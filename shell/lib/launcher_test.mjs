@@ -8,6 +8,17 @@ import { join } from "node:path";
 import { initial, record } from "./frecency.mjs";
 import { blockedHeading, confirmRows, highlighted, grantIds, launchCommand, launcherItems, moved, nextSection, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
 
+// Array.prototype.at and Object.fromEntries, which the shell's engine lacks
+// (qtjs_env_test.mjs).
+const last = (list) => list[list.length - 1];
+const byId = (rows, field) => {
+    const out = {};
+    for (const r of rows) {
+        out[r.id] = r[field];
+    }
+    return out;
+};
+
 const chrome = {
     id: "google-chrome",
     name: "Google Chrome",
@@ -206,7 +217,7 @@ test("the quick actions are the screenshots, the session, the toggles and reload
 });
 
 test("a quick action shows the key that does the same", () => {
-    const hints = Object.fromEntries(quickActions().map(q => [q.id, q.hint]));
+    const hints = byId(quickActions(), "hint");
     assert.equal(hints["screenshot-window"], "Alt+Print");
     assert.equal(hints.lock, "Super+L");
     assert.equal(hints.reload, "");
@@ -219,7 +230,7 @@ test("Do not disturb is there only while the shell serves notifications", () => 
 });
 
 test("the toggles say whether they're on", () => {
-    const sub = state => Object.fromEntries(quickActions(state).map(q => [q.id, q.sub]));
+    const sub = state => byId(quickActions(state), "sub");
     assert.equal(sub({ notifications: true, dnd: true }).dnd, "On");
     assert.equal(sub({ notifications: true }).dnd, "Off");
     assert.equal(sub({ keepAwake: true })["keep-awake"], "On");
@@ -279,7 +290,7 @@ test("quick actions are searched with the apps, and listed after them when empty
     assert.equal(search(all, "caffeine")[0].item.id, "keep-awake");
     const empty = search(all, "").map(r => r.item.kind);
     assert.deepEqual(empty.slice(0, 4), ["app", "app", "app", "app"]);
-    assert.equal(empty.at(-1), "quick");
+    assert.equal(last(empty), "quick");
 });
 
 // Runs windowScreenshot's command against a fake `hyprctl` printing
@@ -348,7 +359,7 @@ test("the empty query comes in sections: recent apps, the rest, then actions", (
         ["google-chrome", "Apps"],
         ["htop", "Apps"],
     ]);
-    assert.equal(rows.at(-1).section, "Actions");
+    assert.equal(last(rows).section, "Actions");
     // With nothing used yet there's no Recent section.
     assert.equal(search(items, "").some(r => r.section === "Recent"), false);
 });

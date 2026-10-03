@@ -34,7 +34,7 @@ export function parseStat(text) {
             count += 1;
         }
     }
-    return cpu === null ? null : { ...cpu, count: Math.max(1, count) };
+    return cpu === null ? null : Object.assign({}, cpu, { count: Math.max(1, count) });
 }
 
 // The share of the whole machine busy between two parseStat samples, 0-1;
@@ -408,7 +408,7 @@ function asGood(now, best) {
 // (`complete` false), since what it couldn't read may be what matters. A
 // machine that never had something (a VM) isn't probed forever for it.
 export function afterProbe({ seen, probe, sensors }) {
-    const was = { ...NOTHING_SEEN, ...seen };
+    const was = Object.assign({}, NOTHING_SEEN, seen);
     const ranks = (sensors ?? []).map(sensorRank).sort((a, b) => a - b);
     const throttles = probe?.throttles?.length ?? 0;
     const maxFreq = Number.isFinite(probe?.maxFreq);

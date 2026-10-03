@@ -15,7 +15,9 @@ function named() {
     const names = new Set();
     for (const f of readdirSync(shell).filter((n) => n.endsWith(".qml"))) {
         const text = readFileSync(join(shell, f), "utf8");
-        for (const m of text.matchAll(/\bfile:\s*"([^"]+)"/g)) {
+        // An exec loop: the tests run without matchAll (qtjs_env_test.mjs).
+        const file = /\bfile:\s*"([^"]+)"/g;
+        for (let m = file.exec(text); m !== null; m = file.exec(text)) {
             names.add(m[1]);
         }
     }

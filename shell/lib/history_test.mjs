@@ -3,6 +3,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MAX_ENTRIES, GROUP_SHOWN, record, appOf, groups, clearApp, apply, shownItems, age, unread, serialize, parse, clickTarget } from "./history.mjs";
 
+// Array.prototype.at, which the shell's engine lacks (qtjs_env_test.mjs).
+const last = (list) => list[list.length - 1];
+
 // A history after a sequence of changes.
 const replay = (state, changes) => changes.reduce(apply, state);
 
@@ -46,7 +49,7 @@ test("the history keeps the newest 200", () => {
     }
     assert.equal(h.length, MAX_ENTRIES);
     assert.equal(h[0].key, String(MAX_ENTRIES + 4));
-    assert.equal(h.at(-1).key, "5");
+    assert.equal(last(h).key, "5");
 });
 
 test("entries group by app, the group with the newest first", () => {
