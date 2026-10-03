@@ -120,10 +120,12 @@ const ALLOWED = new Set(["b", "i", "u"]);
 // make the shell fetch anything. Everything else is escaped, and line
 // breaks are kept.
 export function bodyStyled(body) {
+    body = String(body);
     const out = [];
     const tag = /<\s*(\/?)\s*([a-zA-Z]+)[^>]*>/g;
     let last = 0;
-    for (const m of String(body).matchAll(tag)) {
+    // An exec loop: Qt's JavaScript engine has no matchAll.
+    for (let m = tag.exec(body); m !== null; m = tag.exec(body)) {
         out.push(escape(String(body).slice(last, m.index)));
         last = m.index + m[0].length;
         const name = m[2].toLowerCase();
@@ -176,7 +178,7 @@ export function hold(c, source, now) {
         return c;
     }
     const left = held(c) ? c.left : Math.max(0, c.deadline - now);
-    return Object.freeze({ ...c, left, holders: Object.freeze([...c.holders, source]) });
+    return Object.freeze(Object.assign({}, c, { left, holders: Object.freeze([...c.holders, source]) }));
 }
 
 export function release(c, source, now) {
@@ -185,9 +187,9 @@ export function release(c, source, now) {
     }
     const holders = Object.freeze(c.holders.filter(h => h !== source));
     if (holders.length > 0) {
-        return Object.freeze({ ...c, holders });
+        return Object.freeze(Object.assign({}, c, { holders }));
     }
-    return Object.freeze({ ...c, holders, deadline: c.ms > 0 ? now + c.left : Infinity });
+    return Object.freeze(Object.assign({}, c, { holders, deadline: c.ms > 0 ? now + c.left : Infinity }));
 }
 
 // A fresh countdown, as for an update in place, keeping whoever holds it.

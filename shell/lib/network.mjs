@@ -71,7 +71,7 @@ export function wifiStatus(network) {
 export function wifiList(devices) {
     const rank = (n) => (n.connected ? 0 : n.known ? 1 : 2);
     return devices.filter((d) => d.type === WIFI)
-        .flatMap((d) => d.networks)
+        .reduce((all, d) => all.concat(d.networks), [])
         .filter((n) => n.name)
         .sort((a, b) => rank(a) - rank(b) || (b.signalStrength ?? 0) - (a.signalStrength ?? 0)
             || a.name.localeCompare(b.name));

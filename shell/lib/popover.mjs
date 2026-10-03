@@ -163,7 +163,7 @@ export function monthGrid(year, month, today, marks = []) {
 // monthGrid's weeks as one list of grid cells, eight to a row: the ISO week
 // number as {week}, then that week's seven days.
 export function calendarCells(weeks) {
-    return weeks.flatMap((w) => [{ week: w.week }, ...w.days]);
+    return [].concat(...weeks.map((w) => [{ week: w.week }, ...w.days]));
 }
 
 // The local dates the clocks change on, from nextDstChange's result, for
@@ -174,7 +174,7 @@ export function changeDays(change, localOffsetAt) {
         return [];
     }
     const groups = change.then ? [change.first, change.then] : [change.first];
-    return groups.flatMap((g) => g.changes.map((c) => localDate(c.at, localOffsetAt(c.at))));
+    return [].concat(...groups.map((g) => g.changes.map((c) => localDate(c.at, localOffsetAt(c.at)))));
 }
 
 // The DST line's lead: "Clocks change soon." within SOON of the first

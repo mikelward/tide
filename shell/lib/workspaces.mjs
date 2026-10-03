@@ -53,12 +53,21 @@ export const NO_MARKS = Object.freeze({ guard: Object.freeze([]), guardAt: Objec
 //   {type: "guardReset"}         the focus guard's state was rebuilt (a
 //       Hyprland config reload runs focus.lua afresh): its marks go, and
 //       the shell asks it to announce what still waits.
+// Object.fromEntries, which Qt's JavaScript engine doesn't have.
+function fromEntries(pairs) {
+    const out = {};
+    for (const [key, value] of pairs) {
+        out[key] = value;
+    }
+    return out;
+}
+
 export function updateMarks(marks, event) {
     if (event.type === "cycleStart") {
-        return { ...marks, cycling: true };
+        return Object.assign({}, marks, { cycling: true });
     }
     if (event.type === "cycleEnd") {
-        const ended = { ...marks, cycling: false };
+        const ended = Object.assign({}, marks, { cycling: false });
         return event.address ? updateMarks(ended, { type: "focused", address: event.address }) : ended;
     }
     if (event.type === "focused" && marks.cycling) {
@@ -69,7 +78,7 @@ export function updateMarks(marks, event) {
     const notes = {};
     // Later than any mark standing now.
     const now = 1 + Math.max(0, ...Object.values(guardAt),
-        ...Object.values(marks.notes).flatMap((n) => Object.values(n.at ?? {})));
+        ...[].concat(...Object.values(marks.notes).map((n) => Object.values(n.at ?? {}))));
     const put = (id, note) => {
         if (note.wide.length + note.direct.length > 0) {
             notes[id] = note;
@@ -81,21 +90,21 @@ export function updateMarks(marks, event) {
     case "notified": {
         Object.assign(notes, marks.notes);
         // It keeps what it marked before, under the app it names now.
-        const note = { wide: [], direct: [], at: {}, ...(notes[event.id] ?? notes[event.replaces]), app: event.app };
+        const note = Object.assign({ wide: [], direct: [], at: {} }, notes[event.id] ?? notes[event.replaces], { app: event.app });
         delete notes[event.id];
         delete notes[event.replaces];
-        const stamped = (addresses) => ({ ...note.at, ...Object.fromEntries(addresses.map((a) => [a, now])) });
+        const stamped = (addresses) => Object.assign({}, note.at, fromEntries(addresses.map((a) => [a, now])));
         if (event.address !== undefined) {
             const named = event.windows.find((w) => w.address === event.address);
             const hidden = named !== undefined && !event.visible.has(named.workspace);
             put(event.id, hidden
-                ? { ...note, direct: [...new Set([...note.direct, event.address])], at: stamped([event.address]) }
+                ? Object.assign({}, note, { direct: [...new Set([...note.direct, event.address])], at: stamped([event.address]) })
                 : note);
         } else {
             const hidden = event.windows
                 .filter((w) => sameApp(w.app, event.app) && !event.visible.has(w.workspace))
                 .map((w) => w.address);
-            put(event.id, { ...note, wide: [...new Set([...note.wide, ...hidden])], at: stamped(hidden) });
+            put(event.id, Object.assign({}, note, { wide: [...new Set([...note.wide, ...hidden])], at: stamped(hidden) }));
         }
         break;
     }
@@ -103,11 +112,11 @@ export function updateMarks(marks, event) {
         Object.assign(notes, marks.notes);
         // Announced again, it's the newest.
         guard = [...without(guard, event.address), event.address];
-        guardAt = { ...guardAt, [event.address]: now };
+        guardAt = Object.assign({}, guardAt, { [event.address]: now });
         break;
     case "activated":
         for (const [id, note] of Object.entries(marks.notes)) {
-            put(id, sameApp(note.app, event.app) ? { ...note, wide: [] } : note);
+            put(id, sameApp(note.app, event.app) ? Object.assign({}, note, { wide: [] }) : note);
         }
         break;
     case "focused":
@@ -129,13 +138,13 @@ export function updateMarks(marks, event) {
     case "closed":
         guard = without(guard, event.address);
         for (const [id, note] of Object.entries(marks.notes)) {
-            put(id, { ...note, wide: without(note.wide, event.address), direct: without(note.direct, event.address) });
+            put(id, Object.assign({}, note, { wide: without(note.wide, event.address), direct: without(note.direct, event.address) }));
         }
         break;
     default:
         throw new Error(`unknown mark event ${event.type}`);
     }
-    guardAt = Object.fromEntries(guard.map((a) => [a, guardAt[a] ?? 0]));
+    guardAt = fromEntries(guard.map((a) => [a, guardAt[a] ?? 0]));
     // A rebuilt guard has no cycle running.
     return { guard, guardAt, notes, cycling: event.type !== "guardReset" && (marks.cycling ?? false) };
 }
@@ -247,7 +256,7 @@ export function attentionOrder(marks) {
 
 // Which windows are marked: Hyprland's urgent flag, plus `marks`.
 export function markedWindows({ windows, marks = NO_MARKS }) {
-    const marked = new Set([...marks.guard, ...Object.values(marks.notes).flatMap((n) => [...n.wide, ...n.direct])]);
+    const marked = new Set([].concat(marks.guard, ...Object.values(marks.notes).map((n) => n.wide.concat(n.direct))));
     for (const w of windows) {
         if (w.urgent === true) {
             marked.add(w.address);
@@ -306,13 +315,12 @@ export function barWorkspaces({ monitor, monitors, windows, marks = NO_MARKS }) 
         } else if (elsewhere.has(id)) {
             state = "elsewhere";
         }
-        list.push({
+        list.push(Object.assign({
             id,
             state,
             urgent: here.some((w) => marked.has(w.address)),
             big: here.some((w) => w.fullscreen > 0),
-            ...icons(here, marked),
-        });
+        }, icons(here, marked)));
     }
     return list;
 }

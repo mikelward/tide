@@ -1838,6 +1838,12 @@ are what "done" means.
   (schedule, sunrise and sunset, manual flip expiry), and config loading (`.local`
   merge rules; a bad file keeps the last good settings). The QML only binds
   to them.
+- **Qt's JavaScript, not Node's.** Quickshell runs those modules in Qt's
+  QML engine, which (checked on Qt 6.11) has no object spread and none of
+  the built-ins newer than ECMAScript 2016, such as `flatMap`, `at` or
+  `Object.fromEntries`. `make test` parses each module with `qmllint`, and
+  runs the Node tests with those built-ins removed, so either mistake fails
+  a test rather than the whole shell.
 - **Clock fixtures.** Instants on both sides of every 2026–2027 US and EU DST
   change, asserting each zone's abbreviation and day offset. The `GMT+1`
   trap is a named test.
