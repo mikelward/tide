@@ -20,9 +20,9 @@ function unsent(state) {
 // Returns the state and the errors to send now: those never delivered.
 export function verdict(state, errors) {
     const current = [...new Set(errors)];
-    const next = { ...state, current };
+    const next = Object.assign({}, state, { current });
     const send = unsent(next);
-    return { state: { ...next, sending: next.sending.concat(send) }, send };
+    return { state: Object.assign({}, next, { sending: next.sending.concat(send) }), send };
 }
 
 // A notification for `error` finished, delivered (`ok`) or not.
@@ -31,13 +31,13 @@ export function sent(state, error, ok) {
     const delivered = ok && !state.delivered.includes(error)
         ? state.delivered.concat([error])
         : state.delivered;
-    return { ...state, sending, delivered };
+    return Object.assign({}, state, { sending, delivered });
 }
 
 // The current errors still waiting to be delivered, to send again.
 export function retry(state) {
     const send = unsent(state);
-    return { state: { ...state, sending: state.sending.concat(send) }, send };
+    return { state: Object.assign({}, state, { sending: state.sending.concat(send) }), send };
 }
 
 // Whether any current error hasn't been delivered.

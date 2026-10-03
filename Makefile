@@ -32,6 +32,11 @@ OLD_AUTOSTART_DROPIN_MARK = \# A drop-in for another desktop's autostarted polki
 GO ?= go
 # The shell's pure logic (shell/lib) is tested with node --test (SPEC.md §20).
 NODE ?= node
+# Qt's own parser checks the shell's modules (shell/lib), whose syntax Node
+# accepts but Quickshell's QML engine may not. Debian and Ubuntu ship it in
+# qt6-declarative-dev-tools, outside PATH. The Qt 6 names come first: a bare
+# qmllint can be Qt 5's qtchooser wrapper, whose parser rejects what Qt 6 runs.
+QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /usr/lib/qt6/bin/qmllint || command -v /usr/lib64/qt6/bin/qmllint || command -v qmllint)
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
@@ -45,7 +50,11 @@ test:
 	sh bin/tide-shell_test.sh
 	sh bin/tide-doctor_test.sh
 	sh bin/tide-sysmon_test.sh
-	$(NODE) --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/keepawake_test.mjs shell/lib/sysmon_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs theme/palette_test.mjs
+	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
+	$(QMLLINT) $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs))
+	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/keepawake_test.mjs shell/lib/sysmon_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs
+# theme/ is build-time Node, not loaded by the shell, so runs unguarded.
+	$(NODE) --test theme/palette_test.mjs
 	$(NODE) theme/generate.mjs --check
 	$(GO) vet ./...
 	$(GO) test ./...

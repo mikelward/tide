@@ -35,7 +35,7 @@ export function parseAnnouncement(data) {
         return null;
     }
     const m = /^(-?\d+),([a-z]+)$/.exec(data.slice(PREFIX.length));
-    if (!m || !Object.hasOwn(SYMBOLS, m[2])) {
+    if (!m || !Object.prototype.hasOwnProperty.call(SYMBOLS, m[2])) {
         return null;
     }
     return { workspace: Number(m[1]), mode: m[2] };

@@ -34,7 +34,7 @@ export function parseStat(text) {
             count += 1;
         }
     }
-    return cpu === null ? null : { ...cpu, count: Math.max(1, count) };
+    return cpu === null ? null : Object.assign({}, cpu, { count: Math.max(1, count) });
 }
 
 // The share of the whole machine busy between two parseStat samples, 0-1;

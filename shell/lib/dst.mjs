@@ -58,7 +58,7 @@ export function nextDstChange({ clocks, periodsOf, now }) {
         // Every change, not just the next: a zone can change twice within
         // FOLLOW_WINDOW, and its second change ends the altered gap too.
         for (const change of offsetChanges(periods, now)) {
-            pending.push({ ...change, zone: c.zone, label: clockName(c, change.fromAbbr), order });
+            pending.push(Object.assign({}, change, { zone: c.zone, label: clockName(c, change.fromAbbr), order }));
         }
     }
     if (pending.length === 0) {

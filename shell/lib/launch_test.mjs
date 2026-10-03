@@ -3,6 +3,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { initial, step, track } from "./launch.mjs";
 
+// Array.prototype.at, which the shell's engine lacks (qtjs_env_test.mjs).
+const last = (list) => list[list.length - 1];
+
 const COMMAND = ["tide", "launch", "--", "blueman-manager"];
 
 // Feeds `events` through step, returning every run along the way.
@@ -52,7 +55,7 @@ test("stderr ending before the exit code waits for the code", () => {
 
 test("an exit code alone isn't the end: stderr may still be coming", () => {
     const runs = play([STARTED, exited(1), STOPPED]);
-    assert.equal(runs.at(-1).done, false);
+    assert.equal(last(runs).done, false);
 });
 
 test("stopping without starting is a failed start", () => {
@@ -65,8 +68,8 @@ test("a finished run reports once, whatever arrives after", () => {
     assert.equal(reports([STARTED, exited(2), stderr("x"), STOPPED, stderr("y"), exited(3)]).length, 1);
     assert.equal(reports([STOPPED, STOPPED, exited(1), stderr("z")]).length, 1);
     const runs = play([STARTED, exited(0), stderr(""), STOPPED]);
-    assert.equal(runs.at(-1).done, true);
-    assert.equal(runs.at(-1).report, null);
+    assert.equal(last(runs).done, true);
+    assert.equal(last(runs).report, null);
 });
 
 test("an unknown event is an error", () => {
@@ -75,7 +78,7 @@ test("an unknown event is an error", () => {
 
 test("a finished run keeps its code and stderr for a caller that reads them", () => {
     // SessionMenu reads systemctl's blockers from a failed run's stderr.
-    const run = play([STARTED, stderr("Operation inhibited\n"), exited(1)]).at(-1);
+    const run = last(play([STARTED, stderr("Operation inhibited\n"), exited(1)]));
     assert.equal(run.done, true);
     assert.equal(run.started, true);
     assert.equal(run.code, 1);
@@ -84,8 +87,8 @@ test("a finished run keeps its code and stderr for a caller that reads them", ()
 
 test("a run whose stderr isn't read finishes only by failing to start", () => {
     // ClockData reads tide-tz's stdout, not its stderr.
-    assert.equal(play([STARTED, exited(0), STOPPED]).at(-1).done, false);
-    assert.equal(play([STOPPED]).at(-1).done, true);
+    assert.equal(last(play([STARTED, exited(0), STOPPED])).done, false);
+    assert.equal(last(play([STOPPED])).done, true);
 });
 
 // A log that remembers what it was told.
@@ -104,7 +107,7 @@ test("a tracked run calls back once when it's done, whatever the outcome", () =>
         let calls = 0;
         const t = track(COMMAND, () => calls++, recorder());
         const done = events.map(e => t.on(e));
-        assert.equal(done.at(-1), true);
+        assert.equal(last(done), true);
         assert.equal(done.slice(0, -1).includes(true), false);
         assert.equal(calls, 1);
         // Anything after the end changes nothing.

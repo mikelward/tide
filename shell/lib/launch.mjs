@@ -40,9 +40,9 @@ function outcome(run, command) {
 // on the event that finishes the run, which alone carries its `report`.
 export function step(run, event, command) {
     if (run.done) {
-        return Object.freeze({ ...run, report: null });
+        return Object.freeze(Object.assign({}, run, { report: null }));
     }
-    const next = { ...run, report: null };
+    const next = Object.assign({}, run, { report: null });
     switch (event.type) {
     case "started":
         next.started = true;
