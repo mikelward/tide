@@ -247,9 +247,15 @@ tested where it can be without a live session.
     (NetworkManager): wired, Wi-Fi strength, no route or offline; Wi-Fi on
     and off, connecting with a password asked for in place, and
     nm-connection-editor for the rest. Wi-Fi scanning is shared across
-    monitors' popovers, in `shell/NetworkData.qml`. §7.4's VPN lock isn't
-    there yet, since `Quickshell.Networking` 0.3 doesn't list VPN
-    connections; it needs NetworkManager's D-Bus API directly.
+    monitors' popovers, in `shell/NetworkData.qml`. VPNs (§7.4), which
+    `Quickshell.Networking` 0.3 doesn't list, come from `nmcli`
+    (`shell/lib/vpn.mjs`): a lock on the network icon while one is up,
+    faint while it connects, and a row each in the popover that brings it
+    up or down. They're read again on each `nmcli monitor` line, when a
+    popover opens, and every minute. On a live session, check that the
+    lock follows a VPN brought up from elsewhere without the minute's
+    wait, and that one needing a password asks through the polkit or
+    nm-applet secret agent.
   - The tray (`shell/Tray.qml`, from `shell/lib/tray.mjs`) shows apps'
     StatusNotifierItems, hiding passive ones as waybar did: a left or
     right click opens the menu (§7.4), and a middle click activates.
