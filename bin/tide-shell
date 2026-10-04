@@ -224,8 +224,12 @@ if test -n "$agent"; then
         # waited for, so a TERM from the shell's exit trap is handled at
         # once: it stops whichever is running and waits for it, so nothing
         # outlives the shell, registered with polkit or holding the journal.
+        # It's stopped with KILL, not TERM: until a child dash forked has
+        # exec'd, it still has this trap's handler, so a TERM sent then is
+        # caught and dropped, and the agent runs on with the trap waiting
+        # on it. A unit stop still TERMs the agent itself, from systemd.
         child=
-        trap 'test -z "$child" || kill "$child"; test -z "$child" || wait "$child"; exit 0' TERM
+        trap 'test -z "$child" || kill -KILL "$child"; test -z "$child" || wait "$child"; exit 0' TERM
         delay=$agent_retry
         while :; do
             started=$(date +%s)
