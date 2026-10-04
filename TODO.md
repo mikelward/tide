@@ -167,8 +167,7 @@ tested where it can be without a live session.
   including while a fullscreen window covers the bar.
 - The system monitor (SPEC.md §7.4) is built but unchecked on a live
   session: the CPU % against `top`, the sensor picked on an Intel and an
-  AMD machine, and the throttling line under load. The bar mock shows its
-  CPU %; its popover isn't mocked yet.
+  AMD machine, and the throttling line under load.
 - The system monitor reads one CPU package: the throttle counter and the
   coretemp package sensor of the package holding cpu0. On a multi-socket
   machine, throttling or heat on another package goes unseen. Watching one

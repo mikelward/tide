@@ -110,6 +110,7 @@ fonts mock shows the pairings that were compared.
 | **Launcher**: empty query and a fuzzy query. [`launcher.png`](docs/mocks/launcher.png) | ![launcher](docs/mocks/launcher.png) |
 | **Notifications**: popups, OSD, the notification center while sharing. [`notifications.png`](docs/mocks/notifications.png) | ![notifications](docs/mocks/notifications.png) |
 | **Clocks popover**: zones, working-hours strips, DST warning, calendar. [`clocks.png`](docs/mocks/clocks.png) | ![clocks](docs/mocks/clocks.png) |
+| **System monitor popover**: the CPU and Memory tabs, and throttling. [`sysmon.png`](docs/mocks/sysmon.png) | ![system monitor](docs/mocks/sysmon.png) |
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
 | **Screen-share picker**: screens, windows, 16:9 area. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
 | **Screenshots**: region and window modes. [`screenshot.png`](docs/mocks/screenshot.png) | ![screenshot](docs/mocks/screenshot.png) |
@@ -770,7 +771,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | Notifications | dot when unread, a bell with *z* for DND | notification center | middle-click toggles DND |
 | Session | — | lock, log out, suspend, restart, shut down | — |
 
-**System monitor.**
+**System monitor** ([`sysmon.png`](docs/mocks/sysmon.png)).
 
 - The bar's CPU % is the whole machine's, updated every 3 s; it's cheap
   enough to run all the time, since it reads a few small files and starts

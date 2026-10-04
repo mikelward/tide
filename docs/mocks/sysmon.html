@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: system monitor popover</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .row { display: flex; gap: 24px; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; gap: 10px; }
+  .col .cap { max-width: 300px; }
+  .stage {
+    position: relative;
+    width: 340px;
+    height: 430px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .theme-dark.stage { box-shadow: 0 0 0 1px #2a2a30; background: radial-gradient(400px 300px at 30% 70%, #2b1c3f, transparent 70%), #16213a; }
+  .theme-light.stage { box-shadow: 0 0 0 1px #3a3a42; background: radial-gradient(400px 300px at 30% 70%, #e7dcf3, transparent 70%), #d6e4f7; }
+  .stage .bar { justify-content: flex-end; }
+  /* 300 px wide, as SysmonPopover.qml's implicitWidth. */
+  .pop { position: absolute; right: 8px; top: calc(var(--bar-h) + 6px); width: 300px; padding: 6px 0; font-feature-settings: 'tnum' 1; }
+  .readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 6px 10px 8px; }
+  .readouts .l { font-size: 11.5px; color: var(--fg-dim); }
+  .readouts .v { font-size: 18px; font-weight: 700; margin-top: 2px; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 0 6px; }
+  .tab { height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--fg-dim); }
+  .tab .ms { font-size: 16px; }
+  .tab.on { background: var(--surface-2); color: var(--fg); }
+  .lines { padding-top: 6px; }
+  .line { height: 24px; display: flex; align-items: center; padding: 0 10px; font-size: 12.5px; }
+  .line .k { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 8px; }
+  .line .val { white-space: nowrap; }
+  .head { padding: 8px 10px 2px; font-size: 11.5px; font-weight: 500; color: var(--fg-dim); }
+  .danger { color: var(--danger); }
+  .warn { color: var(--warn); }
+</style>
+</head>
+<body class="sheet" data-width="1200" data-scale="2">
+
+<h1>System monitor</h1>
+<p class="lede">Clicking the CPU % in the bar opens one popover. A readout row (CPU, memory, temperature) sits above two tabs. CPU, the default, shows the temperature, the clock (the fastest core's current speed over the fastest core's top), thermal throttling where the kernel counts it, and the five processes using the most CPU, as a share of one CPU, the way <code>top</code> shows it. Memory shows memory and swap, used over total, and the five processes using the most resident memory. The lists refresh every 2 s while the popover is open.</p>
+
+<div class="row">
+  <div class="col">
+    <div class="stage theme-dark">
+      <div class="bar">
+        <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
+        <span class="sicon hover"><i class="ms">memory</i>12%</span>
+        <span class="sicon"><i class="ms">notifications</i></span>
+      </div>
+      <div class="pop card theme-dark">
+        <div class="readouts">
+          <div><div class="l">CPU</div><div class="v">12%</div></div>
+          <div><div class="l">Memory</div><div class="v">6.2 GB</div></div>
+          <div><div class="l">Temp</div><div class="v">54 °C</div></div>
+        </div>
+        <div class="tabs">
+          <div class="tab on"><i class="ms">memory</i>CPU</div>
+          <div class="tab"><i class="ms">memory_alt</i>Memory</div>
+        </div>
+        <div class="lines">
+          <div class="line"><span class="k">Temperature</span><span class="val">54 °C</span></div>
+          <div class="line"><span class="k">Clock</span><span class="val">2.1 / 4.7 GHz</span></div>
+          <div class="line"><span class="k">Thermal throttling</span><span class="val">No</span></div>
+          <div class="head">Top CPU</div>
+          <div class="line"><span class="k">firefox</span><span class="val">38%</span></div>
+          <div class="line"><span class="k">Isolated Web Co</span><span class="val">21%</span></div>
+          <div class="line"><span class="k">quickshell</span><span class="val">4%</span></div>
+          <div class="line"><span class="k">pipewire</span><span class="val">2%</span></div>
+          <div class="line"><span class="k">kitty</span><span class="val">1%</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>CPU</b>, the default tab. A process name is the kernel's, cut to 15 characters, so a browser's content processes show as <code>Isolated Web Co</code>.</div>
+  </div>
+
+  <div class="col">
+    <div class="stage theme-dark">
+      <div class="bar">
+        <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
+        <span class="sicon hover"><i class="ms">memory</i>12%</span>
+        <span class="sicon"><i class="ms">notifications</i></span>
+      </div>
+      <div class="pop card theme-dark">
+        <div class="readouts">
+          <div><div class="l">CPU</div><div class="v">12%</div></div>
+          <div><div class="l">Memory</div><div class="v">6.2 GB</div></div>
+          <div><div class="l">Temp</div><div class="v">54 °C</div></div>
+        </div>
+        <div class="tabs">
+          <div class="tab"><i class="ms">memory</i>CPU</div>
+          <div class="tab on"><i class="ms">memory_alt</i>Memory</div>
+        </div>
+        <div class="lines">
+          <div class="line"><span class="k">Memory</span><span class="val">6.2 GB / 15.5 GB</span></div>
+          <div class="line"><span class="k">Swap</span><span class="val">0 MB / 8.0 GB</span></div>
+          <div class="head">Top memory</div>
+          <div class="line"><span class="k">firefox</span><span class="val">1.4 GB</span></div>
+          <div class="line"><span class="k">Isolated Web Co</span><span class="val">612 MB</span></div>
+          <div class="line"><span class="k">code</span><span class="val">488 MB</span></div>
+          <div class="line"><span class="k">quickshell</span><span class="val">231 MB</span></div>
+          <div class="line"><span class="k">Hyprland</span><span class="val">142 MB</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Memory</b>: used over total for memory and swap, and resident memory per process.</div>
+  </div>
+
+  <div class="col">
+    <div class="stage theme-light">
+      <div class="bar">
+        <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
+        <span class="sicon hover danger"><i class="ms">memory</i>97%</span>
+        <span class="sicon"><i class="ms">notifications</i></span>
+      </div>
+      <div class="pop card theme-light">
+        <div class="readouts">
+          <div><div class="l">CPU</div><div class="v danger">97%</div></div>
+          <div><div class="l">Memory</div><div class="v">6.4 GB</div></div>
+          <div><div class="l">Temp</div><div class="v warn">92 °C</div></div>
+        </div>
+        <div class="tabs">
+          <div class="tab on"><i class="ms">memory</i>CPU</div>
+          <div class="tab"><i class="ms">memory_alt</i>Memory</div>
+        </div>
+        <div class="lines">
+          <div class="line"><span class="k">Temperature</span><span class="val warn">92 °C</span></div>
+          <div class="line"><span class="k">Clock</span><span class="val">2.8 / 4.7 GHz</span></div>
+          <div class="line"><span class="k">Thermal throttling</span><span class="val danger">Now</span></div>
+          <div class="head">Top CPU</div>
+          <div class="line"><span class="k">cc1plus</span><span class="val">100%</span></div>
+          <div class="line"><span class="k">cc1plus</span><span class="val">99%</span></div>
+          <div class="line"><span class="k">cc1plus</span><span class="val">98%</span></div>
+          <div class="line"><span class="k">cc1plus</span><span class="val">98%</span></div>
+          <div class="line"><span class="k">ld</span><span class="val">64%</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><b>Throttling</b>, in the light theme. A build has the CPU hot (amber) and throttling (red): the bar's reading, the CPU readout and the throttling line turn red, and the temperature amber. The clock shows the throttled speed against the top.</div>
+  </div>
+</div>
+
+</body>
+</html>
