@@ -225,9 +225,12 @@ tested where it can be without a live session.
     (`shell/lib/report.mjs`, through `notify-send`; one undelivered at
     login is retried). On a live session,
     check that one arrives, and that a reload with the same error is quiet.
-  - `Theme.qml` has the mocks' light and dark palettes and follows the
-    desktop's `color-scheme`. Next for §15: generate it from one
-    `palette.json`, and move the light/dark schedule from conf's theme
+  - `Theme.qml` reads its light and dark colors from `theme/palette.json`,
+    which `make palette` turns into `shell/lib/palette.mjs` (`make test`
+    fails when that's stale, or when the palette and the mocks'
+    `common.css` disagree), and follows the desktop's `color-scheme`.
+    Next for §15: generate GTK's, Qt's and Hyprland's colors from the
+    same file (M7), and move the light/dark schedule from conf's theme
     daemon into the shell (`appearance.json`).
   - Status icons (§7.4): `shell/StatusIcons.qml` has volume (scroll by 5%)
     and battery (red below 15%), from `shell/lib/status.mjs`, and the

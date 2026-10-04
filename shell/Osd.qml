@@ -28,7 +28,7 @@ PanelWindow {
         anchors.fill: parent
         radius: height / 2
         color: Theme.surface
-        border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.07) : Qt.rgba(0, 0, 0, 0.08)
+        border.color: Theme.edge
 
         Row {
             anchors.fill: parent

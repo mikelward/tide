@@ -12,6 +12,8 @@
 #                         and the tide commands under $(PREFIX) (root;
 #                         see README.md; run `make build` as yourself first)
 #   make mocks            re-render the design mocks (docs/mocks/*.html -> *.png)
+#   make palette          regenerate shell/lib/palette.mjs from
+#                         theme/palette.json (SPEC.md §15)
 
 # Hyprland embeds Lua 5.5; the layout also runs on 5.4, which is what most
 # distributions package today.
@@ -33,7 +35,7 @@ NODE ?= node
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test build install install-session mocks
+.PHONY: test build install install-session mocks palette
 test:
 	@test -n "$(LUA)" || { echo "make test: no lua5.5, lua5.4 or lua on PATH" >&2; exit 1; }
 	$(LUA) hypr/tide/layout_test.lua
@@ -43,9 +45,13 @@ test:
 	sh bin/tide-shell_test.sh
 	sh bin/tide-doctor_test.sh
 	sh bin/tide-sysmon_test.sh
-	$(NODE) --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/keepawake_test.mjs shell/lib/sysmon_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs
+	$(NODE) --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/keepawake_test.mjs shell/lib/sysmon_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs theme/palette_test.mjs
+	$(NODE) theme/generate.mjs --check
 	$(GO) vet ./...
 	$(GO) test ./...
+
+palette:
+	$(NODE) theme/generate.mjs
 
 build: build/tide-grant build/tide-tz
 
