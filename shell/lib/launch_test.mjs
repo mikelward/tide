@@ -114,6 +114,24 @@ test("a tracked run calls back once when it's done, whatever the outcome", () =>
     }
 });
 
+test("a tracked run tells its callback whether it worked", () => {
+    for (const [events, ok] of [
+        [[STARTED, exited(0), stderr("")], true],
+        [[STARTED, exited(0), stderr("slow shell\n")], true],
+        // The signals come in no fixed order: an exit before `started` is
+        // still a run that worked.
+        [[exited(0), stderr(""), STARTED], true],
+        [[stderr(""), exited(0)], true],
+        [[STARTED, stderr("nope"), exited(1)], false],
+        [[STOPPED], false],
+    ]) {
+        const got = [];
+        const t = track(COMMAND, worked => got.push(worked), recorder());
+        events.forEach(e => t.on(e));
+        assert.deepEqual(got, [ok]);
+    }
+});
+
 test("a tracked run logs its report at its level", () => {
     const failed = recorder();
     track(COMMAND, null, failed).on(STOPPED);

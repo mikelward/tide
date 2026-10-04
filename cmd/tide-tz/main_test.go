@@ -201,3 +201,24 @@ func TestBadArguments(t *testing.T) {
 		t.Errorf("bad --days: exit %d, %q", code, stderr)
 	}
 }
+
+// The shell passes zones after "--" (shell/ClockData.qml), so a zone that
+// looks like a flag, from a typo in clocks.json, is a zone with an error
+// rather than a bad argument that stops tide-tz from answering at all.
+func TestZonesAfterDashDashAreZones(t *testing.T) {
+	out, stderr, code := runTZ(t, time.UTC, utc, "--days", "1", "--", "-bad", "--", "UTC")
+	if code != 0 {
+		t.Fatalf("exit %d: %q", code, stderr)
+	}
+	if len(out.Zones) != 3 {
+		t.Fatalf("zones = %+v", out.Zones)
+	}
+	for i, want := range []string{"-bad", "--"} {
+		if out.Zones[i].Zone != want || out.Zones[i].Error == "" {
+			t.Errorf("zone %d = %+v, want an error for %q", i, out.Zones[i], want)
+		}
+	}
+	if out.Zones[2].Zone != "UTC" || out.Zones[2].Error != "" {
+		t.Errorf("zone 2 = %+v", out.Zones[2])
+	}
+}

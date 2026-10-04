@@ -224,7 +224,12 @@ tested where it can be without a live session.
     between switching to the workspace before the menu opens and adding a
     workspace argument to `layout.lua`'s `layoutmsg`. A plain `layoutmsg`
     also doesn't announce the new mode today.
-  - A bad clocks file notifies (§16.1); today it's a warning in the log.
+  - A bad clocks file is a notification naming the file and line
+    (§16.1), and a zone in it that doesn't load one naming the file and
+    entry, at most once per distinct error while the shell runs
+    (`shell/lib/report.mjs`, through `notify-send`; one undelivered at
+    login is retried). On a live session,
+    check that one arrives, and that a reload with the same error is quiet.
   - `Theme.qml` has the mocks' light and dark palettes and follows the
     desktop's `color-scheme`. Next for §15: generate it from one
     `palette.json`, and move the light/dark schedule from conf's theme

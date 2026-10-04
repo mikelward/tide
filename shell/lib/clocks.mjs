@@ -167,10 +167,13 @@ export function parseClocks(text, isZone) {
 // §16.1). Each text is the file's contents, or null when it doesn't exist.
 // The local list replaces the shared one whole. A file that fails to parse,
 // or names a zone `isZone` doesn't know, keeps `lastGood` (the defaults the
-// first time) and is named in `errors`.
+// first time). Every file is checked, so `errors` names each one that's
+// wrong, not just the first. `source` names the file the clocks came from,
+// or is null for the defaults and `lastGood`.
 export function loadClocks(sharedText, localText, lastGood = DEFAULT_CLOCKS, isZone = undefined) {
     const errors = [];
     let clocks = DEFAULT_CLOCKS;
+    let source = null;
     for (const [name, text] of [["clocks.json", sharedText], ["clocks.local.json", localText]]) {
         if (text === null || text === undefined) {
             continue;
@@ -178,11 +181,34 @@ export function loadClocks(sharedText, localText, lastGood = DEFAULT_CLOCKS, isZ
         const parsed = parseClocks(text, isZone);
         if (parsed.error) {
             errors.push(`${name}: ${parsed.error}`);
-            return { clocks: lastGood, errors };
+            continue;
         }
         clocks = parsed.clocks;
+        source = name;
     }
-    return { clocks, errors };
+    if (errors.length > 0) {
+        return { clocks: lastGood, errors, source: null };
+    }
+    return { clocks, errors, source };
+}
+
+// A zone tide-tz couldn't load, as an error naming where it was set: the
+// file and every entry that names it, numbered from 1 like a parse
+// error's, so a zone listed twice is fixed in both places at once.
+export function zoneError(clocks, source, zone, error) {
+    const entries = [];
+    clocks.forEach((c, i) => {
+        if (c.zone === zone) {
+            entries.push(i + 1);
+        }
+    });
+    let where = "";
+    if (entries.length === 1) {
+        where = `entry ${entries[0]}: `;
+    } else if (entries.length > 1) {
+        where = `entries ${entries.slice(0, -1).join(", ")} and ${entries[entries.length - 1]}: `;
+    }
+    return source ? `${source}: ${where}${error}` : `${where}${error}`;
 }
 
 // The listed clocks minus any in the local zone, compared by zone ID; zones
