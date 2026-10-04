@@ -43,7 +43,7 @@ test:
 	sh bin/tide-shell_test.sh
 	sh bin/tide-doctor_test.sh
 	sh bin/tide-sysmon_test.sh
-	$(NODE) --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/keepawake_test.mjs shell/lib/sysmon_test.mjs
+	$(NODE) --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/keepawake_test.mjs shell/lib/sysmon_test.mjs shell/lib/icons_test.mjs
 	$(GO) vet ./...
 	$(GO) test ./...
 
@@ -76,6 +76,8 @@ install: build
 	install -m 644 xdg-desktop-portal/tide-portals.conf "$(PORTAL_DIR)/"
 	install -d "$(SHELL_DIR)/lib"
 	install -m 644 shell/*.qml "$(SHELL_DIR)/"
+	install -d "$(SHELL_DIR)/icons"
+	install -m 644 shell/icons/*.svg "$(SHELL_DIR)/icons/"
 	install -m 644 $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs)) "$(SHELL_DIR)/lib/"
 
 # Display managers list sessions from wayland-sessions under the system data

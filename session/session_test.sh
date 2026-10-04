@@ -212,7 +212,9 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
              .config/systemd/user/tide.service \
              .config/systemd/user/hypridle.service.d/tide.conf \
              .config/xdg-desktop-portal/tide-portals.conf \
-             .config/systemd/user/app-.service.d/tide-autostart.conf; do
+             .config/systemd/user/app-.service.d/tide-autostart.conf \
+             .config/quickshell/tide/icons/cpu-symbolic.svg \
+             .config/quickshell/tide/icons/memory-symbolic.svg; do
         check "make install puts $f in place" test -f "$home/$f"
     done
     check "make install removes an old per-agent drop-in and its directory" test ! -e "$old_dropin"
