@@ -372,6 +372,19 @@ holds the queue, and
   `hypr/tide/focus.lua`, through `tide grant`). On a live session, check it
   with an app that doesn't activate on a click, and that Chrome's own
   activation still wins.
+- Bring up the browser window a notification came from, not just the
+  browser's most recent one, when the browser's own activation doesn't
+  arrive. Today the fallback picks the app's most recently focused window
+  (§9 *Clicking*), which for Chrome with several windows may be the wrong
+  one. Open questions before choosing how:
+  - Can Quickshell hand the action an xdg-activation token? It doesn't
+    emit `ActivationToken` today, so the browser can't be told which
+    surface the click came from.
+  - Does Hyprland 0.56 show the Lua guard which token, or which surface,
+    an activation request carries? If so the grant could follow the
+    token instead of the app.
+  - Which browsers send a `sender-pid` hint, which would narrow the
+    fallback to the sending process's windows?
 - History: the center (`shell/NotificationCenter.qml`), the bell, and
   `notifications.json` (`shell/HistoryData.qml`, `shell/lib/history.mjs`)
   are in, behind the same opt-in; only parsed with `qmlformat`.
