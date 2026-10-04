@@ -313,6 +313,7 @@ export function nextSection(rows, index, step) {
 
 // Programs that start something else, so a window never has their name:
 // shells, sandboxes and launchers an Exec line runs an app through.
+// tide-grant keeps the same list (opaque in cmd/tide-grant/desktop.go).
 const WRAPPERS = new Set([
     "env", "sh", "bash", "dash", "zsh", "exec", "nohup", "setsid", "sudo", "pkexec", "systemd-run",
     "flatpak", "snap", "gtk-launch", "gapplication", "dbus-launch", "xdg-open", "gio", "uwsm", "uwsm-app",

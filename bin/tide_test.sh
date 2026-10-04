@@ -52,12 +52,22 @@ cat > "$fake/app" <<'FAKE'
 printf "app %s\n" "$*" >> "$FAKE_LOG"
 FAKE
 chmod +x "$fake"/*
+# tide-grant answers $FAKE_CLASSES (words) for --classes and exits
+# $FAKE_CLASSES_STATUS.
+cat > "$fake/tide-grant" <<'FAKE'
+#!/bin/sh
+printf "tide-grant %s\n" "$*" >> "$FAKE_LOG"
+test -z "${FAKE_CLASSES:-}" || printf '%s\n' $FAKE_CLASSES
+exit "${FAKE_CLASSES_STATUS:-0}"
+FAKE
+chmod +x "$fake/tide-grant"
 
 # run ENV... -- ARGS...: runs tide with the fakes first on PATH, in a
 # tide session unless the env says otherwise.
 run() {
     : > "$log"
     env PATH="$fake:$PATH" FAKE_LOG="$log" XDG_CURRENT_DESKTOP=tide:Hyprland \
+        XDG_DATA_HOME="$tmp/home-data" XDG_DATA_DIRS="$tmp/sys-data" \
         "$@" 2> "$tmp/err"
 }
 
@@ -66,11 +76,11 @@ check "launch exits 0" test $? -eq 0
 out=$(cat "$log")
 check "launch waits for the shell" contains "$out" "systemctl --user start tide.service"
 check "launch grants focus to the command's basename" \
-    contains "$out" 'hyprctl eval tide_focus.grant("app")'
+    contains "$out" 'hyprctl eval tide_focus.grant("app", nil, '
 check "launch runs the app through uwsm app" contains "$out" "uwsm app -- app one two"
 check "the app gets its arguments" contains "$out" "app one two"
-check "the grant comes before the wait, and the wait before the app" \
-    test "$(sed -n 's/ .*//p' "$log" | tr '\n' ' ')" = "hyprctl systemctl uwsm app "
+check "the grant, then its desktop-entry lookup, then the wait, then the app" \
+    test "$(sed -n 's/ .*//p' "$log" | tr '\n' ' ')" = "hyprctl tide-grant systemctl uwsm app "
 check "a clean launch says nothing" test ! -s "$tmp/err"
 
 run "$qs" launch --app org.gnome.Nautilus -- "$fake/app" .
@@ -90,7 +100,7 @@ run "$qs" launch --app firefox --app '*' -- app
 check "--app '*' after another ID is refused too" test $? -eq 2
 run "$qs" launch --app '' -- "$fake/app"
 check "an empty --app falls back to the basename" \
-    contains "$(cat "$log")" 'tide_focus.grant("app")'
+    contains "$(cat "$log")" 'tide_focus.grant("app", nil, '
 run FAKE_HYPRCTL_REPLY='error: no tide_focus' "$qs" launch --app a --app b -- app
 check "a rejected list grant names every ID" \
     contains "$(cat "$tmp/err")" "couldn't record a focus grant for a, b: error"
@@ -111,6 +121,38 @@ check "gio trash opens no app, so it grants no wildcard" \
 run "$qs" launch --app 'a"b\c' app
 check "the grant escapes the ID for Lua" \
     contains "$(cat "$log")" 'tide_focus.grant("a\"b\\c")'
+
+# A program's desktop entries name the classes its window may have; tide-grant
+# reads them (its own tests cover how).
+printf '#!/bin/sh\n' > "$fake/editor"
+chmod +x "$fake/editor"
+run FAKE_CLASSES="org.example.Editor example-editor-x11 EDITOR" "$qs" launch editor
+# The grant is keyed by tide's pid, so the extend finds that grant only.
+key=$(sed -n '1s/^hyprctl eval tide_focus.grant("editor", nil, \([0-9][0-9]*\))$/\1/p' "$log")
+check "the program's own grant goes in first, keyed by tide's pid" test -n "$key"
+check "its classes are read after the grant" test "$(sed -n 2p "$log")" = 'tide-grant --classes editor'
+check "its desktop entries' classes are added to that grant, by its key, without repeats" \
+    test "$(sed -n 3p "$log")" = "hyprctl eval tide_focus.extend(\"editor\", { \"org.example.Editor\", \"example-editor-x11\" }, nil, $key)"
+check "reading desktop entries says nothing" test ! -s "$tmp/err"
+run "$qs" launch "$fake/editor" --writer letter.odt
+check "the program goes to the lookup as written, without its arguments" \
+    test "$(grep 'tide-grant' "$log")" = "tide-grant --classes $fake/editor"
+check "a program run by path is still granted by name" \
+    contains "$(cat "$log")" 'tide_focus.grant("editor", nil, '
+run "$qs" launch editor
+check "no classes, no extend" test "$(grep -c 'tide_focus' "$log")" -eq 1
+run FAKE_CLASSES_STATUS=1 "$qs" launch editor
+check "a failed lookup is reported" contains "$(cat "$tmp/err")" "tide-grant couldn't read editor's desktop entries"
+check "a failed lookup still launches the app" contains "$(cat "$log")" "uwsm app -- editor"
+run FAKE_HYPRCTL_REPLY='error: no tide_focus' FAKE_CLASSES="org.example.Editor" "$qs" launch editor
+check "a failed grant isn't widened" test "$(grep -c 'tide_focus' "$log")" -eq 1
+run FAKE_CLASSES="org.example.Editor" "$qs" launch --app editor -- editor
+check "--app is taken as given, without reading desktop entries" \
+    test "$(grep -c 'tide-grant\|extend' "$log")" -eq 0
+rm "$fake/tide-grant"
+run "$qs" launch editor
+check "without tide-grant the grant names the program alone, and says why" \
+    contains "$(cat "$tmp/err")" "no tide-grant, so editor's desktop entries weren't read"
 
 run XDG_CURRENT_DESKTOP=KDE "$qs" launch app x
 out=$(cat "$log")
