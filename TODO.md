@@ -174,9 +174,10 @@ tested where it can be without a live session.
   machine, throttling or heat on another package goes unseen. Watching one
   counter (and sensor) per package and combining them is the fix; it was
   left out of the first version, which targets laptops and desktops.
-- At 1536 px the status icons, with keep awake, the volume % and the CPU %,
-  leave the centered window title about 40 px (`docs/mocks/bar.png`). How
-  the bar gives the title room back is the maintainer's call.
+- The clocks collapse to local alone when the title would get under 200 px
+  (SPEC.md §7.3). On a live session, check the switch at the edge: resize
+  or plug in a monitor across it, and watch for the clocks flickering
+  between the two, which `collapseClocks` is built to prevent.
 
 - Clock logic is in `shell/lib/clocks.mjs`: the `.local` list rule, hiding
   the local zone, day offsets and labels, tested with `node --test`.

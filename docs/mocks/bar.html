@@ -19,7 +19,7 @@
 <body class="sheet" data-width="1600" data-scale="2">
 
 <h1>Bar</h1>
-<p class="lede">One full-width bar per monitor: a plain 34&nbsp;px rectangle flush with the top edge and both sides, with no margins, rounded corners or shadow. Workspaces sit on the left, the focused window&rsquo;s title in the middle, and status and clocks on the right. Shown here at 1536&nbsp;px wide. A wider monitor only adds room around the title, and a narrower one cuts the title short first.</p>
+<p class="lede">One full-width bar per monitor: a plain 34&nbsp;px rectangle flush with the top edge and both sides, with no margins, rounded corners or shadow. Workspaces sit on the left, the focused window&rsquo;s title in the middle, and status and clocks on the right. Shown here at 1536&nbsp;px wide, a typical laptop, where the zone clocks would leave the title under 200&nbsp;px, so only the local clock shows and the zone clocks are in its popover. A wider monitor shows all four clocks (see Clocks below); the title stays centered and is cut short when it doesn&rsquo;t fit.</p>
 
 <h2>Dark</h2>
 <div class="frame theme-dark">
@@ -36,7 +36,7 @@
       <div class="ws empty"><span class="n">9</span></div>
       <span class="layout-sym">|M|</span>
     </div>
-    <span class="bar-title" style="max-width:40px">SPEC.md — tide - Google Chrome</span>
+    <span class="bar-title">SPEC.md — tide - Google Chrome</span>
     <div class="bar-right">
       <div class="tray" style="display:flex">
         <span class="sicon dim"><i class="ms">cloud_done</i></span>
@@ -53,16 +53,13 @@
       <span class="sicon"><i class="ms">power_settings_new</i></span>
       <span class="sep"></span>
       <div class="clocks">
-        <span class="clock"><span class="tz">SF</span><span class="t">10:41</span></span>
-        <span class="clock"><span class="tz">NYC</span><span class="t">13:41</span></span>
-        <span class="clock"><span class="tz">LON</span><span class="t">18:41</span></span>
         <span class="clock local"><span class="tz">Sep 28</span><span class="t">19:41</span></span>
       </div>
     </div>
   </div>
   <div class="under"></div>
 </div>
-<p class="note">Left to right: workspaces 1–9, each showing the icons of its windows, and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (keep awake, faint while off; Bluetooth; network; volume, battery and CPU, each with its percentage; notifications; session), then the clocks. The zone clocks carry short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT). The local clock swaps its label for the date.</p>
+<p class="note">Left to right: workspaces 1–9, each showing the icons of its windows, and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (keep awake, faint while off; Bluetooth; network; volume, battery and CPU, each with its percentage; notifications; session), then the clocks: local alone here, all four where there&rsquo;s room. The zone clocks carry short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT). The local clock swaps its label for the date.</p>
 
 <h2>Light (07:00–19:00 by default)</h2>
 <div class="frame light theme-light">
@@ -79,7 +76,7 @@
       <div class="ws empty"><span class="n">9</span></div>
       <span class="layout-sym">|M|</span>
     </div>
-    <span class="bar-title" style="max-width:40px">SPEC.md — tide - Google Chrome</span>
+    <span class="bar-title">SPEC.md — tide - Google Chrome</span>
     <div class="bar-right">
       <div class="tray" style="display:flex">
         <span class="sicon dim"><i class="ms">cloud_done</i></span>
@@ -96,9 +93,6 @@
       <span class="sicon"><i class="ms">power_settings_new</i></span>
       <span class="sep"></span>
       <div class="clocks">
-        <span class="clock"><span class="tz">SF</span><span class="t">10:41</span></span>
-        <span class="clock"><span class="tz">NYC</span><span class="t">13:41</span></span>
-        <span class="clock"><span class="tz">LON</span><span class="t">18:41</span></span>
         <span class="clock local"><span class="tz">Sep 28</span><span class="t">19:41</span></span>
       </div>
     </div>
@@ -141,5 +135,19 @@
   </div></div><div class="cap" style="max-width:340px"><b>Local is London</b>: the LON clock is dropped rather than shown twice (configurable).</div></div>
 </div>
 
+<script>
+// Size each title as shell/lib/title.mjs does: centered, and no wider than
+// twice the room on its narrower side, less a 32 px gap. After the fonts
+// load: until then each icon is its ligature's name, as wide as a word.
+document.fonts.ready.then(() => {
+  for (const bar of document.querySelectorAll('.frame .bar')) {
+    const box = bar.getBoundingClientRect();
+    const left = bar.querySelector('.bar-left').getBoundingClientRect().right - box.left;
+    const right = bar.querySelector('.bar-right').firstElementChild.getBoundingClientRect().left - box.left;
+    const mid = box.width / 2;
+    bar.querySelector('.bar-title').style.maxWidth = Math.max(0, 2 * Math.min(mid - left, right - mid) - 32) + 'px';
+  }
+});
+</script>
 </body>
 </html>

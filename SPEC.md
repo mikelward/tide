@@ -713,6 +713,14 @@ See [`bar.png`](docs/mocks/bar.png).
   - A zone that only shares the current offset (Arizona against Los Angeles
     in summer) stays, so no clock appears and disappears at a DST change.
   - The popover still lists the hidden zone, marked as local.
+- **Short of room, local alone.** The window title stays centered, so the
+  right-hand icons and clocks eat into it from the middle out. When every
+  clock showing would leave the title under 200 px, the bar shows only
+  the local clock, and the zone clocks are a click away in the popover. On
+  a laptop at 1536 px that is the usual case; on an ultrawide all four
+  stay. It only applies when the right side is what's short: if the
+  workspaces are, hiding clocks wouldn't help the title. Decided by the
+  maintainer, from the options in [`narrow.png`](docs/mocks/narrow.png).
 - **Different day.** A zone whose date differs from local shows a small
   `−1` or `+1` (`−2` or `+2` only between zones either side of the date
   line, such as UTC−12 and UTC+14).

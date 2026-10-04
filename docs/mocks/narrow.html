@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: bar on a narrow screen</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .frame { overflow: hidden; box-shadow: 0 0 0 1px #2a2a30; margin-bottom: 8px; }
+</style>
+</head>
+<body class="sheet" data-width="1600" data-scale="2">
+
+<h1>Bar on a narrow screen</h1>
+<p class="lede">The bar at 1536&nbsp;px, a typical laptop width, with keep awake, the volume % and the CPU % added. Each option below is drawn to scale; the title gets exactly the room each layout leaves it. <b>Chosen: C</b>, and only when every clock showing would leave the title under 200&nbsp;px (SPEC.md §7.3).</p>
+
+<h2>A. Today</h2>
+<div class="frame theme-dark">
+  <div class="bar" data-title="center">
+    <div class="bar-left">
+      <div class="ws occupied"><span class="n">1</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span></span></div>
+      <div class="ws active"><span class="n">2</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span><span class="appicon app-meet"><i class="ms">videocam</i></span><span class="appicon app-chat"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">3</span><span class="apps"><span class="appicon app-code"><i class="ms">code</i></span></span></div>
+      <div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">5</span><span class="apps"><span class="appicon app-music"><i class="ms">music_note</i></span></span></div>
+      <div class="ws empty"><span class="n">6</span></div>
+      <div class="ws empty"><span class="n">7</span></div>
+      <div class="ws empty"><span class="n">8</span></div>
+      <div class="ws empty"><span class="n">9</span></div>
+      <span class="layout-sym">|M|</span>
+    </div>
+    <span class="bar-title">SPEC.md — tide - Google Chrome</span>
+    <div class="bar-right">
+      <div class="tray" style="display:flex">
+        <span class="sicon dim"><i class="ms">cloud_done</i></span>
+        <span class="sicon dim"><i class="ms">forum</i></span>
+      </div>
+      <span class="sep"></span>
+      <span class="sicon" style="color:var(--fg-faint)"><i class="ms">light_mode</i></span>
+      <span class="sicon"><i class="ms">bluetooth_connected</i></span>
+      <span class="sicon"><i class="ms fill">wifi</i></span>
+      <span class="sicon"><i class="ms fill">volume_up</i>64%</span>
+      <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
+      <span class="sicon"><i class="ms">computer</i>12%</span>
+      <span class="sicon badge"><i class="ms">notifications</i></span>
+      <span class="sicon"><i class="ms">power_settings_new</i></span>
+      <span class="sep"></span>
+      <div class="clocks">
+        <span class="clock"><span class="tz">SF</span><span class="t">10:41</span></span>
+        <span class="clock"><span class="tz">NYC</span><span class="t">13:41</span></span>
+        <span class="clock"><span class="tz">LON</span><span class="t">18:41</span></span>
+        <span class="clock local"><span class="tz">Sep 28</span><span class="t">19:41</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note">Every icon with its percentage, and all four clocks. The centered title gets what's left between the two sides: about 40&nbsp;px.</p>
+<h2>B. Percentages only where they matter</h2>
+<div class="frame theme-dark">
+  <div class="bar" data-title="center">
+    <div class="bar-left">
+      <div class="ws occupied"><span class="n">1</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span></span></div>
+      <div class="ws active"><span class="n">2</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span><span class="appicon app-meet"><i class="ms">videocam</i></span><span class="appicon app-chat"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">3</span><span class="apps"><span class="appicon app-code"><i class="ms">code</i></span></span></div>
+      <div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">5</span><span class="apps"><span class="appicon app-music"><i class="ms">music_note</i></span></span></div>
+      <div class="ws empty"><span class="n">6</span></div>
+      <div class="ws empty"><span class="n">7</span></div>
+      <div class="ws empty"><span class="n">8</span></div>
+      <div class="ws empty"><span class="n">9</span></div>
+      <span class="layout-sym">|M|</span>
+    </div>
+    <span class="bar-title">SPEC.md — tide - Google Chrome</span>
+    <div class="bar-right">
+      <div class="tray" style="display:flex">
+        <span class="sicon dim"><i class="ms">cloud_done</i></span>
+        <span class="sicon dim"><i class="ms">forum</i></span>
+      </div>
+      <span class="sep"></span>
+      <span class="sicon" style="color:var(--fg-faint)"><i class="ms">light_mode</i></span>
+      <span class="sicon"><i class="ms">bluetooth_connected</i></span>
+      <span class="sicon"><i class="ms fill">wifi</i></span>
+      <span class="sicon"><i class="ms fill">volume_up</i></span>
+      <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
+      <span class="sicon"><i class="ms">computer</i></span>
+      <span class="sicon badge"><i class="ms">notifications</i></span>
+      <span class="sicon"><i class="ms">power_settings_new</i></span>
+      <span class="sep"></span>
+      <div class="clocks">
+        <span class="clock"><span class="tz">SF</span><span class="t">10:41</span></span>
+        <span class="clock"><span class="tz">NYC</span><span class="t">13:41</span></span>
+        <span class="clock"><span class="tz">LON</span><span class="t">18:41</span></span>
+        <span class="clock local"><span class="tz">Sep 28</span><span class="t">19:41</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note">Volume and CPU drop their numbers below a width (the icon still turns amber or red, and a click or scroll still works); battery keeps its percentage. All four clocks stay.</p>
+<h2>C. Collapse the zone clocks (chosen)</h2>
+<div class="frame theme-dark">
+  <div class="bar" data-title="center">
+    <div class="bar-left">
+      <div class="ws occupied"><span class="n">1</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span></span></div>
+      <div class="ws active"><span class="n">2</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span><span class="appicon app-meet"><i class="ms">videocam</i></span><span class="appicon app-chat"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">3</span><span class="apps"><span class="appicon app-code"><i class="ms">code</i></span></span></div>
+      <div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">5</span><span class="apps"><span class="appicon app-music"><i class="ms">music_note</i></span></span></div>
+      <div class="ws empty"><span class="n">6</span></div>
+      <div class="ws empty"><span class="n">7</span></div>
+      <div class="ws empty"><span class="n">8</span></div>
+      <div class="ws empty"><span class="n">9</span></div>
+      <span class="layout-sym">|M|</span>
+    </div>
+    <span class="bar-title">SPEC.md — tide - Google Chrome</span>
+    <div class="bar-right">
+      <div class="tray" style="display:flex">
+        <span class="sicon dim"><i class="ms">cloud_done</i></span>
+        <span class="sicon dim"><i class="ms">forum</i></span>
+      </div>
+      <span class="sep"></span>
+      <span class="sicon" style="color:var(--fg-faint)"><i class="ms">light_mode</i></span>
+      <span class="sicon"><i class="ms">bluetooth_connected</i></span>
+      <span class="sicon"><i class="ms fill">wifi</i></span>
+      <span class="sicon"><i class="ms fill">volume_up</i>64%</span>
+      <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
+      <span class="sicon"><i class="ms">computer</i>12%</span>
+      <span class="sicon badge"><i class="ms">notifications</i></span>
+      <span class="sicon"><i class="ms">power_settings_new</i></span>
+      <span class="sep"></span>
+      <div class="clocks">
+        <span class="clock local"><span class="tz">Sep 28</span><span class="t">19:41</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note">Only the local clock shows; SF, NYC and LON move into the clocks popover a click away. Every percentage stays.</p>
+<h2>D. Both</h2>
+<div class="frame theme-dark">
+  <div class="bar" data-title="center">
+    <div class="bar-left">
+      <div class="ws occupied"><span class="n">1</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span></span></div>
+      <div class="ws active"><span class="n">2</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span><span class="appicon app-meet"><i class="ms">videocam</i></span><span class="appicon app-chat"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">3</span><span class="apps"><span class="appicon app-code"><i class="ms">code</i></span></span></div>
+      <div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">5</span><span class="apps"><span class="appicon app-music"><i class="ms">music_note</i></span></span></div>
+      <div class="ws empty"><span class="n">6</span></div>
+      <div class="ws empty"><span class="n">7</span></div>
+      <div class="ws empty"><span class="n">8</span></div>
+      <div class="ws empty"><span class="n">9</span></div>
+      <span class="layout-sym">|M|</span>
+    </div>
+    <span class="bar-title">SPEC.md — tide - Google Chrome</span>
+    <div class="bar-right">
+      <div class="tray" style="display:flex">
+        <span class="sicon dim"><i class="ms">cloud_done</i></span>
+        <span class="sicon dim"><i class="ms">forum</i></span>
+      </div>
+      <span class="sep"></span>
+      <span class="sicon" style="color:var(--fg-faint)"><i class="ms">light_mode</i></span>
+      <span class="sicon"><i class="ms">bluetooth_connected</i></span>
+      <span class="sicon"><i class="ms fill">wifi</i></span>
+      <span class="sicon"><i class="ms fill">volume_up</i></span>
+      <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
+      <span class="sicon"><i class="ms">computer</i></span>
+      <span class="sicon badge"><i class="ms">notifications</i></span>
+      <span class="sicon"><i class="ms">power_settings_new</i></span>
+      <span class="sep"></span>
+      <div class="clocks">
+        <span class="clock local"><span class="tz">Sep 28</span><span class="t">19:41</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note">Volume and CPU as icons, and only the local clock.</p>
+<h2>E. Title off-center</h2>
+<div class="frame theme-dark">
+  <div class="bar" data-title="left">
+    <div class="bar-left">
+      <div class="ws occupied"><span class="n">1</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span></span></div>
+      <div class="ws active"><span class="n">2</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span><span class="appicon app-meet"><i class="ms">videocam</i></span><span class="appicon app-chat"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">3</span><span class="apps"><span class="appicon app-code"><i class="ms">code</i></span></span></div>
+      <div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">5</span><span class="apps"><span class="appicon app-music"><i class="ms">music_note</i></span></span></div>
+      <div class="ws empty"><span class="n">6</span></div>
+      <div class="ws empty"><span class="n">7</span></div>
+      <div class="ws empty"><span class="n">8</span></div>
+      <div class="ws empty"><span class="n">9</span></div>
+      <span class="layout-sym">|M|</span>
+    </div>
+    <span class="bar-title">SPEC.md — tide - Google Chrome</span>
+    <div class="bar-right">
+      <div class="tray" style="display:flex">
+        <span class="sicon dim"><i class="ms">cloud_done</i></span>
+        <span class="sicon dim"><i class="ms">forum</i></span>
+      </div>
+      <span class="sep"></span>
+      <span class="sicon" style="color:var(--fg-faint)"><i class="ms">light_mode</i></span>
+      <span class="sicon"><i class="ms">bluetooth_connected</i></span>
+      <span class="sicon"><i class="ms fill">wifi</i></span>
+      <span class="sicon"><i class="ms fill">volume_up</i>64%</span>
+      <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
+      <span class="sicon"><i class="ms">computer</i>12%</span>
+      <span class="sicon badge"><i class="ms">notifications</i></span>
+      <span class="sicon"><i class="ms">power_settings_new</i></span>
+      <span class="sep"></span>
+      <div class="clocks">
+        <span class="clock"><span class="tz">SF</span><span class="t">10:41</span></span>
+        <span class="clock"><span class="tz">NYC</span><span class="t">13:41</span></span>
+        <span class="clock"><span class="tz">LON</span><span class="t">18:41</span></span>
+        <span class="clock local"><span class="tz">Sep 28</span><span class="t">19:41</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="note">Everything stays; the title takes the free space between the layout symbol and the tray, left-aligned, instead of being centered on the bar.</p>
+
+<script>
+// Size each title the way the shell does: centered, and no wider than the
+// room on its narrower side (shell/lib/title.mjs), or, for the off-center
+// option, the whole gap between the two sides.
+// After the fonts load: until then each icon is its ligature's name, as
+// wide as a word.
+document.fonts.ready.then(() => {
+for (const bar of document.querySelectorAll('.bar')) {
+  const box = bar.getBoundingClientRect();
+  const leftEnd = bar.querySelector('.bar-left').getBoundingClientRect().right - box.left;
+  const rightStart = bar.querySelector('.bar-right').firstElementChild.getBoundingClientRect().left - box.left;
+  const title = bar.querySelector('.bar-title');
+  const gap = 16;
+  if (bar.dataset.title === 'left') {
+    title.style.left = (leftEnd + gap) + 'px';
+    title.style.transform = 'none';
+    title.style.maxWidth = (rightStart - leftEnd - 2 * gap) + 'px';
+  } else {
+    const mid = box.width / 2;
+    title.style.maxWidth = Math.max(0, 2 * Math.min(mid - leftEnd, rightStart - mid) - 2 * gap) + 'px';
+  }
+}
+});
+</script>
+</body>
+</html>
