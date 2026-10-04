@@ -128,8 +128,44 @@ func TestRunClasses(t *testing.T) {
 	if got, want := stdout.String(), "org.example.Editor\nexample-editor-x11\n"; got != want {
 		t.Errorf("--classes printed %q, want %q", got, want)
 	}
-	if status := run([]string{"--classes", "editor", "file.txt"}, dataEnv("/nonexistent", sys), io.Discard, &stderr); status != 2 {
-		t.Errorf("--classes with arguments = %d, want 2: it takes the program alone", status)
+	// It takes a command as words: past wrappers to the program, whose own
+	// arguments don't matter.
+	writeEntry(t, sys, "org.example.Mode.desktop", "[Desktop Entry]\nExec=env MODE=a moded\n")
+	for words, want := range map[string]string{
+		"editor file.txt":                "org.example.Editor\nexample-editor-x11\n",
+		"env LANG=C nice -n 5 editor":    "",
+		"nice -n 5 editor --new-window":  "org.example.Editor\nexample-editor-x11\n",
+		"env MODE=a moded":               "org.example.Mode\n",
+		"env MODE=b moded":               "",
+		"env PATH=/opt/vendor editor":    "",
+		"env --help":                     "",
+		"/usr/bin/env -- MODE=a moded x": "org.example.Mode\n",
+	} {
+		stdout.Reset()
+		if status := run(append([]string{"--classes", "--"}, strings.Fields(words)...), dataEnv("/nonexistent", sys), &stdout, &stderr); status != 0 || stdout.String() != want {
+			t.Errorf("--classes %s = %d, %q; want 0, %q", words, status, stdout.String(), want)
+		}
+	}
+	for _, args := range [][]string{{"--classes"}, {"--program"}, {"--classes", "--program", "editor"}} {
+		if status := run(args, dataEnv("/nonexistent", sys), io.Discard, io.Discard); status != 2 {
+			t.Errorf("run %q = %d, want 2", args, status)
+		}
+	}
+}
+
+// --program prints the program a command runs, past wrappers, as written.
+func TestRunProgram(t *testing.T) {
+	for words, want := range map[string]string{
+		"editor file.txt":                "editor\n",
+		"env LANG=C /opt/x/editor --new": "/opt/x/editor\n",
+		"nice -n 5 setsid -w editor":     "editor\n",
+		"env --help":                     "",
+		"flatpak run org.example.App":    "flatpak\n",
+	} {
+		var stdout bytes.Buffer
+		if status := run(append([]string{"--program", "--"}, strings.Fields(words)...), nil, &stdout, io.Discard); status != 0 || stdout.String() != want {
+			t.Errorf("--program %s = %d, %q; want 0, %q", words, status, stdout.String(), want)
+		}
 	}
 }
 

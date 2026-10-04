@@ -457,17 +457,13 @@ The focus guard matches a grant against the window class alone (SPEC.md
 §14.3), so a grant lists every class the app's window may have. The
 launcher grants each entry its `StartupWMClass`, desktop ID and
 program at once (`grantIds` in `shell/lib/launcher.mjs`, repeated `--app`).
-On a live session, check which apps in use come up unfocused because their
-window class is none of those three. Still to do:
+Key bindings (`tide launch COMMAND`) and terminal commands (`tide-grant`)
+grant the program the command runs, past wrappers, and the desktop ID and
+`StartupWMClass` of each entry whose `Exec` runs it
+(`cmd/tide-grant/desktop.go`). On a live session, check which apps in use
+come up unfocused because their window class is none of those. Still to
+do:
 
-- Key bindings (`tide launch PROGRAM`) and terminal commands (`tide-grant`)
-  also grant the desktop ID and `StartupWMClass` of each entry whose
-  `Exec` runs the program, read once, in Go (`cmd/tide-grant/desktop.go`).
-- `tide launch env VAR=x editor` grants `env`, not `editor`, and reads no
-  desktop entries, since `bin/tide` takes the first word for the program.
-  Resolve it past wrappers the way `tide-grant` does, perhaps by handing
-  the whole command to `tide-grant`. It's older than the desktop-entry
-  lookup.
 - `tide launch xdg-open URL` or `gio open FILE` grants `*` (the first
   window of any app) unless `--app` names the app. Resolve the opener
   through the default handler for the file's type.

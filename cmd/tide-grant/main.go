@@ -49,17 +49,33 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("tide-grant", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	pid := flags.Int("pid", os.Getppid(), "the `pid` of the shell running the command")
-	classes := flags.String("classes", "", "print the window classes the desktop entries running `PROGRAM` name, one per line, and exit")
+	classes := flags.Bool("classes", false, "print the window classes the desktop entries for the command `WORD...` name, one per line, and exit")
+	program := flags.Bool("program", false, "print the program the command `WORD...` runs, past wrappers, and exit")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
-	if *classes != "" {
-		// For `tide launch`, which grants a key binding's program.
-		if flags.NArg() != 0 {
-			fmt.Fprintln(stderr, "usage: tide-grant --classes PROGRAM")
+	// For `tide launch`, which runs a key binding's command as words, not a
+	// line for the shell: the program it runs, past wrappers (`env VAR=x
+	// editor` runs editor), to grant before the lookup, then its classes.
+	if *classes || *program {
+		if *classes && *program || flags.NArg() == 0 {
+			fmt.Fprintln(stderr, "usage: tide-grant --program WORD...")
+			fmt.Fprintln(stderr, "       tide-grant --classes WORD...")
 			return 2
 		}
-		found, err := desktopClasses(*classes, nil, env)
+		runs, settings, moves := commandProgram(flags.Args())
+		if *program {
+			if runs != "" {
+				fmt.Fprintln(stdout, runs)
+			}
+			return 0
+		}
+		// A command run with a PATH or directory of its own may run
+		// another program than its entries name.
+		if runs == "" || moves {
+			return 0
+		}
+		found, err := desktopClasses(runs, settings, env)
 		for _, c := range found {
 			fmt.Fprintln(stdout, c)
 		}
@@ -71,7 +87,8 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	}
 	if flags.NArg() != 1 {
 		fmt.Fprintln(stderr, "usage: tide-grant [--pid PID] [--] COMMAND-LINE")
-		fmt.Fprintln(stderr, "       tide-grant --classes PROGRAM")
+		fmt.Fprintln(stderr, "       tide-grant --program WORD...")
+		fmt.Fprintln(stderr, "       tide-grant --classes WORD...")
 		return 2
 	}
 	if !inTide(lookup(env, "XDG_CURRENT_DESKTOP")) {
@@ -214,6 +231,20 @@ func programPathEnv(line string, env []string) (name string, settings []string, 
 		return name, append(settings, more...), moves || envMoves
 	}
 	return "", nil, false
+}
+
+// commandProgram is the program a command given as words runs, as written,
+// past wrappers, with the settings env runs it with and whether they move
+// it (envSettings); "" when it runs none, such as `env --help`.
+func commandProgram(words []string) (name string, settings []string, moves bool) {
+	wrapperAt := map[int]bool{}
+	name, at, done := scanProgram(words, func(i int) { wrapperAt[i] = true })
+	app := filepath.Base(name)
+	if !done || name == "" || app == "." || app == "/" || strings.ContainsAny(app, " \t\n") {
+		return "", nil, false
+	}
+	settings, moves = envSettings(words[:at], wrapperAt)
+	return name, settings, moves
 }
 
 // firstCall returns the line's first simple command, looking past `!`,

@@ -156,20 +156,38 @@ focus_app() {
     grant "$1" focus focus_recent "focus its window" || exit 1
 }
 
-# The window classes a program's desktop entries say its window may have
-# (SPEC.md §14.3), one per line, from tide-grant, which reads Exec lines the
-# way it reads a terminal's. $1 is the program's name and $2 the program
-# as written, since a path (/opt/vendor/editor) matches only the entries that
-# run that file. Without tide-grant, or if it fails, the grant names the
-# program alone, and says why.
+# The program a command runs, as written, past wrappers (`env VAR=x editor`
+# runs editor), from tide-grant, which reads wrappers the way it reads a
+# terminal's. Without tide-grant it's the first word, and desktop_classes
+# says so; if tide-grant fails, that's said here.
+command_program() {
+    if ! command -v tide-grant >/dev/null 2>&1; then
+        printf '%s\n' "$1"
+        return 0
+    fi
+    if ! runs=$(tide-grant --program -- "$@"); then
+        echo "$prog launch: tide-grant couldn't read the program $1 runs; granting $1" >&2
+        runs=$1
+    fi
+    # A command that runs no program (`env --help`) is granted its first word.
+    printf '%s\n' "${runs:-$1}"
+}
+
+# The window classes the desktop entries for a command say its window may
+# have (SPEC.md §14.3), one per line, from tide-grant. $1 is the program's
+# name and the rest is the command: a path (/opt/vendor/editor) matches only
+# the entries that run that file, and settings before the program (`env
+# MODE=writer suite`) only the entries run with the same. Without
+# tide-grant, or if it fails, the grant names the program alone, and says
+# why.
 desktop_classes() {
     name=$1
-    runs=$2
+    shift
     if ! command -v tide-grant >/dev/null 2>&1; then
         echo "$prog launch: no tide-grant, so $name's desktop entries weren't read; granting $name alone (make install builds it)" >&2
         return 0
     fi
-    if ! tide-grant --classes "$runs"; then
+    if ! tide-grant --classes -- "$@"; then
         echo "$prog launch: tide-grant couldn't read $name's desktop entries; granting $name alone" >&2
     fi
 }
@@ -235,14 +253,16 @@ launch() {
         exec "$@"
     fi
     if test -z "$app"; then
-        case "${1##*/}" in
+        runs=$(command_program "$@")
+        case "${runs##*/}" in
             # They open whatever handles the file, whose app isn't known here
             # (TODO.md: grants through desktop entries).
             xdg-open) app='*' ;;
             # Only `gio open` opens an app; `gio trash` and the rest don't.
-            gio) if test "${2:-}" = open; then app='*'; else app=gio; fi ;;
+            # Behind a wrapper, where `open` would be later, it's taken as gio.
+            gio) if test "$runs" = "$1" && test "${2:-}" = open; then app='*'; else app=gio; fi ;;
             *)
-                app=${1##*/}
+                app=${runs##*/}
                 add_app "$app"
                 lookup=yes
                 ;;
@@ -261,7 +281,7 @@ launch() {
         # cancels it, and added to it only if it still holds. The grant is
         # keyed by this process's pid, so a lookup for a launch that was
         # canceled can't widen a later launch's grant for the same program.
-        classes=$(desktop_classes "$app" "$1")
+        classes=$(desktop_classes "$app" "$@")
         count=0
         names=
         apps=
