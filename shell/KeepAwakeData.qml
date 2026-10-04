@@ -6,15 +6,21 @@ import "lib/keepawake.mjs" as KeepAwake
 
 // Keep awake (SPEC.md §10), shared by every monitor's bar: while it's on,
 // each bar holds an idle inhibitor, so hypridle doesn't dim, lock, blank or
-// suspend. It turns itself off after KeepAwake.HOLD_MS. It survives a
-// config reload, but a new shell starts with it off.
+// suspend. It's on while you asked for it, which turns itself off after
+// KeepAwake.HOLD_MS, survives a config reload, and starts off in a new
+// shell; and while the mic is live (MicData), so an audio-only call with
+// nothing moving on screen doesn't blank.
 Singleton {
     id: root
 
-    readonly property bool on: held.until > 0
+    // You turned it on, and its time hasn't run out.
+    readonly property bool asked: held.until > 0
+    readonly property bool on: root.asked || MicData.live
 
+    // Turns your request on or off. While the mic is live it stays on
+    // either way; the click still decides what's left once the call ends.
     function toggle() {
-        const next = KeepAwake.toggled({ on: root.on, until: held.until }, Date.now());
+        const next = KeepAwake.toggled({ on: root.asked, until: held.until }, Date.now());
         held.until = next.until;
     }
 
@@ -33,7 +39,7 @@ Singleton {
     // it would hold on for whatever was left before it. Starting on, it
     // also catches a deadline that passed before a config reload.
     Timer {
-        running: root.on
+        running: root.asked
         repeat: true
         triggeredOnStart: true
         interval: 30 * 1000
