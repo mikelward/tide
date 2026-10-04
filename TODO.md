@@ -280,10 +280,9 @@ holds the queue, and
   activation still wins.
 - History: the center (`shell/NotificationCenter.qml`), the bell, and
   `notifications.json` (`shell/HistoryData.qml`, `shell/lib/history.mjs`)
-  are in, behind the same opt-in; only parsed with `qmlformat`. Still to
-  do: `Super+Shift+N` in `conf` (`qs -c tide ipc call notifications
-  toggle`, falling back to swaync's panel while the call fails), and
-  `persistence` (`persistenceSupported`), which §9 lists: it needs a popup
+  are in, behind the same opt-in; only parsed with `qmlformat`.
+  `Super+Shift+N` in `conf` opens it (swaync's panel while the call
+  fails). Still to do: `persistence` (`persistenceSupported`), which §9 lists: it needs a popup
   that times out to stay open on the server, hidden, until the center lets
   it go, or its actions are gone by the time the center is clicked.
 - A click on a center entry does what its popup's click does while its
@@ -304,8 +303,6 @@ holds the queue, and
   the Sharing pill's click (§7.4: what is being shared), which waits on
   the same. The pill itself is `shell/SharingPill.qml`. On a live
   session, check that Chrome's consumer link reads as active.
-- Keep popups out of screen shares: a `no_screen_share` layer rule for the
-  `tide-notifications` namespace in `conf`.
 - Retire swaync: the shell owns the name, joins the ready check, and
   `tide-shell` stops starting it; drop the opt-in.
 
