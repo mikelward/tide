@@ -233,3 +233,56 @@ export function passesDnd(notification, URGENCY) {
 export function heldByDnd(queue, dnd, URGENCY) {
     return dnd ? queue.filter(n => !passesDnd(n, URGENCY)) : [];
 }
+
+// Persistence (§9). A popup that runs out of time, or that Do not disturb
+// or a share holds, leaves the queue for `resting`: the notification stays
+// live on the server, out of sight, so a click on its center entry can
+// still run its actions. It's released when the center lets its entry go
+// (unkept), and woken back into the queue by an update in place, which is
+// news as a new notification would be.
+
+// {queue, resting, replaced} after `notification` arrives (arrive). A
+// synchronous key also matches a resting notification, which is still
+// live: the new one takes its place in the history and marks, and it's
+// released, rather than lingering beside it.
+export function arriveResting(queue, resting, notification) {
+    const result = arrive(queue, notification);
+    const key = syncKey(notification.hints);
+    if (result.replaced || key === null || queue.includes(notification)) {
+        return { queue: result.queue, resting, replaced: result.replaced };
+    }
+    const replaced = resting.find(n =>
+        n !== notification && n.appName === notification.appName && syncKey(n.hints) === key) ?? null;
+    return { queue: result.queue, resting: replaced ? leave(resting, replaced) : resting, replaced };
+}
+
+// Whether `notification` is still live on the server: shown or waiting
+// in the queue, or resting. A click's grant can outlast the popup, so its
+// action runs if it's either.
+export function isLive(queue, resting, notification) {
+    return queue.includes(notification) || resting.includes(notification);
+}
+
+// {queue, resting} after `notification`'s popup goes but the notification
+// stays.
+export function rest(queue, resting, notification) {
+    return {
+        queue: leave(queue, notification),
+        resting: resting.includes(notification) ? resting : [...resting, notification],
+    };
+}
+
+// {queue, resting, replaced} after a resting notification is updated in
+// place, so its popup shows again (arrive, which may replace another).
+export function wake(queue, resting, notification) {
+    const result = arrive(queue, notification);
+    return { queue: result.queue, resting: leave(resting, notification), replaced: result.replaced };
+}
+
+// The resting notifications whose center entry has gone (cleared, past
+// the history's cap, or never there for a transient one), to release.
+// `keys` holds the entries' keys; `keyOf` turns an id into one.
+export function unkept(resting, keys, keyOf) {
+    const kept = new Set(keys);
+    return resting.filter(n => !kept.has(keyOf(n.id)));
+}

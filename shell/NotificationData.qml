@@ -15,6 +15,55 @@ Singleton {
 
     // The notifications with a popup, shown or waiting, oldest first.
     property var queue: []
+    // The notifications whose popup has gone (timed out, or held for Do not
+    // disturb or a share) but which stay live for the center (Notes.rest),
+    // oldest first. A config reload carries them over as live ones, so
+    // their ids are kept to tell them from popups: added as one rests and
+    // dropped as one leaves, rather than copied from `resting`, which starts
+    // empty after a reload while the carried ones are still arriving.
+    property var resting: []
+
+    PersistentProperties {
+        id: restingState
+
+        reloadableId: "tide-resting"
+
+        property var ids: []
+    }
+
+    function setResting(next) {
+        const gone = new Set(root.resting.filter(n => !next.includes(n)).map(n => n.id));
+        const added = next.filter(n => !root.resting.includes(n)).map(n => n.id);
+        restingState.ids = [...restingState.ids.filter(id => !gone.has(id) && !added.includes(id)), ...added];
+        root.resting = next;
+    }
+
+    // A popup that goes rests rather than closing, and a resting one whose
+    // center entry has already gone (a transient one has none) is released.
+    function rest(notification) {
+        const next = Notes.rest(root.queue, root.resting, notification);
+        root.queue = next.queue;
+        root.setResting(next.resting);
+        root.release();
+    }
+
+    // Releases each resting notification the center has let go of
+    // (Notes.unkept). Expiring, rather than dismissing, keeps its bar marks,
+    // as its popup running out of time did. Closing takes it out of
+    // `resting` (onNotification).
+    function release() {
+        for (const n of Notes.unkept(root.resting, HistoryData.entries.map(e => e.key), HistoryData.keyOf)) {
+            n.expire();
+        }
+    }
+
+    Connections {
+        target: HistoryData
+
+        function onEntriesChanged() {
+            root.release();
+        }
+    }
     // Countdowns of the shown ones (shell/lib/notifications.mjs), by id.
     property var countdowns: ({})
     // Reply text being typed, by id, so it survives its popup moving to
@@ -46,15 +95,16 @@ Singleton {
 
     // Takes down every popup, shown or waiting, that Do not disturb or a
     // screen share holds as things stand (Notes.heldByDnd). It runs whenever
-    // the answer could change: either starting, an arrival, an update. Expiring keeps a
-    // notification's history entry and marks, as a popup timing out does.
+    // the answer could change: either starting, an arrival, an update. It
+    // rests, as a popup timing out does, keeping its history entry, its
+    // marks and its actions.
     function holdForDnd() {
         const held = Notes.heldByDnd(root.queue, root.quiet, root.urgency);
         if (ShareData.holdingPopups) {
             ShareData.counted(held.length);
         }
         for (const n of held) {
-            n.expire();
+            root.rest(n);
         }
     }
 
@@ -143,8 +193,9 @@ Singleton {
         }
         root.hold(notification, "click", true);
         Launcher.grant(app, () => {
-            // It may have gone meanwhile: closed by its app, or replaced.
-            if (root.queue.includes(notification)) {
+            // It may have gone meanwhile: closed by its app, or replaced. A
+            // resting one is still live (a click on its center entry).
+            if (Notes.isLive(root.queue, root.resting, notification)) {
                 root.hold(notification, "click", false);
                 action.invoke();
             }
@@ -152,12 +203,13 @@ Singleton {
     }
 
     // A click on an entry in the center (§9): while the notification is
-    // still live, what a click on its popup does (its default action, or a
-    // dismissal when it has none); otherwise its app's most recent window,
-    // through the focus guard (`tide focus`), since a notification that has
-    // gone took its actions with it.
+    // still live, shown or resting, what a click on its popup does (its
+    // default action, or a dismissal when it has none); otherwise its app's
+    // most recent window, through the focus guard (`tide focus`), since a
+    // notification that has gone took its actions with it.
     function openEntry(entry) {
-        const live = root.queue.find(n => HistoryData.keyOf(n.id) === entry.key) ?? null;
+        const mine = n => HistoryData.keyOf(n.id) === entry.key;
+        const live = root.queue.find(mine) ?? root.resting.find(mine) ?? null;
         const target = History.clickTarget(entry, live, Notes.defaultAction);
         if (target?.action) {
             root.run(live, target.action);
@@ -195,11 +247,11 @@ Singleton {
 
         onTriggered: {
             const now = Date.now();
-            // Expiring closes it, which takes it out of the queue.
+            // Its popup goes, and the notification rests (Notes.rest).
             for (const n of Notes.shown(root.queue)) {
                 const c = root.countdowns[n.id];
                 if (c && Notes.due(c, now)) {
-                    n.expire();
+                    root.rest(n);
                 }
             }
             root.schedule();
@@ -212,22 +264,30 @@ Singleton {
         NotificationServer {
             // What §9 advertises. Chrome sends native notifications only
             // with body and actions, and actions are off by default.
-            // Persistence stays off: a popup that times out is closed, which
-            // takes its actions with it, so the center can run only a live
-            // one's (TODO.md). An app that sees persistence may leave keeping
-            // its notifications to the server, and they'd be gone.
+            // Persistence is real: a popup that times out leaves the
+            // notification resting, still live, until the center lets its
+            // entry go, so an app that leaves keeping its notifications to
+            // the server finds them there.
             bodySupported: true
             bodyMarkupSupported: true
             actionsSupported: true
             imageSupported: true
-            persistenceSupported: false
+            persistenceSupported: true
             inlineReplySupported: true
 
             onNotification: notification => {
                 notification.tracked = true;
                 const id = notification.id;
-                const result = Notes.arrive(root.queue, notification);
+                // One that was resting before a config reload goes on
+                // resting, rather than popping up again.
+                const wasResting = notification.lastGeneration && restingState.ids.includes(id);
+                const result = wasResting ? {
+                    queue: root.queue,
+                    resting: [...root.resting, notification],
+                    replaced: null
+                } : Notes.arriveResting(root.queue, root.resting, notification);
                 root.queue = result.queue;
+                root.setResting(result.resting);
                 // It marks its app's windows that are off screen (§14.4),
                 // taking over the marks of any it replaced.
                 MarkData.notified(id, Notes.grantId(notification), result.replaced?.id);
@@ -239,6 +299,7 @@ Singleton {
                 // go too, unless it only ran out of time.
                 notification.closed.connect(reason => {
                     root.queue = Notes.leave(root.queue, notification);
+                    root.setResting(Notes.leave(root.resting, notification));
                     root.drafts = Notes.withDraft(root.drafts, id, "");
                     if (Notes.clearsMarks(reason, root.closeReason)) {
                         MarkData.dismissed(id);
@@ -250,6 +311,13 @@ Singleton {
                 // An update is news, so it marks again.
                 for (const changed of [notification.appNameChanged, notification.appIconChanged, notification.summaryChanged, notification.bodyChanged, notification.urgencyChanged, notification.actionsChanged, notification.imageChanged, notification.hintsChanged, notification.desktopEntryChanged, notification.expireTimeoutChanged]) {
                     changed.connect(() => {
+                        // A resting one shows again, as news.
+                        if (root.resting.includes(notification)) {
+                            const woken = Notes.wake(root.queue, root.resting, notification);
+                            root.queue = woken.queue;
+                            root.setResting(woken.resting);
+                            woken.replaced?.expire();
+                        }
                         root.restart(notification);
                         MarkData.notified(id, Notes.grantId(notification));
                         HistoryData.record(notification);
