@@ -2,11 +2,12 @@ import QtQuick
 import Quickshell
 import Quickshell.Networking
 import "lib/network.mjs" as Net
+import "lib/vpn.mjs" as Vpn
 
 // The network popover (SPEC.md §7.4): Wi-Fi on or off, the networks in
-// range, and NetworkManager's editor for everything else. A network that
-// needs a password asks for it here, once NetworkManager says so. There's
-// one per monitor; what they share lives in NetworkData.
+// range, the VPNs, and NetworkManager's editor for everything else. A
+// network that needs a password asks for it here, once NetworkManager says
+// so. There's one per monitor; what they share lives in NetworkData.
 PopupWindow {
     id: root
 
@@ -195,6 +196,23 @@ PopupWindow {
                                 modelData.connect();
                             }
                         }
+                    }
+                }
+
+                // The VPNs (SPEC.md §7.4), through nmcli (NetworkData): a
+                // click brings one up or down.
+                Repeater {
+                    model: Vpn.vpnList(NetworkData.vpns)
+
+                    MenuRow {
+                        required property var modelData
+                        readonly property string status: Vpn.vpnStatus(modelData, NetworkData.vpnFailed)
+
+                        width: list.width
+                        icon: "network-vpn-symbolic"
+                        label: status ? `${modelData.name} · ${status}` : modelData.name
+                        selected: modelData.active
+                        onClicked: NetworkData.toggleVpn(modelData)
                     }
                 }
 

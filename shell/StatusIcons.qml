@@ -87,6 +87,28 @@ Row {
         visible: view.visible
         name: view.icon || "network-offline-symbolic"
 
+        // A VPN's lock (SPEC.md §7.4), on a disc of the bar's color so it
+        // reads over the icon; faint while the VPN is still connecting.
+        Rectangle {
+            visible: NetworkData.lock !== ""
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.rightMargin: -2
+            anchors.bottomMargin: -2
+            width: 10
+            height: 10
+            radius: 5
+            color: Theme.barBg
+
+            SymbolicIcon {
+                anchors.centerIn: parent
+                width: 8
+                height: 8
+                name: "changes-prevent-symbolic"
+                opacity: NetworkData.lock === "on" ? 1 : 0.5
+            }
+        }
+
         TapHandler {
             onTapped: networkPopover.toggle()
         }
