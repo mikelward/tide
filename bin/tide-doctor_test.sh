@@ -329,6 +329,28 @@ if command -v jq >/dev/null 2>&1; then
     check "a bar with margins and a set width still counts" contains "$out" "2 bars on DP-1 (waybar, floating-bar)"
     run FAKE_MONITORS="$monitors" FAKE_LAYERS="{\"DP-1\":{\"levels\":{\"1\":[$(bar 0 0 2752 32 bottom-layer-bar)],\"2\":[$(bar 0 0 2752 32 waybar)]}}}"
     check "a bar on the bottom layer counts" contains "$out" "2 bars on DP-1 (bottom-layer-bar, waybar)"
+    # Reserved space: tide's 34 px bar on DP-1 reserves 34 at the top.
+    reserved() {
+        printf '[{"name":"DP-1","x":0,"y":0,"width":3440,"height":1440,"scale":1.25,"transform":0,"reserved":[%s]}]' "$1"
+    }
+    ours="{\"DP-1\":{\"levels\":{\"2\":[$(bar 0 0 2752 34 tide-bar)]}}}"
+    run FAKE_MONITORS="$(reserved 0,34,0,0)" FAKE_LAYERS="$ours"
+    check "tide's bar reserving its own height is fine" test -z "$(grep 'reserves\|bars on' "$tmp/out")"
+    run FAKE_MONITORS="$(reserved 0,62,0,48)" FAKE_LAYERS="$ours"
+    check "space reserved beyond tide's bar is a problem, by edge" \
+        contains "$out" "DP-1 reserves 28 px at the top, 48 px at the bottom beyond tide's bar"
+    run FAKE_MONITORS="$(reserved 0,74,0,0)" FAKE_LAYERS="{\"DP-1\":{\"levels\":{\"2\":[$(bar 0 40 2752 34 tide-bar)]}}}"
+    check "a monitor rule's reservation above tide's bar is found though it moves the bar down" \
+        contains "$out" "DP-1 reserves 40 px at the top beyond tide's bar"
+    run FAKE_MONITORS="$(reserved 40,34,0,0)" FAKE_LAYERS="$ours"
+    check "a side dock is caught by the space it reserves" contains "$out" "DP-1 reserves 40 px on the left beyond tide's bar"
+    run FAKE_MONITORS="$(reserved 0,34,0,48)" FAKE_LAYERS="{\"DP-1\":{\"levels\":{\"2\":[$(bar 0 0 2752 34 waybar)]}}}"
+    check "without tide's bar (under waybar) reserved space isn't judged" test -z "$(grep 'reserves' "$tmp/out")"
+    run FAKE_MONITORS="$(reserved 0,64,0,0)" FAKE_LAYERS="{\"DP-1\":{\"levels\":{\"2\":[$(bar 0 0 2752 34 tide-bar),$(bar 0 34 2752 30 waybar)]}}}"
+    check "a second full-width bar is named once, as a bar" contains "$out" "2 bars on DP-1 (tide-bar, waybar)"
+    check "a second full-width bar isn't also reported as reserved space" test -z "$(grep 'reserves' "$tmp/out")"
+    run FAKE_MONITORS="$(reserved 0,34,0,0)" FAKE_LAYERS="{\"DP-1\":{\"levels\":{\"2\":[$(bar 0 0 2752 34 tide-bar)],\"3\":[$(bar 2000 0 700 34 popup)]}}}"
+    check "a layer that reserves nothing isn't counted" test -z "$(grep 'reserves\|bars on' "$tmp/out")"
     run FAKE_MONITORS="$monitors" FAKE_LAYERS="not json"
     check "unreadable layers leave the bar check incomplete" \
         contains "$out" "so the one-bar-per-monitor check is incomplete"

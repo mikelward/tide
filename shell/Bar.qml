@@ -5,7 +5,9 @@ import Quickshell.Wayland
 import "lib/title.mjs" as Title
 
 // One bar per monitor (SPEC.md §7.1): a plain rectangle flush with the top
-// edge and both sides, its exclusive zone keeping tiling below it.
+// edge and both sides, its exclusive zone keeping tiling below it. Its
+// layer is named tide-bar, which `tide doctor` looks for to tell the space
+// it reserves from another bar's.
 PanelWindow {
     id: bar
 
@@ -13,6 +15,7 @@ PanelWindow {
     readonly property var monitor: Hyprland.monitorFor(bar.screen)
 
     screen: modelData
+    WlrLayershell.namespace: "tide-bar"
     anchors {
         top: true
         left: true

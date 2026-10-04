@@ -460,7 +460,9 @@ flowchart TD
   - who owns each D-Bus name in §5.2;
   - activatable services that could steal those names;
   - duplicate processes (two idle daemons, two polkit agents);
-  - more than one top-anchored layer surface per monitor (a second bar);
+  - more than one bar per monitor: a second bar-shaped layer, or space
+    reserved at any edge beyond the height of tide's own bar (its layer
+    is named `tide-bar`), which a narrow bar or a dock holds;
   - portal backend selection;
   - `hyprctl configerrors`;
   - unscoped autostart entries.
