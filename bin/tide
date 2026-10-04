@@ -2,13 +2,16 @@
 #
 # tide: the session's command-line helpers.
 #
-#   tide launch [--app ID] [--] COMMAND [ARG...]
+#   tide launch [--app ID]... [--] COMMAND [ARG...]
 #
 #     Starts an app the way the key bindings and the launcher do
 #     (SPEC.md §5.4, §14.3):
 #       1. records a one-shot focus grant for the app with the focus guard,
 #          so its first window may take focus. ID defaults to COMMAND's
-#          basename; '*' grants the first window of any app, for a
+#          basename. Repeat --app for an app whose window class isn't known
+#          for sure: a window of any ID uses the one grant (the launcher
+#          passes a desktop entry's ID and program name). '*' grants the
+#          first window of any app, for a
 #          wrapper script whose app isn't known in advance, and the
 #          default for xdg-open and gio open. It comes
 #          first, so a key press or focus change while the shell is still
@@ -69,7 +72,7 @@
 prog=${0##*/}
 
 usage() {
-    echo "usage: $prog launch [--app ID] [--] COMMAND [ARG...]" >&2
+    echo "usage: $prog launch [--app ID]... [--] COMMAND [ARG...]" >&2
     echo "       $prog grant ID" >&2
     echo "       $prog focus ID" >&2
     echo "       $prog autostart-allowed UNIT" >&2
@@ -109,18 +112,24 @@ wait_for_shell() {
 # Returns 1, having said why, when the guard didn't take it; $2 names the
 # subcommand for the message, $3 the guard's function (grant by default),
 # and $4 what the call does, for the messages (a focus grant by default).
+# $5, if given, is the call's argument already written as Lua, for a list
+# of IDs; $1 then only names them in the messages.
 grant() {
     what=${4:-record a focus grant}
     if ! command -v hyprctl >/dev/null 2>&1; then
         echo "$prog $2: no hyprctl, so couldn't $what for $1" >&2
         return 1
     fi
-    lua_id=$(printf '%s' "$1" | sed 's/[\\"]/\\&/g')
-    reply=$(hyprctl eval "tide_focus.${3:-grant}(\"$lua_id\")" 2>&1)
+    reply=$(hyprctl eval "tide_focus.${3:-grant}(${5:-$(lua_string "$1")})" 2>&1)
     if test "$reply" != ok; then
         echo "$prog $2: couldn't $what for $1: $reply" >&2
         return 1
     fi
+}
+
+# $1 as a Lua string literal.
+lua_string() {
+    printf '"%s"' "$(printf '%s' "$1" | sed 's/[\\"]/\\&/g')"
 }
 
 grant_only() {
@@ -147,17 +156,49 @@ focus_app() {
 }
 
 launch() {
+    # app is the first --app; names all of them, for the messages; apps
+    # the Lua list of all, and count how many. An empty ID means none
+    # given, as it always has.
     app=
+    names=
+    apps=
+    count=0
+    wildcard=no
     while test $# -gt 0; do
         case "$1" in
-            --app) test $# -ge 2 || usage; app=$2; shift 2 ;;
-            --app=*) app=${1#--app=}; shift ;;
+            --app | --app=*)
+                if test "$1" = --app; then
+                    test $# -ge 2 || usage
+                    id=$2
+                    shift 2
+                else
+                    id=${1#--app=}
+                    shift
+                fi
+                test -n "$id" || continue
+                test "$id" != '*' || wildcard=yes
+                count=$((count + 1))
+                if test -z "$app"; then
+                    app=$id
+                    names=$id
+                    apps=$(lua_string "$id")
+                else
+                    names="$names, $id"
+                    apps="$apps, $(lua_string "$id")"
+                fi
+                ;;
             --) shift; break ;;
             -*) usage ;;
             *) break ;;
         esac
     done
     test $# -gt 0 || usage
+    # '*' stands alone: beside a name it would make the name meaningless,
+    # and the guard refuses the pair, which would start the app ungranted.
+    if test "$wildcard" = yes && test "$count" -gt 1; then
+        echo "$prog launch: --app '*' grants any app's window, so it can't be given with other IDs ($names)" >&2
+        exit 2
+    fi
     if ! in_tide; then
         exec "$@"
     fi
@@ -171,8 +212,13 @@ launch() {
             *) app=${1##*/} ;;
         esac
     fi
-    # A grant that fails is reported; the app starts anyway.
-    grant "$app" launch
+    # A grant that fails is reported; the app starts anyway. One ID goes
+    # in as a string, several as a list.
+    if test "$count" -gt 1; then
+        grant "$names" launch grant "" "{ $apps }"
+    else
+        grant "$app" launch
+    fi
     wait_for_shell "$app"
     exec uwsm app -- "$@"
 }

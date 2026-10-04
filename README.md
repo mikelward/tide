@@ -38,9 +38,10 @@ target, so tide's units never start in a plain Hyprland or Plasma
 login (SPEC.md §5.3). If the display manager doesn't list the session,
 install it with `sudo make install-session PREFIX=/usr`.
 
-Key bindings and the launcher start apps with `tide launch [--app ID]
+Key bindings and the launcher start apps with `tide launch [--app ID]...
 COMMAND...`: it waits (at most 15 s) for the shell, gives the app a one-shot
 focus grant, and runs it with `uwsm app` so it outlives a shell restart.
+Repeat `--app` when the app's window class could be any of several IDs.
 Terminal commands get their grants from `tide-grant`, which each shell
 runs before a command (SPEC.md §14.3).
 

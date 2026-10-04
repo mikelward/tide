@@ -78,6 +78,22 @@ check "--app names the grant" \
     contains "$(cat "$log")" 'tide_focus.grant("org.gnome.Nautilus")'
 run "$qs" launch --app=kitty app
 check "--app=ID works too" contains "$(cat "$log")" 'tide_focus.grant("kitty")'
+run "$qs" launch --app org.example.Editor --app=example-editor -- "$fake/app"
+check "repeated --app grants a list any of them can use" \
+    contains "$(cat "$log")" 'tide_focus.grant({ "org.example.Editor", "example-editor" })'
+run "$qs" launch --app '*' --app firefox -- app
+check "--app '*' beside another ID is refused" test $? -eq 2
+check "--app '*' beside another ID says why" \
+    contains "$(cat "$tmp/err")" "--app '*' grants any app's window"
+check "--app '*' beside another ID starts nothing" test ! -s "$log"
+run "$qs" launch --app firefox --app '*' -- app
+check "--app '*' after another ID is refused too" test $? -eq 2
+run "$qs" launch --app '' -- "$fake/app"
+check "an empty --app falls back to the basename" \
+    contains "$(cat "$log")" 'tide_focus.grant("app")'
+run FAKE_HYPRCTL_REPLY='error: no tide_focus' "$qs" launch --app a --app b -- app
+check "a rejected list grant names every ID" \
+    contains "$(cat "$tmp/err")" "couldn't record a focus grant for a, b: error"
 run "$qs" launch --app '*' -- "$fake/app"
 check "--app '*' grants the next window of any app" \
     contains "$(cat "$log")" 'tide_focus.grant("*")'

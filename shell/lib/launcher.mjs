@@ -37,6 +37,7 @@ export function launcherItems(entries) {
             terminal: Boolean(e.runInTerminal),
             workingDirectory: e.workingDirectory || "",
             appId: e.startupClass || "",
+            entryId: e.id,
         };
         items.push(app);
         for (const a of e.actions ?? []) {
@@ -310,17 +311,45 @@ export function nextSection(rows, index, step) {
     return before.length > 0 ? before[before.length - 1] : starts[starts.length - 1];
 }
 
-// The `tide launch` command that runs `item`. The focus grant goes to its
-// StartupWMClass when the entry names one, since that's the window class
-// the guard sees. Otherwise nothing says which class its window will have:
-// the Exec line is often a wrapper (a script, `env`, `flatpak run`) whose
-// name no window has. So it grants the first window of any app (`*`), as
-// `tide launch` does for xdg-open; the grant still ends on a key press, a
-// focus change or after 10 s. A terminal app's window is the terminal's,
-// whatever class the entry names, so it grants `*` too.
+// Programs that start something else, so a window never has their name:
+// shells, sandboxes and launchers an Exec line runs an app through.
+const WRAPPERS = new Set([
+    "env", "sh", "bash", "dash", "zsh", "exec", "nohup", "setsid", "sudo", "pkexec", "systemd-run",
+    "flatpak", "snap", "gtk-launch", "gapplication", "dbus-launch", "xdg-open", "gio", "uwsm", "uwsm-app",
+    "app2unit", "python", "python3", "perl", "java", "wine", "toolbox", "distrobox",
+]);
+
+// The window classes `item`'s window may have, for its focus grant
+// (SPEC.md §14.3): its StartupWMClass when the entry names one, its
+// desktop ID, which a Wayland app's app_id usually is, and the program it
+// runs, unless that's a wrapper. One grant takes any of them, so an app
+// whose class is none of these is left unfocused and marked, the safe way
+// to be wrong. A terminal app's window is the terminal's, whatever class
+// the entry names, so it grants the first window of any app (`*`).
+export function grantIds(item) {
+    if (item.terminal) {
+        return ["*"];
+    }
+    const ids = [];
+    const seen = new Set();
+    for (const id of [item.appId, item.entryId, WRAPPERS.has(item.exec) ? "" : item.exec]) {
+        const key = String(id ?? "").toLowerCase();
+        if (key !== "" && !seen.has(key)) {
+            seen.add(key);
+            ids.push(id);
+        }
+    }
+    return ids.length > 0 ? ids : ["*"];
+}
+
+// The `tide launch` command that runs `item`, granting focus to the
+// classes grantIds lists.
 export function launchCommand(item) {
-    const app = item.appId && !item.terminal ? item.appId : "*";
-    const command = ["tide", "launch", "--app", app, "--"];
+    const command = ["tide", "launch"];
+    for (const id of grantIds(item)) {
+        command.push("--app", id);
+    }
+    command.push("--");
     if (item.terminal) {
         command.push("xdg-terminal-exec");
     }
