@@ -877,7 +877,9 @@ See [`notifications.png`](docs/mocks/notifications.png).
     Apps such as Chrome activate the right window when a notification is
     clicked, and the shell focuses exactly that window.
   - If nothing arrives and the app already has windows, it focuses the app's
-    most recently focused window.
+    most recently focused window. Anything you do meanwhile (a key, moving
+    the pointer into another window) cancels that, like any grant, so it
+    never pulls you away from what you moved on to.
   - Quickshell doesn't emit `ActivationToken`, so the app's activation is
     what identifies the window.
 - **Replacement.** Replacing notifications (`replaces_id`,

@@ -34,7 +34,8 @@
 --
 -- setup() also publishes the module as the global `tide_focus`, so
 -- `tide launch` can record a grant with
--- `hyprctl eval 'tide_focus.grant("APP")'`.
+-- `hyprctl eval 'tide_focus.grant("APP")'`, and a notification click
+-- `tide_focus.grant_or_recent("APP")`.
 --
 -- Known gaps, from SPEC.md §14.3: Lua sees key presses but not pointer
 -- buttons, so a click inside the window you're already in doesn't cancel a
@@ -79,7 +80,9 @@ local REASON_NEW_WINDOW = 16
 
 local state = {
     opts = nil,
-    grants = {}, -- { app = normalized id, at = seconds, pid = requester or nil }
+    -- { app = normalized id, at = seconds, pid = requester or nil, live },
+    -- where live drops to false when the grant is used or canceled.
+    grants = {},
     active = nil, -- { address, pid, app } of the focused window
     waiting = {}, -- addresses of windows left unfocused, oldest first
     shell_order = nil, -- every marked window, oldest first, from the shell
@@ -162,6 +165,7 @@ local function take_grant(w)
     for _, wildcard in ipairs({ false, true }) do
         for i, g in ipairs(state.grants) do
             if (g.app == "*") == wildcard and (wildcard or same_id(g.app, app)) then
+                g.live = false
                 table.remove(state.grants, i)
                 return true
             end
@@ -217,6 +221,7 @@ local function take_grant_by_ancestry(w)
     end
     for i, g in ipairs(state.grants) do
         if g.pid and descends(pid, g.pid) then
+            g.live = false
             table.remove(state.grants, i)
             return true
         end
@@ -227,6 +232,9 @@ end
 -- Anything you do after launching cancels every grant: a slow app mustn't
 -- take focus from whatever you moved on to.
 local function cancel_grants()
+    for _, g in ipairs(state.grants) do
+        g.live = false
+    end
     state.grants = {}
 end
 
@@ -570,7 +578,72 @@ function M.grant(app, pid)
         error("tide_focus.grant: expected an app id, got " .. tostring(app), 2)
     end
     expire()
-    table.insert(state.grants, { app = id, at = M.clock(), pid = pid })
+    table.insert(state.grants, { app = id, at = M.clock(), pid = pid, live = true })
+end
+
+-- The window of app focused most recently, or one never focused if none
+-- has been; nil when app has no window. focus_history_id is 0 for the
+-- window focused last and -1 for one never focused.
+local function most_recent(app)
+    -- A failed query is an error, which Hyprland logs as the timer's: the
+    -- click then brings up nothing, and the log says why.
+    local ok, windows = pcall(hl.get_windows)
+    if not ok then
+        error("tide focus: couldn't list windows to bring up " .. app .. ": " .. tostring(windows), 0)
+    end
+    if type(windows) ~= "table" then
+        error("tide focus: hl.get_windows returned " .. type(windows) .. ", not a list", 0)
+    end
+    local best, best_id = nil, nil
+    for _, w in ipairs(windows) do
+        if same_id(app, app_of(w)) and field(w, "address") then
+            local id = field(w, "focus_history_id")
+            id = (math.type(id) == "integer" and id >= 0) and id or math.huge
+            if not best or id < best_id then
+                best, best_id = w, id
+            end
+        end
+    end
+    return best
+end
+
+-- A notification's grant ran out unused (SPEC.md §9): the app sent no
+-- activation and opened no window, and you did nothing else meanwhile.
+-- Its most recent window comes up instead, on whatever workspace it is.
+-- That is the grant expiring, so a grant expire() has already dropped from
+-- the list (the timer ran late) still falls back here; only one used or
+-- canceled doesn't.
+local function lapse(g)
+    if not g.live then
+        return -- used, or canceled by you moving on
+    end
+    g.live = false
+    for i, other in ipairs(state.grants) do
+        if other == g then
+            table.remove(state.grants, i)
+            break
+        end
+    end
+    local w = most_recent(g.app)
+    if w then
+        focus(w)
+    end
+end
+
+-- A clicked notification's grant (SPEC.md §9, from `tide grant`): a
+-- grant like any other, which, if nothing uses or cancels it before it
+-- runs out, focuses the app's most recently focused window.
+function M.grant_or_recent(app)
+    local id = normalize(app)
+    if not id or id == "*" then
+        error("tide_focus.grant_or_recent: expected an app id, got " .. tostring(app), 2)
+    end
+    expire()
+    local g = { app = id, at = M.clock(), live = true }
+    table.insert(state.grants, g)
+    hl.timer(function()
+        lapse(g)
+    end, { timeout = state.opts.grant_seconds * 1000, type = "oneshot" })
 end
 
 -- For the tests and `tide doctor`.

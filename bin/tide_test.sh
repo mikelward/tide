@@ -122,9 +122,10 @@ check "a rejected grant is reported" \
 
 run "$qs" grant google-chrome
 check "grant exits 0 once recorded" test $? -eq 0
-check "grant records only the grant" test "$(cat "$log")" = 'hyprctl eval tide_focus.grant("google-chrome")'
+check "grant records only the grant, falling back to the app's last window" \
+    test "$(cat "$log")" = 'hyprctl eval tide_focus.grant_or_recent("google-chrome")'
 run "$qs" grant 'a"b'
-check "grant escapes the ID for Lua" contains "$(cat "$log")" 'tide_focus.grant("a\"b")'
+check "grant escapes the ID for Lua" contains "$(cat "$log")" 'tide_focus.grant_or_recent("a\"b")'
 run FAKE_HYPRCTL_REPLY='error: no tide_focus' "$qs" grant app
 check "a rejected grant exits 1" test $? -eq 1
 check "a rejected grant says why" \

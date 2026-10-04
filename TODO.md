@@ -272,8 +272,12 @@ holds the queue, and
 - Try it on a real session: stop swaync, run the shell with
   `TIDE_NOTIFICATIONS=1`, and check Chrome's notifications, a reply,
   and that a click brings up the right window.
-- When a click's app sends no activation within 10 s and already has
-  windows, focus its most recently focused one (§9).
+- When a click's app sends no activation and opens no window within 10 s,
+  and you haven't moved on, the focus guard brings up its most recently
+  focused window, switching workspace (`grant_or_recent` in
+  `hypr/tide/focus.lua`, through `tide grant`). On a live session, check it
+  with an app that doesn't activate on a click, and that Chrome's own
+  activation still wins.
 - History: the center (`shell/NotificationCenter.qml`), the bell, and
   `notifications.json` (`shell/HistoryData.qml`, `shell/lib/history.mjs`)
   are in, behind the same opt-in; only parsed with `qmlformat`. Still to

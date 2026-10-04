@@ -31,7 +31,7 @@ local S -- what the stub recorded
 local now
 
 local function load(opts)
-    S = { rules = {}, handlers = {}, dispatched = {}, notified = {}, active = nil }
+    S = { rules = {}, handlers = {}, dispatched = {}, notified = {}, active = nil, timers = {}, windows = {} }
     now = 1000
     _G.tide_focus = nil
     _G.hl = {
@@ -39,6 +39,8 @@ local function load(opts)
         on = function(ev, fn) S.handlers[ev] = fn end,
         dispatch = function(d) table.insert(S.dispatched, d) end,
         get_active_window = function() return S.active end,
+        get_windows = function() return S.windows end,
+        timer = function(fn, opts) table.insert(S.timers, { fn = fn, opts = opts }) end,
         notification = {
             create = function(n) table.insert(S.notified, n) end,
         },
@@ -816,6 +818,129 @@ test("the waiting windows can be announced again, for a shell that restarted", f
     m.announce_waiting()
     eq(#S.dispatched, 1, "only what still waits")
     eq(is_attention(S.dispatched[1], b), true, "the one left")
+end)
+
+-- A clicked notification's grant (SPEC.md §9).
+local function history(w, id)
+    w.focus_history_id = id
+    return w
+end
+
+test("a notification's unused grant focuses the app's most recent window", function()
+    local m = load()
+    local older = history(window("org.example.Chat"), 3)
+    local recent = history(window("org.example.Chat"), 1)
+    local other = history(window("kitty"), 0)
+    S.windows = { older, recent, other }
+    m.grant_or_recent("org.example.Chat")
+    eq(#S.timers, 1, "timers")
+    eq(S.timers[1].opts.timeout, 10000, "runs as long as a grant")
+    eq(S.timers[1].opts.type, "oneshot", "once")
+    S.dispatched = {}
+    S.timers[1].fn()
+    eq(#S.dispatched, 1, "one dispatch")
+    eq(is_focus(S.dispatched[1], recent), true, "the window focused last")
+    eq(#m.grants(), 0, "the grant is gone")
+end)
+
+test("a notification's grant used by the app's activation doesn't fall back", function()
+    local m = load()
+    local chat = history(window("org.example.Chat"), 2)
+    local other = history(window("org.example.Chat"), 1)
+    S.windows = { chat, other }
+    m.grant_or_recent("org.example.Chat")
+    eq(is_focus(fire("window.urgent", chat)[1], chat), true, "the activation takes focus")
+    S.dispatched = {}
+    S.timers[1].fn()
+    eq(#S.dispatched, 0, "nothing more")
+end)
+
+test("a notification's grant used by a new window doesn't fall back", function()
+    local m = load()
+    S.windows = { history(window("org.example.Chat"), 0) }
+    m.grant_or_recent("org.example.Chat")
+    local new = window("org.example.Chat")
+    eq(is_focus(fire("window.open", new)[1], new), true, "the new window takes focus")
+    S.dispatched = {}
+    S.timers[1].fn()
+    eq(#S.dispatched, 0, "nothing more")
+end)
+
+test("moving on cancels the fallback too", function()
+    local m = load()
+    S.windows = { history(window("org.example.Chat"), 1) }
+    m.grant_or_recent("org.example.Chat")
+    fire("input.keyboard.key", nil, nil, 1)
+    S.dispatched = {}
+    S.timers[1].fn()
+    eq(#S.dispatched, 0, "a key press")
+
+    m = load()
+    S.windows = { history(window("org.example.Chat"), 1) }
+    m.grant_or_recent("org.example.Chat")
+    focused(window("kitty"), FFM)
+    S.dispatched = {}
+    S.timers[1].fn()
+    eq(#S.dispatched, 0, "the pointer moving into another window")
+end)
+
+test("with no window ever focused, any of the app's windows comes up", function()
+    local m = load()
+    local w = history(window("org.example.Chat"), -1)
+    S.windows = { history(window("kitty"), 0), w }
+    m.grant_or_recent("chat") -- a bare name matches a qualified class
+    S.dispatched = {}
+    S.timers[1].fn()
+    eq(is_focus(S.dispatched[1], w), true, "its never-focused window")
+end)
+
+test("an app with no window gets nothing when its grant runs out", function()
+    local m = load()
+    S.windows = { history(window("kitty"), 0) }
+    m.grant_or_recent("org.example.Chat")
+    S.dispatched = {}
+    S.timers[1].fn()
+    eq(#S.dispatched, 0, "no dispatch")
+    eq(#m.grants(), 0, "and no grant left")
+end)
+
+test("a window list that can't be read is an error, not a silent nothing", function()
+    local m = load()
+    hl.get_windows = function() error("no compositor") end
+    m.grant_or_recent("org.example.Chat")
+    S.dispatched = {}
+    local ok, err = pcall(S.timers[1].fn)
+    eq(ok, false, "the timer callback fails, so Hyprland logs it")
+    eq(tostring(err):find("couldn't list windows to bring up org.example.chat: ", 1, true) ~= nil, true, err)
+    eq(tostring(err):find("no compositor", 1, true) ~= nil, true, "names the cause")
+    eq(#S.dispatched, 0, "no dispatch")
+end)
+
+test("a notification's grant still falls back when the timer runs late", function()
+    local m = load()
+    local w = history(window("org.example.Chat"), 0)
+    S.windows = { w }
+    m.grant_or_recent("org.example.Chat")
+    now = now + 30 -- the timer fires late, after another grant expired this one
+    m.grant("kitty")
+    eq(#m.grants(), 1, "only kitty's grant is left")
+    S.dispatched = {}
+    S.timers[1].fn()
+    eq(is_focus(S.dispatched[1], w), true, "running out is what brings the window up")
+end)
+
+test("a notification's grant needs an app", function()
+    local m = load()
+    eq(pcall(m.grant_or_recent, "*"), false, "wildcard")
+    eq(pcall(m.grant_or_recent, nil), false, "nil")
+    eq(pcall(m.grant_or_recent, ""), false, "empty")
+    eq(#S.timers, 0, "no timer")
+end)
+
+test("grant_seconds sets how long a notification's grant waits", function()
+    local m = load({ grant_seconds = 4 })
+    m.grant_or_recent("kitty")
+    eq(S.timers[1].opts.timeout, 4000, "timeout")
 end)
 
 io.write(string.format("focus_test.lua: %d passed, %d failed\n", passed, failures))

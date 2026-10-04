@@ -26,8 +26,10 @@
 #
 #     Records only the focus grant, for an app that something other than
 #     a launch is about to bring up: the shell grants the app a clicked
-#     notification came from (SPEC.md §9). Exits 1 if the grant couldn't
-#     be recorded. Outside a tide session there's no guard, and it
+#     notification came from (SPEC.md §9). If nothing uses the grant
+#     before it runs out, and you haven't moved on, the guard focuses the
+#     app's most recently focused window instead. Exits 1 if the grant
+#     couldn't be recorded. Outside a tide session there's no guard, and it
 #     does nothing.
 #
 #   tide autostart-allowed UNIT
@@ -97,14 +99,14 @@ wait_for_shell() {
 # The guard lives in Hyprland's Lua config (hypr/tide/focus.lua), so the
 # grant goes in through `hyprctl eval`, with the ID escaped for a Lua string.
 # Returns 1, having said why, when the grant isn't recorded; $2 names the
-# subcommand for the message.
+# subcommand for the message, and $3 the guard's function (grant by default).
 grant() {
     if ! command -v hyprctl >/dev/null 2>&1; then
         echo "$prog $2: no hyprctl, so $1 gets no focus grant" >&2
         return 1
     fi
     lua_id=$(printf '%s' "$1" | sed 's/[\\"]/\\&/g')
-    reply=$(hyprctl eval "tide_focus.grant(\"$lua_id\")" 2>&1)
+    reply=$(hyprctl eval "tide_focus.${3:-grant}(\"$lua_id\")" 2>&1)
     if test "$reply" != ok; then
         echo "$prog $2: couldn't record a focus grant for $1: $reply" >&2
         return 1
@@ -118,7 +120,7 @@ grant_only() {
     if ! in_tide; then
         exit 0
     fi
-    grant "$1" grant || exit 1
+    grant "$1" grant grant_or_recent || exit 1
 }
 
 launch() {
