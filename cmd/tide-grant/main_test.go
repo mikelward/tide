@@ -124,9 +124,9 @@ func TestInTide(t *testing.T) {
 		"tide:Hyprland": true,
 		"Hyprland:tide": true,
 		"tide":          true,
-		"KDE":                 false,
+		"KDE":           false,
 		"tide2":         false,
-		"":                    false,
+		"":              false,
 	} {
 		if got := inTide(desktops); got != want {
 			t.Errorf("inTide(%q) = %v, want %v", desktops, got, want)
