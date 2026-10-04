@@ -402,12 +402,13 @@ owners, duplicate and rival daemons, the portal config, Hyprland's config
 errors, autostart entries, and a second bar on any monitor. SPEC.md §5.4
 also wants:
 
-- **Bars by a better signal than geometry.** `hyprctl layers` has no
-  anchors or exclusive zones, so the bar check guesses from position and
-  size, and misses a second bar narrower than half the monitor rather than
-  report every notification as a bar. Once tide's own bar exists
-  (M3), count bars by the exclusive zones Hyprland reserves, or have the
-  shell report its own.
+- **Bars by a better signal than geometry.** Where tide's bar (layer
+  `tide-bar`) is on a monitor, the check now also reports space reserved
+  beyond its height, which catches a narrow bar or a dock that reserves
+  space. A bar that reserves none, narrower than half the monitor, still
+  goes unseen; `hyprctl layers` has no anchors to say more. On a live
+  session, check that the bar's reservation matches its height at each
+  scale, so a lone tide bar reports nothing.
 - **Activatable services that could steal a name.** In M2 swaync's own
   activation file names `org.freedesktop.Notifications`, so flagging every
   activatable one would flag the owner. Check it once the shell owns the

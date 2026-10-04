@@ -12,7 +12,8 @@
 #   - no daemon runs twice, and no rival to an owner runs at all;
 #   - tide-portals.conf is installed and XDG_CURRENT_DESKTOP selects it;
 #   - Hyprland reports no config errors;
-#   - no monitor has more than one bar;
+#   - no monitor has more than one bar, by shape or by space reserved
+#     beyond tide's own bar;
 #   - no XDG autostart unit off the allowlist ran in tide.
 
 prog=${0##*/}
@@ -245,13 +246,26 @@ elif test "$installed" != "$(shipped_portals_conf)"; then
 fi
 
 # One bar per monitor (§5.2): a second one stacks above or below the first.
-# A bar is a strip near its monitor's top edge on any layer but the
-# wallpaper's background one: at least half the monitor's width (margins
-# and a set width allowed), at most an eighth of its height, and starting
-# within the top eighth. Popups and the launcher are narrower; a bottom bar
-# starts lower. Layer geometry
-# is logical, so the monitor's size is too: its pixels over its scale,
-# swapped when it's rotated a quarter turn.
+# Two signals, one problem per monitor:
+#
+# - Shape. A bar is a strip near its monitor's top edge on any layer but
+#   the wallpaper's background one: at least half the monitor's width
+#   (margins and a set width allowed), at most an eighth of its height, and
+#   starting within the top eighth. Popups and the launcher are narrower; a
+#   bottom bar starts lower. Layer geometry is logical, so the monitor's
+#   size is too: its pixels over its scale, swapped when it's rotated a
+#   quarter turn.
+# - Reserved space. `hyprctl layers` has no anchors or exclusive zones, but
+#   each monitor's `reserved` is the space layers' exclusive zones (and
+#   monitor rules) take from its edges, in the same logical pixels. Where
+#   tide's own bar (namespace tide-bar) is on a monitor, anything reserved
+#   beyond its height is something else holding an edge: a bar too narrow
+#   for the shape test, a dock, or a monitor rule's reservation. The bar
+#   is matched wherever it sits, since space reserved above it pushes it
+#   down. Under waybar there's no tide-bar, and only the shape test runs.
+#
+# Prints "MONITOR<tab>bars<tab>N<tab>NAMESPACES" or
+# "MONITOR<tab>reserved<tab>WHERE", one line per monitor with a problem.
 bars_on_monitors() {
     # On failure it prints the error instead, and returns false.
     if ! monitors=$(hyprctl -j monitors 2>&1); then
@@ -267,20 +281,33 @@ bars_on_monitors() {
         | $monitors[] | select(.name == $name) as $m
         | (if $m.transform % 2 == 0 then [$m.width, $m.height] else [$m.height, $m.width] end) as $size
         | ($size[0] / $m.scale) as $w | ($size[1] / $m.scale) as $h
-        | [($layers.levels["1"] // [])[], ($layers.levels["2"] // [])[], ($layers.levels["3"] // [])[]
-           | select(.x >= $m.x and .x < $m.x + $w and .y >= $m.y and .y - $m.y < $h / 8
-                    and .w >= $w / 2 and .h <= $h / 8)]
-        | select(length > 1)
-        | "\($name)\t\(length)\t\(map(.namespace) | join(", "))"' 2>&1
+        | [($layers.levels["1"] // [])[], ($layers.levels["2"] // [])[], ($layers.levels["3"] // [])[]] as $all
+        | [$all[] | select(.x >= $m.x and .x < $m.x + $w and .y >= $m.y and .y - $m.y < $h / 8
+                           and .w >= $w / 2 and .h <= $h / 8)] as $bars
+        | ([$all[] | select(.namespace == "tide-bar") | .h] | max) as $ours
+        | ($m.reserved // [0, 0, 0, 0]) as $r
+        | (if $ours == null then [] else
+              [if $r[1] > $ours then "\($r[1] - $ours) px at the top" else empty end,
+               if $r[3] > 0 then "\($r[3]) px at the bottom" else empty end,
+               if $r[0] > 0 then "\($r[0]) px on the left" else empty end,
+               if $r[2] > 0 then "\($r[2]) px on the right" else empty end]
+           end) as $extra
+        | if ($bars | length) > 1 then
+              "\($name)\tbars\t\($bars | length)\t\($bars | map(.namespace) | join(", "))"
+          elif ($extra | length) > 0 then
+              "\($name)\treserved\t\($extra | join(", "))"
+          else empty end' 2>&1
 }
 if ! command -v jq >/dev/null 2>&1; then
     problem "jq isn't installed, so the one-bar-per-monitor check is skipped: install jq (scripts' setup does)"
 elif ! bars=$(bars_on_monitors); then
     problem "$bars, so the one-bar-per-monitor check is incomplete: is Hyprland running?"
 else
-    while IFS='	' read -r monitor n namespaces; do
-        test -n "$monitor" || continue
-        problem "$n bars on $monitor ($namespaces): only tide's should be there; stop the others and remove them from autostart"
+    while IFS='	' read -r monitor kind detail namespaces; do
+        case "$kind" in
+            bars) problem "$detail bars on $monitor ($namespaces): only tide's should be there; stop the others and remove them from autostart" ;;
+            reserved) problem "$monitor reserves $detail beyond tide's bar: another bar or dock holds that edge (or a monitor rule reserves it); stop it and remove it from autostart" ;;
+        esac
     done <<EOF
 $bars
 EOF
