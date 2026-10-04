@@ -19,7 +19,7 @@ The mocks are in [`docs/mocks/`](docs/mocks/).
 this is the way to install by hand:
 
     make install                       # builds tide-grant and tide-tz (needs Go 1.22+); layout, user units, portal config under ~/.config
-    sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant and tide-tz under /usr/local
+    sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant, tide-tz and tide-sysmon under /usr/local
     systemctl --user daemon-reload
     systemctl --user enable tide.service
 
@@ -53,10 +53,12 @@ swaync owns the notification name and the bar's tray owns the watcher (see
 
 The Quickshell bar has the workspaces, the layout symbol, the tray, the
 clocks and their popover, a keep-awake toggle, network, Bluetooth, volume
-and battery with their percentages, and the session menu, plus the volume and mic-mute OSD. To use it, install
+and battery with their percentages, the system monitor (CPU %, with top
+processes, memory and temperature) and the session menu, plus the volume and mic-mute OSD. To use it, install
 Quickshell (above), run `make install` and `sudo make install-session`,
 then log in to tide again (or `systemctl --user restart tide`).
-The clocks need `tide-tz` on `PATH`. Its notification popups are off
+The clocks need `tide-tz` on `PATH`, and the system monitor's temperature
+and process lists need `tide-sysmon`. Its notification popups are off
 while swaync runs;
 to try them, stop swaync and restart the shell with
 `TIDE_NOTIFICATIONS=1` in its environment.

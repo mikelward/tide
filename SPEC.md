@@ -648,7 +648,7 @@ See [`bar.png`](docs/mocks/bar.png).
 - **Left:** workspaces 1–9, always all nine, then the layout symbol.
 - **Right:** privacy pills (screen shared, mic live), third-party tray icons,
   then the built-in status icons: keep-awake, Bluetooth, network,
-  volume %, battery %, notifications, session. The four clocks come
+  volume %, battery %, CPU %, notifications, session. The four clocks come
   last.
 - **Middle:** the window title, as waybar showed it. The focused monitor
   shows the focused window's, wherever on that monitor it is: under an
@@ -758,8 +758,31 @@ See [`bar.png`](docs/mocks/bar.png).
 | Network | Wi-Fi strength / wired / VPN lock / offline | network list, VPNs; *settings* opens `nm-connection-editor` | — |
 | Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5% |
 | Battery | % and charging, red below 15% | power profile (performance / balanced / saver), time left | — |
+| System monitor | CPU %; amber when the CPU is hot or memory is 90% full, red while it throttles or is critically hot | a readout of CPU, memory and temperature, then tabs: **CPU** (the default: temperature, clock, thermal throttling, the five processes using the most CPU) and **Memory** (memory, swap, the five using the most) | — |
 | Notifications | dot when unread, a bell with *z* for DND | notification center | middle-click toggles DND |
 | Session | — | lock, log out, suspend, restart, shut down | — |
+
+**System monitor.**
+
+- The bar's CPU % is the whole machine's, updated every 3 s; it's cheap
+  enough to run all the time, since it reads a few small files and starts
+  no process.
+- The processes are sampled only while a popover is open, every 2 s. A
+  process's CPU is a share of one CPU, as `top` shows it, so one busy
+  thread reads 100% on any machine. Memory is resident memory.
+- Temperature is the CPU's own sensor where a driver names one (a package
+  reading over a single core's), else the ACPI zone. It turns amber at the
+  sensor's own max (else 85 °C), and red at its crit (else 95 °C).
+- **Thermal throttling** is shown only where the kernel counts it: Intel's
+  thermal driver exposes `package_throttle_count`
+  (`drivers/thermal/intel/therm_throt.c`, Linux 7.3-rc5). It reads as
+  throttling for 30 s after the count goes up. Other CPUs show the
+  temperature and clock, and no throttling line, rather than a guess; so
+  does a counter that stops reading.
+- A sensor that drops out (a driver reload) is looked for again each
+  minute until it, or one as good, is back.
+- `tide-sysmon` reads `/proc` and `/sys` for it, so the parsing is tested
+  against a fake tree and needs no privileges.
 
 Critical battery (7%) is a critical notification. At 3% the machine
 hibernates if hibernation is set up, and otherwise suspends.
@@ -1687,7 +1710,7 @@ are what "done" means.
 - **Pure logic in plain JavaScript** modules, run by `node --test` in CI:
   clock labels, day offsets and hiding the zone that is local, workspace
   states, icons and attention marks, the DST-change finder, fuzzy scoring,
-  the
+  the system monitor's CPU, memory and process readings, the
   single-window width rule, layout geometry, the light/dark boundaries
   (schedule, sunrise and sunset, manual flip expiry), and config loading (`.local`
   merge rules; a bad file keeps the last good settings). The QML only binds
@@ -1699,7 +1722,8 @@ are what "done" means.
   and 32:9 areas and 1–6 windows.
 - **Session.** A `conf` test asserts the Hyprland config's only `exec-once`
   is `uwsm finalize`. `doctor` has its own tests over recorded `busctl` and
-  `systemctl` output.
+  `systemctl` output, and `tide-sysmon` runs over a fake `/proc` and
+  `/sys`.
 - **Scripts.** `screenshot_test` covers the Wayland argument parsing with
   stubbed `grim`/`slurp`/`wl-copy`, in the repo's existing `*_test` style,
   plus two captures in the same second getting distinct names.

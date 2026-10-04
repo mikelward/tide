@@ -42,7 +42,8 @@ test:
 	sh bin/tide_test.sh
 	sh bin/tide-shell_test.sh
 	sh bin/tide-doctor_test.sh
-	$(NODE) --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/keepawake_test.mjs
+	sh bin/tide-sysmon_test.sh
+	$(NODE) --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/keepawake_test.mjs shell/lib/sysmon_test.mjs
 	$(GO) vet ./...
 	$(GO) test ./...
 
@@ -87,7 +88,7 @@ install-session:
 		test -x build/$$cmd || { echo "make install-session: no build/$$cmd; run make build first, as yourself" >&2; exit 1; }; \
 	done
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
-	install -m 755 bin/tide bin/tide-doctor bin/tide-hyprland bin/tide-shell build/tide-grant build/tide-tz "$(DESTDIR)$(PREFIX)/bin/"
+	install -m 755 bin/tide bin/tide-doctor bin/tide-hyprland bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz "$(DESTDIR)$(PREFIX)/bin/"
 	install -m 644 session/tide.desktop "$(DESTDIR)$(PREFIX)/share/wayland-sessions/"
 
 # Needs Node and Playwright with Chromium. A global Playwright install is

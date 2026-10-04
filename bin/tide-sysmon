@@ -1,0 +1,147 @@
+#!/bin/sh
+#
+# tide-sysmon: what the bar's system monitor reads (SPEC.md §7.4), as text
+# shell/lib/sysmon.mjs parses. Reads /proc and /sys only, runs nothing else
+# but getconf, and needs no privileges.
+#
+#   tide-sysmon probe    once at startup: the page size, the CPU's top
+#                        frequency, the thermal throttle counter if the
+#                        kernel has one, and every hwmon temperature input
+#                        with its chip, label, max and crit; then a line
+#                        `incomplete` if any of those could not be read,
+#                        so the shell probes again
+#   tide-sysmon sample   each tick while the popover is open: /proc/stat,
+#                        each CPU's current frequency, and every process's
+#                        /proc/<pid>/stat line, in sections headed @stat,
+#                        @freq and @procs
+#
+# TIDE_SYSMON_ROOT, empty by default, is put in front of /proc and /sys, so
+# the tests can run it over a fake tree.
+
+prog=${0##*/}
+root=${TIDE_SYSMON_ROOT:-}
+cpu=$root/sys/devices/system/cpu
+
+# Every file here may legitimately be missing (no cpufreq in a VM, no
+# throttle counter off Intel, no label on a sensor), and a missing one is
+# skipped quietly. One that's there but can't be read is a different
+# failure, reported with its path, so a reading never vanishes unexplained.
+
+# Set when a file that's there couldn't be read.
+incomplete=
+
+# Reads $1 into $val. A missing file returns 1 quietly; one that's there
+# but whose read fails, for permissions or an I/O error alike, is reported,
+# marks the probe incomplete, and returns 2. Every file is read through
+# this, so checking access and then reading separately can't let a read
+# that fails after the check go unreported.
+fetch() {
+    val=
+    test -e "$1" || return 1
+    if val=$(cat "$1"); then
+        return 0
+    fi
+    val=
+    echo "$prog: can't read ${1#"$root"}" >&2
+    incomplete=1
+    return 2
+}
+
+# One /proc/<pid>/stat record into $rec, as one line: a process can put a
+# newline in its own name, and a plain read would stop there. The shell's
+# read, not a cat per process, since this runs over every process. A stat
+# record is never empty, so reading nothing means the read failed: the shell
+# can't tell a failed read from the end of the file, and a while loop that
+# never ran succeeds.
+record() {
+    rec=
+    while IFS= read -r part || test -n "$part"; do
+        rec="$rec${rec:+ }$part"
+    done
+    test -n "$rec"
+}
+
+case "${1:-}" in
+probe)
+    # Every process's memory is counted in pages, so without the real size
+    # there is no memory figure to give: fail, and the shell asks again.
+    if ! page=$(getconf PAGESIZE) || test -z "$page"; then
+        echo "$prog: getconf PAGESIZE failed; no page size for process memory" >&2
+        exit 1
+    fi
+    printf 'page\t%s\n' "$page"
+    # The fastest CPU's top, to match the sample's fastest current clock:
+    # cores can differ (ARM big.LITTLE, Intel's P and E cores), and cpu0
+    # may be a slow one.
+    top=
+    for f in "$cpu"/cpu[0-9]*/cpufreq/cpuinfo_max_freq; do
+        fetch "$f" || continue
+        case $val in
+        '' | *[!0-9]*)
+            echo "$prog: ${f#"$root"} isn't a frequency: $val" >&2
+            ;;
+        *)
+            if test -z "$top" || test "$val" -gt "$top"; then
+                top=$val
+            fi
+            ;;
+        esac
+    done
+    if test -n "$top"; then
+        printf 'maxfreq\t%s\n' "$top"
+    fi
+    # Intel's thermal interrupt driver counts package throttling here;
+    # other CPUs don't have it, and then there's no throttle line.
+    f=$cpu/cpu0/thermal_throttle/package_throttle_count
+    if fetch "$f"; then
+        printf 'throttle\t%s\n' "${f#"$root"}"
+    fi
+    for t in "$root"/sys/class/hwmon/hwmon*/temp*_input; do
+        # An unmatched glob is a missing file, skipped like any other.
+        fetch "$t" || continue
+        base=${t%_input}
+        # A missing label or limit is just empty; a failed read was already
+        # reported, so neither stops the sensor being listed.
+        fetch "${t%/*}/name"; name=$val
+        fetch "${base}_label"; label=$val
+        fetch "${base}_max"; max=$val
+        fetch "${base}_crit"; crit=$val
+        printf 'temp\t%s\t%s\t%s\t%s\t%s\n' "${t#"$root"}" "$name" "$label" "$max" "$crit"
+    done
+    # A read error may be passing (a driver mid-reload), and what it hid
+    # may be the sensor that matters most, so the shell asks again.
+    if test -n "$incomplete"; then
+        echo incomplete
+    fi
+    ;;
+sample)
+    echo @stat
+    if ! cat "$root/proc/stat"; then
+        echo "$prog: can't read $root/proc/stat" >&2
+        exit 1
+    fi
+    echo @freq
+    for f in "$cpu"/cpu[0-9]*/cpufreq/scaling_cur_freq; do
+        # No cpufreq at all (many VMs) leaves the pattern unmatched.
+        if fetch "$f"; then
+            printf '%s\n' "$val"
+        fi
+    done
+    echo @procs
+    # A process can exit between the glob and its read, which is expected
+    # and left out quietly (so the read's own error is hidden); a stat file
+    # that's still there and can't be read is reported like any other.
+    for f in "$root"/proc/[0-9]*/stat; do
+        if record 2>/dev/null < "$f"; then
+            printf '%s\n' "$rec"
+        elif test -e "$f"; then
+            echo "$prog: can't read ${f#"$root"}" >&2
+        fi
+    done
+    ;;
+*)
+    echo "usage: $prog probe|sample" >&2
+    exit 2
+    ;;
+esac
+exit 0
