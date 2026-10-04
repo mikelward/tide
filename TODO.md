@@ -7,13 +7,6 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
-- [ ] **A center click on a notification that has gone brings up its app's
-      most recent window, and persistence stays off.** The alternative was
-      keeping timed-out notifications open on the server, so their actions
-      still run from the center, and advertising `persistence`. That changes
-      how long every notification lives, so it waits for a live session.
-      Undoing this is dropping `clickTarget`'s `{app}` branch.
-
 - [ ] **The autostart allowlist starts as `nm-applet` and `blueman`.** The
       spec says it starts empty, but the bar's network and Bluetooth icons
       come from those applets' autostart entries until the shell draws them
@@ -43,11 +36,6 @@ once you have agreed with it or reversed it.
       and that shell's history isn't saved. The alternative keeps the
       damaged file aside as `notifications.json.bad` first. It's the
       `FileView` in `shell/HistoryData.qml`.
-- [ ] **The center's entries are text only, and a click does nothing.**
-      SPEC.md §9 doesn't say what a click on a past notification does; most
-      have gone from the server by then, so their actions can't run. The
-      alternative runs a still-live one's default action. It's
-      `shell/NotificationCenter.qml`.
 - [ ] **A system critical shows during a share.** SPEC.md §9 shows a
       critical on a monitor that isn't shared, else holds it with the bell
       flashing; for now a system sender's critical gets through a share as
