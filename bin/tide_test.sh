@@ -54,8 +54,8 @@ FAKE
 chmod +x "$fake"/*
 # tide-grant answers --program with $FAKE_PROGRAM, else the command's first
 # word, exiting $FAKE_PROGRAM_STATUS; and --classes with $FAKE_CLASSES
-# (words), exiting $FAKE_CLASSES_STATUS; and --entry with $FAKE_ENTRY,
-# exiting $FAKE_ENTRY_STATUS. It logs --classes and --entry calls only, so
+# (words), exiting $FAKE_CLASSES_STATUS; and --opener with $FAKE_OPENER,
+# exiting $FAKE_OPENER_STATUS. It logs --classes and --opener calls only, so
 # the log shows the lookup where it happens.
 cat > "$fake/tide-grant" <<'FAKE'
 #!/bin/sh
@@ -65,27 +65,14 @@ if test "$1" = --program; then
     exit "${FAKE_PROGRAM_STATUS:-0}"
 fi
 printf "tide-grant %s\n" "$*" >> "$FAKE_LOG"
-if test "$1" = --entry; then
-    test -z "${FAKE_ENTRY:-}" || printf '%s\n' $FAKE_ENTRY
-    exit "${FAKE_ENTRY_STATUS:-0}"
+if test "$1" = --opener; then
+    test -z "${FAKE_OPENER:-}" || printf '%s\n' $FAKE_OPENER
+    exit "${FAKE_OPENER_STATUS:-0}"
 fi
 test -z "${FAKE_CLASSES:-}" || printf '%s\n' $FAKE_CLASSES
 exit "${FAKE_CLASSES_STATUS:-0}"
 FAKE
 chmod +x "$fake/tide-grant"
-# xdg-mime answers `query filetype` with $FAKE_MIME (text/plain by
-# default) and `query default` with $FAKE_DEFAULT, exiting
-# $FAKE_XDG_MIME_STATUS, and logs each call.
-cat > "$fake/xdg-mime" <<'FAKE'
-#!/bin/sh
-printf "xdg-mime %s\n" "$*" >> "$FAKE_LOG"
-case "$2" in
-    filetype) printf '%s\n' "${FAKE_MIME-text/plain}" ;;
-    default) test -z "${FAKE_DEFAULT:-}" || printf '%s\n' "$FAKE_DEFAULT" ;;
-esac
-exit "${FAKE_XDG_MIME_STATUS:-0}"
-FAKE
-chmod +x "$fake/xdg-mime"
 
 # run ENV... -- ARGS...: runs tide with the fakes first on PATH, in a
 # tide session unless the env says otherwise.
@@ -150,66 +137,43 @@ for opener in xdg-open "gio open"; do
     chmod +x "$fake/${opener%% *}"
     # shellcheck disable=SC2086  # "gio open" is two words
     run "$qs" launch "$fake"/$opener https://example.com/
-    check "$opener with no default app grants the first window of any app" \
+    check "$opener whose app isn't found grants the first window of any app" \
         contains "$(cat "$log")" 'tide_focus.grant("*")'
-    check "$opener with no default app says so" \
-        contains "$(cat "$tmp/err")" "no default app for x-scheme-handler/https"
     # shellcheck disable=SC2086
-    run FAKE_DEFAULT=org.mozilla.firefox.desktop FAKE_ENTRY="org.mozilla.firefox firefox" \
-        "$qs" launch "$fake"/$opener HTTPS://example.com/
-    check "$opener asks for the URL scheme's handler" \
-        contains "$(cat "$log")" "xdg-mime query default x-scheme-handler/https"
-    check "$opener reads the handler's desktop entry" \
-        contains "$(cat "$log")" "tide-grant --entry org.mozilla.firefox.desktop"
-    check "$opener grants the handler's classes" \
+    run FAKE_OPENER="org.mozilla.firefox firefox" "$qs" launch "$fake"/$opener https://example.com/
+    check "$opener's whole command goes to the lookup" \
+        test "$(grep tide-grant "$log")" = "tide-grant --opener -- $fake/$opener https://example.com/"
+    check "$opener grants the app it opens with" \
         contains "$(cat "$log")" 'tide_focus.grant({ "org.mozilla.firefox", "firefox" })'
-    check "$opener's handler lookup comes before the grant" \
-        test "$(sed -n 's/ .*//p' "$log" | head -n 3 | tr '\n' ' ')" = "xdg-mime tide-grant hyprctl "
-    check "$opener's handler lookup says nothing" test ! -s "$tmp/err"
+    check "$opener's lookup comes before the grant" \
+        test "$(sed -n 's/ .*//p' "$log" | head -n 2 | tr '\n' ' ')" = "tide-grant hyprctl "
+    check "$opener's lookup says nothing" test ! -s "$tmp/err"
 done
-: > "$tmp/notes.txt"
-run FAKE_MIME=text/plain FAKE_DEFAULT='org.example.Editor.desktop;other.desktop' FAKE_ENTRY=org.example.Editor \
-    "$qs" launch "$fake/xdg-open" "$tmp/notes.txt"
-check "a file's type is read from the file" \
-    contains "$(cat "$log")" "xdg-mime query filetype $tmp/notes.txt"
-check "the first of several default apps is used" \
-    contains "$(cat "$log")" "tide-grant --entry org.example.Editor.desktop"
+run FAKE_OPENER=org.example.Editor "$qs" launch "$fake/xdg-open" notes.txt
 check "one class is granted as a string" \
     contains "$(cat "$log")" 'tide_focus.grant("org.example.Editor")'
-run FAKE_DEFAULT=org.example.Editor.desktop FAKE_ENTRY=org.example.Editor \
-    "$qs" launch "$fake/xdg-open" "file://$tmp/notes.txt"
-check "a file:// URL is typed as its file" \
-    contains "$(cat "$log")" "xdg-mime query filetype $tmp/notes.txt"
-run FAKE_DEFAULT=x.desktop "$qs" launch "$fake/xdg-open" "file://$tmp/my%20notes.txt"
-check "a file:// URL with escapes grants any app's window" \
+run FAKE_OPENER_STATUS=1 "$qs" launch "$fake/xdg-open" https://example.com/
+check "a failed opener lookup is reported" \
+    contains "$(cat "$tmp/err")" "tide-grant couldn't find the app $fake/xdg-open opens with"
+check "a failed opener lookup grants any app's window" \
     contains "$(cat "$log")" 'tide_focus.grant("*")'
-run FAKE_DEFAULT=x.desktop "$qs" launch "$fake/xdg-open" no-such-file
-check "a target that's neither a file nor a URL grants any app's window" \
-    contains "$(cat "$log")" 'tide_focus.grant("*")'
-check "a target that's neither looks nothing up" test -z "$(grep xdg-mime "$log")"
-run FAKE_DEFAULT=x.desktop FAKE_ENTRY=x "$qs" launch "$fake/gio" open "$tmp/notes.txt" https://example.com/
-check "several gio open locations grant any app's window" \
-    contains "$(cat "$log")" 'tide_focus.grant("*")'
-check "several locations look nothing up" test -z "$(grep xdg-mime "$log")"
-run FAKE_DEFAULT=x.desktop FAKE_ENTRY=x "$qs" launch "$fake/gio" open "$tmp/notes.txt"
-check "one gio open location grants its app" contains "$(cat "$log")" 'tide_focus.grant("x")'
-run FAKE_DEFAULT=x.desktop "$qs" launch "$fake/xdg-open" --help
-check "an opener's option grants any app's window" \
-    contains "$(cat "$log")" 'tide_focus.grant("*")'
-run FAKE_XDG_MIME_STATUS=1 "$qs" launch "$fake/xdg-open" "$tmp/notes.txt"
-check "a failed type lookup is reported" \
-    contains "$(cat "$tmp/err")" "xdg-mime couldn't tell the type of $tmp/notes.txt"
-check "a failed type lookup grants any app's window" \
-    contains "$(cat "$log")" 'tide_focus.grant("*")'
-run FAKE_DEFAULT=x.desktop FAKE_ENTRY_STATUS=1 "$qs" launch "$fake/xdg-open" https://example.com/
-check "an unreadable handler entry is reported" \
-    contains "$(cat "$tmp/err")" "no window class for x.desktop, the default app for x-scheme-handler/https"
-check "an unreadable handler entry grants any app's window" \
-    contains "$(cat "$log")" 'tide_focus.grant("*")'
-run FAKE_DEFAULT=x.desktop FAKE_ENTRY=x "$qs" launch --new-workspace "$fake/xdg-open" https://example.com/
+run FAKE_OPENER=x "$qs" launch --new-workspace "$fake/xdg-open" https://example.com/
 check "an opener's grant takes --new-workspace" \
     contains "$(cat "$log")" 'tide_focus.grant("x", nil, nil, { new_workspace = true })'
-run "$qs" launch "$fake/gio" trash file.txt
+run FAKE_PROGRAM=gio FAKE_OPENER=org.mozilla.firefox "$qs" launch nice -n 5 gio open https://example.com/
+check "a wrapped gio open goes to the opener lookup" \
+    test "$(grep tide-grant "$log")" = "tide-grant --opener -- nice -n 5 gio open https://example.com/"
+check "a wrapped gio open grants the app it opens with" \
+    contains "$(cat "$log")" 'tide_focus.grant("org.mozilla.firefox")'
+# tide-grant tells an opener from the rest at the program's own position,
+# and exits 3 for a command that runs none.
+run FAKE_PROGRAM=gio FAKE_OPENER_STATUS=3 "$qs" launch env --unset gio gio trash file.txt
+check "a gio command goes to the opener lookup whole" \
+    test "$(grep tide-grant "$log")" = "tide-grant --opener -- env --unset gio gio trash file.txt"
+check "a command running no opener grants its program" \
+    contains "$(cat "$log")" 'tide_focus.grant("gio")'
+check "a command running no opener says nothing" test ! -s "$tmp/err"
+run FAKE_OPENER_STATUS=3 "$qs" launch "$fake/gio" trash file.txt
 check "gio trash opens no app, so it grants no wildcard" \
     contains "$(cat "$log")" 'tide_focus.grant("gio")'
 run "$qs" launch --app 'a"b\c' app
@@ -241,9 +205,11 @@ check "a wrapped program is granted by its own name" \
 check "the wrapped command goes to the lookup whole" \
     test "$(grep 'tide-grant' "$log")" = "tide-grant --classes -- env MODE=a editor"
 check "the wrapped command runs as given" contains "$(cat "$log")" "uwsm app -- env MODE=a editor"
-run FAKE_PROGRAM=/opt/x/xdg-open "$qs" launch env xdg-open https://example.com/
-check "a wrapped opener still grants any app's window" \
-    contains "$(cat "$log")" 'tide_focus.grant("*")'
+run FAKE_PROGRAM=/opt/x/xdg-open FAKE_OPENER=org.mozilla.firefox "$qs" launch nice -n 5 xdg-open https://example.com/
+check "a wrapped opener's command goes to the lookup whole" \
+    test "$(grep tide-grant "$log")" = "tide-grant --opener -- nice -n 5 xdg-open https://example.com/"
+check "a wrapped opener grants the app it opens with" \
+    contains "$(cat "$log")" 'tide_focus.grant("org.mozilla.firefox")'
 run FAKE_PROGRAM= "$qs" launch env --help > /dev/null
 check "a command that runs no program is granted its first word" \
     contains "$(cat "$log")" 'tide_focus.grant("env", nil, '
@@ -266,6 +232,11 @@ rm "$fake/tide-grant"
 run "$qs" launch editor
 check "without tide-grant the grant names the program alone, and says why" \
     contains "$(cat "$tmp/err")" "no tide-grant, so editor's desktop entries weren't read"
+run "$qs" launch "$fake/gio" trash file.txt
+check "without tide-grant, gio trash still grants gio" contains "$(cat "$log")" 'tide_focus.grant("gio")'
+run "$qs" launch "$fake/xdg-open" https://example.com/
+check "without tide-grant, an opener grants any app's window" contains "$(cat "$log")" 'tide_focus.grant("*")'
+check "without tide-grant, an opener says why" contains "$(cat "$tmp/err")" "no tide-grant, so the app"
 
 run XDG_CURRENT_DESKTOP=KDE "$qs" launch app x
 out=$(cat "$log")

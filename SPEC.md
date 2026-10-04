@@ -1433,7 +1433,8 @@ this spec.
       kept turning up misses; ancestry covers them without parsing.
     - It costs one short process per command, about 3 ms, plus one
       `hyprctl eval`; reading desktop entries adds about 4 ms over 300,
-      and a second `hyprctl eval` when they name a class.
+      and a second `hyprctl eval` when they name a class. An `xdg-open` or
+      `gio open` line adds two `xdg-mime` calls, some tens of ms.
   - The guard resolves a program name to an app the way the launcher does,
     through desktop entries' `Exec` and `StartupWMClass`. `xdg-open` and
     `gio open` resolve through the default handler for the file's type.
@@ -1458,24 +1459,38 @@ this spec.
     (`APP_MODE=calc suite`) matches only an entry with the same settings.
     It finishes the lookup before the command runs, so an app that's already running can't activate its window
     ahead of it.
-  - A key binding's `xdg-open TARGET` or `gio open TARGET` grants the app
-    that opens TARGET: the default app for its type in `mimeapps.list`
-    (`xdg-mime`), by its desktop ID, `StartupWMClass` and program.
+  - `xdg-open TARGET` or `gio open TARGET`, from a key binding or the
+    terminal, grants the app that opens TARGET: the default app for its
+    type in `mimeapps.list` (`xdg-mime`), by its desktop ID,
+    `StartupWMClass` and program. `tide-grant` finds it, past wrappers.
     - A file's type comes from the file, a URL's from its scheme
-      (`x-scheme-handler/https`).
-    - The app's name isn't known until the lookup ends, so the grant goes
-      in after it, some tens of ms after the key press. A key pressed
-      in between doesn't cancel it.
-    - A target that can't be typed (an option, a `file://` URL with
-      escapes, neither a file nor a URL), a type with no default app, a
-      failed lookup, a default whose entry is gone or names no window (a
-      terminal app), several targets (`gio open A B`, whose apps may
-      differ), or an opener behind a wrapper grants `*`, the first
-      window of any app, as before. A failed lookup and a default that
-      names no window are reported.
-    - A terminal command running `xdg-open` is still granted by its
-      shell's pid; the opener's app is usually already running, so the
-      grant doesn't reach its window.
+      (`x-scheme-handler/https`). A word with a scheme is a URL, as both
+      openers read it, even where a path of that spelling exists. A scheme
+      with a digit (`s3:`) names nothing: xdg-open reads it as a path.
+    - The app is usually running already, so in the terminal its name is
+      what lets its window take focus: the shell's pid doesn't reach it.
+    - From a key binding, the app's name isn't known until the lookup
+      ends, so the grant goes in after it, some tens of ms after the key
+      press, and a key pressed in between doesn't cancel it. In the
+      terminal the opener's own grant goes in first and the app is added
+      to it, as for any program's entries.
+    - A `file:` URL is its local file in the one form both openers read
+      as that file: `file:///PATH`, escapes undone and a query or
+      fragment dropped. They differ on the rest (`FILE:`, `file:/x`,
+      `file://localhost/x`), so any other form names nothing.
+    - A target that can't be typed (an option, another form of `file:`
+      URL, neither a file nor a URL), a glob (what it matches depends on
+      the shell and its options), several targets (`gio open A
+      B`, whose apps may differ), a command run with settings of its own
+      (`XDG_DATA_HOME=… xdg-open URL`, which may pick another app), a
+      type with no default app, a failed lookup, or a default whose entry
+      is gone or names no window (a terminal app) adds nothing: a key
+      binding grants `*`, the first window of any app, and the terminal
+      the opener's name and pid.
+    - A failed lookup and a default that names no window are reported. A
+      type with no default app is too, from a key binding; in the
+      terminal the opener says so itself. A message names a URL by its
+      scheme alone, since any part of one may carry a secret.
 - **Process ancestry** covers the terminal's commands: a script that opens
   a window, the second command on a line, or anything the shell's grant
   can't name. The preexec hook's grant names its shell's pid, and a window

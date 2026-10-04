@@ -452,11 +452,10 @@ grant the program the command runs, past wrappers, and the desktop ID and
 (`cmd/tide-grant/desktop.go`). On a live session, check which apps in use
 come up unfocused because their window class is none of those.
 
-- A key binding's `xdg-open` or `gio open` grants the default app for the
-  target's type (`opener_classes` in `bin/tide`). On a live session,
-  check a URL and a file each bring up their app focused. Still to do:
-  the terminal's `xdg-open URL`, which `tide-grant` grants only by its
-  shell's pid, so a browser already running doesn't take focus.
+- `xdg-open` and `gio open`, from a key binding or the terminal, grant
+  the default app for the target's type (`openerClasses` in
+  `cmd/tide-grant/opener.go`). On a live session, check a URL and a file
+  each bring up their app focused, with the browser already running.
 
 ## Fullscreen on open, under the focus guard
 

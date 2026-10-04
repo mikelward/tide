@@ -25,10 +25,17 @@
 // prints those classes, one per line, for `tide launch`, which grants a key
 // binding's program the same way.
 //
+//	tide-grant --opener WORD...
+//
+// prints the classes of the app a command's xdg-open or gio open hands its
+// target to (the default app for the target's type), for `tide launch`;
+// it exits 3 for a command that runs no opener (`gio trash`).
+// A terminal command running one is granted that app's classes the same
+// way, so a browser that's already running takes focus for `xdg-open URL`.
+//
 //	tide-grant --entry DESKTOP-ID
 //
-// prints the classes one desktop entry names, for the app `tide launch
-// xdg-open URL` hands the URL to.
+// prints the classes one desktop entry names.
 package main
 
 import (
@@ -57,13 +64,45 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	classes := flags.Bool("classes", false, "print the window classes the desktop entries for the command `WORD...` name, one per line, and exit")
 	program := flags.Bool("program", false, "print the program the command `WORD...` runs, past wrappers, and exit")
 	entryID := flags.String("entry", "", "print the window classes the desktop entry `DESKTOP-ID` names, one per line, and exit")
+	opener := flags.Bool("opener", false, "print the window classes of the app the opener command `WORD...` (xdg-open or gio open) hands its target to, one per line, and exit; exit 3 if it runs no opener")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 	// For `tide launch xdg-open URL`: the classes of the app the opener
 	// hands the URL to, found by the caller from the URL's type.
+	if *opener {
+		if *classes || *program || *entryID != "" || flags.NArg() == 0 {
+			fmt.Fprintln(stderr, "usage: tide-grant --opener WORD...")
+			return 2
+		}
+		// Not an opener at all (`gio trash`) is its own answer, so the
+		// caller can grant the program instead of any app's window.
+		if !opensWith(flags.Args()) {
+			return 3
+		}
+		target, ok := openerTarget(flags.Args())
+		// A command run with settings of its own (`env XDG_DATA_HOME=…
+		// xdg-open URL`) may open another app than this environment's
+		// default, so it names none.
+		if _, settings, moves := commandProgram(flags.Args()); !ok || len(settings) > 0 || moves {
+			return 0
+		}
+		found, err := openerClasses(target, env)
+		if errors.Is(err, errNoDefault) {
+			fmt.Fprintf(stderr, "tide-grant: %v\n", err)
+			return 0
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, "tide-grant: couldn't find the app that opens %s: %v\n", shownTarget(target), err)
+			return 1
+		}
+		for _, c := range found {
+			fmt.Fprintln(stdout, c)
+		}
+		return 0
+	}
 	if *entryID != "" {
-		if *classes || *program || flags.NArg() != 0 {
+		if *classes || *program || *opener || flags.NArg() != 0 {
 			fmt.Fprintln(stderr, "usage: tide-grant --entry DESKTOP-ID")
 			return 2
 		}
@@ -112,6 +151,7 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "usage: tide-grant [--pid PID] [--] COMMAND-LINE")
 		fmt.Fprintln(stderr, "       tide-grant --program WORD...")
 		fmt.Fprintln(stderr, "       tide-grant --classes WORD...")
+		fmt.Fprintln(stderr, "       tide-grant --opener WORD...")
 		fmt.Fprintln(stderr, "       tide-grant --entry DESKTOP-ID")
 		return 2
 	}
@@ -131,6 +171,22 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	// program than the entries this lookup finds, so it's granted only its
 	// name.
 	if app == "" || moves {
+		return 0
+	}
+	// An opener's own entries name no window: the app it hands its target
+	// to does, and that app is usually running already, so only a name
+	// reaches its window.
+	if app == "xdg-open" || app == "gio" {
+		// A command run with settings of its own (`XDG_DATA_HOME=… xdg-open
+		// URL`) may open another app than this environment's default.
+		if len(settings) > 0 {
+			return 0
+		}
+		if words, ok := lineWords(flags.Arg(0), env); ok {
+			if target, ok := openerTarget(words); ok {
+				return extendForOpener(app, target, *pid, env, stderr)
+			}
+		}
 		return 0
 	}
 	// The app's desktop entries may name the class its window has. They're
@@ -159,6 +215,30 @@ func extendFromEntries(app, runs string, settings []string, pid int, env []strin
 		return 1
 	}
 	return status
+}
+
+// extendForOpener adds the classes of the app an opener hands target to
+// to the opener's grant for pid. A type with no default app is the
+// opener's to report, and is left quiet here, since this prints in the
+// user's terminal before every such command; any other failure is
+// reported, and nothing added.
+func extendForOpener(app, target string, pid int, env []string, stderr io.Writer) int {
+	more, err := openerClasses(target, env)
+	if errors.Is(err, errNoDefault) {
+		return 0
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "tide: couldn't find the app that opens %s for its focus grant: %v\n", shownTarget(target), err)
+		return 1
+	}
+	if len(more) == 0 {
+		return 0
+	}
+	if err := extend(app, more, pid); err != nil {
+		fmt.Fprintf(stderr, "tide: couldn't add %s to the focus grant for %s: %v\n", strings.Join(more, ", "), app, err)
+		return 1
+	}
+	return 0
 }
 
 func inTide(desktops string) bool {
