@@ -49,3 +49,12 @@ test("case and accents fold the same way on both sides", () => {
     assert.deepEqual(match("cafe", "Café").positions, [0, 1, 2, 3]);
     assert.deepEqual(match("é", "Cafe").positions, [3]);
 });
+
+test("of equally scored alignments, an unbroken run, then the earliest start", () => {
+    // "ba" scores the same at [0, 7] and at the run [6, 7].
+    assert.equal(match("ba", "bxxx-BbA_B").score, 54);
+    assert.deepEqual(match("ba", "bxxx-BbA_B").positions, [6, 7]);
+    // Neither of "abb"'s best alignments is a run: the earlier start, not
+    // the one with fewer gaps.
+    assert.deepEqual(match("abb", "axxxxxab--xB").positions, [0, 7, 11]);
+});

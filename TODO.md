@@ -7,14 +7,6 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
-- [ ] **Launcher frecency breaks ties; it doesn't boost.** SPEC.md §8 said
-      results are "boosted by frecency"; a boost let a used "Screenshot
-      screen", or a used Screenshot app, take `scr` from "Screenshot
-      window", breaking §8's `scr`-and-Enter promise. So use now orders
-      only equal matches of one kind, and never the quick actions. The
-      alternative is a capped boost for apps and desktop actions only,
-      under the quick actions; it's the sort in `search` in
-      `shell/lib/launcher.mjs`.
 - [ ] **The autostart allowlist starts as `nm-applet` and `blueman`.** The
       spec says it starts empty, but the bar's network and Bluetooth icons
       come from those applets' autostart entries until the shell draws them
