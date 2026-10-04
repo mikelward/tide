@@ -7,6 +7,13 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **A center click on a notification that has gone brings up its app's
+      most recent window, and persistence stays off.** The alternative was
+      keeping timed-out notifications open on the server, so their actions
+      still run from the center, and advertising `persistence`. That changes
+      how long every notification lives, so it waits for a live session.
+      Undoing this is dropping `clickTarget`'s `{app}` branch.
+
 - [ ] **The autostart allowlist starts as `nm-applet` and `blueman`.** The
       spec says it starts empty, but the bar's network and Bluetooth icons
       come from those applets' autostart entries until the shell draws them
@@ -287,9 +294,15 @@ holds the queue, and
   `notifications.json` (`shell/HistoryData.qml`, `shell/lib/history.mjs`)
   are in, behind the same opt-in; only parsed with `qmlformat`. Still to
   do: `Super+Shift+N` in `conf` (`qs -c tide ipc call notifications
-  toggle`, falling back to swaync's panel while the call fails); a click on
-  an entry, which could run a live notification's default action; then
-  advertise `persistence` (`persistenceSupported`), which §9 lists.
+  toggle`, falling back to swaync's panel while the call fails), and
+  `persistence` (`persistenceSupported`), which §9 lists: it needs a popup
+  that times out to stay open on the server, hidden, until the center lets
+  it go, or its actions are gone by the time the center is clicked.
+- A click on a center entry does what its popup's click does while its
+  notification is live (shown or held), and otherwise brings up its app's
+  most recent window (`tide focus`, `focus_recent` in
+  `hypr/tide/focus.lua`). On a live
+  session, check both, and that the center closes after.
 - Do not disturb: manual DND is in (the center's tile, the bell's
   middle-click, and `qs -c tide ipc call notifications dnd`), with
   only system senders' criticals getting through (`passesDnd` in

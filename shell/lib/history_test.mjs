@@ -1,7 +1,7 @@
 // Tests for history.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_ENTRIES, GROUP_SHOWN, record, appOf, groups, clearApp, apply, shownItems, age, unread, serialize, parse } from "./history.mjs";
+import { MAX_ENTRIES, GROUP_SHOWN, record, appOf, groups, clearApp, apply, shownItems, age, unread, serialize, parse, clickTarget } from "./history.mjs";
 
 // A history after a sequence of changes.
 const replay = (state, changes) => changes.reduce(apply, state);
@@ -184,4 +184,31 @@ test("a file past the cap is cut to the newest 200", () => {
     const h = parse(JSON.stringify({ version: 1, unread: [], entries }));
     assert.equal(h.entries.length, MAX_ENTRIES);
     assert.equal(h.entries[0].key, String(MAX_ENTRIES + 2));
+});
+
+const byDefault = actions => actions.find(a => a.identifier === "default") ?? null;
+
+test("a click on a live entry runs its default action", () => {
+    const open = { identifier: "default", text: "Open" };
+    const live = { actions: [{ identifier: "reply", text: "Reply" }, open] };
+    assert.deepEqual(clickTarget(note("1", "Chat", "hi", { entry: "org.example.Chat" }), live, byDefault), { action: open });
+});
+
+test("a click on an entry whose notification is gone brings up its app", () => {
+    assert.deepEqual(clickTarget(note("1", "Chat", "hi", { entry: "org.example.Chat" }), null, byDefault), { app: "org.example.Chat" });
+    assert.deepEqual(clickTarget(note("1", "Chat", "hi"), null, byDefault), { app: "Chat" });
+});
+
+test("a live entry without a default action is dismissed, as its popup would be", () => {
+    const live = { actions: [{ identifier: "reply", text: "Reply" }] };
+    assert.deepEqual(clickTarget(note("1", "Chat", "hi"), live, byDefault), { dismiss: true });
+    assert.deepEqual(clickTarget(note("1", "", "hi"), { actions: [] }, byDefault), { dismiss: true });
+});
+
+test("a gone entry names its app by desktop entry, else app name", () => {
+    assert.deepEqual(clickTarget(note("1", "Chat", "hi", { entry: " " }), null, byDefault), { app: "Chat" });
+});
+
+test("an entry that names no app has nothing to bring up", () => {
+    assert.equal(clickTarget(note("1", "", "hi"), null, byDefault), null);
 });

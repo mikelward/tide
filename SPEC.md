@@ -891,6 +891,11 @@ See [`notifications.png`](docs/mocks/notifications.png).
 - It groups entries by app and survives a shell restart (stored in
   `$XDG_STATE_HOME/tide/notifications.json`, capped at 200 entries).
 - **Clear all** empties it, and each group has its own ✕.
+- **A click on an entry** does what a click on its popup would while the
+  notification is still live (on screen or held): runs its default action,
+  or dismisses it when it has none. Once it has gone, its action went with
+  it, so the click brings up the app's most recently focused window
+  instead. Either way the center closes.
 - A click outside it, or `Escape`, closes it.
 - Popups don't show over it on its monitor, since it lists them; a critical
   one comes back when it closes.

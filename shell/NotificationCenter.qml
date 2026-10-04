@@ -312,6 +312,17 @@ PanelWindow {
                                     width: groupBody.width
                                     implicitHeight: texts.implicitHeight + 12
 
+                                    // A click runs its action or brings up its
+                                    // app (NotificationData.openEntry), and the
+                                    // center closes, as it does for any choice.
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: {
+                                            NotificationData.openEntry(modelData);
+                                            HistoryData.close();
+                                        }
+                                    }
+
                                     Rectangle {
                                         visible: index > 0
                                         width: parent.width

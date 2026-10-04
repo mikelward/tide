@@ -32,6 +32,13 @@
 #     couldn't be recorded. Outside a tide session there's no guard, and it
 #     does nothing.
 #
+#   tide focus ID
+#
+#     Focuses ID's most recently focused window now, switching to its
+#     workspace: what a click on a notification center entry does when its
+#     notification is gone (SPEC.md §9). Exits 1 if the guard couldn't be
+#     asked. Outside a tide session it does nothing.
+#
 #   tide autostart-allowed UNIT
 #
 #     The condition on every XDG autostart unit in the tide session
@@ -64,6 +71,7 @@ prog=${0##*/}
 usage() {
     echo "usage: $prog launch [--app ID] [--] COMMAND [ARG...]" >&2
     echo "       $prog grant ID" >&2
+    echo "       $prog focus ID" >&2
     echo "       $prog autostart-allowed UNIT" >&2
     echo "       $prog brightness STEP" >&2
     echo "       $prog doctor" >&2
@@ -98,17 +106,19 @@ wait_for_shell() {
 
 # The guard lives in Hyprland's Lua config (hypr/tide/focus.lua), so the
 # grant goes in through `hyprctl eval`, with the ID escaped for a Lua string.
-# Returns 1, having said why, when the grant isn't recorded; $2 names the
-# subcommand for the message, and $3 the guard's function (grant by default).
+# Returns 1, having said why, when the guard didn't take it; $2 names the
+# subcommand for the message, $3 the guard's function (grant by default),
+# and $4 what the call does, for the messages (a focus grant by default).
 grant() {
+    what=${4:-record a focus grant}
     if ! command -v hyprctl >/dev/null 2>&1; then
-        echo "$prog $2: no hyprctl, so $1 gets no focus grant" >&2
+        echo "$prog $2: no hyprctl, so couldn't $what for $1" >&2
         return 1
     fi
     lua_id=$(printf '%s' "$1" | sed 's/[\\"]/\\&/g')
     reply=$(hyprctl eval "tide_focus.${3:-grant}(\"$lua_id\")" 2>&1)
     if test "$reply" != ok; then
-        echo "$prog $2: couldn't record a focus grant for $1: $reply" >&2
+        echo "$prog $2: couldn't $what for $1: $reply" >&2
         return 1
     fi
 }
@@ -121,6 +131,19 @@ grant_only() {
         exit 0
     fi
     grant "$1" grant grant_or_recent || exit 1
+}
+
+# The notification center's click on a past notification (SPEC.md §9):
+# the guard focuses the app's most recently focused window, switching
+# workspace, at once rather than waiting on a grant.
+focus_app() {
+    if test $# -ne 1 || test -z "$1"; then
+        usage
+    fi
+    if ! in_tide; then
+        exit 0
+    fi
+    grant "$1" focus focus_recent "focus its window" || exit 1
 }
 
 launch() {
@@ -237,6 +260,7 @@ brightness() {
 case "${1:-}" in
     launch) shift; launch "$@" ;;
     grant) shift; grant_only "$@" ;;
+    focus) shift; focus_app "$@" ;;
     autostart-allowed) shift; autostart_allowed "$@" ;;
     brightness) shift; brightness "$@" ;;
     # Installed beside this script.

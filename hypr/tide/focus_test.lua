@@ -937,6 +937,36 @@ test("a notification's grant needs an app", function()
     eq(#S.timers, 0, "no timer")
 end)
 
+test("focus_recent brings up the app's most recent window at once", function()
+    local m = load()
+    local older = history(window("org.example.Chat"), 2)
+    local recent = history(window("org.example.Chat"), 1)
+    S.windows = { older, recent, history(window("kitty"), 0) }
+    m.grant("firefox")
+    S.dispatched = {}
+    m.focus_recent("chat")
+    eq(#S.dispatched, 1, "one dispatch")
+    eq(is_focus(S.dispatched[1], recent), true, "the window focused last")
+    eq(#S.timers, 0, "no waiting")
+    eq(#m.grants(), 0, "choosing a window cancels pending grants")
+end)
+
+test("focus_recent with no window does nothing, and says so", function()
+    local m = load()
+    S.windows = { history(window("kitty"), 0) }
+    local printed = {}
+    local real = print
+    print = function(...) table.insert(printed, table.concat({ ... }, " ")) end
+    S.dispatched = {}
+    local ok, err = pcall(m.focus_recent, "org.example.Chat")
+    print = real
+    eq(ok, true, tostring(err))
+    eq(#S.dispatched, 0, "no dispatch")
+    eq(printed[1], "tide focus: no window of org.example.chat to bring up", "logged")
+    eq(pcall(m.focus_recent, "*"), false, "wildcard")
+    eq(pcall(m.focus_recent, nil), false, "nil")
+end)
+
 test("grant_seconds sets how long a notification's grant waits", function()
     local m = load({ grant_seconds = 4 })
     m.grant_or_recent("kitty")

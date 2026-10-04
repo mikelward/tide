@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Services.Notifications
+import "lib/history.mjs" as History
 import "lib/notifications.mjs" as Notes
 
 // The notification server (SPEC.md §9), its popup queue, and each popup's
@@ -150,6 +151,25 @@ Singleton {
         });
     }
 
+    // A click on an entry in the center (§9): while the notification is
+    // still live, what a click on its popup does (its default action, or a
+    // dismissal when it has none); otherwise its app's most recent window,
+    // through the focus guard (`tide focus`), since a notification that has
+    // gone took its actions with it.
+    function openEntry(entry) {
+        const live = root.queue.find(n => HistoryData.keyOf(n.id) === entry.key) ?? null;
+        const target = History.clickTarget(entry, live, Notes.defaultAction);
+        if (target?.action) {
+            root.run(live, target.action);
+        } else if (target?.dismiss) {
+            live.dismiss();
+        } else if (target?.app) {
+            Launcher.run(["tide", "focus", target.app], null);
+        } else {
+            console.warn("tide: notification center: the entry names no app, so the click brings nothing up");
+        }
+    }
+
     // A reply being typed holds the countdown as "draft" until it's sent
     // or emptied, whichever monitor shows the popup and wherever the
     // pointer or keyboard focus has gone.
@@ -192,9 +212,10 @@ Singleton {
         NotificationServer {
             // What §9 advertises. Chrome sends native notifications only
             // with body and actions, and actions are off by default.
-            // Persistence waits for the center to run a past notification's
-            // actions (TODO.md): an app that sees it may leave keeping its
-            // notifications to the server, and the history keeps only text.
+            // Persistence stays off: a popup that times out is closed, which
+            // takes its actions with it, so the center can run only a live
+            // one's (TODO.md). An app that sees persistence may leave keeping
+            // its notifications to the server, and they'd be gone.
             bodySupported: true
             bodyMarkupSupported: true
             actionsSupported: true

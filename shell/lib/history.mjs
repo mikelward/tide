@@ -171,3 +171,24 @@ export function parse(text) {
         errors,
     };
 }
+
+// What a click on an entry in the center does (SPEC.md §9). `live` is its
+// notification while the server still has it (shown, or held), else null.
+// A live one does what clicking its popup does: runs its default action,
+// or dismisses it when it has none. One that has gone took its actions
+// with it, so the click brings up its app's most recent window instead.
+// Returns {action}, {dismiss: true}, {app} (the id to focus), or null when
+// a gone entry names no app.
+export function clickTarget(entry, live, defaultAction) {
+    if (live) {
+        const action = defaultAction(live.actions ?? []);
+        return action ? { action } : { dismiss: true };
+    }
+    for (const id of [entry.entry, entry.app]) {
+        const trimmed = (id ?? "").trim();
+        if (trimmed !== "") {
+            return { app: trimmed };
+        }
+    }
+    return null;
+}
