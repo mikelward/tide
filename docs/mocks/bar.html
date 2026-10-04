@@ -43,9 +43,10 @@
         <span class="sicon dim"><i class="ms">forum</i></span>
       </div>
       <span class="sep"></span>
+      <span class="sicon" style="color:var(--fg-faint)"><i class="ms">light_mode</i></span>
       <span class="sicon"><i class="ms">bluetooth_connected</i></span>
       <span class="sicon"><i class="ms fill">wifi</i></span>
-      <span class="sicon"><i class="ms fill">volume_up</i></span>
+      <span class="sicon"><i class="ms fill">volume_up</i>64%</span>
       <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
       <span class="sicon badge"><i class="ms">notifications</i></span>
       <span class="sicon"><i class="ms">power_settings_new</i></span>
@@ -60,7 +61,7 @@
   </div>
   <div class="under"></div>
 </div>
-<p class="note">Left to right: workspaces 1–9, each showing the icons of its windows, and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (Bluetooth, network, volume, battery, notifications, session), then the clocks. The zone clocks carry short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT). The local clock swaps its label for the date.</p>
+<p class="note">Left to right: workspaces 1–9, each showing the icons of its windows, and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (keep awake, faint while off; Bluetooth; network; volume and battery, each with its percentage; notifications; session), then the clocks. The zone clocks carry short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT). The local clock swaps its label for the date.</p>
 
 <h2>Light (07:00–19:00 by default)</h2>
 <div class="frame light theme-light">
@@ -84,9 +85,10 @@
         <span class="sicon dim"><i class="ms">forum</i></span>
       </div>
       <span class="sep"></span>
+      <span class="sicon" style="color:var(--fg-faint)"><i class="ms">light_mode</i></span>
       <span class="sicon"><i class="ms">bluetooth_connected</i></span>
       <span class="sicon"><i class="ms fill">wifi</i></span>
-      <span class="sicon"><i class="ms fill">volume_up</i></span>
+      <span class="sicon"><i class="ms fill">volume_up</i>64%</span>
       <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
       <span class="sicon badge"><i class="ms">notifications</i></span>
       <span class="sicon"><i class="ms">power_settings_new</i></span>
@@ -114,8 +116,9 @@
 <h2>Status states</h2>
 <div class="chips theme-dark">
   <div class="chip"><div class="bar"><span class="pill share"><i class="ms fill">screen_share</i>Sharing</span><span style="width:4px"></span><span class="pill mic"><i class="ms fill">mic</i></span></div><div class="cap"><b>Screen shared / mic live</b>. The red pill shows while a PipeWire screencast stream has a consumer; during a screen or region share, popups are held until it ends.</div></div>
+  <div class="chip"><div class="bar"><span class="sicon" style="color:var(--fg-dim)"><i class="ms fill">volume_off</i>64%</span></div><div class="cap"><b>Muted</b>: the icon changes and the level dims, showing what unmuting brings back.</div></div>
   <div class="chip"><div class="bar"><span class="sicon"><i class="ms">notifications_paused</i></span></div><div class="cap"><b>Do not disturb</b>. The icon changes; held popups go to the history.</div></div>
-  <div class="chip"><div class="bar"><span class="sicon" style="color:var(--accent)"><i class="ms fill">coffee</i></span></div><div class="cap"><b>Keeping awake</b>: on while you asked for it, or while the mic is live. It turns itself off after 2&nbsp;h.</div></div>
+  <div class="chip"><div class="bar"><span class="sicon" style="color:var(--accent)"><i class="ms fill">light_mode</i></span></div><div class="cap"><b>Keeping awake</b>: always in the bar, faint while off and lit while on. A click turns it on for 2&nbsp;h, or off.</div></div>
   <div class="chip"><div class="bar"><span class="sicon low"><i class="ms fill">battery_1_bar</i>9%</span></div><div class="cap"><b>Battery low</b>: red below 15%, with a critical notification at 7%.</div></div>
   <div class="chip"><div class="bar"><span class="sicon dim"><i class="ms">wifi_off</i></span></div><div class="cap"><b>Offline</b>. A VPN adds a small lock to the network icon.</div></div>
 </div>

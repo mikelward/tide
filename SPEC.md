@@ -647,8 +647,8 @@ See [`bar.png`](docs/mocks/bar.png).
   belong only to things that pop up (popovers, notifications, the launcher).
 - **Left:** workspaces 1–9, always all nine, then the layout symbol.
 - **Right:** privacy pills (screen shared, mic live), third-party tray icons,
-  then the built-in status icons: keep-awake (only when on), Bluetooth,
-  network, volume %, battery %, notifications, session. The four clocks come
+  then the built-in status icons: keep-awake, Bluetooth, network,
+  volume %, battery %, notifications, session. The four clocks come
   last.
 - **Middle:** the window title, as waybar showed it. The focused monitor
   shows the focused window's, wherever on that monitor it is: under an
@@ -753,7 +753,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen, window or area); stop it from the app | — |
 | Privacy: mic (orange) | any app is capturing the microphone | per-app list with mute | — |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
-| Keep awake | on only while you asked for it, or while the mic is live | turn off | — |
+| Keep awake | always there: faint while off, in the accent color while on (you asked for it, or the mic is live) | turn on for 2 hours, or off | — |
 | Bluetooth | off / on / connected | device list, connect/disconnect; *pair* opens `blueman-manager` | — |
 | Network | Wi-Fi strength / wired / VPN lock / offline | network list, VPNs; *settings* opens `nm-connection-editor` | — |
 | Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5% |
@@ -973,8 +973,11 @@ one of them:
 
 **Keep awake.**
 
-- A bar and launcher toggle holds an `IdleInhibitor` on the bar's surface.
-  It turns itself off after 2 hours unless re-armed.
+- A bar and launcher toggle holds an `IdleInhibitor` on each bar's surface.
+  It turns itself off after 2 hours of wall-clock time, time asleep
+  included, unless re-armed. It survives a config
+  reload, but a new shell starts with it off, so it's never left on by
+  accident across a login.
 - It also switches on automatically **while the microphone is live**, so an
   audio-only call with no video on screen doesn't blank.
 

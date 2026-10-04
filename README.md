@@ -52,7 +52,7 @@ swaync owns the notification name and the bar's tray owns the watcher (see
 `TODO.md`). `TIDE_BAR=waybar` in `~/.config/uwsm/env` keeps waybar.
 
 The Quickshell bar has the workspaces, the layout symbol, the tray, the
-clocks and their popover, network, Bluetooth, volume
+clocks and their popover, a keep-awake toggle, network, Bluetooth, volume
 and battery with their percentages, and the session menu, plus the volume and mic-mute OSD. To use it, install
 Quickshell (above), run `make install` and `sudo make install-session`,
 then log in to tide again (or `systemctl --user restart tide`).

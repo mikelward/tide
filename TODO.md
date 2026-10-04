@@ -161,6 +161,11 @@ packaged). It also runs
 The Quickshell bar replaces waybar piece by piece (SPEC.md §7), each piece
 tested where it can be without a live session.
 
+- Keep awake (SPEC.md §10) is the bar toggle only so far. Still to come:
+  turning on by itself while the mic is live, and the launcher's toggle.
+  On a live session, check that hypridle honors the bar's inhibitor,
+  including while a fullscreen window covers the bar.
+
 - Clock logic is in `shell/lib/clocks.mjs`: the `.local` list rule, hiding
   the local zone, day offsets and labels, tested with `node --test`.
 - Re-render `docs/mocks/bar.png` with `make mocks`: its caption now says
