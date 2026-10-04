@@ -630,6 +630,24 @@ local function lapse(g)
     end
 end
 
+-- A click on a notification center entry whose notification is gone (SPEC.md
+-- §9, from `tide focus`): the app's most recently focused window comes up
+-- at once, on whatever workspace it is. An app with no window gets nothing,
+-- which the log says.
+function M.focus_recent(app)
+    local id = normalize(app)
+    if not id or id == "*" then
+        error("tide_focus.focus_recent: expected an app id, got " .. tostring(app), 2)
+    end
+    local w = most_recent(id)
+    if w then
+        cancel_grants() -- you chose this window
+        focus(w)
+    else
+        print("tide focus: no window of " .. id .. " to bring up")
+    end
+end
+
 -- A clicked notification's grant (SPEC.md §9, from `tide grant`): a
 -- grant like any other, which, if nothing uses or cancels it before it
 -- runs out, focuses the app's most recently focused window.

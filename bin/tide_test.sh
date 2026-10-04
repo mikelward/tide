@@ -132,6 +132,18 @@ check "a rejected grant says why" \
     contains "$(cat "$tmp/err")" "tide grant: couldn't record a focus grant for app: error: no tide_focus"
 run XDG_CURRENT_DESKTOP=KDE "$qs" grant app
 check "outside tide grant does nothing" test $? -eq 0 -a ! -s "$log"
+run "$qs" focus org.example.Chat
+check "focus exits 0 once the guard took it" test $? -eq 0
+check "focus asks the guard for the app's most recent window" \
+    test "$(cat "$log")" = 'hyprctl eval tide_focus.focus_recent("org.example.Chat")'
+run FAKE_HYPRCTL_REPLY='error: no tide_focus' "$qs" focus app
+check "a rejected focus exits 1" test $? -eq 1
+check "a rejected focus says why" \
+    contains "$(cat "$tmp/err")" "tide focus: couldn't focus its window for app: error: no tide_focus"
+run XDG_CURRENT_DESKTOP=KDE "$qs" focus app
+check "outside tide focus does nothing" test $? -eq 0 -a ! -s "$log"
+run "$qs" focus
+check "focus with no ID is a usage error" test $? -eq 2
 run "$qs" grant
 check "grant with no ID is a usage error" test $? -eq 2
 run "$qs" grant ''
