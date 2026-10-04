@@ -165,6 +165,18 @@ tested where it can be without a live session.
   turning on by itself while the mic is live, and the launcher's toggle.
   On a live session, check that hypridle honors the bar's inhibitor,
   including while a fullscreen window covers the bar.
+- The system monitor (SPEC.md §7.4) is built but unchecked on a live
+  session: the CPU % against `top`, the sensor picked on an Intel and an
+  AMD machine, and the throttling line under load. The bar mock shows its
+  CPU %; its popover isn't mocked yet.
+- The system monitor reads one CPU package: the throttle counter and the
+  coretemp package sensor of the package holding cpu0. On a multi-socket
+  machine, throttling or heat on another package goes unseen. Watching one
+  counter (and sensor) per package and combining them is the fix; it was
+  left out of the first version, which targets laptops and desktops.
+- At 1536 px the status icons, with keep awake, the volume % and the CPU %,
+  leave the centered window title about 40 px (`docs/mocks/bar.png`). How
+  the bar gives the title room back is the maintainer's call.
 
 - Clock logic is in `shell/lib/clocks.mjs`: the `.local` list rule, hiding
   the local zone, day offsets and labels, tested with `node --test`.

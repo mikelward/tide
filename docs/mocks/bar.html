@@ -36,7 +36,7 @@
       <div class="ws empty"><span class="n">9</span></div>
       <span class="layout-sym">|M|</span>
     </div>
-    <span class="bar-title">SPEC.md — tide - Google Chrome</span>
+    <span class="bar-title" style="max-width:40px">SPEC.md — tide - Google Chrome</span>
     <div class="bar-right">
       <div class="tray" style="display:flex">
         <span class="sicon dim"><i class="ms">cloud_done</i></span>
@@ -48,6 +48,7 @@
       <span class="sicon"><i class="ms fill">wifi</i></span>
       <span class="sicon"><i class="ms fill">volume_up</i>64%</span>
       <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
+      <span class="sicon"><i class="ms">computer</i>12%</span>
       <span class="sicon badge"><i class="ms">notifications</i></span>
       <span class="sicon"><i class="ms">power_settings_new</i></span>
       <span class="sep"></span>
@@ -61,7 +62,7 @@
   </div>
   <div class="under"></div>
 </div>
-<p class="note">Left to right: workspaces 1–9, each showing the icons of its windows, and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (keep awake, faint while off; Bluetooth; network; volume and battery, each with its percentage; notifications; session), then the clocks. The zone clocks carry short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT). The local clock swaps its label for the date.</p>
+<p class="note">Left to right: workspaces 1–9, each showing the icons of its windows, and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (keep awake, faint while off; Bluetooth; network; volume, battery and CPU, each with its percentage; notifications; session), then the clocks. The zone clocks carry short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT). The local clock swaps its label for the date.</p>
 
 <h2>Light (07:00–19:00 by default)</h2>
 <div class="frame light theme-light">
@@ -78,7 +79,7 @@
       <div class="ws empty"><span class="n">9</span></div>
       <span class="layout-sym">|M|</span>
     </div>
-    <span class="bar-title">SPEC.md — tide - Google Chrome</span>
+    <span class="bar-title" style="max-width:40px">SPEC.md — tide - Google Chrome</span>
     <div class="bar-right">
       <div class="tray" style="display:flex">
         <span class="sicon dim"><i class="ms">cloud_done</i></span>
@@ -90,6 +91,7 @@
       <span class="sicon"><i class="ms fill">wifi</i></span>
       <span class="sicon"><i class="ms fill">volume_up</i>64%</span>
       <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
+      <span class="sicon"><i class="ms">computer</i>12%</span>
       <span class="sicon badge"><i class="ms">notifications</i></span>
       <span class="sicon"><i class="ms">power_settings_new</i></span>
       <span class="sep"></span>
@@ -120,6 +122,7 @@
   <div class="chip"><div class="bar"><span class="sicon"><i class="ms">notifications_paused</i></span></div><div class="cap"><b>Do not disturb</b>. The icon changes; held popups go to the history.</div></div>
   <div class="chip"><div class="bar"><span class="sicon" style="color:var(--accent)"><i class="ms fill">light_mode</i></span></div><div class="cap"><b>Keeping awake</b>: always in the bar, faint while off and lit while on. A click turns it on for 2&nbsp;h, or off.</div></div>
   <div class="chip"><div class="bar"><span class="sicon low"><i class="ms fill">battery_1_bar</i>9%</span></div><div class="cap"><b>Battery low</b>: red below 15%, with a critical notification at 7%.</div></div>
+  <div class="chip"><div class="bar"><span class="sicon" style="color:var(--warn)"><i class="ms">computer</i>87%</span></div><div class="cap"><b>CPU hot</b>: amber when the CPU is hot or memory is 90% full, red while it throttles. A click shows the top processes, memory and temperature.</div></div>
   <div class="chip"><div class="bar"><span class="sicon dim"><i class="ms">wifi_off</i></span></div><div class="cap"><b>Offline</b>. A VPN adds a small lock to the network icon.</div></div>
 </div>
 

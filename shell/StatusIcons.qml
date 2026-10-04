@@ -8,9 +8,9 @@ import "lib/network.mjs" as Net
 import "lib/status.mjs" as Status
 
 // The status icons before the clocks (SPEC.md §7.4). So far: keep awake;
-// Bluetooth; network; volume and its %, which scrolls by 5%; and battery,
-// red below 15%, each with its popover; the notification center's bell;
-// and the session menu.
+// Bluetooth; network; volume and its %, which scrolls by 5%; battery, red
+// below 15%; and the system monitor's CPU %, each with its popover; the
+// notification center's bell; and the session menu.
 // The tray is shell/Tray.qml, to their left. The other icons come later;
 // TODO.md lists them.
 Row {
@@ -205,6 +205,56 @@ Row {
             font.pixelSize: 12.5
             font.weight: Font.Medium
             font.features: ({ "tnum": 1 })
+        }
+    }
+
+    // The system monitor: CPU %, amber when hot or memory is nearly full,
+    // red while throttling or critically hot. A click opens its popover.
+    Row {
+        id: sysmon
+
+        readonly property color ink: SysmonData.view.tone === "danger" ? Theme.danger
+            : SysmonData.view.tone === "warn" ? Theme.warn : Theme.fg
+
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 3
+
+        TapHandler {
+            onTapped: sysmonPopover.toggle()
+        }
+
+        SysmonPopover {
+            id: sysmonPopover
+
+            icon: sysmon
+        }
+
+        SymbolicIcon {
+            anchors.verticalCenter: parent.verticalCenter
+            name: "computer-symbolic"
+            color: sysmon.ink
+        }
+
+        // Wide enough for "100%" so the icons after it don't shift.
+        Text {
+            id: cpuText
+
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.max(implicitWidth, cpuWidth.width)
+            horizontalAlignment: Text.AlignRight
+            text: SysmonData.view.text
+            color: sysmon.ink
+            font.family: Theme.font
+            font.pixelSize: 12.5
+            font.weight: Font.Medium
+            font.features: ({ "tnum": 1 })
+
+            TextMetrics {
+                id: cpuWidth
+
+                font: cpuText.font
+                text: "100%"
+            }
         }
     }
 
