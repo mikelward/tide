@@ -231,7 +231,7 @@ Row {
 
         SymbolicIcon {
             anchors.verticalCenter: parent.verticalCenter
-            name: "computer-symbolic"
+            file: "cpu-symbolic.svg"
             color: sysmon.ink
         }
 

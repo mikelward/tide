@@ -3,13 +3,16 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.Widgets
 
-// A symbolic icon from the desktop's icon theme in `color`. Symbolic icons
-// come drawn in near-black, and colorizing keeps their darkness, so the icon
-// is only a mask: its alpha cuts a fill of `color`.
+// A symbolic icon from the desktop's icon theme in `color`, or, with `file`,
+// one of tide's own from shell/icons, for the few the theme has no icon for
+// (SPEC.md §15). Symbolic icons come drawn in near-black, and colorizing
+// keeps their darkness, so the icon is only a mask: its alpha cuts a fill
+// of `color`.
 Item {
     id: root
 
-    required property string name
+    property string name
+    property string file: ""
     property color color: Theme.fg
 
     implicitWidth: 16
@@ -28,7 +31,7 @@ Item {
         id: icon
 
         anchors.fill: parent
-        source: Quickshell.iconPath(root.name, true)
+        source: root.file !== "" ? Qt.resolvedUrl("icons/" + root.file) : Quickshell.iconPath(root.name, true)
         visible: false
         layer.enabled: true
     }

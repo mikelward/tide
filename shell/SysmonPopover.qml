@@ -79,6 +79,8 @@ PopupWindow {
         id: tabItem
 
         property string label
+        // An icon from shell/icons before the label.
+        property string file
         property bool selected: false
         signal chosen
 
@@ -86,13 +88,24 @@ PopupWindow {
         radius: 7
         color: selected || tabHover.hovered ? Theme.surface2 : "transparent"
 
-        Text {
+        Row {
             anchors.centerIn: parent
-            text: tabItem.label
-            color: tabItem.selected ? Theme.fg : Theme.fgDim
-            font.family: Theme.font
-            font.pixelSize: 12.5
-            font.weight: Font.Medium
+            spacing: 6
+
+            SymbolicIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                file: tabItem.file
+                color: tabItem.selected ? Theme.fg : Theme.fgDim
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: tabItem.label
+                color: tabItem.selected ? Theme.fg : Theme.fgDim
+                font.family: Theme.font
+                font.pixelSize: 12.5
+                font.weight: Font.Medium
+            }
         }
 
         HoverHandler {
@@ -207,6 +220,7 @@ PopupWindow {
                 Tab {
                     width: (tabs.width - tabs.spacing) / 2
                     label: "CPU"
+                    file: "cpu-symbolic.svg"
                     selected: root.tab === "cpu"
                     onChosen: root.tab = "cpu"
                 }
@@ -214,6 +228,7 @@ PopupWindow {
                 Tab {
                     width: (tabs.width - tabs.spacing) / 2
                     label: "Memory"
+                    file: "memory-symbolic.svg"
                     selected: root.tab === "memory"
                     onChosen: root.tab = "memory"
                 }

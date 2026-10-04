@@ -1528,6 +1528,12 @@ to be focused.
     the icon theme's symbolic icons (`battery-level-80-symbolic`), tinted
     to the palette. The mocks draw them with Material Symbols Rounded,
     which may replace them once setup installs that font.
+  - Where Adwaita has no icon for a thing, tide ships its own symbolic SVG
+    in `shell/icons`, drawn to Adwaita's 16 px grid and tinted the same
+    way. So far that is the system monitor's two (Adwaita 46 has neither):
+    a square chip with pins on four sides for the CPU, and a module with
+    contacts along one edge for memory, the shapes people already read as
+    a processor and RAM.
   - The cursor theme and size are set once, in the uwsm environment, for
     every toolkit.
 
