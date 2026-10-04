@@ -260,7 +260,7 @@ PopupWindow {
                 // while the counter reads: an unreadable one can't say "No".
                 Line {
                     width: list.width
-                    visible: SysmonData.probe.throttle !== "" && SysmonData.throttleState !== null
+                    visible: SysmonData.throttleKnown
                     label: "Thermal throttling"
                     value: SysmonData.throttled ? "Now" : "No"
                     ink: root.toneColor(SysmonData.throttled ? "danger" : "normal")

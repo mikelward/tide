@@ -784,14 +784,21 @@ See [`bar.png`](docs/mocks/bar.png).
 - Temperature is the CPU's own sensor where a driver names one (a package
   reading over a single core's), else the ACPI zone. It turns amber at the
   sensor's own max (else 85 °C), and red at its crit (else 95 °C).
+- A machine with several CPU packages is read package by package, so heat
+  or throttling on a second socket isn't missed. The CPU drivers
+  (`coretemp`, `k10temp`, `zenpower`) give a sensor for each, and the one
+  shown is the most severe against its own limits, then the hottest. Other
+  sensors (an ACPI zone) give one, since a second zone may not be the CPU.
 - **Thermal throttling** is shown only where the kernel counts it: Intel's
   thermal driver exposes `package_throttle_count`
-  (`drivers/thermal/intel/therm_throt.c`, Linux 7.3-rc5). It reads as
-  throttling for 30 s after the count goes up. Other CPUs show the
-  temperature and clock, and no throttling line, rather than a guess; so
-  does a counter that stops reading.
-- A sensor that drops out (a driver reload) is looked for again each
-  minute until it, or one as good, is back.
+  (`drivers/thermal/intel/therm_throt.c`, Linux 7.3-rc5). It's read once
+  per package, and the CPU reads as throttling for 30 s after any
+  package's count goes up. Other CPUs show the temperature and clock, and
+  no throttling line, rather than a guess. A package whose counter stops
+  reading, or goes missing, hides the line too, unless another package is
+  throttling: "No" has to hold for every package.
+- A sensor or counter that drops out (a driver reload) is looked for again
+  each minute until it, or one as good, is back.
 - `tide-sysmon` reads `/proc` and `/sys` for it, so the parsing is tested
   against a fake tree and needs no privileges.
 

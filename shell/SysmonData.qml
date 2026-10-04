@@ -18,9 +18,10 @@ Singleton {
     readonly property bool watching: open.length > 0
 
     // From `tide-sysmon probe`: sensors, page size, top frequency, and the
-    // throttle counter's path ("" without one).
+    // throttle counters' paths, one per CPU package (none without).
     property var probe: Sysmon.parseProbe("")
-    readonly property var sensor: Sysmon.pickCpuSensor(probe.sensors)
+    // The CPU's sensors, one per package where the driver has one each.
+    readonly property var sensors: Sysmon.pickCpuSensors(probe.sensors)
     // The most a probe has shown of this machine: probes go on while the
     // latest shows less (Sysmon.afterProbe).
     property var seen: Sysmon.NOTHING_SEEN
@@ -28,9 +29,18 @@ Singleton {
     property var lastStat: null
     property real cpu: NaN
     property var memory: null
-    property real temp: NaN
-    property var throttleState: null
-    readonly property bool throttled: Sysmon.throttling(throttleState, now)
+    // Each sensor's last reading, by its input path, and the one shown:
+    // the most severe against its own limits, then the hottest.
+    property var temps: ({})
+    readonly property var hottest: Sysmon.hottest(sensors.map(s => ({ milli: temps[s.input] ?? NaN, sensor: s })))
+    readonly property real temp: hottest?.milli ?? NaN
+    readonly property var sensor: hottest?.sensor ?? sensors[0] ?? null
+    // Each package's throttle state, by its counter's path. The CPU is
+    // throttling when any package is.
+    property var throttleStates: ({})
+    readonly property bool throttled: Sysmon.anyThrottling(throttleStates, probe.throttles, now)
+    // Whether the popover's throttling line can say anything (Sysmon.throttleKnown).
+    readonly property bool throttleKnown: Sysmon.throttleKnown(throttleStates, probe.throttles, now, seen.throttles)
     property real now: Date.now()
 
     // The popover's details, from `tide-sysmon sample`.
@@ -51,11 +61,11 @@ Singleton {
         root.now = Date.now();
         stat.reload();
         meminfo.reload();
-        if (tempFile.path !== "") {
-            tempFile.reload();
+        for (let i = 0; i < tempFiles.count; i++) {
+            tempFiles.objectAt(i)?.reload();
         }
-        if (throttleFile.path !== "") {
-            throttleFile.reload();
+        for (let i = 0; i < throttleFiles.count; i++) {
+            throttleFiles.objectAt(i)?.reload();
         }
         if (root.watching && !sampler.busy) {
             sampler.busy = true;
@@ -120,7 +130,7 @@ Singleton {
                 // A sensor or counter that went away may come back later
                 // than one retry, and a lesser sensor may stand in
                 // meanwhile: keep probing until all of it is back.
-                const next = Sysmon.afterProbe({ seen: root.seen, probe: root.probe, sensor: root.sensor });
+                const next = Sysmon.afterProbe({ seen: root.seen, probe: root.probe, sensors: root.sensors });
                 root.seen = next.seen;
                 if (next.retry) {
                     reprobe.start();
@@ -200,65 +210,86 @@ Singleton {
         }
     }
 
-    FileView {
-        id: tempFile
+    // A reading kept only for a file a probe still finds: a sensor that
+    // went away leaves no reading rather than its last one, while one
+    // found again keeps its reading through the probe.
+    onSensorsChanged: root.temps = Sysmon.pruned(root.temps, root.sensors.map(s => s.input))
+    onProbeChanged: root.throttleStates = Sysmon.pruned(root.throttleStates, root.probe.throttles)
 
-        property bool warned: false
+    function setTemp(path, milli) {
+        root.temps = Object.assign({}, root.temps, {
+            [path]: milli
+        });
+    }
 
-        // unreadable() says why once; FileView would say it every tick.
-        printErrors: false
+    function setThrottle(path, state) {
+        root.throttleStates = Object.assign({}, root.throttleStates, {
+            [path]: state
+        });
+    }
 
-        path: root.sensor?.input ?? ""
-        onLoaded: {
-            warned = false;
-            root.temp = Number(text().trim());
-        }
-        // A sensor that went away (a driver reload, hwmon renumbering)
-        // leaves no reading rather than the last one, and probes again,
-        // since a recreated sensor can come back under another hwmonN.
-        onLoadFailed: error => {
-            root.temp = NaN;
-            root.unreadable(tempFile, error);
-            if (!reprobe.running) {
-                reprobe.start();
+    // One reader per sensor, so a second package's heat isn't missed.
+    Instantiator {
+        id: tempFiles
+
+        model: root.sensors
+
+        delegate: FileView {
+            id: tempFile
+
+            required property var modelData
+            property bool warned: false
+
+            // unreadable() says why once; FileView would say it every tick.
+            printErrors: false
+
+            path: modelData.input
+            onLoaded: {
+                warned = false;
+                root.setTemp(path, Number(text().trim()));
             }
-        }
-        // A new path gets its own first warning, and no reading until it's
-        // read: a probe that drops the sensor empties the path, which
-        // unloads the file without a failure to clear the old reading.
-        onPathChanged: {
-            warned = false;
-            root.temp = NaN;
+            // A sensor that went away (a driver reload, hwmon renumbering)
+            // leaves no reading rather than the last one, and probes again,
+            // since a recreated sensor can come back under another hwmonN.
+            onLoadFailed: error => {
+                root.setTemp(path, NaN);
+                root.unreadable(tempFile, error);
+                if (!reprobe.running) {
+                    reprobe.start();
+                }
+            }
         }
     }
 
-    FileView {
-        id: throttleFile
+    // One reader per package's throttle counter.
+    Instantiator {
+        id: throttleFiles
 
-        property bool warned: false
+        model: root.probe.throttles
 
-        // unreadable() says why once; FileView would say it every tick.
-        printErrors: false
+        delegate: FileView {
+            id: throttleFile
 
-        path: root.probe.throttle
-        // As for the temperature: no state carried over from another path,
-        // or from a counter a probe no longer finds.
-        onPathChanged: {
-            warned = false;
-            root.throttleState = null;
-        }
-        onLoaded: {
-            warned = false;
-            root.throttleState = Sysmon.throttleStep(root.throttleState, Number(text().trim()), Date.now());
-        }
-        // An unreadable counter can't say the CPU is throttling, and the
-        // popover hides its line. Probe again: a counter that's gone drops
-        // out of the probe, and one that's back is read again.
-        onLoadFailed: error => {
-            root.throttleState = null;
-            root.unreadable(throttleFile, error);
-            if (!reprobe.running) {
-                reprobe.start();
+            required property var modelData
+            property bool warned: false
+
+            // unreadable() says why once; FileView would say it every tick.
+            printErrors: false
+
+            path: modelData
+            onLoaded: {
+                warned = false;
+                root.setThrottle(path, Sysmon.throttleStep(root.throttleStates[path] ?? null, Number(text().trim()), Date.now()));
+            }
+            // An unreadable counter can't say the CPU is throttling. Probe
+            // again: a counter that's gone drops out of the probe, and one
+            // that's back is read again.
+            onLoadFailed: error => {
+                root.setThrottle(path, null);
+                root.unreadable(throttleFile, error);
+                if (!reprobe.running) {
+                    reprobe.start();
+                }
             }
         }
     }
