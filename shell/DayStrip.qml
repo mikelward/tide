@@ -48,6 +48,6 @@ Rectangle {
         x: root.width * root.now - 1
         width: 2
         height: root.height
-        color: Theme.dark ? "#ffffff" : Theme.fg
+        color: Theme.stripNow
     }
 }

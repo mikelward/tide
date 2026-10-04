@@ -74,7 +74,7 @@ PanelWindow {
         implicitHeight: 14 + header.implicitHeight + 12 + dndTile.height + 12 + (heldBanner.visible ? heldBanner.height + 12 : 0) + (list.count > 0 ? groupColumn.implicitHeight : empty.implicitHeight) + 14
         radius: 12
         color: Theme.surface
-        border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.07) : Qt.rgba(0, 0, 0, 0.08)
+        border.color: Theme.edge
         focus: true
         Keys.onEscapePressed: HistoryData.close()
 
@@ -327,7 +327,7 @@ PanelWindow {
                                         visible: index > 0
                                         width: parent.width
                                         height: 1
-                                        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.07) : Qt.rgba(0, 0, 0, 0.08)
+                                        color: Theme.edge
                                     }
 
                                     Column {

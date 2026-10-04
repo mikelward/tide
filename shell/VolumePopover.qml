@@ -52,7 +52,7 @@ PopupWindow {
         anchors.fill: parent
         radius: 12
         color: Theme.surface
-        border.color: Theme.dark ? Qt.rgba(1, 1, 1, 0.07) : Qt.rgba(0, 0, 0, 0.08)
+        border.color: Theme.edge
 
         Flickable {
             anchors.fill: parent

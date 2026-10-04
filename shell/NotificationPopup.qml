@@ -17,7 +17,7 @@ Rectangle {
     implicitHeight: content.implicitHeight + 24
     radius: 12
     color: Theme.surface
-    border.color: notification.urgency === NotificationUrgency.Critical ? Theme.danger : (Theme.dark ? Qt.rgba(1, 1, 1, 0.07) : Qt.rgba(0, 0, 0, 0.08))
+    border.color: notification.urgency === NotificationUrgency.Critical ? Theme.danger : Theme.edge
 
     // A click on the popup runs the default action (NotificationData.run);
     // without one there's nothing to bring up, and it just dismisses it.
