@@ -47,7 +47,10 @@ PanelWindow {
         keepAwake: KeepAwakeData.on,
         micHolds: MicData.live && !KeepAwakeData.asked
     }))
-    readonly property var rows: root.asking !== "" ? Search.confirmRows(root.asking) : Search.search(root.items, root.query)
+    readonly property var rows: root.asking !== "" ? Search.confirmRows(root.asking) : Search.search(root.items, root.query, LauncherData.frecency, root.openedAt)
+    // Frecency is read as of the opening, so the order doesn't shift while
+    // it's open.
+    property real openedAt: 0
     // A screenshot waiting for the launcher to leave the screen, and the
     // window you were in when it opened, which "Screenshot window" takes
     // (§8): the address of Hyprland's focused window, which the launcher's
@@ -67,6 +70,7 @@ PanelWindow {
         pending = "";
         windowAtOpen = Workspaces.normalizeAddress(Hyprland.activeToplevel?.address);
         session += 1;
+        openedAt = Date.now();
         apps = Search.launcherItems(DesktopEntries.applications.values);
         checking = false;
         asking = "";
@@ -107,6 +111,9 @@ PanelWindow {
             }
             return;
         }
+        // Choosing it counts as using it, a blocked power action too: the
+        // next opening lists it sooner either way.
+        LauncherData.record(Search.rowKey(row));
         if (row.item.kind === "quick" && Search.quickCommand(row.item.id).power) {
             checkPower(row.item.id);
             return;

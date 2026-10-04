@@ -824,7 +824,12 @@ See [`launcher.png`](docs/mocks/launcher.png).
   - Fuzzy subsequence matching, scored fzf-style: consecutive runs and word
     starts beat scattered hits.
   - Searched fields: name, generic name, keywords, and the exec basename.
-  - Results are then boosted by frecency.
+  - Frecency (how often and how recently you ran each row, kept in
+    `$XDG_STATE_HOME/tide/launcher.json`) breaks ties between equal matches
+    of one kind. It never lifts a row over a better match, nor an app over
+    a quick action, and the quick actions keep their own order.
+  - An empty query lists the apps, most used first, then by name, and then
+    the quick actions.
   - The top hit is preselected, so `Super`, `s c r`, `Enter` is a window
     screenshot.
 - **Keys.**

@@ -2,6 +2,7 @@
 // their desktop actions, matched with fuzzy.mjs, and the command that runs
 // one through `tide launch` (§5.4).
 
+import { score as used } from "./frecency.mjs";
 import { match } from "./fuzzy.mjs";
 import { ACTIONS as SESSION, actionCommand } from "./session.mjs";
 
@@ -213,26 +214,31 @@ function byName(a, b) {
 // Then an app, before its own desktop actions.
 const KIND_ORDER = { quick: 0, app: 1, action: 2 };
 
-// The rows for `query`, best first, each `{item, positions}`. An empty
-// query lists the apps by name, without their desktop actions, then the
-// quick actions in their own order, until frecency orders the apps
-// (TODO.md).
-export function search(items, query) {
+// The rows for `query`, best first, each `{item, positions}`. `frecency`
+// is the state from frecency.mjs, keyed by rowKey's "kind:id", read at
+// `now`. An empty query lists the apps, without their desktop actions,
+// most used first and then by name, then the quick actions in their own
+// order. A query ranks by match; among equal matches of one kind, the
+// quick actions keep their own order and the rest go most used first. Use
+// never lifts a row over a better match, nor an app over a quick action,
+// so `scr` and Enter stays a window screenshot however often you take
+// another kind.
+export function search(items, query, frecency = {}, now = 0) {
+    const usage = item => used(frecency[`${item.kind}:${item.id}`], now);
     if (query.trim() === "") {
-        const apps = items.filter(i => i.kind === "app").sort(byName);
+        const apps = items.filter(i => i.kind === "app").map(item => ({ item, used: usage(item) }));
+        apps.sort((a, b) => b.used - a.used || byName(a.item, b.item));
         const quick = items.filter(i => i.kind === "quick");
-        return apps.concat(quick).map(item => ({ item, positions: [] }));
+        return apps.map(a => a.item).concat(quick).map(item => ({ item, positions: [] }));
     }
     const rows = [];
     for (const item of items) {
         const m = scoreItem(item, query);
         if (m) {
-            rows.push({ item, score: m.score, positions: m.positions });
+            rows.push({ item, score: m.score, used: usage(item), positions: m.positions });
         }
     }
-    // On an equal score, by KIND_ORDER, and quick actions in their own
-    // order.
-    rows.sort((a, b) => b.score - a.score || KIND_ORDER[a.item.kind] - KIND_ORDER[b.item.kind] || (a.item.rank ?? 0) - (b.item.rank ?? 0) || byName(a.item, b.item));
+    rows.sort((a, b) => b.score - a.score || KIND_ORDER[a.item.kind] - KIND_ORDER[b.item.kind] || (a.item.rank ?? 0) - (b.item.rank ?? 0) || b.used - a.used || byName(a.item, b.item));
     return rows.map(({ item, positions }) => ({ item, positions }));
 }
 
