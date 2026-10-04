@@ -168,8 +168,7 @@ tested where it can be without a live session.
   app recording, and a click on one mutes or unmutes its recording
   (`shell/MicPopover.qml`, `captureRows` in `shell/lib/mic.mjs`). Only
   parsed with `qmlformat`: on a live session, check that a Meet call shows
-  it and its mute works. Still to come: the launcher's
-  toggle.
+  it and its mute works.
   On a live session, check that hypridle honors the bar's inhibitor,
   including while a fullscreen window covers the bar.
 - The launcher (SPEC.md §8) is `shell/LauncherWindow.qml`: fuzzy search
@@ -180,11 +179,27 @@ tested where it can be without a live session.
   Still to do:
   - Point `conf`'s `Super+Space` at `global, tide:launcher` instead of
     fuzzel, once it's been tried live.
-  - The quick actions (screenshots, session, settings, Do not disturb,
-    keep awake, theme, reload).
-  - Frecency for the empty query and as a boost, the key hints, sections
-    with `Tab`, and `Ctrl+Enter` for a new workspace.
-  - Recording the focused window as it opens, for "Screenshot window".
+  - Quick actions: screenshots, the session actions, Do not disturb (while
+    the shell serves notifications), keep awake and reload are in, with
+    their keys shown. A blocked power action
+    keeps the launcher open and asks, naming what blocks it, as the
+    session menu does. Still to come: Settings and the theme (dark /
+    light / automatic), which wait on the shell owning the schedule (§15).
+  - Frecency for the empty query and as a boost, sections with `Tab`, and
+    `Ctrl+Enter` for a new workspace.
+  - "Screenshot window" records Hyprland's focused window's address as the
+    launcher opens, then reads its geometry with `hyprctl clients -j` as
+    the screenshot runs and passes it to `screenshot --geometry`, the same
+    capture `--window` makes. §13's `grim -T <stableId>`, which captures a
+    window's own contents even under a popup, waits on the script (in
+    `mikelward/scripts`) taking a window to capture; the launcher would then
+    record the `stableId` instead. On a live session, check it takes the
+    window you were in.
+  - "Screenshot screen" takes every monitor, as `Print` does today: the
+    script's screen mode is a bare `grim`. §13's `grim -o <focused output>`
+    waits on the script taking an output; the launcher would then record
+    its monitor as it opens and pass it, so a focus change while it closes
+    can't move the capture to another display.
   - On a live session, check that typing reaches it with the pointer over
     a window (§14.2), and that an app it starts takes focus.
 - The system monitor (SPEC.md §7.4) is built but unchecked on a live
@@ -333,7 +348,8 @@ holds the queue, and
   are also held while a share is live (`shell/ShareData.qml`,
   `shell/lib/share.mjs`: an `xdph-streaming-*` node with an active link
   out of it), with the center's "held while you were sharing" banner.
-  Still to do: the launcher's entry; telling a window share from a screen
+  Do not disturb is a launcher quick action too. Still to do: telling a
+  window share from a screen
   share, once the picker records its choice (§12), so a window share
   holds nothing; showing a critical on a monitor that isn't shared; and
   the Sharing pill's click (§7.4: what is being shared), which waits on
