@@ -1,7 +1,7 @@
 // Tests for notifications.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { timeoutFor, MAX_SHOWN, stackHeight, withDraft, replyDraft, shown, syncKey, arrive, leave, grantId, clearsMarks, defaultAction, buttons, bodyStyled, iconFile, countdown, held, hold, release, restarted, due, nextDeadline, passesDnd, heldByDnd } from "./notifications.mjs";
+import { timeoutFor, MAX_SHOWN, stackHeight, withDraft, replyDraft, shown, syncKey, arrive, leave, grantId, clearsMarks, defaultAction, buttons, bodyStyled, iconFile, countdown, held, hold, release, restarted, due, nextDeadline, passesDnd, heldByDnd, rest, wake, unkept, isLive, arriveResting } from "./notifications.mjs";
 
 // Quickshell's NotificationUrgency values.
 const URGENCY = { Low: 0, Normal: 1, Critical: 2 };
@@ -235,4 +235,49 @@ test("Do not disturb holds whatever in the queue doesn't pass, as it is now", ()
     // A system critical updated to normal no longer passes.
     shell.urgency = URGENCY.Normal;
     assert.deepEqual(heldByDnd([shell, chat], true, URGENCY), [shell, chat]);
+});
+
+test("a popup that goes rests, still live, out of the queue", () => {
+    const a = { id: 1 }, b = { id: 2 };
+    assert.deepEqual(rest([a, b], [], a), { queue: [b], resting: [a] });
+    // Resting twice keeps one.
+    assert.deepEqual(rest([b], [a], a), { queue: [b], resting: [a] });
+});
+
+test("an update wakes a resting notification back into the queue", () => {
+    const a = { id: 1, appName: "x", hints: {} }, b = { id: 2, appName: "x", hints: {} };
+    assert.deepEqual(wake([b], [a], a), { queue: [b, a], resting: [], replaced: null });
+    // Woken with a synchronous key, it replaces what holds that key.
+    const s1 = { id: 3, appName: "vol", hints: { "x-canonical-private-synchronous": "v" } };
+    const s2 = { id: 4, appName: "vol", hints: { "x-canonical-private-synchronous": "v" } };
+    assert.deepEqual(wake([s1], [s2], s2), { queue: [s2], resting: [], replaced: s1 });
+});
+
+test("a resting notification goes once the center lets its entry go", () => {
+    const a = { id: 1 }, b = { id: 2 };
+    const keyOf = (id) => `k-${id}`;
+    assert.deepEqual(unkept([a, b], ["k-1"], keyOf), [b]);
+    assert.deepEqual(unkept([a, b], ["k-1", "k-2"], keyOf), []);
+    assert.deepEqual(unkept([a], [], keyOf), [a]);
+});
+
+test("a resting notification is still live, so a click's grant runs its action", () => {
+    const a = { id: 1 }, b = { id: 2 }, gone = { id: 3 };
+    assert.equal(isLive([a], [], a), true);
+    assert.equal(isLive([], [b], b), true);
+    assert.equal(isLive([a], [b], gone), false);
+});
+
+test("a synchronous key replaces a resting notification too", () => {
+    const sync = (id, app) => ({ id, appName: app, hints: { "x-canonical-private-synchronous": "v" } });
+    const old = sync(1, "vol"), next = sync(2, "vol"), other = sync(3, "mail");
+    // The resting one is replaced and leaves `resting`; the new one queues.
+    assert.deepEqual(arriveResting([], [old], next), { queue: [next], resting: [], replaced: old });
+    // One in the queue is matched first, as before.
+    const queued = sync(4, "vol");
+    assert.deepEqual(arriveResting([queued], [old], next), { queue: [next], resting: [old], replaced: queued });
+    // Another app's key, or no key, replaces nothing.
+    assert.deepEqual(arriveResting([], [other], next), { queue: [next], resting: [other], replaced: null });
+    const plain = { id: 5, appName: "vol", hints: {} };
+    assert.deepEqual(arriveResting([], [old], plain), { queue: [plain], resting: [old], replaced: null });
 });

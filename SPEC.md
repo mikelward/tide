@@ -923,10 +923,16 @@ See [`notifications.png`](docs/mocks/notifications.png).
   `$XDG_STATE_HOME/tide/notifications.json`, capped at 200 entries).
 - **Clear all** empties it, and each group has its own ✕.
 - **A click on an entry** does what a click on its popup would while the
-  notification is still live (on screen or held): runs its default action,
-  or dismisses it when it has none. Once it has gone, its action went with
-  it, so the click brings up the app's most recently focused window
-  instead. Either way the center closes.
+  notification is still live: runs its default action, or dismisses it
+  when it has none. Once it has gone, its action went with it, so the
+  click brings up the app's most recently focused window instead. Either
+  way the center closes.
+- **Persistence.** A popup that times out, or that Do not disturb or a
+  share holds, leaves the notification live on the server, out of sight,
+  for as long as its entry is in the center. So its entry's click can still
+  run its action, and an app that leaves keeping its notifications to the
+  server finds them there. Clearing the entry, or the history's cap pushing
+  it out, releases it. An update to it shows its popup again, as news.
 - A click outside it, or `Escape`, closes it.
 - Popups don't show over it on its monitor, since it lists them; a critical
   one comes back when it closes.

@@ -376,9 +376,11 @@ holds the queue, and
   `notifications.json` (`shell/HistoryData.qml`, `shell/lib/history.mjs`)
   are in, behind the same opt-in; only parsed with `qmlformat`.
   `Super+Shift+N` in `conf` opens it (swaync's panel while the call
-  fails). Still to do: `persistence` (`persistenceSupported`), which §9 lists: it needs a popup
-  that times out to stay open on the server, hidden, until the center lets
-  it go, or its actions are gone by the time the center is clicked.
+  fails). Persistence is in: a popup that times out leaves its notification
+  resting, live on the server, until the center lets its entry go
+  (`rest`, `unkept` in `shell/lib/notifications.mjs`). On a live session,
+  check a timed-out Chrome notification's entry still opens its page, and
+  that clearing the center releases it.
 - A click on a center entry does what its popup's click does while its
   notification is live (shown or held), and otherwise brings up its app's
   most recent window (`tide focus`, `focus_recent` in

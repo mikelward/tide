@@ -173,7 +173,7 @@ export function parse(text) {
 }
 
 // What a click on an entry in the center does (SPEC.md §9). `live` is its
-// notification while the server still has it (shown, or held), else null.
+// notification while the server still has it (shown, or resting), else null.
 // A live one does what clicking its popup does: runs its default action,
 // or dismisses it when it has none. One that has gone took its actions
 // with it, so the click brings up its app's most recent window instead.
