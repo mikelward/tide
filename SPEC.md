@@ -762,7 +762,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen, window or area); stop it from the app | — |
 | Privacy: mic (orange) | any app is capturing the microphone | per-app list with mute | — |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
-| Keep awake | always there: faint while off, in the accent color while on (you asked for it, or the mic is live) | turn on for 2 hours, or off | — |
+| Keep awake | always there: faint while off, in the accent color while on (you asked for it, or the mic is live) | turn on, or off | — |
 | Bluetooth | off / on / connected | device list, connect/disconnect; *pair* opens `blueman-manager` | — |
 | Network | Wi-Fi strength / wired / VPN lock / offline | network list, VPNs; *settings* opens `nm-connection-editor` | — |
 | Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5% |
@@ -1013,10 +1013,10 @@ one of them:
 **Keep awake.**
 
 - A bar and launcher toggle holds an `IdleInhibitor` on each bar's surface.
-  It turns itself off after 2 hours of wall-clock time, time asleep
-  included, unless re-armed. It survives a config
-  reload, but a new shell starts with it off, so it's never left on by
-  accident across a login.
+  The toggle is always in the bar, and it stays on until you click it off:
+  it never times out (decided 2026-10-04, replacing a two-hour limit). It
+  survives a config reload, but a new shell starts with it off, so it's
+  never left on by accident across a login.
 - It also switches on automatically **while the microphone is live**, so an
   audio-only call with no video on screen doesn't blank.
 
