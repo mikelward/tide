@@ -7,6 +7,14 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **Launcher frecency breaks ties; it doesn't boost.** SPEC.md §8 said
+      results are "boosted by frecency"; a boost let a used "Screenshot
+      screen", or a used Screenshot app, take `scr` from "Screenshot
+      window", breaking §8's `scr`-and-Enter promise. So use now orders
+      only equal matches of one kind, and never the quick actions. The
+      alternative is a capped boost for apps and desktop actions only,
+      under the quick actions; it's the sort in `search` in
+      `shell/lib/launcher.mjs`.
 - [ ] **The autostart allowlist starts as `nm-applet` and `blueman`.** The
       spec says it starts empty, but the bar's network and Bluetooth icons
       come from those applets' autostart entries until the shell draws them
@@ -185,8 +193,10 @@ tested where it can be without a live session.
     keeps the launcher open and asks, naming what blocks it, as the
     session menu does. Still to come: Settings and the theme (dark /
     light / automatic), which wait on the shell owning the schedule (§15).
-  - Frecency for the empty query and as a boost, sections with `Tab`, and
-    `Ctrl+Enter` for a new workspace.
+  - Frecency is in: the empty query lists the apps you run most and most
+    recently first, and a query puts them first among equal matches; kept in
+    `$XDG_STATE_HOME/tide/launcher.json`.
+  - Sections with `Tab`, and `Ctrl+Enter` for a new workspace.
   - "Screenshot window" records Hyprland's focused window's address as the
     launcher opens, then reads its geometry with `hyprctl clients -j` as
     the screenshot runs and passes it to `screenshot --geometry`, the same

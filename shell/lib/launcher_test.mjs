@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { initial, record } from "./frecency.mjs";
 import { blockedHeading, confirmRows, highlighted, launchCommand, launcherItems, moved, quickActions, quickCommand, reselect, rowKey, scoreItem, search, windowScreenshot } from "./launcher.mjs";
 
 const chrome = {
@@ -54,6 +55,47 @@ test("an entry hidden from menus, or with nothing to run, has no row", () => {
 test("the empty query lists the apps by name, without their actions", () => {
     assert.deepEqual(search(items, "").map(r => r.item.name), ["Google Chrome", "Htop", "kitty", "Secure Shell"]);
     assert.deepEqual(search(items, " ")[0].positions, []);
+});
+
+test("the empty query lists the apps you use first, most used on top", () => {
+    const now = 1e12;
+    let used = record(initial(), "app:ssh", now - 1000);
+    used = record(used, "app:kitty", now - 1000);
+    used = record(used, "app:kitty", now);
+    assert.deepEqual(search(items, "", used, now).map(r => r.item.name), ["kitty", "Secure Shell", "Google Chrome", "Htop"]);
+    // An action's use doesn't put it in the empty list.
+    used = record(used, "action:google-chrome:new-window", now);
+    assert.equal(search(items, "", used, now).some(r => r.item.kind === "action"), false);
+});
+
+test("use breaks a tie but never beats a better match", () => {
+    const now = 1e12;
+    const term = { id: "term", name: "Term", command: ["term"], actions: [] };
+    const tmux = { id: "tmux", name: "Tmux", command: ["tmux"], actions: [] };
+    const skit = { id: "skit", name: "Skit", command: ["skit"], actions: [] };
+    const all = launcherItems([term, tmux, kitty, skit]);
+    let used = initial();
+    for (let i = 0; i < 50; i++) {
+        used = record(used, "app:tmux", now);
+        used = record(used, "app:skit", now);
+    }
+    // An equal match: by name without use, the one you use with it.
+    assert.equal(search(all, "t")[0].item.id, "term");
+    assert.equal(search(all, "t", used, now)[0].item.id, "tmux");
+    // kitty's prefix beats a much-used Skit.
+    assert.equal(search(all, "kit", used, now)[0].item.id, "kitty");
+});
+
+test("use doesn't reorder the quick actions, so scr and Enter stays a window screenshot", () => {
+    const now = 1e12;
+    const screenshotApp = { id: "org.gnome.Screenshot", name: "Screenshot", command: ["gnome-screenshot"], actions: [] };
+    const all = launcherItems([screenshotApp]).concat(quickActions());
+    let used = initial();
+    for (let i = 0; i < 50; i++) {
+        used = record(used, "quick:screenshot-screen", now);
+        used = record(used, "app:org.gnome.Screenshot", now);
+    }
+    assert.equal(search(all, "scr", used, now)[0].item.id, "screenshot-window");
 });
 
 test("a query ranks matching rows best first, and drops the rest", () => {
