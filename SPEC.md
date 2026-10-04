@@ -838,7 +838,12 @@ See [`launcher.png`](docs/mocks/launcher.png).
   - `↑`/`↓` or `Ctrl+N`/`Ctrl+P` move the selection.
   - `Enter` runs the selection.
   - `Ctrl+Enter` runs it on a new empty workspace.
-  - `Tab` jumps to the next section.
+  - `Tab` jumps to the next section, `Shift+Tab` back.
+- **Sections.**
+  - Empty query: the apps you've used (Recent), the other apps, then the
+    quick actions.
+  - A query: the top hit (Best match), then the other quick actions, then
+    the apps and their desktop actions, each in rank order.
 - **Quick actions:**
   - Screenshot window / screen / region.
   - Lock, log out, suspend, restart, shut down.

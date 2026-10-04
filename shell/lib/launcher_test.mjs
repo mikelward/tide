@@ -6,7 +6,7 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initial, record } from "./frecency.mjs";
-import { blockedHeading, confirmRows, highlighted, launchCommand, launcherItems, moved, quickActions, quickCommand, reselect, rowKey, scoreItem, search, windowScreenshot } from "./launcher.mjs";
+import { blockedHeading, confirmRows, highlighted, launchCommand, launcherItems, moved, nextSection, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
 
 const chrome = {
     id: "google-chrome",
@@ -307,4 +307,47 @@ test("a quick action wins a tie with an app, so scr and Enter is a screenshot", 
     assert.equal(search(all, "scr")[0].item.id, "screenshot-window");
     // The app is still found, just below.
     assert.ok(search(all, "scr").some(r => r.item.id === "org.gnome.Screenshot"));
+});
+
+test("the empty query comes in sections: recent apps, the rest, then actions", () => {
+    const now = 1e12;
+    const used = record(initial(), "app:kitty", now);
+    const rows = search(items.concat(quickActions()), "", used, now);
+    assert.deepEqual(rows.slice(0, 3).map(r => [r.item.id, r.section]), [
+        ["kitty", "Recent"],
+        ["google-chrome", "Apps"],
+        ["htop", "Apps"],
+    ]);
+    assert.equal(rows.at(-1).section, "Actions");
+    // With nothing used yet there's no Recent section.
+    assert.equal(search(items, "").some(r => r.section === "Recent"), false);
+});
+
+test("a query puts its best match first, then actions, then apps", () => {
+    const screenshotApp = { id: "org.gnome.Screenshot", name: "Screenshot", command: ["gnome-screenshot"], actions: [] };
+    const rows = search(launcherItems([screenshotApp, shell]).concat(quickActions()), "scr");
+    assert.deepEqual(rows[0].item.id, "screenshot-window");
+    assert.equal(rows[0].section, "Best match");
+    // Lock matches too, by its "screen" keyword.
+    assert.deepEqual(rows.slice(1).map(r => r.section), ["Actions", "Actions", "Actions", "Apps", "Apps"]);
+    // Each section keeps rank order: Screenshot outranks Secure Shell.
+    assert.deepEqual(rows.filter(r => r.section === "Apps").map(r => r.item.id), ["org.gnome.Screenshot", "ssh"]);
+    // An app on top is the best match, and actions still come before apps.
+    const top = search(launcherItems([kitty]).concat(quickActions()), "kit");
+    assert.deepEqual(top.map(r => [r.item.id, r.section]), [["kitty", "Best match"]]);
+});
+
+test("Tab steps to the next section's first row, and Shift+Tab back", () => {
+    const rows = ["Best match", "Actions", "Actions", "Apps", "Apps"].map((section, i) => ({ item: { kind: "app", id: String(i) }, positions: [], section }));
+    assert.deepEqual(rows.map((_, i) => startsSection(rows, i)), [true, true, false, true, false]);
+    assert.equal(nextSection(rows, 0, 1), 1);
+    assert.equal(nextSection(rows, 2, 1), 3);
+    assert.equal(nextSection(rows, 4, 1), 0);
+    // Shift+Tab: to its own section's start first, then the one before.
+    assert.equal(nextSection(rows, 4, -1), 3);
+    assert.equal(nextSection(rows, 3, -1), 1);
+    assert.equal(nextSection(rows, 0, -1), 3);
+    // Confirmation rows have no sections: Tab leaves the selection alone.
+    assert.equal(nextSection(confirmRows("reboot"), 1, 1), 1);
+    assert.equal(startsSection(confirmRows("reboot"), 0), false);
 });

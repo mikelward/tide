@@ -239,21 +239,28 @@ function shape(item, positions) {
     };
 }
 
-// The rows for `query`, best first, each `{item, positions}`. `frecency`
-// is the state from frecency.mjs, keyed by rowKey's "kind:id", read at
-// `now`. An empty query lists the apps, without their desktop actions,
-// most used first and then by name, then the quick actions in their own
-// order. A query ranks by match score; equal scores go by kind (quick
-// actions in their own order), then by the shape of the match (byShape),
-// and only then most used first. Use only ever breaks a tie, so `scr` and
-// Enter stays a window screenshot however often you take another kind.
+// The rows for `query`, best first, each `{item, positions, section}`.
+// `frecency` is the state from frecency.mjs, keyed by rowKey's "kind:id",
+// read at `now`. Rows come in sections (§8), which Tab steps through:
+//   - An empty query lists the apps you've used ("Recent", most used
+//     first), then the other apps ("Apps", by name), without their desktop
+//     actions, then the quick actions ("Actions") in their own order.
+//   - A query puts its top hit first ("Best match"), then the other quick
+//     actions ("Actions"), then the apps and their desktop actions
+//     ("Apps"), each in rank order. Rank is by match score; equal scores go
+//     by kind (quick actions in their own order), then by the shape of the
+//     match (byShape), and only then most used first. Use only ever breaks
+//     a tie, so `scr` and Enter stays a window screenshot however often you
+//     take another kind.
 export function search(items, query, frecency = {}, now = 0) {
     const usage = item => used(frecency[`${item.kind}:${item.id}`], now);
     if (query.trim() === "") {
         const apps = items.filter(i => i.kind === "app").map(item => ({ item, used: usage(item) }));
         apps.sort((a, b) => b.used - a.used || byName(a.item, b.item));
         const quick = items.filter(i => i.kind === "quick");
-        return apps.map(a => a.item).concat(quick).map(item => ({ item, positions: [] }));
+        return apps
+            .map(a => ({ item: a.item, positions: [], section: a.used > 0 ? "Recent" : "Apps" }))
+            .concat(quick.map(item => ({ item, positions: [], section: "Actions" })));
     }
     const rows = [];
     for (const item of items) {
@@ -271,7 +278,35 @@ export function search(items, query, frecency = {}, now = 0) {
             b.used - a.used ||
             byName(a.item, b.item)
     );
-    return rows.map(({ item, positions }) => ({ item, positions }));
+    const row = section => ({ item, positions }) => ({ item, positions, section });
+    const rest = rows.slice(1);
+    return rows
+        .slice(0, 1)
+        .map(row("Best match"))
+        .concat(rest.filter(r => r.item.kind === "quick").map(row("Actions")))
+        .concat(rest.filter(r => r.item.kind !== "quick").map(row("Apps")));
+}
+
+// Whether the row at `index` starts a section, so gets its heading.
+export function startsSection(rows, index) {
+    const section = rows[index]?.section ?? "";
+    return section !== "" && (index === 0 || rows[index - 1].section !== section);
+}
+
+// The selection after Tab (`step` 1) or Shift+Tab (-1) from `index`: the
+// first row of the next or previous section, wrapping around. Shift+Tab
+// inside a section goes to its own start first. A list with no sections
+// keeps the selection.
+export function nextSection(rows, index, step) {
+    const starts = rows.map((_, i) => i).filter(i => startsSection(rows, i));
+    if (starts.length === 0) {
+        return index;
+    }
+    if (step > 0) {
+        return starts.find(i => i > index) ?? starts[0];
+    }
+    const before = starts.filter(i => i < index);
+    return before.length > 0 ? before[before.length - 1] : starts[starts.length - 1];
 }
 
 // The `tide launch` command that runs `item`. The focus grant goes to its

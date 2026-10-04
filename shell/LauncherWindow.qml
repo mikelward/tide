@@ -305,7 +305,12 @@ PanelWindow {
                     Keys.onUpPressed: root.selected = Search.moved(root.selected, -1, root.rows.length)
                     Keys.onDownPressed: root.selected = Search.moved(root.selected, 1, root.rows.length)
                     Keys.onPressed: event => {
-                        if (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_N) {
+                        // Tab and Shift+Tab step through the sections; the
+                        // field keeps focus rather than passing it on.
+                        if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+                            root.selected = Search.nextSection(root.rows, root.selected, event.key === Qt.Key_Backtab ? -1 : 1);
+                            event.accepted = true;
+                        } else if (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_N) {
                             root.selected = Search.moved(root.selected, 1, root.rows.length);
                             event.accepted = true;
                         } else if (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_P) {
@@ -382,114 +387,141 @@ PanelWindow {
                 id: list
 
                 width: parent.width
-                // Seven rows, as in the mock; more scroll.
-                height: Math.min(contentHeight, 7 * 48)
+                // About seven rows, as in the mock; more scroll.
+                height: Math.min(contentHeight, 8 * 48)
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 model: root.rows
                 currentIndex: root.selected
                 highlightMoveDuration: 0
 
-                delegate: Rectangle {
-                    id: row
+                delegate: Item {
+                    id: slot
 
                     required property var modelData
                     required property int index
-                    readonly property bool current: index === root.selected
+                    // The first row of a section carries its heading.
+                    readonly property bool heading: Search.startsSection(root.rows, index)
 
                     width: list.width
-                    height: 48
-                    radius: 10
-                    color: current ? Theme.accentBg : hover.hovered ? Theme.surface2 : "transparent"
+                    height: (heading ? 28 : 0) + 48
 
-                    HoverHandler {
-                        id: hover
+                    Text {
+                        visible: slot.heading
+                        height: 28
+                        leftPadding: 10
+                        topPadding: 12
+                        textFormat: Text.PlainText
+                        text: (slot.modelData.section ?? "").toUpperCase()
+                        color: Theme.fgDim
+                        font.family: Theme.font
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        font.letterSpacing: 0.6
                     }
 
-                    TapHandler {
-                        onTapped: root.runRow(row.index)
-                    }
-
-                    // The key that does the same, so the launcher teaches
-                    // the bindings.
                     Rectangle {
-                        id: hint
+                        id: row
 
-                        anchors.right: parent.right
-                        anchors.rightMargin: 10
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: (row.modelData.item.hint ?? "") !== ""
-                        width: hintText.implicitWidth + 12
-                        height: 20
-                        radius: 5
-                        color: row.current ? Qt.rgba(1, 1, 1, 0.16) : Theme.surface2
+                        readonly property var modelData: slot.modelData
+                        readonly property int index: slot.index
+                        readonly property bool current: index === root.selected
 
-                        Text {
-                            id: hintText
+                        y: slot.heading ? 28 : 0
+                        width: slot.width
+                        height: 48
+                        radius: 10
+                        color: current ? Theme.accentBg : hover.hovered ? Theme.surface2 : "transparent"
 
-                            anchors.centerIn: parent
-                            textFormat: Text.PlainText
-                            text: row.modelData.item.hint ?? ""
-                            color: row.current ? Qt.rgba(1, 1, 1, 0.82) : Theme.fgDim
-                            font.family: Theme.font
-                            font.pixelSize: 11
+                        HoverHandler {
+                            id: hover
                         }
-                    }
 
-                    // A quick action's (or a confirmation's) symbolic icon,
-                    // colored like the bar's;
-                    // an app's own icon goes in the same place.
-                    SymbolicIcon {
-                        anchors.centerIn: icon
-                        visible: row.modelData.item.kind === "quick" || row.modelData.item.kind === "confirm"
-                        implicitWidth: 22
-                        implicitHeight: 22
-                        name: visible ? row.modelData.item.icon : ""
-                        color: row.current ? "#ffffff" : Theme.fg
-                    }
+                        TapHandler {
+                            onTapped: root.runRow(row.index)
+                        }
 
-                    IconImage {
-                        id: icon
+                        // The key that does the same, so the launcher teaches
+                        // the bindings.
+                        Rectangle {
+                            id: hint
 
-                        anchors.left: parent.left
-                        anchors.leftMargin: 10
-                        anchors.verticalCenter: parent.verticalCenter
-                        implicitSize: 32
-                        // Empty for a quick action, whose box still lays the
-                        // row out.
-                        // An entry may name its icon by path rather than by theme name.
-                        source: row.modelData.item.kind === "quick" || row.modelData.item.kind === "confirm" ? "" : Notes.iconFile(row.modelData.item.icon) ?? Quickshell.iconPath(row.modelData.item.icon, "application-x-executable")
-                    }
+                            anchors.right: parent.right
+                            anchors.rightMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: (row.modelData.item.hint ?? "") !== ""
+                            width: hintText.implicitWidth + 12
+                            height: 20
+                            radius: 5
+                            color: row.current ? Qt.rgba(1, 1, 1, 0.16) : Theme.surface2
 
-                    Column {
-                        anchors.left: icon.right
-                        anchors.leftMargin: 12
-                        anchors.right: hint.visible ? hint.left : parent.right
-                        anchors.rightMargin: 10
-                        anchors.verticalCenter: parent.verticalCenter
+                            Text {
+                                id: hintText
 
-                        Text {
-                            width: parent.width
-                            elide: Text.ElideRight
-                            // Built by Search.highlighted, which escapes the
-                            // name: desktop entries are never markup.
-                            textFormat: Text.StyledText
-                            text: Search.highlighted(row.modelData.item.name, row.modelData.positions, row.current ? "#ffffff" : Theme.accent)
+                                anchors.centerIn: parent
+                                textFormat: Text.PlainText
+                                text: row.modelData.item.hint ?? ""
+                                color: row.current ? Qt.rgba(1, 1, 1, 0.82) : Theme.fgDim
+                                font.family: Theme.font
+                                font.pixelSize: 11
+                            }
+                        }
+
+                        // A quick action's (or a confirmation's) symbolic icon,
+                        // colored like the bar's;
+                        // an app's own icon goes in the same place.
+                        SymbolicIcon {
+                            anchors.centerIn: icon
+                            visible: row.modelData.item.kind === "quick" || row.modelData.item.kind === "confirm"
+                            implicitWidth: 22
+                            implicitHeight: 22
+                            name: visible ? row.modelData.item.icon : ""
                             color: row.current ? "#ffffff" : Theme.fg
-                            font.family: Theme.font
-                            font.pixelSize: 14
-                            font.weight: Font.DemiBold
                         }
 
-                        Text {
-                            width: parent.width
-                            visible: text !== ""
-                            elide: Text.ElideRight
-                            textFormat: Text.PlainText
-                            text: row.modelData.item.sub
-                            color: row.current ? Qt.rgba(1, 1, 1, 0.82) : Theme.fgDim
-                            font.family: Theme.font
-                            font.pixelSize: 12
+                        IconImage {
+                            id: icon
+
+                            anchors.left: parent.left
+                            anchors.leftMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            implicitSize: 32
+                            // Empty for a quick action, whose box still lays the
+                            // row out.
+                            // An entry may name its icon by path rather than by theme name.
+                            source: row.modelData.item.kind === "quick" || row.modelData.item.kind === "confirm" ? "" : Notes.iconFile(row.modelData.item.icon) ?? Quickshell.iconPath(row.modelData.item.icon, "application-x-executable")
+                        }
+
+                        Column {
+                            anchors.left: icon.right
+                            anchors.leftMargin: 12
+                            anchors.right: hint.visible ? hint.left : parent.right
+                            anchors.rightMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            Text {
+                                width: parent.width
+                                elide: Text.ElideRight
+                                // Built by Search.highlighted, which escapes the
+                                // name: desktop entries are never markup.
+                                textFormat: Text.StyledText
+                                text: Search.highlighted(row.modelData.item.name, row.modelData.positions, row.current ? "#ffffff" : Theme.accent)
+                                color: row.current ? "#ffffff" : Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
+                            }
+
+                            Text {
+                                width: parent.width
+                                visible: text !== ""
+                                elide: Text.ElideRight
+                                textFormat: Text.PlainText
+                                text: row.modelData.item.sub
+                                color: row.current ? Qt.rgba(1, 1, 1, 0.82) : Theme.fgDim
+                                font.family: Theme.font
+                                font.pixelSize: 12
+                            }
                         }
                     }
                 }
@@ -519,7 +551,7 @@ PanelWindow {
                 spacing: 16
 
                 Repeater {
-                    model: [["↑↓", "select"], ["↵", "run"], ["Esc", "close"]]
+                    model: [["↑↓", "select"], ["↵", "run"], ["Tab", "next section"], ["Esc", "close"]]
 
                     Text {
                         required property var modelData

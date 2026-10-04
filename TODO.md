@@ -188,7 +188,8 @@ tested where it can be without a live session.
   - Frecency is in: the empty query lists the apps you run most and most
     recently first, and a query puts them first among equal matches; kept in
     `$XDG_STATE_HOME/tide/launcher.json`.
-  - Sections with `Tab`, and `Ctrl+Enter` for a new workspace.
+  - Sections are in, with `Tab` and `Shift+Tab` stepping through them.
+  - `Ctrl+Enter` for a new workspace.
   - "Screenshot window" records Hyprland's focused window's address as the
     launcher opens, then reads its geometry with `hyprctl clients -j` as
     the screenshot runs and passes it to `screenshot --geometry`, the same
