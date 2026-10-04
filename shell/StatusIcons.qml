@@ -35,7 +35,8 @@ Row {
     }
 
     // Keep awake: always here, faint while off and in the accent color
-    // while on. A click turns it on for two hours, or off.
+    // while on, whether you asked or the mic is live. A click turns your
+    // request on for two hours, or off.
     SymbolicIcon {
         id: keepAwake
 

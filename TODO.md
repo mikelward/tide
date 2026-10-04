@@ -156,8 +156,14 @@ packaged). It also runs
 The Quickshell bar replaces waybar piece by piece (SPEC.md §7), each piece
 tested where it can be without a live session.
 
-- Keep awake (SPEC.md §10) is the bar toggle only so far. Still to come:
-  turning on by itself while the mic is live, and the launcher's toggle.
+- Keep awake (SPEC.md §10) is the bar toggle, and it also holds while the
+  mic is live: an app's capture stream with an active PipeWire link from a
+  microphone (`shell/MicData.qml`, `shell/lib/mic.mjs`), the same signal
+  the orange mic indicator (§7.4) will use. Meters don't count: a stream
+  marked `media.category` Monitor or Manager, or `stream.monitor`
+  (pavucontrol's, through pipewire-pulse). On a live session, check that a Meet call holds it, and
+  that pavucontrol's level meters don't. Still to come: the launcher's
+  toggle.
   On a live session, check that hypridle honors the bar's inhibitor,
   including while a fullscreen window covers the bar.
 - The system monitor (SPEC.md §7.4) is built but unchecked on a live
@@ -319,11 +325,10 @@ holds the queue, and
 
 SPEC.md §9's OSD is `shell/Osd.qml`, from `shell/OsdData.qml` and
 `shell/lib/osd.mjs`: a change to the default output's volume or mute, or the
-default input's mute, from any source. Only parsed with `qmlformat`. Still
-to do:
+default input's mute, from any source, and the backlight when the keys in
+`conf` change it through `tide brightness STEP` and the shell's `osd`
+`IpcHandler`. Only parsed with `qmlformat`. Still to do:
 
-- Brightness shows through `tide brightness STEP`, which the keys in
-  `conf` run, and the shell's `osd` `IpcHandler`.
 - Try it on a real session: the volume and brightness keys, the bar's
   scroll and the volume popover should each show it, and switching
   outputs or hypridle dimming shouldn't.
