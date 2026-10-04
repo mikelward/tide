@@ -98,6 +98,19 @@ check "--app=ID works too" contains "$(cat "$log")" 'tide_focus.grant("kitty")'
 run "$qs" launch --app org.example.Editor --app=example-editor -- "$fake/app"
 check "repeated --app grants a list any of them can use" \
     contains "$(cat "$log")" 'tide_focus.grant({ "org.example.Editor", "example-editor" })'
+run "$qs" launch --new-workspace app one
+check "--new-workspace asks the guard for an empty workspace" \
+    contains "$(cat "$log")" ', { new_workspace = true })'
+check "--new-workspace still runs the app" contains "$(cat "$log")" "uwsm app -- app one"
+run "$qs" launch --new-workspace --app org.example.Editor --app=example-editor -- "$fake/app"
+check "--new-workspace goes with a list grant" \
+    contains "$(cat "$log")" 'tide_focus.grant({ "org.example.Editor", "example-editor" }, nil, nil, { new_workspace = true })'
+run "$qs" launch --app=kitty --new-workspace app
+check "--new-workspace goes with one --app" \
+    contains "$(cat "$log")" 'tide_focus.grant("kitty", nil, nil, { new_workspace = true })'
+run "$qs" launch --app=kitty app
+check "without --new-workspace the grant has no options" \
+    contains "$(cat "$log")" 'tide_focus.grant("kitty")'
 run "$qs" launch --app '*' --app firefox -- app
 check "--app '*' beside another ID is refused" test $? -eq 2
 check "--app '*' beside another ID says why" \

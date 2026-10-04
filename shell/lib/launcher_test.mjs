@@ -6,7 +6,7 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initial, record } from "./frecency.mjs";
-import { blockedHeading, confirmRows, highlighted, grantIds, launchCommand, emptyWorkspaceCommand, launcherItems, moved, nextSection, holdsOpen, openRequest, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
+import { blockedHeading, confirmRows, highlighted, grantIds, launchCommand, launcherItems, moved, nextSection, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
 
 const chrome = {
     id: "google-chrome",
@@ -375,51 +375,10 @@ test("Ctrl+Enter moves to a new workspace only for what opens a window", () => {
     assert.equal(opensWindow(undefined), false);
 });
 
-function runEmptyWorkspace(lua, reply) {
-    const dir = mkdtempSync(join(tmpdir(), "launcher-test-"));
-    writeFileSync(join(dir, "hyprctl"), `#!/bin/sh\nprintf '%s\\n' "$@" > "${dir}/args"\nprintf '%s' '${reply}'\n`);
-    chmodSync(join(dir, "hyprctl"), 0o755);
-    const [command, ...args] = emptyWorkspaceCommand(lua);
-    const run = spawnSync(command, args, { env: { ...process.env, PATH: `${dir}:${process.env.PATH}` }, encoding: "utf8" });
-    return { status: run.status, stderr: run.stderr, args: readFileSync(join(dir, "args"), "utf8").trim().split("\n") };
-}
-
-test("the empty-workspace switch passes the dispatch whole and checks its reply", () => {
-    const lua = runEmptyWorkspace(true, "ok");
-    assert.equal(lua.status, 0, lua.stderr);
-    assert.deepEqual(lua.args, ["dispatch", 'hl.dsp.focus({ workspace = "emptym" })']);
-    assert.deepEqual(runEmptyWorkspace(false, "ok").args, ["dispatch", "workspace emptym"]);
-    // hyprctl exits 0 for a dispatch Hyprland refused; the reply says so.
-    const refused = runEmptyWorkspace(false, "Invalid dispatcher");
-    assert.equal(refused.status, 1);
-    assert.match(refused.stderr, /hyprctl dispatch workspace emptym: Invalid dispatcher/);
-});
-
-test("opening the launcher waits while a Ctrl+Enter launch is under way", () => {
-    assert.equal(holdsOpen("idle"), false);
-    assert.equal(holdsOpen("waiting"), true);
-    assert.equal(holdsOpen("switching"), true);
-});
-
-test("an open during a Ctrl+Enter launch is held, and the newest request wins", () => {
-    const closed = { visible: false, launch: "idle", held: false };
-    const busy = { visible: false, launch: "switching", held: false };
-    const held = { ...busy, held: true };
-    assert.deepEqual(openRequest("open", closed), { act: "open", held: false });
-    assert.deepEqual(openRequest("toggle", closed), { act: "open", held: false });
-    // While the launch is under way, open and toggle hold the open.
-    assert.deepEqual(openRequest("open", busy), { act: null, held: true });
-    assert.deepEqual(openRequest("toggle", { ...busy, launch: "waiting" }), { act: null, held: true });
-    // The held open happens once the app has started...
-    assert.deepEqual(openRequest("launched", { ...held, launch: "idle" }), { act: "open", held: false });
-    // ...unless a close or a second toggle took it back first.
-    assert.deepEqual(openRequest("close", held), { act: null, held: false });
-    assert.deepEqual(openRequest("toggle", held), { act: null, held: false });
-    assert.deepEqual(openRequest("launched", { ...busy, launch: "idle" }), { act: null, held: false });
-    // An open launcher closes; opening it again is a no-op.
-    const shown = { visible: true, launch: "idle", held: false };
-    assert.deepEqual(openRequest("close", shown), { act: "close", held: false });
-    assert.deepEqual(openRequest("toggle", shown), { act: "close", held: false });
-    assert.deepEqual(openRequest("open", shown), { act: null, held: false });
-    assert.throws(() => openRequest("bogus", closed), /unknown launcher request/);
+test("Ctrl+Enter's launch asks for a new workspace", () => {
+    const app = items.find(i => i.kind === "app");
+    const plain = launchCommand(app);
+    const asked = launchCommand(app, { newWorkspace: true });
+    assert.deepEqual(asked, ["tide", "launch", "--new-workspace", ...plain.slice(2)]);
+    assert.deepEqual(launchCommand(app, { newWorkspace: false }), plain);
 });

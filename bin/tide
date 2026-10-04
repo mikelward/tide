@@ -2,7 +2,7 @@
 #
 # tide: the session's command-line helpers.
 #
-#   tide launch [--app ID]... [--] COMMAND [ARG...]
+#   tide launch [--new-workspace] [--app ID]... [--] COMMAND [ARG...]
 #
 #     Starts an app the way the key bindings and the launcher do
 #     (SPEC.md §5.4, §14.3):
@@ -24,6 +24,10 @@
 #          because a terminal is how you'd fix a stuck start;
 #       3. runs it with `uwsm app`, in app-graphical.slice, so the app
 #          outlives a shell restart.
+#     --new-workspace asks for the app's first window on an empty workspace:
+#     the guard takes it there as it opens, and focus follows (the
+#     launcher's Ctrl+Enter). If you move on first, the grant is canceled
+#     and the window opens where you are, unfocused, like any other.
 #     Outside a tide session it just runs COMMAND.
 #
 #   tide grant ID
@@ -73,7 +77,7 @@
 prog=${0##*/}
 
 usage() {
-    echo "usage: $prog launch [--app ID]... [--] COMMAND [ARG...]" >&2
+    echo "usage: $prog launch [--new-workspace] [--app ID]... [--] COMMAND [ARG...]" >&2
     echo "       $prog grant ID" >&2
     echo "       $prog focus ID" >&2
     echo "       $prog autostart-allowed UNIT" >&2
@@ -222,8 +226,11 @@ launch() {
     wildcard=no
     lookup=no
     seen_ids='|'
+    # The grant's options, as Lua, after its pid and key.
+    opts=
     while test $# -gt 0; do
         case "$1" in
+            --new-workspace) opts=', { new_workspace = true }'; shift ;;
             --app | --app=*)
                 if test "$1" = --app; then
                     test $# -ge 2 || usage
@@ -271,10 +278,10 @@ launch() {
     # A grant that fails is reported; the app starts anyway. One ID goes
     # in as a string, several as a list.
     if test "$count" -gt 1; then
-        grant "$names" launch grant "" "{ $apps }"
+        grant "$names" launch grant "" "{ $apps }${opts:+, nil, nil$opts}"
     elif test "$lookup" != yes; then
-        grant "$app" launch
-    elif grant "$app" launch grant "" "$(lua_string "$app"), nil, $$"; then
+        grant "$app" launch grant "" "$(lua_string "$app")${opts:+, nil, nil$opts}"
+    elif grant "$app" launch grant "" "$(lua_string "$app"), nil, $$$opts"; then
         # The program's desktop entries may name the class its window has
         # (Exec=foo, StartupWMClass=org.example.Foo). They're read after
         # the grant is in, so a key press or focus change meanwhile still
