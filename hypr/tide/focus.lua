@@ -34,13 +34,15 @@
 --
 -- setup() also publishes the module as the global `tide_focus`, so
 -- `tide launch` can record a grant with
--- `hyprctl eval 'tide_focus.grant("APP")'`, and a notification click
--- `tide_focus.grant_or_recent("APP")`.
+-- `hyprctl eval 'tide_focus.grant("APP")'` (or a list of the classes the
+-- app's window may have, `tide_focus.grant({ "APP", "OTHER" })`), and a
+-- notification click `tide_focus.grant_or_recent("APP")`.
 --
 -- Known gaps, from SPEC.md §14.3: Lua sees key presses but not pointer
 -- buttons, so a click inside the window you're already in doesn't cancel a
--- grant; a grant names an app by window class, not yet through desktop
--- entries; and a window that asked for fullscreen as it opened comes up
+-- grant; a grant names an app by window class, which the launcher reads
+-- from its desktop entry, but a program name from a key binding or the
+-- terminal isn't yet resolved through desktop entries; and a window that asked for fullscreen as it opened comes up
 -- tiled, since Hyprland skips that request for a window it doesn't focus
 -- and Lua can't see the request to re-apply it (TODO.md).
 
@@ -156,6 +158,16 @@ local function expire()
     state.grants = keep
 end
 
+-- Whether grant g names w's app, under any of the classes it lists.
+local function names(g, app)
+    for _, id in ipairs(g.apps or {}) do
+        if same_id(id, app) then
+            return true
+        end
+    end
+    return false
+end
+
 -- Uses up the grant for w's app, if one holds.
 -- A grant for "*" is used by whichever app shows a window first; one that
 -- names w's app is used before it.
@@ -164,7 +176,7 @@ local function take_grant(w)
     local app = app_of(w)
     for _, wildcard in ipairs({ false, true }) do
         for i, g in ipairs(state.grants) do
-            if (g.app == "*") == wildcard and (wildcard or same_id(g.app, app)) then
+            if (g.app == "*") == wildcard and (wildcard or names(g, app)) then
                 g.live = false
                 table.remove(state.grants, i)
                 return true
@@ -569,16 +581,40 @@ end
 -- shell's), which lets a window from it or one of its descendants use the
 -- grant. With a pid, app may be nil: a command whose app the shell can't
 -- name still gets its windows focused, through ancestry alone.
+--
+-- app may also be a list of ids, for an app whose window class isn't known
+-- for sure (the launcher's desktop ID and program name, SPEC.md §14.3): a
+-- window of any of them uses the one grant. "*" stands alone, since a
+-- wildcard beside names would make the names meaningless.
 function M.grant(app, pid)
     if pid ~= nil and (math.type(pid) ~= "integer" or pid <= 1) then
         error("tide_focus.grant: expected a process id, got " .. tostring(pid), 2)
     end
-    local id = normalize(app)
-    if not id and not (app == nil and pid) then
-        error("tide_focus.grant: expected an app id, got " .. tostring(app), 2)
+    local apps = {}
+    if type(app) == "table" then
+        local count = 0
+        for _ in pairs(app) do
+            count = count + 1
+        end
+        for i = 1, count do
+            local id = normalize(app[i])
+            if not id or (id == "*" and count > 1) then
+                error("tide_focus.grant: expected a list of app ids, got " .. tostring(app[i]) .. " at " .. i, 2)
+            end
+            table.insert(apps, id)
+        end
+        if count == 0 then
+            error("tide_focus.grant: expected at least one app id", 2)
+        end
+    else
+        local id = normalize(app)
+        if not id and not (app == nil and pid) then
+            error("tide_focus.grant: expected an app id, got " .. tostring(app), 2)
+        end
+        apps[1] = id
     end
     expire()
-    table.insert(state.grants, { app = id, at = M.clock(), pid = pid, live = true })
+    table.insert(state.grants, { app = apps[1], apps = apps, at = M.clock(), pid = pid, live = true })
 end
 
 -- The window of app focused most recently, or one never focused if none
@@ -657,7 +693,7 @@ function M.grant_or_recent(app)
         error("tide_focus.grant_or_recent: expected an app id, got " .. tostring(app), 2)
     end
     expire()
-    local g = { app = id, at = M.clock(), live = true }
+    local g = { app = id, apps = { id }, at = M.clock(), live = true }
     table.insert(state.grants, g)
     hl.timer(function()
         lapse(g)
@@ -669,7 +705,7 @@ function M.grants()
     expire()
     local out = {}
     for _, g in ipairs(state.grants) do
-        table.insert(out, g.app or ("pid " .. g.pid))
+        table.insert(out, (g.apps and #g.apps > 0) and table.concat(g.apps, " ") or g.app or ("pid " .. g.pid))
     end
     return out
 end

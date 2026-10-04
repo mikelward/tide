@@ -14,6 +14,13 @@ once you have agreed with it or reversed it.
       once, which left five ways for what you did next to cancel the
       pending app's focus or land on its new workspace. It's `openRequest`
       in `shell/lib/launcher.mjs`.
+- [ ] **A launcher entry with no `StartupWMClass` grants named classes,
+  not any app's window.** It grants its desktop ID and program (unless a
+  wrapper), where it used to grant `*`. An app whose window class is
+  neither now comes up unfocused and marked instead of focused; in
+  exchange, an unrelated window that opens first no longer takes the
+  focus. Reverting is one line in `grantIds`: return `["*"]` when the entry
+  names no class.
 - [ ] **The autostart allowlist starts as `nm-applet` and `blueman`.** The
       spec says it starts empty, but the bar's network and Bluetooth icons
       come from those applets' autostart entries until the shell draws them
@@ -415,12 +422,16 @@ TODO.md). Nothing has run it in a live session yet.
 ## Grants through desktop entries
 
 The focus guard matches a grant against the window class alone (SPEC.md
-§14.3). `tide launch xdg-open URL` or `gio open FILE` would grant
-`xdg-open` or `gio`, which no window has, leaving the opened app unfocused.
-Until the launcher's desktop-entry index exists (M3), such a launch grants
-`*` (the first window of any app) unless `--app` names the app. Then resolve
-a program name through desktop entries' `Exec` and `StartupWMClass`, and an
-opener through the default handler for the file's type.
+§14.3). The launcher grants each entry its `StartupWMClass`, desktop ID and
+program at once (`grantIds` in `shell/lib/launcher.mjs`, repeated `--app`).
+On a live session, check which apps in use come up unfocused because their
+window class is none of those three. Still to do:
+
+- A key binding or terminal command grants its program's name. Resolve it
+  through desktop entries' `Exec` and `StartupWMClass` as the launcher does.
+- `tide launch xdg-open URL` or `gio open FILE` grants `*` (the first
+  window of any app) unless `--app` names the app. Resolve the opener
+  through the default handler for the file's type.
 
 ## Fullscreen on open, under the focus guard
 

@@ -1373,9 +1373,13 @@ this spec.
   - **A wildcard** (`tide launch --app '*'`) is used by the first
     window of any app. It's for a key bound to a wrapper script, whose app
     isn't known until its window appears. A grant naming the app is used
-    before it, and the same cancel rules apply. Matching grants through
-    desktop entries, a known gap below, will make it unneeded for launcher
-    entries.
+    before it, and the same cancel rules apply.
+  - **Several classes** (`--app` repeated) make one grant, used by a
+    window of any of them. The launcher grants an entry's
+    `StartupWMClass`, its desktop ID (which a Wayland app's app_id usually
+    is) and its program, unless that's a wrapper (`env`, `flatpak`, a
+    shell). An app whose window has none of these comes up unfocused and
+    marked. A terminal app's window is the terminal's, so it grants `*`.
   - **Canceled by** anything you do after launching: a key press, a mouse
     click anywhere (including inside the window you're already in), or
     focus moving to another window by any means (`Super+J`, a workspace
@@ -1419,9 +1423,9 @@ this spec.
   - The guard resolves a program name to an app the way the launcher does,
     through desktop entries' `Exec` and `StartupWMClass`. `xdg-open` and
     `gio open` resolve through the default handler for the file's type.
-    Not yet in M2: a grant matches the window class alone (TODO.md), so a
-    launch through `xdg-open` or `gio open` grants `*`, the first window of any
-    app, unless `--app` names the app.
+    Not yet: a grant from a key binding or the terminal matches the window
+    class alone (TODO.md), so a launch through `xdg-open` or `gio open`
+    grants `*`, the first window of any app, unless `--app` names the app.
 - **Process ancestry** covers the terminal's commands: a script that opens
   a window, the second command on a line, or anything the shell's grant
   can't name. The preexec hook's grant names its shell's pid, and a window

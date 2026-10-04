@@ -6,7 +6,7 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initial, record } from "./frecency.mjs";
-import { blockedHeading, confirmRows, highlighted, launchCommand, emptyWorkspaceCommand, launcherItems, moved, nextSection, holdsOpen, openRequest, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
+import { blockedHeading, confirmRows, highlighted, grantIds, launchCommand, emptyWorkspaceCommand, launcherItems, moved, nextSection, holdsOpen, openRequest, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
 
 const chrome = {
     id: "google-chrome",
@@ -152,10 +152,25 @@ test("an app comes before its own actions on an equal score", () => {
 });
 
 test("an app is launched through tide launch, granting its window class", () => {
-    assert.deepEqual(launchCommand(items[2]), ["tide", "launch", "--app", "Google-chrome", "--", "/usr/bin/google-chrome-stable", "--incognito"]);
-    // With no class named, the command may be a wrapper whose name no
-    // window has, so any app's first window may take focus.
-    assert.deepEqual(launchCommand(items[3]), ["tide", "launch", "--app", "*", "--", "kitty"]);
+    // The class the entry names, then the program's name; the desktop ID
+    // differs from the class only in case, so it's listed once.
+    assert.deepEqual(launchCommand(items[2]), [
+        "tide", "launch", "--app", "Google-chrome", "--app", "google-chrome-stable", "--",
+        "/usr/bin/google-chrome-stable", "--incognito",
+    ]);
+    // With no class named, the desktop ID and the program's name.
+    assert.deepEqual(launchCommand(items[3]), ["tide", "launch", "--app", "kitty", "--", "kitty"]);
+    assert.deepEqual(grantIds(items[5]), ["ssh", "ssh-app"]);
+});
+
+test("a wrapper's name isn't granted, since no window has it", () => {
+    const flatpak = launcherItems([{
+        id: "org.example.Editor", name: "Editor",
+        command: ["/usr/bin/flatpak", "run", "--branch=stable", "org.example.Editor"], actions: [],
+    }])[0];
+    assert.deepEqual(grantIds(flatpak), ["org.example.Editor"]);
+    const env = launcherItems([{ id: "tool", name: "Tool", command: ["env", "GDK_BACKEND=x11", "tool"], actions: [] }])[0];
+    assert.deepEqual(grantIds(env), ["tool"]);
 });
 
 test("a terminal app runs in the terminal, granting any first window", () => {
