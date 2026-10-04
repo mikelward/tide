@@ -837,7 +837,10 @@ See [`launcher.png`](docs/mocks/launcher.png).
 - **Keys.**
   - `↑`/`↓` or `Ctrl+N`/`Ctrl+P` move the selection.
   - `Enter` runs the selection.
-  - `Ctrl+Enter` runs it on a new empty workspace.
+  - `Ctrl+Enter` runs it on a new empty workspace: the first empty one on
+    the monitor (Hyprland's `emptym` selector, checked in v0.56.0's
+    `MiscFunctions.cpp` and on main at `579829f`). A quick action opens no
+    window, so there `Ctrl+Enter` does what `Enter` does.
   - `Tab` jumps to the next section, `Shift+Tab` back.
 - **Sections.**
   - Empty query: the apps you've used (Recent), the other apps, then the

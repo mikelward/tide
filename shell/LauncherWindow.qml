@@ -59,8 +59,35 @@ PanelWindow {
     // so a window that moved meanwhile is taken where it is.
     property string pending: ""
     property var windowAtOpen: null
+    // A Ctrl+Enter launch, held for the same pause: see runRow. `launch`
+    // is where it is ("idle", "waiting", "switching"), and an open asked
+    // for meanwhile waits for it (Search.holdsOpen), in `openHeld`.
+    property var pendingLaunch: null
+    property string launch: "idle"
+    property bool openHeld: false
+
+    // Open, close, toggle, and a Ctrl+Enter launch having started all go
+    // through Search.openRequest, which holds an open while a launch is
+    // under way and lets the newest request win.
+    function request(name) {
+        const result = Search.openRequest(name, {
+            visible: visible,
+            launch: launch,
+            held: openHeld
+        });
+        openHeld = result.held;
+        if (result.act === "open") {
+            show();
+        } else if (result.act === "close") {
+            visible = false;
+        }
+    }
 
     function open() {
+        request("open");
+    }
+
+    function show() {
         const focused = Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor);
         if (focused) {
             screen = focused;
@@ -87,18 +114,16 @@ PanelWindow {
     }
 
     function close() {
-        visible = false;
+        request("close");
     }
 
     function toggle() {
-        if (visible) {
-            close();
-        } else {
-            open();
-        }
+        request("toggle");
     }
 
-    function runRow(index) {
+    // Runs the row at `index`; `newWorkspace` (Ctrl+Enter) first moves to
+    // an empty workspace for an app, so its window opens there.
+    function runRow(index, newWorkspace) {
         const row = rows[index];
         if (!row || checking) {
             return;
@@ -121,6 +146,17 @@ PanelWindow {
         close();
         if (row.item.kind === "quick") {
             runQuick(row.item.id);
+        } else if (newWorkspace && Search.opensWindow(row.item)) {
+            // Every focus change ends a focus grant (focus.lua), and two
+            // come first here: focus going back to the window you were in
+            // as the launcher unmaps, then the switch to an empty
+            // workspace. So the switch waits out the unmap, as a screenshot
+            // does (screenshotDelay), and `tide launch` grants the app's
+            // first window only once hyprctl returns, by which time
+            // Hyprland has made the switch.
+            pendingLaunch = row.item;
+            launch = "waiting";
+            launchDelay.restart();
         } else {
             Launcher.start(Search.launchCommand(row.item), row.item.workingDirectory);
         }
@@ -160,6 +196,34 @@ PanelWindow {
             screenshotDelay.restart();
         } else {
             Launcher.run(what.run, null);
+        }
+    }
+
+    // Opens `item` on the first empty workspace, then lets a held open
+    // through. A switch that fails (Launcher logs why) still launches, on
+    // the workspace you're on.
+    function launchOnEmptyWorkspace(item) {
+        launch = "switching";
+        Launcher.run(Search.emptyWorkspaceCommand(Hyprland.usingLua), ok => {
+            if (!ok) {
+                console.warn("tide: launcher: couldn't switch to an empty workspace; launching on this one");
+            }
+            Launcher.start(Search.launchCommand(item), item.workingDirectory);
+            root.launch = "idle";
+            root.request("launched");
+        });
+    }
+
+    // The same pause, for a Ctrl+Enter launch: focus going back to the
+    // window you were in has to come before the switch.
+    Timer {
+        id: launchDelay
+
+        interval: screenshotDelay.interval
+        onTriggered: {
+            const item = root.pendingLaunch;
+            root.pendingLaunch = null;
+            root.launchOnEmptyWorkspace(item);
         }
     }
 
@@ -300,8 +364,8 @@ PanelWindow {
                     onTextChanged: root.query = text
 
                     Keys.onEscapePressed: root.close()
-                    Keys.onReturnPressed: root.runRow(root.selected)
-                    Keys.onEnterPressed: root.runRow(root.selected)
+                    Keys.onReturnPressed: event => root.runRow(root.selected, (event.modifiers & Qt.ControlModifier) !== 0)
+                    Keys.onEnterPressed: event => root.runRow(root.selected, (event.modifiers & Qt.ControlModifier) !== 0)
                     Keys.onUpPressed: root.selected = Search.moved(root.selected, -1, root.rows.length)
                     Keys.onDownPressed: root.selected = Search.moved(root.selected, 1, root.rows.length)
                     Keys.onPressed: event => {
@@ -551,7 +615,7 @@ PanelWindow {
                 spacing: 16
 
                 Repeater {
-                    model: [["↑↓", "select"], ["↵", "run"], ["Tab", "next section"], ["Esc", "close"]]
+                    model: [["↑↓", "select"], ["↵", "run"], ["Ctrl+↵", "new workspace"], ["Tab", "next section"], ["Esc", "close"]]
 
                     Text {
                         required property var modelData

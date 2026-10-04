@@ -2,6 +2,7 @@
 // their desktop actions, matched with fuzzy.mjs, and the command that runs
 // one through `tide launch` (§5.4).
 
+import { focusEmptyWorkspace } from "./dispatch.mjs";
 import { score as used } from "./frecency.mjs";
 import { match } from "./fuzzy.mjs";
 import { ACTIONS as SESSION, actionCommand } from "./session.mjs";
@@ -328,6 +329,66 @@ export function launchCommand(item) {
 
 function escapeHtml(s) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Whether Ctrl+Enter's "on a new empty workspace" applies to `item`: an
+// app or a desktop action opens a window it can go to. A quick action
+// opens none, so Ctrl+Enter runs it as Enter does.
+export function opensWindow(item) {
+    return item?.kind === "app" || item?.kind === "action";
+}
+
+// Whether opening the launcher waits, given where a Ctrl+Enter launch is
+// (`launch`: "idle", "waiting" out the pause after the launcher closed, or
+// "switching" workspace). Until that launch has started, a reopened
+// launcher could close over it, or start something else, between its pause
+// and its switch, and either would cancel its focus grant or land on its
+// workspace. So the open waits until the app has started, which takes at
+// most the pause and one hyprctl call.
+export function holdsOpen(launch) {
+    return launch === "waiting" || launch === "switching";
+}
+
+// What a request does to the launcher: "open", "close", "toggle" (the key,
+// and IPC), or "launched" (a Ctrl+Enter launch has started). `state` is
+// {visible, launch, held}, `held` saying an open is waiting for the launch.
+// Returns {act: "open", "close" or null, held}: the newest request wins, so
+// a close or a second toggle takes back a held open.
+export function openRequest(request, state) {
+    switch (request) {
+    case "open":
+        if (holdsOpen(state.launch)) {
+            return { act: null, held: true };
+        }
+        return { act: state.visible ? null : "open", held: false };
+    case "close":
+        return { act: state.visible ? "close" : null, held: false };
+    case "toggle":
+        if (state.visible) {
+            return { act: "close", held: false };
+        }
+        if (state.held) {
+            return { act: null, held: false };
+        }
+        return openRequest("open", state);
+    case "launched":
+        return { act: state.held && !state.visible ? "open" : null, held: false };
+    default:
+        throw new Error(`unknown launcher request: ${request}`);
+    }
+}
+
+// The command that moves to an empty workspace for Ctrl+Enter. hyprctl
+// exits 0 whenever it reached Hyprland, and prints the dispatch's own
+// failure instead ("ok" otherwise), so this checks what it printed and
+// fails, saying why on stderr, when it isn't "ok".
+export const EMPTY_WORKSPACE = [
+    'out=$(hyprctl dispatch "$1") || exit',
+    'case $out in ok*) ;; *) printf "hyprctl dispatch %s: %s\\n" "$1" "$out" >&2; exit 1 ;; esac',
+].join("\n");
+
+export function emptyWorkspaceCommand(lua) {
+    return ["sh", "-c", EMPTY_WORKSPACE, "sh", focusEmptyWorkspace(lua)];
 }
 
 // `name` as styled text with the matched letters underlined in `color`,
