@@ -172,6 +172,21 @@ tested where it can be without a live session.
   toggle.
   On a live session, check that hypridle honors the bar's inhibitor,
   including while a fullscreen window covers the bar.
+- The launcher (SPEC.md §8) is `shell/LauncherWindow.qml`: fuzzy search
+  over desktop entries and their actions (`shell/lib/fuzzy.mjs`,
+  `shell/lib/launcher.mjs`), run through `tide launch`. It answers
+  Hyprland's `tide:launcher` global shortcut and
+  `qs -c tide ipc call launcher toggle`. Only parsed with `qmlformat`.
+  Still to do:
+  - Point `conf`'s `Super+Space` at `global, tide:launcher` instead of
+    fuzzel, once it's been tried live.
+  - The quick actions (screenshots, session, settings, Do not disturb,
+    keep awake, theme, reload).
+  - Frecency for the empty query and as a boost, the key hints, sections
+    with `Tab`, and `Ctrl+Enter` for a new workspace.
+  - Recording the focused window as it opens, for "Screenshot window".
+  - On a live session, check that typing reaches it with the pointer over
+    a window (§14.2), and that an app it starts takes focus.
 - The system monitor (SPEC.md §7.4) is built but unchecked on a live
   session: the CPU % against `top`, the sensor picked on an Intel and an
   AMD machine, and the throttling line under load.

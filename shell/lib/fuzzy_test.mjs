@@ -1,0 +1,51 @@
+// Tests for fuzzy.mjs.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { match } from "./fuzzy.mjs";
+
+test("a query matches its letters in order, ignoring case", () => {
+    assert.deepEqual(match("scr", "Screenshot").positions, [0, 1, 2]);
+    assert.notEqual(match("SCR", "screenshot"), null);
+    assert.equal(match("rcs", "Screenshot"), null);
+    assert.equal(match("x", "Screenshot"), null);
+    assert.equal(match("toolong", "tool"), null);
+});
+
+test("an empty or blank query matches anything with no letters", () => {
+    assert.deepEqual(match("", "kitty"), { score: 0, positions: [] });
+    assert.deepEqual(match("  ", "kitty"), { score: 0, positions: [] });
+});
+
+test("spaces in the query are ignored", () => {
+    assert.deepEqual(match("s s", "Secure Shell").positions, [0, 7]);
+});
+
+test("a prefix beats letters scattered through the middle", () => {
+    assert.ok(match("scr", "Screenshot window").score > match("scr", "Secure Shell").score);
+});
+
+test("word starts beat letters inside a word", () => {
+    // Both words' first letters, not the "s" and "c" of "Secure".
+    assert.deepEqual(match("ss", "Secure Shell").positions, [0, 7]);
+    assert.ok(match("nm", "Network Manager").score > match("nm", "Penumbra").score);
+});
+
+test("a camelCase hump counts as a word start", () => {
+    assert.deepEqual(match("nm", "NetworkManager").positions, [0, 7]);
+});
+
+test("a consecutive run beats the same letters spread out", () => {
+    assert.ok(match("fire", "Firefox").score > match("fire", "Files Reader").score);
+});
+
+test("positions are code points, so they index a name with emoji", () => {
+    assert.deepEqual(match("b", "😀 Bob").positions, [2]);
+});
+
+test("case and accents fold the same way on both sides", () => {
+    // "İ" lowercases to two code points; it still matches a plain "i".
+    assert.deepEqual(match("i", "İnternet").positions, [0]);
+    assert.deepEqual(match("İ", "internet").positions, [0]);
+    assert.deepEqual(match("cafe", "Café").positions, [0, 1, 2, 3]);
+    assert.deepEqual(match("é", "Cafe").positions, [3]);
+});
