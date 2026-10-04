@@ -25,6 +25,7 @@ export const PALETTE = {
         urgentBg: "#33f6d32d",
         urgentRing: "#f6d32d",
         warn: "#ffa348",
+        warnBg: "#2effa348",
     },
     light: {
         accent: "#1c71d8",
@@ -49,5 +50,6 @@ export const PALETTE = {
         urgentBg: "#42e5a50a",
         urgentRing: "#e5a50a",
         warn: "#c64600",
+        warnBg: "#2effa348",
     },
 };

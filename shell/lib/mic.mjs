@@ -55,3 +55,21 @@ export function liveCaptures(links, ACTIVE) {
     const live = new Set(links.filter(g => g.state === ACTIVE).map(g => g.target));
     return captureStreams(links).filter(s => live.has(s) && !isMonitor(s));
 }
+
+// The mic popover's rows: one per app capturing, named by `label` (the
+// volume popover's streamLabel), muted or not. A stream's mute is invalid
+// until it's bound (`ready`), even though its `audio` already exists, so an
+// unbound one isn't `ready`, shows as not muted, and can't be toggled.
+export function captureRows(captures, label) {
+    return captures.map(node => {
+        const ready = Boolean(node.ready && node.audio);
+        const muted = ready && Boolean(node.audio.muted);
+        return {
+            node,
+            label: muted ? `${label(node)} · Muted` : label(node),
+            icon: muted ? "microphone-disabled-symbolic" : "audio-input-microphone-symbolic",
+            muted,
+            ready,
+        };
+    });
+}

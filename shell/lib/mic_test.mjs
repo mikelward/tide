@@ -1,7 +1,7 @@
 // Tests for mic.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MIC_TYPES, captureLinks, captureStreams, isInputStream, isMicSource, isMonitor, liveCaptures } from "./mic.mjs";
+import { MIC_TYPES, captureLinks, captureRows, captureStreams, isInputStream, isMicSource, isMonitor, liveCaptures } from "./mic.mjs";
 
 const ACTIVE = 4;
 const PAUSED = 3;
@@ -91,4 +91,22 @@ test("the QML's own type values are what's matched", () => {
     const groups = [{ source: { id: 1, type: 100 }, target: { id: 2, type: 200 }, state: ACTIVE }];
     assert.equal(captureLinks(groups, types).length, 1);
     assert.equal(captureLinks(groups).length, 0);
+});
+
+test("each app capturing gets a row saying whether it's muted", () => {
+    const label = n => n.properties?.["application.name"] ?? "Unknown";
+    const rows = captureRows([
+        { ...call, ready: true, audio: { muted: false } },
+        { ...recorder, properties: { "application.name": "Recorder" }, ready: true, audio: { muted: true } },
+        { ...recorder, id: 8, ready: true, audio: null },
+        // Discovered but not bound yet: audio exists, but its mute is invalid.
+        { ...recorder, id: 9, ready: false, audio: { muted: true } },
+    ], label);
+    assert.deepEqual(rows.map(r => [r.label, r.muted, r.icon, r.ready]), [
+        ["Chrome", false, "audio-input-microphone-symbolic", true],
+        ["Recorder · Muted", true, "microphone-disabled-symbolic", true],
+        ["Unknown", false, "audio-input-microphone-symbolic", false],
+        ["Unknown", false, "audio-input-microphone-symbolic", false],
+    ]);
+    assert.equal(rows[0].node.id, call.id);
 });

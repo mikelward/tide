@@ -43,6 +43,8 @@ Singleton {
     // The Sharing pill's fill, with white on it.
     readonly property color dangerBg: palette.dangerBg
     readonly property color warn: palette.warn
+    // The mic pill's fill (docs/mocks/common.css's .pill.mic).
+    readonly property color warnBg: palette.warnBg
     // The clocks popover's day strip: night, day, and working hours.
     readonly property color stripNight: palette.stripNight
     readonly property color stripDay: palette.stripDay
