@@ -1,7 +1,11 @@
 // Tests for launcher.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { highlighted, launchCommand, launcherItems, moved, scoreItem, search } from "./launcher.mjs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { blockedHeading, confirmRows, highlighted, launchCommand, launcherItems, moved, quickActions, quickCommand, reselect, rowKey, scoreItem, search, windowScreenshot } from "./launcher.mjs";
 
 const chrome = {
     id: "google-chrome",
@@ -100,4 +104,136 @@ test("moving the selection stops at the ends", () => {
     assert.equal(moved(1, 1, 3), 2);
     assert.equal(moved(2, 1, 3), 2);
     assert.equal(moved(0, 1, 0), -1);
+});
+
+test("the quick actions are the screenshots, the session, the toggles and reload", () => {
+    assert.deepEqual(quickActions({ notifications: true }).map(q => q.id), [
+        "screenshot-window", "screenshot-screen", "screenshot-region",
+        "lock", "logout", "suspend", "reboot", "poweroff",
+        "dnd", "keep-awake", "reload",
+    ]);
+    // Every one has something to run.
+    for (const q of quickActions({ notifications: true })) {
+        assert.ok(quickCommand(q.id));
+    }
+    assert.throws(() => quickCommand("nope"));
+});
+
+test("a quick action shows the key that does the same", () => {
+    const hints = Object.fromEntries(quickActions().map(q => [q.id, q.hint]));
+    assert.equal(hints["screenshot-window"], "Alt+Print");
+    assert.equal(hints.lock, "Super+L");
+    assert.equal(hints.reload, "");
+});
+
+test("Do not disturb is there only while the shell serves notifications", () => {
+    // Under swaync it would hold nothing, so it's left out, as the bell is.
+    assert.equal(quickActions({}).some(q => q.id === "dnd"), false);
+    assert.equal(quickActions({ notifications: true }).some(q => q.id === "dnd"), true);
+});
+
+test("the toggles say whether they're on", () => {
+    const sub = state => Object.fromEntries(quickActions(state).map(q => [q.id, q.sub]));
+    assert.equal(sub({ notifications: true, dnd: true }).dnd, "On");
+    assert.equal(sub({ notifications: true }).dnd, "Off");
+    assert.equal(sub({ keepAwake: true })["keep-awake"], "On");
+    assert.equal(sub({ keepAwake: true, micHolds: true })["keep-awake"], "On while the mic is live");
+});
+
+test("screenshots wait for the launcher to go, the session runs through logind or uwsm", () => {
+    assert.deepEqual(quickCommand("screenshot-window"), { run: ["screenshot", "--window"], afterClose: true });
+    assert.deepEqual(quickCommand("screenshot-region"), { run: ["screenshot", "--region"], afterClose: true });
+    assert.deepEqual(quickCommand("lock"), { run: ["loginctl", "lock-session"], afterClose: false, power: false });
+    // A power action checks inhibitors, so it fails when something blocks it.
+    assert.deepEqual(quickCommand("suspend"), { run: ["systemctl", "--check-inhibitors=yes", "suspend"], afterClose: false, power: true });
+    assert.equal(quickCommand("logout").power, false);
+    assert.deepEqual(quickCommand("dnd"), { shell: "dnd" });
+});
+
+test("a blocked power action asks: anyway, or cancel", () => {
+    assert.deepEqual(confirmRows("suspend").map(r => [r.item.kind, r.item.id, r.item.name]), [
+        ["confirm", "anyway", "Suspend anyway"],
+        ["confirm", "cancel", "Cancel"],
+    ]);
+    assert.equal(blockedHeading("poweroff"), "Shut down is blocked by:");
+});
+
+test("the selection stays on its row unless the query changed", () => {
+    const rows = ids => ids.map(id => ({ item: { kind: "app", id } }));
+    const key = id => `app:${id}`;
+    // A toggle's state changed: the same row, wherever it went.
+    assert.equal(reselect(key("b"), rows(["a", "b", "c"]), false), 1);
+    assert.equal(reselect(key("b"), rows(["b", "a"]), false), 0);
+    // A new query preselects its top hit.
+    assert.equal(reselect(key("b"), rows(["a", "b"]), true), 0);
+    // A row that's gone, or nothing selected before, falls back to the top.
+    assert.equal(reselect(key("z"), rows(["a", "b"]), false), 0);
+    assert.equal(reselect(null, rows(["a"]), false), 0);
+    assert.equal(reselect(key("a"), [], false), -1);
+});
+
+test("a row is known by its kind and id, so an app can't stand in for an action", () => {
+    // A desktop entry with a quick action's id, listed first.
+    const rows = [
+        { item: { kind: "app", id: "keep-awake" } },
+        { item: { kind: "quick", id: "keep-awake" } },
+    ];
+    assert.equal(reselect(rowKey(rows[1]), rows, false), 1);
+    assert.equal(rowKey(null), null);
+});
+
+test("quick actions are searched with the apps, and listed after them when empty", () => {
+    const all = items.concat(quickActions());
+    assert.equal(search(all, "scr")[0].item.id, "screenshot-window");
+    assert.equal(search(all, "caffeine")[0].item.id, "keep-awake");
+    const empty = search(all, "").map(r => r.item.kind);
+    assert.deepEqual(empty.slice(0, 4), ["app", "app", "app", "app"]);
+    assert.equal(empty.at(-1), "quick");
+});
+
+// Runs windowScreenshot's command against a fake `hyprctl` printing
+// `clients` and a fake `screenshot` that records its arguments, with the real
+// sh and jq, and returns what screenshot was asked for and the stderr.
+function runWindowScreenshot(address, clients) {
+    const dir = mkdtempSync(join(tmpdir(), "launcher-test-"));
+    writeFileSync(join(dir, "clients.json"), clients);
+    writeFileSync(join(dir, "hyprctl"), `#!/bin/sh\ncat "${dir}/clients.json"\n`);
+    writeFileSync(join(dir, "screenshot"), `#!/bin/sh\nprintf '%s\\n' "$@" > "${dir}/args"\n`);
+    chmodSync(join(dir, "hyprctl"), 0o755);
+    chmodSync(join(dir, "screenshot"), 0o755);
+    const [command, ...args] = windowScreenshot(address);
+    const run = spawnSync(command, args, { env: { ...process.env, PATH: `${dir}:${process.env.PATH}` }, encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    return { args: readFileSync(join(dir, "args"), "utf8").trim().split("\n"), stderr: run.stderr };
+}
+
+test("Screenshot window takes the recorded window where it is now", () => {
+    const clients = JSON.stringify([
+        { address: "0x55aa01", at: [0, 0], size: [10, 10] },
+        { address: "0x55AA02", at: [100, 40], size: [800, 600] },
+    ]);
+    // Matched however Hyprland and Quickshell write the address.
+    const found = runWindowScreenshot("55aa02", clients);
+    assert.deepEqual(found.args, ["--geometry", "100,40 800x600"]);
+    assert.equal(found.stderr, "");
+    // quickCommand passes the recorded address through.
+    assert.deepEqual(quickCommand("screenshot-window", { window: "55aa02" }).run.slice(0, 2), ["sh", "-c"]);
+});
+
+test("Screenshot window falls back to the focused window, and says so", () => {
+    const gone = JSON.stringify([{ address: "0x1", at: [0, 0], size: [1, 1] }]);
+    const fallback = runWindowScreenshot("2", gone);
+    assert.deepEqual(fallback.args, ["--window"]);
+    assert.match(fallback.stderr, /gone or unreadable; taking the focused window/);
+    // With nothing recorded, the script finds the focused window itself.
+    assert.deepEqual(windowScreenshot(null), ["screenshot", "--window"]);
+    assert.deepEqual(windowScreenshot(""), ["screenshot", "--window"]);
+});
+
+test("a quick action wins a tie with an app, so scr and Enter is a screenshot", () => {
+    const screenshotApp = { id: "org.gnome.Screenshot", name: "Screenshot", command: ["gnome-screenshot"], actions: [] };
+    const all = launcherItems([screenshotApp]).concat(quickActions());
+    assert.equal(search(all, "scr")[0].item.id, "screenshot-window");
+    // The app is still found, just below.
+    assert.ok(search(all, "scr").some(r => r.item.id === "org.gnome.Screenshot"));
 });

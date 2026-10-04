@@ -68,9 +68,10 @@ export function step(run, event, command) {
 }
 
 // One run, from its first signal to its last: `on(event)` steps it, logs
-// its report through `log` ({warn, log}), calls `then(ok)` exactly once
-// when it's done, whether it worked or not (`ok`: it exited 0, which is
-// proof it started, whatever order the `started` signal arrives in),
+// its report through `log` ({warn, log}), calls `then(ok, errors)` exactly
+// once when it's done, whether it worked or not (`ok`: it exited 0, which is
+// proof it started, whatever order the `started` signal arrives in;
+// `errors`: its stderr, empty if it never started),
 // and returns whether it's done, so the QML can let the Process go.
 // Signals after that change nothing.
 export function track(command, then, log) {
@@ -89,7 +90,7 @@ export function track(command, then, log) {
             } else if (run.report?.level === "log") {
                 log.log(run.report.message);
             }
-            then?.(run.code === 0);
+            then?.(run.code === 0, run.errors ?? "");
             return true;
         },
     };

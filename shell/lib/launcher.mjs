@@ -3,6 +3,7 @@
 // one through `tide launch` (§5.4).
 
 import { match } from "./fuzzy.mjs";
+import { ACTIONS as SESSION, actionCommand } from "./session.mjs";
 
 // A match outside the name (generic name, keywords, the command) still
 // finds an app, but below one that matches its name as well.
@@ -56,6 +57,138 @@ export function launcherItems(entries) {
     return items;
 }
 
+// The built-in quick actions (§8), as rows like the apps', with symbolic
+// icons the launcher colors like the bar's: `hint` is the
+// key that does the same, so the launcher teaches the bindings. Do not
+// disturb and keep awake say whether they're on (`state.dnd`,
+// `state.keepAwake`, and `state.micHolds` when only a live mic holds keep
+// awake, which a click can't turn off). Do not disturb is there only
+// while the shell is the notification server (`state.notifications`), as
+// the bell is: under swaync it would hold nothing. Theme and Settings come
+// later (TODO.md).
+export function quickActions(state = {}) {
+    const quick = (id, name, sub, icon, keywords, hint = "") => ({
+        kind: "quick",
+        id,
+        name,
+        sub,
+        icon,
+        keywords,
+        exec: "",
+        hint,
+    });
+    const onOff = on => (on ? "On" : "Off");
+    const session = Object.fromEntries(SESSION.map(a => [a.id, a]));
+    // Listed in this order, which also breaks ties between them: window
+    // first, so "scr" and Enter is a window screenshot (§8).
+    return [
+        quick("screenshot-window", "Screenshot window", "The window you were in", "camera-photo-symbolic", ["capture", "print"], "Alt+Print"),
+        quick("screenshot-screen", "Screenshot screen", "Every monitor", "camera-photo-symbolic", ["capture", "print"], "Print"),
+        quick("screenshot-region", "Screenshot region", "Drag on a frozen screen", "camera-photo-symbolic", ["capture", "print", "area"], "Shift+Print"),
+        quick("lock", session.lock.label, "Session", session.lock.icon, ["screen"], "Super+L"),
+        quick("logout", session.logout.label, "Session", session.logout.icon, ["exit", "sign out", "quit"]),
+        quick("suspend", session.suspend.label, "Session", session.suspend.icon, ["sleep"]),
+        quick("reboot", session.reboot.label, "Session", session.reboot.icon, ["reboot"]),
+        quick("poweroff", session.poweroff.label, "Session", session.poweroff.icon, ["power off", "halt"]),
+        state.notifications ? quick("dnd", "Do not disturb", onOff(state.dnd), "notifications-disabled-symbolic", ["dnd", "notifications", "quiet"]) : null,
+        quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), "display-brightness-symbolic", ["caffeine", "idle", "inhibit"]),
+        quick("reload", "Reload shell", "tide", "view-refresh-symbolic", ["restart", "quickshell"]),
+    ].filter(q => q).map((q, rank) => ({ ...q, rank }));
+}
+
+// "Screenshot window" for the window at `address` (Hyprland's, recorded
+// as the launcher opened): its geometry is read from `hyprctl clients -j`
+// when the screenshot runs, not before, so a window that moved meanwhile is
+// taken where it is. A window that has closed, or a lookup that fails, falls
+// back to the focused window (`--window`), saying why on stderr, which
+// Launcher logs. jq is already one of tide's dependencies (README).
+export const WINDOW_SCREENSHOT = [
+    'a=$1',
+    "g=$(hyprctl clients -j | jq -r --arg a \"$a\" '.[] | select((.address | ascii_downcase | ltrimstr(\"0x\") | sub(\"^0+\"; \"\")) == $a) | \"\\(.at[0]),\\(.at[1]) \\(.size[0])x\\(.size[1])\"' | head -n 1)",
+    'if test -n "$g"; then exec screenshot --geometry "$g"; fi',
+    'echo "the window the launcher opened over is gone or unreadable; taking the focused window" >&2',
+    "exec screenshot --window",
+].join("\n");
+
+export function windowScreenshot(address) {
+    return address ? ["sh", "-c", WINDOW_SCREENSHOT, "sh", address] : ["screenshot", "--window"];
+}
+
+// What running a quick action takes: a command to run (`run`), with a
+// pause first for the launcher to leave the screen (`afterClose`, so a
+// screenshot doesn't catch it), or something the shell does itself
+// (`shell`: "dnd", "keep-awake", "reload"). "Screenshot window" takes the
+// window recorded as the launcher opened (`context.window`, its normalized
+// Hyprland address; windowScreenshot), so a focus change while it closes
+// can't swap it; with none, the script finds the focused one itself.
+export function quickCommand(id, context = {}) {
+    switch (id) {
+    case "screenshot-window":
+        return { run: windowScreenshot(context.window), afterClose: true };
+    case "screenshot-screen":
+        return { run: ["screenshot"], afterClose: true };
+    case "screenshot-region":
+        return { run: ["screenshot", "--region"], afterClose: true };
+    case "lock":
+    case "logout":
+    case "suspend":
+    case "reboot":
+    case "poweroff":
+        // A power action checks inhibitors (session.mjs), and one that's
+        // blocked asks before going ahead (confirmRows); `power` says to
+        // keep the launcher open until it knows.
+        return { run: actionCommand(id, false), afterClose: false, power: ["suspend", "reboot", "poweroff"].includes(id) };
+    case "dnd":
+    case "keep-awake":
+    case "reload":
+        return { shell: id };
+    default:
+        throw new Error(`unknown quick action: ${id}`);
+    }
+}
+
+// The rows for confirming a power action that something blocks (§8: ask
+// only then): go ahead anyway, or cancel. The launcher stays open with
+// these in place of the results, under a list of what's in the way, as
+// the session menu does.
+export function confirmRows(id) {
+    const action = SESSION.find(a => a.id === id);
+    const row = (choice, name, icon) => ({
+        item: { kind: "confirm", id: choice, name, sub: "", icon, keywords: [], exec: "", hint: "" },
+        positions: [],
+    });
+    return [
+        row("anyway", `${action?.label ?? id} anyway`, "dialog-warning-symbolic"),
+        row("cancel", "Cancel", "window-close-symbolic"),
+    ];
+}
+
+// The heading over that list.
+export function blockedHeading(id) {
+    return `${SESSION.find(a => a.id === id)?.label ?? id} is blocked by:`;
+}
+
+// A row's identity across rebuilds: its kind and id together, since a
+// desktop entry may share an id with a quick action ("keep-awake").
+export function rowKey(row) {
+    return row ? `${row.item.kind}:${row.item.id}` : null;
+}
+
+// The selection once the rows change. A new query preselects its top hit;
+// otherwise (a toggle's state changed under an open launcher) it stays on
+// the row it was on (`previousKey`, from rowKey), wherever that moved, so
+// Enter runs what was selected.
+export function reselect(previousKey, rows, queryChanged) {
+    if (rows.length === 0) {
+        return -1;
+    }
+    if (queryChanged || previousKey === null) {
+        return 0;
+    }
+    const at = rows.findIndex(r => rowKey(r) === previousKey);
+    return at >= 0 ? at : 0;
+}
+
 // How `item` matches `query`: its score and the matched positions in its
 // name (code points, empty when only another field matched), or null.
 export function scoreItem(item, query) {
@@ -75,12 +208,20 @@ function byName(a, b) {
     return a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.id.localeCompare(b.id);
 }
 
+// On an equal score, a quick action first: §8 promises `scr` and Enter
+// is a window screenshot, even with an app named Screenshot installed.
+// Then an app, before its own desktop actions.
+const KIND_ORDER = { quick: 0, app: 1, action: 2 };
+
 // The rows for `query`, best first, each `{item, positions}`. An empty
-// query lists the apps by name, without their desktop actions, until
-// frecency orders them (TODO.md).
+// query lists the apps by name, without their desktop actions, then the
+// quick actions in their own order, until frecency orders the apps
+// (TODO.md).
 export function search(items, query) {
     if (query.trim() === "") {
-        return items.filter(i => i.kind === "app").sort(byName).map(item => ({ item, positions: [] }));
+        const apps = items.filter(i => i.kind === "app").sort(byName);
+        const quick = items.filter(i => i.kind === "quick");
+        return apps.concat(quick).map(item => ({ item, positions: [] }));
     }
     const rows = [];
     for (const item of items) {
@@ -89,8 +230,9 @@ export function search(items, query) {
             rows.push({ item, score: m.score, positions: m.positions });
         }
     }
-    // An app before its own actions when they score the same.
-    rows.sort((a, b) => b.score - a.score || (a.item.kind === b.item.kind ? 0 : a.item.kind === "app" ? -1 : 1) || byName(a.item, b.item));
+    // On an equal score, by KIND_ORDER, and quick actions in their own
+    // order.
+    rows.sort((a, b) => b.score - a.score || KIND_ORDER[a.item.kind] - KIND_ORDER[b.item.kind] || (a.item.rank ?? 0) - (b.item.rank ?? 0) || byName(a.item, b.item));
     return rows.map(({ item, positions }) => ({ item, positions }));
 }
 

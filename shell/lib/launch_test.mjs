@@ -132,6 +132,20 @@ test("a tracked run tells its callback whether it worked", () => {
     }
 });
 
+test("a tracked run passes its callback the run's stderr", () => {
+    for (const [events, errors] of [
+        [[STARTED, stderr("blocked\n"), exited(1)], "blocked\n"],
+        [[STARTED, exited(0), stderr("")], ""],
+        // One that never started has no stderr to pass.
+        [[STOPPED], ""],
+    ]) {
+        const got = [];
+        const t = track(COMMAND, (ok, text) => got.push(text), recorder());
+        events.forEach(e => t.on(e));
+        assert.deepEqual(got, [errors]);
+    }
+});
+
 test("a tracked run logs its report at its level", () => {
     const failed = recorder();
     track(COMMAND, null, failed).on(STOPPED);
