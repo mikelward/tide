@@ -181,9 +181,6 @@ tested where it can be without a live session.
 
 - Clock logic is in `shell/lib/clocks.mjs`: the `.local` list rule, hiding
   the local zone, day offsets and labels, tested with `node --test`.
-- Re-render `docs/mocks/bar.png` with `make mocks`: its caption now says
-  −2 / +2 across the date line, but the sandbox that changed it couldn't
-  load the mocks' web fonts, so the PNG still shows the old caption.
 - Workspace logic is in `shell/lib/workspaces.mjs`: the four states, icons
   up to five then `+n`, urgency from Hyprland and from notification marks
   (§14.4), the maximized/fullscreen glyph and scroll steps. Marks are kept
