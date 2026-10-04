@@ -26,7 +26,8 @@ this is the way to install by hand:
 By hand, also install what the session runs: Hyprland 0.56 or later,
 Quickshell 0.3 (`qs`, which draws the bar; without it `tide-shell`
 falls back to waybar), hypridle, uwsm, waybar, swaync, a polkit agent, swww
-or swaybg, and jq, which `tide doctor` reads Hyprland's JSON with.
+or swaybg, notify-send (libnotify), which the shell reports a bad settings
+file with, and jq, which `tide doctor` reads Hyprland's JSON with.
 `setup-tide` installs them all. jq is a free distro package that runs locally, with no
 network calls; without it, the doctor reports its bar check as skipped.
 

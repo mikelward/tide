@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     DEFAULT_CLOCKS, jsonError, parseClocks, loadClocks, visibleClocks, dayOffset,
-    formatTime, formatLocal, barClocks, scrubbed, SCRUB_STEP,
+    formatTime, formatLocal, barClocks, scrubbed, SCRUB_STEP, zoneError,
 } from "./clocks.mjs";
 
 function canonical(zone) {
@@ -53,6 +53,53 @@ test("an unknown zone is an error at load, keeping the last good clocks", () => 
     assert.deepEqual(loadClocks('[{"zone": "America/Los_Angeles", "label": "SF"}]', null, lastGood, isZone).errors, []);
 });
 
+test("every bad file is named, not just the first", () => {
+    const r = loadClocks("[", '{"zone": 1}', DEFAULT_CLOCKS);
+    assert.equal(r.errors.length, 2);
+    assert.match(r.errors[0], /^clocks\.json: line 1: /);
+    assert.equal(r.errors[1], "clocks.local.json: expected a list of {zone, label}");
+    assert.deepEqual(r.clocks, DEFAULT_CLOCKS);
+});
+
+test("a bad shared file still keeps the last good list when the local one parses", () => {
+    const lastGood = [{ zone: "Asia/Tokyo", label: "TYO" }];
+    const r = loadClocks("[", '[{"zone": "UTC", "label": "U"}]', lastGood);
+    assert.deepEqual(r.clocks, lastGood);
+    assert.equal(r.source, null);
+});
+
+test("the clocks name the file they came from", () => {
+    const list = '[{"zone": "Asia/Tokyo", "label": "TYO"}]';
+    assert.equal(loadClocks(list, null).source, "clocks.json");
+    assert.equal(loadClocks(list, list).source, "clocks.local.json");
+    assert.equal(loadClocks(null, null).source, null);
+    assert.equal(loadClocks("[", null).source, null);
+});
+
+test("the shell's JavaScript sticks to what QML's engine has", async () => {
+    // QML implements ECMAScript 7: newer methods such as Array.prototype.at
+    // pass under Node and throw in the shell.
+    const { readdir, readFile } = await import("node:fs/promises");
+    const dir = new URL(".", import.meta.url);
+    const sources = (await readdir(dir)).filter(f => f.endsWith(".mjs") && !f.endsWith("_test.mjs"));
+    assert.ok(sources.length > 0);
+    for (const f of sources) {
+        const text = await readFile(new URL(f, dir), "utf8");
+        assert.doesNotMatch(text, /\.at\(/, `${f} uses .at()`);
+    }
+});
+
+test("a zone tide-tz can't load is named by file and entry", () => {
+    const clocks = [{ zone: "Asia/Tokyo", label: "TYO" }, { zone: "US/Nowhere", label: "X" }];
+    assert.equal(zoneError(clocks, "clocks.local.json", "US/Nowhere", "unknown time zone US/Nowhere"),
+        "clocks.local.json: entry 2: unknown time zone US/Nowhere");
+    assert.equal(zoneError(clocks, null, "US/Nowhere", "bad"), "entry 2: bad");
+    assert.equal(zoneError(clocks, "clocks.json", "Other/Zone", "bad"), "clocks.json: bad");
+    const twice = clocks.concat([{ zone: "US/Nowhere", label: "Y" }, { zone: "US/Nowhere", label: "Z" }]);
+    assert.equal(zoneError(twice, "clocks.json", "US/Nowhere", "bad"), "clocks.json: entries 2, 3 and 4: bad");
+    assert.equal(zoneError(twice.slice(0, 3), "clocks.json", "US/Nowhere", "bad"), "clocks.json: entries 2 and 3: bad");
+});
+
 test("a JSON error names its line", () => {
     assert.equal(jsonError('[\n  {"zone": "UTC",\n   "label": }\n]'), "line 3: unexpected }");
     assert.equal(jsonError('[\n  {"zone": "UTC", "label": "U"}'), "line 2: expected ] before the end");
@@ -72,7 +119,7 @@ test("a JSON error names its line", () => {
 });
 
 test("no files means the defaults", () => {
-    assert.deepEqual(loadClocks(null, null), { clocks: DEFAULT_CLOCKS, errors: [] });
+    assert.deepEqual(loadClocks(null, null), { clocks: DEFAULT_CLOCKS, errors: [], source: null });
 });
 
 test("the local list replaces the shared one whole", () => {
