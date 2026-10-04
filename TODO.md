@@ -271,6 +271,15 @@ tested where it can be without a live session.
     `shell/lib/popover.mjs` and `shell/lib/dst.mjs`. Scrolling over the
     clocks scrubs them (`scrubbed` in `shell/lib/clocks.mjs`).
 
+## Keep awake never times out (maintainer, 2026-10-04)
+
+- Keep awake is always a button in the bar, and a click keeps it on until
+  you click it again: it no longer turns itself off after two hours. That
+  reverses SPEC.md §10, which changes with the work (`HOLD_MS` in
+  `shell/lib/keepawake.mjs`, the 30 s check in
+  `shell/KeepAwakeData.qml`). Whether a new shell still starts with it
+  off isn't decided here.
+
 ## Notifications (M4)
 
 SPEC.md §9. So far the shell has the server and the popups. They're
