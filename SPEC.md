@@ -1430,7 +1430,9 @@ this spec.
     terminal command's) grant the program's name at once, then add the
     desktop ID and `StartupWMClass` of each entry whose `Exec` runs it, so
     a key press during the lookup still cancels the grant. `tide-grant`
-    reads `Exec` as it reads a terminal line, past wrappers. Entries that
+    reads `Exec`, and a key binding's command, as it reads a terminal
+    line, past wrappers, so `tide launch env VAR=x editor` grants
+    `editor`. Entries that
     run one program with different arguments (`libreoffice --writer`,
     `--calc`) are different apps, which a command's arguments can't
     reliably tell apart, so none of them is granted. Only application
@@ -1438,10 +1440,10 @@ this spec.
     name found on `PATH`. An entry isn't matched if it runs in a directory
     of its own (`Path`, `env --chdir`), in a terminal (`Terminal=true`), or
     with a `PATH` or environment of its own (`env PATH=…`, `env -i`): it
-    may run another program. For the same reason a terminal command run
-    that way (`PATH=… editor`, `env --chdir DIR ./editor`) is granted only
-    its name. Other settings count (`env APP_MODE=writer suite`, `env -u
-    WAYLAND_DISPLAY app`); a terminal command run with settings of its own
+    may run another program. For the same reason a command run that way
+    (`PATH=… editor`, `env --chdir DIR ./editor`) is granted only its
+    name. Other settings count (`env APP_MODE=writer suite`, `env -u
+    WAYLAND_DISPLAY app`); a command run with settings of its own
     (`APP_MODE=calc suite`) matches only an entry with the same settings.
     It finishes the lookup before the command runs, so an app that's already running can't activate its window
     ahead of it. Not yet: a launch through `xdg-open` or `gio open` grants

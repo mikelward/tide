@@ -52,10 +52,17 @@ cat > "$fake/app" <<'FAKE'
 printf "app %s\n" "$*" >> "$FAKE_LOG"
 FAKE
 chmod +x "$fake"/*
-# tide-grant answers $FAKE_CLASSES (words) for --classes and exits
-# $FAKE_CLASSES_STATUS.
+# tide-grant answers --program with $FAKE_PROGRAM, else the command's first
+# word, exiting $FAKE_PROGRAM_STATUS; and --classes with $FAKE_CLASSES
+# (words), exiting $FAKE_CLASSES_STATUS. It logs --classes calls only, so the
+# log shows the lookup where it happens.
 cat > "$fake/tide-grant" <<'FAKE'
 #!/bin/sh
+if test "$1" = --program; then
+    shift 2
+    printf '%s\n' "${FAKE_PROGRAM-$1}"
+    exit "${FAKE_PROGRAM_STATUS:-0}"
+fi
 printf "tide-grant %s\n" "$*" >> "$FAKE_LOG"
 test -z "${FAKE_CLASSES:-}" || printf '%s\n' $FAKE_CLASSES
 exit "${FAKE_CLASSES_STATUS:-0}"
@@ -130,15 +137,34 @@ run FAKE_CLASSES="org.example.Editor example-editor-x11 EDITOR" "$qs" launch edi
 # The grant is keyed by tide's pid, so the extend finds that grant only.
 key=$(sed -n '1s/^hyprctl eval tide_focus.grant("editor", nil, \([0-9][0-9]*\))$/\1/p' "$log")
 check "the program's own grant goes in first, keyed by tide's pid" test -n "$key"
-check "its classes are read after the grant" test "$(sed -n 2p "$log")" = 'tide-grant --classes editor'
+check "its classes are read after the grant" test "$(sed -n 2p "$log")" = 'tide-grant --classes -- editor'
 check "its desktop entries' classes are added to that grant, by its key, without repeats" \
     test "$(sed -n 3p "$log")" = "hyprctl eval tide_focus.extend(\"editor\", { \"org.example.Editor\", \"example-editor-x11\" }, nil, $key)"
 check "reading desktop entries says nothing" test ! -s "$tmp/err"
 run "$qs" launch "$fake/editor" --writer letter.odt
-check "the program goes to the lookup as written, without its arguments" \
-    test "$(grep 'tide-grant' "$log")" = "tide-grant --classes $fake/editor"
+check "the command goes to the lookup as written" \
+    test "$(grep 'tide-grant' "$log")" = "tide-grant --classes -- $fake/editor --writer letter.odt"
 check "a program run by path is still granted by name" \
     contains "$(cat "$log")" 'tide_focus.grant("editor", nil, '
+# Past wrappers: the program tide-grant finds is granted, and the whole
+# command goes to the lookup.
+run FAKE_PROGRAM=editor FAKE_CLASSES="org.example.Editor" "$qs" launch env MODE=a editor
+check "a wrapped program is granted by its own name" \
+    contains "$(cat "$log")" 'tide_focus.grant("editor", nil, '
+check "the wrapped command goes to the lookup whole" \
+    test "$(grep 'tide-grant' "$log")" = "tide-grant --classes -- env MODE=a editor"
+check "the wrapped command runs as given" contains "$(cat "$log")" "uwsm app -- env MODE=a editor"
+run FAKE_PROGRAM=/opt/x/xdg-open "$qs" launch env xdg-open https://example.com/
+check "a wrapped opener still grants any app's window" \
+    contains "$(cat "$log")" 'tide_focus.grant("*")'
+run FAKE_PROGRAM= "$qs" launch env --help > /dev/null
+check "a command that runs no program is granted its first word" \
+    contains "$(cat "$log")" 'tide_focus.grant("env", nil, '
+run FAKE_PROGRAM=editor FAKE_PROGRAM_STATUS=2 "$qs" launch env editor
+check "a failed program lookup is reported" \
+    contains "$(cat "$tmp/err")" "tide-grant couldn't read the program env runs"
+check "a failed program lookup grants the first word" \
+    contains "$(cat "$log")" 'tide_focus.grant("env", nil, '
 run "$qs" launch editor
 check "no classes, no extend" test "$(grep -c 'tide_focus' "$log")" -eq 1
 run FAKE_CLASSES_STATUS=1 "$qs" launch editor
