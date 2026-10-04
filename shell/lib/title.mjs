@@ -67,6 +67,24 @@ export function titleWidth({ implicit, max, barWidth, left, right, gap }) {
     return Math.max(0, Math.min(implicit, max, 2 * room - gap));
 }
 
+// Below this much room, the centered title counts as squeezed.
+export const MIN_TITLE_ROOM = 200;
+
+// Whether the bar collapses its clocks to local alone (SPEC.md §7.3): when
+// the room titleWidth would give the title with every clock showing is
+// under MIN_TITLE_ROOM, and the right side is the short one. `right` is
+// the right group's start as laid out now, with the clocks `clocksWidth`
+// wide; `fullClocksWidth` is what every clock would take. The full
+// layout's start is worked back from those, so the answer never depends
+// on whether the clocks are collapsed now, and can't flip on its own result.
+export function collapseClocks({ barWidth, left, right, gap, clocksWidth, fullClocksWidth }) {
+    const fullRight = right + clocksWidth - fullClocksWidth;
+    const leftRoom = barWidth / 2 - left;
+    const rightRoom = fullRight - barWidth / 2;
+    // Hiding clocks only helps when the right side is what's short.
+    return rightRoom < leftRoom && 2 * rightRoom - gap < MIN_TITLE_ROOM;
+}
+
 // Whether an activewindowv2 event's data says the window at `address`
 // (as barWindow gives it) now has focus. A double-click on another
 // monitor's title focuses that window first, and maximizes it only once

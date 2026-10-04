@@ -1,7 +1,7 @@
 // Tests for title.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_TITLE, barTitle, barWindow, focusReached, shownWorkspace, hasFocus, titleWidth } from "./title.mjs";
+import { MAX_TITLE, barTitle, barWindow, focusReached, shownWorkspace, hasFocus, titleWidth, collapseClocks, MIN_TITLE_ROOM } from "./title.mjs";
 
 const editor = { address: "abc", workspace: 2, monitor: "DP-1", title: "SPEC.md - tide" };
 const chat = { address: "def", workspace: 5, monitor: "DP-2", title: "Chat" };
@@ -105,4 +105,26 @@ test("a cross-monitor maximize waits for focus to reach its window", () => {
     // Focus moving to an empty workspace names no window.
     assert.equal(focusReached("abc", ","), false);
     assert.equal(focusReached(null, "0xabc"), false);
+});
+
+test("the zone clocks collapse only when the title would be squeezed", () => {
+    // Every clock takes 330 px; local alone, 80.
+    const full = { clocksWidth: 330, fullClocksWidth: 330 };
+    const local = { clocksWidth: 80, fullClocksWidth: 330 };
+    const bar = { barWidth: 1536, left: 480, gap: 32 };
+    // A wide bar: plenty of room with every clock.
+    assert.equal(collapseClocks({ barWidth: 3440, left: 480, gap: 32, right: 2600, ...full }), false);
+    // At 1536 px with every clock, the right group starts at 840: 2 * 72 - 32
+    // of room, under MIN_TITLE_ROOM.
+    assert.equal(collapseClocks({ ...bar, right: 840, ...full }), true);
+    // Collapsed, the group starts 250 px further right; the answer comes
+    // from the full layout, so it stays collapsed.
+    assert.equal(collapseClocks({ ...bar, right: 1090, ...local }), true);
+    // Exactly MIN_TITLE_ROOM is enough, collapsed or not.
+    const edge = 1536 / 2 + (MIN_TITLE_ROOM + 32) / 2;
+    assert.equal(collapseClocks({ ...bar, right: edge, ...full }), false);
+    assert.equal(collapseClocks({ ...bar, right: edge + 250, ...local }), false);
+    // When the workspaces' side is what's short, hiding clocks wouldn't
+    // help the centered title, so they stay.
+    assert.equal(collapseClocks({ ...bar, left: 700, right: 1300, ...full }), false);
 });
