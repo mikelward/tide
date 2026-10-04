@@ -1,32 +1,32 @@
 // Tests for keepawake.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toggled, isOn, remaining, OFF, HOLD_MS } from "./keepawake.mjs";
+import { OFF, migrated, toggled } from "./keepawake.mjs";
 
-test("a click turns it on for two hours", () => {
-    const on = toggled(OFF, 1000);
-    assert.equal(isOn(on, 1000), true);
-    assert.equal(remaining(on, 1000), HOLD_MS);
-    assert.equal(HOLD_MS, 2 * 60 * 60 * 1000);
+test("it starts off", () => {
+    assert.equal(OFF.on, false);
+});
+
+test("a click turns it on, with no end", () => {
+    assert.deepEqual(toggled(OFF), { on: true, until: 0 });
 });
 
 test("a second click turns it off", () => {
-    const on = toggled(OFF, 0);
-    const off = toggled(on, 60000);
-    assert.equal(isOn(off, 60000), false);
-    assert.equal(remaining(off, 60000), 0);
+    assert.deepEqual(toggled(toggled(OFF)), OFF);
 });
 
-test("it turns itself off when its time is up", () => {
-    const on = toggled(OFF, 0);
-    assert.equal(isOn(on, HOLD_MS - 1), true);
-    assert.equal(isOn(on, HOLD_MS), false);
-    // A click after it ran out turns it on again, rather than off.
-    assert.equal(isOn(toggled(on, HOLD_MS + 5), HOLD_MS + 5), true);
+test("an old deadline still to come carries over as on, with no end", () => {
+    assert.deepEqual(migrated({ on: false, until: 5000 }, 1000), { on: true, until: 0 });
 });
 
-test("a missing or malformed state is off", () => {
-    assert.equal(isOn(null, 0), false);
-    assert.equal(isOn({ on: true, until: NaN }, 0), false);
-    assert.equal(isOn({ on: false, until: 99 }, 0), false);
+test("an old deadline that has passed carries over as off", () => {
+    // After a resume, say, before the old version's check cleared it.
+    assert.deepEqual(migrated({ on: false, until: 1000 }, 5000), OFF);
+    assert.deepEqual(migrated({ on: false, until: 1000 }, 1000), OFF);
+});
+
+test("this version's own state carries over as it was", () => {
+    assert.deepEqual(migrated({ on: true, until: 0 }, 1000), { on: true, until: 0 });
+    assert.deepEqual(migrated(OFF, 1000), OFF);
+    assert.deepEqual(migrated(undefined, 1000), OFF);
 });
