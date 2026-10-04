@@ -843,6 +843,13 @@ See [`launcher.png`](docs/mocks/launcher.png).
     the monitor (Hyprland's `emptym` selector, checked in v0.56.0's
     `MiscFunctions.cpp` and on main at `579829f`). A quick action opens no
     window, so there `Ctrl+Enter` does what `Enter` does.
+    - The focus guard moves the app's first window there as it opens, and
+      focus follows (§14.3). Nothing switches before the app starts, so
+      nothing you do in between is overridden.
+    - Moving on first cancels the grant, and with it the move: the window
+      opens where you are, unfocused and marked.
+    - A window the app already had, activated instead, is focused where it
+      is rather than moved.
   - `Tab` jumps to the next section, `Shift+Tab` back.
 - **Sections.**
   - Empty query: the apps you've used (Recent), the other apps, then the
@@ -1376,6 +1383,10 @@ this spec.
     window of any app. It's for a key bound to a wrapper script, whose app
     isn't known until its window appears. A grant naming the app is used
     before it, and the same cancel rules apply.
+  - **On a new workspace** (`tide launch --new-workspace`, the launcher's
+    `Ctrl+Enter`), the window that uses the grant goes to an empty
+    workspace on its monitor, and focus follows. A canceled grant moves
+    nothing.
   - **Several classes** (`--app` repeated) make one grant, used by a
     window of any of them. The launcher grants an entry's
     `StartupWMClass`, its desktop ID (which a Wayland app's app_id usually

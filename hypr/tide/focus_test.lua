@@ -47,6 +47,9 @@ local function load(opts)
         dsp = {
             focus = function(a) return { dsp = "focus", args = a } end,
             event = function(e) return { dsp = "event", args = e } end,
+            window = {
+                move = function(a) return { dsp = "move", args = a } end,
+            },
         },
     }
     local m = dofile(dir .. "focus.lua")
@@ -515,6 +518,76 @@ test("the guard's own focusing doesn't cancel other grants", function()
     end
     fire("window.open", window("firefox"))
     eq(#m.grants(), 1, "chromium's grant survives")
+end)
+
+test("a grant on a new workspace takes its window to an empty one, focused", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("firefox", nil, 7, { new_workspace = true })
+    local firefox = window("firefox")
+    local d = fire("window.open", firefox)
+    eq(#d, 2, "dispatches")
+    eq(is_focus(d[1], firefox), true, "focused first")
+    eq(d[2].dsp, "move", "then moved")
+    eq(d[2].args.workspace, "emptym", "to an empty workspace on its monitor")
+    eq(d[2].args.follow, true, "and focus follows")
+end)
+
+test("a plain grant leaves its window where it opened", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("firefox", nil, nil, { new_workspace = false })
+    local firefox = window("firefox")
+    local d = fire("window.open", firefox)
+    eq(#d, 1, "dispatches")
+    eq(is_focus(d[1], firefox), true, "focused")
+end)
+
+test("a key press before the window opens leaves it where you are", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant({ "firefox", "org.mozilla.firefox" }, nil, nil, { new_workspace = true })
+    fire("input.keyboard.key", nil, nil, 1)
+    local firefox = window("firefox")
+    local d = fire("window.open", firefox)
+    eq(is_attention(d[1], firefox), true, "marked")
+    for _, x in ipairs(d) do
+        eq(x.dsp ~= "move" and not is_focus(x, firefox), true, "neither moved nor focused")
+    end
+end)
+
+test("a grant on a new workspace focuses an existing window where it is", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("*", nil, nil, { new_workspace = true })
+    local chrome = window("google-chrome")
+    local d = fire("window.urgent", chrome)
+    eq(#d, 1, "dispatches")
+    eq(is_focus(d[1], chrome), true, "focused, not moved")
+end)
+
+test("moving to the new workspace doesn't cancel other grants", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("firefox", nil, nil, { new_workspace = true })
+    m.grant("chromium")
+    -- Hyprland fires window.active from each dispatch: the focus, then the
+    -- workspace change the move follows.
+    local firefox = window("firefox")
+    hl.dispatch = function(d)
+        table.insert(S.dispatched, d)
+        S.handlers["window.active"](firefox, d.dsp == "move" and WORKSPACE or DISPATCH)
+    end
+    fire("window.open", firefox)
+    eq(#m.grants(), 1, "chromium's grant survives")
+end)
+
+test("grant rejects options it doesn't know", function()
+    local m = load()
+    eq(pcall(m.grant, "firefox", nil, nil, "new"), false, "not a table")
+    eq(pcall(m.grant, "firefox", nil, nil, { workspace = 3 }), false, "unknown option")
+    eq(pcall(m.grant, "firefox", nil, nil, { new_workspace = "yes" }), false, "not a boolean")
+    eq(#m.grants(), 0, "no grant")
 end)
 
 test("focusing a window no grant asked for cancels the grants", function()

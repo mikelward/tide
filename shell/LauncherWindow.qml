@@ -15,8 +15,7 @@ import "lib/workspaces.mjs" as Workspaces
 // shortcut) or `qs -c tide ipc call launcher toggle` opens and closes it;
 // Escape or a click on the backdrop closes it. Its quick actions take
 // screenshots, run the session actions, flip Do not disturb and keep awake,
-// and reload the shell. Frecency, sections and Ctrl+Enter come later
-// (TODO.md).
+// and reload the shell, and Ctrl+Enter opens an app on a new workspace.
 PanelWindow {
     id: root
 
@@ -59,35 +58,10 @@ PanelWindow {
     // so a window that moved meanwhile is taken where it is.
     property string pending: ""
     property var windowAtOpen: null
-    // A Ctrl+Enter launch, held for the same pause: see runRow. `launch`
-    // is where it is ("idle", "waiting", "switching"), and an open asked
-    // for meanwhile waits for it (Search.holdsOpen), in `openHeld`.
-    property var pendingLaunch: null
-    property string launch: "idle"
-    property bool openHeld: false
-
-    // Open, close, toggle, and a Ctrl+Enter launch having started all go
-    // through Search.openRequest, which holds an open while a launch is
-    // under way and lets the newest request win.
-    function request(name) {
-        const result = Search.openRequest(name, {
-            visible: visible,
-            launch: launch,
-            held: openHeld
-        });
-        openHeld = result.held;
-        if (result.act === "open") {
-            show();
-        } else if (result.act === "close") {
-            visible = false;
-        }
-    }
-
     function open() {
-        request("open");
-    }
-
-    function show() {
+        if (visible) {
+            return;
+        }
         const focused = Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor);
         if (focused) {
             screen = focused;
@@ -114,15 +88,19 @@ PanelWindow {
     }
 
     function close() {
-        request("close");
+        visible = false;
     }
 
     function toggle() {
-        request("toggle");
+        if (visible) {
+            close();
+        } else {
+            open();
+        }
     }
 
-    // Runs the row at `index`; `newWorkspace` (Ctrl+Enter) first moves to
-    // an empty workspace for an app, so its window opens there.
+    // Runs the row at `index`; `newWorkspace` (Ctrl+Enter) asks for an
+    // app's window on an empty workspace.
     function runRow(index, newWorkspace) {
         const row = rows[index];
         if (!row || checking) {
@@ -146,19 +124,15 @@ PanelWindow {
         close();
         if (row.item.kind === "quick") {
             runQuick(row.item.id);
-        } else if (newWorkspace && Search.opensWindow(row.item)) {
-            // Every focus change ends a focus grant (focus.lua), and two
-            // come first here: focus going back to the window you were in
-            // as the launcher unmaps, then the switch to an empty
-            // workspace. So the switch waits out the unmap, as a screenshot
-            // does (screenshotDelay), and `tide launch` grants the app's
-            // first window only once hyprctl returns, by which time
-            // Hyprland has made the switch.
-            pendingLaunch = row.item;
-            launch = "waiting";
-            launchDelay.restart();
         } else {
-            Launcher.start(Search.launchCommand(row.item), row.item.workingDirectory);
+            // Ctrl+Enter asks the focus guard to take the app's first window
+            // to an empty workspace as it opens (`tide launch
+            // --new-workspace`), so nothing waits here, and a key you press
+            // before the window opens cancels the move with the grant.
+            const options = {
+                newWorkspace: newWorkspace && Search.opensWindow(row.item)
+            };
+            Launcher.start(Search.launchCommand(row.item, options), row.item.workingDirectory);
         }
     }
 
@@ -196,34 +170,6 @@ PanelWindow {
             screenshotDelay.restart();
         } else {
             Launcher.run(what.run, null);
-        }
-    }
-
-    // Opens `item` on the first empty workspace, then lets a held open
-    // through. A switch that fails (Launcher logs why) still launches, on
-    // the workspace you're on.
-    function launchOnEmptyWorkspace(item) {
-        launch = "switching";
-        Launcher.run(Search.emptyWorkspaceCommand(Hyprland.usingLua), ok => {
-            if (!ok) {
-                console.warn("tide: launcher: couldn't switch to an empty workspace; launching on this one");
-            }
-            Launcher.start(Search.launchCommand(item), item.workingDirectory);
-            root.launch = "idle";
-            root.request("launched");
-        });
-    }
-
-    // The same pause, for a Ctrl+Enter launch: focus going back to the
-    // window you were in has to come before the switch.
-    Timer {
-        id: launchDelay
-
-        interval: screenshotDelay.interval
-        onTriggered: {
-            const item = root.pendingLaunch;
-            root.pendingLaunch = null;
-            root.launchOnEmptyWorkspace(item);
         }
     }
 

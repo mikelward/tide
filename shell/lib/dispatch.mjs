@@ -12,13 +12,6 @@ export function focusWorkspace(id, lua) {
     return lua ? `hl.dsp.focus({ workspace = ${id} })` : `workspace ${id}`;
 }
 
-// Go to the first empty workspace on the focused monitor, for the
-// launcher's Ctrl+Enter (SPEC.md §8). `emptym` is Hyprland's own selector
-// for it, in both the Lua and the text form.
-export function focusEmptyWorkspace(lua) {
-    return lua ? 'hl.dsp.focus({ workspace = "emptym" })' : "workspace emptym";
-}
-
 // Focus the window at `address` (hex, with or without 0x).
 export function focusWindow(address, lua) {
     const hex = String(address ?? "").toLowerCase().replace(/^0x/, "");

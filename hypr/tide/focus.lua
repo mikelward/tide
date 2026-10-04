@@ -35,7 +35,9 @@
 -- setup() also publishes the module as the global `tide_focus`, so
 -- `tide launch` can record a grant with
 -- `hyprctl eval 'tide_focus.grant("APP")'` (or a list of the classes the
--- app's window may have, `tide_focus.grant({ "APP", "OTHER" })`), and a
+-- app's window may have, `tide_focus.grant({ "APP", "OTHER" })`; options
+-- after the pid and key, `{ new_workspace = true }` for a launch on an
+-- empty workspace), and a
 -- notification click `tide_focus.grant_or_recent("APP")`.
 --
 -- Known gaps, from SPEC.md §14.3: Lua sees key presses but not pointer
@@ -168,7 +170,7 @@ local function names(g, app)
     return false
 end
 
--- Uses up the grant for w's app, if one holds.
+-- Uses up the grant for w's app, if one holds, and returns it.
 -- A grant for "*" is used by whichever app shows a window first; one that
 -- names w's app is used before it.
 local function take_grant(w)
@@ -179,11 +181,11 @@ local function take_grant(w)
             if (g.app == "*") == wildcard and (wildcard or names(g, app)) then
                 g.live = false
                 table.remove(state.grants, i)
-                return true
+                return g
             end
         end
     end
-    return false
+    return nil
 end
 
 -- A process's parent, from /proc/PID/stat, or nil if it can't be read (the
@@ -229,16 +231,16 @@ local function take_grant_by_ancestry(w)
     expire()
     local pid = field(w, "pid")
     if not pid then
-        return false
+        return nil
     end
     for i, g in ipairs(state.grants) do
         if g.pid and descends(pid, g.pid) then
             g.live = false
             table.remove(state.grants, i)
-            return true
+            return g
         end
     end
-    return false
+    return nil
 end
 
 -- Anything you do after launching cancels every grant: a slow app mustn't
@@ -287,6 +289,28 @@ local function focus(w)
         return -- a window that is going away has no address, and needs no focus
     end
     focus_address(address)
+end
+
+-- Focuses a new window and takes it to an empty workspace on its monitor,
+-- following it there: a launch asked for on a new workspace (Ctrl+Enter in
+-- the launcher). It happens as the window opens, not before the app
+-- starts, so nothing you do in between is overridden: a key press or focus
+-- change cancels the grant, and the window then opens where you are,
+-- unfocused, like any other. Both dispatches are the guard's own focusing.
+local function focus_on_new_workspace(w)
+    local address = field(w, "address")
+    if not address then
+        return
+    end
+    focusing = true
+    local ok, err = pcall(function()
+        hl.dispatch(hl.dsp.focus({ window = "address:" .. address }))
+        hl.dispatch(hl.dsp.window.move({ workspace = "emptym", follow = true }))
+    end)
+    focusing = false
+    if not ok then
+        error(err, 0)
+    end
 end
 
 -- An address as a table key: Hyprland writes 0x and lowercase hex, and the
@@ -415,7 +439,10 @@ end
 function M.on_open(w)
     -- Grants first, so one is used up even when the window is from the app
     -- you are in (a second terminal from a terminal, or a script's window).
-    if take_grant(w) or take_grant_by_ancestry(w) then
+    local g = take_grant(w) or take_grant_by_ancestry(w)
+    if g and g.new_workspace then
+        focus_on_new_workspace(w)
+    elseif g then
         focus(w)
     elseif same_app_as_active(w) or portal_dialog_for_active(w) or prompt_you_asked_for(w) then
         -- Focus moving to a window no grant asked for is moving on, even
@@ -432,6 +459,8 @@ end
 -- urgent (misc:focus_on_activate is off); a launch grant lets it through,
 -- and otherwise it waits with the rest, so Super+Tab takes the latest of both.
 function M.on_urgent(w)
+    -- A grant asked for on a new workspace focuses an existing window where
+    -- it is: moving a window you already had would be a surprise.
     if take_grant(w) then
         focus(w)
         return
@@ -586,12 +615,28 @@ end
 -- for sure (the launcher's desktop ID and program name, SPEC.md §14.3): a
 -- window of any of them uses the one grant. "*" stands alone, since a
 -- wildcard beside names would make the names meaningless.
-function M.grant(app, pid, key)
+--
+-- opts, if given, is { new_workspace = true } for a launch on a new
+-- workspace: the window that uses the grant goes to an empty workspace on
+-- its monitor, and focus follows it (`tide launch --new-workspace`).
+function M.grant(app, pid, key, opts)
     if pid ~= nil and (math.type(pid) ~= "integer" or pid <= 1) then
         error("tide_focus.grant: expected a process id, got " .. tostring(pid), 2)
     end
     if key ~= nil and (math.type(key) ~= "integer" or key <= 0) then
         error("tide_focus.grant: expected a positive integer key, got " .. tostring(key), 2)
+    end
+    local new_workspace = false
+    if opts ~= nil then
+        if type(opts) ~= "table" then
+            error("tide_focus.grant: expected an options table, got " .. tostring(opts), 2)
+        end
+        for k, v in pairs(opts) do
+            if k ~= "new_workspace" or type(v) ~= "boolean" then
+                error("tide_focus.grant: " .. tostring(k) .. " is not an option (new_workspace takes true or false)", 2)
+            end
+        end
+        new_workspace = opts.new_workspace == true
     end
     local apps = {}
     if type(app) == "table" then
@@ -617,7 +662,15 @@ function M.grant(app, pid, key)
         apps[1] = id
     end
     expire()
-    table.insert(state.grants, { app = apps[1], apps = apps, at = M.clock(), pid = pid, key = key, live = true })
+    table.insert(state.grants, {
+        app = apps[1],
+        apps = apps,
+        at = M.clock(),
+        pid = pid,
+        key = key,
+        new_workspace = new_workspace,
+        live = true,
+    })
 end
 
 -- Adds ids to the grant just recorded for app, while it still holds: one
