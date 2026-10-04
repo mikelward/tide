@@ -402,6 +402,63 @@ test("grant_seconds is an option", function()
     eq(is_attention(fire("window.open", ff)[1], ff), true, "announced")
 end)
 
+test("extend widens a launch grant that still holds", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("editor", nil, 7)
+    m.extend("editor", { "org.example.Editor", "editor", "example-editor-x11" }, nil, 7)
+    eq(m.grants()[1], "editor org.example.editor example-editor-x11", "the names added once each")
+    local w = window("org.example.Editor")
+    eq(is_focus(fire("window.open", w)[1], w), true, "an added class takes it")
+    eq(#m.grants(), 0, "used up")
+end)
+
+test("extend after a key press makes no grant", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("editor", nil, 7)
+    fire("input.keyboard.key", 36, 5001, 1) -- you moved on while desktop entries were read
+    m.extend("editor", { "org.example.Editor" }, nil, 7)
+    eq(#m.grants(), 0, "still canceled")
+    local w = window("org.example.Editor")
+    eq(is_attention(fire("window.open", w)[1], w), true, "waits")
+end)
+
+test("extend widens a shell's grant by its pid, and only that one", function()
+    local m = load()
+    m.grant("nautilus", 150, 9) -- `nautilus .` in shell 150
+    m.grant("nautilus", nil, 9) -- a launch
+    m.extend("nautilus", { "org.gnome.Nautilus" }, 150, 9)
+    eq(table.concat(m.grants(), ","), "nautilus org.gnome.nautilus,nautilus", "the shell's grant only")
+    eq(pcall(m.extend, "nautilus", { "x" }, 1, 9), false, "pid 1 isn't a shell")
+    eq(pcall(m.extend, "nautilus", { "x" }, "150", 9), false, "a pid is a number")
+end)
+
+test("extend leaves other grants alone and rejects bad ids", function()
+    local m = load()
+    m.grant("firefox")
+    m.grant("*")
+    m.extend("editor", { "org.example.Editor" }, nil, 7)
+    eq(table.concat(m.grants(), ","), "firefox,*", "no grant for editor, so nothing changes")
+    eq(pcall(m.extend, "*", { "a" }, nil, 7), false, "a wildcard grant can't be widened")
+    eq(pcall(m.extend, "editor", "a", nil, 7), false, "ids must be a list")
+    eq(pcall(m.extend, "editor", { "a", "*" }, nil, 7), false, "* isn't an id to add")
+    eq(pcall(m.extend, "editor", { "" }, nil, 7), false, "an empty id")
+    eq(pcall(m.extend, "editor", { "a" }), false, "the grant's key is required")
+    eq(pcall(m.grant, "editor", nil, "7"), false, "a key is an integer")
+end)
+
+test("extend widens only the grant its lookup was for", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("libreoffice", nil, 7) -- libreoffice --writer, still reading entries
+    fire("input.keyboard.key", 36, 5001, 1) -- canceled by the key launching Calc
+    m.grant("libreoffice", nil, 8) -- libreoffice --calc
+    m.extend("libreoffice", { "libreoffice-writer" }, nil, 7) -- Writer's lookup, late
+    m.extend("libreoffice", { "libreoffice-calc" }, nil, 8)
+    eq(table.concat(m.grants(), ","), "libreoffice libreoffice-calc", "Calc's grant holds Calc's class only")
+end)
+
 test("a key press cancels the grant; a release doesn't", function()
     local m = load()
     focused(window("kitty"), FFM)

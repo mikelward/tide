@@ -21,6 +21,24 @@ once you have agreed with it or reversed it.
   exchange, an unrelated window that opens first no longer takes the
   focus. Reverting is one line in `grantIds`: return `["*"]` when the entry
   names no class.
+- [ ] **A terminal command waits for its desktop-entry lookup.**
+  `tide-grant` reads desktop entries before the command runs, about 4 ms
+  over 300 entries, so a command costs about 7 ms where it cost 3. Done
+  in the background, an already-running app could activate its window
+  before its class was granted. The alternative is a cache of program to
+  classes, invalidated when the applications directories change; it's
+  `extendFromEntries` in `cmd/tide-grant/main.go`.
+- [ ] **Entries running one program with different arguments grant
+  nothing.** Each `libreoffice --writer`, `--calc` and plain `libreoffice`
+  entry is its own app, so a key binding or terminal command running
+  `libreoffice` grants only that name, and a Writer window whose class is
+  `libreoffice-writer` may come up unfocused. Telling them apart by the
+  command's arguments was tried, first in order and then by prefix, and
+  review kept finding commands it misread (option values, field codes
+  inside an argument, an argument only the shell could expand). The
+  alternative is to bring that matching back; the launcher's own entries
+  are unaffected, since it grants the entry it launches. It's the
+  `slices.Equal` check in `desktopClasses`, `cmd/tide-grant/desktop.go`.
 - [ ] **The autostart allowlist starts as `nm-applet` and `blueman`.** The
       spec says it starts empty, but the bar's network and Bluetooth icons
       come from those applets' autostart entries until the shell draws them
@@ -423,13 +441,20 @@ TODO.md). Nothing has run it in a live session yet.
 ## Grants through desktop entries
 
 The focus guard matches a grant against the window class alone (SPEC.md
-§14.3). The launcher grants each entry its `StartupWMClass`, desktop ID and
+§14.3), so a grant lists every class the app's window may have. The
+launcher grants each entry its `StartupWMClass`, desktop ID and
 program at once (`grantIds` in `shell/lib/launcher.mjs`, repeated `--app`).
 On a live session, check which apps in use come up unfocused because their
 window class is none of those three. Still to do:
 
-- A key binding or terminal command grants its program's name. Resolve it
-  through desktop entries' `Exec` and `StartupWMClass` as the launcher does.
+- Key bindings (`tide launch PROGRAM`) and terminal commands (`tide-grant`)
+  also grant the desktop ID and `StartupWMClass` of each entry whose
+  `Exec` runs the program, read once, in Go (`cmd/tide-grant/desktop.go`).
+- `tide launch env VAR=x editor` grants `env`, not `editor`, and reads no
+  desktop entries, since `bin/tide` takes the first word for the program.
+  Resolve it past wrappers the way `tide-grant` does, perhaps by handing
+  the whole command to `tide-grant`. It's older than the desktop-entry
+  lookup.
 - `tide launch xdg-open URL` or `gio open FILE` grants `*` (the first
   window of any app) unless `--app` names the app. Resolve the opener
   through the default handler for the file's type.

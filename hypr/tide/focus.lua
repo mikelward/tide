@@ -586,9 +586,12 @@ end
 -- for sure (the launcher's desktop ID and program name, SPEC.md §14.3): a
 -- window of any of them uses the one grant. "*" stands alone, since a
 -- wildcard beside names would make the names meaningless.
-function M.grant(app, pid)
+function M.grant(app, pid, key)
     if pid ~= nil and (math.type(pid) ~= "integer" or pid <= 1) then
         error("tide_focus.grant: expected a process id, got " .. tostring(pid), 2)
+    end
+    if key ~= nil and (math.type(key) ~= "integer" or key <= 0) then
+        error("tide_focus.grant: expected a positive integer key, got " .. tostring(key), 2)
     end
     local apps = {}
     if type(app) == "table" then
@@ -614,7 +617,56 @@ function M.grant(app, pid)
         apps[1] = id
     end
     expire()
-    table.insert(state.grants, { app = apps[1], apps = apps, at = M.clock(), pid = pid, live = true })
+    table.insert(state.grants, { app = apps[1], apps = apps, at = M.clock(), pid = pid, key = key, live = true })
+end
+
+-- Adds ids to the grant just recorded for app, while it still holds: one
+-- from `tide launch` (no pid), or from tide-grant for the shell pid. The
+-- grant goes in under the program's name first, so a key press or focus
+-- change from then on cancels it; the other classes the app's window may
+-- have, read from desktop entries, come here after. A grant canceled, used
+-- or expired in between stays gone: extend() never makes one. key is the
+-- one the grant went in with, the granting process's pid, so a slow lookup
+-- for a launch that was canceled can't widen a later grant for the same
+-- program.
+function M.extend(app, ids, pid, key)
+    if pid ~= nil and (math.type(pid) ~= "integer" or pid <= 1) then
+        error("tide_focus.extend: expected a process id, got " .. tostring(pid), 2)
+    end
+    if math.type(key) ~= "integer" or key <= 0 then
+        error("tide_focus.extend: expected the grant's key, got " .. tostring(key), 2)
+    end
+    local id = normalize(app)
+    if not id or id == "*" then
+        error("tide_focus.extend: expected an app id, got " .. tostring(app), 2)
+    end
+    if type(ids) ~= "table" then
+        error("tide_focus.extend: expected a list of app ids, got " .. tostring(ids), 2)
+    end
+    local add = {}
+    for i, v in ipairs(ids) do
+        local n = normalize(v)
+        if not n or n == "*" then
+            error("tide_focus.extend: expected an app id at " .. i .. ", got " .. tostring(v), 2)
+        end
+        table.insert(add, n)
+    end
+    expire()
+    for i = #state.grants, 1, -1 do
+        local g = state.grants[i]
+        if g.live and g.pid == pid and g.app == id and g.key == key then
+            for _, n in ipairs(add) do
+                local seen = false
+                for _, have in ipairs(g.apps) do
+                    seen = seen or have == n
+                end
+                if not seen then
+                    table.insert(g.apps, n)
+                end
+            end
+            return
+        end
+    end
 end
 
 -- The window of app focused most recently, or one never focused if none

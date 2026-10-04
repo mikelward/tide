@@ -2,12 +2,17 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 )
+
+// key is the grant key tide-grant passes: its own pid, which in a test is
+// the test binary's.
+var key = strconv.Itoa(os.Getpid())
 
 func TestProgram(t *testing.T) {
 	env := []string{
@@ -53,6 +58,15 @@ func TestProgram(t *testing.T) {
 		{"! nautilus .", "nautilus"},
 		{"time nautilus .", "nautilus"},
 		{"env -- nautilus", "nautilus"},
+		{"env -- LANG=C nautilus", "nautilus"},
+		{"nice -- env nautilus", "nautilus"},
+		{"env -- nice -n 5 nautilus", "nautilus"},
+		{"nohup -- env -- LANG=C nautilus .", "nautilus"},
+		{"/usr/bin/env nautilus", "nautilus"},
+		{"/bin/nice -n 5 nautilus", "nautilus"},
+		// A wrapper's name elsewhere is a program of its own.
+		{"./env nautilus", "env"},
+		{"/opt/vendor/env nautilus", "env"},
 		{"env -v nautilus .", "nautilus"},
 		// Wrapper modes that run nothing, or run a string the helper
 		// doesn't read, name nothing.
@@ -60,6 +74,9 @@ func TestProgram(t *testing.T) {
 		{"command -p -V firefox", ""},
 		{"env --version firefox", ""},
 		{"nohup --help firefox", ""},
+		{"setsid -h firefox", ""},
+		{"setsid -wV firefox", ""},
+		{"setsid -w firefox", "firefox"},
 		{"env -S 'nautilus .'", ""},
 		{"env --split-string='nautilus .'", ""},
 		// Variables are expanded the way the shell would.
@@ -163,18 +180,18 @@ func readLog(t *testing.T, log string) string {
 func TestRun(t *testing.T) {
 	log, path := fakeHyprctl(t, "ok")
 	t.Setenv("PATH", path) // exec.Command finds hyprctl through the real PATH
-	env := []string{"PATH=" + path, "XDG_CURRENT_DESKTOP=tide:Hyprland"}
+	env := []string{"PATH=" + path, "XDG_CURRENT_DESKTOP=tide:Hyprland", "XDG_DATA_HOME=/nonexistent", "XDG_DATA_DIRS=/nonexistent"}
 	var stderr bytes.Buffer
-	if status := run([]string{"--pid", "4242", "--", "nautilus ."}, env, &stderr); status != 0 {
+	if status := run([]string{"--pid", "4242", "--", "nautilus ."}, env, io.Discard, &stderr); status != 0 {
 		t.Fatalf("run = %d, stderr %q", status, stderr.String())
 	}
-	if got, want := readLog(t, log), `eval tide_focus.grant("nautilus", 4242)`; got != want {
+	if got, want := readLog(t, log), `eval tide_focus.grant("nautilus", 4242, `+key+`)`; got != want {
 		t.Errorf("hyprctl got %q, want %q", got, want)
 	}
-	if status := run([]string{"--pid=7", "nautilus ."}, env, &stderr); status != 0 {
+	if status := run([]string{"--pid=7", "nautilus ."}, env, io.Discard, &stderr); status != 0 {
 		t.Fatalf("run --pid=7 = %d", status)
 	}
-	if !strings.HasSuffix(readLog(t, log), `grant("nautilus", 7)`) {
+	if !strings.HasSuffix(readLog(t, log), `grant("nautilus", 7, `+key+`)`) {
 		t.Errorf("--pid=7 wasn't used: %q", readLog(t, log))
 	}
 }
@@ -184,12 +201,12 @@ func TestRun(t *testing.T) {
 func TestRunGrantsThePidAlone(t *testing.T) {
 	log, path := fakeHyprctl(t, "ok")
 	t.Setenv("PATH", path)
-	env := []string{"PATH=" + path, "XDG_CURRENT_DESKTOP=tide"}
+	env := []string{"PATH=" + path, "XDG_CURRENT_DESKTOP=tide", "XDG_DATA_HOME=/nonexistent", "XDG_DATA_DIRS=/nonexistent"}
 	var stderr bytes.Buffer
-	if status := run([]string{"--pid", "4242", "cd /tmp && nautilus ."}, env, &stderr); status != 0 {
+	if status := run([]string{"--pid", "4242", "cd /tmp && nautilus ."}, env, io.Discard, &stderr); status != 0 {
 		t.Fatalf("run = %d, stderr %q", status, stderr.String())
 	}
-	if got, want := readLog(t, log), "eval tide_focus.grant(nil, 4242)"; got != want {
+	if got, want := readLog(t, log), "eval tide_focus.grant(nil, 4242, "+key+")"; got != want {
 		t.Errorf("hyprctl got %q, want %q", got, want)
 	}
 }
@@ -198,7 +215,7 @@ func TestRunOutsideTide(t *testing.T) {
 	log, path := fakeHyprctl(t, "ok")
 	t.Setenv("PATH", path)
 	var stderr bytes.Buffer
-	status := run([]string{"nautilus ."}, []string{"PATH=" + path, "XDG_CURRENT_DESKTOP=KDE"}, &stderr)
+	status := run([]string{"nautilus ."}, []string{"PATH=" + path, "XDG_CURRENT_DESKTOP=KDE"}, io.Discard, &stderr)
 	if status != 0 || readLog(t, log) != "" {
 		t.Errorf("run outside tide = %d, hyprctl log %q", status, readLog(t, log))
 	}
@@ -208,7 +225,7 @@ func TestRunReportsARejectedGrant(t *testing.T) {
 	_, path := fakeHyprctl(t, "error: attempt to index a nil value")
 	t.Setenv("PATH", path)
 	var stderr bytes.Buffer
-	status := run([]string{"nautilus ."}, []string{"PATH=" + path, "XDG_CURRENT_DESKTOP=tide"}, &stderr)
+	status := run([]string{"nautilus ."}, []string{"PATH=" + path, "XDG_CURRENT_DESKTOP=tide", "XDG_DATA_HOME=/nonexistent", "XDG_DATA_DIRS=/nonexistent"}, io.Discard, &stderr)
 	if status != 1 {
 		t.Errorf("run = %d, want 1", status)
 	}
@@ -224,7 +241,7 @@ func TestRunReportsNoHyprctl(t *testing.T) {
 	}
 	t.Setenv("PATH", dir)
 	var stderr bytes.Buffer
-	status := run([]string{"nautilus"}, []string{"PATH=" + dir, "XDG_CURRENT_DESKTOP=tide"}, &stderr)
+	status := run([]string{"nautilus"}, []string{"PATH=" + dir, "XDG_CURRENT_DESKTOP=tide"}, io.Discard, &stderr)
 	if status != 1 || !strings.Contains(stderr.String(), "hyprctl") {
 		t.Errorf("run without hyprctl = %d, stderr %q", status, stderr.String())
 	}
@@ -232,7 +249,7 @@ func TestRunReportsNoHyprctl(t *testing.T) {
 
 func TestRunUsage(t *testing.T) {
 	var stderr bytes.Buffer
-	if status := run(nil, nil, &stderr); status != 2 || !strings.Contains(stderr.String(), "usage") {
+	if status := run(nil, nil, io.Discard, &stderr); status != 2 || !strings.Contains(stderr.String(), "usage") {
 		t.Errorf("run() = %d, stderr %q", status, stderr.String())
 	}
 }

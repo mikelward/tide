@@ -1421,13 +1421,32 @@ this spec.
       `eval`, `env -S` and other shells' blocks the way each shell does
       kept turning up misses; ancestry covers them without parsing.
     - It costs one short process per command, about 3 ms, plus one
-      `hyprctl eval`.
+      `hyprctl eval`; reading desktop entries adds about 4 ms over 300,
+      and a second `hyprctl eval` when they name a class.
   - The guard resolves a program name to an app the way the launcher does,
     through desktop entries' `Exec` and `StartupWMClass`. `xdg-open` and
     `gio open` resolve through the default handler for the file's type.
-    Not yet: a grant from a key binding or the terminal matches the window
-    class alone (TODO.md), so a launch through `xdg-open` or `gio open`
-    grants `*`, the first window of any app, unless `--app` names the app.
+    Both `tide launch` (a key binding's program) and `tide-grant` (a
+    terminal command's) grant the program's name at once, then add the
+    desktop ID and `StartupWMClass` of each entry whose `Exec` runs it, so
+    a key press during the lookup still cancels the grant. `tide-grant`
+    reads `Exec` as it reads a terminal line, past wrappers. Entries that
+    run one program with different arguments (`libreoffice --writer`,
+    `--calc`) are different apps, which a command's arguments can't
+    reliably tell apart, so none of them is granted. Only application
+    entries count, and only those that run the same file as the command, a
+    name found on `PATH`. An entry isn't matched if it runs in a directory
+    of its own (`Path`, `env --chdir`), in a terminal (`Terminal=true`), or
+    with a `PATH` or environment of its own (`env PATH=…`, `env -i`): it
+    may run another program. For the same reason a terminal command run
+    that way (`PATH=… editor`, `env --chdir DIR ./editor`) is granted only
+    its name. Other settings count (`env APP_MODE=writer suite`, `env -u
+    WAYLAND_DISPLAY app`); a terminal command run with settings of its own
+    (`APP_MODE=calc suite`) matches only an entry with the same settings.
+    It finishes the lookup before the command runs, so an app that's already running can't activate its window
+    ahead of it. Not yet: a launch through `xdg-open` or `gio open` grants
+    `*`, the first window of any app, unless `--app` names the app
+    (TODO.md).
 - **Process ancestry** covers the terminal's commands: a script that opens
   a window, the second command on a line, or anything the shell's grant
   can't name. The preexec hook's grant names its shell's pid, and a window
