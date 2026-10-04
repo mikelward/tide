@@ -24,6 +24,11 @@
 //
 // prints those classes, one per line, for `tide launch`, which grants a key
 // binding's program the same way.
+//
+//	tide-grant --entry DESKTOP-ID
+//
+// prints the classes one desktop entry names, for the app `tide launch
+// xdg-open URL` hands the URL to.
 package main
 
 import (
@@ -51,8 +56,26 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	pid := flags.Int("pid", os.Getppid(), "the `pid` of the shell running the command")
 	classes := flags.Bool("classes", false, "print the window classes the desktop entries for the command `WORD...` name, one per line, and exit")
 	program := flags.Bool("program", false, "print the program the command `WORD...` runs, past wrappers, and exit")
+	entryID := flags.String("entry", "", "print the window classes the desktop entry `DESKTOP-ID` names, one per line, and exit")
 	if err := flags.Parse(args); err != nil {
 		return 2
+	}
+	// For `tide launch xdg-open URL`: the classes of the app the opener
+	// hands the URL to, found by the caller from the URL's type.
+	if *entryID != "" {
+		if *classes || *program || flags.NArg() != 0 {
+			fmt.Fprintln(stderr, "usage: tide-grant --entry DESKTOP-ID")
+			return 2
+		}
+		found, err := entryClasses(*entryID, env)
+		if err != nil {
+			fmt.Fprintf(stderr, "tide-grant: desktop entry %s names no window class: %v\n", *entryID, err)
+			return 1
+		}
+		for _, c := range found {
+			fmt.Fprintln(stdout, c)
+		}
+		return 0
 	}
 	// For `tide launch`, which runs a key binding's command as words, not a
 	// line for the shell: the program it runs, past wrappers (`env VAR=x
@@ -89,6 +112,7 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "usage: tide-grant [--pid PID] [--] COMMAND-LINE")
 		fmt.Fprintln(stderr, "       tide-grant --program WORD...")
 		fmt.Fprintln(stderr, "       tide-grant --classes WORD...")
+		fmt.Fprintln(stderr, "       tide-grant --entry DESKTOP-ID")
 		return 2
 	}
 	if !inTide(lookup(env, "XDG_CURRENT_DESKTOP")) {

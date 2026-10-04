@@ -1457,9 +1457,25 @@ this spec.
     WAYLAND_DISPLAY app`); a command run with settings of its own
     (`APP_MODE=calc suite`) matches only an entry with the same settings.
     It finishes the lookup before the command runs, so an app that's already running can't activate its window
-    ahead of it. Not yet: a launch through `xdg-open` or `gio open` grants
-    `*`, the first window of any app, unless `--app` names the app
-    (TODO.md).
+    ahead of it.
+  - A key binding's `xdg-open TARGET` or `gio open TARGET` grants the app
+    that opens TARGET: the default app for its type in `mimeapps.list`
+    (`xdg-mime`), by its desktop ID, `StartupWMClass` and program.
+    - A file's type comes from the file, a URL's from its scheme
+      (`x-scheme-handler/https`).
+    - The app's name isn't known until the lookup ends, so the grant goes
+      in after it, some tens of ms after the key press. A key pressed
+      in between doesn't cancel it.
+    - A target that can't be typed (an option, a `file://` URL with
+      escapes, neither a file nor a URL), a type with no default app, a
+      failed lookup, a default whose entry is gone or names no window (a
+      terminal app), several targets (`gio open A B`, whose apps may
+      differ), or an opener behind a wrapper grants `*`, the first
+      window of any app, as before. A failed lookup and a default that
+      names no window are reported.
+    - A terminal command running `xdg-open` is still granted by its
+      shell's pid; the opener's app is usually already running, so the
+      grant doesn't reach its window.
 - **Process ancestry** covers the terminal's commands: a script that opens
   a window, the second command on a line, or anything the shell's grant
   can't name. The preexec hook's grant names its shell's pid, and a window

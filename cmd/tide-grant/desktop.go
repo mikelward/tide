@@ -580,3 +580,76 @@ func fieldCodes(w string) (text, codes string, valid bool) {
 	}
 	return b.String(), codes, true
 }
+
+// entryClasses returns the window classes the desktop entry with desktop
+// ID id (`org.mozilla.firefox`, with or without `.desktop`) says its
+// window may have: the ID, its StartupWMClass, and the program its Exec
+// runs, past wrappers, unless that program is itself one that opens other
+// apps (opaque). It's for `tide launch xdg-open URL`, granting the app the
+// opener hands the URL to. The entry is found as the desktop finds it: the
+// first data directory holding the ID wins, even hidden. An ID no
+// directory holds (a stale default in mimeapps.list), a hidden entry, one
+// that isn't an application, a terminal entry (its window is the
+// terminal's) or one whose Exec is invalid names no class, and is an error
+// saying which, so the caller's fallback is reported. So is anything that
+// can't be read on the way, since it may have been the entry asked for.
+func entryClasses(id string, env []string) ([]string, error) {
+	id = strings.TrimSuffix(id, ".desktop")
+	if id == "" || strings.ContainsAny(id, "/\r\n") {
+		return nil, fmt.Errorf("not a desktop ID: %q", id)
+	}
+	var errs []error
+	var e entry
+	found := false
+	for _, data := range dataDirs(env) {
+		if found {
+			break
+		}
+		walkEntries(filepath.Join(data, "applications"), func(rel, path string) {
+			if found || strings.ReplaceAll(strings.TrimSuffix(rel, ".desktop"), string(filepath.Separator), "-") != id {
+				return
+			}
+			found = true
+			var err error
+			if e, err = readEntry(path); err != nil {
+				errs = append(errs, err)
+			}
+		}, func(err error) {
+			// Once the entry is found, what can't be read later in the
+			// walk can't be the entry asked for, so it doesn't count.
+			if !found {
+				errs = append(errs, err)
+			}
+		})
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	switch {
+	case !found:
+		return nil, errors.New("no such desktop entry")
+	case e.hidden:
+		return nil, errors.New("the entry is hidden")
+	case e.kind != "Application":
+		return nil, fmt.Errorf("the entry is a %q, not an application", e.kind)
+	case e.terminal:
+		return nil, errors.New("the entry runs in a terminal, whose window is the terminal's")
+	}
+	runs, _, valid := execCommand(e.exec)
+	if !valid {
+		return nil, fmt.Errorf("the entry's Exec is invalid: %q", e.exec)
+	}
+	var out []string
+	seen := map[string]bool{}
+	program := filepath.Base(runs)
+	if opaque[program] {
+		program = ""
+	}
+	for _, c := range []string{id, e.class, program} {
+		if key := strings.ToLower(c); c != "" && !strings.ContainsAny(c, "\r\n") && !seen[key] {
+			seen[key] = true
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}

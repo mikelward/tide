@@ -450,12 +450,13 @@ Key bindings (`tide launch COMMAND`) and terminal commands (`tide-grant`)
 grant the program the command runs, past wrappers, and the desktop ID and
 `StartupWMClass` of each entry whose `Exec` runs it
 (`cmd/tide-grant/desktop.go`). On a live session, check which apps in use
-come up unfocused because their window class is none of those. Still to
-do:
+come up unfocused because their window class is none of those.
 
-- `tide launch xdg-open URL` or `gio open FILE` grants `*` (the first
-  window of any app) unless `--app` names the app. Resolve the opener
-  through the default handler for the file's type.
+- A key binding's `xdg-open` or `gio open` grants the default app for the
+  target's type (`opener_classes` in `bin/tide`). On a live session,
+  check a URL and a file each bring up their app focused. Still to do:
+  the terminal's `xdg-open URL`, which `tide-grant` grants only by its
+  shell's pid, so a browser already running doesn't take focus.
 
 ## Fullscreen on open, under the focus guard
 

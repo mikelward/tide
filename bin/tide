@@ -13,8 +13,9 @@
 #          for sure: a window of any ID uses the one grant (the launcher
 #          passes a desktop entry's ID and program name). '*' grants the
 #          first window of any app, for a
-#          wrapper script whose app isn't known in advance, and the
-#          default for xdg-open and gio open. It comes
+#          wrapper script whose app isn't known in advance. xdg-open
+#          and gio open grant the default app for the target's type
+#          (xdg-mime), or '*' when it can't be found. It comes
 #          first, so a key press or focus change while the shell is still
 #          starting cancels it, and its 10 s run from the key press that
 #          launched it;
@@ -196,6 +197,64 @@ desktop_classes() {
     fi
 }
 
+# The window classes of the app an opener (xdg-open, gio open) hands
+# TARGET to, one per line: the default app for its type, as xdg-mime
+# finds it in mimeapps.list, and the classes its desktop entry names
+# (tide-grant --entry). A file's type is read from the file; a URL's is
+# its scheme's handler (x-scheme-handler/https). Prints nothing, and the
+# launch grants any app's window instead, for a target it can't type (an
+# option, a file:// URL with escapes, something neither a file nor a URL)
+# or a type with no default app; a lookup that fails, or a default whose
+# entry names no class, is reported too.
+opener_classes() {
+    target=$1
+    case "$target" in
+        '' | -*) return 0 ;;
+    esac
+    case "$target" in
+        file://*%*) return 0 ;;
+        file://*) target=${target#file://} ;;
+    esac
+    if test -e "$target"; then
+        kind=path
+    else
+        scheme=${target%%:*}
+        case "$scheme" in
+            "$target" | '' | [!A-Za-z]* | *[!A-Za-z0-9+.-]*) return 0 ;;
+        esac
+        kind=scheme
+    fi
+    if ! command -v xdg-mime >/dev/null 2>&1; then
+        echo "$prog launch: no xdg-mime, so the app that opens $1 wasn't found; granting any app's window" >&2
+        return 0
+    fi
+    if test "$kind" = scheme; then
+        mime=x-scheme-handler/$(printf '%s' "$scheme" | tr '[:upper:]' '[:lower:]')
+    elif ! mime=$(xdg-mime query filetype "$target") || test -z "$mime"; then
+        echo "$prog launch: xdg-mime couldn't tell the type of $1; granting any app's window" >&2
+        return 0
+    fi
+    if ! desktop=$(xdg-mime query default "$mime"); then
+        echo "$prog launch: xdg-mime couldn't find the default app for $mime; granting any app's window" >&2
+        return 0
+    fi
+    # mimeapps.list may list several, separated by ';': the first is used.
+    desktop=${desktop%%;*}
+    if test -z "$desktop"; then
+        echo "$prog launch: no default app for $mime; granting any app's window" >&2
+        return 0
+    fi
+    if ! command -v tide-grant >/dev/null 2>&1; then
+        echo "$prog launch: no tide-grant, so $desktop's desktop entry wasn't read; granting any app's window (make install builds it)" >&2
+        return 0
+    fi
+    # tide-grant says why an entry names no class (a stale default, a
+    # terminal app); this says what the launch does about it.
+    if ! tide-grant --entry "$desktop"; then
+        echo "$prog launch: no window class for $desktop, the default app for $mime; granting any app's window" >&2
+    fi
+}
+
 # Adds ID to the grant's list, unless it's empty or already there in any
 # case (the guard compares IDs without case).
 add_app() {
@@ -261,19 +320,47 @@ launch() {
     fi
     if test -z "$app"; then
         runs=$(command_program "$@")
+        target=
+        opener=no
         case "${runs##*/}" in
-            # They open whatever handles the file, whose app isn't known here
-            # (TODO.md: grants through desktop entries).
-            xdg-open) app='*' ;;
+            # They open whatever handles the file: the default app for its
+            # type. Behind a wrapper, where the target would be later,
+            # or with more than one target, any app's window is granted,
+            # as for a target that can't be typed.
+            xdg-open)
+                opener=yes
+                if test "$runs" = "$1" && test $# -eq 2; then target=$2; fi
+                ;;
             # Only `gio open` opens an app; `gio trash` and the rest don't.
             # Behind a wrapper, where `open` would be later, it's taken as gio.
-            gio) if test "$runs" = "$1" && test "${2:-}" = open; then app='*'; else app=gio; fi ;;
+            gio)
+                if test "$runs" = "$1" && test "${2:-}" = open; then
+                    opener=yes
+                    # Several locations may each have their own app, which
+                    # one grant can't name, so they grant any app's window.
+                    if test $# -eq 3; then target=$3; fi
+                else
+                    app=gio
+                fi
+                ;;
             *)
                 app=${runs##*/}
                 add_app "$app"
                 lookup=yes
                 ;;
         esac
+        # The opener's app is found before the grant goes in, since its
+        # name isn't known until then; xdg-mime takes some tens of ms.
+        if test "$opener" = yes; then
+            classes=$(opener_classes "$target")
+            while IFS= read -r class; do
+                add_app "$class"
+                app=${app:-$class}
+            done <<EOF2
+$classes
+EOF2
+            app=${app:-*}
+        fi
     fi
     # A grant that fails is reported; the app starts anyway. One ID goes
     # in as a string, several as a list.
