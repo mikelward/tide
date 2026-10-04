@@ -59,6 +59,14 @@ PanelWindow {
     SharingPill {
         id: sharing
 
+        anchors.right: mic.left
+        anchors.rightMargin: visible ? 4 : 0
+        anchors.verticalCenter: parent.verticalCenter
+    }
+
+    MicPill {
+        id: mic
+
         anchors.right: tray.left
         anchors.rightMargin: visible ? 10 : 0
         anchors.verticalCenter: parent.verticalCenter

@@ -162,7 +162,13 @@ tested where it can be without a live session.
   the orange mic indicator (§7.4) will use. Meters don't count: a stream
   marked `media.category` Monitor or Manager, or `stream.monitor`
   (pavucontrol's, through pipewire-pulse). On a live session, check that a Meet call holds it, and
-  that pavucontrol's level meters don't. Still to come: the launcher's
+  that pavucontrol's level meters don't.
+- The orange mic pill (§7.4) is `shell/MicPill.qml`, left of the tray
+  beside the Sharing pill, shown while `MicData.live`; a click lists each
+  app recording, and a click on one mutes or unmutes its recording
+  (`shell/MicPopover.qml`, `captureRows` in `shell/lib/mic.mjs`). Only
+  parsed with `qmlformat`: on a live session, check that a Meet call shows
+  it and its mute works. Still to come: the launcher's
   toggle.
   On a live session, check that hypridle honors the bar's inhibitor,
   including while a fullscreen window covers the bar.
