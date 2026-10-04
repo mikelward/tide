@@ -644,3 +644,87 @@ func TestDesktopClassesLiteralAndInvalidCodes(t *testing.T) {
 		t.Errorf("a field code as the program is valid")
 	}
 }
+
+// --entry prints the classes one desktop entry names, for the app an
+// opener hands a URL to.
+func TestEntryClasses(t *testing.T) {
+	home, sys := t.TempDir(), t.TempDir()
+	writeEntry(t, sys, "org.mozilla.firefox.desktop", "[Desktop Entry]\nExec=/usr/lib/firefox/firefox %u\nStartupWMClass=firefox\n")
+	writeEntry(t, sys, "vendor/viewer.desktop", "[Desktop Entry]\nExec=env GDK_BACKEND=x11 image-viewer %f\nStartupWMClass=Viewer\n")
+	writeEntry(t, sys, "org.example.Flat.desktop", "[Desktop Entry]\nExec=flatpak run org.example.Flat %U\n")
+	writeEntry(t, sys, "htop.desktop", "[Desktop Entry]\nExec=htop\nTerminal=true\n")
+	writeEntry(t, sys, "link.desktop", "[Desktop Entry]\nType=Link\nURL=https://example.com\n")
+	writeEntry(t, sys, "bad.desktop", "[Desktop Entry]\nExec=\"unclosed\n")
+	writeEntry(t, sys, "gone.desktop", "[Desktop Entry]\nExec=gone\n")
+	writeEntry(t, home, "gone.desktop", "[Desktop Entry]\nExec=gone\nHidden=true\n")
+	env := dataEnv(home, sys)
+	for id, want := range map[string][]string{
+		"org.mozilla.firefox":         {"org.mozilla.firefox", "firefox"},
+		"org.mozilla.firefox.desktop": {"org.mozilla.firefox", "firefox"},
+		"vendor-viewer":               {"vendor-viewer", "Viewer", "image-viewer"},
+		"org.example.Flat":            {"org.example.Flat"},
+	} {
+		got, err := entryClasses(id, env)
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Errorf("entryClasses(%q) = %q, %v; want %q", id, got, err, want)
+		}
+	}
+	// One that names no class says why, so the caller's fallback is
+	// reported: a stale default in mimeapps.list is the common case.
+	for id, why := range map[string]string{
+		"htop":    "terminal",
+		"link":    "not an application",
+		"bad":     "Exec is invalid",
+		"gone":    "hidden",
+		"missing": "no such desktop entry",
+	} {
+		got, err := entryClasses(id, env)
+		if len(got) != 0 || err == nil || !strings.Contains(err.Error(), why) {
+			t.Errorf("entryClasses(%q) = %q, %v; want nothing and an error saying %q", id, got, err, why)
+		}
+	}
+	for _, id := range []string{"", "a/b", ".desktop"} {
+		if _, err := entryClasses(id, env); err == nil {
+			t.Errorf("entryClasses(%q) took a bad ID", id)
+		}
+	}
+
+	var stdout, stderr bytes.Buffer
+	if status := run([]string{"--entry", "org.mozilla.firefox"}, env, &stdout, &stderr); status != 0 || stdout.String() != "org.mozilla.firefox\nfirefox\n" {
+		t.Errorf("run --entry = %d, %q, stderr %q", status, stdout.String(), stderr.String())
+	}
+	for _, args := range [][]string{{"--entry", "x", "y"}, {"--entry", "x", "--classes"}} {
+		if status := run(args, env, io.Discard, io.Discard); status != 2 {
+			t.Errorf("run %q = %d, want 2", args, status)
+		}
+	}
+	if err := os.Symlink(filepath.Join(sys, "nothing"), filepath.Join(sys, "applications", "dangling.desktop")); err != nil {
+		t.Fatal(err)
+	}
+	stderr.Reset()
+	if status := run([]string{"--entry", "dangling"}, env, io.Discard, &stderr); status != 1 || !strings.Contains(stderr.String(), "desktop entry dangling names no window class") {
+		t.Errorf("an unreadable entry = %d, stderr %q", status, stderr.String())
+	}
+	// What can't be read after the entry is found doesn't count; before
+	// it, it may have been the entry.
+	later := t.TempDir()
+	writeEntry(t, later, "a.desktop", "[Desktop Entry]\nExec=a-app\n")
+	if err := os.Symlink(filepath.Join(later, "nothing"), filepath.Join(later, "applications", "zz-dir")); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := entryClasses("a", dataEnv("/nonexistent", later)); err != nil || !reflect.DeepEqual(got, []string{"a", "a-app"}) {
+		t.Errorf("an unreadable path after the entry: %q, %v; want [a a-app]", got, err)
+	}
+	earlier := t.TempDir()
+	writeEntry(t, earlier, "a.desktop", "[Desktop Entry]\nExec=a-app\n")
+	if err := os.Symlink(filepath.Join(earlier, "nothing"), filepath.Join(earlier, "applications", "0-dir")); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := entryClasses("a", dataEnv("/nonexistent", earlier)); err == nil || len(got) != 0 {
+		t.Errorf("an unreadable path before the entry: %q, %v; want an error", got, err)
+	}
+	stderr.Reset()
+	if status := run([]string{"--entry", "missing.desktop"}, env, io.Discard, &stderr); status != 1 || !strings.Contains(stderr.String(), "missing.desktop names no window class: no such desktop entry") {
+		t.Errorf("a stale default = %d, stderr %q", status, stderr.String())
+	}
+}
