@@ -22,8 +22,19 @@ Singleton {
         run(["tide", "grant", app], then);
     }
 
-    function run(command, then) {
-        const process = runner.createObject(root, { command: command, then: then });
+    // Runs a command the launcher built (`tide launch …`, shell/lib/
+    // launcher.mjs) from a desktop entry's working directory, if it names
+    // one; `uwsm app` keeps it.
+    function start(command, workingDirectory) {
+        run(command, null, workingDirectory);
+    }
+
+    function run(command, then, workingDirectory) {
+        const properties = { command: command, then: then };
+        if (workingDirectory) {
+            properties.workingDirectory = workingDirectory;
+        }
+        const process = runner.createObject(root, properties);
         process.running = true;
     }
 

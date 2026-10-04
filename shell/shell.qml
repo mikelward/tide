@@ -3,7 +3,8 @@ import Quickshell
 import Quickshell.Hyprland
 
 // tide's shell (SPEC.md §3.2): for now, the bar, the OSD and the
-// notification popups (opt-in; see NotificationData.qml) on every monitor.
+// notification popups (opt-in; see NotificationData.qml) on every monitor,
+// and the launcher.
 ShellRoot {
     Variants {
         model: Quickshell.screens
@@ -22,6 +23,9 @@ ShellRoot {
 
         NotificationPopups {}
     }
+
+    // One launcher, which moves to the focused monitor as it opens.
+    LauncherWindow {}
 
     // A toplevel's class and fullscreen state come from Hyprland's client
     // list, which Quickshell reads on request; ask again when they change.
