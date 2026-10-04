@@ -7,8 +7,8 @@ import "lib/bluetooth.mjs" as Bt
 import "lib/network.mjs" as Net
 import "lib/status.mjs" as Status
 
-// The status icons before the clocks (SPEC.md §7.4). So far: Bluetooth;
-// network; volume and its %, which scrolls by 5%; and battery,
+// The status icons before the clocks (SPEC.md §7.4). So far: keep awake;
+// Bluetooth; network; volume and its %, which scrolls by 5%; and battery,
 // red below 15%, each with its popover; the notification center's bell;
 // and the session menu.
 // The tray is shell/Tray.qml, to their left. The other icons come later;
@@ -32,6 +32,20 @@ Row {
     // Volume and mute are only live on a bound node.
     PwObjectTracker {
         objects: [root.sink]
+    }
+
+    // Keep awake: always here, faint while off and in the accent color
+    // while on. A click turns it on for two hours, or off.
+    SymbolicIcon {
+        id: keepAwake
+
+        anchors.verticalCenter: parent.verticalCenter
+        name: "display-brightness-symbolic"
+        color: KeepAwakeData.on ? Theme.accent : Theme.fgFaint
+
+        TapHandler {
+            onTapped: KeepAwakeData.toggle()
+        }
     }
 
     SymbolicIcon {

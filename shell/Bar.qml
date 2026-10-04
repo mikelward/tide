@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Wayland
 import "lib/title.mjs" as Title
 
 // One bar per monitor (SPEC.md §7.1): a plain rectangle flush with the top
@@ -105,6 +106,13 @@ PanelWindow {
                 }
             }
         }
+    }
+
+    // Keep awake (SPEC.md §10): every bar holds one while it's on, so it
+    // holds on whichever monitors are lit.
+    IdleInhibitor {
+        window: bar
+        enabled: KeepAwakeData.on
     }
 
     // Only while the shell is the notification server (NotificationData).
