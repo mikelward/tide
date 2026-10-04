@@ -45,6 +45,13 @@ export function volumeIcon({ muted, volume }) {
     return volume < 2 / 3 ? "audio-volume-medium-symbolic" : "audio-volume-high-symbolic";
 }
 
+// The volume's percentage beside its icon, "45%"; above 100% when an app
+// set it there. "" with no output. Muted keeps its level, which the bar
+// dims, so unmuting shows what comes back.
+export function volumeText(volume) {
+    return Number.isFinite(volume) ? `${Math.round(Math.max(0, volume) * 100)}%` : "";
+}
+
 // The volume after `notches` of scrolling (positive is up), VOLUME_STEP a
 // notch from wherever it is, within 0 to 1. A volume already above 1,
 // which some apps set, isn't pulled down by scrolling up.
