@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    batteryView, volumeIcon, scrolledVolume, formatDuration, batteryStatus, profileChoices, degradedText,
+    batteryView, volumeIcon, volumeText, scrolledVolume, formatDuration, batteryStatus, profileChoices, degradedText,
 } from "./status.mjs";
 
 test("the battery shows its percentage and level icon", () => {
@@ -87,4 +87,11 @@ test("a battery charging at 100% uses the charged icon, as Adwaita has no 100-ch
     assert.equal(batteryView({ present: true, percentage: 0.97, state: 1 }).icon, "battery-level-100-charged-symbolic");
     assert.equal(batteryView({ present: true, percentage: 1, state: 5 }).icon, "battery-level-100-charged-symbolic");
     assert.equal(batteryView({ present: true, percentage: 0.94, state: 1 }).icon, "battery-level-90-charging-symbolic");
+});
+
+test("the volume reads as a percentage", () => {
+    assert.equal(volumeText(0.453), "45%");
+    assert.equal(volumeText(0), "0%");
+    assert.equal(volumeText(1.3), "130%");
+    assert.equal(volumeText(undefined), "");
 });

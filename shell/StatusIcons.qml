@@ -8,8 +8,9 @@ import "lib/network.mjs" as Net
 import "lib/status.mjs" as Status
 
 // The status icons before the clocks (SPEC.md §7.4). So far: Bluetooth;
-// network; volume, which scrolls by 5%; and battery, red below 15%, each
-// with its popover; the notification center's bell; and the session menu.
+// network; volume and its %, which scrolls by 5%; and battery,
+// red below 15%, each with its popover; the notification center's bell;
+// and the session menu.
 // The tray is shell/Tray.qml, to their left. The other icons come later;
 // TODO.md lists them.
 Row {
@@ -84,15 +85,44 @@ Row {
         }
     }
 
-    SymbolicIcon {
+    // The volume's icon (muted, or a level by thirds), then its %, dimmed
+    // while muted.
+    Row {
         id: volume
 
         anchors.verticalCenter: parent.verticalCenter
         visible: root.sink !== null
-        name: Status.volumeIcon({
-            muted: root.sink?.audio?.muted ?? true,
-            volume: root.sink?.audio?.volume,
-        })
+        spacing: 3
+
+        SymbolicIcon {
+            anchors.verticalCenter: parent.verticalCenter
+            name: Status.volumeIcon({
+                muted: root.sink?.audio?.muted ?? true,
+                volume: root.sink?.audio?.volume,
+            })
+        }
+
+        // Wide enough for "100%" so the icons after it don't shift.
+        Text {
+            id: volumeText
+
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.max(implicitWidth, volumeWidth.width)
+            horizontalAlignment: Text.AlignRight
+            text: Status.volumeText(root.sink?.audio?.volume)
+            color: (root.sink?.audio?.muted ?? true) ? Theme.fgDim : Theme.fg
+            font.family: Theme.font
+            font.pixelSize: 12.5
+            font.weight: Font.Medium
+            font.features: ({ "tnum": 1 })
+
+            TextMetrics {
+                id: volumeWidth
+
+                font: volumeText.font
+                text: "100%"
+            }
+        }
 
         property real wheel: 0
 
