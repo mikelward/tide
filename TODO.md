@@ -7,6 +7,13 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **Opening the launcher waits while a Ctrl+Enter launch is under
+      way.** For up to the 300 ms pause plus one `hyprctl` call, a reopen
+      is held and happens once the app has started; a second tap cancels
+      it, and so does a close. The alternative let the launcher reopen at
+      once, which left five ways for what you did next to cancel the
+      pending app's focus or land on its new workspace. It's `openRequest`
+      in `shell/lib/launcher.mjs`.
 - [ ] **The autostart allowlist starts as `nm-applet` and `blueman`.** The
       spec says it starts empty, but the bar's network and Bluetooth icons
       come from those applets' autostart entries until the shell draws them
@@ -189,7 +196,15 @@ tested where it can be without a live session.
     recently first, and a query puts them first among equal matches; kept in
     `$XDG_STATE_HOME/tide/launcher.json`.
   - Sections are in, with `Tab` and `Shift+Tab` stepping through them.
-  - `Ctrl+Enter` for a new workspace.
+  - `Ctrl+Enter` is in: an app opens on the first empty workspace.
+  - `Ctrl+Enter` waits 300 ms for the launcher to unmap, then switches,
+    then launches, because each focus change ends a focus grant. A key or
+    focus change of your own inside that pause is overridden: the switch
+    still happens and the app still takes focus. Fix it by making the
+    switch and the grant one step the focus guard takes itself (say
+    `tide launch --new-workspace`, flagged in `focus.lua` the way the
+    guard's own focusing is), which also removes the pause. Deferred from
+    #95's review.
   - "Screenshot window" records Hyprland's focused window's address as the
     launcher opens, then reads its geometry with `hyprctl clients -j` as
     the screenshot runs and passes it to `screenshot --geometry`, the same
