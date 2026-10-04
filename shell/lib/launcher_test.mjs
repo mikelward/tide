@@ -86,6 +86,35 @@ test("use breaks a tie but never beats a better match", () => {
     assert.equal(search(all, "kit", used, now)[0].item.id, "kitty");
 });
 
+test("an equal score goes by the match's shape before use", () => {
+    const now = 1e12;
+    const app = (id, name) => ({ id, name, command: [id], actions: [] });
+    const all = launcherItems([app("terminal", "Terminal"), app("term", "Term"), app("xab", "X Abc"), app("xyab", "Xy Ab")]);
+    let used = initial();
+    for (let i = 0; i < 50; i++) {
+        used = record(used, "app:terminal", now);
+        used = record(used, "app:xyab", now);
+    }
+    // Both a prefix of the same score: the shorter name, however much the
+    // longer one is used.
+    assert.equal(scoreItem(all[0], "term").score, scoreItem(all[1], "term").score);
+    assert.equal(search(all, "term", used, now)[0].item.id, "term");
+    // Both a word-start run of the same score: the earlier one.
+    assert.equal(scoreItem(all[2], "ab").score, scoreItem(all[3], "ab").score);
+    assert.deepEqual(search(all, "ab", used, now).map(r => r.item.id).slice(0, 2), ["xab", "xyab"]);
+});
+
+test("the shape is judged on the cleanest of equally scored alignments", () => {
+    const app = (id, name) => ({ id, name, command: [id], actions: [] });
+    const all = launcherItems([app("run", "bxxx-BbA_B"), app("gap", "b------a")]);
+    assert.equal(scoreItem(all[0], "ba").score, scoreItem(all[1], "ba").score);
+    assert.equal(search(all, "ba")[0].item.id, "run");
+    // Both broken: the one with an alignment that starts earlier.
+    const broken = launcherItems([app("early", "axxxxxab--xB"), app("late", "babaa-b")]);
+    assert.equal(scoreItem(broken[0], "abb").score, scoreItem(broken[1], "abb").score);
+    assert.equal(search(broken, "abb")[0].item.id, "early");
+});
+
 test("use doesn't reorder the quick actions, so scr and Enter stays a window screenshot", () => {
     const now = 1e12;
     const screenshotApp = { id: "org.gnome.Screenshot", name: "Screenshot", command: ["gnome-screenshot"], actions: [] };

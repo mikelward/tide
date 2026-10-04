@@ -214,15 +214,39 @@ function byName(a, b) {
 // Then an app, before its own desktop actions.
 const KIND_ORDER = { quick: 0, app: 1, action: 2 };
 
+// Between two equal fuzzy scores, the closer match first: one in the
+// name before one in another field, then a prefix of the name, then one
+// unbroken run, then one that starts earlier, then the shorter name.
+// fuzzy.mjs scores most of this already; this settles what it leaves equal.
+function byShape(a, b) {
+    return (
+        Number(b.inName) - Number(a.inName) ||
+        Number(b.prefix) - Number(a.prefix) ||
+        Number(b.run) - Number(a.run) ||
+        a.start - b.start ||
+        [...a.item.name].length - [...b.item.name].length
+    );
+}
+
+function shape(item, positions) {
+    const inName = positions.length > 0;
+    const run = inName && positions.every((p, i) => p === positions[0] + i);
+    return {
+        inName,
+        prefix: run && positions[0] === 0,
+        run,
+        start: inName ? positions[0] : Infinity,
+    };
+}
+
 // The rows for `query`, best first, each `{item, positions}`. `frecency`
 // is the state from frecency.mjs, keyed by rowKey's "kind:id", read at
 // `now`. An empty query lists the apps, without their desktop actions,
 // most used first and then by name, then the quick actions in their own
-// order. A query ranks by match; among equal matches of one kind, the
-// quick actions keep their own order and the rest go most used first. Use
-// never lifts a row over a better match, nor an app over a quick action,
-// so `scr` and Enter stays a window screenshot however often you take
-// another kind.
+// order. A query ranks by match score; equal scores go by kind (quick
+// actions in their own order), then by the shape of the match (byShape),
+// and only then most used first. Use only ever breaks a tie, so `scr` and
+// Enter stays a window screenshot however often you take another kind.
 export function search(items, query, frecency = {}, now = 0) {
     const usage = item => used(frecency[`${item.kind}:${item.id}`], now);
     if (query.trim() === "") {
@@ -235,10 +259,18 @@ export function search(items, query, frecency = {}, now = 0) {
     for (const item of items) {
         const m = scoreItem(item, query);
         if (m) {
-            rows.push({ item, score: m.score, used: usage(item), positions: m.positions });
+            rows.push({ item, score: m.score, used: usage(item), positions: m.positions, ...shape(item, m.positions) });
         }
     }
-    rows.sort((a, b) => b.score - a.score || KIND_ORDER[a.item.kind] - KIND_ORDER[b.item.kind] || (a.item.rank ?? 0) - (b.item.rank ?? 0) || b.used - a.used || byName(a.item, b.item));
+    rows.sort(
+        (a, b) =>
+            b.score - a.score ||
+            KIND_ORDER[a.item.kind] - KIND_ORDER[b.item.kind] ||
+            (a.item.rank ?? 0) - (b.item.rank ?? 0) ||
+            byShape(a, b) ||
+            b.used - a.used ||
+            byName(a.item, b.item)
+    );
     return rows.map(({ item, positions }) => ({ item, positions }));
 }
 
