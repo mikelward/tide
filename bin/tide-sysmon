@@ -5,9 +5,10 @@
 # but getconf, and needs no privileges.
 #
 #   tide-sysmon probe    once at startup: the page size, the CPU's top
-#                        frequency, the thermal throttle counter if the
-#                        kernel has one, and every hwmon temperature input
-#                        with its chip, label, max and crit; then a line
+#                        frequency, each CPU package's thermal throttle
+#                        counter if the kernel has one, and every hwmon
+#                        temperature input with its chip, label, max and
+#                        crit; then a line
 #                        `incomplete` if any of those could not be read,
 #                        so the shell probes again
 #   tide-sysmon sample   each tick while the popover is open: /proc/stat,
@@ -90,12 +91,26 @@ probe)
     if test -n "$top"; then
         printf 'maxfreq\t%s\n' "$top"
     fi
-    # Intel's thermal interrupt driver counts package throttling here;
-    # other CPUs don't have it, and then there's no throttle line.
-    f=$cpu/cpu0/thermal_throttle/package_throttle_count
-    if fetch "$f"; then
+    # Intel's thermal interrupt driver counts package throttling here,
+    # under every CPU of the package alike; other CPUs don't have it, and
+    # then there's no throttle line. One line per package, from the first
+    # CPU in it, so a second socket's throttling isn't missed. A CPU with
+    # no package id (an old kernel, a VM) can't be matched to a package,
+    # so its counter is read on its own: more files, but none missed.
+    packages=' '
+    for f in "$cpu"/cpu[0-9]*/thermal_throttle/package_throttle_count; do
+        fetch "$f" || continue
+        dir=${f%/thermal_throttle/*}
+        id=${dir##*/}
+        if fetch "$dir/topology/physical_package_id"; then
+            id=package$val
+        fi
+        case $packages in
+        *" $id "*) continue ;;
+        esac
+        packages="$packages$id "
         printf 'throttle\t%s\n' "${f#"$root"}"
-    fi
+    done
     for t in "$root"/sys/class/hwmon/hwmon*/temp*_input; do
         # An unmatched glob is a missing file, skipped like any other.
         fetch "$t" || continue

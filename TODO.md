@@ -237,11 +237,9 @@ tested where it can be without a live session.
 - The system monitor (SPEC.md §7.4) is built but unchecked on a live
   session: the CPU % against `top`, the sensor picked on an Intel and an
   AMD machine, and the throttling line under load.
-- The system monitor reads one CPU package: the throttle counter and the
-  coretemp package sensor of the package holding cpu0. On a multi-socket
-  machine, throttling or heat on another package goes unseen. Watching one
-  counter (and sensor) per package and combining them is the fix; it was
-  left out of the first version, which targets laptops and desktops.
+- The system monitor reads every CPU package's throttle counter and
+  sensor; on a live multi-socket machine, check both packages are found
+  and that the bar follows the hotter one.
 - The clocks collapse to local alone when the title would get under 200 px
   (SPEC.md §7.3). On a live session, check the switch at the edge: resize
   or plug in a monitor across it, and watch for the clocks flickering

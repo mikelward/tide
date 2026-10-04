@@ -134,49 +134,83 @@ export function topProcesses({ prevProcs, procs, prevStat, stat, pageSize }) {
     return { cpu, memory };
 }
 
-// Which temperature sensor is the CPU's, from the shell's sensor listing:
+// Which temperature sensors are the CPU's, from the shell's sensor listing:
 // one {input, chip, label, max, crit} per hwmon temp*_input, max and crit
 // in millidegrees or null. Package-wide readings beat a single core's, and
-// a CPU driver beats the ACPI zone; null when nothing looks like a CPU.
+// a CPU driver beats the ACPI zone. A CPU driver has one hwmon device per
+// package (`multi`), so each of those gives its own sensor, and a second
+// socket's heat isn't missed; the other chips give one. Empty when nothing
+// looks like a CPU.
 const CHIPS = [
-    ["coretemp", ["Package id 0", "Physical id 0"]],
-    ["k10temp", ["Tdie", "Tctl"]],
-    ["zenpower", ["Tdie", "Tctl"]],
-    ["cpu_thermal", []],
-    ["soc_thermal", []],
-    ["thinkpad", ["CPU"]],
-    ["acpitz", []],
+    { chip: "coretemp", labels: [/^Package id \d+$/, /^Physical id \d+$/], multi: true },
+    { chip: "k10temp", labels: [/^Tdie$/, /^Tctl$/], multi: true },
+    { chip: "zenpower", labels: [/^Tdie$/, /^Tctl$/], multi: true },
+    { chip: "cpu_thermal", labels: [] },
+    { chip: "soc_thermal", labels: [] },
+    { chip: "thinkpad", labels: [/^CPU$/] },
+    { chip: "acpitz", labels: [] },
 ];
 
-export function pickCpuSensor(sensors) {
-    for (const [chip, labels] of CHIPS) {
+// The hwmon device a sensor's input belongs to.
+const device = (input) => String(input ?? "").replace(/\/[^/]*$/, "");
+
+export function pickCpuSensors(sensors) {
+    for (const { chip, labels, multi } of CHIPS) {
         const ours = (sensors ?? []).filter((s) => s.chip === chip);
         if (ours.length === 0) {
             continue;
         }
-        for (const label of labels) {
-            const s = ours.find((o) => o.label === label);
+        const devices = [...new Set(ours.map((s) => device(s.input)))];
+        const picked = [];
+        for (const dev of multi ? devices : devices.slice(0, 1)) {
+            const mine = ours.filter((s) => device(s.input) === dev);
+            const named = labels.map((re) => mine.find((s) => re.test(s.label))).find(Boolean);
+            // A chip whose preferred labels are all missing still counts, at
+            // its first sensor, except thinkpad's, whose others aren't the CPU.
+            const s = named ?? (chip === "thinkpad" ? null : mine[0]);
             if (s) {
-                return s;
+                picked.push(s);
             }
         }
-        // A chip whose preferred labels are all missing still counts, at
-        // its first sensor, except thinkpad's, whose others aren't the CPU.
-        if (chip !== "thinkpad") {
-            return ours[0];
+        if (picked.length > 0) {
+            return picked;
         }
     }
-    return null;
+    return [];
+}
+
+// The first of pickCpuSensors, or null.
+export function pickCpuSensor(sensors) {
+    return pickCpuSensors(sensors)[0] ?? null;
+}
+
+// Of several {milli, sensor} readings, the one to show: the most severe
+// against its own sensor's limits (tempLevel), then the hottest. Null when
+// none has a reading.
+export function hottest(readings) {
+    const order = { ok: 0, hot: 1, critical: 2 };
+    let best = null;
+    for (const r of readings ?? []) {
+        if (!Number.isFinite(r?.milli)) {
+            continue;
+        }
+        const level = order[tempLevel(r.milli, r.sensor)];
+        if (!best || level > best.level || (level === best.level && r.milli > best.milli)) {
+            best = { milli: r.milli, sensor: r.sensor, level };
+        }
+    }
+    return best && { milli: best.milli, sensor: best.sensor };
 }
 
 // The shell's sensor listing, one tab-separated line per temp*_input:
 // `temp`, the input's path, the chip name, its label, and its max and crit
 // in millidegrees, each field empty when the file is missing. Other lines
-// are settings: `page` (bytes), `maxfreq` (kHz) and `throttle` (a path).
+// are settings: `page` (bytes), `maxfreq` (kHz) and `throttle` (a path,
+// one line per CPU package).
 // The page size is null until a probe says, never a guess: a 16 KiB-page
 // machine would read every process's memory at a quarter of its size.
 export function parseProbe(text) {
-    const probe = { sensors: [], pageSize: null, maxFreq: null, throttle: "", complete: true };
+    const probe = { sensors: [], pageSize: null, maxFreq: null, throttles: [], complete: true };
     const num = (s) => (s === undefined || s.trim() === "" || !Number.isFinite(Number(s)) ? null : Number(s));
     for (const line of String(text ?? "").split("\n")) {
         const f = line.split("\t");
@@ -186,8 +220,8 @@ export function parseProbe(text) {
             probe.pageSize = num(f[1]);
         } else if (f[0] === "maxfreq" && num(f[1]) > 0) {
             probe.maxFreq = num(f[1]);
-        } else if (f[0] === "throttle" && f[1]) {
-            probe.throttle = f[1].trim();
+        } else if (f[0] === "throttle" && f[1] && f[1].trim() !== "") {
+            probe.throttles.push(f[1].trim());
         } else if (f[0] === "incomplete") {
             probe.complete = false;
         }
@@ -225,6 +259,36 @@ export function throttleStep(state, count, now) {
     const prev = state?.count;
     const rose = Number.isFinite(prev) && count > prev;
     return { count, since: rose ? now : (state?.since ?? null) };
+}
+
+// A per-file map (a path to its reading or state) cut down to `keys`,
+// so a probe that finds the same files keeps their readings and one that
+// drops a file drops its reading.
+export function pruned(map, keys) {
+    const out = {};
+    for (const k of keys ?? []) {
+        if (map && Object.prototype.hasOwnProperty.call(map, k)) {
+            out[k] = map[k];
+        }
+    }
+    return out;
+}
+
+// Whether any package's counter, of `paths`, throttled within the last
+// THROTTLE_HOLD_MS (throttling).
+export function anyThrottling(states, paths, now) {
+    return (paths ?? []).some((p) => throttling(states?.[p], now));
+}
+
+// Whether the throttling line can say anything: some package is throttling,
+// which one readable counter is enough to tell, or every package's counter
+// has been read, so "No" covers them all. A package whose counter can't be
+// read leaves "No" unsaid rather than vouching for it, and so does one a
+// probe no longer finds: `expected` is how many counters a probe has ever
+// found (afterProbe's `throttles`).
+export function throttleKnown(states, paths, now, expected = 0) {
+    const all = paths ?? [];
+    return all.length > 0 && (anyThrottling(states, all, now) || (all.length >= expected && all.every((p) => states?.[p] != null)));
 }
 
 // Whether the CPU throttled within the last THROTTLE_HOLD_MS. A rise that
@@ -314,38 +378,48 @@ export function trackOpen(open, popover, visible) {
 // place, then its label's place within the chip, a chip's fallback sensor
 // after its named ones. Infinity for none.
 export function sensorRank(sensor) {
-    const i = CHIPS.findIndex(([chip]) => chip === sensor?.chip);
+    const i = CHIPS.findIndex(({ chip }) => chip === sensor?.chip);
     if (i < 0) {
         return Infinity;
     }
-    const labels = CHIPS[i][1];
-    const j = labels.indexOf(sensor.label);
+    const labels = CHIPS[i].labels;
+    const j = labels.findIndex((re) => re.test(sensor.label ?? ""));
     return i * 100 + (j < 0 ? labels.length : j);
 }
 
-// What the best probe so far showed of this machine: its sensor's rank
-// (sensorRank), and whether it had a throttle counter and a top frequency.
-export const NOTHING_SEEN = { rank: Infinity, throttle: false, maxFreq: false };
+// What the best probe so far showed of this machine: its sensors' ranks
+// (sensorRank, best first), how many throttle counters (one per package),
+// and whether it had a top frequency.
+export const NOTHING_SEEN = { ranks: [], throttles: 0, maxFreq: false };
+
+// Whether sensors ranked `now` are as good as `best`: as many, each as good
+// as its counterpart, best with best. A package that fell back to a core
+// reading is worse than one with its package reading, even when the other
+// packages, and the count, are unchanged.
+function asGood(now, best) {
+    return now.length >= best.length && best.every((r, i) => now[i] <= r);
+}
 
 // After a probe, what's been seen so far and whether to probe again in a
 // minute. Probing goes on while this probe shows less than the best one did
-// in any way (a lesser sensor or none, no throttle counter, no top
-// frequency), so whatever went away (a driver reload) is taken back when it
-// returns, and while it hit a read error (`complete` false), since what it
-// couldn't read may be what matters. A machine that never had something (a
-// VM) isn't probed forever for it.
-export function afterProbe({ seen, probe, sensor }) {
-    const was = seen ?? NOTHING_SEEN;
-    const now = {
-        rank: sensorRank(sensor),
-        throttle: (probe?.throttle ?? "") !== "",
-        maxFreq: Number.isFinite(probe?.maxFreq),
-    };
+// in any way (a lesser sensor for any package or none, fewer sensors or
+// throttle counters, no top frequency), so whatever went away (a driver
+// reload) is taken back when it returns, and while it hit a read error
+// (`complete` false), since what it couldn't read may be what matters. A
+// machine that never had something (a VM) isn't probed forever for it.
+export function afterProbe({ seen, probe, sensors }) {
+    const was = { ...NOTHING_SEEN, ...seen };
+    const ranks = (sensors ?? []).map(sensorRank).sort((a, b) => a - b);
+    const throttles = probe?.throttles?.length ?? 0;
+    const maxFreq = Number.isFinite(probe?.maxFreq);
+    const good = asGood(ranks, was.ranks);
     const best = {
-        rank: Math.min(was.rank, now.rank),
-        throttle: was.throttle || now.throttle,
-        maxFreq: was.maxFreq || now.maxFreq,
+        // Neither as good as the other (a better reading for one package,
+        // a worse one for another) keeps what was seen.
+        ranks: good ? ranks : was.ranks,
+        throttles: Math.max(was.throttles, throttles),
+        maxFreq: was.maxFreq || maxFreq,
     };
-    const less = now.rank > best.rank || now.throttle < best.throttle || now.maxFreq < best.maxFreq;
+    const less = !good || throttles < best.throttles || maxFreq < best.maxFreq;
     return { seen: best, retry: less || probe?.complete === false };
 }

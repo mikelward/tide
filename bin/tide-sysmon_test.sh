@@ -72,6 +72,27 @@ out=$(TIDE_SYSMON_ROOT=$r "$sysmon" sample)
 check "a name with a newline stays on one line" contains "$out" "77 (two lines) S 1"
 rm -r "$r/proc/77"
 
+# Two packages of two CPUs each: one throttle line per package, from its
+# first CPU, since every CPU of a package reads the same counter.
+m=$tmp/multi
+for n in 0 1 2 3; do
+    d=$m/sys/devices/system/cpu/cpu$n
+    mkdir -p "$d/thermal_throttle" "$d/topology"
+    echo 3 > "$d/thermal_throttle/package_throttle_count"
+    echo $((n / 2)) > "$d/topology/physical_package_id"
+done
+out=$(TIDE_SYSMON_ROOT=$m "$sysmon" probe)
+check "probe gives the first package's counter" \
+    contains "$out" "throttle$tab/sys/devices/system/cpu/cpu0/thermal_throttle/package_throttle_count"
+check "probe gives the second package's counter" \
+    contains "$out" "throttle$tab/sys/devices/system/cpu/cpu2/thermal_throttle/package_throttle_count"
+check "probe gives one counter per package" test "$(printf '%s\n' "$out" | grep -c '^throttle')" -eq 2
+# A CPU without a package id can't be matched to a package, so its
+# counter is read on its own rather than dropped.
+rm "$m"/sys/devices/system/cpu/cpu*/topology/physical_package_id
+out=$(TIDE_SYSMON_ROOT=$m "$sysmon" probe)
+check "probe without package ids gives every CPU's counter" test "$(printf '%s\n' "$out" | grep -c '^throttle')" -eq 4
+
 # A VM: no cpufreq, no throttle counter, no sensors.
 v=$tmp/vm
 mkdir -p "$v/proc/1" "$v/sys/devices/system/cpu/cpu0" "$v/sys/class/hwmon"
