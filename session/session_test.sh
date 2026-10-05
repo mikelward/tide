@@ -31,6 +31,7 @@ entry=session/tide.desktop
 wrapper=bin/tide-hyprland
 portals=xdg-desktop-portal/tide-portals.conf
 autostart=systemd/user/app-.service.d/tide-autostart.conf
+lock=systemd/user/tide-lock.service
 
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
@@ -149,6 +150,20 @@ for path in $(printf '%s\n' "$agents" | grep '^ */'); do
     check "doctor recognizes the shell's agent $path" doctor_knows "${path##*/}"
 done
 
+# --- tide-lock.service ----------------------------------------------------------
+# The lock (SPEC.md §10) runs the shell's lock.qml with the file watcher off,
+# and only a crash restarts it: an unlock is a clean exit.
+check "the lock runs lock.qml from the installed shell" \
+    has_line "$lock" "ExecStart=qs -p %h/.config/quickshell/tide/lock.qml"
+check "the lock's file watcher is off" \
+    has_line "$lock" "Environment=QS_DISABLE_FILE_WATCHER=1"
+check "only a crash restarts the lock" \
+    has_line "$lock" "Restart=on-failure"
+check "the lock's PAM service checks the password like a login" \
+    has_line pam/tide-lock "auth include login"
+check "the lock asks PAM for its own service" \
+    grep -qF 'config: "tide-lock"' shell/lock.qml
+
 # --- systemd-analyze verify ---------------------------------------------------
 # Resolves the units as systemd would. tide-shell and hypridle aren't
 # installed here, so the copies point ExecStart at a stub; everything else is
@@ -169,7 +184,8 @@ if command -v systemd-analyze >/dev/null 2>&1; then
     printf '[Unit]\nDescription=agent\n[Service]\nExecStart=%s\n' "$tmp/stub" \
         > "$tmp/units/$agent_unit"
     cp "$autostart" "$tmp/units/app-.service.d/"
-    for u in tide.service hypridle.service "$agent_unit"; do
+    sed "s|^ExecStart=qs .*\$|ExecStart=$tmp/stub|" "$lock" > "$tmp/units/tide-lock.service"
+    for u in tide.service tide-lock.service hypridle.service "$agent_unit"; do
         out=$(cd "$tmp/units" && XDG_RUNTIME_DIR="$tmp/run" \
             systemd-analyze verify --user --man=no "$u" 2>&1)
         status=$?
@@ -210,6 +226,10 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
              .config/hypr/tide/geometry.lua \
              .config/hypr/tide/focus.lua \
              .config/systemd/user/tide.service \
+             .config/systemd/user/tide-lock.service \
+             .config/quickshell/tide/lock.qml \
+             .config/quickshell/tide/LockSurface.qml \
+             .config/quickshell/tide/lib/lock.mjs \
              .config/systemd/user/hypridle.service.d/tide.conf \
              .config/xdg-desktop-portal/tide-portals.conf \
              .config/systemd/user/app-.service.d/tide-autostart.conf \
@@ -236,6 +256,8 @@ if make -s install-session DESTDIR="$tmp/root" PREFIX=/usr >"$tmp/session.log" 2
         test -x "$tmp/root/usr/bin/tide-shell"
     check "make install-session installs the session entry" \
         test -f "$tmp/root/usr/share/wayland-sessions/tide.desktop"
+    check "make install-session installs the lock's PAM service in /etc/pam.d" \
+        test -f "$tmp/root/etc/pam.d/tide-lock"
 else
     fail "make install-session: $(cat "$tmp/session.log")"
 fi

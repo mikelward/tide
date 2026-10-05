@@ -1,0 +1,4 @@
+# PAM service for tide-lock, the tide session lock (SPEC.md §10). It
+# checks the password the way logging in does; `make install-session`
+# installs it as /etc/pam.d/tide-lock.
+auth include login
