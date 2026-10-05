@@ -20,8 +20,16 @@
 # Every file's types and properties are checked, since Quickshell compiles
 # them all, but only what runs reports: the bindings of what exists at
 # startup and what the stand-in's answers and events make, and what they
-# queue. A popover's contents, or a delegate made from data the stand-in
-# doesn't give (a clock's process, a notification), aren't covered.
+# queue. A popover's contents, or a delegate made from data neither the
+# stand-in nor the notifications below give (a clock's process), aren't
+# covered.
+#
+# With notify-send, it also runs the shell as the notification server
+# (TIDE_NOTIFICATIONS=1, SPEC.md §9), sends it notifications, and expects
+# them in its history. In every run, an icon that can't load fails the
+# test: Quickshell draws a placeholder for it, which nothing else reports.
+# Every icon the shell asks for is Adwaita's (§15), so that needs Adwaita
+# installed.
 #
 # With wtype, it also types into them. It opens the launcher, types the
 # name of an app only it installs, and expects Enter to run that app. Given
@@ -32,7 +40,7 @@
 #
 #   $QS                  the Quickshell command (default: qs)
 #   $TIDE_REQUIRE_QS     set (CI sets it) to fail, not skip, without qs,
-#                        sway or wtype
+#                        sway, wtype or notify-send
 #   $TIDE_LOAD_WAIT      seconds to wait for each step (default: 60)
 #   $TIDE_KEEP_LOG       a file to copy Quickshell's logs to
 #   $TIDE_LOCK_PASSWORD  the running user's password, to unlock the lock with.
@@ -53,8 +61,9 @@ if fractional=$(grep -n -E 'pixelSize:.*[0-9]\.[0-9]' shell/*.qml); then
 fi
 
 # The shell and the lock name their icon theme, since Qt picks none for
-# tide's desktop. Quickshell reads the pragma only above the first import,
-# and its loss shows only as missing icons, which no load reports.
+# tide's desktop. Quickshell reads the pragma only above the first import.
+# Its loss also fails the load below, as icons that won't load, but this
+# says why, and runs without qs.
 for entry in shell/shell.qml shell/lock.qml; do
     if ! sed '/^import /q' "$entry" | grep -q '^//@ pragma IconTheme Adwaita$'; then
         echo "FAIL: $entry doesn't name the Adwaita icon theme above its imports (SPEC.md §15)" >&2
@@ -83,6 +92,13 @@ if ! wtype_path=$(command -v wtype); then
         exit 1
     fi
     wtype_path=
+fi
+if ! notify_path=$(command -v notify-send); then
+    if test -n "${TIDE_REQUIRE_QS:-}"; then
+        echo "FAIL: $prog: no notify-send on PATH to send the shell notifications" >&2
+        exit 1
+    fi
+    notify_path=
 fi
 
 wait=${TIDE_LOAD_WAIT:-60}
@@ -215,9 +231,11 @@ settle() {
 # load NAME WHAT ARG...: starts `qs ARG...` on the headless sway, with a
 # fresh stand-in Hyprland, and fails the test unless it loads WHAT, asks
 # Hyprland for its windows, takes in its events, and through all of that
-# has nothing reported by the shell's own files. Its log is
-# $tmp/NAME.qs.log. Nothing edits the files during the test, so the file
-# watcher is off, as tide-lock.service has it.
+# has nothing reported by the shell's own files. With $load_env, it starts
+# qs with those settings too, and with $after_load, it runs that function
+# once all of that has settled. Its log is $tmp/NAME.qs.log. Nothing edits
+# the files during the test, so the file watcher is off, as
+# tide-lock.service has it.
 load() {
     _what=$2
     log=$tmp/$1.qs.log
@@ -242,11 +260,12 @@ load() {
         i=$((i + 1))
     done
 
+    # shellcheck disable=SC2086 # $load_env is none, or one or more settings
     env -i PATH="$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
         ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
         LANG=C.UTF-8 QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
         HYPRLAND_INSTANCE_SIGNATURE="$hypr_signature" QS_DISABLE_FILE_WATCHER=1 \
-        "$qs_path" "$@" >"$log" 2>&1 &
+        ${load_env:-} "$qs_path" "$@" >"$log" 2>&1 &
     qs_pid=$!
 
     # Quickshell says either, once the config has compiled and its objects
@@ -276,6 +295,9 @@ load() {
         settle
         _listeners=$(hyprland play) || exit 1
         settle
+        if test -n "${after_load:-}"; then
+            "$after_load"
+        fi
     fi
     # It may have exited already, having failed.
     kill "$qs_pid" 2>/dev/null
@@ -312,6 +334,34 @@ reports() {
         cat "$tmp/reports" >&2
         exit 1
     fi
+    # Quickshell's word for an icon it drew as a placeholder.
+    if grep 'Could not load icon' "$log" >"$tmp/reports"; then
+        echo "FAIL: $1, but an icon wouldn't load; is the Adwaita icon theme installed?" >&2
+        cat "$tmp/reports" >&2
+        exit 1
+    fi
+}
+
+# notify: sends the shell, the notification server in this run, a
+# notification whose icon no theme has and a critical one, then lets it
+# take them in. load runs it, as $after_load.
+notify() {
+    for _args in "-i tide-test-no-such-icon|Probe|An icon no theme has" \
+        "-u critical|Probe critical|A critical one, which stays up"; do
+        IFS='|' read -r _opts _summary _body <<EOF
+$_args
+EOF
+        # The id it prints says the server took it.
+        # shellcheck disable=SC2086 # $_opts is two words on purpose
+        if ! _id=$(timeout "$wait" env -i PATH="$PATH" HOME="$tmp/home" \
+            ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} LANG=C.UTF-8 \
+            "$notify_path" -p -a Probe $_opts "$_summary" "$_body" 2>"$tmp/notify.err") || test -z "$_id"; then
+            echo "FAIL: the notification server didn't take \"$_summary\": $(cat "$tmp/notify.err")" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+    done
+    settle
 }
 
 # keyboard: holds a keyboard on the seat, if nothing does yet. The headless
@@ -496,6 +546,24 @@ $TIDE_LOCK_PASSWORD
 
 load shell "the shell" -c tide
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
+if test -n "$notify_path"; then
+    load_env=TIDE_NOTIFICATIONS=1
+    after_load=notify
+    load notifications "the notification server" -c tide
+    load_env=
+    after_load=
+    # The history keeps both; a summary is plain text, so it's in the JSON
+    # as it was sent.
+    for _summary in '"Probe"' '"Probe critical"'; do
+        if ! grep -q "\"summary\":$_summary" "$tmp/home/.local/state/tide/notifications.json" 2>"$tmp/history.err"; then
+            echo "FAIL: the notification server didn't record $_summary in its history: $(cat "$tmp/history.err")" >&2
+            exit 1
+        fi
+    done
+    echo "ok: the notification server takes notifications and records them"
+else
+    echo "$prog: no notify-send, so the shell isn't sent notifications; CI sends them" >&2
+fi
 if test -n "$wtype_path"; then
     launch
 else

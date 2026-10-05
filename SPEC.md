@@ -895,6 +895,11 @@ See [`notifications.png`](docs/mocks/notifications.png).
   timer. Critical stays until dismissed.
 - **Content.** Popups support body markup, images, action buttons, and inline
   reply where the sender offers it.
+- **Icons.** A popup shows the sender's image, else the app's icon, else
+  Adwaita's generic app icon (`application-x-executable`). An image that
+  names a theme icon the theme lacks is left out, so the app's icon shows
+  rather than Quickshell's placeholder. The history's icons fall back the
+  same way.
 - **Capabilities.** The server advertises `body`, `actions`, `body-markup`,
   `icon-static`, `persistence` and `inline-reply`. Chrome sends native
   notifications only if `body` and `actions` are advertised, and Quickshell's
@@ -1909,11 +1914,20 @@ are what "done" means.
     for events.
   - A popover's contents, and data from a process or a timer, aren't
     covered.
+- **Every icon loads.** Quickshell logs an icon it can't load, and draws
+  a placeholder for it. The test fails on that log line, so it needs
+  the Adwaita icon theme installed.
+- **Notifications arrive.** With `notify-send`, the same test runs the shell
+  as the notification server (`TIDE_NOTIFICATIONS=1`). It sends one
+  notification whose icon no theme has, and one critical one. The server
+  must answer each with an id and keep both in its history. Their popups
+  must load with no icon missing.
 - **Where it runs.** CI builds the Quickshell release `setup --tide`
   installs, and runs it on Ubuntu 26.04's Qt. Elsewhere it's skipped
   without `qs`, `sway` and `python3`. Its checks for a fractional
   `font.pixelSize`, and for the icon theme pragma (§15), run everywhere.
-  A missing pragma loads cleanly and shows only as missing icons.
+  A missing pragma also fails the load, as icons that won't load, but
+  that check needs `qs`.
 - **The launcher runs an app.** With wtype, the same test opens the
   launcher over IPC and types the name of an app only it installs,
   "Café Probe", as `cafepro`. Enter must run that app through `tide
