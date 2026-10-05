@@ -47,11 +47,73 @@ jobs:
           go-version-file: go.mod
       - run: make test
 
+  # Loads the shell in Quickshell (shell/shell_test.sh): the release that
+  # `setup --tide` builds on Ubuntu 26.04 (scripts repo), at the same
+  # commit, against the same distro Qt. Keep the pin in step with
+  # setup-tide's QUICKSHELL_TAG and QUICKSHELL_COMMIT. The build is cached
+  # per pin and Qt version, so only a pin or Qt update rebuilds it.
+  #
+  # Cost and reliability: GitHub-hosted runners are free for this public
+  # repository. A cold build takes about 20 minutes, a cached run a few.
+  # It depends on the Ubuntu archive and the Quickshell mirror on GitHub;
+  # either one down fails this job until a re-run succeeds.
+  shell:
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    timeout-minutes: 60
+    needs: classify
+    if: needs.classify.outputs.docs_only != 'true'
+    env:
+      QUICKSHELL_REPO: https://github.com/quickshell-mirror/quickshell.git
+      QUICKSHELL_TAG: v0.3.1
+      QUICKSHELL_COMMIT: 1a4716cde794a59928d9d9fc15f2afc7a95de360
+      QUICKSHELL_PREFIX: /opt/quickshell
+    steps:
+      # setup-tide's QUICKSHELL_BUILD_DEPS, plus what this job runs: git
+      # for the checkout, and the bus and the compositor the test runs on.
+      - name: Install Quickshell's build dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config git ca-certificates dbus-daemon sway \
+            qt6-base-dev qt6-base-private-dev qt6-declarative-dev qt6-declarative-private-dev \
+            qt6-wayland-dev qt6-wayland-private-dev qt6-shadertools-dev spirv-tools \
+            libcli11-dev libjemalloc-dev libdrm-dev libgbm-dev libegl-dev libgles-dev libvulkan-dev \
+            libwayland-dev libwayland-bin wayland-protocols libxcb1-dev \
+            libpipewire-0.3-dev libpam0g-dev libpolkit-agent-1-dev libpolkit-gobject-1-dev libglib2.0-dev \
+            qt6-svg-plugins qml6-module-qtquick qml6-module-qtquick-layouts qml6-module-qtquick-effects
+      - name: Name the Qt it builds against
+        id: qt
+        run: echo "version=$(dpkg-query -W -f='${Version}' qt6-base-private-dev)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: ${{ env.QUICKSHELL_PREFIX }}
+          key: quickshell-${{ env.QUICKSHELL_COMMIT }}-qt-${{ steps.qt.outputs.version }}
+      - name: Build Quickshell
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --quiet --depth 1 --branch "$QUICKSHELL_TAG" "$QUICKSHELL_REPO" /tmp/quickshell
+          commit=$(git -C /tmp/quickshell rev-parse HEAD)
+          if test "$commit" != "$QUICKSHELL_COMMIT"; then
+            echo "Quickshell's $QUICKSHELL_TAG tag is $commit, not the pinned $QUICKSHELL_COMMIT" >&2
+            exit 1
+          fi
+          cmake -S /tmp/quickshell -B /tmp/quickshell/build -G Ninja -DCMAKE_INSTALL_PREFIX="$QUICKSHELL_PREFIX" \
+            -DCMAKE_BUILD_TYPE=Release -DCRASH_HANDLER=OFF -DDISTRIBUTOR="tide CI"
+          cmake --build /tmp/quickshell/build
+          cmake --install /tmp/quickshell/build
+      - name: Load the shell
+        run: PATH="$QUICKSHELL_PREFIX/bin:$PATH" TIDE_REQUIRE_QS=1 sh shell/shell_test.sh
+
   lanes:
     name: lanes
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [classify, test]
+    needs: [classify, test, shell]
     if: always()
     steps:
       - uses: actions/checkout@v5
@@ -63,4 +125,4 @@ jobs:
           pr: ${{ github.event.pull_request.number }}
           classify-result: ${{ needs.classify.result }}
           base-sha: ${{ needs.classify.outputs.base_sha }}
-          results: test=${{ needs.test.result }}
+          results: test=${{ needs.test.result }} shell=${{ needs.shell.result }}

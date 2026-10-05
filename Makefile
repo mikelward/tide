@@ -8,6 +8,7 @@
 #                         config (run it with `qs -c tide`),
 #                         the session's systemd user units and the portal
 #                         config, under ~/.config
+#   make install-shell    install only the Quickshell config
 #   make install-session  install the session entry, its compositor wrapper
 #                         and the tide commands under $(PREFIX), and the
 #                         lock's PAM service in /etc/pam.d (root;
@@ -41,7 +42,7 @@ QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test build install install-session mocks palette
+.PHONY: test build install install-shell install-session mocks palette
 test:
 	@test -n "$(LUA)" || { echo "make test: no lua5.5, lua5.4 or lua on PATH" >&2; exit 1; }
 	$(LUA) hypr/tide/layout_test.lua
@@ -51,6 +52,8 @@ test:
 	sh bin/tide-shell_test.sh
 	sh bin/tide-doctor_test.sh
 	sh bin/tide-sysmon_test.sh
+	sh shell/shell_test_test.sh
+	sh shell/shell_test.sh
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
 	$(QMLLINT) $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs))
 	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/sysmon_test.mjs shell/lib/keepawake_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs shell/lib/vpn_test.mjs shell/lib/mic_test.mjs shell/lib/fuzzy_test.mjs shell/lib/frecency_test.mjs shell/lib/launcher_test.mjs shell/lib/lock_test.mjs
@@ -73,7 +76,7 @@ build/tide-tz: go.mod $(wildcard cmd/tide-tz/*.go)
 
 # Copies only. Enabling tide.service, which hangs it off the tide
 # session's target, is `setup --tide`'s job (scripts repo).
-install: build
+install: build install-shell
 	install -d "$(HYPR_DIR)"
 	install -m 644 hypr/tide/geometry.lua hypr/tide/layout.lua hypr/tide/focus.lua "$(HYPR_DIR)/"
 	install -d "$(SYSTEMD_USER_DIR)/hypridle.service.d" "$(SYSTEMD_USER_DIR)/app-.service.d"
@@ -90,6 +93,9 @@ install: build
 	done
 	install -d "$(PORTAL_DIR)"
 	install -m 644 xdg-desktop-portal/tide-portals.conf "$(PORTAL_DIR)/"
+
+# The Quickshell config alone, which shell/shell_test.sh loads.
+install-shell:
 	install -d "$(SHELL_DIR)/lib"
 	install -m 644 shell/*.qml "$(SHELL_DIR)/"
 	install -d "$(SHELL_DIR)/icons"
