@@ -223,6 +223,19 @@ test("a quick action shows the key that does the same", () => {
     assert.equal(hints.reload, "");
 });
 
+test("the screenshot actions say what they take, and region doesn't promise a frozen screen", () => {
+    // The frozen picker is post-MVP (SPEC.md §13); until then --region is a
+    // live slurp selection.
+    const sub = {};
+    for (const q of quickActions()) {
+        sub[q.id] = q.sub;
+    }
+    assert.equal(sub["screenshot-window"], "The window you were in");
+    assert.equal(sub["screenshot-screen"], "The monitor you were on");
+    assert.equal(sub["screenshot-region"], "Drag to select");
+    assert.doesNotMatch(sub["screenshot-region"], /frozen/i);
+});
+
 test("Do not disturb is there only while the shell serves notifications", () => {
     // Under swaync it would hold nothing, so it's left out, as the bell is.
     assert.equal(quickActions({}).some(q => q.id === "dnd"), false);

@@ -88,7 +88,7 @@ export function quickActions(state = {}) {
     return [
         quick("screenshot-window", "Screenshot window", "The window you were in", "camera-photo-symbolic", ["capture", "print"], "Alt+Print"),
         quick("screenshot-screen", "Screenshot screen", "The monitor you were on", "camera-photo-symbolic", ["capture", "print"], "Print"),
-        quick("screenshot-region", "Screenshot region", "Drag on a frozen screen", "camera-photo-symbolic", ["capture", "print", "area"], "Shift+Print"),
+        quick("screenshot-region", "Screenshot region", "Drag to select", "camera-photo-symbolic", ["capture", "print", "area"], "Shift+Print"),
         quick("lock", session.lock.label, "Session", session.lock.icon, ["screen"], "Super+L"),
         quick("logout", session.logout.label, "Session", session.logout.icon, ["exit", "sign out", "quit"]),
         quick("suspend", session.suspend.label, "Session", session.suspend.icon, ["sleep"]),
