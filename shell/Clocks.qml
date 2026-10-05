@@ -97,7 +97,7 @@ Row {
                     text: clock.label
                     color: Theme.fgDim
                     font.family: Theme.font
-                    font.pixelSize: clock.modelData.local ? 12 : 10.5
+                    font.pixelSize: clock.modelData.local ? 12 : 11
                     font.weight: clock.modelData.local ? Font.Medium : Font.DemiBold
                     font.letterSpacing: clock.modelData.local ? 0 : 0.4
                 }
@@ -120,7 +120,7 @@ Row {
                     text: clock.modelData.dayOffset > 0 ? `+${clock.modelData.dayOffset}` : `−${-clock.modelData.dayOffset}`
                     color: Theme.fgDim
                     font.family: Theme.font
-                    font.pixelSize: 9.5
+                    font.pixelSize: 10
                     font.weight: Font.Bold
                 }
             }

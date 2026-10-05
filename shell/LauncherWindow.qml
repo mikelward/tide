@@ -393,7 +393,7 @@ PanelWindow {
                     text: modelData
                     color: Theme.fgDim
                     font.family: Theme.font
-                    font.pixelSize: 12.5
+                    font.pixelSize: 13
                 }
             }
 
@@ -574,7 +574,7 @@ PanelWindow {
                         text: `${modelData[0]}  ${modelData[1]}`
                         color: Theme.fgDim
                         font.family: Theme.font
-                        font.pixelSize: 11.5
+                        font.pixelSize: 12
                     }
                 }
             }

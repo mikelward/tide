@@ -74,7 +74,7 @@ Row {
                     text: chip.modelData.id
                     color: chip.ink
                     font.family: Theme.font
-                    font.pixelSize: 12.5
+                    font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
 

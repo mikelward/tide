@@ -98,7 +98,7 @@ Rectangle {
                     text: root.notification.appName
                     color: Theme.fgDim
                     font.family: Theme.font
-                    font.pixelSize: 11.5
+                    font.pixelSize: 12
                 }
 
                 SymbolicIcon {
@@ -141,7 +141,7 @@ Rectangle {
                 text: Notes.bodyStyled(root.notification.body)
                 color: Theme.fgDim
                 font.family: Theme.font
-                font.pixelSize: 12.5
+                font.pixelSize: 13
             }
 
             // Buttons wrap, and a long label elides, so every action stays
@@ -216,7 +216,7 @@ Rectangle {
                     verticalAlignment: TextInput.AlignVCenter
                     color: Theme.fg
                     font.family: Theme.font
-                    font.pixelSize: 12.5
+                    font.pixelSize: 13
                     // The field mirrors the notification's draft in
                     // NotificationData, the one source: it follows the popup
                     // to whichever monitor shows it, and goes when the draft

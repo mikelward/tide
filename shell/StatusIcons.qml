@@ -149,7 +149,7 @@ Row {
             text: Status.volumeText(root.sink?.audio?.volume)
             color: (root.sink?.audio?.muted ?? true) ? Theme.fgDim : Theme.fg
             font.family: Theme.font
-            font.pixelSize: 12.5
+            font.pixelSize: 13
             font.weight: Font.Medium
             font.features: ({ "tnum": 1 })
 
@@ -225,7 +225,7 @@ Row {
             text: battery.view.text
             color: battery.ink
             font.family: Theme.font
-            font.pixelSize: 12.5
+            font.pixelSize: 13
             font.weight: Font.Medium
             font.features: ({ "tnum": 1 })
         }
@@ -268,7 +268,7 @@ Row {
             text: SysmonData.view.text
             color: sysmon.ink
             font.family: Theme.font
-            font.pixelSize: 12.5
+            font.pixelSize: 13
             font.weight: Font.Medium
             font.features: ({ "tnum": 1 })
 

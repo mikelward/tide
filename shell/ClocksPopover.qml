@@ -224,7 +224,7 @@ PopupWindow {
                         text: `<b>${Pop.dstLead(root.change, root.now)}</b> ${Pop.escapeStyled(Dst.dstMessage(root.change))}`
                         color: Theme.fg
                         font.family: Theme.font
-                        font.pixelSize: 12.5
+                        font.pixelSize: 13
                     }
                 }
             }
@@ -243,7 +243,7 @@ PopupWindow {
                     text: Pop.monthTitle(root.year, root.month)
                     color: Theme.fg
                     font.family: Theme.font
-                    font.pixelSize: 13.5
+                    font.pixelSize: 14
                     font.weight: Font.Bold
                 }
 
@@ -260,7 +260,7 @@ PopupWindow {
                     text: `week ${Pop.isoWeek(root.today.year, root.today.month, root.today.date)}`
                     color: Theme.fgDim
                     font.family: Theme.font
-                    font.pixelSize: 11.5
+                    font.pixelSize: 12
                     font.weight: Font.Medium
                 }
             }
@@ -288,7 +288,7 @@ PopupWindow {
                         text: modelData
                         color: Theme.fgFaint
                         font.family: Theme.font
-                        font.pixelSize: 10.5
+                        font.pixelSize: 11
                         font.weight: Font.Bold
                     }
                 }
@@ -311,7 +311,7 @@ PopupWindow {
                             text: parent.isWeek ? parent.modelData.week : parent.modelData.date
                             color: parent.modelData.today ? Theme.accentFg : parent.isWeek || parent.modelData.outside ? Theme.fgFaint : Theme.fg
                             font.family: Theme.font
-                            font.pixelSize: parent.isWeek ? 10.5 : 12.5
+                            font.pixelSize: parent.isWeek ? 11 : 13
                             font.weight: parent.modelData.today ? Font.Bold : Font.Normal
                             font.features: ({ "tnum": 1 })
                         }

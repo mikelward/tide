@@ -67,7 +67,7 @@ PopupWindow {
                 })
                 color: Theme.fgDim
                 font.family: Theme.font
-                font.pixelSize: 12.5
+                font.pixelSize: 13
             }
 
             Repeater {

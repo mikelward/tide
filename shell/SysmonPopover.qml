@@ -60,7 +60,7 @@ PopupWindow {
             text: parent.label
             color: Theme.fgDim
             font.family: Theme.font
-            font.pixelSize: 11.5
+            font.pixelSize: 12
         }
 
         Text {
@@ -103,7 +103,7 @@ PopupWindow {
                 text: tabItem.label
                 color: tabItem.selected ? Theme.fg : Theme.fgDim
                 font.family: Theme.font
-                font.pixelSize: 12.5
+                font.pixelSize: 13
                 font.weight: Font.Medium
             }
         }
@@ -137,7 +137,7 @@ PopupWindow {
             text: parent.label
             color: Theme.fg
             font.family: Theme.font
-            font.pixelSize: 12.5
+            font.pixelSize: 13
         }
 
         Text {
@@ -149,7 +149,7 @@ PopupWindow {
             text: parent.value
             color: parent.ink
             font.family: Theme.font
-            font.pixelSize: 12.5
+            font.pixelSize: 13
             font.features: ({ "tnum": 1 })
         }
     }
@@ -160,7 +160,7 @@ PopupWindow {
         bottomPadding: 2
         color: Theme.fgDim
         font.family: Theme.font
-        font.pixelSize: 11.5
+        font.pixelSize: 12
         font.weight: Font.Medium
     }
 

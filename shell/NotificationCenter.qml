@@ -164,7 +164,7 @@ PanelWindow {
                     text: NotificationData.dnd ? "On" : "Off"
                     color: NotificationData.dnd ? Qt.rgba(1, 1, 1, 0.8) : Theme.fgDim
                     font.family: Theme.font
-                    font.pixelSize: 11.5
+                    font.pixelSize: 12
                 }
             }
 
@@ -196,7 +196,7 @@ PanelWindow {
                 text: ShareData.holdingPopups ? `${ShareData.held} held while you're sharing` : `${ShareData.held} held while you were sharing`
                 color: Theme.urgent
                 font.family: Theme.font
-                font.pixelSize: 12.5
+                font.pixelSize: 13
                 font.weight: Font.DemiBold
             }
         }
@@ -210,7 +210,7 @@ PanelWindow {
             text: "No notifications"
             color: Theme.fgDim
             font.family: Theme.font
-            font.pixelSize: 12.5
+            font.pixelSize: 13
         }
 
         Flickable {
@@ -361,7 +361,7 @@ PanelWindow {
                                             text: Notes.bodyStyled(modelData.body)
                                             color: Theme.fgDim
                                             font.family: Theme.font
-                                            font.pixelSize: 12.5
+                                            font.pixelSize: 13
                                         }
                                     }
 
