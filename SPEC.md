@@ -1881,6 +1881,17 @@ are what "done" means.
   `Object.fromEntries`. `make test` parses each module with `qmllint`, and
   runs the Node tests with those built-ins removed, so either mistake fails
   a test rather than the whole shell.
+- **The shell and the lock load.** `shell/shell_test.sh` installs the
+  shell as `make install` does, and starts it with `qs -c tide` and the
+  lock with `qs -p .../lock.qml` under headless sway, a wlroots compositor
+  with the layer shell and session lock they need. It fails when Quickshell
+  can't load either, or when any of the shell's files reports an error as
+  it starts. That covers every file's types and properties, the bindings of
+  whatever exists at startup, and what they queue. A popover's contents or
+  a delegate made from data that arrives later aren't covered. CI builds
+  the Quickshell release `setup --tide` installs, and runs it on Ubuntu
+  26.04's Qt. Elsewhere, it's skipped without `qs` and `sway`, but its
+  check for a fractional `font.pixelSize` runs everywhere.
 - **Clock fixtures.** Instants on both sides of every 2026–2027 US and EU DST
   change, asserting each zone's abbreviation and day offset. The `GMT+1`
   trap is a named test.
