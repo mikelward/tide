@@ -1,7 +1,9 @@
 import QtQuick
 import Quickshell
+import Quickshell.Services.UPower
 import Quickshell.Wayland
 import "lib/lock.mjs" as Lock
+import "lib/status.mjs" as Status
 
 // One output's lock face (SPEC.md §10, docs/mocks/lock.png). The password
 // face: the short hostname, the time and date, the user and the password
@@ -18,8 +20,14 @@ WlSessionLockSurface {
     property string hostname: ""
     property string user: ""
     property date lockedAt: new Date()
+    // The last power action's trouble, if any (Lock.powerMessage).
+    property string powerMessage: ""
+    property bool powerBusy: false
 
     signal event(var event)
+    signal power(string id)
+
+    readonly property var battery: UPower.displayDevice
 
     color: "#000000"
 
@@ -39,14 +47,17 @@ WlSessionLockSurface {
 
         Keys.onPressed: keyEvent => {
             keyEvent.accepted = true;
-            if (keyEvent.key === Qt.Key_Return || keyEvent.key === Qt.Key_Enter) {
-                surface.event({ type: "submit" });
-            } else if (keyEvent.key === Qt.Key_Backspace) {
-                surface.event({ type: "backspace" });
-            } else if (keyEvent.key === Qt.Key_Escape) {
-                surface.event({ type: "clear" });
-            } else if (keyEvent.text !== "" && keyEvent.text >= " ") {
-                surface.event({ type: "key", text: keyEvent.text });
+            const event = Lock.keyEvent({
+                key: keyEvent.key === Qt.Key_Return || keyEvent.key === Qt.Key_Enter ? "enter"
+                    : keyEvent.key === Qt.Key_Backspace ? "backspace"
+                    : keyEvent.key === Qt.Key_Escape ? "escape"
+                    // Ctrl+U types U+0015, so the key code says it was U.
+                    : keyEvent.key === Qt.Key_U ? "u" : "",
+                text: keyEvent.text,
+                ctrl: (keyEvent.modifiers & Qt.ControlModifier) !== 0,
+            });
+            if (event !== null) {
+                surface.event(event);
             } else if (surface.lockState.saver) {
                 // Shift, say: it types nothing, but wakes the screensaver.
                 surface.event({ type: "wake" });
@@ -65,6 +76,7 @@ WlSessionLockSurface {
 
             anchors.fill: parent
             hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
             onPositionChanged: mouse => {
                 if (!surface.lockState.saver) {
                     return;
@@ -94,6 +106,89 @@ WlSessionLockSurface {
                 orientation: Gradient.Horizontal
                 GradientStop { position: 0.0; color: "#13303a" }
                 GradientStop { position: 1.0; color: "#241a3a" }
+            }
+
+            // Battery, top left, as the mock shows. The notification
+            // count waits on a way to ask the shell (TODO.md).
+            Row {
+                readonly property var view: Status.batteryView({
+                    present: surface.battery?.isPresent ?? false,
+                    percentage: surface.battery?.percentage,
+                    state: surface.battery?.state,
+                })
+
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.margins: 16
+                visible: view.visible
+                spacing: 4
+
+                SymbolicIcon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: parent.view.icon
+                    color: parent.view.low ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.55)
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: parent.view.text
+                    color: parent.view.low ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.55)
+                    font.family: "Inter"
+                    font.pixelSize: 11.5
+                }
+            }
+
+            // Suspend, bottom left; Restart and Shut down, bottom right.
+            // logind's inhibitors are checked, never overridden here.
+            Row {
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                anchors.margins: 16
+
+                LockButton {
+                    icon: "weather-clear-night-symbolic"
+                    label: "Suspend"
+                    enabled: !surface.powerBusy
+                    onClicked: surface.power("suspend")
+                }
+            }
+
+            Row {
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: 16
+                spacing: 8
+
+                LockButton {
+                    icon: "system-reboot-symbolic"
+                    tip: "Restart"
+                    enabled: !surface.powerBusy
+                    onClicked: surface.power("reboot")
+                }
+
+                LockButton {
+                    icon: "system-shutdown-symbolic"
+                    tip: "Shut down"
+                    enabled: !surface.powerBusy
+                    onClicked: surface.power("poweroff")
+                }
+            }
+
+            // What blocked or broke the last power action.
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 24
+                width: Math.min(parent.width - 400, 560)
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                visible: text !== ""
+                // Inhibitor names come from other programs: never markup.
+                textFormat: Text.PlainText
+                text: surface.powerMessage
+                color: "#ff9e8a"
+                font.family: "Inter"
+                font.pixelSize: 12
             }
 
             Column {

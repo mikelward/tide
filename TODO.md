@@ -440,11 +440,13 @@ an idle lock opens on (`tide idle-lock`). Only parsed with `qmlformat` and
 - On a real session, check the screensaver: an idle lock opens on it, the
   first pointer report doesn't wake it but a move does, and the first key
   lands in the field.
-- The zone clocks under the hostname and on the screensaver, the
-  notification count and battery
-  in the corner, Suspend, and restart and shut down (through logind's
-  inhibitor check), as the mock shows.
+- The zone clocks under the hostname and on the screensaver, and the
+  notification count in the corner, as the mock shows.
+- On a real session, check Suspend, Restart and Shut down from the lock,
+  and that an inhibitor's name shows instead of the action going through.
 - The keyboard layout badge by the field.
+- Take a right click as a left one on the greeter too, as the lock does
+  (SPEC.md §10), when the greeter is built.
 - Skip the lock inside a Chrome Remote Desktop session.
 - Crash it on purpose and walk the three ways out (§10).
 

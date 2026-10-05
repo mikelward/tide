@@ -38,6 +38,38 @@ ShellRoot {
         }
     }
 
+    // Suspend, Restart and Shut down from the lock (SPEC.md §10), through
+    // logind as the session menu does (shell/lib/session.mjs), but never
+    // past an inhibitor: what blocks one is shown, not overridden.
+    // One run at a time (Lock.powerNext): the buttons stay busy until the
+    // run has its result and its process has stopped, so no signal of one
+    // run is taken for the next's.
+    property var power: Lock.POWER_IDLE
+
+    function powerEvent(event) {
+        const r = Lock.powerNext(root.power, event);
+        root.power = r.state;
+        if (r.command !== null) {
+            powerRunner.command = r.command;
+            powerRunner.running = true;
+        }
+    }
+
+    Process {
+        id: powerRunner
+
+        stderr: StdioCollector {
+            onStreamFinished: root.powerEvent({ type: "stderr", text: text })
+        }
+        onStarted: root.powerEvent({ type: "started" })
+        onRunningChanged: {
+            if (!running) {
+                root.powerEvent({ type: "stopped" });
+            }
+        }
+        onExited: (code, status) => root.powerEvent({ type: "exited", code: code })
+    }
+
     function startPam() {
         if (!pam.start()) {
             root.dispatch({ type: "failed", detail: "PAM didn't start" });
@@ -85,7 +117,10 @@ ShellRoot {
             hostname: root.hostname
             user: root.user
             lockedAt: root.lockedAt
+            powerMessage: root.power.message
+            powerBusy: Lock.powerBusy(root.power)
             onEvent: event => root.dispatch(event)
+            onPower: id => root.powerEvent({ type: "press", id: id })
         }
     }
 

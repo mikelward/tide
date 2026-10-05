@@ -1,7 +1,8 @@
 // Tests for lock.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, WRONG, fieldText, idleFlagFresh, next, saverPosition, shortHostname, statusText } from "./lock.mjs";
+import * as Run from "./launch.mjs";
+import { POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -21,6 +22,28 @@ test("each key shows as a dot at once", () => {
     const { state } = run(INITIAL, ...type("abc"));
     assert.equal(state.input, "abc");
     assert.equal(fieldText(state), "•••");
+});
+
+test("Ctrl+U erases the field, and no other Control chord types", () => {
+    assert.deepEqual(keyEvent({ key: "u", text: "\x15", ctrl: true }), { type: "clear" });
+    assert.equal(run(INITIAL, ...type("abc"), keyEvent({ key: "u", text: "\x15", ctrl: true })).state.input, "");
+    assert.equal(keyEvent({ key: "", text: "\x01", ctrl: true }), null);
+    assert.equal(keyEvent({ key: "", text: "a", ctrl: true }), null);
+});
+
+test("the U key without Control types what it types", () => {
+    // Shift+U, and whatever another layout puts on that key, must reach the
+    // password as typed, or it can never match.
+    assert.deepEqual(keyEvent({ key: "u", text: "u", ctrl: false }), { type: "key", text: "u" });
+    assert.deepEqual(keyEvent({ key: "u", text: "U", ctrl: false }), { type: "key", text: "U" });
+    assert.deepEqual(keyEvent({ key: "u", text: "ü", ctrl: false }), { type: "key", text: "ü" });
+});
+
+test("Enter, Backspace and Escape map to their events", () => {
+    assert.deepEqual(keyEvent({ key: "enter", text: "\r", ctrl: false }), { type: "submit" });
+    assert.deepEqual(keyEvent({ key: "backspace", text: "\b", ctrl: false }), { type: "backspace" });
+    assert.deepEqual(keyEvent({ key: "escape", text: "\x1b", ctrl: false }), { type: "clear" });
+    assert.equal(keyEvent({ key: "", text: "", ctrl: false }), null);
 });
 
 test("backspace and Escape edit the field", () => {
@@ -212,4 +235,121 @@ test("the same minute is the same spot", () => {
 
 test("a block bigger than the area sits at the margin", () => {
     assert.deepEqual(saverPosition(7, 300, 200, 400, 300), { x: 18, y: 12 });
+});
+
+test("a power action that worked says nothing", () => {
+    assert.equal(powerMessage("Suspend", { started: true, code: 0, errors: "" }), "");
+});
+
+test("a power action logind's inhibitors block names them", () => {
+    const errors = 'Operation inhibited by "Firefox" (PID 42 "firefox", user user), reason is "Playing video".\n'
+        + "Please retry operation after closing inhibitors and logging out other users.";
+    assert.equal(powerMessage("Restart", { started: true, code: 1, errors }), "Restart is blocked by Firefox: Playing video.");
+});
+
+test("a power action that fails otherwise says why", () => {
+    assert.equal(powerMessage("Shut down", { started: true, code: 1, errors: "Failed to power off: Access denied\n" }),
+        "Shut down failed: Failed to power off: Access denied");
+    assert.equal(powerMessage("Shut down", { started: true, code: 1, errors: "" }), "Shut down failed (exit 1).");
+    assert.equal(powerMessage("Suspend", { started: false, code: null }), "Suspend didn't start.");
+});
+
+test("an exit before the started signal still counts as started", () => {
+    // Run.step can finish a run on its exit code and stderr before
+    // `started` arrives (launch_test.mjs), so `started` stays false.
+    let run = Run.initial();
+    run = Run.step(run, { type: "exited", code: 0 }, ["systemctl"]);
+    run = Run.step(run, { type: "stderr", text: "" }, ["systemctl"]);
+    assert.equal(run.done, true);
+    assert.equal(run.started, false);
+    assert.equal(powerMessage("Suspend", run), "");
+    run = Run.step(Run.initial(), { type: "exited", code: 1 }, ["systemctl"]);
+    run = Run.step(run, { type: "stderr", text: "Failed to suspend: Access denied\n" }, ["systemctl"]);
+    assert.equal(powerMessage("Suspend", run), "Suspend failed: Failed to suspend: Access denied");
+});
+
+// Every order of `events`.
+function orders(events) {
+    if (events.length <= 1) return [events];
+    // No flatMap: the tests run with Qt's JS built-ins (qtjs_env_test.mjs).
+    const all = [];
+    events.forEach((e, i) => {
+        for (const rest of orders(events.filter((_, j) => j !== i))) {
+            all.push([e].concat(rest));
+        }
+    });
+    return all;
+}
+
+function power(state, ...events) {
+    let command = null;
+    for (const event of events) {
+        const r = powerNext(state, event);
+        state = r.state;
+        command = r.command ?? command;
+    }
+    return { state, command };
+}
+
+test("a power press starts its command, never forced", () => {
+    const { state, command } = power(POWER_IDLE, { type: "press", id: "suspend" });
+    assert.deepEqual(command, ["systemctl", "--check-inhibitors=yes", "suspend"]);
+    assert.equal(powerBusy(state), true);
+    assert.equal(powerBusy(POWER_IDLE), false);
+});
+
+test("the power buttons stay busy until the result is in and the process has stopped, in any order", () => {
+    const signals = [
+        { type: "started" },
+        { type: "exited", code: 1 },
+        { type: "stderr", text: "Operation inhibited by \"Firefox\" (PID 1 \"firefox\", user u), reason is \"Playing video\".\n" },
+        { type: "stopped" },
+    ];
+    // A process starts before it stops; every other order happens.
+    const possible = orders(signals).filter((o) =>
+        o.findIndex((e) => e.type === "started") < o.findIndex((e) => e.type === "stopped"));
+    let checked = 0;
+    for (const order of possible) {
+        let { state } = power(POWER_IDLE, { type: "press", id: "reboot" });
+        for (let i = 0; i < order.length; i++) {
+            assert.equal(powerBusy(state), true, `busy before ${order.map((e) => e.type).slice(0, i)}`);
+            // A press while busy is ignored, and starts nothing.
+            const pressed = powerNext(state, { type: "press", id: "poweroff" });
+            assert.equal(pressed.command, null);
+            assert.equal(pressed.state, state);
+            state = powerNext(state, order[i]).state;
+        }
+        assert.equal(powerBusy(state), false, order.map((e) => e.type).join(","));
+        assert.equal(state.message, "Restart is blocked by Firefox: Playing video.");
+        // Free again: the next press starts its own run.
+        assert.deepEqual(power(state, { type: "press", id: "suspend" }).command,
+            ["systemctl", "--check-inhibitors=yes", "suspend"]);
+        checked++;
+    }
+    assert.equal(checked, 12);
+});
+
+test("a power action that works says nothing, whatever the order", () => {
+    for (const order of orders([{ type: "started" }, { type: "exited", code: 0 }, { type: "stderr", text: "" }, { type: "stopped" }])
+        .filter((o) => o.findIndex((e) => e.type === "started") < o.findIndex((e) => e.type === "stopped"))) {
+        const { state } = power(POWER_IDLE, { type: "press", id: "suspend" }, ...order);
+        assert.equal(powerBusy(state), false);
+        assert.equal(state.message, "");
+    }
+});
+
+test("a power command that can't start frees the buttons and says so", () => {
+    const { state } = power(POWER_IDLE, { type: "press", id: "poweroff" }, { type: "stopped" });
+    assert.equal(powerBusy(state), false);
+    assert.equal(state.message, "Shut down didn't start.");
+});
+
+test("a late signal from a finished run changes nothing", () => {
+    const done = power(POWER_IDLE, { type: "press", id: "suspend" }, { type: "exited", code: 1 },
+        { type: "stderr", text: "Failed to suspend: Access denied\n" }, { type: "stopped" }).state;
+    const after = power(done, { type: "started" }).state;
+    assert.equal(after.message, "Suspend failed: Failed to suspend: Access denied");
+    assert.equal(powerBusy(after), false);
+    // Signals with no run yet are ignored too.
+    assert.equal(powerNext(POWER_IDLE, { type: "stopped" }).state, POWER_IDLE);
 });
