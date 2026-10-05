@@ -279,6 +279,12 @@ ShellRoot {
             removeFlag.running = true;
         }
         // No flag is the usual case: a lock from Super+L, suspend or the lid.
+        printErrors: false
+        onLoadFailed: error => {
+            if (error !== FileViewError.FileNotFound) {
+                console.warn(`tide-lock: ${root.idleFlag}: ${FileViewError.toString(error)}`);
+            }
+        }
     }
 
     Process {
