@@ -2037,8 +2037,8 @@ such as `centeredmaster`, scenefx, and what niri, sway and KWin can do beyond
   `screencast>>`, the layout's `custom>>` events), and its Lua (`hl.`). They
   run through the bar, launcher, screenshots, idle and lock, focus grants,
   live settings and doctor. The fork has to replace each one, not just the
-  bar's view of workspaces, so the complete list isn't kept here: building it
-  from the spec is the first step of a rewrite (below).
+  bar's view of workspaces, so the complete list isn't kept here: it is in
+  [`docs/compositor.md`](docs/compositor.md), step 4 below.
 - **Reloading config without a restart** (principle 4): dwl's config is
   compiled in, and a Wayland compositor can't restart under its apps. Tunables
   and key bindings would move to a runtime file the fork reads, so only code
