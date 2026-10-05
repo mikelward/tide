@@ -23,6 +23,8 @@ WlSessionLockSurface {
     // The last power action's trouble, if any (Lock.powerMessage).
     property string powerMessage: ""
     property bool powerBusy: false
+    // How many notifications arrived since the center was last open.
+    property int unread: 0
     // The keyboard layout badge (Lock.layoutBadge), "" when unknown.
     property string layout: ""
 
@@ -110,33 +112,56 @@ WlSessionLockSurface {
                 GradientStop { position: 1.0; color: "#241a3a" }
             }
 
-            // Battery, top left, as the mock shows. The notification
-            // count waits on a way to ask the shell (TODO.md).
+            // The notification count and the battery, top left, as the mock
+            // shows. A count, never what the notifications say.
             Row {
-                readonly property var view: Status.batteryView({
-                    present: surface.battery?.isPresent ?? false,
-                    percentage: surface.battery?.percentage,
-                    state: surface.battery?.state,
-                })
-
                 anchors.left: parent.left
                 anchors.top: parent.top
                 anchors.margins: 16
-                visible: view.visible
-                spacing: 4
+                spacing: 12
 
-                SymbolicIcon {
-                    anchors.verticalCenter: parent.verticalCenter
-                    name: parent.view.icon
-                    color: parent.view.low ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.55)
+                Row {
+                    visible: surface.unread > 0
+                    spacing: 4
+
+                    SymbolicIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "preferences-system-notifications-symbolic"
+                        color: Qt.rgba(1, 1, 1, 0.55)
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: surface.unread
+                        color: Qt.rgba(1, 1, 1, 0.55)
+                        font.family: "Inter"
+                        font.pixelSize: 11.5
+                    }
                 }
 
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: parent.view.text
-                    color: parent.view.low ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.55)
-                    font.family: "Inter"
-                    font.pixelSize: 11.5
+                Row {
+                    readonly property var view: Status.batteryView({
+                        present: surface.battery?.isPresent ?? false,
+                        percentage: surface.battery?.percentage,
+                        state: surface.battery?.state,
+                    })
+
+                    visible: view.visible
+                    spacing: 4
+
+                    SymbolicIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: parent.view.icon
+                        color: parent.view.low ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.55)
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: parent.view.text
+                        color: parent.view.low ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.55)
+                        font.family: "Inter"
+                        font.pixelSize: 11.5
+                    }
                 }
             }
 

@@ -127,6 +127,12 @@ export function unread(state) {
     return kept(state).unread.length > 0;
 }
 
+// How many have arrived since the center was last open: the lock's count
+// (SPEC.md §10), which shows a number and never what they say.
+export function unreadCount(state) {
+    return kept(state).unread.length;
+}
+
 // The file's contents for the history.
 export function serialize(state) {
     return JSON.stringify({ version: 1, unread: state.unread, entries: state.entries }) + "\n";

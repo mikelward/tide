@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Pam
 import Quickshell.Wayland
+import "lib/history.mjs" as History
 import "lib/lock.mjs" as Lock
 
 // tide-lock (SPEC.md §10): the session lock, a Quickshell process of its own,
@@ -149,6 +150,62 @@ ShellRoot {
         }
     }
 
+    // The notification count in the corner: read from the history the bar
+    // saves (shell/HistoryData.qml), and followed as it changes, so the
+    // lock needs no channel to the shell. No file (nothing has arrived yet)
+    // is no count.
+    property int unread: 0
+    // Only while the shell is the notification server, the same opt-in it
+    // reads from the session's environment (NotificationData.enabled).
+    // Otherwise the file is a leftover from trying it, which nothing can
+    // mark seen any more, so its count would never go away.
+    readonly property bool notifications: Quickshell.env("TIDE_NOTIFICATIONS") === "1"
+    readonly property string historyDir: (Quickshell.env("XDG_STATE_HOME") || `${Quickshell.env("HOME")}/.local/state`) + "/tide"
+    // Set once the directory exists: Quickshell's FileView watches a file
+    // and its parent only, so on a fresh profile, with no tide directory
+    // yet, the first notification's file would never be noticed.
+    property string historyPath: ""
+
+    Process {
+        property bool started: false
+
+        command: ["mkdir", "-p", "--", root.historyDir]
+        running: root.notifications
+        onStarted: started = true
+        onExited: (code, status) => {
+            if (code !== 0) {
+                console.warn(`tide-lock: couldn't create ${root.historyDir} (mkdir exited ${code}); the notification count may not follow new notifications`);
+            }
+            root.historyPath = `${root.historyDir}/notifications.json`;
+        }
+        onRunningChanged: {
+            if (!running && !started) {
+                console.warn(`tide-lock: couldn't start mkdir for ${root.historyDir}; the notification count may not follow new notifications`);
+                root.historyPath = `${root.historyDir}/notifications.json`;
+            }
+        }
+    }
+
+    FileView {
+        path: root.historyPath
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            const history = History.parse(text());
+            for (const error of history.errors) {
+                console.warn(`tide-lock: ${path}: ${error}`);
+            }
+            root.unread = History.unreadCount(history);
+        }
+        onLoadFailed: error => {
+            if (error !== FileViewError.FileNotFound) {
+                console.warn(`tide-lock: ${path}: ${FileViewError.toString(error)}; no notification count`);
+            }
+            root.unread = 0;
+        }
+    }
+
     function startPam() {
         if (!pam.start()) {
             root.dispatch({ type: "failed", detail: "PAM didn't start" });
@@ -199,6 +256,7 @@ ShellRoot {
             powerMessage: root.power.message
             powerBusy: Lock.powerBusy(root.power)
             layout: Lock.layoutBadge(root.layout.keymap)
+            unread: root.unread
             onEvent: event => root.dispatch(event)
             onPower: id => root.powerEvent({ type: "press", id: id })
         }
