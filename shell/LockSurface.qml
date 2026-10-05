@@ -205,13 +205,27 @@ WlSessionLockSurface {
                     font.weight: Font.Bold
                 }
 
-                Text {
+                // The zone clocks, then local's date and time, as the bar
+                // orders them.
+                Row {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: Qt.formatDateTime(clock.date, "ddd MMM d  HH:mm")
-                    color: Qt.rgba(1, 1, 1, 0.7)
-                    font.family: "Inter"
-                    font.pixelSize: 13
-                    font.features: { "tnum": 1 }
+                    spacing: 14
+
+                    // Whatever the surface leaves beside local's time, so
+                    // many zones wrap rather than run off its edges.
+                    LockClocks {
+                        maxWidth: surface.width - 64 - localTime.implicitWidth - parent.spacing
+                    }
+
+                    Text {
+                        id: localTime
+
+                        text: Qt.formatDateTime(clock.date, "ddd MMM d  HH:mm")
+                        color: Qt.rgba(1, 1, 1, 0.7)
+                        font.family: "Inter"
+                        font.pixelSize: 13
+                        font.features: { "tnum": 1 }
+                    }
                 }
 
                 Item { width: 1; height: 14 }
@@ -319,6 +333,13 @@ WlSessionLockSurface {
                 color: Qt.rgba(1, 1, 1, 0.35)
                 font.family: "Inter"
                 font.pixelSize: 13
+            }
+
+            LockClocks {
+                // Within saverPosition's margins (6% a side).
+                maxWidth: surface.width * 0.88
+                labelColor: Qt.rgba(1, 1, 1, 0.3)
+                timeColor: Qt.rgba(1, 1, 1, 0.5)
             }
         }
     }

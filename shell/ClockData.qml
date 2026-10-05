@@ -75,10 +75,18 @@ Singleton {
         root.send(v.send);
     }
 
+    // Set by the lock, which shows these clocks too: the bar already
+    // reports a bad file, and a notification can't be read on the lock.
+    // Its errors still go to the log.
+    property bool quiet: false
+
     // An error counts as reported only once notify-send delivers it; one
     // that fails (at login, before the notification server is up) is sent
     // again by `resend`, for as long as it lasts.
     function send(errors) {
+        if (root.quiet) {
+            return;
+        }
         for (const error of errors) {
             Launcher.run(Report.notifyCommand("Clocks not updated", error), ok => {
                 root.reports = Report.sent(root.reports, error, ok);

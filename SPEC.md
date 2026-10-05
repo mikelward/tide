@@ -1086,6 +1086,10 @@ one of them:
   at the bottom right, through logind like the session menu, but never past
   an inhibitor: what blocks one is named under the buttons. The battery sits
   at the top left.
+- **Zone clocks on the lock** are the bar's (§7.3), from the same
+  `clocks.json`. They stay on one line: as many as fit, then "+N" for the
+  rest, so no list can push the password field off the screen. A bad file
+  is reported by the bar, not the lock, where no notification could be read.
 - **Triggers:** `Super+L`, idle, suspend, and lid-close without an external
   display.
 - **All of them go through logind.** `loginctl lock-session` raises logind's

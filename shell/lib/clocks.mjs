@@ -272,6 +272,40 @@ export function barClocks({ clocks, localZone, instant, offsetOf, abbrOf }) {
     return shown;
 }
 
+// The lock's zone clocks: the bar's without local, whose time the lock
+// already shows large. A label may hold line breaks (clocks.json takes any
+// text); the lock's clocks are one line, so they read as spaces.
+export function zoneClocks(items) {
+    return items.filter((c) => !c.local).map((c) =>
+        Object.assign({}, c, { text: c.text.replace(/[\r\n\u2028\u2029\v\f]+/g, " ") }));
+}
+
+// How many of the lock's clocks fit on its one line: all of them when they
+// do, else as many as leave room for a "+N" of `moreWidth` after them.
+// `widths` are each clock's, in order, with `spacing` between neighbors.
+// The lock keeps them to one line so no list, however long, can push the
+// password field off the screen (SPEC.md §10).
+export function fitCount(widths, spacing, maxWidth, moreWidth) {
+    let used = 0;
+    for (let i = 0; i < widths.length; i++) {
+        used += (i > 0 ? spacing : 0) + widths[i];
+    }
+    if (used <= maxWidth) {
+        return widths.length;
+    }
+    let fit = 0;
+    used = 0;
+    for (let i = 0; i < widths.length; i++) {
+        const next = used + (i > 0 ? spacing : 0) + widths[i];
+        if (next + spacing + moreWidth > maxWidth) {
+            break;
+        }
+        used = next;
+        fit = i + 1;
+    }
+    return fit;
+}
+
 // Scrolling over the clocks moves the time they show by this much a notch.
 export const SCRUB_STEP = 15 * MINUTE;
 

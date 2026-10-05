@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     DEFAULT_CLOCKS, jsonError, parseClocks, loadClocks, visibleClocks, dayOffset,
-    formatTime, formatLocal, barClocks, scrubbed, SCRUB_STEP, zoneError,
+    formatTime, formatLocal, barClocks, scrubbed, SCRUB_STEP, zoneError, zoneClocks, fitCount,
 } from "./clocks.mjs";
 
 function canonical(zone) {
@@ -257,6 +257,35 @@ test("the bar ends with local and marks other days", () => {
         { text: "NYC 19:30", dayOffset: -1 },
         { text: "Oct 3 00:30", dayOffset: 0, local: true },
     ]);
+});
+
+test("the lock's zone clocks are the bar's without local", () => {
+    const bar = barClocks({
+        clocks: DEFAULT_CLOCKS, localZone: "Europe/London", instant: at("2026-10-02T23:30:00Z"),
+        offsetOf, abbrOf: () => "",
+    });
+    assert.deepEqual(zoneClocks(bar).map((c) => c.text), ["SF 16:30", "NYC 19:30"]);
+    // A label's line breaks read as spaces, so a clock stays one line.
+    assert.deepEqual(zoneClocks([{ text: "NEW\nYORK\r\n2 13:47", dayOffset: 0 }]),
+        [{ text: "NEW YORK 2 13:47", dayOffset: 0 }]);
+    // Only local, when every listed zone is local's.
+    assert.deepEqual(zoneClocks([{ text: "Oct 3 00:30", dayOffset: 0, local: true }]), []);
+});
+
+test("all the lock's clocks show when they fit on one line", () => {
+    assert.equal(fitCount([60, 60, 60], 10, 200, 20), 3);
+    assert.equal(fitCount([60, 60, 60], 10, 200.5, 20), 3);
+    assert.equal(fitCount([], 10, 100, 20), 0);
+});
+
+test("the clocks that don't fit leave room for +N", () => {
+    // 60+10+60 = 130, then 10 + 20 for "+N" = 160 <= 170; a third won't fit.
+    assert.equal(fitCount([60, 60, 60, 60], 10, 170, 20), 2);
+    // Exactly at the edge still fits.
+    assert.equal(fitCount([60, 60, 60, 60], 10, 160, 20), 2);
+    assert.equal(fitCount([60, 60, 60, 60], 10, 159, 20), 1);
+    // Not even one clock beside "+N": only the count shows.
+    assert.equal(fitCount([300, 60], 10, 100, 20), 0);
 });
 
 // The GMT+1 trap (SPEC.md §7.3): ICU's en-US names London's summer time

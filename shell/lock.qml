@@ -19,6 +19,11 @@ ShellRoot {
     readonly property date lockedAt: new Date()
     property string hostname: ""
 
+    // The zone clocks come from the bar's ClockData, which this process
+    // runs its own copy of; the bar is the one that reports a bad clocks
+    // file. Set before its files load, which is asynchronous.
+    Component.onCompleted: ClockData.quiet = true
+
     // Every key and PAM event goes through here, so the field changes on
     // the frame the key is pressed and nothing waits on PAM to draw.
     function dispatch(event) {
