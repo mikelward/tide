@@ -195,6 +195,35 @@ export function normalizeAddress(address) {
     return /^[0-9a-f]+$/.test(hex) ? hex : null;
 }
 
+// The windows focused since the shell started, newest first, as addresses
+// (normalizeAddress), after `address` takes focus. Hyprland's own order
+// (a client's focusHistoryID) is only as fresh as the shell's last client
+// list, which focus changes don't refresh, so the shell keeps this from
+// activewindowv2 itself (§14.4). It keeps the most recent 100.
+export function withFocus(order, address) {
+    if (address === null || address === undefined) {
+        return order;
+    }
+    return [address, ...order.filter((a) => a !== address)].slice(0, 100);
+}
+
+// The order without a window that closed.
+export function withoutWindow(order, address) {
+    return order.filter((a) => a !== address);
+}
+
+// A window's place in focus order, lower being more recent: its place in
+// `order` if it was focused since the shell started, else after all of
+// those, by the focusHistoryID Hyprland gave when the shell last listed
+// clients (0 was last focused, -1 never). Infinity when neither says.
+export function focusRank(order, address, historyId) {
+    const i = order.indexOf(address);
+    if (i >= 0) {
+        return i;
+    }
+    return Number.isInteger(historyId) && historyId >= 0 ? order.length + historyId : Infinity;
+}
+
 // The mark event a Hyprland socket event means, or null: the focus guard
 // keeping a window from focus (custom>>tide-attention>>ADDRESS,
 // SPEC.md §14.3), a window being focused, one closing, a window asking for

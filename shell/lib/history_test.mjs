@@ -15,7 +15,7 @@ test("a notification goes on top, with the time it arrived", () => {
     let h = record([], note("1", "Mail", "a"), 100);
     h = record(h, note("2", "Chat", "b"), 200);
     assert.deepEqual(h.map(e => [e.key, e.summary, e.time]), [["2", "b", 200], ["1", "a", 100]]);
-    assert.deepEqual(Object.keys(h[0]).sort(), ["app", "body", "critical", "entry", "icon", "key", "summary", "time"]);
+    assert.deepEqual(Object.keys(h[0]).sort(), ["app", "body", "critical", "entry", "icon", "key", "origin", "summary", "time"]);
 });
 
 test("an update in place replaces its entry and comes back to the top", () => {
@@ -210,6 +210,31 @@ test("a live entry without a default action is dismissed, as its popup would be"
 
 test("a gone entry names its app by desktop entry, else app name", () => {
     assert.deepEqual(clickTarget(note("1", "Chat", "hi", { entry: " " }), null, byDefault), { app: "Chat" });
+});
+
+test("a gone web notification brings up its site's --app window, if one is open", () => {
+    const chat = note("1", "Google Chrome", "hi", { entry: "google-chrome", origin: "chat.google.com" });
+    const windows = [{ app: "google-chrome", focus: 0 }, { app: "chrome-chat.google.com__-Default", focus: 1 }];
+    assert.deepEqual(clickTarget(chat, null, byDefault, windows), { app: "chrome-chat.google.com__-Default" });
+    assert.deepEqual(clickTarget(chat, null, byDefault, [{ app: "google-chrome", focus: 0 }]), { app: "google-chrome" });
+    assert.deepEqual(clickTarget(chat, null, byDefault), { app: "google-chrome" });
+});
+
+test("a gone entry from another app naming a site stays its own app", () => {
+    const mail = note("1", "Mail", "hi", { entry: "org.example.Mail", origin: "chat.google.com" });
+    assert.deepEqual(clickTarget(mail, null, byDefault, [{ app: "chrome-chat.google.com__-Default", focus: 0 }]), { app: "org.example.Mail" });
+});
+
+test("an entry saved before the site was kept still brings up its app", () => {
+    const old = note("1", "Google Chrome", "hi", { entry: "google-chrome" });
+    assert.deepEqual(clickTarget(old, null, byDefault, [{ app: "chrome-chat.google.com__-Default", focus: 0 }]), { app: "google-chrome" });
+    assert.equal(parse(JSON.stringify({ version: 1, entries: [Object.assign({ time: 1 }, old)] })).entries.length, 1);
+});
+
+test("the site is kept with the entry", () => {
+    const h = record([], note("1", "Google Chrome", "hi", { origin: "chat.google.com" }), 100);
+    assert.equal(h[0].origin, "chat.google.com");
+    assert.equal(record([], note("2", "Files", "done"), 100)[0].origin, "");
 });
 
 test("an entry that names no app has nothing to bring up", () => {

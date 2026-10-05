@@ -396,19 +396,42 @@ Nothing has run in a live session. Still to do:
   `hypr/tide/focus.lua`, through `tide grant`). On a live session, check it
   with an app that doesn't activate on a click, and that Chrome's own
   activation still wins.
-- Bring up the browser window a notification came from, not just the
-  browser's most recent one, when the browser's own activation doesn't
-  arrive. Today the fallback picks the app's most recently focused window
-  (§9 *Clicking*), which for Chrome with several windows may be the wrong
-  one. Open questions before choosing how:
-  - Can Quickshell hand the action an xdg-activation token? It doesn't
-    emit `ActivationToken` today, so the browser can't be told which
-    surface the click came from.
-  - Does Hyprland 0.56 show the Lua guard which token, or which surface,
-    an activation request carries? If so the grant could follow the
-    token instead of the app.
-  - Which browsers send a `sender-pid` hint, which would narrow the
-    fallback to the sending process's windows?
+- A Chrome notification goes to its site's `--app` window when one is
+  open: the server advertises `x-kde-origin-name`, and `targetApp` in
+  `shell/lib/notifications.mjs` matches the site to the window's class for
+  marks, clicks and the center (§14.4). Checked against Chromium's source,
+  not a live Chrome. On a live session, check a Chat and a Meet
+  notification each mark and bring up their own `--app` window, that the
+  popup and the center show the site, and that a tab's notification still
+  marks the ordinary Chrome windows.
+- Bring up the right one of several ordinary Chrome windows (a tab's
+  notification). Chrome already handles it given an xdg-activation token:
+  it listens for the server's `ActivationToken` signal and activates with
+  it (`OnActivationToken` in Chromium's
+  `notification_platform_bridge_linux.cc`). Quickshell 0.3.1 declares that
+  signal but never sends it, and has no xdg-activation client to get a
+  token from the compositor. So it's an upstream Quickshell change: get a
+  token for the click's serial and emit `ActivationToken` before
+  `ActionInvoked`. Then check the focus guard focuses Chrome's activation
+  under the click's grant rather than just marking it.
+- A Chrome extension whose context message looks like a host
+  (`chat.google.com`) is taken for that site, and routes to its `--app`
+  window. Chrome puts the site and an extension's context message in the
+  same hint, with nothing to tell them apart. Rare enough to leave for now;
+  the fix needs a way to know which one Chrome sent.
+- With both Google Chrome and Chromium running an `--app` window for the
+  same site, a notification from one can route to the other's window (the
+  more recently focused). Filtering by the sender's desktop entry would fix
+  it; rare enough to leave for now.
+- A packaged Chrome (Flatpak) prefixes its `--app` window classes with
+  its desktop ID (`com.google.Chrome.chrome-chat.google.com__-Default`,
+  `CHROME_WEB_APP_DESKTOP_ID_PREFIX`), which the site match doesn't
+  allow for, so its notifications go to Chrome as before. Rare; allow the
+  prefix if a packaged Chrome is ever used.
+- A site with an internationalized domain (`öbb.at`) comes in the hint as
+  Unicode, while its `--app` class has the Punycode host
+  (`chrome-xn--bb-eka.at__-Default`), so it doesn't match and goes to
+  Chrome as before. Rare; convert the host to ASCII if one is ever used.
 - History: the center (`shell/NotificationCenter.qml`), the bell, and
   `notifications.json` (`shell/HistoryData.qml`, `shell/lib/history.mjs`)
   are in, behind the same opt-in; only parsed with `qmlformat`.

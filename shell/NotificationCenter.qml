@@ -370,7 +370,10 @@ PanelWindow {
 
                                         anchors.right: parent.right
                                         y: 8
-                                        text: History.age(modelData.time, root.now)
+                                        // The site comes from the sender: never markup.
+                                        textFormat: Text.PlainText
+                                        // The site, for a web notification (§9).
+                                        text: Notes.joinLabel(Notes.originLabel(modelData.origin), History.age(modelData.time, root.now))
                                         color: Theme.fgFaint
                                         font.family: Theme.font
                                         font.pixelSize: 11

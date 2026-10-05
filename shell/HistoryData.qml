@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import "lib/history.mjs" as History
+import "lib/notifications.mjs" as Notes
 
 // The notification center's history (SPEC.md §9), kept in
 // $XDG_STATE_HOME/tide/notifications.json so it survives a shell
@@ -73,6 +74,7 @@ Singleton {
                 app: notification.appName,
                 icon: notification.appIcon,
                 entry: notification.desktopEntry,
+                origin: Notes.originText(notification),
                 summary: notification.summary,
                 body: notification.body,
                 critical: notification.urgency === NotificationData.urgency.Critical,

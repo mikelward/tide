@@ -903,9 +903,18 @@ See [`notifications.png`](docs/mocks/notifications.png).
   rather than Quickshell's placeholder. The history's icons fall back the
   same way.
 - **Capabilities.** The server advertises `body`, `actions`, `body-markup`,
-  `icon-static`, `persistence` and `inline-reply`. Chrome sends native
-  notifications only if `body` and `actions` are advertised, and Quickshell's
-  `actionsSupported` defaults to false, so it has to be switched on.
+  `icon-static`, `persistence`, `inline-reply` and `x-kde-origin-name`.
+  Chrome sends native notifications only if `body` and `actions` are
+  advertised, and Quickshell's `actionsSupported` defaults to false, so it
+  has to be switched on.
+- **The site.** With `x-kde-origin-name` advertised, Chrome names a web
+  notification's site in that hint (`chat.google.com`, or past 28
+  characters the registered domain) rather than at the top of its body. The
+  popup shows it after the app name, and the center beside the entry's age,
+  so you can still see who sent it. Chrome also sends an extension's own
+  context message there. That shows the same way, cut at 28 characters,
+  and names no site unless it looks like a host, which can't be told
+  apart (TODO.md).
 - **Clicking.** A click runs the default action, and the shell then brings
   up **the window that sent it**, switching workspace. An app can have
   several windows (Chrome, Nautilus), so matching the `desktop-entry` hint
@@ -918,12 +927,19 @@ See [`notifications.png`](docs/mocks/notifications.png).
     so an app with no window yet, or a slow one, still comes up focused.
     Apps such as Chrome activate the right window when a notification is
     clicked, and the shell focuses exactly that window.
+  - A web notification from a site with an `--app` window open grants that
+    window's class instead of Chrome's (§14.4), so Chat's notification
+    brings up the Chat window, not whichever Chrome window was last used.
   - If nothing arrives and the app already has windows, it focuses the app's
     most recently focused window. Anything you do meanwhile (a key, moving
     the pointer into another window) cancels that, like any grant, so it
     never pulls you away from what you moved on to.
   - Quickshell doesn't emit `ActivationToken`, so the app's activation is
-    what identifies the window.
+    what identifies the window. Chrome listens for that signal and would
+    activate the tab's own window with it (`notification_platform_bridge_linux.cc`),
+    so a token would also pick the right one of several ordinary Chrome
+    windows; that needs Quickshell to ask the compositor for a token at the
+    click (TODO.md).
 - **Replacement.** Replacing notifications (`replaces_id`,
   `x-canonical-private-synchronous`) update in place.
 
@@ -1596,10 +1612,22 @@ to be focused.
   - So it marks the app. Every workspace holding one of that app's windows
     that isn't visible turns urgent, and each of those windows is marked.
     With two Nautilus windows on different workspaces, both are.
-  - Chrome `--app` windows have classes of their own, like
-    `chrome-<host>__-Default`, so a Chat notification can mark just the Chat
-    window if Chrome exposes the notification's origin. How reliably it does
-    is an M3 prototype question. Without it, every Chrome window is marked.
+  - Chrome `--app` windows have classes of their own:
+    `chrome-HOST_PATH-PROFILE`, the URL's path with its slashes made
+    underscores, so `--app=https://chat.google.com/` is
+    `chrome-chat.google.com__-Default`. Chrome names a notification's site
+    in the `x-kde-origin-name` hint (§9), so a Chat notification marks just
+    the Chat window, and a click on it brings that window up. With several
+    `--app` windows for one site, the most recently focused one's class
+    counts. A shortened site (`google.com`) matches its subdomains' windows.
+  - Any app can send that hint, so a site counts only on a notification
+    whose desktop entry is Chrome's or Chromium's. Another app naming a
+    host marks its own windows.
+  - A notification from a site with no `--app` window open (a tab in an
+    ordinary window) marks every ordinary Chrome window, as before.
+  - An installed web app's class is `chrome-<app id>-Default`, which names
+    no site, so its notifications are treated like a tab's. Installed apps
+    aren't used today.
   - If the app then activates one window (`urgent>>ADDRESS`), that window's
     own mark replaces the app-wide one.
 - **What you see.**
