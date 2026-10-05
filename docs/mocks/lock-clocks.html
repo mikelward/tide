@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: login and lock</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .faces { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 22px; }
+  .face {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    color: #f2f2f6;
+    box-shadow: 0 0 0 1px #2a2a30;
+    background:
+      radial-gradient(360px 220px at 22% 28%, rgba(38, 105, 110, .55), transparent 70%),
+      radial-gradient(420px 260px at 82% 78%, rgba(98, 52, 140, .55), transparent 70%),
+      #10172a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .face::before { content: ''; position: absolute; inset: 0; backdrop-filter: blur(0); background: rgba(8, 10, 18, .35); }
+  .face > * { position: relative; }
+  .host { font-size: 58px; font-weight: 700; letter-spacing: -.02em; line-height: 1; }
+  .fclocks { display: flex; gap: 14px; margin-top: 12px; font-feature-settings: 'tnum' 1; font-size: 13px; color: rgba(255,255,255,.7); }
+  .fclocks b { font-weight: 600; color: #fff; }
+  .fclocks .tz { font-size: 10px; font-weight: 700; letter-spacing: .05em; margin-right: 4px; color: rgba(255,255,255,.55); }
+  .who { display: flex; align-items: center; gap: 10px; margin-top: 26px; }
+  .av { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #3584e4, #9141ac); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .who .n { font-weight: 600; font-size: 14px; }
+  .who .s { font-size: 11.5px; color: rgba(255,255,255,.6); }
+  .pw { margin-top: 12px; width: 270px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 14px; letter-spacing: .25em; }
+  .pw .ms { font-size: 18px; color: rgba(255,255,255,.6); letter-spacing: 0; }
+  .pw .kb { margin-left: auto; letter-spacing: 0; font-size: 10.5px; font-weight: 700; background: rgba(255,255,255,.14); border-radius: 5px; padding: 2px 6px; color: rgba(255,255,255,.85); }
+  .pw.err { box-shadow: inset 0 0 0 1.5px #ff7b63; }
+  .errmsg { margin-top: 8px; font-size: 12px; color: #ff9e8a; font-weight: 600; }
+  .sess { position: absolute; left: 16px; bottom: 14px; display: flex; gap: 8px; }
+  .chipx { height: 28px; border-radius: 14px; background: rgba(255,255,255,.1); display: flex; align-items: center; gap: 6px; padding: 0 12px 0 10px; font-size: 12px; font-weight: 600; }
+  .chipx .ms { font-size: 16px; }
+  .pwr { position: absolute; right: 14px; bottom: 12px; display: flex; gap: 6px; }
+  .pwr span { width: 32px; height: 32px; border-radius: 16px; background: rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; }
+  .pwr .ms { font-size: 18px; }
+  .corner { position: absolute; left: 16px; top: 12px; font-size: 11.5px; color: rgba(255,255,255,.55); display: flex; gap: 12px; align-items: center; }
+  .corner .ms { font-size: 15px; }
+  .tag { position: absolute; right: 14px; top: 12px; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.5); }
+  .ambient { background: #000; }
+  .ambient::before { display: none; }
+  .ambient .blk { position: absolute; left: 58%; top: 30%; text-align: left; }
+  .ambient .host { font-size: 26px; color: rgba(255,255,255,.42); }
+  .ambient .big { font-size: 64px; font-weight: 300; color: rgba(255,255,255,.5); letter-spacing: -.02em; font-feature-settings: 'tnum' 1; line-height: 1.05; margin-top: 6px; }
+  .ambient .fclocks { color: rgba(255,255,255,.35); margin-top: 6px; }
+  .ambient .fclocks b { color: rgba(255,255,255,.5); }
+  .ambient .fclocks .tz { color: rgba(255,255,255,.3); }
+  .ghost { position: absolute; border: 1px dashed rgba(255,255,255,.14); border-radius: 8px; }
+
+  .face.small { aspect-ratio: 4 / 3; }
+  .fclocks .more { font-size: 11px; font-weight: 700; color: rgba(255,255,255,.55); }
+  .fclocks.wrap { flex-wrap: wrap; justify-content: center; max-width: 360px; row-gap: 14px; }
+  .pwr span.busy, .sess .chipx.busy { opacity: .5; }
+  .pmsg { position: absolute; left: 50%; transform: translateX(-50%); bottom: 22px; width: 52%; text-align: center; font-size: 12px; color: #ff9e8a; }
+  .clip { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: repeating-linear-gradient(135deg, rgba(255,123,99,.25) 0 8px, transparent 8px 16px); border-top: 1px dashed #ff7b63; }
+  .cliplbl { position: absolute; right: 14px; bottom: 36px; font-size: 10.5px; font-weight: 700; color: #ff9e8a; letter-spacing: .06em; text-transform: uppercase; }
+</style>
+</head>
+<body class="sheet" data-width="1360" data-scale="2">
+
+<h1>Lock: zone clocks and power</h1>
+<p class="lede">What #116 and #117 build onto the lock, on a 4:3 screen with seven zones in <code>clocks.json</code>, so the clocks don't fit. The top row is the open decision: keep the clocks to one line with "+N" for the rest (what #117 does now), or wrap them onto more lines.</p>
+
+<div class="faces">
+  <div>
+    <div class="face small">
+      <span class="tag">A · one line, +N</span>
+      <div class="corner"><span><i class="ms fill">battery_5_bar</i> 82%</span></div>
+      <div class="host">host1</div>
+      <div class="fclocks"><span><span class="tz">SF</span><b>10:47</b></span><span><span class="tz">DEN</span><b>11:47</b></span><span><span class="tz">CHI</span><b>12:47</b></span><span><span class="tz">NYC</span><b>13:47</b></span><span class="more">+3</span><span>Mon Sep 28 <b>19:47</b></span></div>
+      <div class="who"><span class="av">U</span><div><div class="n">user</div><div class="s">locked at 19:41</div></div></div>
+      <div class="pw"><i class="ms">lock</i><span>••••••</span></div>
+      <div class="sess"><span class="chipx"><i class="ms">bedtime</i>Suspend</span></div><div class="pwr"><span><i class="ms">restart_alt</i></span><span><i class="ms">power_settings_new</i></span></div>
+    </div>
+    <div class="cap"><b>A: one line (built).</b> As many zones as fit, then "+3". The face never grows, however many zones or how long a label, so the password field stays where it is. The bar's clocks popover still lists every zone.</div>
+  </div>
+
+  <div>
+    <div class="face small">
+      <span class="tag">B · wrapped</span>
+      <div class="corner"><span><i class="ms fill">battery_5_bar</i> 82%</span></div>
+      <div class="host">host1</div>
+      <div class="fclocks wrap"><span><span class="tz">SF</span><b>10:47</b></span><span><span class="tz">DEN</span><b>11:47</b></span><span><span class="tz">CHI</span><b>12:47</b></span><span><span class="tz">NYC</span><b>13:47</b></span><span><span class="tz">LON</span><b>18:47</b></span><span><span class="tz">BER</span><b>19:47</b></span><span><span class="tz">TYO</span><b>02:47</b></span><span>Mon Sep 28 <b>19:47</b></span></div>
+      <div class="who"><span class="av">U</span><div><div class="n">user</div><div class="s">locked at 19:41</div></div></div>
+      <div class="pw"><i class="ms">lock</i><span>••••••</span></div>
+      <div class="sess"><span class="chipx"><i class="ms">bedtime</i>Suspend</span></div><div class="pwr"><span><i class="ms">restart_alt</i></span><span><i class="ms">power_settings_new</i></span></div>
+    </div>
+    <div class="cap"><b>B: wrapped.</b> Every zone shows, a line at a time, and the rest of the face moves down. Fine for seven; a long list on a short screen pushes the password field toward the buttons, so it would need a cap of a few lines and "+N" after that anyway.</div>
+  </div>
+
+  <div>
+    <div class="face small">
+      <span class="tag">Restart blocked</span>
+      <div class="corner"><span><i class="ms fill">battery_5_bar</i> 82%</span></div>
+      <div class="host">host1</div>
+      <div class="fclocks"><span><span class="tz">SF</span><b>10:47</b></span><span><span class="tz">DEN</span><b>11:47</b></span><span><span class="tz">CHI</span><b>12:47</b></span><span><span class="tz">NYC</span><b>13:47</b></span><span class="more">+3</span><span>Mon Sep 28 <b>19:47</b></span></div>
+      <div class="who"><span class="av">U</span><div><div class="n">user</div><div class="s">locked at 19:41</div></div></div>
+      <div class="pw"><i class="ms">lock</i><span>••••••</span></div>
+      <div class="sess"><span class="chipx"><i class="ms">bedtime</i>Suspend</span></div><div class="pwr"><span><i class="ms">restart_alt</i></span><span><i class="ms">power_settings_new</i></span></div>
+      <div class="pmsg">Restart is blocked by Firefox: Playing video.</div>
+    </div>
+    <div class="cap"><b>Power.</b> Suspend at the bottom left, Restart and Shut down at the bottom right, always through logind's inhibitor check. What blocks one is named under them; the lock never offers to go ahead anyway. Left or right click both press them.</div>
+  </div>
+
+  <div>
+    <div class="face small ambient">
+      <span class="tag" style="color:rgba(255,255,255,.28)">Screensaver</span>
+      <div class="blk" style="left:46%;top:32%">
+        <div class="host">host1</div>
+        <div class="big">19:47</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.35);margin-top:2px">Monday, September 28</div>
+        <div class="fclocks"><span><span class="tz">SF</span><b>10:47</b></span><span><span class="tz">DEN</span><b>11:47</b></span><span><span class="tz">CHI</span><b>12:47</b></span><span><span class="tz">NYC</span><b>13:47</b></span><span class="more" style="color:rgba(255,255,255,.3)">+3</span></div>
+      </div>
+    </div>
+    <div class="cap"><b>Screensaver.</b> The same zones under the date, in low contrast, held to the space inside its moving margins. Any key, move, click or scroll brings back the password face.</div>
+  </div>
+</div>
+
+</body>
+</html>
