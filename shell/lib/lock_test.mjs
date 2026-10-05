@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText } from "./lock.mjs";
+import { LAYOUT_INITIAL, layoutNext, layoutBadge, mainKeymap, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -352,4 +352,78 @@ test("a late signal from a finished run changes nothing", () => {
     assert.equal(powerBusy(after), false);
     // Signals with no run yet are ignored too.
     assert.equal(powerNext(POWER_IDLE, { type: "stopped" }).state, POWER_IDLE);
+});
+
+test("the layout badge is the layout's variant, in capitals", () => {
+    assert.equal(layoutBadge("English (Dvorak)"), "DVORAK");
+    assert.equal(layoutBadge("English (US)"), "US");
+    assert.equal(layoutBadge("German"), "GERMAN");
+    assert.equal(layoutBadge("English (US, intl., with dead keys)"), "US, INTL., WITH DEAD KEYS");
+    assert.equal(layoutBadge(""), "");
+    assert.equal(layoutBadge(undefined), "");
+});
+
+test("the main keyboard's keymap comes from hyprctl devices", () => {
+    const devices = JSON.stringify({
+        mice: [],
+        keyboards: [
+            { name: "power-button", active_keymap: "English (US)", main: false },
+            { name: "at-translated-set-2-keyboard", active_keymap: "English (Dvorak)", main: true },
+        ],
+    });
+    assert.equal(mainKeymap(devices), "English (Dvorak)");
+    // No main one: the first.
+    assert.equal(mainKeymap(JSON.stringify({ keyboards: [{ name: "kb", active_keymap: "German" }] })), "German");
+    assert.equal(mainKeymap(JSON.stringify({ keyboards: [] })), null);
+    assert.equal(mainKeymap(JSON.stringify({ keyboards: [{ name: "kb" }] })), null);
+    assert.equal(mainKeymap("not json"), null);
+    assert.equal(mainKeymap(""), null);
+});
+
+function layout(state, ...events) {
+    let queries = 0;
+    for (const event of events) {
+        const r = layoutNext(state, event);
+        state = r.state;
+        if (r.query) queries++;
+    }
+    return { state, queries };
+}
+
+test("each refresh reads hyprctl, and the badge takes its answer", () => {
+    const first = layout(LAYOUT_INITIAL, { type: "refresh" }, { type: "answer", keymap: "English (Dvorak)" });
+    assert.equal(first.queries, 1);
+    assert.equal(first.state.keymap, "English (Dvorak)");
+    assert.equal(first.state.querying, false);
+    // A later switch, or the main keyboard unplugged and another promoted:
+    // the next refresh reads again and takes whatever is main now.
+    const later = layout(first.state, { type: "refresh" }, { type: "answer", keymap: "German" });
+    assert.equal(later.queries, 1);
+    assert.equal(later.state.keymap, "German");
+});
+
+test("a refresh while a read runs reads again once, after it", () => {
+    let r = layoutNext(LAYOUT_INITIAL, { type: "refresh" });
+    assert.equal(r.query, true);
+    // Two switches during the read: one more read, not two, and not yet.
+    const during = layout(r.state, { type: "refresh" }, { type: "refresh" });
+    assert.equal(during.queries, 0);
+    // The first answer may predate the switches; it shows, and the reread
+    // starts.
+    r = layoutNext(during.state, { type: "answer", keymap: "English (Dvorak)" });
+    assert.equal(r.query, true);
+    assert.equal(r.state.querying, true);
+    const done = layout(r.state, { type: "answer", keymap: "German" });
+    assert.equal(done.queries, 0);
+    assert.equal(done.state.keymap, "German");
+    assert.equal(done.state.querying, false);
+});
+
+test("a failed read hides the badge, and a refresh during it still rereads", () => {
+    let { state } = layout(LAYOUT_INITIAL, { type: "refresh" }, { type: "answer", keymap: "German" });
+    const failed = layout(state, { type: "refresh" }, { type: "refresh" }, { type: "answer", keymap: null });
+    assert.equal(failed.state.keymap, "");
+    assert.equal(failed.state.querying, true);
+    assert.equal(failed.queries, 2);
+    assert.equal(layout(failed.state, { type: "answer", keymap: "German" }).state.keymap, "German");
 });

@@ -1080,6 +1080,11 @@ one of them:
   doesn't shake.
 - **Editing the field:** Backspace drops a character; Escape and Ctrl+U
   erase it all. No other Control chord types into it.
+- **Layout badge:** the main keyboard's layout sits in the field ("DVORAK"),
+  following a switch, so a failed password isn't a layout mystery. Main is
+  Hyprland's word: the keyboard last typed on. It's read again on each
+  switch and after each failed password, so an unplugged keyboard's layout
+  doesn't linger.
 - **Either mouse button clicks** on the lock and the greeter, so a
   left-handed mouse needs no setting there.
 - **Power from the lock:** Suspend at the bottom left, Restart and Shut down

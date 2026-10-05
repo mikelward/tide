@@ -314,3 +314,67 @@ export function powerNext(state, event) {
     }
     return { state: Object.freeze({ action: state.action, run, stopped, message }), command: null };
 }
+
+// The keyboard layout badge by the password field (SPEC.md §10), so a
+// failed password isn't a layout mystery. Hyprland names a layout by its
+// xkb description, "English (Dvorak)" or "English (US)": the badge is the
+// part in parentheses, else the whole name, in capitals ("DVORAK", "US",
+// "GERMAN"). "" when there's no layout to show.
+export function layoutBadge(name) {
+    const text = String(name || "").trim();
+    const inner = /\(([^()]+)\)\s*$/.exec(text);
+    return (inner ? inner[1].trim() : text).toUpperCase();
+}
+
+// The main keyboard's layout from `hyprctl devices -j` (Hyprland 0.56):
+// {keyboards: [{name, active_keymap, main}]}. The main one, else the first.
+// Its description ("English (Dvorak)"), or null when there's no keyboard or
+// the text isn't that JSON.
+export function mainKeymap(text) {
+    let devices;
+    try {
+        devices = JSON.parse(text);
+    } catch (e) {
+        return null;
+    }
+    const keyboards = Array.isArray(devices?.keyboards) ? devices.keyboards : [];
+    const keyboard = keyboards.find((k) => k && k.main === true) || keyboards[0];
+    if (!keyboard || typeof keyboard.active_keymap !== "string") return null;
+    return keyboard.active_keymap;
+}
+
+// Which layout the badge shows. Only `hyprctl devices -j` says which
+// keyboard is the main one, and in Hyprland 0.56 that changes: it's the
+// keyboard last typed on (onKeyboardMod), or another one after an unplug,
+// which sends no event. So nothing here remembers a keyboard. Each
+// refresh reads hyprctl afresh; a refresh while a read runs, whose answer
+// may already be old, reads again once it ends, so at most one runs and
+// the last answer is never older than the last refresh.
+//   keymap     the main keyboard's layout, "" while unknown
+//   querying   a read is running
+//   again      a refresh arrived while it ran
+export const LAYOUT_INITIAL = Object.freeze({ keymap: "", querying: false, again: false });
+
+// Events: {type: "refresh"} (the lock starts, Hyprland reports a layout
+// switch, or a password fails) and {type: "answer", keymap} (mainKeymap's
+// result, null when the read failed, which hides the badge rather than
+// keep a layout that may be stale). Returns {state, query}: `query` asks
+// the QML to start a read.
+export function layoutNext(state, event) {
+    switch (event.type) {
+    case "refresh":
+        if (state.querying) {
+            return { state: Object.freeze(Object.assign({}, state, { again: true })), query: false };
+        }
+        return { state: Object.freeze(Object.assign({}, state, { querying: true })), query: true };
+    case "answer": {
+        const keymap = typeof event.keymap === "string" ? event.keymap : "";
+        return {
+            state: Object.freeze({ keymap: keymap, querying: state.again, again: false }),
+            query: state.again,
+        };
+    }
+    default:
+        throw new Error(`unknown layout event: ${event.type}`);
+    }
+}
