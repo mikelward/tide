@@ -1066,6 +1066,13 @@ one of them:
     Quickshell's default `login`.
   - Its file watcher is off (`QS_DISABLE_FILE_WATCHER`), so editing the
     shell never reloads a live lock.
+- **Every keystroke shows at once** (maintainer, 2026-10-05). Each key
+  changes the field on the next frame, with no animation: a dot per
+  character, and past 20 a count, so the next key is still visible. Keys
+  typed while PAM checks the last attempt go into the field as the next
+  one, and Enter then is held until that check fails. "Checking" and PAM's
+  messages show under the field. A wrong password clears the field; it
+  doesn't shake.
 - **Triggers:** `Super+L`, idle, suspend, and lid-close without an external
   display.
 - **All of them go through logind.** `loginctl lock-session` raises logind's

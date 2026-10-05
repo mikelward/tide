@@ -1,0 +1,22 @@
+# The session lock (SPEC.md §10): tide-lock, a Quickshell process of its
+# own built from the shell's QML. Every lock goes through logind:
+# `loginctl lock-session` raises its Lock signal, and hypridle's lock_cmd
+# starts this unit. It exits 0 once the password is accepted.
+[Unit]
+Description=tide lock screen
+Documentation=https://github.com/mikelward/tide
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+# A live lock never reloads because the shell's files were edited.
+Environment=QS_DISABLE_FILE_WATCHER=1
+ExecStart=qs -p %h/.config/quickshell/tide/lock.qml
+# If the lock dies, the compositor keeps the session locked; restarting
+# takes the lock back (Hyprland's misc:allow_session_lock_restore), and the
+# password unlocks it as usual. An unlock is a clean exit, which this
+# doesn't restart.
+Restart=on-failure
+RestartSec=0
+Slice=session-graphical.slice

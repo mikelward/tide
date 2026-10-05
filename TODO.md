@@ -7,6 +7,12 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **A wrong password doesn't shake the lock's field.** The mock had it
+  shake once; tide-lock only clears it and shows the error under it. You
+  insisted keystrokes never wait on an animation, and weren't sure about
+  one after Enter. A shake after a failed check could be added back
+  without touching keystroke feedback.
+
 - [ ] **A launcher entry with no `StartupWMClass` grants named classes,
   not any app's window.** It grants its desktop ID and program (unless a
   wrapper), where it used to grant `*`. An app whose window class is
@@ -412,6 +418,31 @@ default input's mute, from any source, and the backlight when the keys in
 - Try it on a real session: the volume and brightness keys, the bar's
   scroll and the volume popover should each show it, and switching
   outputs or hypridle dimming shouldn't.
+
+## Lock (M5)
+
+SPEC.md §10's lock is `tide-lock`: `shell/lock.qml` and
+`shell/LockSurface.qml`, from `shell/lib/lock.mjs`, run by
+`tide-lock.service` (`qs -p .../tide/lock.qml`) with PAM service
+`tide-lock`. It has the password face: the short hostname, the time and
+date, the user, the field and PAM's messages. Only parsed with `qmlformat`
+and `qmllint`; nothing has run it yet. Still to do:
+
+- Try it on a real session: `make install`, `sudo make install-session`
+  (for `/etc/pam.d/tide-lock`), then `systemctl --user start
+  tide-lock.service`. A right password unlocks; a wrong one clears the
+  field and says so; every key shows at once.
+- Switch `conf` over: hypridle's `lock_cmd` starts `tide-lock.service`,
+  `misc:allow_session_lock_restore` is on, and `Super+L` stays `loginctl
+  lock-session`. Then hyprlock goes.
+- The screensaver face (§10): black, low contrast, moving each minute;
+  any input brings back the password face with the key in the field.
+- The zone clocks under the hostname, the notification count and battery
+  in the corner, Suspend, and restart and shut down (through logind's
+  inhibitor check), as the mock shows.
+- The keyboard layout badge by the field.
+- Skip the lock inside a Chrome Remote Desktop session.
+- Crash it on purpose and walk the three ways out (§10).
 
 ## The rest of `tide doctor`
 

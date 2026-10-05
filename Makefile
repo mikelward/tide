@@ -9,7 +9,8 @@
 #                         the session's systemd user units and the portal
 #                         config, under ~/.config
 #   make install-session  install the session entry, its compositor wrapper
-#                         and the tide commands under $(PREFIX) (root;
+#                         and the tide commands under $(PREFIX), and the
+#                         lock's PAM service in /etc/pam.d (root;
 #                         see README.md; run `make build` as yourself first)
 #   make mocks            re-render the design mocks (docs/mocks/*.html -> *.png)
 #   make palette          regenerate shell/lib/palette.mjs from
@@ -52,7 +53,7 @@ test:
 	sh bin/tide-sysmon_test.sh
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
 	$(QMLLINT) $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs))
-	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/sysmon_test.mjs shell/lib/keepawake_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs shell/lib/vpn_test.mjs shell/lib/mic_test.mjs shell/lib/fuzzy_test.mjs shell/lib/frecency_test.mjs shell/lib/launcher_test.mjs
+	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/sysmon_test.mjs shell/lib/keepawake_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs shell/lib/vpn_test.mjs shell/lib/mic_test.mjs shell/lib/fuzzy_test.mjs shell/lib/frecency_test.mjs shell/lib/launcher_test.mjs shell/lib/lock_test.mjs
 # theme/ is build-time Node, not loaded by the shell, so runs unguarded.
 	$(NODE) --test theme/palette_test.mjs
 	$(NODE) theme/generate.mjs --check
@@ -76,7 +77,7 @@ install: build
 	install -d "$(HYPR_DIR)"
 	install -m 644 hypr/tide/geometry.lua hypr/tide/layout.lua hypr/tide/focus.lua "$(HYPR_DIR)/"
 	install -d "$(SYSTEMD_USER_DIR)/hypridle.service.d" "$(SYSTEMD_USER_DIR)/app-.service.d"
-	install -m 644 systemd/user/tide.service "$(SYSTEMD_USER_DIR)/"
+	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service "$(SYSTEMD_USER_DIR)/"
 	install -m 644 systemd/user/hypridle.service.d/tide.conf "$(SYSTEMD_USER_DIR)/hypridle.service.d/"
 	install -m 644 systemd/user/app-.service.d/tide-autostart.conf "$(SYSTEMD_USER_DIR)/app-.service.d/"
 	@# rmdir only removes a directory this emptied.
@@ -107,6 +108,9 @@ install-session:
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
 	install -m 755 bin/tide bin/tide-doctor bin/tide-hyprland bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz "$(DESTDIR)$(PREFIX)/bin/"
 	install -m 644 session/tide.desktop "$(DESTDIR)$(PREFIX)/share/wayland-sessions/"
+	@# PAM reads /etc/pam.d, whatever PREFIX is.
+	install -d "$(DESTDIR)/etc/pam.d"
+	install -m 644 pam/tide-lock "$(DESTDIR)/etc/pam.d/tide-lock"
 
 # Needs Node and Playwright with Chromium. A global Playwright install is
 # found through NODE_PATH; a project-local one works without it.
