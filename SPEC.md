@@ -1901,6 +1901,12 @@ are what "done" means.
   checks for a fractional `font.pixelSize`, and for the icon theme pragma
   (§15), run everywhere. A missing pragma loads cleanly and shows only as
   missing icons.
+- **The lock unlocks.** Given the password of the user running it, the same
+  test types into the lock with wtype: a wrong password, then the right
+  one, at once. PAM must turn down the first, and the lock must unlock and
+  exit on the second, which also checks that keys typed while PAM checks
+  are kept. CI gives root a password in its throwaway container, and
+  installs the lock's PAM service. Elsewhere this step is skipped.
 - **Clock fixtures.** Instants on both sides of every 2026–2027 US and EU DST
   change, asserting each zone's abbreviation and day offset. The `GMT+1`
   trap is a named test.

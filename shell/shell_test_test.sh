@@ -1,9 +1,9 @@
 #!/bin/sh
 #
-# Tests for shell/shell_test.sh itself, with stand-ins for qs and sway, so
-# they run without Quickshell: what the load test does with a shell that
-# loads cleanly, one whose files report an error, and one whose event loop
-# never answers.
+# Tests for shell/shell_test.sh itself, with stand-ins for qs, sway and
+# wtype, so they run without Quickshell: what the load test does with a
+# shell that loads cleanly, one whose files report an error, one whose event
+# loop never answers, and a lock that unlocks or doesn't.
 
 cd "$(dirname "$0")/.." || exit 1
 
@@ -30,8 +30,11 @@ fi
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
-# stubs DIR IPC LOAD: a sway that listens on wayland-1 until it's killed,
-# and a qs whose `ipc` runs IPC and whose load prints LOAD then waits.
+# stubs DIR IPC LOAD [UNLOCK]: a sway that listens on wayland-1 until it's
+# killed; a qs whose `ipc` runs IPC, which runs UNLOCK when started as the
+# unlock step starts it (with WAYLAND_DEBUG), and otherwise prints LOAD then
+# waits; and a wtype that keeps what it types in DIR/typed, and in the
+# runtime directory for qs to see.
 stubs() {
     mkdir -p "$1" || exit 1
     cat >"$1/sway" <<'EOF'
@@ -46,10 +49,22 @@ EOF
 if test "\$1" = ipc; then
     $2
 fi
+if test -n "\$WAYLAND_DEBUG"; then
+    ${4:-:}
+fi
 printf '%s\n' '$3'
 exec sleep 3600
 EOF
-    chmod +x "$1/sway" "$1/qs" || exit 1
+    cat >"$1/wtype" <<'EOF'
+#!/bin/sh
+if test "$1" = -s; then
+    exec sleep 3600
+fi
+printf '%s' "$1" >>"$(dirname "$0")/typed"
+printf '%s\n' "$LANG" >>"$(dirname "$0")/typed-lang"
+printf '%s' "$1" >"$XDG_RUNTIME_DIR/typed"
+EOF
+    chmod +x "$1/sway" "$1/qs" "$1/wtype" || exit 1
 }
 
 # run DIR [VAR=VALUE...]: the load test with DIR's stand-ins, a 2 s limit,
@@ -93,6 +108,70 @@ stubs "$tmp/broken" "exit 0" " ERROR: Failed to load configuration"
 run "$tmp/broken"
 check "a shell that fails to load fails" test "$code" -ne 0
 check "and shows Quickshell's log" contains "$out" "Failed to load configuration"
+
+# What a lock started for unlocking says: that it took the keyboard, then,
+# once the passwords are typed, PAM's verdicts.
+focused="echo '[1.0] {Default Queue} wl_keyboard#3.enter(1, wl_surface#2, array[0])'"
+typed='until test -s "$XDG_RUNTIME_DIR/typed"; do sleep 0.1; done'
+loaded="  INFO: Configuration Loaded"
+
+stubs "$tmp/unlocks" "exit 0" "$loaded" "$focused; $typed
+echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
+run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
+check "a lock that unlocks on the right password passes" test "$code" -eq 0
+check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
+check "having typed a wrong password, then the right one" test "$(cat "$tmp/unlocks/typed")" = "not-pw
+pw"
+check "in a UTF-8 locale, for a password beyond ASCII" test "$(cat "$tmp/unlocks/typed-lang")" = C.UTF-8
+
+run "$tmp/clean"
+check "without a password, the lock isn't unlocked" contains "$out" "no TIDE_LOCK_PASSWORD, so the lock isn't unlocked"
+
+stubs "$tmp/unfocused" "exit 0" "$loaded" "exec sleep 3600"
+run "$tmp/unfocused" TIDE_LOCK_PASSWORD=pw
+check "a lock that never takes the keyboard fails" test "$code" -ne 0
+check "and says so" contains "$out" "the lock didn't take the keyboard in 2 s"
+check "within the limit ($took s)" test "$took" -lt 30
+
+stubs "$tmp/dies" "exit 0" "$loaded" "exit 1"
+run "$tmp/dies" TIDE_LOCK_PASSWORD=pw
+check "a lock that exits before it takes the keyboard fails" test "$code" -ne 0
+check "and says so" contains "$out" "the lock exited before it took the keyboard"
+
+stubs "$tmp/stays" "exit 0" "$loaded" "$focused; exec sleep 3600"
+run "$tmp/stays" TIDE_LOCK_PASSWORD=pw
+check "a lock that never unlocks fails" test "$code" -ne 0
+check "and says so" contains "$out" "the lock didn't unlock in 2 s"
+check "within the limit ($took s)" test "$took" -lt 30
+
+stubs "$tmp/stuck-typing" "exit 0" "$loaded" "$focused; exec sleep 3600"
+cat >"$tmp/stuck-typing/wtype" <<'EOF'
+#!/bin/sh
+exec sleep 3600
+EOF
+run "$tmp/stuck-typing" TIDE_LOCK_PASSWORD=pw
+check "a wtype that never finishes typing fails" test "$code" -ne 0
+check "and says so" contains "$out" "wtype didn't finish typing into the lock in 2 s"
+check "within the limit ($took s)" test "$took" -lt 30
+
+stubs "$tmp/lets-in" "exit 0" "$loaded" "$focused; $typed
+echo 'Authenticated successfully.'; exit 0"
+run "$tmp/lets-in" TIDE_LOCK_PASSWORD=pw
+check "a lock that takes the wrong password fails" test "$code" -ne 0
+check "and says so" contains "$out" "PAM should turn down the wrong password"
+
+stubs "$tmp/crashes" "exit 0" "$loaded" "$focused; $typed
+echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 3"
+run "$tmp/crashes" TIDE_LOCK_PASSWORD=pw
+check "a lock that exits with an error on unlocking fails" test "$code" -ne 0
+check "and says so" contains "$out" "the lock exited 3 on unlocking"
+
+stubs "$tmp/unlock-reports" "exit 0" "$loaded" "$focused; $typed
+echo '  WARN scene: @lock.qml[40:-1]: TypeError: x is undefined'
+echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
+run "$tmp/unlock-reports" TIDE_LOCK_PASSWORD=pw
+check "a lock whose file reports an error while unlocking fails" test "$code" -ne 0
+check "and names the report" contains "$out" "@lock.qml[40:-1]: TypeError"
 
 printf 'shell_test_test.sh: %d passed, %d failed\n' "$passes" "$failures"
 test "$failures" -eq 0

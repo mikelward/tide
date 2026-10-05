@@ -20,10 +20,18 @@
 # made from data that arrives later (a clock, a notification), aren't
 # covered.
 #
-#   $QS               the Quickshell command (default: qs)
-#   $TIDE_REQUIRE_QS  set (CI sets it) to fail, not skip, without qs or sway
-#   $TIDE_LOAD_WAIT   seconds to wait for each to start (default: 60)
-#   $TIDE_KEEP_LOG    a file to copy Quickshell's logs to
+# Given the password of the user running it, it also unlocks the lock: it
+# types a wrong password and then the right one, and expects PAM to turn
+# down the first and the lock to unlock and exit on the second. That needs
+# wtype and tide-lock's PAM service in /etc/pam.d (`make install-session`).
+#
+#   $QS                  the Quickshell command (default: qs)
+#   $TIDE_REQUIRE_QS     set (CI sets it) to fail, not skip, without qs or sway
+#   $TIDE_LOAD_WAIT      seconds to wait for each step (default: 60)
+#   $TIDE_KEEP_LOG       a file to copy Quickshell's logs to
+#   $TIDE_LOCK_PASSWORD  the running user's password, to unlock the lock with.
+#                        CI sets one in its throwaway container. It goes on
+#                        wtype's command line, so never give it a real one.
 
 cd "$(dirname "$0")/.." || exit 1
 prog=shell/shell_test.sh
@@ -60,6 +68,10 @@ missing() {
 qs=${QS:-qs}
 qs_path=$(command -v "$qs") || missing "$qs (Quickshell)"
 sway_path=$(command -v sway) || missing "sway (to run headless)"
+if test -n "${TIDE_LOCK_PASSWORD:-}" && ! wtype_path=$(command -v wtype); then
+    echo "FAIL: $prog: TIDE_LOCK_PASSWORD is set, but there's no wtype on PATH to type it" >&2
+    exit 1
+fi
 
 wait=${TIDE_LOAD_WAIT:-60}
 case "$wait" in
@@ -71,11 +83,12 @@ esac
 
 tmp=$(mktemp -d) || exit 1
 qs_pid=
+keyboard_pid=
 sway_pid=
 bus_pid=
 cleanup() {
     _status=$?
-    for pid in $qs_pid $sway_pid; do
+    for pid in $qs_pid $keyboard_pid $sway_pid; do
         # It may have exited already.
         kill "$pid" 2>/dev/null
         wait "$pid"
@@ -114,11 +127,11 @@ else
     echo "$prog: no dbus-daemon, so the shell runs without a session bus" >&2
 fi
 
-# waited WHAT N: whether N tenths of a second have passed, which ends a
-# wait for WHAT by failing the test.
+# waited FAILURE N: whether N tenths of a second have passed, which ends a
+# wait by failing the test with FAILURE.
 waited() {
     test "$2" -lt "$((wait * 10))" && return 1
-    echo "FAIL: $1 didn't start in $wait s" >&2
+    echo "FAIL: $1 in $wait s" >&2
     return 0
 }
 
@@ -131,7 +144,7 @@ env -i PATH="$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
 sway_pid=$!
 i=0
 until test -S "$tmp/run/wayland-1"; do
-    if ! kill -0 "$sway_pid" 2>/dev/null || waited "sway" "$i"; then
+    if ! kill -0 "$sway_pid" 2>/dev/null || waited "sway didn't start" "$i"; then
         echo "FAIL: headless sway didn't start:" >&2
         cat "$tmp/sway.log" >&2
         exit 1
@@ -166,7 +179,7 @@ load() {
         if ! kill -0 "$qs_pid" 2>/dev/null; then
             break
         fi
-        if waited "Quickshell" "$i"; then
+        if waited "Quickshell didn't start" "$i"; then
             cat "$log" >&2
             exit 1
         fi
@@ -195,15 +208,107 @@ load() {
         cat "$log" >&2
         exit 1
     fi
-    # What the shell's own files reported: Quickshell names them @File.qml
-    # or @lib/file.mjs.
+    reports "$_what loaded"
+    echo "ok: Quickshell loads $_what"
+}
+
+# reports CONTEXT: fails the test on anything the shell's own files reported
+# in $log. Quickshell names them @File.qml or @lib/file.mjs.
+reports() {
     if grep -E '@[A-Za-z]+\.qml|@lib/[a-z_]+\.mjs' "$log" >"$tmp/reports"; then
-        echo "FAIL: $_what loaded, but its files reported:" >&2
+        echo "FAIL: $1, but its files reported:" >&2
         cat "$tmp/reports" >&2
         exit 1
     fi
-    echo "ok: Quickshell loads $_what"
+}
+
+# unlock: starts the lock again, types a wrong password and the right one
+# in one go, and fails the test unless PAM turns down the first and the
+# lock unlocks and exits on the second. Keys typed while PAM checks are
+# kept, and an Enter among them waits for that check (SPEC.md §10), so the
+# typing needn't wait on PAM. Its log is $tmp/unlock.qs.log.
+unlock() {
+    log=$tmp/unlock.qs.log
+    : >"$log" || exit 1
+    # The headless seat has no keyboard, and the one wtype makes comes and
+    # goes with it: the lock would get its keyboard after the first keys
+    # had gone. One held from the start keeps every key.
+    env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        "$wtype_path" -s 3600000 >"$tmp/keyboard.log" 2>&1 &
+    keyboard_pid=$!
+    # WAYLAND_DEBUG logs the protocol, so the log shows the moment the lock
+    # surface takes the keyboard (wl_keyboard.enter); keys typed before it
+    # would go nowhere.
+    env -i PATH="$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
+        ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
+        LANG=C.UTF-8 QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
+        QS_DISABLE_FILE_WATCHER=1 WAYLAND_DEBUG=client \
+        "$qs_path" -p "$tmp/home/.config/quickshell/tide/lock.qml" >"$log" 2>&1 &
+    qs_pid=$!
+    i=0
+    until grep -q '} wl_keyboard#[0-9]*\.enter(' "$log"; do
+        if ! kill -0 "$qs_pid" 2>/dev/null; then
+            echo "FAIL: the lock exited before it took the keyboard:" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        if waited "the lock didn't take the keyboard" "$i"; then
+            cat "$tmp/keyboard.log" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    # wtype reads its text in the locale's encoding, so a password beyond
+    # ASCII needs a UTF-8 one.
+    timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 "$wtype_path" "not-$TIDE_LOCK_PASSWORD
+$TIDE_LOCK_PASSWORD
+" >"$tmp/wtype.log" 2>&1
+    case $? in
+        0) ;;
+        124)
+            echo "FAIL: wtype didn't finish typing into the lock in $wait s" >&2
+            exit 1
+            ;;
+        *)
+            echo "FAIL: wtype couldn't type into the lock: $(cat "$tmp/wtype.log")" >&2
+            exit 1
+            ;;
+    esac
+    i=0
+    while kill -0 "$qs_pid" 2>/dev/null; do
+        if waited "the lock didn't unlock" "$i"; then
+            echo "Is TIDE_LOCK_PASSWORD right, and tide-lock's PAM service installed (make install-session)?" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    wait "$qs_pid"
+    _status=$?
+    qs_pid=
+    if test "$_status" -ne 0; then
+        echo "FAIL: the lock exited $_status on unlocking:" >&2
+        grep -v '^\[' "$log" >&2
+        exit 1
+    fi
+    # Quickshell's PAM subprocess logs each conversation's end.
+    _results=$(grep -o 'Failed to authenticate\|Authenticated successfully' "$log" | tr '\n' ' ')
+    if test "$_results" != "Failed to authenticate Authenticated successfully "; then
+        echo "FAIL: PAM should turn down the wrong password, then take the right one; it said: $_results" >&2
+        exit 1
+    fi
+    reports "the lock unlocked"
+    echo "ok: the lock turns down a wrong password and unlocks on the right one"
 }
 
 load shell "the shell" -c tide
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
+if test -n "${TIDE_LOCK_PASSWORD:-}"; then
+    unlock
+else
+    echo "$prog: no TIDE_LOCK_PASSWORD, so the lock isn't unlocked; CI unlocks it" >&2
+fi

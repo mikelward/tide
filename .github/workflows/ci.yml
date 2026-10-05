@@ -68,14 +68,18 @@ jobs:
       QUICKSHELL_TAG: v0.3.1
       QUICKSHELL_COMMIT: 1a4716cde794a59928d9d9fc15f2afc7a95de360
       QUICKSHELL_PREFIX: /opt/quickshell
+      # root's password in this throwaway container, which the test types
+      # into the lock; it guards nothing.
+      TIDE_LOCK_PASSWORD: tide-ci-unlock
     steps:
       # setup-tide's QUICKSHELL_BUILD_DEPS, plus what this job runs: git
-      # for the checkout, and the bus and the compositor the test runs on.
+      # for the checkout, the bus and the compositor the test runs on, and
+      # wtype to type into the lock.
       - name: Install Quickshell's build dependencies
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build pkg-config git ca-certificates dbus-daemon sway \
+            build-essential cmake ninja-build pkg-config git ca-certificates dbus-daemon sway wtype \
             qt6-base-dev qt6-base-private-dev qt6-declarative-dev qt6-declarative-private-dev \
             qt6-wayland-dev qt6-wayland-private-dev qt6-shadertools-dev spirv-tools \
             libcli11-dev libjemalloc-dev libdrm-dev libgbm-dev libegl-dev libgles-dev libvulkan-dev \
@@ -106,7 +110,13 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release -DCRASH_HANDLER=OFF -DDISTRIBUTOR="tide CI"
           cmake --build /tmp/quickshell/build
           cmake --install /tmp/quickshell/build
-      - name: Load the shell
+      # What the test needs to unlock the lock: a password to type, and the
+      # lock's PAM service, as `make install-session` installs it.
+      - name: Give root a password and install the lock's PAM service
+        run: |
+          printf 'root:%s\n' "$TIDE_LOCK_PASSWORD" | chpasswd
+          install -m 644 pam/tide-lock /etc/pam.d/tide-lock
+      - name: Load the shell, and unlock the lock
         run: PATH="$QUICKSHELL_PREFIX/bin:$PATH" TIDE_REQUIRE_QS=1 sh shell/shell_test.sh
 
   lanes:
