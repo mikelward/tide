@@ -12,8 +12,8 @@ This document is milestone 1: the options, the decisions, and what
 "done" looks like for each later milestone. Mocks are in
 [`docs/mocks/`](docs/mocks/); every claim about an upstream project was
 checked against its current release on 2026-09-28 (see
-[Sources](#sources)), except in §21.1, a deferred exploration that says
-which of its claims were checked.
+[Sources](#sources)), except in §21.1 and §21.2, deferred explorations that
+say which of their claims were checked.
 
 Contents:
 [Goals](#1-goals) ·
@@ -1858,6 +1858,7 @@ light/dark switch.
 | **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, launcher, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide grant` and `tide idle-suspend`. The Lua tiling layout. `make install`. |
 | **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf` timings; uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts), with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **scripts** | `setup --tide`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
+| **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |
 | **dwl** (exploration) | The tide fork of dwl that §21.1 is exploring, on upstream's history, under dwl's GPL-3.0-or-later license: the layouts, dimming and IPC it would add. Nothing else depends on it until §21.1's next steps are done and §3.1 is rewritten around it. |
 
 ## 19. Milestones
@@ -1958,8 +1959,8 @@ are what "done" means.
 
 ## 21. Open questions
 
-None right now. Deferred work, with its notes, is in `TODO.md`. §21.1
-records a deferred exploration, not an open M1 question: Hyprland stays the
+None right now. Deferred work, with its notes, is in `TODO.md`. §21.1 and
+§21.2 record deferred explorations, not open M1 questions: Hyprland stays the
 baseline M1 accepted.
 
 ### 21.1 Deferred exploration: a dwl fork instead of Hyprland
@@ -2073,6 +2074,185 @@ sources, then a test session on wlroots 0.19/0.20:
    model, focus and activation). That list becomes the fork's acceptance
    test.
 
+### 21.2 A possible later iteration: our own window manager on river
+
+A later tide may own its window management without owning a compositor:
+river runs the compositor, and tide's own window manager, a separate program,
+makes every policy decision. It waits until river exposes what tide needs
+(below). Until then Hyprland stays, and this is not built.
+
+**Why it appeals:**
+
+- **One license.** river is GPL-3.0-only, but tide would only run it, as it
+  runs Hyprland today. Its protocols are MIT, and the window manager is our
+  own program in its own repository, so it can carry one Apache-2.0
+  `LICENSE`. A dwl fork can't: dwl ships GPL text plus MIT and CC0 notices
+  for dwm, sway and tinywl, which GitHub lists as several licenses rather
+  than one, and a fork has to keep them.
+- **No compositor to maintain.** Rendering, wlroots ports and the protocols
+  are river's. We write the policy, so it's far less code than a compositor
+  started from tinywl, the fallback if river stalls.
+- **Any language.** We'd use Go, which tide already uses for `tide-grant` and
+  `tide-tz`.
+- **It fits tide's design:**
+  - The window manager owns focus outright, so the focus guard (§14.3) stops
+    fighting a compositor rule. Its process ancestry reads each window's
+    `unreliable_pid` (`river-window-management-v1`, since version 2). That
+    PID can be reused, as Hyprland's `pid` can, so it stays a focus
+    decision, never a security one.
+    A click on a window cancels a grant through `window_interaction`,
+    which reports a button press without taking it from the app. Those
+    events don't cover tide's own layer surfaces (the bar, popovers,
+    notifications), and typing has no such event at all (below).
+  - The layouts (§6.1) are ours.
+  - Minimize is in the protocol: apps can ask, and the window manager hides
+    and shows windows.
+  - Pointer operations report live deltas, so dragging to resize a tiled
+    window is ours to write.
+  - river tells the window manager how many captures are running per window
+    and per output. That counts screenshots too, so the Sharing pill (§7.4)
+    still keys on a live PipeWire stream (§12); the counts can only name
+    what a share is capturing.
+- **Restartable.** The window manager can be restarted or swapped without
+  restarting the session or any app; a crash in it closes nothing. river
+  doesn't remember which workspace a window was on, so the window manager
+  saves that and each workspace's layout, keyed by river's window
+  `identifier`, and puts windows back where they were when it restarts.
+
+**What it waits for:**
+
+- **Activation.** river 0.4.8 drops xdg-activation requests from windows
+  (a TODO in its source). Its maintainer's own issue, "Expose xdg-activation
+  information to window managers", is open, and in January 2026 the
+  maintainer wrote that it will be exposed "eventually". Without it, an
+  app's own request for attention is lost: tide can't mark it (§14.1), and
+  an app can't raise its own window. A notification click would still bring
+  its app up, through tide's fallback to the app's most recent window.
+- **X11 activation too.** river 0.4.8 doesn't listen for an Xwayland
+  window's `_NET_ACTIVE_WINDOW` request at all (`XwaylandWindow.zig` has no
+  `request_activate` listener), so river#1281 has to cover that path as
+  well, or it is a second thing to wait for (§14.1 covers X11 apps).
+- **Dialog metadata.** river 0.4.8's window-management protocol tells the
+  window manager a window's parent and size hints, so a dialog with a
+  parent or a fixed size floats, but not whether it is modal or an X11
+  dialog, utility or splash window. Without those, a parentless modal
+  dialog or a typed X11 one tiles unless its class or title gives it away,
+  which §6.4 doesn't allow. River has to expose them, or this waits too.
+- **Input activity.** The focus guard drops a launch grant once you type
+  or click anywhere (§14.3), so the window manager has to see every key
+  press and every button press, wherever it lands, in river's own order.
+  river 0.4.8 reports only some of them:
+  - `window_interaction` covers clicks on windows, but a click on a layer
+    surface such as the bar, or on bare wallpaper (the margin around a lone
+    window, §6.1), isn't reported at all.
+  - `river-xkb-bindings-v1` reports only keys that trigger a binding; every
+    other key goes straight to the focused window, and binding every key
+    would eat it. So a slow window could take focus mid-word.
+  - The shell can't stand in by reporting clicks over the window manager's
+    IPC: that isn't ordered with river's manage sequence, so the click can
+    arrive after a new window has already taken the grant. river orders its
+    own interaction events for exactly this reason.
+
+  River has to report every key and button press in its sequence, without
+  consuming them, or this waits too.
+- **Capture exclusion.** §12 shows the launcher and notifications black to
+  the far end of a screen or region share, while they stay visible on your
+  own screen. Hyprland does that with `no_screen_share`. river 0.4.8 has no
+  way to mark a surface for that: `river-layer-shell-v1` sets focus,
+  exclusive area and the default output, and the window-management
+  protocol's capture events only count sessions. Only the compositor can
+  black something out of what it hands the portal, so river has to add it,
+  or this waits too.
+- **Capture checks.** `grim -T`, screen and region screenshots, and window and
+  monitor sharing through xdg-desktop-portal-wlr, including §12's 16:9 slice,
+  which xdg-desktop-portal-wlr doesn't offer and would have to be built.
+  `tide-share-picker` needs an adapter, as in §21.1: xdg-desktop-portal-wlr
+  0.8.4's chooser gets no list of windows and outputs, and takes only
+  `Monitor: <name>` or `Window: <identifier>` back, while the picker reads
+  xdph's lists and answers `[SELECTION]`. Without it, every choice reads as
+  a declined share.
+  §12's "let this app reuse the choice" checkbox needs xdpw patched or
+  replaced too: 0.8.4 takes persistence only from the process-wide
+  `XDPW_PERSIST_MODE` (letting the chooser decide is a TODO in its source)
+  and returns restore data only for a monitor, so the adapter has no way to
+  pass the checkbox on, and a window share can't be restored.
+  The Sharing pill (§7.4) also has to learn the new portal's streams: it
+  matches xdph's `xdph-streaming-*`, and xdg-desktop-portal-wlr 0.8.4 names
+  its streams `xdpw-stream-*`, so a share would show no pill and let
+  popups into the shared image until it does, with a test. The session
+  also has to route to it: `tide-portals.conf` goes from `hyprland;gtk` to
+  `wlr;gtk`, `setup` installs xdg-desktop-portal-wlr, and the session test
+  and doctor expect it. It costs nothing. If it's missing, crashed or too
+  old, Meet's share and the portal's screenshots fail with no picker, while
+  tide's own `grim` screenshots still work; doctor names which it is.
+  river provides the capture protocols; these flows haven't been tried on it.
+
+**What to know first:**
+
+- **No AI in contributions.** river forbids LLM-assisted patches, bug
+  reports and comments. Using river is unaffected, but anything we need
+  upstream we wait for, unless a person researches and writes the request
+  without AI.
+- **One main developer.** The maintainer wrote 286 of the 320 commits on
+  `main` in the year to 2026-09-23 (see Sources), so river's protocols are our whole contract with it. That is more than
+  window management: key bindings come through `river-xkb-bindings-v1`;
+  keyboard and pointer settings through `river-xkb-config-v1`,
+  `river-input-management-v1` and `river-libinput-config-v1`; and the
+  window manager must bind `river-layer-shell-v1`, or river closes every
+  layer surface, which is the whole shell. All are MIT, in river 0.4.8.
+- **Outputs are a companion's job, not the window manager's.** river 0.4.8
+  provides wlr-output-management and wlr-output-power-management, and its
+  man page suggests kanshi for output configuration.
+  - **Per-output settings** (§16) need a client of the first: kanshi, or
+    our own.
+  - **The lid** (§6.5) needs more than that. kanshi picks a profile from
+    which outputs are connected, and a closed lid leaves the panel
+    connected, so kanshi alone never turns it off. A small lid listener
+    on logind's `LidClosed` has to tell the output client to disable and
+    re-enable the panel; river 0.4.8 has no switch or lid event of its
+    own.
+  - **Idle screen-off** (§10) needs a client of the second, `wlopm` in
+    place of Hyprland's `dpms` dispatch.
+  - **Cost:** none in money; Ubuntu 26.04 packages `wlopm` 1.0.0 and
+    `kanshi` 1.9.0, so `setup --tide` installs them. `wlopm` runs once per
+    idle step; kanshi and the lid listener are resident, two more
+    processes for `tide doctor` to check.
+  - **When one fails:** without `wlopm` the screens never turn off: the
+    session locks at 5 minutes as usual, and the lock screen then stays lit,
+    on AC indefinitely and on battery until the 30-minute suspend (§10).
+    A lit lock screen is easy to mistake for working; without kanshi, outputs keep river's defaults; without
+    the lid listener, closing the lid leaves the panel on and its
+    workspaces stay there. Each fails quietly unless doctor checks it, so
+    it would, separately.
+- **Building it** needs Zig 0.16 and wlroots 0.20, and `-Dxwayland`, which river's
+  default build leaves out; without it no X11 app runs. Ubuntu 26.04 ships Zig
+  0.14 and wlroots 0.19.2; Debian is not checked. That's a smaller pinned build than Hyprland's (§21.1).
+- **Cost and failures.** river costs nothing in money. Its failures are
+  Hyprland's today:
+  - a missing or broken river build means the session doesn't start;
+  - a river crash disconnects every app, so their windows close and
+    unsaved work is lost.
+
+  The window manager is the part that can crash and close nothing (above),
+  but the desktop stalls until it's back: river leaves window policy to it,
+  so new windows aren't shown, and focus and tide's key bindings do
+  nothing. It costs nothing. It runs as a user unit that restarts it on
+  failure, the session test expects it, and doctor reports it when it isn't
+  running.
+
+**When river has all five (activation, X11 activation, dialog metadata,
+input activity, capture exclusion),** before any switch:
+
+1. A prototype window manager in Go: tile and monocle, focus only by grant,
+   minimize, dimming, an IPC for the shell, and layer shell, so the bar,
+   launcher and notifications appear. It runs on a river built with
+   `-Dxwayland`, and an X11 app runs on it.
+2. The capture flows above, run end to end, and the lid and idle
+   screen-off through those output clients and the lid listener.
+3. The list of what tide needs from the compositor
+   ([`docs/compositor.md`](docs/compositor.md)), each item with river's
+   replacement and its check passing.
+
 Decided in review of this spec:
 
 - **Monitors:** each monitor shows its own workspace (§6.5).
@@ -2131,6 +2311,39 @@ systemd 255's `systemd-analyze verify` in `session_test.sh`:
   ([NEWS](https://github.com/systemd/systemd/blob/main/NEWS), "CHANGES WITH 246";
   [`xdg-autostart-service.c`](https://github.com/systemd/systemd/blob/main/src/xdg-autostart-generator/xdg-autostart-service.c))
 
+Checked 2026-10-05, for §21.2:
+
+- river 0.4.8 (`b028abc`, 2026-08-07):
+  [`README.md`](https://codeberg.org/river/river/src/tag/v0.4.8/README.md)
+  (the window manager is a separate program; the protocols are stable; no
+  LLM contributions; Zig 0.16 and wlroots 0.20),
+  [`river-window-management-v1.xml`](https://codeberg.org/river/river/src/tag/v0.4.8/protocol/river-window-management-v1.xml)
+  (MIT; `focus_window`, `hide`, `minimize_requested`, `op_start_pointer`,
+  `capture_sessions`),
+  [`protocol/`](https://codeberg.org/river/river/src/tag/v0.4.8/protocol)
+  (seven `river-*-v1` protocols, all MIT, including `river-xkb-bindings-v1`
+  for key bindings),
+  [`river/OutputManager.zig`](https://codeberg.org/river/river/src/tag/v0.4.8/river/OutputManager.zig)
+  (wlr-output-management and wlr-output-power-management) and
+  [`doc/river.1.scd`](https://codeberg.org/river/river/src/tag/v0.4.8/doc/river.1.scd)
+  (kanshi for output configuration),
+  [`LICENSES/`](https://codeberg.org/river/river/src/tag/v0.4.8/LICENSES)
+  (GPL-3.0-only for the compositor)
+- river's xdg-activation handler, which drops a window's request:
+  [`river/Server.zig`](https://codeberg.org/river/river/src/tag/v0.4.8/river/Server.zig)
+  (`handleRequestActivate`)
+- river's Xwayland windows, which listen for maximize, fullscreen and
+  minimize requests but not activation:
+  [`river/XwaylandWindow.zig`](https://codeberg.org/river/river/src/tag/v0.4.8/river/XwaylandWindow.zig)
+- xdg-desktop-portal-wlr 0.8.4's stream names (`xdpw-stream-XXXXXX`):
+  [`src/screencast/pipewire_screencast.c`](https://github.com/emersion/xdg-desktop-portal-wlr/blob/v0.8.4/src/screencast/pipewire_screencast.c)
+- [river#1281](https://codeberg.org/river/river/issues/1281), "Expose
+  xdg-activation information to window managers" (open), and
+  [river#1358](https://codeberg.org/river/river/issues/1358) (the
+  maintainer's "eventually")
+- dwl's license files: [`LICENSE`](https://codeberg.org/dwl/dwl/src/tag/v0.9/LICENSE),
+  `LICENSE.dwm`, `LICENSE.sway`, `LICENSE.tinywl`
+
 Checked 2026-09-29, for §21.1:
 
 - dwl 0.9: [`config.mk`](https://codeberg.org/dwl/dwl/src/tag/v0.9/config.mk)
@@ -2139,6 +2352,14 @@ Checked 2026-09-29, for §21.1:
   [`config.def.h`](https://codeberg.org/dwl/dwl/src/tag/v0.9/config.def.h)
   (tile and monocle layouts; Super+drag `moveresize`)
 - Ubuntu 26.04 wlroots: [`libwlroots-0.19-dev` 0.19.2](https://packages.ubuntu.com/resolute/libwlroots-0.19-dev)
+- Ubuntu 26.04 Zig: [`zig`](https://packages.ubuntu.com/resolute/zig), whose default is `zig0.14`, checked 2026-10-05
+- Ubuntu 26.04 output tools: [`wlopm` 1.0.0](https://packages.ubuntu.com/resolute/wlopm) and [`kanshi` 1.9.0](https://packages.ubuntu.com/resolute/kanshi), checked 2026-10-05
+- kanshi's profile matching:
+  [kanshi(1)](https://manpages.ubuntu.com/manpages/resolute/man1/kanshi.1.html)
+  on Ubuntu 26.04, "A profile will be automatically activated if all
+  specified outputs are currently connected", so the lid doesn't select one
+- river's commit history: 286 of the 320 commits on `main` from 2025-10-01
+  to `fd5ea7f` (2026-09-23) are the maintainer's, counted with `git log`
 - Ubuntu 26.04 Hyprland: 0.53.3 (`hyprland` 0.53.3+ds-4), from `apt-cache
   policy hyprland` on a 26.04 machine
 - The nine pinned projects and GCC 15:

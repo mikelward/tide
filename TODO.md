@@ -601,6 +601,21 @@ Deferred: it needs a Hyprland patch, and the MVP comes first.
 - Rejected: title bars from the `hyprbars` plugin. A plugin is rebuilt against
   every Hyprland upgrade (SPEC.md §3.1).
 
+## Later: our own window manager on river (SPEC.md §21.2)
+
+Not started, and not to start until river exposes xdg-activation to window
+managers ([river#1281](https://codeberg.org/river/river/issues/1281)),
+including X11 apps' `_NET_ACTIVE_WINDOW`, which river 0.4.8 doesn't listen
+for either, and the modal and X11 window-type information §6.4 floats
+dialogs by, which 0.4.8 doesn't expose, and a way to see every key and
+button press, wherever it lands (bar, wallpaper or window), in river's order
+and without eating it, which the focus guard needs, and a way to keep the
+launcher and notifications out of a screen share (§12). Re-check that issue now and
+then. When all of these have landed, not just the issue, §21.2's steps: a Go
+prototype window manager, the capture flows, and each compositor need with
+river's replacement checked. If river stalls, the fallback is our own
+compositor started from tinywl (check its CC0 license before copying).
+
 ## Compositor: explore a dwl fork (SPEC.md §21.1)
 
 Hyprland stays the baseline, but building it on Debian and Ubuntu is heavy,
