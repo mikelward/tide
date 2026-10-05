@@ -1239,6 +1239,13 @@ one of them:
   - a login started at once takes that answer for its own success;
   - greetd then refuses to start the session ("session is not ready"), and
     the password has to be typed again.
+- **Quickshell's `Greetd` is for now** (maintainer, 2026-10-05). Its
+  cancel race is filed upstream as quickshell-mirror/quickshell#1266.
+  tide will talk to greetd through a client of its own, which waits for
+  the reply to every request it sends, so no reply can be taken for
+  another's (TODO.md). Until then, "Other user" stays disabled while a
+  login is under way, and that limit goes with the new client. Enter
+  during a check does nothing either way.
 
 ## 12. Screen sharing (Google Meet)
 

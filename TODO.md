@@ -566,12 +566,18 @@ Still to do:
   into the field isn't built.
 - The mock's "last signed in yesterday" line under the user isn't built.
 - Quickshell 0.3.1's `Greetd` takes the answer to a cancel it didn't wait
-  for as the next login's own (SPEC.md §11). The greeter avoids the cases
-  where that answer is slow: no held Enter, and no user switch during a
-  login. A login started within greetd's round trip after a failure can
-  still hit it, and greetd then refuses the start. An upstream fix in
-  `src/services/greetd/connection.cpp`, or a greetd client of tide's own,
-  would remove it.
+  for as the next login's own (SPEC.md §11). It's filed upstream as
+  quickshell-mirror/quickshell#1266; master has the same code as 0.3.1.
+  The greeter shipped working around it: no held Enter, and no user
+  switch during a login. A login started within greetd's round trip after
+  a failure can still hit it, and greetd then refuses the start, so the
+  password has to be typed again.
+- Write tide's own greetd client and use it in place of Quickshell's
+  `Greetd` (maintainer, 2026-10-05). It waits for the reply to every
+  request it sends, a cancel's included, so no reply is taken for
+  another's, whatever #1266's fate. A small Go helper in `cmd/` that the
+  greeter talks to is the likely shape; greetd's IPC is a length-prefixed
+  JSON message each way.
 - The greeter has no idle: no dim, no screensaver and no DPMS, so a
   machine left at the greeter keeps its screens lit.
 - SPEC.md §15 has the greeter follow the default light/dark schedule. Its
