@@ -23,6 +23,8 @@ WlSessionLockSurface {
     // The last power action's trouble, if any (Lock.powerMessage).
     property string powerMessage: ""
     property bool powerBusy: false
+    // The keyboard layout badge (Lock.layoutBadge), "" when unknown.
+    property string layout: ""
 
     signal event(var event)
     signal power(string id)
@@ -253,6 +255,8 @@ WlSessionLockSurface {
                     readonly property string shown: Lock.fieldText(surface.lockState)
 
                     Text {
+                        id: entry
+
                         readonly property bool dots: surface.lockState.input !== ""
 
                         anchors.verticalCenter: parent.verticalCenter
@@ -263,6 +267,38 @@ WlSessionLockSurface {
                         font.family: "Inter"
                         font.pixelSize: dots ? 14 : 13
                         font.letterSpacing: dots ? 3 : 0
+                    }
+
+                    // The keyboard layout, so a failed password isn't a
+                    // layout mystery. It takes only the room the field's
+                    // text leaves, elided to fit and hidden below a few
+                    // letters, so it never covers a keystroke.
+                    Rectangle {
+                        readonly property real room: parent.width - entry.anchors.leftMargin - entry.implicitWidth - 8 - anchors.rightMargin
+
+                        visible: surface.layout !== "" && room >= 36
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: parent.right
+                        anchors.rightMargin: 8
+                        width: Math.min(badge.implicitWidth + 12, 108, room)
+                        height: 20
+                        radius: 5
+                        color: Qt.rgba(1, 1, 1, 0.14)
+
+                        Text {
+                            id: badge
+
+                            anchors.centerIn: parent
+                            width: Math.min(implicitWidth, parent.width - 12)
+                            elide: Text.ElideRight
+                            // Hyprland's text, never markup.
+                            textFormat: Text.PlainText
+                            text: surface.layout
+                            color: Qt.rgba(1, 1, 1, 0.85)
+                            font.family: "Inter"
+                            font.pixelSize: 10.5
+                            font.weight: Font.Bold
+                        }
                     }
                 }
 

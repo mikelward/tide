@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Pam
 import Quickshell.Wayland
@@ -22,6 +23,9 @@ ShellRoot {
     // Every key and PAM event goes through here, so the field changes on
     // the frame the key is pressed and nothing waits on PAM to draw.
     function dispatch(event) {
+        if (event.type === "done" && event.result !== "success") {
+            root.layoutEvent({ type: "refresh" });
+        }
         const r = Lock.next(root.face, event);
         root.face = r.state;
         for (const action of r.actions) {
@@ -68,6 +72,81 @@ ShellRoot {
             }
         }
         onExited: (code, status) => root.powerEvent({ type: "exited", code: code })
+    }
+
+    // The main keyboard's layout, for the badge by the field
+    // (Lock.layoutNext): read from hyprctl at start, again on each layout
+    // switch Hyprland reports, and again when a password fails, since that
+    // is when the badge matters and the main keyboard may have changed
+    // with no event (an unplug). Unknown, the badge is hidden rather than
+    // guessed.
+    property var layout: Lock.LAYOUT_INITIAL
+
+    function layoutEvent(event) {
+        const r = Lock.layoutNext(root.layout, event);
+        root.layout = r.state;
+        if (r.query) {
+            devices.lookUp();
+        }
+    }
+
+    Process {
+        id: devices
+
+        // Quickshell reports a command that can't start (no hyprctl on
+        // PATH) only by stopping without `started` (shell/lib/launch.mjs).
+        property bool started: false
+        property bool answered: false
+
+        function lookUp() {
+            started = false;
+            answered = false;
+            running = true;
+        }
+
+        command: ["hyprctl", "devices", "-j"]
+        Component.onCompleted: root.layoutEvent({ type: "refresh" })
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const keymap = Lock.mainKeymap(text);
+                if (keymap === null) {
+                    console.warn("tide-lock: hyprctl devices gave no keyboard; the layout badge stays hidden");
+                }
+                devices.answered = true;
+                root.layoutEvent({ type: "answer", keymap: keymap });
+            }
+        }
+        onStarted: started = true
+        onExited: (code, status) => {
+            if (code !== 0) {
+                console.warn(`tide-lock: hyprctl devices exited ${code}`);
+            }
+        }
+        onRunningChanged: {
+            if (running) {
+                return;
+            }
+            if (!started) {
+                console.warn("tide-lock: couldn't start hyprctl; the layout badge stays hidden");
+            }
+            // No output to answer with: the read is over all the same.
+            if (!answered) {
+                root.layoutEvent({ type: "answer", keymap: null });
+            }
+        }
+    }
+
+    Connections {
+        target: Hyprland
+
+        // The event names a keyboard, but only hyprctl says which is main,
+        // so it's only a cue to read again.
+        function onRawEvent(event) {
+            if (event.name === "activelayout") {
+                root.layoutEvent({ type: "refresh" });
+            }
+        }
     }
 
     function startPam() {
@@ -119,6 +198,7 @@ ShellRoot {
             lockedAt: root.lockedAt
             powerMessage: root.power.message
             powerBusy: Lock.powerBusy(root.power)
+            layout: Lock.layoutBadge(root.layout.keymap)
             onEvent: event => root.dispatch(event)
             onPower: id => root.powerEvent({ type: "press", id: id })
         }

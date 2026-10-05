@@ -447,7 +447,10 @@ an idle lock opens on (`tide idle-lock`). Only parsed with `qmlformat` and
 - The notification count in the corner, as the mock shows.
 - On a real session, check Suspend, Restart and Shut down from the lock,
   and that an inhibitor's name shows instead of the action going through.
-- The keyboard layout badge by the field.
+- On a real session, check the layout badge: it names the main keyboard's
+  layout, follows a switch, and what it shows after a YubiKey's code (which
+  may make the YubiKey Hyprland's main keyboard) and after unplugging an
+  external keyboard while locked.
 - Take a right click as a left one on the greeter too, as the lock does
   (SPEC.md §10), when the greeter is built.
 - Skip the lock inside a Chrome Remote Desktop session.
