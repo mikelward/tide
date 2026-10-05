@@ -89,6 +89,36 @@ ShellRoot {
         }
     }
 
+    // An idle lock opens in the screensaver face (SPEC.md §10). Every lock
+    // arrives through logind, so `tide idle-lock`, which hypridle's idle
+    // step runs, leaves this flag first: the time it locked. A flag only
+    // counts for a few seconds (Lock.idleFlagFresh), so one left by a lock
+    // that never happened can't change a later Super+L. Read once, then
+    // removed.
+    readonly property string idleFlag: `${Quickshell.env("XDG_RUNTIME_DIR")}/tide-lock-idle`
+
+    FileView {
+        path: Quickshell.env("XDG_RUNTIME_DIR") ? root.idleFlag : ""
+        onLoaded: {
+            if (Lock.idleFlagFresh(text(), Date.now())) {
+                root.dispatch({ type: "screensaver" });
+            }
+            removeFlag.running = true;
+        }
+        // No flag is the usual case: a lock from Super+L, suspend or the lid.
+    }
+
+    Process {
+        id: removeFlag
+
+        command: ["rm", "-f", "--", root.idleFlag]
+        onExited: code => {
+            if (code !== 0) {
+                console.warn(`tide-lock: couldn't remove ${root.idleFlag} (rm exited ${code})`);
+            }
+        }
+    }
+
     // The kernel's hostname, read once; the face shows the short form.
     FileView {
         path: "/proc/sys/kernel/hostname"

@@ -1,7 +1,7 @@
 // Tests for lock.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { INITIAL, MAX_DOTS, WRONG, fieldText, next, shortHostname, statusText } from "./lock.mjs";
+import { IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, WRONG, fieldText, idleFlagFresh, next, saverPosition, shortHostname, statusText } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -148,4 +148,68 @@ test("the short hostname drops the domain and a user- prefix", () => {
     assert.equal(shortHostname("other-host1", "user"), "other-host1");
     assert.equal(shortHostname("user-", "user"), "user-");
     assert.equal(shortHostname("host1\n", ""), "host1");
+});
+
+test("the screensaver face shows, and the pointer brings back the password face", () => {
+    let { state } = run(INITIAL, { type: "screensaver" });
+    assert.equal(state.saver, true);
+    state = run(state, { type: "wake" }).state;
+    assert.equal(state.saver, false);
+});
+
+test("the first key typed on the screensaver wakes it and lands in the field", () => {
+    const { state } = run(INITIAL, { type: "screensaver" }, ...type("p"));
+    assert.equal(state.saver, false);
+    assert.equal(state.input, "p");
+    assert.equal(fieldText(state), "•");
+});
+
+test("Enter, Backspace and Escape on the screensaver only wake it", () => {
+    for (const key of ["submit", "backspace", "clear"]) {
+        const r = run(INITIAL, { type: "screensaver" }, { type: key });
+        assert.equal(r.state.saver, false, key);
+        assert.deepEqual(r.actions, [], key);
+        assert.equal(r.state.input, "", key);
+    }
+});
+
+test("PAM events leave the face alone", () => {
+    const { state } = run(INITIAL, { type: "screensaver" }, { type: "pam", text: "hi", isError: false, responseRequired: false });
+    assert.equal(state.saver, true);
+});
+
+test("the idle flag counts only for a few seconds after it's written", () => {
+    const now = 1_000_000_000_000;
+    const written = String(now / 1000);
+    assert.equal(idleFlagFresh(written, now), true);
+    assert.equal(idleFlagFresh(written + "\n", now + 5000), true);
+    assert.equal(idleFlagFresh(written, now + (IDLE_FLAG_SECONDS + 1) * 1000), false);
+    assert.equal(idleFlagFresh(String(now / 1000 + 60), now), false);
+    assert.equal(idleFlagFresh("", now), false);
+    assert.equal(idleFlagFresh("garbage", now), false);
+});
+
+test("the screensaver's spot stays inside the margins", () => {
+    for (let minute = 0; minute < 5000; minute++) {
+        const p = saverPosition(minute, 1920, 1080, 400, 200);
+        assert.ok(p.x >= 115 && p.x + 400 <= 1920 - 115, `x ${p.x} at ${minute}`);
+        assert.ok(p.y >= 64 && p.y + 200 <= 1080 - 64, `y ${p.y} at ${minute}`);
+    }
+});
+
+test("the screensaver moves well away every minute", () => {
+    const freeX = 1920 - 400 - 2 * 115;
+    for (let minute = 1; minute < 5000; minute++) {
+        const a = saverPosition(minute - 1, 1920, 1080, 400, 200);
+        const b = saverPosition(minute, 1920, 1080, 400, 200);
+        assert.ok(Math.abs(a.x - b.x) >= freeX * 0.24, `minute ${minute}: ${a.x} -> ${b.x}`);
+    }
+});
+
+test("the same minute is the same spot", () => {
+    assert.deepEqual(saverPosition(29000000, 2560, 1440, 500, 220), saverPosition(29000000, 2560, 1440, 500, 220));
+});
+
+test("a block bigger than the area sits at the margin", () => {
+    assert.deepEqual(saverPosition(7, 300, 200, 400, 300), { x: 18, y: 12 });
 });

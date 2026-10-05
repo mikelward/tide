@@ -424,20 +424,24 @@ default input's mute, from any source, and the backlight when the keys in
 SPEC.md §10's lock is `tide-lock`: `shell/lock.qml` and
 `shell/LockSurface.qml`, from `shell/lib/lock.mjs`, run by
 `tide-lock.service` (`qs -p .../tide/lock.qml`) with PAM service
-`tide-lock`. It has the password face: the short hostname, the time and
-date, the user, the field and PAM's messages. Only parsed with `qmlformat`
-and `qmllint`; nothing has run it yet. Still to do:
+`tide-lock`. It has the password face (the short hostname, the time and
+date, the user, the field and PAM's messages) and the screensaver face, which
+an idle lock opens on (`tide idle-lock`). Only parsed with `qmlformat` and
+`qmllint`; nothing has run it yet. Still to do:
 
 - Try it on a real session: `make install`, `sudo make install-session`
   (for `/etc/pam.d/tide-lock`), then `systemctl --user start
   tide-lock.service`. A right password unlocks; a wrong one clears the
   field and says so; every key shows at once.
 - Switch `conf` over: hypridle's `lock_cmd` starts `tide-lock.service`,
-  `misc:allow_session_lock_restore` is on, and `Super+L` stays `loginctl
-  lock-session`. Then hyprlock goes.
-- The screensaver face (§10): black, low contrast, moving each minute;
-  any input brings back the password face with the key in the field.
-- The zone clocks under the hostname, the notification count and battery
+  its 5-minute listener runs `tide idle-lock` instead of `loginctl
+  lock-session`, `misc:allow_session_lock_restore` is on, and `Super+L`
+  stays `loginctl lock-session`. Then hyprlock goes.
+- On a real session, check the screensaver: an idle lock opens on it, the
+  first pointer report doesn't wake it but a move does, and the first key
+  lands in the field.
+- The zone clocks under the hostname and on the screensaver, the
+  notification count and battery
   in the corner, Suspend, and restart and shut down (through logind's
   inhibitor check), as the mock shows.
 - The keyboard layout badge by the field.

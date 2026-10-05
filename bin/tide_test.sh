@@ -415,6 +415,44 @@ check "outside tide, there's no OSD to tell" test "$(grep -c '^qs ' "$log")" -eq
 run "$qs" brightness
 check "brightness needs a step" test $? -eq 2
 
+# idle-lock: loginctl logs the lock; the flag carries the time it locked.
+cat > "$fake/loginctl" <<'FAKE'
+#!/bin/sh
+printf "loginctl %s\n" "$*" >> "$FAKE_LOG"
+exit "${FAKE_LOGINCTL_STATUS:-0}"
+FAKE
+chmod +x "$fake/loginctl"
+runtime=$tmp/runtime
+mkdir "$runtime"
+before=$(date +%s)
+run XDG_RUNTIME_DIR="$runtime" "$qs" idle-lock
+check "idle-lock exits 0" test $? -eq 0
+check "idle-lock locks through logind" test "$(cat "$log")" = "loginctl lock-session"
+flag=$(cat "$runtime/tide-lock-idle" 2>/dev/null)
+check "idle-lock leaves the flag with the time it locked" \
+    test -n "$flag" -a "$flag" -ge "$before" -a "$flag" -le "$(date +%s)"
+check "idle-lock leaves no temporary file" test ! -e "$runtime/tide-lock-idle.tmp"
+check "a clean idle-lock says nothing" test ! -s "$tmp/err"
+run XDG_RUNTIME_DIR= "$qs" idle-lock
+check "without XDG_RUNTIME_DIR, idle-lock still locks" test "$(cat "$log")" = "loginctl lock-session"
+check "without XDG_RUNTIME_DIR, idle-lock says which face" contains "$(cat "$tmp/err")" "opens on its password face"
+# A directory where the temporary file goes makes the write fail, even for
+# root, who could write through a read-only directory.
+rm -f "$runtime/tide-lock-idle"
+mkdir "$runtime/tide-lock-idle.tmp"
+run XDG_RUNTIME_DIR="$runtime" "$qs" idle-lock
+check "an unwritable flag still locks" test "$(cat "$log")" = "loginctl lock-session"
+check "an unwritable flag is reported" contains "$(cat "$tmp/err")" "couldn't write $runtime/tide-lock-idle"
+check "an unwritable flag leaves no flag" test ! -e "$runtime/tide-lock-idle"
+check "what blocks the flag is named" contains "$(cat "$tmp/err")" "couldn't remove $runtime/tide-lock-idle.tmp"
+rmdir "$runtime/tide-lock-idle.tmp"
+run FAKE_LOGINCTL_STATUS=1 XDG_RUNTIME_DIR="$runtime" "$qs" idle-lock
+check "a failed lock fails idle-lock" test $? -eq 1
+check "a failed lock leaves no flag for the next lock" test ! -e "$runtime/tide-lock-idle"
+check "a failed lock is reported" contains "$(cat "$tmp/err")" "lock-session failed (exit 1)"
+run "$qs" idle-lock now
+check "idle-lock takes no arguments" test $? -eq 2
+
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh "$qs" bin/tide_test.sh
 fi
