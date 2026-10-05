@@ -998,7 +998,7 @@ today's `hypridle.conf`:
 
 **The screensaver** is the lock's idle face, not a separate program:
 
-- a black screen with the hostname, a large time and the zone clocks in low
+- a black screen with the hostname, a large time and the date in low
   contrast;
 - it moves to a new spot each minute to spare OLED panels;
 - any input brings back the password face, and a typed key lands in the
@@ -1126,7 +1126,9 @@ one of them:
   modes ([`lock.png`](docs/mocks/lock.png)).
 - **Hostname.** It leads with the short hostname: the first label, with a
   leading `<user>-` removed, the same rule as `i3statusdwm`.
-- **Clocks** sit below the hostname.
+- **Local's date and time** sit below the hostname. No zone clocks: the
+  bar has them a click away, and the login and lock faces stay simple
+  (maintainer, 2026-10-05).
 - **Greeter extras:**
   - the last user is preselected, with a user picker;
   - a session chip lists the `wayland-sessions` entries (tide first),
