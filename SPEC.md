@@ -655,18 +655,19 @@ See [`bar.png`](docs/mocks/bar.png).
   then the built-in status icons: keep-awake, Bluetooth, network,
   volume %, battery %, CPU %, notifications, session. The four clocks come
   last.
-- **Middle:** the window title, as waybar showed it. The focused monitor
-  shows the focused window's, wherever on that monitor it is: under an
-  open special workspace, or pinned. Each other monitor shows the last
-  focused window on the workspace it shows, which is an open special
-  workspace over the regular one. It's plain text, at most about 60
+- **Middle:** the title of the window your typing goes to. Only the
+  focused monitor shows one, wherever on that monitor the window is: under
+  an open special workspace, or pinned. Every other monitor's bar leaves it
+  blank, so a title never sits over a window that isn't getting your
+  input. waybar showed each monitor's last focused window instead; that
+  read as live when it wasn't. It's plain text, at most about 60
   characters wide, with an ellipsis where it's cut, never inside a
   character.
   Titles do show up in screenshots and screen shares of the bar; having
   the title where waybar had it is worth that.
 - **Double-clicking the title** toggles maximize on the window it names, as
-  a title bar's double-click would (§6.3); on a monitor without focus it
-  focuses that window first.
+  a title bar's double-click would (§6.3). That's always the focused
+  window; a blank title does nothing.
 
 ### 7.2 Workspaces
 

@@ -581,10 +581,11 @@ Deferred: it needs a Hyprland patch, and the MVP comes first.
 ## Double-click the bar to maximize
 
 - Double-clicking the window title in the middle of the bar (SPEC.md §7.1)
-  focuses the window it names and toggles maximize on it, like a title
-  bar: `Title.barWindow` and `Dispatch.toggleMaximize`, wired in
-  `shell/WindowTitle.qml`. Only parsed with `qmlformat`; on a real
-  session, check it on the focused monitor and on another one.
+  toggles maximize on the window it names, like a title bar:
+  `Title.barWindow` and `Dispatch.toggleMaximize`, wired in
+  `shell/WindowTitle.qml`. Only the focused monitor shows a title, so
+  that's always the focused window. Only parsed with `qmlformat`; on a
+  real session, check it, and that other monitors' bars stay blank.
 - `Super`+middle-click does the same from the keyboard and mouse (SPEC.md
   §6.6, in `conf`'s `hyprland.lua`).
 - Rejected: title bars from the `hyprbars` plugin. A plugin is rebuilt against
