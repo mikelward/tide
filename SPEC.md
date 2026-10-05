@@ -871,7 +871,9 @@ See [`launcher.png`](docs/mocks/launcher.png).
   - Screenshot window / screen / region.
   - Lock, log out, suspend, restart, shut down.
   - Settings.
-  - Do not disturb, keep awake, and theme (dark / light / automatic).
+  - Do not disturb, keep awake, and dark style. Dark style shows whether
+    it's on and until when, and flips light and dark until the schedule's
+    next change (§15).
   - Reload shell.
 
   Power actions check logind inhibitors and ask only when something is
@@ -1632,10 +1634,23 @@ to be focused.
     lookup.
   - **`light`** or **`dark`**: fixed.
 
+  The settings are `mode`, `light` and `dark` (24-hour times like
+  `"07:00"`), and `latitude` and `longitude` (decimal degrees, east and
+  north positive). An unknown setting, a bad value, or `sun` without a
+  latitude and longitude is an error at load (§16.1). Both times are wall
+  clock times, so a daylight saving change doesn't move them. Where the sun
+  doesn't rise or set that day, `sun` stays dark or light all day.
+
   A manual flip from the launcher or settings lasts until the next scheduled
-  change, then automatic resumes. A machine can use its own mode or times
-  in `appearance.local.json` (§16.1). The greeter runs before any user
-  config is read, so it follows the default 07:00–19:00 schedule.
+  change, then automatic resumes:
+  - In `light` or `dark` mode, which never changes on its own, a flip lasts
+    until the settings change.
+  - Editing the settings drops a flip, so the edit shows at once.
+  - Reloading the shell keeps a flip; logging out ends it.
+
+  A machine can use its own mode or times in `appearance.local.json`
+  (§16.1). The greeter runs before any user config is read, so it follows
+  the default 07:00–19:00 schedule.
 
   Switching:
   - sets `org.gnome.desktop.interface color-scheme` (`prefer-dark` /
@@ -1653,6 +1668,9 @@ to be focused.
 
   M7 checks which of those qt6ct gives on the pinned Qt, and the spec
   promises no more than that. Few of the apps in use are Qt.
+
+  Something else setting the color scheme is put back at once, so the
+  shell's schedule is the one apps see.
 
   Nothing restarts.
 - **One look across three toolkits.** The desktop mixes a custom-drawn shell

@@ -207,7 +207,7 @@ test("the quick actions are the screenshots, the session, the toggles and reload
     assert.deepEqual(quickActions({ notifications: true }).map(q => q.id), [
         "screenshot-window", "screenshot-screen", "screenshot-region",
         "lock", "logout", "suspend", "reboot", "poweroff",
-        "dnd", "keep-awake", "reload",
+        "dnd", "dark-style", "keep-awake", "reload",
     ]);
     // Every one has something to run.
     for (const q of quickActions({ notifications: true })) {
@@ -248,6 +248,16 @@ test("the toggles say whether they're on", () => {
     assert.equal(sub({ notifications: true }).dnd, "Off");
     assert.equal(sub({ keepAwake: true })["keep-awake"], "On");
     assert.equal(sub({ keepAwake: true, micHolds: true })["keep-awake"], "On while the mic is live");
+    // Dark style also says until when, unless it's fixed.
+    assert.equal(sub({ dark: true, darkUntil: "07:00" })["dark-style"], "On until 07:00");
+    assert.equal(sub({ dark: false, darkUntil: "19:00" })["dark-style"], "Off until 19:00");
+    assert.equal(sub({ dark: true, darkUntil: "" })["dark-style"], "On");
+});
+
+test("dark style is found by theme, light and night", () => {
+    for (const query of ["theme", "dark", "light", "night"]) {
+        assert.equal(search(quickActions(), query)[0].item.id, "dark-style", query);
+    }
 });
 
 test("screenshots wait for the launcher to go, the session runs through logind or uwsm", () => {
@@ -263,6 +273,7 @@ test("screenshots wait for the launcher to go, the session runs through logind o
     assert.deepEqual(quickCommand("suspend"), { run: ["systemctl", "--check-inhibitors=yes", "suspend"], afterClose: false, power: true });
     assert.equal(quickCommand("logout").power, false);
     assert.deepEqual(quickCommand("dnd"), { shell: "dnd" });
+    assert.deepEqual(quickCommand("dark-style"), { shell: "dark-style" });
 });
 
 test("a blocked power action asks: anyway, or cancel", () => {
