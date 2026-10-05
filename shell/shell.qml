@@ -1,3 +1,8 @@
+// Qt picks an icon theme only for a desktop it knows, and tide's
+// (XDG_CURRENT_DESKTOP=tide:Hyprland) isn't one: without this, no theme
+// icon loads, so symbolic icons are blank and app icons placeholders.
+// Quickshell reads pragmas only above the first import (SPEC.md §15).
+//@ pragma IconTheme Adwaita
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
