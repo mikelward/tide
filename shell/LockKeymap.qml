@@ -4,12 +4,12 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import "lib/lock.mjs" as Lock
 
-// The main keyboard's layout, for the badge by the lock's field
+// The main keyboard's layout, for the badge by the login and lock field
 // (Lock.layoutNext): read from hyprctl at start, again on each layout
-// switch Hyprland reports, and again on refresh(), which the lock calls
-// when a password fails, since that is when the badge matters and the main
-// keyboard may have changed with no event (an unplug). Unknown, the badge
-// is hidden rather than guessed.
+// switch Hyprland reports, and again on refresh(), which the lock and the
+// greeter call when a password fails, since that is when the badge matters
+// and the main keyboard may have changed with no event (an unplug).
+// Unknown, the badge is hidden rather than guessed.
 Scope {
     id: root
 

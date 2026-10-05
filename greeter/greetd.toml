@@ -1,0 +1,15 @@
+# greetd's config for the tide greeter (SPEC.md §11), installed as a
+# template under share/tide/greeter. Making greetd the display manager, with
+# this as /etc/greetd/config.toml, is `setup --tide`'s job (scripts repo).
+#
+# greetd runs the default session as `user`, a system account of its own.
+# greetd's example config (0.10.3) names it `greeter`; a distro's package
+# may create it under another name, so set it to the one that exists.
+
+[terminal]
+# The VT greetd runs on, and the session it starts.
+vt = 1
+
+[default_session]
+command = "tide-greeter"
+user = "greeter"

@@ -1,9 +1,9 @@
 #!/bin/sh
 #
-# Loads the shell and the lock in Quickshell, as tide.service and
-# tide-lock.service start them (`qs -c tide`, `qs -p .../lock.qml`, over
-# what `make install` puts in place), and fails on anything that keeps
-# either from loading, or that the shell's own files report as it starts: a
+# Loads the shell, the lock and the greeter in Quickshell, as tide.service,
+# tide-lock.service and tide-greeter start them (`qs -c tide`, `qs -p
+# .../lock.qml`, `qs -p .../greeter.qml`, over what `make install` puts in
+# place), and fails on anything that keeps any of them from loading, or that the shell's own files report as it starts: a
 # type or property error, a module Qt's JavaScript engine can't parse, a
 # binding that throws. The Node tests can't see these; they only show up in
 # Quickshell (SPEC.md §20).
@@ -40,6 +40,12 @@
 # first and the lock to unlock and exit on the second. That needs
 # tide-lock's PAM service in /etc/pam.d (`make install-session`).
 #
+# With wtype, it also logs in at the greeter, on a stand-in greetd
+# (shell/greetd_stand_in.py) that takes a password of the test's own: it
+# types a wrong one, then the right one, and expects the greeter to log in
+# to tide, with the environment pam_systemd reads, remember that for next
+# time, and exit.
+#
 #   $QS                  the Quickshell command (default: qs)
 #   $GO                  the Go command, to build tide-tz (default: go)
 #   $TIDE_REQUIRE_QS     set (CI sets it) to fail, not skip, without qs,
@@ -67,7 +73,7 @@ fi
 # tide's desktop. Quickshell reads the pragma only above the first import.
 # Its loss also fails the load below, as icons that won't load, but this
 # says why, and runs without qs.
-for entry in shell/shell.qml shell/lock.qml; do
+for entry in shell/shell.qml shell/lock.qml shell/greeter.qml; do
     if ! sed '/^import /q' "$entry" | grep -q '^//@ pragma IconTheme Adwaita$'; then
         echo "FAIL: $entry doesn't name the Adwaita icon theme above its imports (SPEC.md §15)" >&2
         exit 1
@@ -88,11 +94,11 @@ qs_path=$(command -v "$qs") || missing "$qs (Quickshell)"
 sway_path=$(command -v sway) || missing "sway (to run headless)"
 python_path=$(command -v python3) || missing "python3 (for the stand-in Hyprland)"
 go_path=$(command -v "${GO:-go}") || missing "${GO:-go} (to build tide-tz, which the bar's clocks run)"
-# Without wtype, nothing is typed, so the launcher and the lock's password
-# go untested.
+# Without wtype, nothing is typed, so the launcher, the lock's password and
+# the greeter go untested.
 if ! wtype_path=$(command -v wtype); then
     if test -n "${TIDE_REQUIRE_QS:-}" || test -n "${TIDE_LOCK_PASSWORD:-}"; then
-        echo "FAIL: $prog: no wtype on PATH to type into the launcher and the lock" >&2
+        echo "FAIL: $prog: no wtype on PATH to type into the launcher, the lock and the greeter" >&2
         exit 1
     fi
     wtype_path=
@@ -117,11 +123,12 @@ tmp=$(mktemp -d) || exit 1
 qs_pid=
 hypr_pid=
 keyboard_pid=
+greetd_pid=
 sway_pid=
 bus_pid=
 cleanup() {
     _status=$?
-    for pid in $qs_pid $hypr_pid $keyboard_pid $sway_pid; do
+    for pid in $qs_pid $hypr_pid $greetd_pid $keyboard_pid $sway_pid; do
         # It may have exited already.
         kill "$pid" 2>/dev/null
         wait "$pid"
@@ -687,12 +694,141 @@ $TIDE_LOCK_PASSWORD
     echo "ok: the lock turns down a wrong password and unlocks on the right one"
 }
 
+# login: starts the greeter on a stand-in greetd, as tide-greeter does
+# (`qs -p .../greeter.qml`), with a getent that lists root and one person,
+# and two session files, tide's own and one whose name sorts first. It types
+# a wrong password and then, once greetd has turned it down and Quickshell
+# has taken in the answer, the right one: an Enter while greetd checks isn't
+# held at the greeter (shell/lib/greeter.mjs), so the two can't go in one
+# go as at the lock. greetd then asks for a code as a visible prompt, and
+# once Quickshell has that, the code goes in. It fails the test unless
+# greetd sees exactly those two attempts and the code, then a request to
+# start tide, with the environment pam_systemd reads, and the greeter
+# remembers that login and exits. Its log is $tmp/login.qs.log.
+login() {
+    _what="the greeter"
+    log=$tmp/login.qs.log
+    : >"$log" || exit 1
+    _bin=$tmp/greeter-bin
+    _data=$tmp/greeter-data
+    mkdir -p "$_bin" "$_data/wayland-sessions" || exit 1
+    printf '#!/bin/sh\nprintf "%%s\\n" "root:x:0:0:root:/root:/bin/sh" "probe:x:1000:1000:Probe User,,,:/home/probe:/bin/sh"\n' \
+        >"$_bin/getent" || exit 1
+    # tide.desktop's TryExec.
+    printf '#!/bin/sh\n' >"$_bin/uwsm" || exit 1
+    chmod +x "$_bin/getent" "$_bin/uwsm" || exit 1
+    cp session/tide.desktop "$_data/wayland-sessions/" || exit 1
+    printf '[Desktop Entry]\nName=Alpha\nExec=alpha-session\n' >"$_data/wayland-sessions/alpha.desktop" || exit 1
+    _password=tide-greeter-test
+    _code=246810
+    _socket=$tmp/run/greetd.sock
+    : >"$tmp/greetd.log" || exit 1
+    "$python_path" shell/greetd_stand_in.py "$_socket" "$tmp/greetd.log" probe "$_password" "$_code" >"$tmp/greetd.err" 2>&1 &
+    greetd_pid=$!
+    i=0
+    until test -S "$_socket"; do
+        if ! kill -0 "$greetd_pid" 2>/dev/null || waited "the stand-in greetd didn't start" "$i"; then
+            cat "$tmp/greetd.err" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    keyboard
+    env -i PATH="$_bin:$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" XDG_DATA_DIRS="$_data" \
+        GREETD_SOCK="$_socket" ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
+        LANG=C.UTF-8 QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
+        QS_DISABLE_FILE_WATCHER=1 WAYLAND_DEBUG=client \
+        "$qs_path" -p "$tmp/home/.config/quickshell/tide/greeter.qml" >"$log" 2>&1 &
+    qs_pid=$!
+    focused 1
+    timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 "$wtype_path" "not-$_password
+" >"$tmp/wtype.log" 2>&1
+    typed $? "the greeter"
+    # Quickshell cancels greetd's session after a failure; once greetd has
+    # answered that, a barrier makes sure Quickshell has taken the answer in.
+    i=0
+    until grep -qx cancel_session "$tmp/greetd.log"; do
+        if ! kill -0 "$qs_pid" 2>/dev/null || waited "the greeter didn't try the wrong password" "$i"; then
+            cat "$tmp/greetd.log" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    barrier
+    timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 "$wtype_path" "$_password
+" >"$tmp/wtype.log" 2>&1
+    typed $? "the greeter"
+    # The right password brings greetd's visible prompt for the code; the
+    # code goes in once Quickshell has taken that prompt in.
+    i=0
+    until grep -qx "answer right" "$tmp/greetd.log"; do
+        if ! kill -0 "$qs_pid" 2>/dev/null || waited "the greeter didn't try the right password" "$i"; then
+            cat "$tmp/greetd.log" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    barrier
+    timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 "$wtype_path" "$_code
+" >"$tmp/wtype.log" 2>&1
+    typed $? "the greeter"
+    i=0
+    while kill -0 "$qs_pid" 2>/dev/null; do
+        if waited "the greeter didn't log in" "$i"; then
+            cat "$tmp/greetd.log" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    wait "$qs_pid"
+    _status=$?
+    qs_pid=
+    kill "$greetd_pid"
+    wait "$greetd_pid"
+    greetd_pid=
+    if test "$_status" -ne 0; then
+        echo "FAIL: the greeter exited $_status on logging in:" >&2
+        grep -v '^\[' "$log" >&2
+        exit 1
+    fi
+    _want='create_session probe
+answer wrong
+cancel_session
+create_session probe
+answer right
+answer code right
+start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"], "env": ["XDG_SESSION_TYPE=wayland", "XDG_SESSION_DESKTOP=tide", "XDG_CURRENT_DESKTOP=tide:Hyprland"]}'
+    if test "$(cat "$tmp/greetd.log")" != "$_want"; then
+        echo "FAIL: greetd should see a wrong password, then the right one and the code, then tide started; it saw:" >&2
+        cat "$tmp/greetd.log" >&2
+        exit 1
+    fi
+    _remembered=$tmp/home/.local/state/tide-greeter/last.json
+    if test "$(cat "$_remembered" 2>/dev/null)" != '{"user":"probe","session":"tide"}'; then
+        echo "FAIL: the greeter should remember probe and tide in $_remembered; it has: $(cat "$_remembered" 2>&1)" >&2
+        exit 1
+    fi
+    reports "the greeter logged in"
+    echo "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
+}
+
 # The shell runs all its commands; without them, the run says nothing
 # about the clocks or the system monitor. The lock runs none of them.
 load_runs=$helpers
 load shell "the shell" -c tide
 load_runs=
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
+load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"
 if test -n "$notify_path"; then
     load_env=TIDE_NOTIFICATIONS=1
     load_runs=$helpers
@@ -722,4 +858,9 @@ if test -n "${TIDE_LOCK_PASSWORD:-}"; then
     unlock
 else
     echo "$prog: no TIDE_LOCK_PASSWORD, so the lock isn't unlocked; CI unlocks it" >&2
+fi
+if test -n "$wtype_path"; then
+    login
+else
+    echo "$prog: no wtype, so nothing logs in at the greeter; CI logs in" >&2
 fi

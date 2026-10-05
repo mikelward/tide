@@ -7,8 +7,9 @@
 # that doesn't run tide-tz or whose tide-tz never ends, one whose clocks
 # or system monitor warn, one whose icon won't load, a notification server
 # that records what it's sent or doesn't, a launcher that runs the app typed
-# or doesn't, and a lock that unlocks or doesn't. The stand-in Hyprland and
-# tide-sysmon are the load test's own.
+# or doesn't, a lock that unlocks or doesn't, and a greeter that logs in or
+# doesn't. The stand-in Hyprland, tide-sysmon and greetd are the load test's
+# own.
 
 cd "$(dirname "$0")/.." || exit 1
 
@@ -35,11 +36,14 @@ fi
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
-# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE]]]]]]:
+# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN]]]]]]]:
 # a sway that listens on wayland-1 until it's killed; a qs whose `ipc`
 # runs IPC, and otherwise talks to Hyprland as HYPRLAND says, then prints
 # LOAD and waits, but started as the unlock step starts the lock
-# (WAYLAND_DEBUG, -p) runs UNLOCK first, and as the launch step starts the
+# (WAYLAND_DEBUG, -p .../lock.qml) runs UNLOCK first, as the login step
+# starts the greeter (WAYLAND_DEBUG, -p .../greeter.qml) runs LOGIN first,
+# which defaults to a greeter that logs in as it should, and as the launch
+# step starts the
 # shell (WAYLAND_DEBUG, -c) prints LOAD and then runs LAUNCH, which
 # defaults to a launcher that runs the app typed; and a wtype that keeps
 # what it types in DIR/typed, and in the runtime directory for qs to see.
@@ -70,7 +74,10 @@ if test "\$1" = ipc; then
     $2
 fi
 if test -n "\$WAYLAND_DEBUG" && test "\$1" = -p; then
-    ${4:-:}
+    case "\$2" in
+        *greeter.qml) ${10:-$greeter} ;;
+        *) ${4:-:} ;;
+    esac
 fi
 # Talked to before it says it loaded, as Quickshell does.
 if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
@@ -110,6 +117,62 @@ open(os.environ["XDG_RUNTIME_DIR"] + "/hyprland_client.ready", "w").close()
 parent = os.getppid()
 while os.getppid() == parent:
     time.sleep(0.2)
+EOF
+    # A greeter on greetd's IPC: each password wtype types is an attempt,
+    # whatever wtype types next answers greetd's next prompt, and a login
+    # starts a session, as $1 says: `tide`, as it should; `alpha`, the
+    # wrong one; `forgetful`, tide without remembering it; `stays`,
+    # nothing; `codeless`, tide without answering the prompt after the
+    # password.
+    cat >"$1/greeter_client.py" <<'EOF'
+import json, os, socket, struct, sys, time
+mode = sys.argv[1]
+header = struct.Struct("=I")
+conn = socket.socket(socket.AF_UNIX)
+conn.connect(os.environ["GREETD_SOCK"])
+def read(n):
+    data = b""
+    while len(data) < n:
+        chunk = conn.recv(n - len(data))
+        if not chunk:
+            sys.exit("greetd hung up")
+        data += chunk
+    return data
+def ask(request):
+    data = json.dumps(request).encode()
+    conn.sendall(header.pack(len(data)) + data)
+    return json.loads(read(header.unpack(read(header.size))[0]))
+typed = os.path.join(os.environ["XDG_RUNTIME_DIR"], "typed")
+def take():
+    while not os.path.exists(typed) or os.path.getsize(typed) == 0:
+        time.sleep(0.1)
+    with open(typed) as f:
+        text = f.read().rstrip("\n")
+    os.remove(typed)
+    return text
+while True:
+    password = take()
+    ask({"type": "create_session", "username": "probe"})
+    reply = ask({"type": "post_auth_message_response", "response": password})
+    while reply["type"] == "auth_message" and mode != "codeless":
+        reply = ask({"type": "post_auth_message_response", "response": take()})
+    if reply["type"] == "error":
+        ask({"type": "cancel_session"})
+        continue
+    if mode == "stays":
+        time.sleep(3600)
+    session = "alpha" if mode == "alpha" else "tide"
+    if mode != "forgetful":
+        state = os.path.join(os.environ["HOME"], ".local/state/tide-greeter")
+        os.makedirs(state, exist_ok=True)
+        with open(os.path.join(state, "last.json"), "w") as f:
+            f.write(json.dumps({"user": "probe", "session": session}, separators=(",", ":")) + "\n")
+    env = ["XDG_SESSION_TYPE=wayland", "XDG_SESSION_DESKTOP=" + session]
+    if session == "tide":
+        env.append("XDG_CURRENT_DESKTOP=tide:Hyprland")
+    cmd = "uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland" if session == "tide" else "alpha-session"
+    ask({"type": "start_session", "cmd": [cmd], "env": env})
+    break
 EOF
     cat >"$1/wtype" <<'EOF'
 #!/bin/sh
@@ -162,11 +225,18 @@ opened='until test -e "$XDG_RUNTIME_DIR/launcher-open"; do sleep 0.1; done'
 focused="echo '[1.0] {Default Queue} wl_keyboard#3.enter(1, wl_surface#2, array[0])'"
 typed='until test -s "$XDG_RUNTIME_DIR/typed"; do sleep 0.1; done; rm "$XDG_RUNTIME_DIR/typed"'
 launcher="$opened; $focused; $typed; tide launch --app tide-test-probe -- tide-test-probe --flag"
+# What a greeter does once the login step starts it: it takes the keyboard,
+# then logs in on the passwords typed, as greeter_client.py's MODE says.
+login_as() {
+    printf '%s; python3 "$(dirname "$0")/greeter_client.py" %s; exit 0' "$focused" "$1"
+}
+greeter=$(login_as tide)
 
 stubs "$tmp/clean" "exit 0" "  INFO: Configuration Loaded"
 run "$tmp/clean"
 check "a shell that loads and answers passes" test "$code" -eq 0
-check "and says both loaded" contains "$out" "ok: Quickshell loads the lock"
+check "and says the lock loaded" contains "$out" "ok: Quickshell loads the lock"
+check "and says the greeter loaded" contains "$out" "ok: Quickshell loads the greeter"
 
 run "$tmp/clean" TIDE_KEEP_LOG="$tmp/kept.log"
 check "a log asked for is kept" test "$code" -eq 0
@@ -287,15 +357,16 @@ check "a shell that never asks Hyprland for its windows fails" test "$code" -ne 
 check "and says so" contains "$out" "the shell never asked the stand-in Hyprland for its windows"
 
 # What a lock started for unlocking says: that it took the keyboard, then,
-# once the passwords are typed, PAM's verdicts.
-typed='until test -s "$XDG_RUNTIME_DIR/typed"; do sleep 0.1; done'
+# once the passwords are typed, PAM's verdicts. It takes what was typed, as
+# the launcher does, so the greeter that follows never reads it.
+typed='until test -s "$XDG_RUNTIME_DIR/typed"; do sleep 0.1; done; rm "$XDG_RUNTIME_DIR/typed"'
 
 stubs "$tmp/unlocks" "exit 0" "$loaded" "$focused; $typed
 echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
 check "a lock that unlocks on the right password passes" test "$code" -eq 0
 check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
-check "having typed a wrong password, then the right one" test "$(sed 1d "$tmp/unlocks/typed")" = "not-pw
+check "having typed a wrong password, then the right one" test "$(sed -n 2,3p "$tmp/unlocks/typed")" = "not-pw
 pw"
 check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
 
@@ -347,6 +418,40 @@ echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlock-reports" TIDE_LOCK_PASSWORD=pw
 check "a lock whose file reports an error while unlocking fails" test "$code" -ne 0
 check "and names the report" contains "$out" "@lock.qml[40:-1]: TypeError"
+
+run "$tmp/clean"
+check "a greeter that logs in to tide on the right password passes" \
+    contains "$out" "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
+check "having typed a wrong password, then the right one, then the code" \
+    test "$(sed -n 2,4p "$tmp/clean/typed")" = "not-tide-greeter-test
+tide-greeter-test
+246810"
+
+stubs "$tmp/greeter-alpha" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" "" "" "$(login_as alpha)"
+run "$tmp/greeter-alpha"
+check "a greeter that starts another session fails" test "$code" -ne 0
+check "and says what greetd saw" contains "$out" "start_session {\"cmd\": [\"alpha-session\"]"
+
+stubs "$tmp/greeter-forgets" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" "" "" "$(login_as forgetful)"
+run "$tmp/greeter-forgets"
+check "a greeter that doesn't remember the login fails" test "$code" -ne 0
+check "and says so" contains "$out" "the greeter should remember probe and tide"
+
+stubs "$tmp/greeter-codeless" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" "" "" "$(login_as codeless)"
+run "$tmp/greeter-codeless"
+check "a greeter that doesn't answer the visible prompt fails" test "$code" -ne 0
+check "and says what greetd saw" contains "$out" "start_session refused: session is not ready"
+
+stubs "$tmp/greeter-stays" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" "" "" "$(login_as stays)"
+run "$tmp/greeter-stays"
+check "a greeter that never logs in fails" test "$code" -ne 0
+check "and says so" contains "$out" "the greeter didn't log in in 2 s"
+check "within the limit ($took s)" test "$took" -lt 30
+
+stubs "$tmp/greeter-unfocused" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" "" "" "exec sleep 3600"
+run "$tmp/greeter-unfocused"
+check "a greeter that never takes the keyboard fails" test "$code" -ne 0
+check "and says so" contains "$out" "the greeter didn't take the keyboard in 2 s"
 
 printf 'shell_test_test.sh: %d passed, %d failed\n' "$passes" "$failures"
 test "$failures" -eq 0

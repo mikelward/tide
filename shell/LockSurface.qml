@@ -2,8 +2,8 @@ import QtQuick
 import Quickshell.Wayland
 import "lib/lock.mjs" as Lock
 
-// One output's lock (SPEC.md §10): the lock face (LockFace.qml) on a
-// session-lock surface. lock.qml owns the state.
+// One output's lock (SPEC.md §10): the login and lock face (LockFace.qml)
+// on a session-lock surface. lock.qml owns the state.
 WlSessionLockSurface {
     id: surface
 
@@ -23,6 +23,7 @@ WlSessionLockSurface {
 
     LockFace {
         anchors.fill: parent
+        mode: "lock"
         lockState: surface.lockState
         hostname: surface.hostname
         user: surface.user

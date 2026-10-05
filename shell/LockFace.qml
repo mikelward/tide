@@ -4,34 +4,72 @@ import Quickshell.Services.UPower
 import "lib/lock.mjs" as Lock
 import "lib/status.mjs" as Status
 
-// One output's lock face (SPEC.md §10, docs/mocks/lock.png), which
-// LockSurface.qml puts on a session-lock surface. The password face: the
-// short hostname, the time and date, the user and the password field, with
-// PAM's messages under it. The screensaver face, for an idle lock: black,
-// the hostname and a large time in low contrast, moved to a new spot each
-// minute. lock.qml owns the state; this draws it and sends it each key and
-// pointer motion. Nothing here animates, and every key changes what the
+// One output's login or lock face (SPEC.md §10, §11, docs/mocks/lock.png):
+// one component, drawn by tide-lock on a session-lock surface
+// (LockSurface.qml) and by the greeter on a panel (greeter.qml).
+//
+// The password face: the short hostname, the time and date, the user and the
+// password field, with PAM's messages under it. The lock adds the
+// notification count and the battery, Suspend, and when it locked; the
+// greeter adds the session and user pickers in their place. The
+// screensaver face, for an idle lock: black, the hostname and a large time
+// in low contrast, moved to a new spot each minute.
+//
+// The process owns the state; this draws it and sends it each key, pointer
+// motion and pick. Nothing here animates, and every key changes what the
 // field shows (shell/lib/lock.mjs), so each keystroke is visible on the next
 // frame, even while PAM is checking the last attempt.
 Item {
     id: face
 
+    // "lock" or "login".
+    property string mode: "lock"
+    readonly property bool login: mode === "login"
+
     property var lockState: Lock.INITIAL
     property string hostname: ""
+    // Who is shown over the field: the user's name.
     property string user: ""
     property date lockedAt: new Date()
+    // The line under the field; the greeter says which session is starting.
+    property string status: Lock.statusText(lockState)
     // The last power action's trouble, if any (Lock.powerMessage).
     property string powerMessage: ""
     property bool powerBusy: false
-    // How many notifications arrived since the center was last open.
+    // How many notifications arrived since the center was last open (lock).
     property int unread: 0
     // The keyboard layout badge (Lock.layoutBadge), "" when unknown.
     property string layout: ""
 
+    // The greeter's pickers: [{name, label}] and [{id, name}], and the
+    // chosen ones.
+    property var users: []
+    property string userName: ""
+    property var sessions: []
+    property string sessionId: ""
+    readonly property string sessionName: sessions.find(s => s.id === sessionId)?.name ?? ""
+    // Whether another user can be picked now; the greeter says no while a
+    // login is under way (Greeter.canPickUser).
+    property bool userPickable: true
+    // Which picker's list is open: "", "session" or "user".
+    property string menu: ""
+    // The room a picker's list has under its chip: the rest of the face
+    // below the middle column, less a margin.
+    readonly property real menuRoom: face.height - (middle.y + middle.height) - 6 - 16
+
+    onUserPickableChanged: {
+        if (!userPickable && menu === "user") {
+            menu = "";
+        }
+    }
+
     signal event(var event)
     signal power(string id)
+    signal pickUser(string name)
+    signal pickSession(string id)
 
-    readonly property var battery: UPower.displayDevice
+    // The greeter has no session to show a battery for.
+    readonly property var battery: login ? null : UPower.displayDevice
 
     SystemClock {
         id: clock
@@ -49,6 +87,11 @@ Item {
 
         Keys.onPressed: keyEvent => {
             keyEvent.accepted = true;
+            // Escape closes an open picker before it clears the field.
+            if (keyEvent.key === Qt.Key_Escape && face.menu !== "") {
+                face.menu = "";
+                return;
+            }
             const event = Lock.keyEvent({
                 key: keyEvent.key === Qt.Key_Return || keyEvent.key === Qt.Key_Enter ? "enter"
                     : keyEvent.key === Qt.Key_Backspace ? "backspace"
@@ -71,7 +114,7 @@ Item {
         // Pointer motion wakes the screensaver. The first position seen is
         // only where the pointer was: the compositor reports one as the
         // lock appears, which isn't a move. A move past a few pixels from it
-        // is.
+        // is. A press anywhere else closes an open picker.
         MouseArea {
             property real fromX: -1
             property real fromY: -1
@@ -90,7 +133,10 @@ Item {
                     face.event({ type: "wake" });
                 }
             }
-            onPressed: face.event({ type: "wake" })
+            onPressed: {
+                face.menu = "";
+                face.event({ type: "wake" });
+            }
             // A wheel or a two-finger scroll is input too, with no move.
             onWheel: wheel => {
                 wheel.accepted = face.lockState.saver;
@@ -117,6 +163,7 @@ Item {
                 anchors.top: parent.top
                 anchors.margins: 16
                 spacing: 12
+                visible: !face.login
 
                 Row {
                     visible: face.unread > 0
@@ -163,12 +210,14 @@ Item {
                 }
             }
 
-            // Suspend, bottom left; Restart and Shut down, bottom right.
-            // logind's inhibitors are checked, never overridden here.
+            // Suspend, bottom left, on the lock; Restart and Shut down, bottom
+            // right, on both. logind's inhibitors are checked, never
+            // overridden here.
             Row {
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
                 anchors.margins: 16
+                visible: !face.login
 
                 LockButton {
                     icon: "weather-clear-night-symbolic"
@@ -217,6 +266,8 @@ Item {
             }
 
             Column {
+                id: middle
+
                 anchors.centerIn: parent
                 spacing: 12
                 width: 320
@@ -247,6 +298,8 @@ Item {
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
+                        // A GECOS name is anyone's to set: never markup.
+                        textFormat: Text.PlainText
                         text: face.user
                         color: "#f2f2f6"
                         font.family: "Inter"
@@ -256,6 +309,7 @@ Item {
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
+                        visible: !face.login
                         text: `locked at ${Qt.formatTime(face.lockedAt, "HH:mm")}`
                         color: Qt.rgba(1, 1, 1, 0.6)
                         font.family: "Inter"
@@ -335,11 +389,60 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
                     visible: text !== ""
-                    text: Lock.statusText(face.lockState)
+                    // PAM's and greetd's words: never markup.
+                    textFormat: Text.PlainText
+                    text: face.status
                     color: face.lockState.error && !face.lockState.checking ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.7)
                     font.family: "Inter"
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
+                }
+
+                // The greeter's pickers: the session, and another user when
+                // there's more than one. Each opens its list under it.
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    visible: face.login
+                    spacing: 8
+
+                    LockButton {
+                        icon: "computer-symbolic"
+                        label: face.sessionName
+                        trailing: "pan-down-symbolic"
+                        visible: face.sessions.length > 0
+                        onClicked: face.menu = face.menu === "session" ? "" : "session"
+
+                        LockMenu {
+                            open: face.menu === "session"
+                            maxHeight: face.menuRoom
+                            rows: face.sessions.map(s => ({ key: s.id, label: s.name }))
+                            selected: face.sessionId
+                            onPicked: key => {
+                                face.menu = "";
+                                face.pickSession(key);
+                            }
+                        }
+                    }
+
+                    LockButton {
+                        icon: "avatar-default-symbolic"
+                        label: "Other user"
+                        trailing: "pan-down-symbolic"
+                        visible: face.users.length > 1
+                        enabled: face.userPickable
+                        onClicked: face.menu = face.menu === "user" ? "" : "user"
+
+                        LockMenu {
+                            open: face.menu === "user"
+                            maxHeight: face.menuRoom
+                            rows: face.users.map(u => ({ key: u.name, label: u.label }))
+                            selected: face.userName
+                            onPicked: key => {
+                                face.menu = "";
+                                face.pickUser(key);
+                            }
+                        }
+                    }
                 }
             }
         }

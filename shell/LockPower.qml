@@ -3,9 +3,10 @@ import Quickshell
 import Quickshell.Io
 import "lib/lock.mjs" as Lock
 
-// Suspend, Restart and Shut down from the lock (SPEC.md §10), through
-// logind as the session menu does (shell/lib/session.mjs), but never past
-// an inhibitor: what blocks one is shown, not overridden.
+// Suspend, Restart and Shut down from the lock, and Restart and Shut down
+// from the greeter (SPEC.md §10, §11), through logind as the session menu
+// does (shell/lib/session.mjs), but never past an inhibitor: what blocks
+// one is shown, not overridden.
 // One run at a time (Lock.powerNext): the buttons stay busy until the
 // run has its result and its process has stopped, so no signal of one
 // run is taken for the next's.

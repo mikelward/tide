@@ -38,6 +38,17 @@ target, so tide's units never start in a plain Hyprland or Plasma
 login (SPEC.md §5.3). If the display manager doesn't list the session,
 install it with `sudo make install-session PREFIX=/usr`.
 
+`make install-session` also installs tide's greeter, for greetd (SPEC.md
+§11): `tide-greeter`, which runs Hyprland with its own config and the
+greeter on the lock's face, plus a copy of the shell for it and a greetd
+config template in `$(PREFIX)/share/tide/greeter/greetd.toml`. Nothing
+switches your display manager to it: `setup --tide` will, and until then
+it's by hand, as root. Install greetd, copy the template to
+`/etc/greetd/config.toml` with `user` set to the greeter account your
+greetd package created, and enable greetd in place of the current display
+manager. The greeter user has to be able to run `Hyprland` and `qs`, so a
+build under someone's home directory won't do (see `TODO.md`).
+
 Key bindings and the launcher start apps with `tide launch [--app ID]...
 COMMAND...`: it waits (at most 15 s) for the shell, gives the app a one-shot
 focus grant, and runs it with `uwsm app` so it outlives a shell restart.
