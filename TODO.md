@@ -433,10 +433,12 @@ an idle lock opens on (`tide idle-lock`). Only parsed with `qmlformat` and
   (for `/etc/pam.d/tide-lock`), then `systemctl --user start
   tide-lock.service`. A right password unlocks; a wrong one clears the
   field and says so; every key shows at once.
-- Switch `conf` over: hypridle's `lock_cmd` starts `tide-lock.service`,
-  its 5-minute listener runs `tide idle-lock` instead of `loginctl
-  lock-session`, `misc:allow_session_lock_restore` is on, and `Super+L`
-  stays `loginctl lock-session`. Then hyprlock goes.
+- `conf` locks the tide session with tide-lock (mikelward/conf#384,
+  #385): hypridle's `lock_cmd` starts `tide-lock.service`, its 5-minute
+  listener runs `tide idle-lock`, `Super+L` runs `loginctl lock-session`,
+  and `misc:allow_session_lock_restore` is on. hyprlock stays only for a
+  plain Hyprland login. On a real session, check all three paths reach
+  tide-lock, and before sleep too.
 - On a real session, check the screensaver: an idle lock opens on it, the
   first pointer report doesn't wake it but a move does, and the first key
   lands in the field.
