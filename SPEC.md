@@ -1894,13 +1894,26 @@ are what "done" means.
   with the layer shell and session lock they need. It fails when Quickshell
   can't load either, or when any of the shell's files reports an error as
   it starts. That covers every file's types and properties, the bindings of
-  whatever exists at startup, and what they queue. A popover's contents or
-  a delegate made from data that arrives later aren't covered. CI builds
-  the Quickshell release `setup --tide` installs, and runs it on Ubuntu
-  26.04's Qt. Elsewhere, it's skipped without `qs` and `sway`, but its
-  checks for a fractional `font.pixelSize`, and for the icon theme pragma
-  (§15), run everywhere. A missing pragma loads cleanly and shows only as
-  missing icons.
+  whatever exists at startup, and what they queue.
+- **The bar takes in Hyprland's data.** In that test, Hyprland's IPC is a
+  stand-in (`shell/hyprland_stand_in.py`) with three workspaces of windows,
+  a special workspace and a fullscreen window. It also has a script of
+  events: focus moving, tide's layout and attention announcements, and a
+  reload. So the bar's workspaces, window icons, title and layout symbol
+  are built and rebuilt from them.
+  - The stand-in answers only when the test drains it. The test alternates
+    an IPC round trip with a drain until a drain finds nothing waiting.
+    Then every request the shell made has been answered and taken in, with
+    no timed wait.
+  - The test fails if the shell never asks for the windows or never listens
+    for events.
+  - A popover's contents, and data from a process or a timer, aren't
+    covered.
+- **Where it runs.** CI builds the Quickshell release `setup --tide`
+  installs, and runs it on Ubuntu 26.04's Qt. Elsewhere it's skipped
+  without `qs`, `sway` and `python3`. Its checks for a fractional
+  `font.pixelSize`, and for the icon theme pragma (§15), run everywhere.
+  A missing pragma loads cleanly and shows only as missing icons.
 - **The launcher runs an app.** With wtype, the same test opens the
   launcher over IPC and types the name of an app only it installs,
   "Café Probe", as `cafepro`. Enter must run that app through `tide
