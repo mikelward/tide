@@ -186,7 +186,7 @@ Singleton {
         // Clicking it is attending to it, so its marks go now (§14.4),
         // whether or not a resident notification stays after its action.
         MarkData.dismissed(notification.id);
-        const app = Notes.grantId(notification);
+        const app = Notes.targetApp(notification, MarkData.windows);
         if (!app) {
             action.invoke();
             return;
@@ -210,7 +210,7 @@ Singleton {
     function openEntry(entry) {
         const mine = n => HistoryData.keyOf(n.id) === entry.key;
         const live = root.queue.find(mine) ?? root.resting.find(mine) ?? null;
-        const target = History.clickTarget(entry, live, Notes.defaultAction);
+        const target = History.clickTarget(entry, live, Notes.defaultAction, MarkData.windows);
         if (target?.action) {
             root.run(live, target.action);
         } else if (target?.dismiss) {
@@ -274,6 +274,10 @@ Singleton {
             imageSupported: true
             persistenceSupported: true
             inlineReplySupported: true
+            // Chrome then names a web notification's site in a hint
+            // rather than in its body, so a click and the bar's marks can
+            // go to that site's `--app` window (§14.4, Notes.targetApp).
+            extraHints: [Notes.ORIGIN_HINT]
 
             onNotification: notification => {
                 notification.tracked = true;
@@ -290,7 +294,7 @@ Singleton {
                 root.setResting(result.resting);
                 // It marks its app's windows that are off screen (§14.4),
                 // taking over the marks of any it replaced.
-                MarkData.notified(id, Notes.grantId(notification), result.replaced?.id);
+                MarkData.notified(id, Notes.targetApp(notification, MarkData.windows), result.replaced?.id);
                 // The center's history keeps it, past its popup (§9). One
                 // carried over a config reload is usually there already.
                 HistoryData.record(notification, result.replaced?.id, notification.lastGeneration);
@@ -319,7 +323,7 @@ Singleton {
                             woken.replaced?.expire();
                         }
                         root.restart(notification);
-                        MarkData.notified(id, Notes.grantId(notification));
+                        MarkData.notified(id, Notes.targetApp(notification, MarkData.windows));
                         HistoryData.record(notification);
                         root.holdForDnd();
                     });

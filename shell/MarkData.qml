@@ -34,7 +34,12 @@ Singleton {
         address: Ws.normalizeAddress(t.address),
         workspace: t.workspace ? t.workspace.id : null,
         app: t.lastIpcObject?.class || t.wayland?.appId || "",
+        // Lower is more recent (Notes.siteWindowClass, Ws.focusRank).
+        focus: Ws.focusRank(root.focusOrder, Ws.normalizeAddress(t.address), t.lastIpcObject?.focusHistoryID),
     }))
+
+    // Windows focused since the shell started, newest first (Ws.withFocus).
+    property var focusOrder: []
     readonly property var visible: Ws.visibleWorkspaces(Hyprland.monitors.values.map(m => ({
         workspace: m.activeWorkspace ? m.activeWorkspace.id : null,
         special: m.lastIpcObject?.specialWorkspace?.id ?? 0,
@@ -195,6 +200,11 @@ Singleton {
 
         function onRawEvent(event) {
             let mark = Ws.markEvent(event.name, event.data);
+            if (mark?.type === "focused") {
+                root.focusOrder = Ws.withFocus(root.focusOrder, mark.address);
+            } else if (mark?.type === "closed") {
+                root.focusOrder = Ws.withoutWindow(root.focusOrder, mark.address);
+            }
             if (mark?.type === "urgent") {
                 mark = Ws.activatedEvent(mark.address, root.windows);
             }

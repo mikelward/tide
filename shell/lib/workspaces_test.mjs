@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
     FIRST, LAST, MAX_ICONS, NO_MARKS, updateMarks, markedWindows, barWorkspaces, scrollTarget,
     normalizeAddress, markEvent, sameApp, visibleWorkspaces, activatedEvent, attentionOrder,
+    withFocus, withoutWindow, focusRank,
 } from "./workspaces.mjs";
 
 const win = (address, workspace, app, extra = {}) =>
@@ -339,4 +340,26 @@ test("a rebuilt guard ends any cycle the shell thought was running", () => {
     const marks = updateMarks(updateMarks(notified(), { type: "cycleStart" }), { type: "guardReset" });
     assert.equal(marks.cycling, false);
     assert.deepEqual(updateMarks(marks, { type: "focused", address: "n2" }), NO_MARKS, "a focus clears again");
+});
+
+test("focus order follows focus events, newest first, without repeats", () => {
+    let order = withFocus([], "a1");
+    order = withFocus(order, "b2");
+    order = withFocus(order, "a1");
+    assert.deepEqual(order, ["a1", "b2"]);
+    assert.deepEqual(withFocus(order, null), order);
+    assert.deepEqual(withoutWindow(order, "a1"), ["b2"]);
+    const many = Array.from({ length: 120 }, (_, i) => `${i + 1}`).reduce(withFocus, []);
+    assert.equal(many.length, 100);
+    assert.equal(many[0], "120");
+});
+
+test("a window focused since the shell started ranks above the startup order", () => {
+    const order = ["b2"];
+    assert.equal(focusRank(order, "b2", 7), 0);
+    // a1 was last focused when the shell listed clients, but b2 since.
+    assert.equal(focusRank(order, "a1", 0), 1);
+    assert.equal(focusRank(order, "c3", 2), 3);
+    assert.equal(focusRank(order, "d4", -1), Infinity);
+    assert.equal(focusRank(order, "e5", undefined), Infinity);
 });

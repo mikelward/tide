@@ -99,7 +99,8 @@ Rectangle {
                     elide: Text.ElideRight
                     // Names come from other programs: never markup.
                     textFormat: Text.PlainText
-                    text: root.notification.appName
+                    // The site, for a web notification (§9).
+                    text: Notes.joinLabel(root.notification.appName, Notes.originLabel(Notes.originText(root.notification)))
                     color: Theme.fgDim
                     font.family: Theme.font
                     font.pixelSize: 12

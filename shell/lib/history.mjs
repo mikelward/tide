@@ -1,3 +1,5 @@
+import { isChrome, siteFrom, siteWindowClass } from "./notifications.mjs";
+
 // The notification center's history (SPEC.md §9), as pure functions the
 // QML binds to. Entries are plain objects, newest first, so they store as
 // JSON in $XDG_STATE_HOME/tide/notifications.json and survive a
@@ -10,7 +12,8 @@ export const MAX_ENTRIES = 200;
 export const GROUP_SHOWN = 3;
 
 // The history after a notification arrives or is updated. `item` is
-// {key, app, icon, entry, summary, body, critical, transient, replaces}:
+// {key, app, icon, entry, origin, summary, body, critical, transient,
+// replaces}, `origin` being what Chrome's origin hint said (Notes.originText):
 // `key` names this notification for as long as it lives, and `replaces`
 // the key of one it took the place of (a synchronous replacement), whose
 // entry goes. An update in place keeps its key, and moves to the top as
@@ -26,6 +29,7 @@ export function record(entries, item, now) {
         app: item.app ?? "",
         icon: item.icon ?? "",
         entry: item.entry ?? "",
+        origin: item.origin ?? "",
         summary: item.summary ?? "",
         body: item.body ?? "",
         critical: item.critical === true,
@@ -179,19 +183,19 @@ export function parse(text) {
 // notification while the server still has it (shown, or resting), else null.
 // A live one does what clicking its popup does: runs its default action,
 // or dismisses it when it has none. One that has gone took its actions
-// with it, so the click brings up its app's most recent window instead.
-// Returns {action}, {dismiss: true}, {app} (the id to focus), or null when
-// a gone entry names no app.
-export function clickTarget(entry, live, defaultAction) {
+// with it, so the click brings up its app's most recent window instead:
+// the `--app` window of the site Chrome said it came from, when one is
+// open (Notes.targetApp; `windows` as there). Returns {action}, {dismiss:
+// true}, {app} (the id to focus), or null when a gone entry names no app.
+export function clickTarget(entry, live, defaultAction, windows) {
     if (live) {
         const action = defaultAction(live.actions ?? []);
         return action ? { action } : { dismiss: true };
     }
-    for (const id of [entry.entry, entry.app]) {
-        const trimmed = (id ?? "").trim();
-        if (trimmed !== "") {
-            return { app: trimmed };
-        }
+    const id = [entry.entry, entry.app].map(i => (i ?? "").trim()).find(i => i !== "") ?? null;
+    const site = isChrome(id) ? siteWindowClass(siteFrom(entry.origin), windows ?? []) : null;
+    if (site) {
+        return { app: site };
     }
-    return null;
+    return id === null ? null : { app: id };
 }

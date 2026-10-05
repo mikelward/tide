@@ -93,6 +93,92 @@ export function grantId(notification) {
     return null;
 }
 
+// The hint Chrome names a web notification's site in (§14.4), for a server
+// that advertises it: `chat.google.com`, or past 28 characters the
+// registered domain alone (`google.com`). Advertising it also keeps Chrome
+// from putting the site at the top of the body instead.
+export const ORIGIN_HINT = "x-kde-origin-name";
+
+// What the origin hint says, for showing, or "" when it says nothing. It
+// isn't always a site: Chrome sends a notification's own context message
+// there when it has one.
+export function originText(notification) {
+    return String(notification.hints?.[ORIGIN_HINT] ?? "").trim();
+}
+
+// The site a notification came from, as a lowercase host without a port,
+// or null when the origin hint isn't a host (absent, or a context message).
+export function siteOf(notification) {
+    return siteFrom(originText(notification));
+}
+
+// The origin hint's text as shown beside a notification's app name or age
+// (§9): the site, now that it's not in the body, so you can see who sent
+// it. A context message can run long, so past Chrome's own 28 characters
+// it's cut short.
+export function originLabel(text) {
+    const t = String(text ?? "").trim();
+    return t.length > 28 ? t.slice(0, 27) + "…" : t;
+}
+
+// `parts` that aren't empty, joined by a middle dot.
+export function joinLabel(...parts) {
+    return parts.map(p => String(p ?? "").trim()).filter(p => p !== "").join(" · ");
+}
+
+// The site in an origin hint's text (siteOf), which the history keeps.
+export function siteFrom(text) {
+    const m = /^([a-z0-9-]+(?:\.[a-z0-9-]+)*)(?::\d+)?$/.exec(String(text ?? "").trim().toLowerCase());
+    return m ? m[1] : null;
+}
+
+// The window class of Chrome's `--app` window for `site` (§14.4), or null
+// when none is open. Chrome names one `chrome-HOST_PATH-PROFILE`, its URL's
+// path's slashes made underscores (`chrome-chat.google.com__-Default`), so
+// the host runs to the first underscore; hosts have none. An installed web
+// app's class (`chrome-<app id>-Default`) has no underscore and names no
+// site, so it never matches. A shortened site (`google.com`) matches its
+// subdomains. Of several, the most recently focused window's class wins.
+// `windows` is [{app, focus}], `focus` being Hyprland's focusHistoryID:
+// 0 for the window focused last, -1 for one never focused.
+export function siteWindowClass(site, windows) {
+    if (!site) {
+        return null;
+    }
+    let best = null;
+    for (const w of windows) {
+        const m = /^chrom(?:e|ium)-([^_]+)_.*-[^-]+$/i.exec(String(w.app ?? ""));
+        if (!m) {
+            continue;
+        }
+        const host = m[1].toLowerCase();
+        if (host !== site && !host.endsWith("." + site)) {
+            continue;
+        }
+        const focus = Number.isInteger(w.focus) && w.focus >= 0 ? w.focus : Infinity;
+        if (best === null || focus < best.focus) {
+            best = { app: w.app, focus };
+        }
+    }
+    return best?.app ?? null;
+}
+
+// Whether an app ID (grantId's) is Chrome's or Chromium's own desktop
+// entry. Any app can send the origin hint, so a site routes to an `--app`
+// window only when Chrome sent it; another app naming a host stays its own.
+export function isChrome(id) {
+    return /^(?:google-chrome(?:-beta|-unstable|-canary)?|chromium(?:-browser)?|org\.chromium\.chromium|com\.google\.chrome(?:\.[a-z]+)?)$/i.test(String(id ?? "").trim());
+}
+
+// The app a notification marks and a click on it brings up (§9, §14.4):
+// for Chrome's notification from a site with an `--app` window open, that
+// window's class, so Chat's notification goes to the Chat window and not
+// every Chrome window; else its grantId.
+export function targetApp(notification, windows) {
+    const id = grantId(notification);
+    return (isChrome(id) ? siteWindowClass(siteOf(notification), windows) : null) ?? id;
+}
+
 // Whether a notification's closing clears the bar marks it made (§14.4):
 // a dismissal, which an invoked action is too, or its app closing it does;
 // running out of time on screen doesn't, since nobody has looked at its

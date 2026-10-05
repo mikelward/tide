@@ -1,7 +1,10 @@
 // Tests for notifications.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { timeoutFor, MAX_SHOWN, stackHeight, withDraft, replyDraft, shown, syncKey, arrive, leave, grantId, clearsMarks, defaultAction, buttons, bodyStyled, iconFile, themedImageName, countdown, held, hold, release, restarted, due, nextDeadline, passesDnd, heldByDnd, rest, wake, unkept, isLive, arriveResting } from "./notifications.mjs";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { timeoutFor, MAX_SHOWN, stackHeight, withDraft, replyDraft, shown, syncKey, arrive, leave, grantId, clearsMarks, defaultAction, buttons, bodyStyled, iconFile, themedImageName, countdown, held, hold, release, restarted, due, nextDeadline, passesDnd, heldByDnd, ORIGIN_HINT, isChrome, originText, siteOf, siteFrom, siteWindowClass, targetApp, originLabel, joinLabel, rest, wake, unkept, isLive, arriveResting } from "./notifications.mjs";
 
 // Quickshell's NotificationUrgency values.
 const URGENCY = { Low: 0, Normal: 1, Critical: 2 };
@@ -289,4 +292,124 @@ test("a synchronous key replaces a resting notification too", () => {
     assert.deepEqual(arriveResting([], [other], next), { queue: [next], resting: [other], replaced: null });
     const plain = { id: 5, appName: "vol", hints: {} };
     assert.deepEqual(arriveResting([], [old], plain), { queue: [plain], resting: [old], replaced: null });
+});
+
+const chat = (origin) => ({ appName: "Google Chrome", desktopEntry: "google-chrome", hints: origin === undefined ? {} : { [ORIGIN_HINT]: origin } });
+
+test("the origin hint gives the site, without a port", () => {
+    assert.equal(ORIGIN_HINT, "x-kde-origin-name");
+    assert.equal(siteOf(chat("chat.google.com")), "chat.google.com");
+    assert.equal(siteOf(chat(" Example.COM:8080 ")), "example.com");
+    assert.equal(siteFrom("localhost:3000"), "localhost");
+});
+
+test("a context message or no hint is no site", () => {
+    assert.equal(siteOf(chat()), null);
+    assert.equal(siteOf(chat("")), null);
+    assert.equal(siteOf(chat("Example Extension")), null);
+    assert.equal(siteOf(chat("example.com/path")), null);
+    assert.equal(originText(chat("Example Extension")), "Example Extension");
+    assert.equal(originText({}), "");
+});
+
+test("a site's --app window class is found by its host", () => {
+    const windows = [
+        { app: "google-chrome", focus: 0 },
+        { app: "chrome-chat.google.com__-Default", focus: 3 },
+        { app: "chrome-mail.google.com__mail_-Default", focus: 1 },
+    ];
+    assert.equal(siteWindowClass("chat.google.com", windows), "chrome-chat.google.com__-Default");
+    assert.equal(siteWindowClass("mail.google.com", windows), "chrome-mail.google.com__mail_-Default");
+    assert.equal(siteWindowClass("meet.google.com", windows), null);
+    assert.equal(siteWindowClass(null, windows), null);
+});
+
+test("a shortened site matches its subdomains, the most recently focused first", () => {
+    const windows = [
+        { app: "chrome-chat.example.co.uk__-Default", focus: 4 },
+        { app: "chrome-mail.example.co.uk__-Profile_1", focus: 2 },
+    ];
+    assert.equal(siteWindowClass("example.co.uk", windows), "chrome-mail.example.co.uk__-Profile_1");
+    assert.equal(siteWindowClass("ample.co.uk", windows), null);
+});
+
+test("an installed web app's class names no site, so it never matches", () => {
+    const windows = [{ app: "chrome-abcdefghijklmnopabcdefghijklmnop-Default", focus: 0 }];
+    assert.equal(siteWindowClass("abcdefghijklmnopabcdefghijklmnop", windows), null);
+});
+
+test("a window never focused (-1) comes after one that was", () => {
+    const windows = [
+        { app: "chrome-chat.google.com__-Profile_1", focus: -1 },
+        { app: "chrome-chat.google.com__-Default", focus: 0 },
+    ];
+    assert.equal(siteWindowClass("chat.google.com", windows), "chrome-chat.google.com__-Default");
+    assert.equal(siteWindowClass("chat.google.com", [windows[0]]), "chrome-chat.google.com__-Profile_1");
+});
+
+test("a window with no focus history still matches, after one that has it", () => {
+    const windows = [
+        { app: "chrome-chat.google.com__-Default" },
+        { app: "chromium-chat.google.com__-Default", focus: 5 },
+    ];
+    assert.equal(siteWindowClass("chat.google.com", windows), "chromium-chat.google.com__-Default");
+});
+
+test("a web notification goes to its site's --app window, else to Chrome", () => {
+    const windows = [{ app: "chrome-chat.google.com__-Default", focus: 0 }];
+    assert.equal(targetApp(chat("chat.google.com"), windows), "chrome-chat.google.com__-Default");
+    assert.equal(targetApp(chat("meet.google.com"), windows), "google-chrome");
+    assert.equal(targetApp(chat(), windows), "google-chrome");
+    assert.equal(targetApp({ appName: "", desktopEntry: "", hints: {} }, windows), null);
+});
+
+test("only Chrome's origin hint routes to an --app window", () => {
+    // Any app can send the hint; one naming a host stays its own app.
+    const windows = [{ app: "chrome-chat.google.com__-Default", focus: 0 }];
+    const other = { appName: "Mail", desktopEntry: "org.example.Mail", hints: { [ORIGIN_HINT]: "chat.google.com" } };
+    assert.equal(targetApp(other, windows), "org.example.Mail");
+    for (const entry of ["google-chrome", "google-chrome-beta", "chromium", "chromium-browser", "org.chromium.Chromium", "com.google.Chrome"]) {
+        assert.equal(isChrome(entry), true, entry);
+        assert.equal(targetApp({ appName: "", desktopEntry: entry, hints: { [ORIGIN_HINT]: "chat.google.com" } }, windows), "chrome-chat.google.com__-Default", entry);
+    }
+    for (const id of ["org.example.Mail", "chrome-chat.google.com__-Default", "googlechrome", "", null]) {
+        assert.equal(isChrome(id), false, String(id));
+    }
+});
+
+test("the origin shows beside the name, cut short past 28 characters", () => {
+    assert.equal(joinLabel("Google Chrome", originLabel("chat.google.com")), "Google Chrome · chat.google.com");
+    assert.equal(joinLabel("Files", originLabel("")), "Files");
+    assert.equal(joinLabel(originLabel(undefined), "2 min"), "2 min");
+    assert.equal(originLabel("x".repeat(28)), "x".repeat(28));
+    assert.equal(originLabel("x".repeat(29)), "x".repeat(27) + "…");
+});
+
+// The origin hint is the sender's text, so any Text showing it renders it
+// as plain text: Qt's default would take HTML, and an <img> in it would
+// make the shell fetch a URL.
+test("every Text that shows the origin hint is plain text", () => {
+    const shell = join(dirname(fileURLToPath(import.meta.url)), "..");
+    let found = 0;
+    for (const f of readdirSync(shell).filter(n => n.endsWith(".qml"))) {
+        const text = readFileSync(join(shell, f), "utf8");
+        for (let i = text.indexOf("Notes.originLabel("); i !== -1; i = text.indexOf("Notes.originLabel(", i + 1)) {
+            found++;
+            const start = text.lastIndexOf("Text {", i);
+            assert.ok(start !== -1, `${f}: no Text around the origin label`);
+            let depth = 0;
+            let end = start;
+            for (let j = text.indexOf("{", start); j < text.length; j++) {
+                if (text[j] === "{") {
+                    depth++;
+                } else if (text[j] === "}" && --depth === 0) {
+                    end = j;
+                    break;
+                }
+            }
+            assert.ok(end > i, `${f}: the origin label isn't inside the Text before it`);
+            assert.match(text.slice(start, end), /\btextFormat:\s*Text\.PlainText\b/, f);
+        }
+    }
+    assert.ok(found >= 2, `found the origin label ${found} times`);
 });
