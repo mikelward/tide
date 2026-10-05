@@ -158,6 +158,20 @@ export function iconFile(appIcon) {
     return appIcon.startsWith("/") ? `file://${appIcon}` : null;
 }
 
+// The theme icon a notification's image names, or null for any other image.
+// Quickshell gives an image-path hint that isn't a file as
+// "image://icon/NAME", which draws its placeholder when the theme has no
+// NAME; the popup drops such an image, and shows the app's icon instead.
+export function themedImageName(image) {
+    const prefix = "image://icon/";
+    if (typeof image !== "string" || !image.startsWith(prefix)) {
+        return null;
+    }
+    const name = image.slice(prefix.length);
+    const query = name.indexOf("?");
+    return query < 0 ? name : name.slice(0, query);
+}
+
 // A popup's countdown, kept in the one NotificationData rather than in each
 // monitor's popup, so there's one per notification however many monitors
 // draw it. Running, it has a deadline; held, it keeps the time it had left,

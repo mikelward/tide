@@ -369,8 +369,10 @@ always-on server would take it over by accident. `shell/NotificationData.qml`
 holds the queue, and
 `shell/NotificationPopups.qml` draws it on the focused monitor, from
 `shell/lib/notifications.mjs`. A click grants focus to the sender's app
-(`tide grant`) before invoking the action. Only parsed with
-`qmlformat`; nothing has run in a live session. Still to do:
+(`tide grant`) before invoking the action. CI's load test runs the
+server headless: it takes a notification and a critical one, keeps both in
+the history, and draws their popups with every icon loaded (SPEC.md §20).
+Nothing has run in a live session. Still to do:
 
 - Try it on a real session: stop swaync, set `TIDE_NOTIFICATIONS=1` in
   the user manager's environment (README), restart the shell, and check Chrome's notifications, a reply,

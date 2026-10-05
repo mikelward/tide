@@ -68,7 +68,11 @@ Rectangle {
 
                 anchors.fill: parent
                 visible: status === Image.Ready
-                source: root.notification.image
+                // A theme icon the theme lacks would draw Quickshell's placeholder.
+                source: {
+                    const name = Notes.themedImageName(root.notification.image);
+                    return name !== null && !Quickshell.hasThemeIcon(name) ? "" : root.notification.image;
+                }
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
             }
@@ -76,7 +80,7 @@ Rectangle {
             IconImage {
                 anchors.fill: parent
                 visible: !image.visible
-                source: Notes.iconFile(root.notification.appIcon) ?? Quickshell.iconPath(root.notification.appIcon || Notes.grantId(root.notification) || "", "dialog-information")
+                source: Notes.iconFile(root.notification.appIcon) ?? Quickshell.iconPath(root.notification.appIcon || Notes.grantId(root.notification) || "", "application-x-executable")
             }
         }
 

@@ -3,9 +3,10 @@
 # Tests for shell/shell_test.sh itself, with stand-ins for qs, sway and
 # wtype, so they run without Quickshell: what the load test does with a
 # shell that loads cleanly, one whose files report an error, one whose event
-# loop never answers, one that ignores Hyprland, a launcher that runs the
-# app typed or doesn't, and a lock that unlocks or doesn't. The stand-in
-# Hyprland is the real one.
+# loop never answers, one that ignores Hyprland, one whose icon won't load,
+# a notification server that records what it's sent or doesn't, a launcher
+# that runs the app typed or doesn't, and a lock that unlocks or doesn't.
+# The stand-in Hyprland is the real one.
 
 cd "$(dirname "$0")/.." || exit 1
 
@@ -41,7 +42,9 @@ trap 'rm -rf "$tmp"' EXIT
 # the app typed; and a wtype that keeps what it types in DIR/typed, and in
 # the runtime directory for qs to see. HYPRLAND is `full` (the default:
 # listen for events, and ask for the status and the windows), `deaf` (no
-# listening) or `windowless` (no asking for windows).
+# listening) or `windowless` (no asking for windows). Its notify-send
+# prints an id and adds the summary to the history, as the shell's server
+# would.
 stubs() {
     mkdir -p "$1" || exit 1
     cat >"$1/sway" <<'EOF'
@@ -100,7 +103,22 @@ printf '%s' "$1" >>"$(dirname "$0")/typed"
 printf '%s\n' "$LANG" >>"$(dirname "$0")/typed-lang"
 printf '%s' "$1" >"$XDG_RUNTIME_DIR/typed"
 EOF
-    chmod +x "$1/sway" "$1/qs" "$1/wtype" || exit 1
+    cat >"$1/notify-send" <<'EOF'
+#!/bin/sh
+summary=
+while test $# -gt 0; do
+    case $1 in
+        -p) ;;
+        -a | -i | -u) shift ;;
+        *) test -n "$summary" || summary=$1 ;;
+    esac
+    shift
+done
+mkdir -p "$HOME/.local/state/tide" || exit 1
+printf '{"summary":"%s"}\n' "$summary" >>"$HOME/.local/state/tide/notifications.json"
+echo 1
+EOF
+    chmod +x "$1/sway" "$1/qs" "$1/wtype" "$1/notify-send" || exit 1
 }
 
 # run DIR [VAR=VALUE...]: the load test with DIR's stand-ins, a 2 s limit,
@@ -173,6 +191,27 @@ stubs "$tmp/launcher-unfocused" "exit 0" "$loaded" ":" "$opened"
 run "$tmp/launcher-unfocused"
 check "a launcher that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the launcher didn't take the keyboard in 2 s"
+
+run "$tmp/clean"
+check "a server that records what it's sent passes" contains "$out" "ok: the notification server takes notifications and records them"
+
+stubs "$tmp/forgets" "exit 0" "  INFO: Configuration Loaded"
+printf '#!/bin/sh\necho 1\n' >"$tmp/forgets/notify-send"
+run "$tmp/forgets"
+check "a server that records nothing fails" test "$code" -ne 0
+check "and says so" contains "$out" "the notification server didn't record \"Probe\" in its history"
+
+stubs "$tmp/refuses" "exit 0" "  INFO: Configuration Loaded"
+printf '#!/bin/sh\necho "no server" >&2\nexit 1\n' >"$tmp/refuses/notify-send"
+run "$tmp/refuses"
+check "a server that refuses a notification fails" test "$code" -ne 0
+check "and says so" contains "$out" "the notification server didn't take \"Probe\": no server"
+
+stubs "$tmp/placeholder" "exit 0" "  WARN: Could not load icon \"no-such\" at size QSize(16, 16) from request
+  INFO: Configuration Loaded"
+run "$tmp/placeholder"
+check "a shell whose icon won't load fails" test "$code" -ne 0
+check "and says so" contains "$out" "an icon wouldn't load"
 
 stubs "$tmp/deaf" "exit 0" "  INFO: Configuration Loaded" ":" "" deaf
 run "$tmp/deaf"

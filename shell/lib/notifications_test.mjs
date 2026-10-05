@@ -1,7 +1,7 @@
 // Tests for notifications.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { timeoutFor, MAX_SHOWN, stackHeight, withDraft, replyDraft, shown, syncKey, arrive, leave, grantId, clearsMarks, defaultAction, buttons, bodyStyled, iconFile, countdown, held, hold, release, restarted, due, nextDeadline, passesDnd, heldByDnd, rest, wake, unkept, isLive, arriveResting } from "./notifications.mjs";
+import { timeoutFor, MAX_SHOWN, stackHeight, withDraft, replyDraft, shown, syncKey, arrive, leave, grantId, clearsMarks, defaultAction, buttons, bodyStyled, iconFile, themedImageName, countdown, held, hold, release, restarted, due, nextDeadline, passesDnd, heldByDnd, rest, wake, unkept, isLive, arriveResting } from "./notifications.mjs";
 
 // Quickshell's NotificationUrgency values.
 const URGENCY = { Low: 0, Normal: 1, Critical: 2 };
@@ -89,6 +89,15 @@ test("an app icon is a themed name, or a path or file URL to an image", () => {
     assert.equal(iconFile("mail-unread"), null);
     assert.equal(iconFile("/usr/share/pixmaps/app.png"), "file:///usr/share/pixmaps/app.png");
     assert.equal(iconFile("file:///tmp/a.png"), "file:///tmp/a.png");
+});
+
+test("an image that names a theme icon gives the name, so a missing one can be dropped", () => {
+    assert.equal(themedImageName("image://icon/firefox"), "firefox");
+    assert.equal(themedImageName("image://icon/firefox?path=/opt/icons"), "firefox");
+    assert.equal(themedImageName("file:///tmp/avatar.png"), null);
+    assert.equal(themedImageName("image://qsimage/42"), null);
+    assert.equal(themedImageName(""), null);
+    assert.equal(themedImageName(undefined), null);
 });
 
 test("a countdown runs out at its deadline", () => {

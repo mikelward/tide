@@ -265,7 +265,7 @@ PanelWindow {
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: 16
                                     height: 16
-                                    source: Notes.iconFile(group.modelData.icon) ?? Quickshell.iconPath(group.modelData.icon || group.modelData.entry || "", "dialog-information")
+                                    source: Notes.iconFile(group.modelData.icon) ?? Quickshell.iconPath(group.modelData.icon || group.modelData.entry || "", "application-x-executable")
                                 }
 
                                 Text {
