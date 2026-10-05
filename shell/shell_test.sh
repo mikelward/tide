@@ -21,10 +21,12 @@
 # them all, but only what runs reports: the bindings of what exists at
 # startup and what the stand-in's answers and events make, and what they
 # queue. The shell's own commands are on its PATH: tide-tz built for the
-# run, so the clocks are drawn from tzdata, and a stand-in tide-sysmon
-# whose probe finds no sensors, so the system monitor parses one but reads
-# no sensor files. Data from a timer, a file read, or any other command
-# isn't covered.
+# run, so the clocks are drawn from tzdata; a stand-in tide-sysmon whose
+# probe finds no sensors, so the system monitor parses one but reads no
+# sensor files; and a stand-in hyprctl, answering from the stand-in
+# Hyprland's fixtures, for the bar's title, the lock's layout badge and
+# the focus guard's calls. Data from a timer, a file read, or any other
+# command isn't covered.
 #
 # With notify-send, it also runs the shell as the notification server
 # (TIDE_NOTIFICATIONS=1, SPEC.md §9), sends it notifications, and expects
@@ -172,6 +174,15 @@ case $1 in
 esac
 EOF
 chmod +x "$tmp/helpers/real/tide-sysmon" || exit 1
+# hyprctl answers from the stand-in Hyprland's fixtures, at once: the
+# shell runs it as a command, which settle waits for, and a request on the
+# stand-in's socket would wait for a drain. Python runs as its child, not
+# in its place, so its command line still names $tmp/helpers until it ends.
+cat >"$tmp/helpers/real/hyprctl" <<EOF || exit 1
+#!/bin/sh
+"$python_path" "$PWD/shell/hyprland_stand_in.py" ctl "\$@"
+EOF
+chmod +x "$tmp/helpers/real/hyprctl" || exit 1
 # With the Go that's installed, as the Makefile builds. Without git's
 # status, which git refuses for a checkout another user owns (CI's, in its
 # container): a binary for this run needs no stamp.
@@ -179,7 +190,7 @@ if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/helpers/real/ti
     echo "FAIL: couldn't build tide-tz: $(cat "$tmp/go.log")" >&2
     exit 1
 fi
-helpers="tide-sysmon tide-tz"
+helpers="tide-sysmon tide-tz hyprctl"
 : >"$tmp/helpers.log" || exit 1
 for _helper in $helpers; do
     cat >"$tmp/helpers/$_helper" <<EOF || exit 1
@@ -338,30 +349,34 @@ settle() {
     done
 }
 
-# started FROM COMMAND...: waits until the shell has run each COMMAND
-# since its run log had FROM lines, failing the test unless that comes in
-# time. The shell may start one only once it has read files in the
+# started FROM CALLS: waits until the shell has made each call in CALLS,
+# a line each, since its run log had FROM lines, failing the test unless
+# that comes in time. A call is the start of a run's line: the command,
+# and as many of its arguments as tell it from the shell's other runs of
+# that command. The shell may make one only once it has read files in the
 # background (the clocks' tide-tz waits on their settings), which nothing
 # else here can wait on.
 started() {
     _from=$1
-    shift
-    for _command; do
+    while IFS= read -r _call; do
         i=0
-        until tail -n "+$((_from + 1))" "$tmp/helpers.log" | grep -q "^$_command "; do
+        until tail -n "+$((_from + 1))" "$tmp/helpers.log" |
+            awk -v call="$_call" 'index($0, call) == 1 { found = 1 } END { exit !found }'; do
             if ! kill -0 "$qs_pid" 2>/dev/null; then
-                echo "FAIL: $_what exited before it ran $_command:" >&2
+                echo "FAIL: $_what exited before it ran \"$_call...\":" >&2
                 grep -v '^\[' "$log" >&2
                 exit 1
             fi
-            if waited "$_what never ran $_command" "$i"; then
+            if waited "$_what never ran \"$_call...\"" "$i"; then
                 grep -v '^\[' "$log" >&2
                 exit 1
             fi
             sleep 0.1
             i=$((i + 1))
         done
-    done
+    done <<EOF
+$2
+EOF
 }
 
 # load NAME WHAT ARG...: starts `qs ARG...` on the headless sway, with a
@@ -371,7 +386,8 @@ started() {
 # by the shell's own files, nor anything the clocks warn of. Local time is
 # New York's, one of the default clocks, so it's hidden as local. With
 # $load_env, it starts qs with those settings too; with $load_runs, it
-# waits for the shell to start each of those commands before it settles;
+# waits for the shell to make each of those calls (started) before it
+# settles;
 # and with $after_load, it runs that function once all of that has
 # settled. Its log is $tmp/NAME.qs.log. Nothing edits the files during
 # the test, so the file watcher is off, as tide-lock.service has it.
@@ -432,8 +448,9 @@ load() {
     # file read) can't be waited for without a timer, and isn't covered.
     _listeners=0
     if grep -q 'Configuration Loaded' "$log"; then
-        # shellcheck disable=SC2086 # $load_runs is a list of commands
-        started "$_load_from" ${load_runs:-}
+        if test -n "${load_runs:-}"; then
+            started "$_load_from" "$load_runs"
+        fi
         settle
         _listeners=$(hyprland play) || exit 1
         settle
@@ -459,7 +476,7 @@ load() {
     # The commands' inputs are fixed (the default zones, $TZ, the system's
     # tzdata; the stand-in probe), so anything the clocks or the system
     # monitor warn of is a failure.
-    if grep -E "tide: (tide-tz|tide-sysmon|clocks|couldn't start tide-)" "$log" >"$tmp/reports"; then
+    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title)|tide: couldn't (start (tide-|hyprctl)|replay|tell)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl)" "$log" >"$tmp/reports"; then
         echo "FAIL: $_what loaded, but its commands warned:" >&2
         cat "$tmp/reports" >&2
         exit 1
@@ -822,16 +839,24 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
     echo "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
 }
 
-# The shell runs all its commands; without them, the run says nothing
-# about the clocks or the system monitor. The lock runs none of them.
-load_runs=$helpers
+# The shell makes all these calls; without them, the run says nothing
+# about the clocks, the system monitor, the title or the focus guard: its
+# replay of the waiting windows, and its order for Super+Tab. The lock and
+# the greeter only ask for the keyboards, for their layout badges.
+shell_runs='tide-tz
+tide-sysmon probe
+hyprctl activewindow -j
+hyprctl eval tide_focus.announce_waiting()
+hyprctl eval tide_focus.set_order('
+load_runs=$shell_runs
 load shell "the shell" -c tide
-load_runs=
+load_runs='hyprctl devices -j'
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"
+load_runs=
 if test -n "$notify_path"; then
     load_env=TIDE_NOTIFICATIONS=1
-    load_runs=$helpers
+    load_runs=$shell_runs
     after_load=notify
     load notifications "the notification server" -c tide
     load_env=

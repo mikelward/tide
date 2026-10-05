@@ -4,12 +4,13 @@
 # wtype, notify-send and go, so they run without Quickshell: what the load
 # test does with a shell that loads cleanly, one whose files report an
 # error, one whose event loop never answers, one that ignores Hyprland, one
-# that doesn't run tide-tz or whose tide-tz never ends, one whose clocks
-# or system monitor warn, one whose icon won't load, a notification server
-# that records what it's sent or doesn't, a launcher that runs the app typed
-# or doesn't, a lock that unlocks or doesn't, and a greeter that logs in or
-# doesn't. The stand-in Hyprland, tide-sysmon and greetd are the load test's
-# own.
+# that doesn't run tide-tz or hyprctl, or whose tide-tz never ends, one
+# whose clocks, system monitor, title or focus guard calls warn, one whose
+# icon won't load, a notification server that records what it's sent or
+# doesn't, a launcher that runs the app typed or doesn't, a lock that
+# can't read its keyboards, or unlocks or doesn't, and a greeter that logs
+# in or doesn't. The stand-in Hyprland, hyprctl, tide-sysmon and greetd
+# are the load test's own.
 
 cd "$(dirname "$0")/.." || exit 1
 
@@ -36,6 +37,9 @@ fi
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
+# The calls the stub qs makes, as the shell and as the lock or the greeter.
+all_runs="tide-tz tide-sysmon title replay order keyboards"
+
 # stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN]]]]]]]:
 # a sway that listens on wayland-1 until it's killed; a qs whose `ipc`
 # runs IPC, and otherwise talks to Hyprland as HYPRLAND says, then prints
@@ -49,15 +53,20 @@ trap 'rm -rf "$tmp"' EXIT
 # what it types in DIR/typed, and in the runtime directory for qs to see.
 # HYPRLAND is `full` (the default: listen for events, and ask for the
 # status and the windows), `deaf` (no listening) or `windowless` (no
-# asking for windows). Loaded as the shell (-c), qs also starts COMMANDS in
-# the background, tide-tz and tide-sysmon by default, and reaps them as
-# they end, as Quickshell does; with LATE, it starts tide-tz that many
-# seconds late, as the shell does once it has read its clock files. Its
-# notify-send prints an id and adds the summary to the
-# history, as the shell's server would. Its go builds a tide-tz that runs
-# TZ, by default one that ends at once.
+# asking for windows). Loaded, qs also makes the calls COMMANDS names in
+# the background, all of $all_runs by default, and reaps them as they end,
+# as Quickshell does: as the shell (-c) tide-tz, tide-sysmon, the title's
+# hyprctl and the focus guard's replay and order, as the lock or the
+# greeter (-p) hyprctl for the keyboards. With LATE, it runs tide-tz that
+# many seconds late, as the shell does once it has read its clock files. Its
+# notify-send prints an id and adds the summary to the history, as the
+# shell's server would. Its go builds a tide-tz that runs TZ, by default
+# one that ends at once. DIR/load-CONFIG.txt, if it's there, is printed
+# before LOAD by that config alone: shell (-c), lock or greeter.
 stubs() {
     mkdir -p "$1" || exit 1
+    # Kept in a file, so LOAD can be any text.
+    printf '%s\n' "$3" >"$1/load.txt" || exit 1
     cat >"$1/sway" <<'EOF'
 #!/bin/sh
 exec python3 -c 'import os, socket, time
@@ -85,15 +94,35 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
     until test -e "\$XDG_RUNTIME_DIR/hyprland_client.ready"; do sleep 0.1; done
     rm "\$XDG_RUNTIME_DIR/hyprland_client.ready" || exit 1
     if test "\$1" = -c; then
-        case " ${7-tide-tz tide-sysmon} " in
+        case " ${7-$all_runs} " in
             *" tide-tz "*) { ${9:+sleep $9;} tide-tz -- America/Los_Angeles; } >/dev/null 2>&1 & ;;
         esac
-        case " ${7-tide-tz tide-sysmon} " in
+        case " ${7-$all_runs} " in
             *" tide-sysmon "*) tide-sysmon probe >/dev/null 2>&1 & ;;
+        esac
+        case " ${7-$all_runs} " in
+            *" title "*) hyprctl activewindow -j >/dev/null 2>&1 & ;;
+        esac
+        case " ${7-$all_runs} " in
+            *" replay "*) hyprctl eval 'tide_focus.announce_waiting()' >/dev/null 2>&1 & ;;
+        esac
+        case " ${7-$all_runs} " in
+            *" order "*) hyprctl eval 'tide_focus.set_order({})' >/dev/null 2>&1 & ;;
+        esac
+    else
+        case " ${7-$all_runs} " in
+            *" keyboards "*) hyprctl devices -j >/dev/null 2>&1 & ;;
         esac
     fi
 fi
-printf '%s\n' '$3'
+case "\$1" in
+    -c) config=shell ;;
+    *) config=\$(basename "\$2" .qml) ;;
+esac
+if test -f "\$(dirname "\$0")/load-\$config.txt"; then
+    cat "\$(dirname "\$0")/load-\$config.txt"
+fi
+cat "\$(dirname "\$0")/load.txt"
 if test -n "\$WAYLAND_DEBUG" && test "\$1" = -c; then
     ${5:-$launcher}
 fi
@@ -306,19 +335,19 @@ run "$tmp/placeholder"
 check "a shell whose icon won't load fails" test "$code" -ne 0
 check "and says so" contains "$out" "an icon wouldn't load"
 
-stubs "$tmp/late" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" ":" 0.5
+stubs "$tmp/late" "exit 0" "$loaded" ":" "" full "$all_runs" ":" 0.5
 run "$tmp/late"
 check "a shell that runs tide-tz only after reading its files passes" test "$code" -eq 0
 check "having waited for it" contains "$out" "ok: Quickshell loads the shell"
 
-stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon"
+stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon title replay order keyboards"
 run "$tmp/no-clocks"
 check "a shell that never runs tide-tz fails" test "$code" -ne 0
-check "and says so" contains "$out" "the shell never ran tide-tz in 2 s"
+check "and says so" contains "$out" 'the shell never ran "tide-tz..." in 2 s'
 
 # A tide-tz that lasts as long as the shell that started it: kill -0 fails
 # once the shell is gone, which is when it ends.
-stubs "$tmp/endless" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" \
+stubs "$tmp/endless" "exit 0" "$loaded" ":" "" full "$all_runs" \
     'while kill -0 "$PPID" 2>/dev/null; do sleep 0.1; done'
 run "$tmp/endless"
 check "a tide-tz that never ends fails" test "$code" -ne 0
@@ -336,6 +365,72 @@ $loaded"
 run "$tmp/probe-fails"
 check "a shell whose system monitor warns fails" test "$code" -ne 0
 check "and says what it said" contains "$out" "tide: tide-sysmon probe exited 2"
+
+stubs "$tmp/no-title" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon replay order keyboards"
+run "$tmp/no-title"
+check "a shell that never asks hyprctl for the focused window fails" test "$code" -ne 0
+check "and says so" contains "$out" 'the shell never ran "hyprctl activewindow -j..." in 2 s'
+
+stubs "$tmp/no-replay" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title order keyboards"
+run "$tmp/no-replay"
+check "a shell that never has the focus guard replay its windows fails" test "$code" -ne 0
+check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.announce_waiting()..." in 2 s'
+
+stubs "$tmp/no-order" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay keyboards"
+run "$tmp/no-order"
+check "a shell that never tells the focus guard its marks fails" test "$code" -ne 0
+check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.set_order(..." in 2 s'
+
+stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order"
+run "$tmp/no-keyboards"
+check "a lock that never asks hyprctl for the keyboards fails" test "$code" -ne 0
+check "and says so" contains "$out" 'the lock never ran "hyprctl devices -j..." in 2 s'
+
+stubs "$tmp/title-warns" "exit 0" "  WARN qml: tide: bar title: hyprctl activewindow gave no window; the title waits for the next focus change
+$loaded"
+run "$tmp/title-warns"
+check "a shell whose title can't read hyprctl fails" test "$code" -ne 0
+check "and says what it said" contains "$out" "tide: bar title: hyprctl activewindow gave no window"
+
+stubs "$tmp/guard-warns" "exit 0" "  WARN qml: tide: couldn't tell the focus guard which windows are marked: no guard
+$loaded"
+run "$tmp/guard-warns"
+check "a shell whose focus guard calls fail fails" test "$code" -ne 0
+check "and says what it said" contains "$out" "couldn't tell the focus guard"
+
+# The stand-in hyprctl answers the focus guard's calls as Hyprland would:
+# ok only for the two MarkData.qml makes, of functions focus.lua defines.
+# ctl CODE [STAND_IN]: what it says to `hyprctl eval CODE`, in out and code.
+ctl() {
+    out=$(python3 "${2-shell/hyprland_stand_in.py}" ctl eval "$1" 2>&1)
+    code=$?
+}
+ctl 'tide_focus.announce_waiting()'
+check "the stand-in hyprctl replays the guard's waiting windows" test "$code:$out" = 0:ok
+ctl 'tide_focus.set_order({})'
+check "and takes no marks" test "$code:$out" = 0:ok
+ctl 'tide_focus.set_order({"0x55aa04","0x55aa05"})'
+check "and takes marks in order" test "$code:$out" = 0:ok
+ctl 'tide_focus.set_ordr({})'
+check "but not a misspelled call" test "$code" -ne 0
+check "and says so" contains "$out" "doesn't evaluate 'tide_focus.set_ordr({})'"
+ctl 'tide_focus.set_order({0x55aa04})'
+check "or an address that isn't a string" test "$code" -ne 0
+ctl 'tide_focus.set_order({"0x55aa04",,})'
+check "or a list that isn't Lua" test "$code" -ne 0
+mkdir -p "$tmp/renamed/shell" "$tmp/renamed/hypr/tide" || exit 1
+cp shell/hyprland_stand_in.py "$tmp/renamed/shell/" || exit 1
+sed 's/function M\.set_order(/function M.set_marks(/' hypr/tide/focus.lua >"$tmp/renamed/hypr/tide/focus.lua" || exit 1
+ctl 'tide_focus.set_order({})' "$tmp/renamed/shell/hyprland_stand_in.py"
+check "or a call focus.lua doesn't define" test "$code" -ne 0
+check "and says so" contains "$out" "hypr/tide/focus.lua has no tide_focus.set_order"
+
+stubs "$tmp/badge-warns" "exit 0" "$loaded"
+echo "  WARN qml: tide-lock: hyprctl devices gave no keyboard; the layout badge stays hidden" >"$tmp/badge-warns/load-lock.txt" || exit 1
+run "$tmp/badge-warns"
+check "a lock that can't read its keyboards fails" test "$code" -ne 0
+check "as the lock loads" contains "$out" "the lock loaded, but its commands warned"
+check "and says what it said" contains "$out" "tide-lock: hyprctl devices gave no keyboard"
 
 run "$tmp/clean" GO=tide-test-no-such-go
 check "without Go, a run that requires Quickshell fails" test "$code" -ne 0
@@ -427,28 +522,28 @@ check "having typed a wrong password, then the right one, then the code" \
 tide-greeter-test
 246810"
 
-stubs "$tmp/greeter-alpha" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" "" "" "$(login_as alpha)"
+stubs "$tmp/greeter-alpha" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "$(login_as alpha)"
 run "$tmp/greeter-alpha"
 check "a greeter that starts another session fails" test "$code" -ne 0
 check "and says what greetd saw" contains "$out" "start_session {\"cmd\": [\"alpha-session\"]"
 
-stubs "$tmp/greeter-forgets" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" "" "" "$(login_as forgetful)"
+stubs "$tmp/greeter-forgets" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "$(login_as forgetful)"
 run "$tmp/greeter-forgets"
 check "a greeter that doesn't remember the login fails" test "$code" -ne 0
 check "and says so" contains "$out" "the greeter should remember probe and tide"
 
-stubs "$tmp/greeter-codeless" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" "" "" "$(login_as codeless)"
+stubs "$tmp/greeter-codeless" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "$(login_as codeless)"
 run "$tmp/greeter-codeless"
 check "a greeter that doesn't answer the visible prompt fails" test "$code" -ne 0
 check "and says what greetd saw" contains "$out" "start_session refused: session is not ready"
 
-stubs "$tmp/greeter-stays" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" "" "" "$(login_as stays)"
+stubs "$tmp/greeter-stays" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "$(login_as stays)"
 run "$tmp/greeter-stays"
 check "a greeter that never logs in fails" test "$code" -ne 0
 check "and says so" contains "$out" "the greeter didn't log in in 2 s"
 check "within the limit ($took s)" test "$took" -lt 30
 
-stubs "$tmp/greeter-unfocused" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" "" "" "exec sleep 3600"
+stubs "$tmp/greeter-unfocused" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "exec sleep 3600"
 run "$tmp/greeter-unfocused"
 check "a greeter that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the greeter didn't take the keyboard in 2 s"
