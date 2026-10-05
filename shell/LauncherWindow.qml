@@ -43,6 +43,8 @@ PanelWindow {
     readonly property var items: root.apps.concat(Search.quickActions({
         notifications: NotificationData.enabled,
         dnd: NotificationData.dnd,
+        dark: AppearanceData.dark,
+        darkUntil: AppearanceData.until,
         keepAwake: KeepAwakeData.on,
         micHolds: MicData.live && !KeepAwakeData.asked
     }))
@@ -164,6 +166,8 @@ PanelWindow {
         const what = Search.quickCommand(id);
         if (what.shell === "dnd") {
             NotificationData.setDnd(!NotificationData.dnd);
+        } else if (what.shell === "dark-style") {
+            AppearanceData.flip();
         } else if (what.shell === "keep-awake") {
             KeepAwakeData.toggle();
         } else if (what.shell === "reload") {

@@ -1,0 +1,202 @@
+pragma Singleton
+
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import "lib/appearance.mjs" as Appearance
+import "lib/report.mjs" as Report
+
+// Light or dark (SPEC.md §15). The shell owns the schedule: it reads
+// appearance.json and appearance.local.json (§16.1), works out which it is
+// each minute, and when that changes tells apps through gsettings and the
+// shell's own palette (Theme) in place. The launcher's flip
+// (`flip`) lasts until the schedule's next change.
+Singleton {
+    id: root
+
+    // The settings in effect: the last good ones.
+    property var settings: Appearance.DEFAULTS
+    property bool loaded: false
+    readonly property var now: Appearance.themeAt(root.settings, clock.minute, flipped.override)
+    readonly property bool dark: root.now.dark
+    // When the next change is due as "HH:MM", or "" when the mode is fixed.
+    readonly property string until: root.now.next === null ? "" : Appearance.clockTime(root.now.next)
+    // The last scheme apps were told, or null before the first time.
+    property var told: null
+    property var reports: Report.NOTHING
+
+    // A config reload keeps a flip, so reloading the shell doesn't undo it.
+    PersistentProperties {
+        id: flipped
+
+        reloadableId: "tide-appearance"
+
+        property var override: null
+    }
+
+    function flip() {
+        flipped.override = Appearance.flip(root.settings, Date.now(), flipped.override);
+    }
+
+    // A flip that has run out is dropped, so it can't come back if the
+    // settings return to what it was made under.
+    onNowChanged: {
+        if (flipped.override !== null && root.now.override === null) {
+            flipped.override = null;
+        }
+    }
+
+    onDarkChanged: root.tell()
+    onLoadedChanged: root.tell()
+
+    // Tells apps (Appearance.schemeCommands), once the settings are read so
+    // a login doesn't flash the defaults' scheme first. A failure is
+    // logged by Launcher, and tried again at the next change.
+    function tell() {
+        if (!root.loaded || root.told === root.dark) {
+            return;
+        }
+        root.told = root.dark;
+        for (const command of Appearance.schemeCommands(root.dark)) {
+            Launcher.run(command, null);
+        }
+    }
+
+    // Anything else that sets the color scheme (conf's theme daemon, at its
+    // own 07:00 and 19:00) is put back at once, so apps can't disagree with
+    // the shell until its next change. The shell's own writes come back
+    // here too, and match.
+    function heard(line) {
+        const dark = Appearance.schemeIsDark(line);
+        if (dark !== null && root.told !== null && dark !== root.dark) {
+            console.log(`tide: color-scheme was set to ${dark ? "dark" : "light"} elsewhere; setting it back`);
+            root.told = null;
+            root.tell();
+        }
+    }
+
+    Process {
+        command: ["gsettings", "monitor", "org.gnome.desktop.interface", "color-scheme"]
+        running: true
+        stdout: SplitParser {
+            onRead: data => root.heard(data)
+        }
+        onExited: (code, status) => {
+            console.warn(`tide: gsettings monitor exited ${code}; a color scheme set elsewhere stays until the shell's next change`);
+        }
+    }
+
+    readonly property string dir: (Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`) + "/tide"
+
+    function textOf(file) {
+        // A missing file is the defaults' cue, not an error.
+        return file.loaded && file.broken === "" ? file.text() : null;
+    }
+
+    function load() {
+        // Both files' first loads are in before anything is decided, so the
+        // shared settings can't show before the local ones replace them.
+        if (!shared.settled || !local.settled) {
+            return;
+        }
+        const broken = [shared.broken, local.broken].filter(b => b !== "");
+        const result = Appearance.loadAppearance(shared.broken ? null : textOf(shared), local.broken ? null : textOf(local), root.settings);
+        const errors = broken.concat(result.errors);
+        for (const error of errors) {
+            console.warn(`tide: ${error}`);
+        }
+        // A file that can't be read keeps the last good settings, rather
+        // than being taken for missing.
+        if (broken.length === 0) {
+            root.settings = result.settings;
+        }
+        root.loaded = true;
+        const v = Report.verdict(root.reports, errors);
+        root.reports = v.state;
+        root.send(v.send);
+    }
+
+    // A bad file is a notification naming it and the line (SPEC.md §16.1),
+    // once; one that fails to send (at login, before the notification
+    // server is up) is sent again by `resend`.
+    function send(errors) {
+        for (const error of errors) {
+            Launcher.run(Report.notifyCommand("Theme not updated", error), ok => {
+                root.reports = Report.sent(root.reports, error, ok);
+                if (!ok) {
+                    resend.restart();
+                }
+            });
+        }
+    }
+
+    FileView {
+        id: shared
+
+        // Why it can't be read, or "" when it can (or doesn't exist).
+        property string broken: ""
+        // Whether its first load has finished, either way.
+        property bool settled: false
+
+        path: `${root.dir}/appearance.json`
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            broken = "";
+            settled = true;
+            root.load();
+        }
+        onLoadFailed: error => {
+            settled = true;
+            broken = error === FileViewError.FileNotFound ? "" : `${path}: ${FileViewError.toString(error)}`;
+            root.load();
+        }
+    }
+
+    FileView {
+        id: local
+
+        // Why it can't be read, or "" when it can (or doesn't exist).
+        property string broken: ""
+        // Whether its first load has finished, either way.
+        property bool settled: false
+
+        path: `${root.dir}/appearance.local.json`
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            broken = "";
+            settled = true;
+            root.load();
+        }
+        onLoadFailed: error => {
+            settled = true;
+            broken = error === FileViewError.FileNotFound ? "" : `${path}: ${FileViewError.toString(error)}`;
+            root.load();
+        }
+    }
+
+    Timer {
+        id: resend
+
+        interval: 30 * 1000
+        onTriggered: {
+            const r = Report.retry(root.reports);
+            root.reports = r.state;
+            root.send(r.send);
+        }
+    }
+
+    // Each minute, and at once after a suspend: the schedule is read
+    // against the wall clock, so a change missed while asleep shows on
+    // waking.
+    SystemClock {
+        id: clock
+
+        readonly property real minute: date.getTime()
+
+        precision: SystemClock.Minutes
+    }
+}

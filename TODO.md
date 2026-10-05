@@ -89,19 +89,24 @@ once you have agreed with it or reversed it.
       as when a popup times out. The alternative keeps it open until
       Do not disturb ends and shows it then. It's `holdForDnd` in
       `shell/NotificationData.qml`.
-- [ ] **The bar follows the desktop's light/dark color scheme for now.**
-      SPEC.md §15 has the shell own the schedule (`appearance.json`); until
-      it does, `shell/Theme.qml` watches `org.gnome.desktop.interface
-      color-scheme`, which conf's theme daemon already flips. The
-      alternative was building the shell's schedule first. The watch is two
-      `gsettings` processes in `Theme.qml`, easy to swap for the shell's
-      own schedule later.
-- [ ] **The bar can miss a light/dark flip at its own startup.** `gsettings
-      monitor` has no "ready" signal, so a flip in the instant before it
-      subscribes leaves the startup read's old value up until the next flip
-      (at most twice a day). Accepted for now; the alternatives were polling
-      `gsettings get` every minute, or building the shell's own schedule
-      (SPEC.md §15), which removes the watch altogether. It's `Theme.qml`.
+- [ ] **The shell puts back a color scheme set elsewhere.**
+      `shell/AppearanceData.qml` owns the schedule (SPEC.md §15) and
+      watches `color-scheme`: when something else sets it (conf's
+      `theme-daemon.sh` still does, at 07:00 and 19:00), the shell sets its
+      own again at once. With other times in `appearance.json`, that's a
+      blink twice a day. The real fix is conf's: have the daemon leave the
+      color scheme to tide inside a tide session, and follow it for swaync,
+      waybar and the wallpaper. The alternative was leaving the daemon's
+      write in place until the shell's next change, which can be hours.
+- [ ] **GTK 3 gets Adwaita and Adwaita-dark, not adw-gtk3.** SPEC.md §15
+      names adw-gtk3, which no setup installs yet, so the shell sets what
+      conf's theme script sets today. It's `schemeCommands` in
+      `shell/lib/appearance.mjs`; switch it when M7's setup installs
+      adw-gtk3.
+- [ ] **A light/dark flip lasts until logout at the latest.** It's kept
+      across a shell reload (`PersistentProperties`), not in a file, so
+      logging back in starts on the schedule. The alternative is saving
+      it in `$XDG_STATE_HOME/tide`.
 - [ ] **The bar's status icons are the icon theme's symbolic icons, not
       Material Symbols.** SPEC.md §15 picked Material Symbols Rounded for
       the shell's glyphs, and now names symbolic icons instead: no distro
@@ -225,8 +230,8 @@ tested where it can be without a live session.
     the shell serves notifications), keep awake and reload are in, with
     their keys shown. A blocked power action
     keeps the launcher open and asks, naming what blocks it, as the
-    session menu does. Still to come: Settings and the theme (dark /
-    light / automatic), which wait on the shell owning the schedule (§15).
+    session menu does. Dark style is in too: it flips light and dark
+    until the schedule's next change (§15). Still to come: Settings.
   - Frecency is in: the empty query lists the apps you run most and most
     recently first, and a query puts them first among equal matches; kept in
     `$XDG_STATE_HOME/tide/launcher.json`.
@@ -327,10 +332,13 @@ tested where it can be without a live session.
   - `Theme.qml` reads its light and dark colors from `theme/palette.json`,
     which `make palette` turns into `shell/lib/palette.mjs` (`make test`
     fails when that's stale, or when the palette and the mocks'
-    `common.css` disagree), and follows the desktop's `color-scheme`.
-    Next for §15: generate GTK's, Qt's and Hyprland's colors from the
-    same file (M7), and move the light/dark schedule from conf's theme
-    daemon into the shell (`appearance.json`).
+    `common.css` disagree). The light/dark schedule is the shell's
+    (`shell/AppearanceData.qml`, from `appearance.json`): it sets
+    `color-scheme` and `gtk-theme` for apps. On a live session, check a
+    flip from the launcher, the switch at a boundary, and one after a
+    suspend across it. Next for §15: generate GTK's, Qt's and Hyprland's
+    colors from the same file (M7), and have conf's theme daemon leave the
+    color scheme to tide in a tide session.
   - Status icons (§7.4): `shell/StatusIcons.qml` has volume (scroll by 5%)
     and battery (red below 15%), from `shell/lib/status.mjs`, and the
     session menu (`shell/SessionMenu.qml`, from `shell/lib/session.mjs`).
