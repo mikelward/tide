@@ -229,6 +229,7 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
              .config/systemd/user/tide-lock.service \
              .config/quickshell/tide/lock.qml \
              .config/quickshell/tide/LockSurface.qml \
+             .config/quickshell/tide/LockFace.qml \
              .config/quickshell/tide/lib/lock.mjs \
              .config/systemd/user/hypridle.service.d/tide.conf \
              .config/xdg-desktop-portal/tide-portals.conf \
