@@ -10,15 +10,18 @@
 #
 # The bar is a layer-shell panel and the lock an ext-session-lock surface,
 # which need a Wayland compositor that speaks both, as Hyprland does; sway,
-# run headless, is the one here. Both run in a scratch home and runtime
-# directory, on a D-Bus session bus of their own, and with no Hyprland to
-# reach, so a run inside a tide session leaves that session alone.
+# run headless, is the one here. Hyprland's IPC is a stand-in
+# (shell/hyprland_stand_in.py) with workspaces, windows and a script of
+# events, so the bar's workspaces, window icons, title and layout symbol
+# are built from them. Both run in a scratch home and runtime directory, on
+# a D-Bus session bus of their own, so a run inside a tide session leaves
+# that session alone.
 #
 # Every file's types and properties are checked, since Quickshell compiles
-# them all, but only what runs at startup reports: the bindings of what
-# exists then, and what they queue. A popover's contents, or a delegate
-# made from data that arrives later (a clock, a notification), aren't
-# covered.
+# them all, but only what runs reports: the bindings of what exists at
+# startup and what the stand-in's answers and events make, and what they
+# queue. A popover's contents, or a delegate made from data the stand-in
+# doesn't give (a clock's process, a notification), aren't covered.
 #
 # With wtype, it also types into them. It opens the launcher, types the
 # name of an app only it installs, and expects Enter to run that app. Given
@@ -71,6 +74,7 @@ missing() {
 qs=${QS:-qs}
 qs_path=$(command -v "$qs") || missing "$qs (Quickshell)"
 sway_path=$(command -v sway) || missing "sway (to run headless)"
+python_path=$(command -v python3) || missing "python3 (for the stand-in Hyprland)"
 # Without wtype, nothing is typed, so the launcher and the lock's password
 # go untested.
 if ! wtype_path=$(command -v wtype); then
@@ -91,12 +95,13 @@ esac
 
 tmp=$(mktemp -d) || exit 1
 qs_pid=
+hypr_pid=
 keyboard_pid=
 sway_pid=
 bus_pid=
 cleanup() {
     _status=$?
-    for pid in $qs_pid $keyboard_pid $sway_pid; do
+    for pid in $qs_pid $hypr_pid $keyboard_pid $sway_pid; do
         # It may have exited already.
         kill "$pid" 2>/dev/null
         wait "$pid"
@@ -161,19 +166,86 @@ until test -S "$tmp/run/wayland-1"; do
     i=$((i + 1))
 done
 
-# load NAME WHAT ARG...: starts `qs ARG...` on the headless sway, and fails
-# the test unless it loads WHAT with nothing reported by the shell's own
-# files. Its log is $tmp/NAME.qs.log. Nothing edits the files during the
-# test, so the file watcher is off, as tide-lock.service has it.
+# barrier: returns once Quickshell has handled everything that reached it
+# before the call. It answers IPC on its event loop, which takes, in one
+# pass, all that's arrived since the last; it may answer before the rest of
+# that pass, but a second request is only taken in a later pass. A loop
+# that's stuck never answers, so each wait has the limit.
+barrier() {
+    for _ in 1 2; do
+        if ! timeout "$wait" env -i PATH="$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
+            LANG=C.UTF-8 "$qs_path" ipc --pid "$qs_pid" show >"$tmp/ipc.log" 2>&1; then
+            echo "FAIL: $_what loaded, but didn't answer IPC within $wait s:" >&2
+            cat "$tmp/ipc.log" "$log" >&2
+            exit 1
+        fi
+    done
+}
+
+# hyprland COMMAND: asks the stand-in Hyprland to drain or play, and prints
+# its answer.
+hyprland() {
+    if ! timeout "$wait" "$python_path" shell/hyprland_stand_in.py "$1" "$hypr_dir" 2>"$tmp/hypr.err"; then
+        echo "FAIL: the stand-in Hyprland didn't $1: $(cat "$tmp/hypr.err")" >&2
+        cat "$tmp/hypr.log" >&2
+        exit 1
+    fi
+}
+
+# settle: answers the shell's Hyprland requests, and lets it take in the
+# answers, until it has nothing more to ask. The stand-in answers only when
+# drained, and a request the shell makes while handling an answer or an
+# event has been sent by the time a barrier returns: so a drain that finds
+# none after a barrier means every request was answered and every answer
+# taken in. Each answered request is added to $tmp/answered.
+settle() {
+    _until=$(($(date +%s) + wait))
+    while :; do
+        barrier
+        _answered=$(hyprland drain) || exit 1
+        test -z "$_answered" && return
+        printf '%s\n' "$_answered" >>"$tmp/answered"
+        if test "$(date +%s)" -ge "$_until"; then
+            echo "FAIL: $_what was still asking Hyprland after $wait s" >&2
+            exit 1
+        fi
+    done
+}
+
+# load NAME WHAT ARG...: starts `qs ARG...` on the headless sway, with a
+# fresh stand-in Hyprland, and fails the test unless it loads WHAT, asks
+# Hyprland for its windows, takes in its events, and through all of that
+# has nothing reported by the shell's own files. Its log is
+# $tmp/NAME.qs.log. Nothing edits the files during the test, so the file
+# watcher is off, as tide-lock.service has it.
 load() {
     _what=$2
     log=$tmp/$1.qs.log
     shift 2
     : >"$log" || exit 1
+    : >"$tmp/answered" || exit 1
+
+    # Quickshell finds Hyprland by HYPRLAND_INSTANCE_SIGNATURE, and only if
+    # its directory is there as it starts.
+    hypr_signature=tide-test
+    hypr_dir=$tmp/run/hypr/$hypr_signature
+    "$python_path" shell/hyprland_stand_in.py serve "$hypr_dir" >"$tmp/hypr.log" 2>&1 &
+    hypr_pid=$!
+    i=0
+    until test -S "$hypr_dir/control.sock"; do
+        if ! kill -0 "$hypr_pid" 2>/dev/null || waited "the stand-in Hyprland didn't start" "$i"; then
+            echo "FAIL: the stand-in Hyprland didn't start:" >&2
+            cat "$tmp/hypr.log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+
     env -i PATH="$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
         ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
         LANG=C.UTF-8 QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
-        QS_DISABLE_FILE_WATCHER=1 \
+        HYPRLAND_INSTANCE_SIGNATURE="$hypr_signature" QS_DISABLE_FILE_WATCHER=1 \
         "$qs_path" "$@" >"$log" 2>&1 &
     qs_pid=$!
 
@@ -195,21 +267,24 @@ load() {
         i=$((i + 1))
     done
     # Loading is synchronous, but what it queued (a Qt.callLater, a queued
-    # signal) runs on the event loop afterward. Quickshell answers IPC on
-    # that same loop, so once it has answered, those have run and reported
-    # too; a loop that's stuck never answers, so the wait has the same
-    # limit. What waits on the world outside (a process's output, a file
-    # read) can't be waited for without a timer, and isn't covered.
-    if grep -q 'Configuration Loaded' "$log" && ! timeout "$wait" env -i PATH="$PATH" HOME="$tmp/home" \
-        XDG_RUNTIME_DIR="$tmp/run" LANG=C.UTF-8 "$qs_path" ipc --pid "$qs_pid" show >"$tmp/ipc.log" 2>&1; then
-        echo "FAIL: $_what loaded, but didn't answer IPC within $wait s:" >&2
-        cat "$tmp/ipc.log" "$log" >&2
-        exit 1
+    # signal) runs on the event loop afterward, and so does what Hyprland's
+    # answers and events set off: settle waits for all of it. What waits on
+    # the world outside (a process's output, a file read) can't be waited
+    # for without a timer, and isn't covered.
+    _listeners=0
+    if grep -q 'Configuration Loaded' "$log"; then
+        settle
+        _listeners=$(hyprland play) || exit 1
+        settle
     fi
     # It may have exited already, having failed.
     kill "$qs_pid" 2>/dev/null
     wait "$qs_pid"
     qs_pid=
+    kill "$hypr_pid"
+    wait "$hypr_pid"
+    hypr_pid=
+    rm -rf "$hypr_dir"
 
     if ! grep -q 'Configuration Loaded' "$log"; then
         echo "FAIL: Quickshell couldn't load $_what:" >&2
@@ -217,6 +292,15 @@ load() {
         exit 1
     fi
     reports "$_what loaded"
+    # Without these, the run says nothing about Hyprland's data.
+    if ! grep -qx 'j/clients' "$tmp/answered"; then
+        echo "FAIL: $_what never asked the stand-in Hyprland for its windows" >&2
+        exit 1
+    fi
+    if test "$_listeners" -lt 1; then
+        echo "FAIL: $_what never listened for the stand-in Hyprland's events" >&2
+        exit 1
+    fi
     echo "ok: Quickshell loads $_what"
 }
 

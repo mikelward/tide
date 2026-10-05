@@ -3,8 +3,9 @@
 # Tests for shell/shell_test.sh itself, with stand-ins for qs, sway and
 # wtype, so they run without Quickshell: what the load test does with a
 # shell that loads cleanly, one whose files report an error, one whose event
-# loop never answers, a launcher that runs the app typed or doesn't, and a
-# lock that unlocks or doesn't.
+# loop never answers, one that ignores Hyprland, a launcher that runs the
+# app typed or doesn't, and a lock that unlocks or doesn't. The stand-in
+# Hyprland is the real one.
 
 cd "$(dirname "$0")/.." || exit 1
 
@@ -31,13 +32,16 @@ fi
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
-# stubs DIR IPC LOAD [UNLOCK [LAUNCH]]: a sway that listens on wayland-1
-# until it's killed; a qs whose `ipc` runs IPC, and otherwise prints LOAD
-# then waits, but started as the unlock step starts the lock (WAYLAND_DEBUG,
-# -p) runs UNLOCK first, and as the launch step starts the shell
-# (WAYLAND_DEBUG, -c) prints LOAD and then runs LAUNCH, which defaults to a
-# launcher that runs the app typed; and a wtype that keeps what it types in
-# DIR/typed, and in the runtime directory for qs to see.
+# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND]]]: a sway that listens on
+# wayland-1 until it's killed; a qs whose `ipc` runs IPC, and otherwise
+# talks to Hyprland as HYPRLAND says, then prints LOAD and waits, but
+# started as the unlock step starts the lock (WAYLAND_DEBUG, -p) runs
+# UNLOCK first, and as the launch step starts the shell (WAYLAND_DEBUG, -c)
+# prints LOAD and then runs LAUNCH, which defaults to a launcher that runs
+# the app typed; and a wtype that keeps what it types in DIR/typed, and in
+# the runtime directory for qs to see. HYPRLAND is `full` (the default:
+# listen for events, and ask for the status and the windows), `deaf` (no
+# listening) or `windowless` (no asking for windows).
 stubs() {
     mkdir -p "$1" || exit 1
     cat >"$1/sway" <<'EOF'
@@ -58,11 +62,34 @@ fi
 if test -n "\$WAYLAND_DEBUG" && test "\$1" = -p; then
     ${4:-:}
 fi
+# Talked to before it says it loaded, as Quickshell does.
+if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
+    python3 "\$(dirname "\$0")/hyprland_client.py" ${6:-full} &
+    until test -e "\$XDG_RUNTIME_DIR/hyprland_client.ready"; do sleep 0.1; done
+    rm "\$XDG_RUNTIME_DIR/hyprland_client.ready" || exit 1
+fi
 printf '%s\n' '$3'
 if test -n "\$WAYLAND_DEBUG" && test "\$1" = -c; then
     ${5:-$launcher}
 fi
 exec sleep 3600
+EOF
+    cat >"$1/hyprland_client.py" <<'EOF'
+import os, socket, sys, time
+directory = os.path.join(os.environ["XDG_RUNTIME_DIR"], "hypr", os.environ["HYPRLAND_INSTANCE_SIGNATURE"])
+held = []
+if sys.argv[1] != "deaf":
+    held.append(socket.socket(socket.AF_UNIX))
+    held[-1].connect(directory + "/.socket2.sock")
+for request in ["j/status"] if sys.argv[1] == "windowless" else ["j/status", "j/clients"]:
+    held.append(socket.socket(socket.AF_UNIX))
+    held[-1].connect(directory + "/.socket.sock")
+    held[-1].sendall(request.encode())
+open(os.environ["XDG_RUNTIME_DIR"] + "/hyprland_client.ready", "w").close()
+# Gone with the qs that started it.
+parent = os.getppid()
+while os.getppid() == parent:
+    time.sleep(0.2)
 EOF
     cat >"$1/wtype" <<'EOF'
 #!/bin/sh
@@ -146,6 +173,16 @@ stubs "$tmp/launcher-unfocused" "exit 0" "$loaded" ":" "$opened"
 run "$tmp/launcher-unfocused"
 check "a launcher that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the launcher didn't take the keyboard in 2 s"
+
+stubs "$tmp/deaf" "exit 0" "  INFO: Configuration Loaded" ":" "" deaf
+run "$tmp/deaf"
+check "a shell that never listens for Hyprland's events fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell never listened for the stand-in Hyprland's events"
+
+stubs "$tmp/windowless" "exit 0" "  INFO: Configuration Loaded" ":" "" windowless
+run "$tmp/windowless"
+check "a shell that never asks Hyprland for its windows fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell never asked the stand-in Hyprland for its windows"
 
 # What a lock started for unlocking says: that it took the keyboard, then,
 # once the passwords are typed, PAM's verdicts.
