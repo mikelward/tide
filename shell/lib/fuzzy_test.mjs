@@ -38,6 +38,15 @@ test("a consecutive run beats the same letters spread out", () => {
     assert.ok(match("fire", "Firefox").score > match("fire", "Files Reader").score);
 });
 
+test("punctuation and symbols end a word, and letters without case start one", () => {
+    // A "b" after a dash or a trademark sign starts a word; after a letter
+    // with an accent it doesn't.
+    assert.ok(match("b", "a—b").score > match("b", "aéb").score);
+    assert.ok(match("b", "a™b").score > match("b", "aéb").score);
+    // 日 after a space starts a word; 本 after 日 doesn't.
+    assert.ok(match("日", "ab 日本").score > match("本", "ab 日本").score);
+});
+
 test("positions are code points, so they index a name with emoji", () => {
     assert.deepEqual(match("b", "😀 Bob").positions, [2]);
 });

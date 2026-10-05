@@ -95,7 +95,8 @@ test("the clocks name the file they came from", () => {
 
 test("the shell's JavaScript sticks to what QML's engine has", async () => {
     // QML implements ECMAScript 7: newer methods such as Array.prototype.at
-    // pass under Node and throw in the shell.
+    // pass under Node and throw in the shell. Newer regular expressions
+    // don't throw there; they match nothing, or the wrong thing.
     const { readdir, readFile } = await import("node:fs/promises");
     const dir = new URL(".", import.meta.url);
     const sources = (await readdir(dir)).filter(f => f.endsWith(".mjs") && !f.endsWith("_test.mjs"));
@@ -103,6 +104,8 @@ test("the shell's JavaScript sticks to what QML's engine has", async () => {
     for (const f of sources) {
         const text = await readFile(new URL(f, dir), "utf8");
         assert.doesNotMatch(text, /\.at\(/, `${f} uses .at()`);
+        assert.doesNotMatch(text, /\\[pP]\{/, `${f} uses a \\p{} property escape`);
+        assert.doesNotMatch(text, /\(\?</, `${f} uses a lookbehind or a named group`);
     }
 });
 

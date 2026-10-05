@@ -24,16 +24,27 @@ const FIRST = 8;
 const GAP = 1;
 const MAX_GAP = 8;
 
+// Qt's JavaScript engine has no Unicode property escapes: one matches
+// nothing there, without an error. So the classes are spelled out.
+// The combining marks NFD splits off Latin, Greek and Cyrillic letters.
+const MARKS = /[\u0300-\u036f\u0483-\u0489\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\ufe20-\ufe2f]/g;
+// What isn't a letter or digit: spaces, controls, combining marks, and the
+// punctuation and symbols of ASCII, Latin-1, the symbol blocks, CJK and
+// fullwidth forms, and of the planes of emoji and other symbols (by their
+// high surrogate). The rest counts as a letter, which takes in the scripts
+// without case (日本, עברית).
+const NOT_ALNUM = /[\s\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\xa9\xab-\xb1\xb4\xb6-\xb8\xbb\xbf\xd7\xf7\u0300-\u036f\u0483-\u0489\u1ab0-\u1aff\u1dc0-\u1dff\u2000-\u206f\u20a0-\u20ff\u2100-\u2101\u2103-\u2106\u2108-\u2109\u2114\u2116-\u2118\u211e-\u2123\u2125\u2127\u2129\u212e\u213a-\u213b\u2140-\u2144\u214a-\u214d\u214f\u218a-\u218b\u2190-\u245f\u2500-\u2775\u2794-\u2bff\u2e00-\u2fff\u3000-\u3004\u3008-\u3020\u3030\u303d-\u303f\u3200-\u33ff\ufe00-\ufe2f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65\ud833\ud834\ud836\ud83c-\ud83e\udb40]/;
+
 // One code point folded for comparison, the same on both sides: lowercased,
 // then without its accents, so "i" finds "İnternet" (whose lowercase is
 // two code points) and "e" finds "é". Each text code point folds alone, so
 // a match's positions still index the original text.
 function fold(c) {
-    return c.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+    return c.toLowerCase().normalize("NFD").replace(MARKS, "");
 }
 
 function isAlnum(c) {
-    return /[\p{L}\p{N}]/u.test(c);
+    return !NOT_ALNUM.test(c);
 }
 
 function isWordStart(text, i) {
