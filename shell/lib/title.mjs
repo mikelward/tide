@@ -1,6 +1,6 @@
 // The window title in the middle of the bar (SPEC.md §7.1), as a pure
-// function the QML binds to. Each monitor's bar shows its own workspace's
-// window, as waybar's hyprland/window does with separate-outputs.
+// function the QML binds to. Only the focused window gets a title, on its
+// own monitor's bar: the title names where typing goes.
 
 import { normalizeAddress } from "./workspaces.mjs";
 
@@ -10,33 +10,34 @@ import { normalizeAddress } from "./workspaces.mjs";
 // characters in any script.
 export const MAX_TITLE = 60;
 
-// The workspace a monitor shows: its open special workspace (Hyprland's
-// `specialWorkspace.id`, 0 when none), which covers the regular one, or
-// else its active one. IDs, or null.
-export function shownWorkspace(active, special) {
-    return special ? special : active ?? null;
-}
-
-// The window the bar on `monitor` (its name) stands for, showing
-// `workspace` (its ID, from shownWorkspace), as {address, title}:
-//   - the focused window, when it's on this monitor: on the shown
-//     workspace, under an open special one, or pinned;
-//   - otherwise that workspace's last focused window (`lastWindow`, the
-//     address Hyprland reports for it), if it's still there;
-//   - otherwise null: an empty workspace, or one whose last window left.
-// `active` is {monitor, address, title}, or null when nothing has focus
-// (see hasFocus); `windows` are [{address, workspace, title}].
-export function barWindow({ monitor, workspace, active, lastWindow, windows }) {
-    if (workspace == null) {
+// The window the bar on `monitor` (its name) stands for, as
+// {address, title}: the focused window when it's on this monitor, wherever
+// on it (under an open special workspace, or pinned), else null. Every
+// other monitor's bar is blank. `active` is {monitor, address, title}, or
+// null when nothing has focus (see hasFocus).
+export function barWindow({ monitor, active }) {
+    if (!active || monitor == null || active.monitor !== monitor) {
         return null;
     }
-    if (active && monitor != null && active.monitor === monitor) {
-        return { address: normalizeAddress(active.address), title: oneLine(active.title) };
+    const address = normalizeAddress(active.address);
+    return address === null ? null : { address, title: oneLine(active.title) };
+}
+
+// The address of the window that has focus, from `hyprctl activewindow -j`
+// when the shell starts: Quickshell 0.3 sets its active toplevel only on
+// the next activewindowv2 event, so until one arrives this is what has
+// focus. Hyprland answers `{}` when nothing has focus, which gives null;
+// so does output that isn't JSON, which gives undefined so the caller can
+// say the read failed.
+export function activeAtStart(text) {
+    let window;
+    try {
+        window = JSON.parse(text);
+    } catch (e) {
+        // The caller reports it: undefined says the read failed.
+        return undefined;
     }
-    const address = normalizeAddress(lastWindow);
-    const last = address === null ? null
-        : windows.find(w => normalizeAddress(w.address) === address && w.workspace === workspace);
-    return last ? { address, title: oneLine(last.title) } : null;
+    return normalizeAddress(window?.address);
 }
 
 // That window's title, or nothing.
@@ -83,15 +84,4 @@ export function collapseClocks({ barWidth, left, right, gap, clocksWidth, fullCl
     const rightRoom = fullRight - barWidth / 2;
     // Hiding clocks only helps when the right side is what's short.
     return rightRoom < leftRoom && 2 * rightRoom - gap < MIN_TITLE_ROOM;
-}
-
-// Whether an activewindowv2 event's data says the window at `address`
-// (as barWindow gives it) now has focus. A double-click on another
-// monitor's title focuses that window first, and maximizes it only once
-// this says so: Quickshell sends each dispatch on its own socket, so a
-// maximize sent straight after the focus could reach the window that had
-// focus before.
-export function focusReached(address, data) {
-    const focused = normalizeAddress(String(data ?? "").split(",")[0]);
-    return address != null && focused !== null && focused === normalizeAddress(address);
 }

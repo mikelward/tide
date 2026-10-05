@@ -1,12 +1,13 @@
 import QtQuick
 import Quickshell.Hyprland
+import Quickshell.Io
 import "lib/dispatch.mjs" as Dispatch
 import "lib/title.mjs" as Title
 import "lib/workspaces.mjs" as Ws
 
 // The window title in the middle of this monitor's bar (SPEC.md §7.1):
-// the focused window's, or this monitor's workspace's last focused one,
-// from shell/lib/title.mjs.
+// the focused window's when it's on this monitor, else nothing, from
+// shell/lib/title.mjs.
 Text {
     id: root
 
@@ -24,31 +25,62 @@ Text {
         font: root.font
     }
 
-    // The workspace this monitor shows: an open special workspace covers
-    // the regular one. Quickshell has no property for it, so it comes from
-    // Hyprland's monitor list, which shell.qml asks for again as one opens
-    // or closes.
-    readonly property int specialId: monitor?.lastIpcObject?.specialWorkspace?.id ?? 0
-    readonly property var workspace: {
-        const id = Title.shownWorkspace(monitor?.activeWorkspace?.id ?? null, root.specialId);
-        return Hyprland.workspaces.values.find(w => w.id === id) ?? null;
-    }
     // Nothing has focus after focus moves to an empty workspace, which
     // Hyprland.activeToplevel doesn't show (Title.hasFocus).
     property bool focusGone: false
-    readonly property var active: root.focusGone ? null : Hyprland.activeToplevel
+    // Hyprland.activeToplevel stays null until the first activewindowv2
+    // event, so until then the focused window is the one `hyprctl
+    // activewindow -j` names when the shell starts (Title.activeAtStart).
+    property bool focusSeen: false
+    property string startAddress: ""
+    readonly property var startFocus: {
+        if (root.focusSeen || root.startAddress === "") {
+            return null;
+        }
+        return Hyprland.toplevels.values.find(t => Ws.normalizeAddress(t.address) === root.startAddress) ?? null;
+    }
+    readonly property var active: root.focusGone ? null : (Hyprland.activeToplevel ?? root.startFocus)
 
     Connections {
         target: Hyprland
 
         function onRawEvent(event) {
             if (event.name === "activewindowv2") {
+                root.focusSeen = true;
                 root.focusGone = !Title.hasFocus(event.data);
-                if (Title.focusReached(root.maximizing, event.data)) {
-                    root.maximizing = null;
-                    giveUp.stop();
-                    Hyprland.dispatch(Dispatch.toggleMaximize(Hyprland.usingLua));
+            }
+        }
+    }
+
+    Process {
+        id: activeWindow
+
+        // Quickshell reports a command that can't start (no hyprctl on
+        // PATH) only by stopping without `started` (shell/lib/launch.mjs).
+        property bool started: false
+
+        command: ["hyprctl", "activewindow", "-j"]
+        running: true
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const address = Title.activeAtStart(text);
+                if (address === undefined) {
+                    console.warn("tide: bar title: hyprctl activewindow gave no window; the title waits for the next focus change");
+                    return;
                 }
+                root.startAddress = address ?? "";
+            }
+        }
+        onStarted: started = true
+        onExited: (code, status) => {
+            if (code !== 0) {
+                console.warn(`tide: bar title: hyprctl activewindow exited ${code}`);
+            }
+        }
+        onRunningChanged: {
+            if (!running && !started) {
+                console.warn("tide: bar title: couldn't start hyprctl; it waits for the next focus change");
             }
         }
     }
@@ -56,52 +88,23 @@ Text {
     // The window the title stands for, {address, title}, or null.
     readonly property var window: Title.barWindow({
         monitor: root.monitor?.name ?? null,
-        workspace: root.workspace?.id ?? null,
         active: root.active ? {
             monitor: root.active.monitor?.name ?? null,
             address: root.active.address,
             title: root.active.title
-        } : null,
-        // Hyprland's workspace list says which window was last focused on
-        // each; shell.qml asks for it again as focus moves.
-        lastWindow: root.workspace?.lastIpcObject?.lastwindow ?? "",
-        windows: Hyprland.toplevels.values.map(t => ({
-            address: Ws.normalizeAddress(t.address),
-            workspace: t.workspace?.id ?? null,
-            title: t.title
-        }))
+        } : null
     })
 
     text: root.window?.title ?? ""
 
     // Double-clicking it toggles maximize on that window, like a title
-    // bar (SPEC.md §7.1). The focused window is maximized at once. Another
-    // is focused first, and maximized only when Hyprland says it has focus
-    // (Title.focusReached): each dispatch goes on its own socket, so their
-    // order isn't kept. If focus doesn't get there in a second (the window
-    // went, or the focus guard held it), nothing is maximized.
-    property var maximizing: null
-
-    Timer {
-        id: giveUp
-
-        interval: 1000
-        onTriggered: root.maximizing = null
-    }
-
+    // bar (SPEC.md §7.1). It's always the focused window, so the dispatch
+    // needs no address.
     TapHandler {
         onDoubleTapped: {
-            const address = root.window?.address;
-            if (!address) {
-                return;
-            }
-            if (Title.focusReached(address, root.active?.address)) {
+            if (root.window) {
                 Hyprland.dispatch(Dispatch.toggleMaximize(Hyprland.usingLua));
-                return;
             }
-            root.maximizing = address;
-            giveUp.restart();
-            Hyprland.dispatch(Dispatch.focusWindow(address, Hyprland.usingLua));
         }
     }
     // Titles come from apps: never markup.

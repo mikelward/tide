@@ -48,11 +48,7 @@ ShellRoot {
             if (["openwindow", "closewindow", "movewindowv2", "fullscreen", "changefloatingmode"].includes(event.name)) {
                 Hyprland.refreshToplevels();
             }
-            // Each workspace's last focused window, for the bar's title.
-            if (["activewindowv2", "openwindow", "closewindow", "movewindowv2"].includes(event.name)) {
-                Hyprland.refreshWorkspaces();
-            }
-            // Which special workspace each monitor shows, for the same.
+            // Which special workspace each monitor shows, for the marks.
             if (["activespecial", "activespecialv2"].includes(event.name)) {
                 Hyprland.refreshMonitors();
             }
