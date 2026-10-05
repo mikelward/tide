@@ -187,6 +187,11 @@ packaged). It also runs
 The Quickshell bar replaces waybar piece by piece (SPEC.md §7), each piece
 tested where it can be without a live session.
 
+- The load test (`shell/shell_test.sh`) stops the shell once Quickshell has
+  loaded it and answered IPC, so an error the shell reports later, from a
+  process's output or a timer, isn't caught. Keeping it running a few
+  seconds more would catch some, at that cost on every run, and as a timed
+  wait. Kept as it is for now.
 - Keep awake (SPEC.md §10) is the bar toggle, and it also holds while the
   mic is live: an app's capture stream with an active PipeWire link from a
   microphone (`shell/MicData.qml`, `shell/lib/mic.mjs`), the same signal
