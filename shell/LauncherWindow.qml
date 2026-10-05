@@ -53,11 +53,13 @@ PanelWindow {
     // A screenshot waiting for the launcher to leave the screen, and the
     // window you were in when it opened, which "Screenshot window" takes
     // (§8): the address of Hyprland's focused window, which the launcher's
-    // layer surface doesn't change. Only the address is kept; the window's
-    // geometry is read when the screenshot runs (Search.windowScreenshot),
-    // so a window that moved meanwhile is taken where it is.
+    // layer surface doesn't change. Only the address is kept; the window is
+    // looked up when the screenshot runs (Search.windowScreenshot), so a
+    // window that moved meanwhile is taken where it is. "Screenshot screen"
+    // takes the monitor it opened on, by Hyprland's name for it.
     property string pending: ""
     property var windowAtOpen: null
+    property string outputAtOpen: ""
     function open() {
         if (visible) {
             return;
@@ -70,6 +72,7 @@ PanelWindow {
         screenshotDelay.stop();
         pending = "";
         windowAtOpen = Workspaces.normalizeAddress(Hyprland.activeToplevel?.address);
+        outputAtOpen = Hyprland.focusedMonitor?.name ?? "";
         session += 1;
         openedAt = Date.now();
         apps = Search.launcherItems(DesktopEntries.applications.values);
@@ -187,7 +190,8 @@ PanelWindow {
                 return;
             }
             Launcher.run(Search.quickCommand(id, {
-                window: root.windowAtOpen
+                window: root.windowAtOpen,
+                output: root.outputAtOpen
             }).run, null);
         }
     }

@@ -220,18 +220,16 @@ tested where it can be without a live session.
     workspace you were on before it moves, and that the launcher's unmap
     doesn't refocus the window you were in after the move.
   - "Screenshot window" records Hyprland's focused window's address as the
-    launcher opens, then reads its geometry with `hyprctl clients -j` as
-    the screenshot runs and passes it to `screenshot --geometry`, the same
-    capture `--window` makes. §13's `grim -T <stableId>`, which captures a
-    window's own contents even under a popup, waits on the script (in
-    `mikelward/scripts`) taking a window to capture; the launcher would then
-    record the `stableId` instead. On a live session, check it takes the
-    window you were in.
-  - "Screenshot screen" takes every monitor, as `Print` does today: the
-    script's screen mode is a bare `grim`. §13's `grim -o <focused output>`
-    waits on the script taking an output; the launcher would then record
-    its monitor as it opens and pass it, so a focus change while it closes
-    can't move the capture to another display.
+    launcher opens, then looks it up with `hyprctl clients -j` as the
+    screenshot runs and passes its `stableId` to `screenshot --window-id`,
+    which captures it with `grim -T`, its own contents even under a popup.
+    A Hyprland reporting no `stableId` gets `--geometry` instead. On a live
+    session, check it takes the window you were in, and that `grim -T`
+    accepts the `stableId` Hyprland reports.
+  - "Screenshot screen" records the focused monitor's name as the launcher
+    opens and passes it to `screenshot --output`, so a focus change while
+    it closes can't move the capture to another display. On a live session
+    with two monitors, check it takes the one the launcher was on.
   - On a live session, check that typing reaches it with the pointer over
     a window (§14.2), and that an app it starts takes focus.
 - The system monitor (SPEC.md §7.4) is built but unchecked on a live
