@@ -755,7 +755,8 @@ See [`bar.png`](docs/mocks/bar.png).
     effect. The check is by form, not against tzdata's full list, so an
     old link name under a city area (`Asia/Calcutta`) still loads. It
     shows the right time, but never counts as the local zone.
-  - `label` is any text, `""` for just the time, or `"abbr"` (above).
+  - `label` is any one line of text, `""` for just the time, or `"abbr"`
+    (above). A line break is an error, since the bar is one line.
 
 ### 7.4 Status icons
 
