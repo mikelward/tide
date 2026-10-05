@@ -41,7 +41,8 @@ export const NO_MARKS = Object.freeze({ guard: Object.freeze([]), guardAt: Objec
 //       replaces its app-wide marks (activatedEvent).
 //
 // A notification's `app` is the desktop entry or app name it gave
-// (notifications.mjs's grantId), matched to window classes by sameApp.
+// (notifications.mjs's targetApps): one or a list, matched to window
+// classes by sameApp.
 //   {type: "focused", address}   the window was attended to: the guard's
 //       mark on it clears, and so does every notification's that covered it.
 //   {type: "dismissed", id}      the notification was dismissed.
@@ -102,7 +103,7 @@ export function updateMarks(marks, event) {
                 : note);
         } else {
             const hidden = event.windows
-                .filter((w) => sameApp(w.app, event.app) && !event.visible.has(w.workspace))
+                .filter((w) => anyApp(event.app, w.app) && !event.visible.has(w.workspace))
                 .map((w) => w.address);
             put(event.id, Object.assign({}, note, { wide: [...new Set([...note.wide, ...hidden])], at: stamped(hidden) }));
         }
@@ -116,7 +117,7 @@ export function updateMarks(marks, event) {
         break;
     case "activated":
         for (const [id, note] of Object.entries(marks.notes)) {
-            put(id, sameApp(note.app, event.app) ? Object.assign({}, note, { wide: [] }) : note);
+            put(id, anyApp(note.app, event.app) ? Object.assign({}, note, { wide: [] }) : note);
         }
         break;
     case "focused":
@@ -147,6 +148,13 @@ export function updateMarks(marks, event) {
     guardAt = fromEntries(guard.map((a) => [a, guardAt[a] ?? 0]));
     // A rebuilt guard has no cycle running.
     return { guard, guardAt, notes, cycling: event.type !== "guardReset" && (marks.cycling ?? false) };
+}
+
+// Whether `app` matches any of `apps`, an app or a list of them (sameApp):
+// a notification from a Chrome site open as an `--app` window in two
+// profiles names both classes.
+export function anyApp(apps, app) {
+    return (Array.isArray(apps) ? apps : [apps]).some((a) => sameApp(a, app));
 }
 
 // Whether a window class and a notification's app name the same app, as

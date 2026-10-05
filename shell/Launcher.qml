@@ -17,9 +17,10 @@ Singleton {
 
     // Grants app focus for what comes next (§14.3), then calls `then`,
     // whether or not the grant was recorded: a failed grant is logged,
-    // and what the click asked for still happens.
+    // and what the click asked for still happens. `app` can be a list,
+    // which one grant covers.
     function grant(app, then) {
-        run(["tide", "grant", app], then);
+        run(["tide", "grant"].concat(app), then);
     }
 
     // Runs a command the launcher built (`tide launch …`, shell/lib/

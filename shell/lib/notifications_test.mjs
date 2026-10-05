@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { timeoutFor, MAX_SHOWN, stackHeight, withDraft, replyDraft, shown, syncKey, arrive, leave, grantId, clearsMarks, defaultAction, buttons, bodyStyled, iconFile, themedImageName, countdown, held, hold, release, restarted, due, nextDeadline, passesDnd, heldByDnd, ORIGIN_HINT, isChrome, originText, siteOf, siteFrom, siteWindowClass, targetApp, originLabel, joinLabel, rest, wake, unkept, isLive, arriveResting } from "./notifications.mjs";
+import { timeoutFor, MAX_SHOWN, stackHeight, withDraft, replyDraft, shown, syncKey, arrive, leave, grantId, clearsMarks, defaultAction, buttons, bodyStyled, iconFile, themedImageName, countdown, held, hold, release, restarted, due, nextDeadline, passesDnd, heldByDnd, ORIGIN_HINT, isChrome, originText, siteOf, siteFrom, siteWindowClasses, browserOf, targetApps, originLabel, joinLabel, rest, wake, unkept, isLive, arriveResting } from "./notifications.mjs";
 
 // Quickshell's NotificationUrgency values.
 const URGENCY = { Low: 0, Normal: 1, Critical: 2 };
@@ -318,59 +318,82 @@ test("a site's --app window class is found by its host", () => {
         { app: "chrome-chat.google.com__-Default", focus: 3 },
         { app: "chrome-mail.google.com__mail_-Default", focus: 1 },
     ];
-    assert.equal(siteWindowClass("chat.google.com", windows), "chrome-chat.google.com__-Default");
-    assert.equal(siteWindowClass("mail.google.com", windows), "chrome-mail.google.com__mail_-Default");
-    assert.equal(siteWindowClass("meet.google.com", windows), null);
-    assert.equal(siteWindowClass(null, windows), null);
+    assert.deepEqual(siteWindowClasses("chat.google.com", windows), ["chrome-chat.google.com__-Default"]);
+    assert.deepEqual(siteWindowClasses("mail.google.com", windows), ["chrome-mail.google.com__mail_-Default"]);
+    assert.deepEqual(siteWindowClasses("meet.google.com", windows), []);
+    assert.deepEqual(siteWindowClasses(null, windows), []);
 });
 
-test("a shortened site matches its subdomains, the most recently focused first", () => {
+test("a site open in two profiles is both classes, the most recently focused first", () => {
+    const windows = [
+        { app: "chrome-calendar.google.com__-Default", focus: 4 },
+        { app: "chrome-calendar.google.com__-Profile_1", focus: 2 },
+        { app: "chrome-calendar.google.com__-Default", focus: 1 },
+    ];
+    assert.deepEqual(siteWindowClasses("calendar.google.com", windows),
+        ["chrome-calendar.google.com__-Default", "chrome-calendar.google.com__-Profile_1"]);
+});
+
+test("a shortened site matches its subdomains", () => {
     const windows = [
         { app: "chrome-chat.example.co.uk__-Default", focus: 4 },
         { app: "chrome-mail.example.co.uk__-Profile_1", focus: 2 },
     ];
-    assert.equal(siteWindowClass("example.co.uk", windows), "chrome-mail.example.co.uk__-Profile_1");
-    assert.equal(siteWindowClass("ample.co.uk", windows), null);
+    assert.deepEqual(siteWindowClasses("example.co.uk", windows),
+        ["chrome-mail.example.co.uk__-Profile_1", "chrome-chat.example.co.uk__-Default"]);
+    assert.deepEqual(siteWindowClasses("ample.co.uk", windows), []);
 });
 
 test("an installed web app's class names no site, so it never matches", () => {
     const windows = [{ app: "chrome-abcdefghijklmnopabcdefghijklmnop-Default", focus: 0 }];
-    assert.equal(siteWindowClass("abcdefghijklmnopabcdefghijklmnop", windows), null);
+    assert.deepEqual(siteWindowClasses("abcdefghijklmnopabcdefghijklmnop", windows), []);
 });
 
-test("a window never focused (-1) comes after one that was", () => {
+test("a window never focused (-1), or with no history, comes after one that was", () => {
     const windows = [
         { app: "chrome-chat.google.com__-Profile_1", focus: -1 },
+        { app: "chrome-chat.google.com__-Profile_2" },
         { app: "chrome-chat.google.com__-Default", focus: 0 },
     ];
-    assert.equal(siteWindowClass("chat.google.com", windows), "chrome-chat.google.com__-Default");
-    assert.equal(siteWindowClass("chat.google.com", [windows[0]]), "chrome-chat.google.com__-Profile_1");
+    assert.deepEqual(siteWindowClasses("chat.google.com", windows)[0], "chrome-chat.google.com__-Default");
 });
 
-test("a window with no focus history still matches, after one that has it", () => {
+test("Chrome's notification goes to Chrome's windows, Chromium's to Chromium's", () => {
     const windows = [
-        { app: "chrome-chat.google.com__-Default" },
-        { app: "chromium-chat.google.com__-Default", focus: 5 },
+        { app: "chrome-chat.google.com__-Default", focus: 1 },
+        { app: "chromium-chat.google.com__-Default", focus: 0 },
     ];
-    assert.equal(siteWindowClass("chat.google.com", windows), "chromium-chat.google.com__-Default");
+    assert.deepEqual(siteWindowClasses("chat.google.com", windows, "chrome"), ["chrome-chat.google.com__-Default"]);
+    assert.deepEqual(siteWindowClasses("chat.google.com", windows, "chromium"), ["chromium-chat.google.com__-Default"]);
+    assert.equal(browserOf("google-chrome"), "chrome");
+    assert.equal(browserOf("org.chromium.Chromium"), "chromium");
+    const from = entry => ({ appName: "", desktopEntry: entry, hints: { [ORIGIN_HINT]: "chat.google.com" } });
+    assert.deepEqual(targetApps(from("google-chrome"), windows), ["chrome-chat.google.com__-Default"]);
+    assert.deepEqual(targetApps(from("chromium"), windows), ["chromium-chat.google.com__-Default"]);
 });
 
-test("a web notification goes to its site's --app window, else to Chrome", () => {
-    const windows = [{ app: "chrome-chat.google.com__-Default", focus: 0 }];
-    assert.equal(targetApp(chat("chat.google.com"), windows), "chrome-chat.google.com__-Default");
-    assert.equal(targetApp(chat("meet.google.com"), windows), "google-chrome");
-    assert.equal(targetApp(chat(), windows), "google-chrome");
-    assert.equal(targetApp({ appName: "", desktopEntry: "", hints: {} }, windows), null);
+test("a web notification goes to its site's --app windows, else to Chrome", () => {
+    const windows = [
+        { app: "chrome-chat.google.com__-Default", focus: 0 },
+        { app: "chrome-chat.google.com__-Profile_1", focus: 1 },
+    ];
+    assert.deepEqual(targetApps(chat("chat.google.com"), windows),
+        ["chrome-chat.google.com__-Default", "chrome-chat.google.com__-Profile_1"]);
+    assert.deepEqual(targetApps(chat("meet.google.com"), windows), ["google-chrome"]);
+    assert.deepEqual(targetApps(chat(), windows), ["google-chrome"]);
+    assert.equal(targetApps({ appName: "", desktopEntry: "", hints: {} }, windows), null);
 });
 
 test("only Chrome's origin hint routes to an --app window", () => {
     // Any app can send the hint; one naming a host stays its own app.
     const windows = [{ app: "chrome-chat.google.com__-Default", focus: 0 }];
     const other = { appName: "Mail", desktopEntry: "org.example.Mail", hints: { [ORIGIN_HINT]: "chat.google.com" } };
-    assert.equal(targetApp(other, windows), "org.example.Mail");
+    assert.deepEqual(targetApps(other, windows), ["org.example.Mail"]);
     for (const entry of ["google-chrome", "google-chrome-beta", "chromium", "chromium-browser", "org.chromium.Chromium", "com.google.Chrome"]) {
         assert.equal(isChrome(entry), true, entry);
-        assert.equal(targetApp({ appName: "", desktopEntry: entry, hints: { [ORIGIN_HINT]: "chat.google.com" } }, windows), "chrome-chat.google.com__-Default", entry);
+        if (!/chromium/i.test(entry)) {
+            assert.deepEqual(targetApps({ appName: "", desktopEntry: entry, hints: { [ORIGIN_HINT]: "chat.google.com" } }, windows), ["chrome-chat.google.com__-Default"], entry);
+        }
     }
     for (const id of ["org.example.Mail", "chrome-chat.google.com__-Default", "googlechrome", "", null]) {
         assert.equal(isChrome(id), false, String(id));

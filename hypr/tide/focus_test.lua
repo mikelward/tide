@@ -1123,6 +1123,36 @@ test("focus_recent with no window does nothing, and says so", function()
     eq(pcall(m.focus_recent, nil), false, "nil")
 end)
 
+test("a notification's grant can name several apps, and covers each", function()
+    -- A Chrome site open as an --app window in two profiles is two classes.
+    local m = load()
+    local work = history(window("chrome-calendar.google.com__-Profile_1"), 2)
+    local home = history(window("chrome-calendar.google.com__-Default"), 1)
+    S.windows = { work, home, history(window("kitty"), 0) }
+    m.grant_or_recent({ "chrome-calendar.google.com__-Default", "chrome-calendar.google.com__-Profile_1" })
+    eq(m.grants()[1], "chrome-calendar.google.com__-default chrome-calendar.google.com__-profile_1", "both")
+    eq(is_focus(fire("window.urgent", work)[1], work), true, "either one's activation takes focus")
+
+    m = load()
+    S.windows = { work, home }
+    m.grant_or_recent({ "chrome-calendar.google.com__-Default", "chrome-calendar.google.com__-Profile_1" })
+    S.dispatched = {}
+    S.timers[1].fn()
+    eq(is_focus(S.dispatched[1], home), true, "running out brings up the one focused last")
+    eq(pcall(m.grant_or_recent, {}), false, "an empty list")
+    eq(pcall(m.grant_or_recent, { "kitty", "*" }), false, "a wildcard in the list")
+end)
+
+test("focus_recent takes several apps", function()
+    local m = load()
+    local work = history(window("chrome-calendar.google.com__-Profile_1"), 1)
+    local home = history(window("chrome-calendar.google.com__-Default"), 3)
+    S.windows = { work, home }
+    S.dispatched = {}
+    m.focus_recent({ "chrome-calendar.google.com__-Default", "chrome-calendar.google.com__-Profile_1" })
+    eq(is_focus(S.dispatched[1], work), true, "the one focused last")
+end)
+
 test("grant_seconds sets how long a notification's grant waits", function()
     local m = load({ grant_seconds = 4 })
     m.grant_or_recent("kitty")

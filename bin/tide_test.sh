@@ -272,6 +272,14 @@ run FAKE_HYPRCTL_REPLY='error: no tide_focus' "$qs" grant app
 check "a rejected grant exits 1" test $? -eq 1
 check "a rejected grant says why" \
     contains "$(cat "$tmp/err")" "tide grant: couldn't record a focus grant for app: error: no tide_focus"
+run "$qs" grant chrome-a__-Default chrome-a__-Profile_1
+check "grant takes several IDs as one grant" \
+    test "$(cat "$log")" = 'hyprctl eval tide_focus.grant_or_recent({ "chrome-a__-Default", "chrome-a__-Profile_1" })'
+run "$qs" focus chrome-a__-Default chrome-a__-Profile_1
+check "focus takes several IDs" \
+    test "$(cat "$log")" = 'hyprctl eval tide_focus.focus_recent({ "chrome-a__-Default", "chrome-a__-Profile_1" })'
+run "$qs" grant app ''
+check "grant with an empty ID is a usage error" test $? -eq 2
 run XDG_CURRENT_DESKTOP=KDE "$qs" grant app
 check "outside tide grant does nothing" test $? -eq 0 -a ! -s "$log"
 run "$qs" focus org.example.Chat
@@ -290,8 +298,6 @@ run "$qs" grant
 check "grant with no ID is a usage error" test $? -eq 2
 run "$qs" grant ''
 check "grant with an empty ID is a usage error" test $? -eq 2
-run "$qs" grant a b
-check "grant takes one ID" test $? -eq 2
 
 run "$qs" launch
 check "launch with no command is a usage error" test $? -eq 2

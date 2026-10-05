@@ -419,10 +419,6 @@ Nothing has run in a live session. Still to do:
   window. Chrome puts the site and an extension's context message in the
   same hint, with nothing to tell them apart. Rare enough to leave for now;
   the fix needs a way to know which one Chrome sent.
-- With both Google Chrome and Chromium running an `--app` window for the
-  same site, a notification from one can route to the other's window (the
-  more recently focused). Filtering by the sender's desktop entry would fix
-  it; rare enough to leave for now.
 - A packaged Chrome (Flatpak) prefixes its `--app` window classes with
   its desktop ID (`com.google.Chrome.chrome-chat.google.com__-Default`,
   `CHROME_WEB_APP_DESKTOP_ID_PREFIX`), which the site match doesn't

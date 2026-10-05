@@ -725,19 +725,27 @@ end
 -- The window of app focused most recently, or one never focused if none
 -- has been; nil when app has no window. focus_history_id is 0 for the
 -- window focused last and -1 for one never focused.
-local function most_recent(app)
+-- The most recently focused window of any of `apps` (a list of normalized
+-- ids): a Chrome site open as an `--app` window in two profiles is two
+-- classes, and a click on its notification brings up whichever was used last.
+local function most_recent(apps)
+    local names = table.concat(apps, ", ")
     -- A failed query is an error, which Hyprland logs as the timer's: the
     -- click then brings up nothing, and the log says why.
     local ok, windows = pcall(hl.get_windows)
     if not ok then
-        error("tide focus: couldn't list windows to bring up " .. app .. ": " .. tostring(windows), 0)
+        error("tide focus: couldn't list windows to bring up " .. names .. ": " .. tostring(windows), 0)
     end
     if type(windows) ~= "table" then
         error("tide focus: hl.get_windows returned " .. type(windows) .. ", not a list", 0)
     end
     local best, best_id = nil, nil
     for _, w in ipairs(windows) do
-        if same_id(app, app_of(w)) and field(w, "address") then
+        local mine = false
+        for _, app in ipairs(apps) do
+            mine = mine or same_id(app, app_of(w))
+        end
+        if mine and field(w, "address") then
             local id = field(w, "focus_history_id")
             id = (math.type(id) == "integer" and id >= 0) and id or math.huge
             if not best or id < best_id then
@@ -765,40 +773,54 @@ local function lapse(g)
             break
         end
     end
-    local w = most_recent(g.app)
+    local w = most_recent(g.apps)
     if w then
         focus(w)
     end
 end
 
+-- One app id or a list of them, as a list of normalized ids; an error,
+-- named for `fn`, when one isn't an id.
+local function app_ids(app, fn)
+    local list = type(app) == "table" and app or { app }
+    local ids = {}
+    for i = 1, #list do
+        local id = normalize(list[i])
+        if not id or id == "*" then
+            error("tide_focus." .. fn .. ": expected an app id, got " .. tostring(list[i]), 3)
+        end
+        table.insert(ids, id)
+    end
+    if #ids == 0 then
+        error("tide_focus." .. fn .. ": expected an app id", 3)
+    end
+    return ids
+end
+
 -- A click on a notification center entry whose notification is gone (SPEC.md
--- §9, from `tide focus`): the app's most recently focused window comes up
+-- §9, from `tide focus`): the app's most recently focused window (of any of
+-- the apps, for a list) comes up
 -- at once, on whatever workspace it is. An app with no window gets nothing,
 -- which the log says.
 function M.focus_recent(app)
-    local id = normalize(app)
-    if not id or id == "*" then
-        error("tide_focus.focus_recent: expected an app id, got " .. tostring(app), 2)
-    end
-    local w = most_recent(id)
+    local ids = app_ids(app, "focus_recent")
+    local w = most_recent(ids)
     if w then
         cancel_grants() -- you chose this window
         focus(w)
     else
-        print("tide focus: no window of " .. id .. " to bring up")
+        print("tide focus: no window of " .. table.concat(ids, ", ") .. " to bring up")
     end
 end
 
 -- A clicked notification's grant (SPEC.md §9, from `tide grant`): a
 -- grant like any other, which, if nothing uses or cancels it before it
--- runs out, focuses the app's most recently focused window.
+-- runs out, focuses the app's most recently focused window. `app` can be a
+-- list, any of whose windows the grant covers.
 function M.grant_or_recent(app)
-    local id = normalize(app)
-    if not id or id == "*" then
-        error("tide_focus.grant_or_recent: expected an app id, got " .. tostring(app), 2)
-    end
+    local ids = app_ids(app, "grant_or_recent")
     expire()
-    local g = { app = id, apps = { id }, at = M.clock(), live = true }
+    local g = { app = ids[1], apps = ids, at = M.clock(), live = true }
     table.insert(state.grants, g)
     hl.timer(function()
         lapse(g)
