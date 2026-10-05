@@ -199,11 +199,11 @@ tested where it can be without a live session.
 
 - The load test (`shell/shell_test.sh`) stops the shell once it has taken
   in the stand-in Hyprland's answers and events and the output of its own
-  commands (`tide-tz`, a stand-in `tide-sysmon`). So an error the shell
-  reports later, from a timer, a file read or another command's output
-  (`hyprctl`, `gsettings`, `nmcli`), isn't caught. Keeping it running a
-  few seconds more would catch some, at that cost on every run, and as a
-  timed wait. Kept as it is for now.
+  commands (`tide-tz`, stand-ins for `tide-sysmon` and `hyprctl`). So an
+  error the shell reports later, from a timer, a file read or another
+  command's output (`gsettings`, `nmcli`), isn't caught. Keeping it
+  running a few seconds more would catch some, at that cost on every run,
+  and as a timed wait. Kept as it is for now.
 - The load test's `tide-sysmon` probe names no sensors, so the system
   monitor's sensor and throttle reads aren't covered. Covering them needs
   a fake `/sys` the shell reads through (the probe names real paths today),

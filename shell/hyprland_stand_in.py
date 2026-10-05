@@ -6,9 +6,13 @@
                                    each one answered, a line each
   hyprland_stand_in.py play DIR    send EVENTS to every event listener, and
                                    print how many there were
+  hyprland_stand_in.py ctl ARG...  answer as `hyprctl ARG...` would, at once
 
 It answers requests only when drained, so the test decides when the shell
-hears back, and can tell when the shell has nothing left to ask. Its
+hears back, and can tell when the shell has nothing left to ask. As
+hyprctl, which the shell runs as a command and the test waits for as one,
+it answers at once, from the same fixtures, and evaluates only the focus
+guard's calls that focus.lua defines. Its
 monitors, workspaces and windows are fixed: an event that changes them
 isn't reflected in later answers, as it would be in Hyprland, so the shell
 sees some churn, as it can when windows come and go quickly.
@@ -16,6 +20,7 @@ sees some churn, as it can when windows come and go quickly.
 
 import json
 import os
+import re
 import socket
 import sys
 
@@ -179,6 +184,52 @@ def serve(directory):
             conn.sendall(reply.encode())
 
 
+# What the shell runs hyprctl for: the focused window at startup, the
+# keyboards for the lock's layout badge, and the focus guard's calls.
+CTL = {
+    ("activewindow", "-j"): lambda: json.dumps(ANSWERS["j/activewindow"]),
+    ("devices", "-j"): lambda: json.dumps(ANSWERS["j/devices"]),
+}
+
+
+# The focus guard's calls MarkData.qml makes: the replay, and the marked
+# windows in order, as Ws.attentionOrder writes their addresses.
+GUARD_CALLS = [
+    ("announce_waiting", re.compile(r"tide_focus\.announce_waiting\(\)")),
+    ("set_order", re.compile(r'tide_focus\.set_order\(\{(?:"0x[0-9a-f]+"(?:,"0x[0-9a-f]+")*)?\}\)')),
+]
+FOCUS_LUA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hypr", "tide", "focus.lua")
+
+
+def guard_call(code):
+    """What Hyprland would say to `hyprctl eval CODE`: ok for a guard call
+    focus.lua defines, else why not."""
+    name = next((n for n, pattern in GUARD_CALLS if pattern.fullmatch(code)), None)
+    if name is None:
+        return f"the stand-in hyprctl doesn't evaluate {code!r}"
+    with open(FOCUS_LUA) as f:
+        source = f.read()
+    if "_G.tide_focus = M" not in source or f"function M.{name}(" not in source:
+        return f"hypr/tide/focus.lua has no tide_focus.{name}"
+    return None
+
+
+def ctl(args):
+    if args and args[0] == "eval" and len(args) == 2:
+        error = guard_call(args[1])
+        if error is not None:
+            sys.stderr.write(error + "\n")
+            return 1
+        print("ok")
+        return 0
+    reply = CTL.get(tuple(args))
+    if reply is None:
+        sys.stderr.write(f"the stand-in hyprctl doesn't answer {' '.join(args)!r}\n")
+        return 2
+    print(reply())
+    return 0
+
+
 def ask(directory, command):
     with socket.socket(socket.AF_UNIX) as conn:
         conn.connect(os.path.join(directory, "control.sock"))
@@ -192,6 +243,8 @@ def ask(directory, command):
 
 
 def main(argv):
+    if len(argv) >= 2 and argv[1] == "ctl":
+        return ctl(argv[2:])
     if len(argv) != 3 or argv[1] not in ("serve", "drain", "play"):
         sys.stderr.write(__doc__)
         return 2

@@ -2033,6 +2033,17 @@ are what "done" means.
     no timed wait.
   - The test fails if the shell never asks for the windows or never listens
     for events.
+  - `hyprctl` is a stand-in too, from the same file, and answers at once
+    from the same fixtures. The bar asks it for the window focused at
+    startup, the lock and the greeter for the keyboards.
+  - The shell also calls the focus guard through it twice at startup: to
+    replay the waiting windows, and to set the marked windows' order. They
+    get its `ok` only in the two forms `MarkData.qml` writes, and only for
+    functions `hypr/tide/focus.lua` defines. Any other `eval` fails, as it
+    would in Hyprland.
+  - The test fails if the shell, the lock or the greeter never makes one
+    of those calls, each told apart by its arguments. It also fails if the
+    title, a layout badge or the focus guard calls warn of anything.
 - **The bar's clocks are drawn.** The shell's own commands are on its PATH
   in that test: `tide-tz`, built for the run, and a stand-in `tide-sysmon`.
   So the clocks get their zones from tzdata and are drawn.
@@ -2042,8 +2053,8 @@ are what "done" means.
   - Local time is New York's, one of the default clocks, so it is hidden
     as local.
   - The shell reads its clock files in the background, and runs `tide-tz`
-    only then. So the test first waits for the shell to run each command,
-    and fails if one doesn't come in time.
+    only then. So the test first waits for the shell to make each call it
+    expects, and fails if one doesn't come in time.
   - Each settle pass first waits until every one of those commands has
     ended and Quickshell has reaped it, then takes the IPC round trip. So
     the round trip means their output has been taken in.
