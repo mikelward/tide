@@ -36,7 +36,7 @@ export function score(entry, now) {
 // lowest-scoring entries go, so the file stays small.
 export function record(state, key, now) {
     const old = state[key];
-    const next = { ...state, [key]: Object.freeze({ count: (old?.count ?? 0) + 1, last: now }) };
+    const next = Object.assign({}, state, { [key]: Object.freeze({ count: (old?.count ?? 0) + 1, last: now }) });
     const keys = Object.keys(next);
     if (keys.length > MAX_ENTRIES) {
         keys.sort((a, b) => score(next[b], now) - score(next[a], now) || next[b].last - next[a].last);

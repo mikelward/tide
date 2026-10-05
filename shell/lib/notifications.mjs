@@ -176,7 +176,7 @@ export function hold(c, source, now) {
         return c;
     }
     const left = held(c) ? c.left : Math.max(0, c.deadline - now);
-    return Object.freeze({ ...c, left, holders: Object.freeze([...c.holders, source]) });
+    return Object.freeze(Object.assign({}, c, { left, holders: Object.freeze([...c.holders, source]) }));
 }
 
 export function release(c, source, now) {
@@ -185,9 +185,9 @@ export function release(c, source, now) {
     }
     const holders = Object.freeze(c.holders.filter(h => h !== source));
     if (holders.length > 0) {
-        return Object.freeze({ ...c, holders });
+        return Object.freeze(Object.assign({}, c, { holders }));
     }
-    return Object.freeze({ ...c, holders, deadline: c.ms > 0 ? now + c.left : Infinity });
+    return Object.freeze(Object.assign({}, c, { holders, deadline: c.ms > 0 ? now + c.left : Infinity }));
 }
 
 // A fresh countdown, as for an update in place, keeping whoever holds it.

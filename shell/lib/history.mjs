@@ -92,9 +92,9 @@ export function apply(state, change) {
     case "clearAll":
         return { entries: [], unread: [] };
     case "clearApp":
-        return kept({ ...state, entries: clearApp(state.entries, change.app) });
+        return kept(Object.assign({}, state, { entries: clearApp(state.entries, change.app) }));
     case "seen":
-        return { ...state, unread: [] };
+        return Object.assign({}, state, { unread: [] });
     }
     throw new Error(`unknown history change ${change.op}`);
 }
@@ -102,7 +102,7 @@ export function apply(state, change) {
 // Only entries still in the history can be unread.
 function kept(state) {
     const keys = new Set(state.entries.map(e => e.key));
-    return { ...state, unread: state.unread.filter(k => keys.has(k)) };
+    return Object.assign({}, state, { unread: state.unread.filter(k => keys.has(k)) });
 }
 
 // How long ago `time` was, as the center shows it.
@@ -151,10 +151,10 @@ export function parse(text) {
     try {
         data = JSON.parse(text);
     } catch (e) {
-        return { ...empty, errors: [`not JSON (${e.message})`] };
+        return Object.assign({}, empty, { errors: [`not JSON (${e.message})`] });
     }
     if (data === null || typeof data !== "object" || data.version !== 1 || !Array.isArray(data.entries)) {
-        return { ...empty, errors: ["not a version 1 history"] };
+        return Object.assign({}, empty, { errors: ["not a version 1 history"] });
     }
     const entries = data.entries.filter(isEntry);
     const errors = [];
@@ -163,13 +163,10 @@ export function parse(text) {
         errors.push(`${dropped} unreadable ${dropped === 1 ? "entry" : "entries"} left out`);
     }
     entries.sort((a, b) => b.time - a.time);
-    return {
-        ...kept({
-            entries: entries.slice(0, MAX_ENTRIES),
-            unread: Array.isArray(data.unread) ? data.unread.filter(k => typeof k === "string") : [],
-        }),
-        errors,
-    };
+    return Object.assign({}, kept({
+        entries: entries.slice(0, MAX_ENTRIES),
+        unread: Array.isArray(data.unread) ? data.unread.filter(k => typeof k === "string") : [],
+    }), { errors });
 }
 
 // What a click on an entry in the center does (SPEC.md §9). `live` is its

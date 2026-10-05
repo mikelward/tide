@@ -43,8 +43,7 @@ export function launcherItems(entries) {
             if (!a || !a.command || a.command.length === 0) {
                 continue;
             }
-            items.push({
-                ...app,
+            items.push(Object.assign({}, app, {
                 kind: "action",
                 id: `${e.id}:${a.id}`,
                 name: a.name || a.id,
@@ -53,7 +52,7 @@ export function launcherItems(entries) {
                 keywords: [],
                 exec: basename(a.command[0]),
                 command: [...a.command],
-            });
+            }));
         }
     }
     return items;
@@ -95,7 +94,7 @@ export function quickActions(state = {}) {
         state.notifications ? quick("dnd", "Do not disturb", onOff(state.dnd), "notifications-disabled-symbolic", ["dnd", "notifications", "quiet"]) : null,
         quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), "display-brightness-symbolic", ["caffeine", "idle", "inhibit"]),
         quick("reload", "Reload shell", "tide", "view-refresh-symbolic", ["restart", "quickshell"]),
-    ].filter(q => q).map((q, rank) => ({ ...q, rank }));
+    ].filter(q => q).map((q, rank) => Object.assign({}, q, { rank }));
 }
 
 // "Screenshot window" for the window at `address` (Hyprland's, recorded
@@ -272,7 +271,7 @@ export function search(items, query, frecency = {}, now = 0) {
     for (const item of items) {
         const m = scoreItem(item, query);
         if (m) {
-            rows.push({ item, score: m.score, used: usage(item), positions: m.positions, ...shape(item, m.positions) });
+            rows.push(Object.assign({ item, score: m.score, used: usage(item), positions: m.positions }, shape(item, m.positions)));
         }
     }
     rows.sort(
