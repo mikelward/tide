@@ -1964,8 +1964,27 @@ are what "done" means.
     no timed wait.
   - The test fails if the shell never asks for the windows or never listens
     for events.
-  - A popover's contents, and data from a process or a timer, aren't
-    covered.
+- **The bar's clocks are drawn.** The shell's own commands are on its PATH
+  in that test: `tide-tz`, built for the run, and a stand-in `tide-sysmon`.
+  So the clocks get their zones from tzdata and are drawn.
+  - The stand-in's probe is fixed and names no sensors. So the system
+    monitor parses a probe, but reads no sensor files: the shell reads
+    those in the background, which the test can't wait on.
+  - Local time is New York's, one of the default clocks, so it is hidden
+    as local.
+  - The shell reads its clock files in the background, and runs `tide-tz`
+    only then. So the test first waits for the shell to run each command,
+    and fails if one doesn't come in time.
+  - Each settle pass first waits until every one of those commands has
+    ended and Quickshell has reaped it, then takes the IPC round trip. So
+    the round trip means their output has been taken in.
+  - A pass in which another of them started goes round again. Qt 6.10
+    starts a process with vfork semantics (`clone` with `CLONE_VFORK`,
+    seen with strace), so a started command is already running its
+    wrapper by the time the shell goes on.
+  - The test fails if the clocks or the system monitor warn of anything:
+    their inputs are all fixed.
+  - Data from a timer, or from any other command, isn't covered.
 - **Every icon loads.** Quickshell logs an icon it can't load, and draws
   a placeholder for it. The test fails on that log line, so it needs
   the Adwaita icon theme installed.
@@ -1976,7 +1995,7 @@ are what "done" means.
   must load with no icon missing.
 - **Where it runs.** CI builds the Quickshell release `setup --tide`
   installs, and runs it on Ubuntu 26.04's Qt. Elsewhere it's skipped
-  without `qs`, `sway` and `python3`. Its checks for a fractional
+  without `qs`, `sway`, `python3` or Go. Its checks for a fractional
   `font.pixelSize`, and for the icon theme pragma (§15), run everywhere.
   A missing pragma also fails the load, as icons that won't load, but
   that check needs `qs`.

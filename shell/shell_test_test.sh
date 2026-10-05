@@ -1,12 +1,14 @@
 #!/bin/sh
 #
-# Tests for shell/shell_test.sh itself, with stand-ins for qs, sway and
-# wtype, so they run without Quickshell: what the load test does with a
-# shell that loads cleanly, one whose files report an error, one whose event
-# loop never answers, one that ignores Hyprland, one whose icon won't load,
-# a notification server that records what it's sent or doesn't, a launcher
-# that runs the app typed or doesn't, and a lock that unlocks or doesn't.
-# The stand-in Hyprland is the real one.
+# Tests for shell/shell_test.sh itself, with stand-ins for qs, sway,
+# wtype, notify-send and go, so they run without Quickshell: what the load
+# test does with a shell that loads cleanly, one whose files report an
+# error, one whose event loop never answers, one that ignores Hyprland, one
+# that doesn't run tide-tz or whose tide-tz never ends, one whose clocks
+# or system monitor warn, one whose icon won't load, a notification server
+# that records what it's sent or doesn't, a launcher that runs the app typed
+# or doesn't, and a lock that unlocks or doesn't. The stand-in Hyprland and
+# tide-sysmon are the load test's own.
 
 cd "$(dirname "$0")/.." || exit 1
 
@@ -33,18 +35,23 @@ fi
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
-# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND]]]: a sway that listens on
-# wayland-1 until it's killed; a qs whose `ipc` runs IPC, and otherwise
-# talks to Hyprland as HYPRLAND says, then prints LOAD and waits, but
-# started as the unlock step starts the lock (WAYLAND_DEBUG, -p) runs
-# UNLOCK first, and as the launch step starts the shell (WAYLAND_DEBUG, -c)
-# prints LOAD and then runs LAUNCH, which defaults to a launcher that runs
-# the app typed; and a wtype that keeps what it types in DIR/typed, and in
-# the runtime directory for qs to see. HYPRLAND is `full` (the default:
-# listen for events, and ask for the status and the windows), `deaf` (no
-# listening) or `windowless` (no asking for windows). Its notify-send
-# prints an id and adds the summary to the history, as the shell's server
-# would.
+# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE]]]]]]:
+# a sway that listens on wayland-1 until it's killed; a qs whose `ipc`
+# runs IPC, and otherwise talks to Hyprland as HYPRLAND says, then prints
+# LOAD and waits, but started as the unlock step starts the lock
+# (WAYLAND_DEBUG, -p) runs UNLOCK first, and as the launch step starts the
+# shell (WAYLAND_DEBUG, -c) prints LOAD and then runs LAUNCH, which
+# defaults to a launcher that runs the app typed; and a wtype that keeps
+# what it types in DIR/typed, and in the runtime directory for qs to see.
+# HYPRLAND is `full` (the default: listen for events, and ask for the
+# status and the windows), `deaf` (no listening) or `windowless` (no
+# asking for windows). Loaded as the shell (-c), qs also starts COMMANDS in
+# the background, tide-tz and tide-sysmon by default, and reaps them as
+# they end, as Quickshell does; with LATE, it starts tide-tz that many
+# seconds late, as the shell does once it has read its clock files. Its
+# notify-send prints an id and adds the summary to the
+# history, as the shell's server would. Its go builds a tide-tz that runs
+# TZ, by default one that ends at once.
 stubs() {
     mkdir -p "$1" || exit 1
     cat >"$1/sway" <<'EOF'
@@ -70,11 +77,21 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
     python3 "\$(dirname "\$0")/hyprland_client.py" ${6:-full} &
     until test -e "\$XDG_RUNTIME_DIR/hyprland_client.ready"; do sleep 0.1; done
     rm "\$XDG_RUNTIME_DIR/hyprland_client.ready" || exit 1
+    if test "\$1" = -c; then
+        case " ${7-tide-tz tide-sysmon} " in
+            *" tide-tz "*) { ${9:+sleep $9;} tide-tz -- America/Los_Angeles; } >/dev/null 2>&1 & ;;
+        esac
+        case " ${7-tide-tz tide-sysmon} " in
+            *" tide-sysmon "*) tide-sysmon probe >/dev/null 2>&1 & ;;
+        esac
+    fi
 fi
 printf '%s\n' '$3'
 if test -n "\$WAYLAND_DEBUG" && test "\$1" = -c; then
     ${5:-$launcher}
 fi
+# Reaps what it started as each ends, until it's killed.
+wait
 exec sleep 3600
 EOF
     cat >"$1/hyprland_client.py" <<'EOF'
@@ -118,7 +135,13 @@ mkdir -p "$HOME/.local/state/tide" || exit 1
 printf '{"summary":"%s"}\n' "$summary" >>"$HOME/.local/state/tide/notifications.json"
 echo 1
 EOF
-    chmod +x "$1/sway" "$1/qs" "$1/wtype" "$1/notify-send" || exit 1
+    cat >"$1/go" <<EOF
+#!/bin/sh
+# As the load test runs it: go build -buildvcs=false -o OUT ./cmd/tide-tz.
+test "\$1 \$2 \$3 \$5" = "build -buildvcs=false -o ./cmd/tide-tz" || exit 2
+printf '#!/bin/sh\n%s\n' '${8:-:}' >"\$4" && chmod +x "\$4"
+EOF
+    chmod +x "$1/sway" "$1/qs" "$1/wtype" "$1/notify-send" "$1/go" || exit 1
 }
 
 # run DIR [VAR=VALUE...]: the load test with DIR's stand-ins, a 2 s limit,
@@ -212,6 +235,46 @@ stubs "$tmp/placeholder" "exit 0" "  WARN: Could not load icon \"no-such\" at si
 run "$tmp/placeholder"
 check "a shell whose icon won't load fails" test "$code" -ne 0
 check "and says so" contains "$out" "an icon wouldn't load"
+
+stubs "$tmp/late" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" ":" 0.5
+run "$tmp/late"
+check "a shell that runs tide-tz only after reading its files passes" test "$code" -eq 0
+check "having waited for it" contains "$out" "ok: Quickshell loads the shell"
+
+stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon"
+run "$tmp/no-clocks"
+check "a shell that never runs tide-tz fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell never ran tide-tz in 2 s"
+
+# A tide-tz that lasts as long as the shell that started it: kill -0 fails
+# once the shell is gone, which is when it ends.
+stubs "$tmp/endless" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon" \
+    'while kill -0 "$PPID" 2>/dev/null; do sleep 0.1; done'
+run "$tmp/endless"
+check "a tide-tz that never ends fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell wasn't done with tide-tz in 2 s"
+check "within the limit ($took s)" test "$took" -lt 30
+
+stubs "$tmp/warns" "exit 0" "  WARN qml: tide: tide-tz exited 1
+$loaded"
+run "$tmp/warns"
+check "a shell whose clocks warn fails" test "$code" -ne 0
+check "and says what they said" contains "$out" "tide: tide-tz exited 1"
+
+stubs "$tmp/probe-fails" "exit 0" "  WARN qml: tide: tide-sysmon probe exited 2: no probe
+$loaded"
+run "$tmp/probe-fails"
+check "a shell whose system monitor warns fails" test "$code" -ne 0
+check "and says what it said" contains "$out" "tide: tide-sysmon probe exited 2"
+
+run "$tmp/clean" GO=tide-test-no-such-go
+check "without Go, a run that requires Quickshell fails" test "$code" -ne 0
+check "and says so" contains "$out" "no tide-test-no-such-go (to build tide-tz, which the bar's clocks run) on PATH"
+
+run "$tmp/clean" GO=tide-test-no-such-go TIDE_REQUIRE_QS=
+check "without Go, any other run is skipped" test "$code" -eq 0
+check "whole, as without Quickshell" contains "$out" "SKIP: shell/shell_test.sh: no tide-test-no-such-go"
+check "and loads nothing" test "$(printf '%s\n' "$out" | grep -c '^ok:')" -eq 0
 
 stubs "$tmp/deaf" "exit 0" "  INFO: Configuration Loaded" ":" "" deaf
 run "$tmp/deaf"
