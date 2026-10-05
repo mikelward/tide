@@ -25,6 +25,9 @@
 // once: no step here waits or animates, so each keystroke shows on the
 // frame it's pressed, including while PAM checks the last attempt.
 
+import { initial as runInitial, step as runStep } from "./launch.mjs";
+import { ACTIONS, actionCommand, blockers } from "./session.mjs";
+
 export const INITIAL = Object.freeze({
     input: "",
     checking: false,
@@ -50,10 +53,25 @@ function result(state, actions) {
     return { state, actions: actions || [] };
 }
 
+// The event a key press makes, or null for one the lock ignores. `key` is
+// "enter", "backspace", "escape", "u" (the key, whatever it types) or ""
+// for any other; `text` is what it types, passed through untouched;
+// `ctrl` whether Control is held. Ctrl+U erases the field, as in a
+// terminal; other Control chords type nothing, so they never land in the
+// password.
+export function keyEvent({ key, text, ctrl }) {
+    if (key === "enter") return { type: "submit" };
+    if (key === "backspace") return { type: "backspace" };
+    if (key === "escape") return { type: "clear" };
+    if (ctrl) return key === "u" ? { type: "clear" } : null;
+    if (text !== "" && text >= " ") return { type: "key", text };
+    return null;
+}
+
 // The state and actions after `event`:
 //   {type: "key", text}       a printable key
 //   {type: "backspace"}
-//   {type: "clear"}           Escape
+//   {type: "clear"}           Escape or Ctrl+U
 //   {type: "submit"}          Enter
 //   {type: "pam", text, isError, responseRequired}
 //                             PAM's message (PamContext's pamMessage)
@@ -231,4 +249,68 @@ export function shortHostname(name, user) {
         return label.slice(prefix.length);
     }
     return label;
+}
+
+// The line under the lock's power buttons after Suspend, Restart or Shut
+// down ran (`label`), from the run's {started, code, errors} (stderr):
+// nothing when it worked, what blocks it when logind's inhibitors did (the
+// lock never offers to go ahead anyway: anyone at a locked screen could),
+// else why it failed. systemctl's stderr names programs and users, never
+// anything typed.
+export function powerMessage(label, run) {
+    // A failed start sends no exit code; an exit code proves a start,
+    // whichever order the signals came in (shell/lib/launch.mjs).
+    if (run.code === null || run.code === undefined) return `${label} didn't start.`;
+    if (run.code === 0) return "";
+    const found = blockers(run.errors || "");
+    if (found.length > 0) return `${label} is blocked by ${found.join("; ")}.`;
+    const why = String(run.errors || "").trim().split("\n").pop();
+    return why ? `${label} failed: ${why}` : `${label} failed (exit ${run.code}).`;
+}
+
+// The power buttons' one run at a time. A press starts a run only while
+// idle: from the press until the run has its result (exit code and stderr,
+// or a failed start) AND its process has stopped, whichever comes last, so
+// no signal of one run can be taken for the next's, in any order the
+// Process sends them (shell/lib/launch.mjs). The QML holds the state,
+// feeds it presses and its Process's signals, and starts the command a
+// press returns.
+//   action   the action id of the latest run, "" before the first
+//   run      that run's launch.mjs state
+//   stopped  whether its process has stopped
+//   message  powerMessage for it, once it's done
+export const POWER_IDLE = Object.freeze({ action: "", run: runInitial(), stopped: true, message: "" });
+
+export function powerBusy(state) {
+    return state.action !== "" && !(state.run.done && state.stopped);
+}
+
+// The state after `event` and the command to start, if any:
+//   {type: "press", id}   a power button
+//   {type: "started"}, {type: "exited", code}, {type: "stderr", text},
+//   {type: "stopped"}     the Process's signals
+// Returns {state, command}; `command` is null unless a press started a run.
+export function powerNext(state, event) {
+    if (event.type === "press") {
+        if (powerBusy(state)) {
+            return { state, command: null };
+        }
+        const command = actionCommand(event.id, false);
+        return {
+            state: Object.freeze({ action: event.id, run: runInitial(), stopped: false, message: "" }),
+            command,
+        };
+    }
+    if (state.action === "") {
+        return { state, command: null };
+    }
+    const command = actionCommand(state.action, false);
+    const run = runStep(state.run, event, command);
+    const stopped = state.stopped || event.type === "stopped";
+    let message = state.message;
+    if (run.done && !state.run.done) {
+        const label = ACTIONS.find((a) => a.id === state.action)?.label ?? state.action;
+        message = powerMessage(label, run);
+    }
+    return { state: Object.freeze({ action: state.action, run, stopped, message }), command: null };
 }

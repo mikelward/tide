@@ -1078,6 +1078,14 @@ one of them:
   one, and Enter then is held until that check fails. "Checking" and PAM's
   messages show under the field. A wrong password clears the field; it
   doesn't shake.
+- **Editing the field:** Backspace drops a character; Escape and Ctrl+U
+  erase it all. No other Control chord types into it.
+- **Either mouse button clicks** on the lock and the greeter, so a
+  left-handed mouse needs no setting there.
+- **Power from the lock:** Suspend at the bottom left, Restart and Shut down
+  at the bottom right, through logind like the session menu, but never past
+  an inhibitor: what blocks one is named under the buttons. The battery sits
+  at the top left.
 - **Triggers:** `Super+L`, idle, suspend, and lid-close without an external
   display.
 - **All of them go through logind.** `loginctl lock-session` raises logind's
