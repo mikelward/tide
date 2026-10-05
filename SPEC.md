@@ -1882,9 +1882,11 @@ are what "done" means.
 - **Qt's JavaScript, not Node's.** Quickshell runs those modules in Qt's
   QML engine, which (checked on Qt 6.11) has no object spread and none of
   the built-ins newer than ECMAScript 2016, such as `flatMap`, `at` or
-  `Object.fromEntries`. `make test` parses each module with `qmllint`, and
-  runs the Node tests with those built-ins removed, so either mistake fails
-  a test rather than the whole shell.
+  `Object.fromEntries`. Its regular expressions have no Unicode property
+  escapes, lookbehind or named groups; those match nothing there rather
+  than fail. `make test` parses each module with `qmllint`, runs the Node
+  tests with those built-ins removed, and scans the modules for those
+  regular expressions, so each mistake fails a test rather than the shell.
 - **The shell and the lock load.** `shell/shell_test.sh` installs the
   shell as `make install` does, and starts it with `qs -c tide` and the
   lock with `qs -p .../lock.qml` under headless sway, a wlroots compositor
