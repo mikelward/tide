@@ -135,7 +135,7 @@ WlSessionLockSurface {
                         text: surface.unread
                         color: Qt.rgba(1, 1, 1, 0.55)
                         font.family: "Inter"
-                        font.pixelSize: 11.5
+                        font.pixelSize: 12
                     }
                 }
 
@@ -160,7 +160,7 @@ WlSessionLockSurface {
                         text: parent.view.text
                         color: parent.view.low ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.55)
                         font.family: "Inter"
-                        font.pixelSize: 11.5
+                        font.pixelSize: 12
                     }
                 }
             }
@@ -261,7 +261,7 @@ WlSessionLockSurface {
                         text: `locked at ${Qt.formatTime(surface.lockedAt, "HH:mm")}`
                         color: Qt.rgba(1, 1, 1, 0.6)
                         font.family: "Inter"
-                        font.pixelSize: 11.5
+                        font.pixelSize: 12
                     }
                 }
 
@@ -321,7 +321,7 @@ WlSessionLockSurface {
                             text: surface.layout
                             color: Qt.rgba(1, 1, 1, 0.85)
                             font.family: "Inter"
-                            font.pixelSize: 10.5
+                            font.pixelSize: 11
                             font.weight: Font.Bold
                         }
                     }

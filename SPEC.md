@@ -100,7 +100,9 @@ Contents:
 The mocks are HTML/CSS in [`docs/mocks/`](docs/mocks/), rendered to PNG with
 `make mocks`. Colors, spacing and type are the proposed defaults: a
 libadwaita palette, with Inter for UI text and Ubuntu Mono for code. The
-fonts mock shows the pairings that were compared.
+fonts mock shows the pairings that were compared. The shell sets type in
+whole pixels, since Qt's `font.pixelSize` takes only an integer, so a
+mock's half-pixel size is rounded up: 12.5px is 13.
 
 | | |
 |---|---|

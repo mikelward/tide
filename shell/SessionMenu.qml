@@ -125,7 +125,7 @@ PopupWindow {
                 text: `${Session.ACTIONS.find(a => a.id === root.action)?.label ?? ""} is blocked by:`
                 color: Theme.fg
                 font.family: Theme.font
-                font.pixelSize: 12.5
+                font.pixelSize: 13
                 font.weight: Font.Bold
             }
 

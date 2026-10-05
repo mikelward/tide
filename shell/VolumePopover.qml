@@ -139,7 +139,7 @@ PopupWindow {
                             text: Audio.streamLabel(parent.modelData)
                             color: Theme.fg
                             font.family: Theme.font
-                            font.pixelSize: 12.5
+                            font.pixelSize: 13
                         }
 
                         VolumeControl {

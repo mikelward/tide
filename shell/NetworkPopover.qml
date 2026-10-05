@@ -137,7 +137,7 @@ PopupWindow {
                         text: `Password for ${root.asking?.name ?? ""}`
                         color: Theme.fgDim
                         font.family: Theme.font
-                        font.pixelSize: 11.5
+                        font.pixelSize: 12
                     }
 
                     TextInput {

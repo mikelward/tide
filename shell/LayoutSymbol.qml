@@ -27,7 +27,7 @@ Text {
     text: Layouts.layoutSymbol(root.mode, root.tiled)
     color: Theme.fgDim
     font.family: Theme.monoFont
-    font.pixelSize: 13.5
+    font.pixelSize: 14
     font.weight: Font.Medium
     font.letterSpacing: -0.27
 }
