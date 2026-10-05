@@ -443,8 +443,10 @@ SPEC.md §10's lock is `tide-lock`: `shell/lock.qml` and
 `tide-lock.service` (`qs -p .../tide/lock.qml`) with PAM service
 `tide-lock`. It has the password face (the short hostname, the time and
 date, the user, the field and PAM's messages) and the screensaver face, which
-an idle lock opens on (`tide idle-lock`). Only parsed with `qmlformat` and
-`qmllint`; nothing has run it yet. Still to do:
+an idle lock opens on (`tide idle-lock`). CI runs it in Quickshell under
+headless sway: it loads, turns down a wrong password through PAM, and
+unlocks on the right one (`shell/shell_test.sh`). Nothing has run it on
+Hyprland yet. Still to do:
 
 - Try it on a real session: `make install`, `sudo make install-session`
   (for `/etc/pam.d/tide-lock`), then `systemctl --user start
