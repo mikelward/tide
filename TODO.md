@@ -211,7 +211,8 @@ tested where it can be without a live session.
   over desktop entries and their actions (`shell/lib/fuzzy.mjs`,
   `shell/lib/launcher.mjs`), run through `tide launch`. It answers
   Hyprland's `tide:launcher` global shortcut and
-  `qs -c tide ipc call launcher toggle`. Only parsed with `qmlformat`.
+  `qs -c tide ipc call launcher toggle`. CI opens it in Quickshell,
+  types a query and runs the app it names (`shell/shell_test.sh`).
   Still to do:
   - Point `conf`'s `Super+Space` at `global, tide:launcher` instead of
     fuzzel, once it's been tried live.

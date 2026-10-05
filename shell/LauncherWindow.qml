@@ -235,6 +235,21 @@ PanelWindow {
         onPressed: root.toggle()
     }
 
+    // Quickshell scans the desktop entries when DesktopEntries is first
+    // used, and hands over the list a pass of the event loop later. This
+    // makes that the shell's start, not the first opening, which would read
+    // an empty list. A list that arrives while the launcher is open fills it
+    // only if it opened with none, so nothing reshuffles under the pointer.
+    Connections {
+        target: DesktopEntries
+
+        function onApplicationsChanged() {
+            if (root.visible && root.apps.length === 0) {
+                root.apps = Search.launcherItems(DesktopEntries.applications.values);
+            }
+        }
+    }
+
     IpcHandler {
         target: "launcher"
 

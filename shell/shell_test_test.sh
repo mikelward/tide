@@ -3,7 +3,8 @@
 # Tests for shell/shell_test.sh itself, with stand-ins for qs, sway and
 # wtype, so they run without Quickshell: what the load test does with a
 # shell that loads cleanly, one whose files report an error, one whose event
-# loop never answers, and a lock that unlocks or doesn't.
+# loop never answers, a launcher that runs the app typed or doesn't, and a
+# lock that unlocks or doesn't.
 
 cd "$(dirname "$0")/.." || exit 1
 
@@ -30,11 +31,13 @@ fi
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
-# stubs DIR IPC LOAD [UNLOCK]: a sway that listens on wayland-1 until it's
-# killed; a qs whose `ipc` runs IPC, which runs UNLOCK when started as the
-# unlock step starts it (with WAYLAND_DEBUG), and otherwise prints LOAD then
-# waits; and a wtype that keeps what it types in DIR/typed, and in the
-# runtime directory for qs to see.
+# stubs DIR IPC LOAD [UNLOCK [LAUNCH]]: a sway that listens on wayland-1
+# until it's killed; a qs whose `ipc` runs IPC, and otherwise prints LOAD
+# then waits, but started as the unlock step starts the lock (WAYLAND_DEBUG,
+# -p) runs UNLOCK first, and as the launch step starts the shell
+# (WAYLAND_DEBUG, -c) prints LOAD and then runs LAUNCH, which defaults to a
+# launcher that runs the app typed; and a wtype that keeps what it types in
+# DIR/typed, and in the runtime directory for qs to see.
 stubs() {
     mkdir -p "$1" || exit 1
     cat >"$1/sway" <<'EOF'
@@ -47,12 +50,18 @@ EOF
     cat >"$1/qs" <<EOF
 #!/bin/sh
 if test "\$1" = ipc; then
+    case "\$*" in
+        *"call launcher open"*) : >"\$XDG_RUNTIME_DIR/launcher-open" ;;
+    esac
     $2
 fi
-if test -n "\$WAYLAND_DEBUG"; then
+if test -n "\$WAYLAND_DEBUG" && test "\$1" = -p; then
     ${4:-:}
 fi
 printf '%s\n' '$3'
+if test -n "\$WAYLAND_DEBUG" && test "\$1" = -c; then
+    ${5:-$launcher}
+fi
 exec sleep 3600
 EOF
     cat >"$1/wtype" <<'EOF'
@@ -78,6 +87,13 @@ run() {
     code=$?
     took=$(($(date +%s) - _start))
 }
+
+# What a launcher says and does once the launch step opens it: it takes the
+# keyboard, then, once the query is typed, runs the app.
+opened='until test -e "$XDG_RUNTIME_DIR/launcher-open"; do sleep 0.1; done'
+focused="echo '[1.0] {Default Queue} wl_keyboard#3.enter(1, wl_surface#2, array[0])'"
+typed='until test -s "$XDG_RUNTIME_DIR/typed"; do sleep 0.1; done; rm "$XDG_RUNTIME_DIR/typed"'
+launcher="$opened; $focused; $typed; tide launch --app tide-test-probe -- tide-test-probe --flag"
 
 stubs "$tmp/clean" "exit 0" "  INFO: Configuration Loaded"
 run "$tmp/clean"
@@ -109,20 +125,40 @@ run "$tmp/broken"
 check "a shell that fails to load fails" test "$code" -ne 0
 check "and shows Quickshell's log" contains "$out" "Failed to load configuration"
 
+loaded="  INFO: Configuration Loaded"
+
+run "$tmp/clean"
+check "a launcher that runs the app typed passes" contains "$out" "ok: the launcher finds an app by a query without its accent, and runs it"
+check "having typed the query and Enter" test "$(head -n 1 "$tmp/clean/typed")" = cafepro
+
+stubs "$tmp/runs-nothing" "exit 0" "$loaded" ":" "$opened; $focused; $typed"
+run "$tmp/runs-nothing"
+check "a launcher that runs nothing fails" test "$code" -ne 0
+check "and says so" contains "$out" "the launcher didn't run Café Probe in 2 s"
+check "within the limit ($took s)" test "$took" -lt 30
+
+stubs "$tmp/runs-wrong" "exit 0" "$loaded" ":" "$opened; $focused; $typed; tide launch -- other"
+run "$tmp/runs-wrong"
+check "a launcher that runs the wrong app fails" test "$code" -ne 0
+check "and says what it ran" contains "$out" "it ran \`tide launch -- other\`"
+
+stubs "$tmp/launcher-unfocused" "exit 0" "$loaded" ":" "$opened"
+run "$tmp/launcher-unfocused"
+check "a launcher that never takes the keyboard fails" test "$code" -ne 0
+check "and says so" contains "$out" "the launcher didn't take the keyboard in 2 s"
+
 # What a lock started for unlocking says: that it took the keyboard, then,
 # once the passwords are typed, PAM's verdicts.
-focused="echo '[1.0] {Default Queue} wl_keyboard#3.enter(1, wl_surface#2, array[0])'"
 typed='until test -s "$XDG_RUNTIME_DIR/typed"; do sleep 0.1; done'
-loaded="  INFO: Configuration Loaded"
 
 stubs "$tmp/unlocks" "exit 0" "$loaded" "$focused; $typed
 echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
 check "a lock that unlocks on the right password passes" test "$code" -eq 0
 check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
-check "having typed a wrong password, then the right one" test "$(cat "$tmp/unlocks/typed")" = "not-pw
+check "having typed a wrong password, then the right one" test "$(sed 1d "$tmp/unlocks/typed")" = "not-pw
 pw"
-check "in a UTF-8 locale, for a password beyond ASCII" test "$(cat "$tmp/unlocks/typed-lang")" = C.UTF-8
+check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
 
 run "$tmp/clean"
 check "without a password, the lock isn't unlocked" contains "$out" "no TIDE_LOCK_PASSWORD, so the lock isn't unlocked"
@@ -151,7 +187,7 @@ exec sleep 3600
 EOF
 run "$tmp/stuck-typing" TIDE_LOCK_PASSWORD=pw
 check "a wtype that never finishes typing fails" test "$code" -ne 0
-check "and says so" contains "$out" "wtype didn't finish typing into the lock in 2 s"
+check "and says so" contains "$out" "wtype didn't finish typing into the launcher in 2 s"
 check "within the limit ($took s)" test "$took" -lt 30
 
 stubs "$tmp/lets-in" "exit 0" "$loaded" "$focused; $typed

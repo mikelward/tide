@@ -1901,6 +1901,12 @@ are what "done" means.
   checks for a fractional `font.pixelSize`, and for the icon theme pragma
   (§15), run everywhere. A missing pragma loads cleanly and shows only as
   missing icons.
+- **The launcher runs an app.** With wtype, the same test opens the
+  launcher over IPC and types the name of an app only it installs,
+  "Café Probe", as `cafepro`. Enter must run that app through `tide
+  launch`, which a stand-in on the shell's PATH records. That checks the
+  launcher takes the keyboard, has the apps on its first opening, and
+  matches without the accent in Qt's engine.
 - **The lock unlocks.** Given the password of the user running it, the same
   test types into the lock with wtype: a wrong password, then the right
   one, at once. PAM must turn down the first, and the lock must unlock and
