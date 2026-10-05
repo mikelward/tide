@@ -452,7 +452,15 @@ an idle lock opens on (`tide idle-lock`). Only parsed with `qmlformat` and
   external keyboard while locked.
 - Take a right click as a left one on the greeter too, as the lock does
   (SPEC.md §10), when the greeter is built.
-- Skip the lock inside a Chrome Remote Desktop session.
+- Skip the lock inside a Chrome Remote Desktop session. Kept for when
+  tide runs in one; not built yet because the signal is unsafe as it
+  stands. `lock-screensaver` checks `CHROME_REMOTE_DESKTOP_SESSION=1` in
+  its own environment, but `tide-lock.service` reads the systemd user
+  manager's, which a remote session and the local one share. A remote
+  session that exports it there would stop the local screen locking, so
+  the check has to be per session (logind's session type, or the
+  variable in the session that raised `Lock`), and it must fail toward
+  locking.
 - Crash it on purpose and walk the three ways out (§10).
 
 ## The rest of `tide doctor`
