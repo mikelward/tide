@@ -75,13 +75,14 @@ jobs:
       # setup-tide's QUICKSHELL_BUILD_DEPS, plus what this job runs: git
       # for the checkout, the bus and the compositor the test runs on, wtype
       # to type into the lock, python3 for the stand-in Hyprland, notify-send
-      # to send the shell notifications, and the icon theme the shell names.
+      # to send the shell notifications, the icon theme the shell names, and
+      # tzdata for the clocks.
       - name: Install Quickshell's build dependencies
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build pkg-config git ca-certificates dbus-daemon sway wtype python3 \
-            libnotify-bin adwaita-icon-theme \
+            libnotify-bin adwaita-icon-theme tzdata \
             qt6-base-dev qt6-base-private-dev qt6-declarative-dev qt6-declarative-private-dev \
             qt6-wayland-dev qt6-wayland-private-dev qt6-shadertools-dev spirv-tools \
             libcli11-dev libjemalloc-dev libdrm-dev libgbm-dev libegl-dev libgles-dev libvulkan-dev \
@@ -94,6 +95,11 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+      # The test builds tide-tz, which the bar's clocks run, with the Go the
+      # test job uses.
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
       - uses: actions/cache@v4
         id: cache
         with:

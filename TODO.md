@@ -198,10 +198,16 @@ The Quickshell bar replaces waybar piece by piece (SPEC.md §7), each piece
 tested where it can be without a live session.
 
 - The load test (`shell/shell_test.sh`) stops the shell once it has taken
-  in the stand-in Hyprland's answers and events, so an error the shell
-  reports later, from a process's output or a timer, isn't caught.
-  Keeping it running a few seconds more would catch some, at that cost on
-  every run, and as a timed wait. Kept as it is for now.
+  in the stand-in Hyprland's answers and events and the output of its own
+  commands (`tide-tz`, a stand-in `tide-sysmon`). So an error the shell
+  reports later, from a timer, a file read or another command's output
+  (`hyprctl`, `gsettings`, `nmcli`), isn't caught. Keeping it running a
+  few seconds more would catch some, at that cost on every run, and as a
+  timed wait. Kept as it is for now.
+- The load test's `tide-sysmon` probe names no sensors, so the system
+  monitor's sensor and throttle reads aren't covered. Covering them needs
+  a fake `/sys` the shell reads through (the probe names real paths today),
+  and a way to wait for the shell's background reads of it.
 - Keep awake (SPEC.md §10) is the bar toggle, and it also holds while the
   mic is live: an app's capture stream with an active PipeWire link from a
   microphone (`shell/MicData.qml`, `shell/lib/mic.mjs`), the same signal

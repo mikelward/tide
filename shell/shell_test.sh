@@ -20,9 +20,11 @@
 # Every file's types and properties are checked, since Quickshell compiles
 # them all, but only what runs reports: the bindings of what exists at
 # startup and what the stand-in's answers and events make, and what they
-# queue. A popover's contents, or a delegate made from data neither the
-# stand-in nor the notifications below give (a clock's process), aren't
-# covered.
+# queue. The shell's own commands are on its PATH: tide-tz built for the
+# run, so the clocks are drawn from tzdata, and a stand-in tide-sysmon
+# whose probe finds no sensors, so the system monitor parses one but reads
+# no sensor files. Data from a timer, a file read, or any other command
+# isn't covered.
 #
 # With notify-send, it also runs the shell as the notification server
 # (TIDE_NOTIFICATIONS=1, SPEC.md §9), sends it notifications, and expects
@@ -39,8 +41,9 @@
 # tide-lock's PAM service in /etc/pam.d (`make install-session`).
 #
 #   $QS                  the Quickshell command (default: qs)
+#   $GO                  the Go command, to build tide-tz (default: go)
 #   $TIDE_REQUIRE_QS     set (CI sets it) to fail, not skip, without qs,
-#                        sway, wtype or notify-send
+#                        sway, python3, Go, wtype or notify-send
 #   $TIDE_LOAD_WAIT      seconds to wait for each step (default: 60)
 #   $TIDE_KEEP_LOG       a file to copy Quickshell's logs to
 #   $TIDE_LOCK_PASSWORD  the running user's password, to unlock the lock with.
@@ -84,6 +87,7 @@ qs=${QS:-qs}
 qs_path=$(command -v "$qs") || missing "$qs (Quickshell)"
 sway_path=$(command -v sway) || missing "sway (to run headless)"
 python_path=$(command -v python3) || missing "python3 (for the stand-in Hyprland)"
+go_path=$(command -v "${GO:-go}") || missing "${GO:-go} (to build tide-tz, which the bar's clocks run)"
 # Without wtype, nothing is typed, so the launcher and the lock's password
 # go untested.
 if ! wtype_path=$(command -v wtype); then
@@ -142,6 +146,43 @@ if ! make -s install-shell SHELL_DIR="$tmp/home/.config/quickshell/tide" >"$tmp/
     exit 1
 fi
 
+# The shell's own commands, first on its PATH. Each is a wrapper that adds
+# its run to $tmp/helpers.log and then runs the real one, from
+# $tmp/helpers/real, so a run's command line names $tmp/helpers throughout
+# (children looks for that).
+mkdir -p "$tmp/helpers/real" || exit 1
+# The real tide-sysmon reads this machine's /proc and /sys, and the sensor
+# files its probe names are read in the background, which nothing here can
+# wait on. This one's probe is fixed, and names none.
+cat >"$tmp/helpers/real/tide-sysmon" <<'EOF' || exit 1
+#!/bin/sh
+case $1 in
+    probe) printf 'page\t4096\n' ;;
+    *)
+        echo "tide-sysmon: the load test's stand-in has only probe, not $1" >&2
+        exit 2
+        ;;
+esac
+EOF
+chmod +x "$tmp/helpers/real/tide-sysmon" || exit 1
+# With the Go that's installed, as the Makefile builds. Without git's
+# status, which git refuses for a checkout another user owns (CI's, in its
+# container): a binary for this run needs no stamp.
+if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/helpers/real/tide-tz" ./cmd/tide-tz >"$tmp/go.log" 2>&1; then
+    echo "FAIL: couldn't build tide-tz: $(cat "$tmp/go.log")" >&2
+    exit 1
+fi
+helpers="tide-sysmon tide-tz"
+: >"$tmp/helpers.log" || exit 1
+for _helper in $helpers; do
+    cat >"$tmp/helpers/$_helper" <<EOF || exit 1
+#!/bin/sh
+printf '%s\n' "$_helper \$*" >>"$tmp/helpers.log"
+exec "$tmp/helpers/real/$_helper" "\$@"
+EOF
+    chmod +x "$tmp/helpers/$_helper" || exit 1
+done
+
 # A session bus of the test's own; dbus-daemon returns once it's ready.
 # Without one, the shell's D-Bus services can't start, which Quickshell
 # reports as its own warnings, not the shell's.
@@ -198,6 +239,53 @@ barrier() {
     done
 }
 
+# children: names, one per line, what the shell has started and not yet
+# taken in: one of its commands from $tmp/helpers still running, or any
+# child that has exited and isn't yet reaped. Quickshell reaps a child
+# when it handles its exit, so once there are none, a barrier means their
+# output and their exits have been handled too.
+children() {
+    for _stat in /proc/[0-9]*/stat; do
+        # A process that ended since the glob has no stat to read.
+        read -r _line 2>/dev/null <"$_stat" || continue
+        # After the command name, which is in parentheses and may hold
+        # anything: the state, then the parent's PID.
+        _fields=${_line##*) }
+        _state=${_fields%% *}
+        _fields=${_fields#* }
+        test "${_fields%% *}" = "$qs_pid" || continue
+        if test "$_state" = Z; then
+            echo "a command that has exited"
+            continue
+        fi
+        _pid=${_stat#/proc/}
+        # Empty, so not one of the helpers, if it ended since its stat was
+        # read.
+        _command=$(tr '\0' ' ' 2>/dev/null <"/proc/${_pid%/stat}/cmdline")
+        case $_command in
+            *"$tmp/helpers/"*)
+                _command=${_command#*"$tmp/helpers/"}
+                _command=${_command#real/}
+                echo "${_command%% *}"
+                ;;
+        esac
+    done
+}
+
+# helpers: waits until children names nothing, failing the test unless
+# that comes in time.
+helpers() {
+    i=0
+    while _running=$(children) && test -n "$_running"; do
+        if waited "$_what wasn't done with $(printf '%s\n' "$_running" | head -n 1)" "$i"; then
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+}
+
 # hyprland COMMAND: asks the stand-in Hyprland to drain or play, and prints
 # its answer.
 hyprland() {
@@ -208,34 +296,78 @@ hyprland() {
     fi
 }
 
+# runs: how many times the shell has run one of its commands.
+runs() {
+    wc -l <"$tmp/helpers.log"
+}
+
 # settle: answers the shell's Hyprland requests, and lets it take in the
-# answers, until it has nothing more to ask. The stand-in answers only when
-# drained, and a request the shell makes while handling an answer or an
-# event has been sent by the time a barrier returns: so a drain that finds
-# none after a barrier means every request was answered and every answer
-# taken in. Each answered request is added to $tmp/answered.
+# answers and its commands' output, until it has nothing more to ask or
+# run. Each pass waits for the commands the shell has started to end,
+# then takes a barrier, then drains the stand-in, which answers only
+# then. The barrier comes after those commands' exits, as after the
+# answers of the pass before, so it returns only once the shell has
+# handled them, and sent any request or started any command that set off.
+# A pass that drains no request and in which no command started ends it.
+# A command started since the pass began has added its run to the log, or
+# is still running its wrapper: Qt (6.10) starts a process with vfork
+# semantics, so it has exec'd before the shell goes on. Each answered
+# request is added to $tmp/answered.
 settle() {
     _until=$(($(date +%s) + wait))
     while :; do
+        _runs=$(runs) || exit 1
+        helpers
         barrier
         _answered=$(hyprland drain) || exit 1
-        test -z "$_answered" && return
-        printf '%s\n' "$_answered" >>"$tmp/answered"
+        if test -z "$_answered" && test "$(runs)" = "$_runs" && test -z "$(children)"; then
+            return
+        fi
+        test -z "$_answered" || printf '%s\n' "$_answered" >>"$tmp/answered"
         if test "$(date +%s)" -ge "$_until"; then
-            echo "FAIL: $_what was still asking Hyprland after $wait s" >&2
+            echo "FAIL: $_what was still asking Hyprland, or running commands, after $wait s" >&2
             exit 1
         fi
     done
 }
 
+# started FROM COMMAND...: waits until the shell has run each COMMAND
+# since its run log had FROM lines, failing the test unless that comes in
+# time. The shell may start one only once it has read files in the
+# background (the clocks' tide-tz waits on their settings), which nothing
+# else here can wait on.
+started() {
+    _from=$1
+    shift
+    for _command; do
+        i=0
+        until tail -n "+$((_from + 1))" "$tmp/helpers.log" | grep -q "^$_command "; do
+            if ! kill -0 "$qs_pid" 2>/dev/null; then
+                echo "FAIL: $_what exited before it ran $_command:" >&2
+                grep -v '^\[' "$log" >&2
+                exit 1
+            fi
+            if waited "$_what never ran $_command" "$i"; then
+                grep -v '^\[' "$log" >&2
+                exit 1
+            fi
+            sleep 0.1
+            i=$((i + 1))
+        done
+    done
+}
+
 # load NAME WHAT ARG...: starts `qs ARG...` on the headless sway, with a
-# fresh stand-in Hyprland, and fails the test unless it loads WHAT, asks
-# Hyprland for its windows, takes in its events, and through all of that
-# has nothing reported by the shell's own files. With $load_env, it starts
-# qs with those settings too, and with $after_load, it runs that function
-# once all of that has settled. Its log is $tmp/NAME.qs.log. Nothing edits
-# the files during the test, so the file watcher is off, as
-# tide-lock.service has it.
+# fresh stand-in Hyprland and the shell's commands, and fails the test
+# unless it loads WHAT, asks Hyprland for its windows, takes in its events
+# and its commands' output, and through all of that has nothing reported
+# by the shell's own files, nor anything the clocks warn of. Local time is
+# New York's, one of the default clocks, so it's hidden as local. With
+# $load_env, it starts qs with those settings too; with $load_runs, it
+# waits for the shell to start each of those commands before it settles;
+# and with $after_load, it runs that function once all of that has
+# settled. Its log is $tmp/NAME.qs.log. Nothing edits the files during
+# the test, so the file watcher is off, as tide-lock.service has it.
 load() {
     _what=$2
     log=$tmp/$1.qs.log
@@ -260,10 +392,11 @@ load() {
         i=$((i + 1))
     done
 
+    _load_from=$(runs) || exit 1
     # shellcheck disable=SC2086 # $load_env is none, or one or more settings
-    env -i PATH="$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
+    env -i PATH="$tmp/helpers:$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
         ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
-        LANG=C.UTF-8 QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 TZ=America/New_York QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
         HYPRLAND_INSTANCE_SIGNATURE="$hypr_signature" QS_DISABLE_FILE_WATCHER=1 \
         ${load_env:-} "$qs_path" "$@" >"$log" 2>&1 &
     qs_pid=$!
@@ -287,11 +420,13 @@ load() {
     done
     # Loading is synchronous, but what it queued (a Qt.callLater, a queued
     # signal) runs on the event loop afterward, and so does what Hyprland's
-    # answers and events set off: settle waits for all of it. What waits on
-    # the world outside (a process's output, a file read) can't be waited
-    # for without a timer, and isn't covered.
+    # answers and events and the shell's commands set off: settle waits for
+    # all of it. What waits on anything else outside (another command, a
+    # file read) can't be waited for without a timer, and isn't covered.
     _listeners=0
     if grep -q 'Configuration Loaded' "$log"; then
+        # shellcheck disable=SC2086 # $load_runs is a list of commands
+        started "$_load_from" ${load_runs:-}
         settle
         _listeners=$(hyprland play) || exit 1
         settle
@@ -314,6 +449,14 @@ load() {
         exit 1
     fi
     reports "$_what loaded"
+    # The commands' inputs are fixed (the default zones, $TZ, the system's
+    # tzdata; the stand-in probe), so anything the clocks or the system
+    # monitor warn of is a failure.
+    if grep -E "tide: (tide-tz|tide-sysmon|clocks|couldn't start tide-)" "$log" >"$tmp/reports"; then
+        echo "FAIL: $_what loaded, but its commands warned:" >&2
+        cat "$tmp/reports" >&2
+        exit 1
+    fi
     # Without these, the run says nothing about Hyprland's data.
     if ! grep -qx 'j/clients' "$tmp/answered"; then
         echo "FAIL: $_what never asked the stand-in Hyprland for its windows" >&2
@@ -544,13 +687,19 @@ $TIDE_LOCK_PASSWORD
     echo "ok: the lock turns down a wrong password and unlocks on the right one"
 }
 
+# The shell runs all its commands; without them, the run says nothing
+# about the clocks or the system monitor. The lock runs none of them.
+load_runs=$helpers
 load shell "the shell" -c tide
+load_runs=
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 if test -n "$notify_path"; then
     load_env=TIDE_NOTIFICATIONS=1
+    load_runs=$helpers
     after_load=notify
     load notifications "the notification server" -c tide
     load_env=
+    load_runs=
     after_load=
     # The history keeps both; a summary is plain text, so it's in the JSON
     # as it was sent.
