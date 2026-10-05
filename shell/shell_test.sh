@@ -38,6 +38,16 @@ if fractional=$(grep -n -E 'pixelSize:.*[0-9]\.[0-9]' shell/*.qml); then
     exit 1
 fi
 
+# The shell and the lock name their icon theme, since Qt picks none for
+# tide's desktop. Quickshell reads the pragma only above the first import,
+# and its loss shows only as missing icons, which no load reports.
+for entry in shell/shell.qml shell/lock.qml; do
+    if ! sed '/^import /q' "$entry" | grep -q '^//@ pragma IconTheme Adwaita$'; then
+        echo "FAIL: $entry doesn't name the Adwaita icon theme above its imports (SPEC.md §15)" >&2
+        exit 1
+    fi
+done
+
 # missing WHAT: skips the test, or fails it under $TIDE_REQUIRE_QS.
 missing() {
     if test -n "${TIDE_REQUIRE_QS:-}"; then

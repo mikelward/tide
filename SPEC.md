@@ -1674,6 +1674,10 @@ to be focused.
     the icon theme's symbolic icons (`battery-level-80-symbolic`), tinted
     to the palette. The mocks draw them with Material Symbols Rounded,
     which may replace them once setup installs that font.
+  - The shell and the lock name Adwaita themselves, with Quickshell's
+    `//@ pragma IconTheme`. Qt picks an icon theme only for a desktop it
+    knows, and `tide:Hyprland` isn't one. Without the pragma, Quickshell
+    0.3.1 on Qt 6.10 loads no theme icon at all.
   - Where Adwaita has no icon for a thing, tide ships its own symbolic SVG
     in `shell/icons`, drawn to Adwaita's 16 px grid and tinted the same
     way. So far that is the system monitor's two (Adwaita 46 has neither):
@@ -1891,7 +1895,9 @@ are what "done" means.
   a delegate made from data that arrives later aren't covered. CI builds
   the Quickshell release `setup --tide` installs, and runs it on Ubuntu
   26.04's Qt. Elsewhere, it's skipped without `qs` and `sway`, but its
-  check for a fractional `font.pixelSize` runs everywhere.
+  checks for a fractional `font.pixelSize`, and for the icon theme pragma
+  (§15), run everywhere. A missing pragma loads cleanly and shows only as
+  missing icons.
 - **Clock fixtures.** Instants on both sides of every 2026–2027 US and EU DST
   change, asserting each zone's abbreviation and day offset. The `GMT+1`
   trap is a named test.
