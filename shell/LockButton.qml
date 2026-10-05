@@ -1,8 +1,9 @@
 import QtQuick
 
-// A button on the lock's password face (docs/mocks/lock.png): a translucent
-// pill with an icon and, for Suspend, a label; round when it's only an icon.
-// Its press shows at once, like every key on the lock.
+// A button on the login and lock faces (docs/mocks/lock.png): a translucent
+// pill with an icon and, for Suspend and the greeter's pickers, a label,
+// with a trailing icon for a picker; round when it's only an icon. Its press
+// shows at once, like every key on the lock.
 Rectangle {
     id: root
 
@@ -10,6 +11,8 @@ Rectangle {
     property string label: ""
     // What an icon-only button does, for screen readers.
     property string tip: ""
+    // After the label: a picker's arrow.
+    property string trailing: ""
 
     signal clicked
 
@@ -37,11 +40,20 @@ Rectangle {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             visible: root.label !== ""
+            // A session's name comes from its file: never markup.
+            textFormat: Text.PlainText
             text: root.label
             color: "#f2f2f6"
             font.family: "Inter"
             font.pixelSize: 12
             font.weight: Font.DemiBold
+        }
+
+        SymbolicIcon {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.trailing !== ""
+            name: root.trailing
+            color: Qt.rgba(1, 1, 1, 0.7)
         }
     }
 
@@ -50,7 +62,7 @@ Rectangle {
 
         anchors.fill: parent
         enabled: root.enabled
-        // Either button is a click on the lock (TODO.md).
+        // Either button is a click on the lock and the greeter (SPEC.md §10).
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         onClicked: root.clicked()
     }

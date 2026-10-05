@@ -225,8 +225,16 @@ on failure, scoped to this session only, and visible in one
 
 ### 3.4 Login: greetd plus the tide greeter
 
-greetd runs a minimal compositor (`cage` or a stripped Hyprland) with the
-tide greeter, the same QML screen as the lock (§11).
+greetd runs a stripped Hyprland with the tide greeter, the same QML screen
+as the lock (§11). cage was the other candidate, and multiple monitors rule
+it out (checked on cage 0.3.1):
+
+- it has no layer shell, so a greeter can't put a surface on each output;
+- its `-m extend` stretches one window across every output, and `-m last`
+  uses only the last one connected.
+
+Hyprland is installed for the session anyway, and its `hyprctl devices`
+gives the greeter the same layout badge as the lock.
 
 ### 3.5 Look
 
@@ -1164,27 +1172,73 @@ one of them:
 
 ## 11. Login
 
-- **greetd** runs the **tide greeter**: Quickshell with the `Greetd`
-  service, inside `cage`, or inside a stripped Hyprland config if `cage`
-  misbehaves with multiple monitors.
+- **greetd** runs **`tide-greeter`** as greetd's own greeter user. It
+  starts Hyprland with tide's greeter config (`greeter/hyprland.lua`, §3.4):
+  - every monitor at its preferred mode;
+  - no key bindings, so only Hyprland's built-in VT switch acts on a key;
+  - none of Hyprland's own popups;
+  - one program, the greeter: Quickshell with the `Greetd` service
+    (`shell/greeter.qml`).
+
+  Once greetd has the session to start, Quickshell exits, Hyprland exits
+  after it, and greetd starts the session. `make install-session` installs
+  the command, the config, a copy of the shell (the greeter user can't read
+  anyone's `~/.config`) and a greetd config template.
 - **Same face as the lock.** Login and lock are one QML component with two
-  modes ([`lock.png`](docs/mocks/lock.png)).
+  modes ([`lock.png`](docs/mocks/lock.png)): `shell/LockFace.qml`.
 - **Hostname.** It leads with the short hostname: the first label, with a
   leading `<user>-` removed, the same rule as `i3statusdwm`.
 - **Local's date and time** sit below the hostname. No zone clocks: the
   bar has them a click away, and the login and lock faces stay simple
   (maintainer, 2026-10-05).
+- **What the lock has and the login face doesn't:** the notification
+  count, the battery, Suspend and the "locked at" line, as the mock shows.
 - **Greeter extras:**
-  - the last user is preselected, with a user picker;
-  - a session chip lists the `wayland-sessions` entries (tide first),
-    plus a plain shell as the way out if the desktop is broken;
-  - restart and shut-down buttons.
-- **Keyboard.** The greeter uses the session's layout (US Dvorak,
-  Compose on Caps) and shows a layout badge by the password field.
+  - The last user and session are preselected. The greeter remembers them
+    in its own state directory, written as the session starts.
+  - An "Other user" chip lists the people who can log in: `getent passwd`'s
+    accounts in `login.defs`' UID range, less those whose shell refuses
+    logins. It shows only when there's more than one. It's disabled while
+    a login is under way, from Enter until it fails, a second prompt
+    included. Picking cancels greetd's session, and Quickshell's `Greetd`
+    doesn't wait for the cancel's answer (below). greetd answers a cancel
+    sent during a password check only once the check ends.
+  - A list longer than the room under its chip scrolls.
+  - A session chip lists the `wayland-sessions` entries, read from
+    `$XDG_DATA_DIRS`:
+    - a hidden entry, or one whose `TryExec` isn't installed, is left out,
+      along with any entry of the same name further down;
+    - tide comes first, then the rest by name;
+    - **Shell** comes last: the user's login shell on greetd's VT, the way
+      out if the desktop is broken.
+  - Restart and Shut down, as on the lock: through logind, never past an
+    inhibitor.
+- **The session's environment.** The greeter passes greetd
+  `XDG_SESSION_TYPE`, `XDG_SESSION_DESKTOP` (the entry's file name) and
+  `XDG_CURRENT_DESKTOP` (its `DesktopNames`). pam_systemd records the first
+  two, and uwsm sets the third for tide anyway.
+- **Keyboard.** The greeter uses the system's X11 keymap, as localed has it,
+  which `setup` sets to the session's layout (US Dvorak, Compose on Caps).
+  It shows the same layout badge by the password field as the lock.
 - **Keyring.** PAM unlocks gnome-keyring with the login password, so Chrome
-  and other secret users don't prompt again.
+  and other secret users don't prompt again. This needs
+  `pam_gnome_keyring` in greetd's PAM stack, which `setup --tide` owns
+  (TODO.md).
 - **PAM messages** (faillock countdowns, fingerprint prompts) show verbatim
-  under the field.
+  under the field. greetd reports a failure only as PAM's return code
+  (`pam_authenticate: AUTH_ERR`, greetd 0.10.3). So a wrong password and
+  too many tries get the lock's own words, and any other code is named.
+  A prompt greetd marks visible shows what's typed, as on the lock (§10).
+- **Enter during a check does nothing** (maintainer, 2026-10-05). Keys
+  typed meanwhile still land in the field, and the next Enter sends them.
+  Unlike the lock (§10), the greeter doesn't hold that Enter for when the
+  check fails. Holding it wouldn't work with Quickshell 0.3.1's `Greetd`
+  anyway:
+  - after a failure it cancels greetd's session without waiting for the
+    answer;
+  - a login started at once takes that answer for its own success;
+  - greetd then refuses to start the session ("session is not ready"), and
+    the password has to be typed again.
 
 ## 12. Screen sharing (Google Meet)
 
@@ -1913,7 +1967,7 @@ light/dark switch.
 
 | Repo | Gets |
 |---|---|
-| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, launcher, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide grant` and `tide idle-suspend`. The Lua tiling layout. `make install`. |
+| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, launcher, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide grant` and `tide idle-suspend`. The Lua tiling layout. `make install`. |
 | **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf` timings; uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts), with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **scripts** | `setup --tide`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |
@@ -1952,9 +2006,10 @@ are what "done" means.
   than fail. `make test` parses each module with `qmllint`, runs the Node
   tests with those built-ins removed, and scans the modules for those
   regular expressions, so each mistake fails a test rather than the shell.
-- **The shell and the lock load.** `shell/shell_test.sh` installs the
-  shell as `make install` does, and starts it with `qs -c tide` and the
-  lock with `qs -p .../lock.qml` under headless sway, a wlroots compositor
+- **The shell, the lock and the greeter load.** `shell/shell_test.sh`
+  installs the shell as `make install` does, and starts it with `qs -c
+  tide`, the lock with `qs -p .../lock.qml` and the greeter with `qs -p
+  .../greeter.qml` under headless sway, a wlroots compositor
   with the layer shell and session lock they need. It fails when Quickshell
   can't load either, or when any of the shell's files reports an error as
   it starts. That covers every file's types and properties, the bindings of
@@ -2012,6 +2067,16 @@ are what "done" means.
   launch`, which a stand-in on the shell's PATH records. That checks the
   launcher takes the keyboard, has the apps on its first opening, and
   matches without the accent in Qt's engine.
+- **The greeter logs in.** With wtype, the same test runs the greeter on
+  a stand-in greetd (`shell/greetd_stand_in.py`), which speaks greetd
+  0.10.3's IPC and takes a password of the test's own. The greeter must:
+  - turn down a wrong password;
+  - on the right one, ask greetd to start tide, with the environment
+    pam_systemd reads;
+  - remember that login, and exit.
+
+  `tide-greeter` runs over stubs, and its Hyprland config against a stub of
+  the `hl` API, which also runs the command it starts the greeter with.
 - **The lock unlocks.** Given the password of the user running it, the same
   test types into the lock with wtype: a wrong password, then the right
   one, at once. PAM must turn down the first, and the lock must unlock and

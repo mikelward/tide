@@ -480,7 +480,8 @@ default input's mute, from any source, and the backlight when the keys in
 ## Lock (M5)
 
 SPEC.md §10's lock is `tide-lock`: `shell/lock.qml` and
-`shell/LockSurface.qml`, from `shell/lib/lock.mjs`, run by
+`shell/LockSurface.qml`, with the face it shares with the greeter
+(`shell/LockFace.qml`), from `shell/lib/lock.mjs`, run by
 `tide-lock.service` (`qs -p .../tide/lock.qml`) with PAM service
 `tide-lock`. It has the password face (the short hostname, the time and
 date, the user, the field and PAM's messages) and the screensaver face, which
@@ -512,8 +513,6 @@ Hyprland yet. Still to do:
   layout, follows a switch, and what it shows after a YubiKey's code (which
   may make the YubiKey Hyprland's main keyboard) and after unplugging an
   external keyboard while locked.
-- Take a right click as a left one on the greeter too, as the lock does
-  (SPEC.md §10), when the greeter is built.
 - Skip the lock inside a Chrome Remote Desktop session. Kept for when
   tide runs in one; not built yet because the signal is unsafe as it
   stands. `lock-screensaver` checks `CHROME_REMOTE_DESKTOP_SESSION=1` in
@@ -524,6 +523,59 @@ Hyprland yet. Still to do:
   variable in the session that raised `Lock`), and it must fail toward
   locking.
 - Crash it on purpose and walk the three ways out (§10).
+
+## Login (M5)
+
+SPEC.md §11's greeter is `tide-greeter`: Hyprland with
+`greeter/hyprland.lua`, running `shell/greeter.qml` on the lock's face
+(`shell/LockFace.qml`), logging in through greetd. `make install-session`
+installs it under `$(PREFIX)`, with a greetd config template. CI loads it in
+Quickshell under headless sway and logs in on a stand-in greetd
+(`shell/shell_test.sh`); nothing has run it under greetd or Hyprland yet.
+Still to do:
+
+- `setup --tide` (scripts repo): make greetd the display manager. That
+  means:
+  - install greetd;
+  - put the template in `/etc/greetd/config.toml`, with the greeter user the
+    distro's package created;
+  - enable greetd in place of GDM or SDDM;
+  - give the greeter user a writable home, where the greeter remembers the
+    last login.
+
+  It's a switch with a lockout risk, so it wants a way back, and Plasma
+  stays a session at the new greeter.
+- The greeter user can't run the Hyprland and Quickshell that
+  `setup-tide` builds from source. It builds them under `~/.local/opt` and
+  links them from `/usr/local/bin`, and a home directory isn't readable by
+  other users (750 on Ubuntu). They need to go somewhere system-wide, such
+  as `/usr/local/opt`, before greetd can use them.
+- The keyring (SPEC.md §11): `pam_gnome_keyring` in greetd's PAM stack,
+  `auth optional` and `session optional ... auto_start`. That's
+  `/etc/pam.d/greetd`, the distro's file, so `setup --tide` owns the edit.
+- Try it on a real machine:
+  - every monitor gets the face, and the keyboard goes to one of them;
+  - the badge reads the system layout;
+  - a wrong password, then the right one, logs in to tide;
+  - Plasma and Shell from the session chip;
+  - Restart and Shut down;
+  - the last user and session preselected at the next boot;
+  - Ctrl+Alt+F2 to a text console.
+- A user `getent` doesn't list (LDAP without enumeration) can't log in:
+  "Other user" lists only `getent passwd`'s accounts. Typing a user name
+  into the field isn't built.
+- The mock's "last signed in yesterday" line under the user isn't built.
+- Quickshell 0.3.1's `Greetd` takes the answer to a cancel it didn't wait
+  for as the next login's own (SPEC.md §11). The greeter avoids the cases
+  where that answer is slow: no held Enter, and no user switch during a
+  login. A login started within greetd's round trip after a failure can
+  still hit it, and greetd then refuses the start. An upstream fix in
+  `src/services/greetd/connection.cpp`, or a greetd client of tide's own,
+  would remove it.
+- The greeter has no idle: no dim, no screensaver and no DPMS, so a
+  machine left at the greeter keeps its screens lit.
+- SPEC.md §15 has the greeter follow the default light/dark schedule. Its
+  face is the lock's, which is dark only, like the lock.
 
 ## The rest of `tide doctor`
 

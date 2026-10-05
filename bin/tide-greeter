@@ -1,0 +1,74 @@
+#!/bin/sh
+#
+# The tide greeter (SPEC.md §11), as greetd's default session runs it, as
+# greetd's greeter user: Hyprland with tide's greeter config
+# (share/tide/greeter/hyprland.lua), which shows the greeter
+# (share/tide/shell/greeter.qml) on every monitor and exits when the greeter
+# does, so greetd can start the session it chose. `make install-session`
+# puts all three under the same PREFIX, which is how this finds the other
+# two.
+#
+# The keyboard is the system's X11 keymap as localed has it (`localectl
+# set-x11-keymap`; /etc/default/keyboard on Debian), which `setup` sets to
+# the session's layout, so a password is typed at the greeter as in the
+# session. Without localed, Hyprland's default (US) stands, and the journal
+# says so.
+#
+# Usage: tide-greeter
+
+prog=tide-greeter
+
+if test $# -gt 0; then
+    case $1 in
+        -h | --help)
+            sed -n '3,17p' "$0" | sed 's/^# \{0,1\}//'
+            exit 0
+            ;;
+    esac
+    echo "$prog: takes no arguments" >&2
+    exit 2
+fi
+
+share=$(dirname -- "$0")/../share/tide
+config=$share/greeter/hyprland.lua
+qml=$share/shell/greeter.qml
+for file in "$config" "$qml"; do
+    if ! test -r "$file"; then
+        echo "$prog: can't read $file; install the greeter with \`make install-session\`" >&2
+        exit 1
+    fi
+done
+
+# unquote LINE: a string property's value from busctl's `s "VALUE"`, or
+# fails for any other line.
+unquote() {
+    case $1 in
+        's "'*'"') _v=${1#s \"}; printf '%s\n' "${_v%\"}" ;;
+        *) return 1 ;;
+    esac
+}
+
+# localed's X11 keymap, one property per line in the order asked.
+if keymap=$(busctl get-property org.freedesktop.locale1 /org/freedesktop/locale1 \
+    org.freedesktop.locale1 X11Layout X11Model X11Variant X11Options 2>&1); then
+    {
+        read -r layout
+        read -r model
+        read -r variant
+        read -r options
+    } <<EOF
+$keymap
+EOF
+    if layout=$(unquote "$layout") && model=$(unquote "$model") &&
+        variant=$(unquote "$variant") && options=$(unquote "$options"); then
+        export TIDE_GREETER_KB_LAYOUT="$layout" TIDE_GREETER_KB_MODEL="$model"
+        export TIDE_GREETER_KB_VARIANT="$variant" TIDE_GREETER_KB_OPTIONS="$options"
+    else
+        echo "$prog: localed's keymap isn't four strings ($(printf '%s' "$keymap" | tr '\n' ' ')); the greeter types in Hyprland's default layout" >&2
+    fi
+else
+    echo "$prog: couldn't read the system keymap from localed: $keymap; the greeter types in Hyprland's default layout" >&2
+fi
+
+export TIDE_GREETER_QML="$qml"
+exec Hyprland --config "$config"

@@ -230,6 +230,8 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
              .config/quickshell/tide/lock.qml \
              .config/quickshell/tide/LockSurface.qml \
              .config/quickshell/tide/LockFace.qml \
+             .config/quickshell/tide/greeter.qml \
+             .config/quickshell/tide/lib/greeter.mjs \
              .config/quickshell/tide/lib/lock.mjs \
              .config/systemd/user/hypridle.service.d/tide.conf \
              .config/xdg-desktop-portal/tide-portals.conf \
@@ -259,6 +261,33 @@ if make -s install-session DESTDIR="$tmp/root" PREFIX=/usr >"$tmp/session.log" 2
         test -f "$tmp/root/usr/share/wayland-sessions/tide.desktop"
     check "make install-session installs the lock's PAM service in /etc/pam.d" \
         test -f "$tmp/root/etc/pam.d/tide-lock"
+    check "make install-session installs the greeter's command" \
+        test -x "$tmp/root/usr/bin/tide-greeter"
+    for f in share/tide/greeter/hyprland.lua \
+             share/tide/greeter/greetd.toml \
+             share/tide/shell/greeter.qml \
+             share/tide/shell/LockFace.qml \
+             share/tide/shell/lib/greeter.mjs \
+             share/tide/shell/lib/lock.mjs; do
+        check "make install-session puts the greeter's $f in place" test -f "$tmp/root/usr/$f"
+    done
+    # The installed command finds the config and the QML beside it.
+    mkdir -p "$tmp/greeter-stubs"
+    printf '#!/bin/sh\nexit 1\n' > "$tmp/greeter-stubs/busctl"
+    cat > "$tmp/greeter-stubs/Hyprland" <<EOF
+#!/bin/sh
+printf '%s\n' "\$2" "\$TIDE_GREETER_QML" > "$tmp/greeter-ran"
+EOF
+    chmod +x "$tmp/greeter-stubs/busctl" "$tmp/greeter-stubs/Hyprland"
+    # busctl failing makes it warn, so what it says is kept for a failure.
+    if PATH="$tmp/greeter-stubs:$PATH" "$tmp/root/usr/bin/tide-greeter" 2>"$tmp/greeter.err"; then
+        pass
+    else
+        fail "the installed tide-greeter exited $?: $(cat "$tmp/greeter.err")"
+    fi
+    check "the installed tide-greeter runs Hyprland with the installed config and QML" \
+        test "$(cat "$tmp/greeter-ran" 2>/dev/null)" = "$tmp/root/usr/bin/../share/tide/greeter/hyprland.lua
+$tmp/root/usr/bin/../share/tide/shell/greeter.qml"
 else
     fail "make install-session: $(cat "$tmp/session.log")"
 fi
