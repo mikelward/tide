@@ -85,7 +85,7 @@ export function quickActions(state = {}) {
     // first, so "scr" and Enter is a window screenshot (§8).
     return [
         quick("screenshot-window", "Screenshot window", "The window you were in", "camera-photo-symbolic", ["capture", "print"], "Alt+Print"),
-        quick("screenshot-screen", "Screenshot screen", "Every monitor", "camera-photo-symbolic", ["capture", "print"], "Print"),
+        quick("screenshot-screen", "Screenshot screen", "The monitor you were on", "camera-photo-symbolic", ["capture", "print"], "Print"),
         quick("screenshot-region", "Screenshot region", "Drag on a frozen screen", "camera-photo-symbolic", ["capture", "print", "area"], "Shift+Print"),
         quick("lock", session.lock.label, "Session", session.lock.icon, ["screen"], "Super+L"),
         quick("logout", session.logout.label, "Session", session.logout.icon, ["exit", "sign out", "quit"]),
@@ -99,15 +99,18 @@ export function quickActions(state = {}) {
 }
 
 // "Screenshot window" for the window at `address` (Hyprland's, recorded
-// as the launcher opened): its geometry is read from `hyprctl clients -j`
-// when the screenshot runs, not before, so a window that moved meanwhile is
-// taken where it is. A window that has closed, or a lookup that fails, falls
-// back to the focused window (`--window`), saying why on stderr, which
-// Launcher logs. jq is already one of tide's dependencies (README).
+// as the launcher opened). `hyprctl clients -j` is read when the screenshot
+// runs, not before, and gives the window's stableId, which the script
+// captures with `grim -T` (its own contents, even under a popup) via
+// `--window-id`. A Hyprland that reports no stableId gets the window's
+// rectangle (`--geometry`), taken where the window is now. A window that has
+// closed, or a lookup that fails, falls back to the focused window
+// (`--window`), saying why on stderr, which Launcher logs. jq is already one
+// of tide's dependencies (README).
 export const WINDOW_SCREENSHOT = [
     'a=$1',
-    "g=$(hyprctl clients -j | jq -r --arg a \"$a\" '.[] | select((.address | ascii_downcase | ltrimstr(\"0x\") | sub(\"^0+\"; \"\")) == $a) | \"\\(.at[0]),\\(.at[1]) \\(.size[0])x\\(.size[1])\"' | head -n 1)",
-    'if test -n "$g"; then exec screenshot --geometry "$g"; fi',
+    "w=$(hyprctl clients -j | jq -r --arg a \"$a\" '.[] | select((.address | ascii_downcase | ltrimstr(\"0x\") | sub(\"^0+\"; \"\")) == $a) | if .stableId then \"--window-id\\t\\(.stableId | tostring)\" else \"--geometry\\t\\(.at[0]),\\(.at[1]) \\(.size[0])x\\(.size[1])\" end' | head -n 1)",
+    'if test -n "$w"; then exec screenshot "${w%%\t*}" "${w#*\t}"; fi',
     'echo "the window the launcher opened over is gone or unreadable; taking the focused window" >&2',
     "exec screenshot --window",
 ].join("\n");
@@ -121,14 +124,16 @@ export function windowScreenshot(address) {
 // screenshot doesn't catch it), or something the shell does itself
 // (`shell`: "dnd", "keep-awake", "reload"). "Screenshot window" takes the
 // window recorded as the launcher opened (`context.window`, its normalized
-// Hyprland address; windowScreenshot), so a focus change while it closes
-// can't swap it; with none, the script finds the focused one itself.
+// Hyprland address; windowScreenshot), and "Screenshot screen" the monitor
+// it opened on (`context.output`, Hyprland's name for it), so a focus change
+// while it closes can't swap either; with none, the script finds the focused
+// one itself.
 export function quickCommand(id, context = {}) {
     switch (id) {
     case "screenshot-window":
         return { run: windowScreenshot(context.window), afterClose: true };
     case "screenshot-screen":
-        return { run: ["screenshot"], afterClose: true };
+        return { run: context.output ? ["screenshot", "--output", context.output] : ["screenshot"], afterClose: true };
     case "screenshot-region":
         return { run: ["screenshot", "--region"], afterClose: true };
     case "lock":

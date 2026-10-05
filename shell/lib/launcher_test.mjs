@@ -229,6 +229,11 @@ test("the toggles say whether they're on", () => {
 test("screenshots wait for the launcher to go, the session runs through logind or uwsm", () => {
     assert.deepEqual(quickCommand("screenshot-window"), { run: ["screenshot", "--window"], afterClose: true });
     assert.deepEqual(quickCommand("screenshot-region"), { run: ["screenshot", "--region"], afterClose: true });
+    // The monitor the launcher opened on, so closing it can't move the shot;
+    // with none recorded, the script takes the focused one.
+    assert.deepEqual(quickCommand("screenshot-screen", { output: "DP-2" }), { run: ["screenshot", "--output", "DP-2"], afterClose: true });
+    assert.deepEqual(quickCommand("screenshot-screen"), { run: ["screenshot"], afterClose: true });
+    assert.deepEqual(quickCommand("screenshot-screen", { output: "" }), { run: ["screenshot"], afterClose: true });
     assert.deepEqual(quickCommand("lock"), { run: ["loginctl", "lock-session"], afterClose: false, power: false });
     // A power action checks inhibitors, so it fails when something blocks it.
     assert.deepEqual(quickCommand("suspend"), { run: ["systemctl", "--check-inhibitors=yes", "suspend"], afterClose: false, power: true });
@@ -293,17 +298,27 @@ function runWindowScreenshot(address, clients) {
     return { args: readFileSync(join(dir, "args"), "utf8").trim().split("\n"), stderr: run.stderr };
 }
 
-test("Screenshot window takes the recorded window where it is now", () => {
+test("Screenshot window takes the recorded window by its stableId", () => {
     const clients = JSON.stringify([
-        { address: "0x55aa01", at: [0, 0], size: [10, 10] },
-        { address: "0x55AA02", at: [100, 40], size: [800, 600] },
+        { address: "0x55aa01", at: [0, 0], size: [10, 10], stableId: "aa11bb22" },
+        { address: "0x55AA02", at: [100, 40], size: [800, 600], stableId: "cc33dd44" },
     ]);
     // Matched however Hyprland and Quickshell write the address.
     const found = runWindowScreenshot("55aa02", clients);
-    assert.deepEqual(found.args, ["--geometry", "100,40 800x600"]);
+    assert.deepEqual(found.args, ["--window-id", "cc33dd44"]);
     assert.equal(found.stderr, "");
     // quickCommand passes the recorded address through.
     assert.deepEqual(quickCommand("screenshot-window", { window: "55aa02" }).run.slice(0, 2), ["sh", "-c"]);
+});
+
+test("Screenshot window without a stableId takes the window where it is now", () => {
+    const clients = JSON.stringify([
+        { address: "0x55aa01", at: [0, 0], size: [10, 10], stableId: "aa11bb22" },
+        { address: "0x55AA02", at: [100, 40], size: [800, 600] },
+    ]);
+    const found = runWindowScreenshot("55aa02", clients);
+    assert.deepEqual(found.args, ["--geometry", "100,40 800x600"]);
+    assert.equal(found.stderr, "");
 });
 
 test("Screenshot window falls back to the focused window, and says so", () => {
