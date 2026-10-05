@@ -455,6 +455,23 @@ come up unfocused because their window class is none of those.
   `cmd/tide-grant/opener.go`). On a live session, check a URL and a file
   each bring up their app focused, with the browser already running.
 
+## Screenshot region on a frozen screen
+
+Deferred until after the MVP, which needs only "Screenshot window" and
+"Screenshot screen" (both done). SPEC.md §13's region mode takes one `grim`
+capture of the output as the overlay opens, shows it frozen while you drag,
+and crops that same capture to the region. Until then, `Shift+Print` and
+"Screenshot region" pick a live region with `slurp`.
+
+- Open question: what the `screenshot` script crops the capture with. §13
+  puts the crop, and the mapping through the output's scale and transform,
+  in the script, where its tests can reach them, but nothing tide installs
+  today can crop an image. Pick the tool, and assess its cost, packaging
+  and failure mode, when this is built.
+- The shell's part is the overlay: the frozen image, the drag and handles,
+  `Enter` or a double-click to confirm, `Space` for window picking, `Esc`
+  to cancel, and the 0/3/5 s timer.
+
 ## Fullscreen on open, under the focus guard
 
 Deferred: it needs a Hyprland patch, and the MVP comes first.

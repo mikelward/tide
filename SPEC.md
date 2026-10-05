@@ -255,7 +255,7 @@ tide greeter, the same QML screen as the lock (§11).
 | R14 | Tap Super for the launcher | a release bind on `SUPER_L` → a Hyprland global shortcut → Quickshell `GlobalShortcut`. Fixed only on Hyprland main (after 0.56.2); `Super+Space` until the pinned version has it (§8) | native + shell |
 | R15 | Fuzzy search of `.desktop` apps | `DesktopEntries` + our scorer | shell |
 | R16 | Quick actions | a built-in action list | shell |
-| R17 | Screenshots | `screenshot` script (grim, including `grim -T` for a window; slurp; wl-copy); region picked on one frozen `grim` capture, then cropped from it (§13) | scripts + shell |
+| R17 | Screenshots | `screenshot` script (grim, including `grim -T` for a window; slurp; wl-copy); region picked on one frozen `grim` capture, then cropped from it, after the MVP (§13) | scripts + shell |
 | R18 | Notifications | `NotificationServer`; the shell owns the name | shell |
 | R19 | Screensaver, idle, lock | §10 | shell + hypridle |
 | R20 | Meet screen sharing | PipeWire + xdph + our picker | portal + shell |
@@ -1218,7 +1218,7 @@ See [`screenshot.png`](docs/mocks/screenshot.png).
 |---|---|---|---|
 | Screen | `Print` | Screenshot screen | `grim -o <focused output>` |
 | Window | `Alt+Print` | Screenshot window | `grim -T <id>`, where `<id>` is Hyprland's `stableId` (from `hyprctl activewindow -j`) for the window focused before the launcher opened. This captures the window's own contents, even where a popup covers it. It needs grim ≥ 1.5 and is what hyprwm's grimblast does. If `grim -T` fails for any reason (an older grim, or a build without toplevel capture), the script falls back to `grim -g <window geometry>`, which captures whatever is on screen there; M4 checks `-T` against the pinned grim. |
-| Region | `Shift+Print`, `Super+Print` | Screenshot region | one `grim` capture of the output when the overlay opens, shown frozen → drag → crop that capture |
+| Region | `Shift+Print`, `Super+Print` | Screenshot region | one `grim` capture of the output when the overlay opens, shown frozen → drag → crop that capture. After the MVP; until then, a live `slurp` selection → `grim -g` |
 
 - **Output.** Every capture goes to the clipboard (`wl-copy`, `image/png`)
   **and** to `~/Pictures/Screenshots/YYYY-MM-DD_HH-MM-SS.png`. A notification
@@ -1232,7 +1232,9 @@ See [`screenshot.png`](docs/mocks/screenshot.png).
   - Not `noclobber`: it refuses only regular files, so an existing FIFO
     with the name would take the shot or block the script.
 - **Region mode.** It freezes the screen first, so hover menus and tooltips
-  can be captured.
+  can be captured. This comes after the MVP (`TODO.md`); until then
+  `screenshot --region` picks a region live with `slurp`, so a hover menu
+  can close before the shot.
   - The freeze is a real capture: opening the overlay takes one `grim`
     shot of the output into a temporary file, and the overlay shows that
     image. Confirming crops the same file to the region, after mapping the
@@ -1823,7 +1825,7 @@ are what "done" means.
 | **M1** | This spec + mocks | agreed; open questions answered |
 | **M2** | Session skeleton + layouts | `setup --tide` installs a session selectable from the current display manager. `doctor` reports no duplicate owners. All four layouts and the single-window rule work per workspace on an ultrawide and on the laptop panel. The focus guard follows §14.1, including each case in §14.2. The Hyprland config is Lua and CI-loaded. Shell memory is measured. |
 | **M3** | Bar + launcher | the bar shows every state in `bar.png` from live data: tray menus, clocks with correct labels and popover abbreviations across a DST fixture, urgency end to end from a kitty bell and from a Chat notification. `Super+Space` opens the launcher (tap-`Super` too, once the pinned Hyprland passes the tap checks), and fuzzy search and quick actions work. |
-| **M4** | Notifications, OSD, screenshots | notifications and history survive a shell restart. DND is automatic while sharing a screen or region, and off for a window share. The OSD works. All three screenshot modes work, including "the window before the launcher". |
+| **M4** | Notifications, OSD, screenshots | notifications and history survive a shell restart. DND is automatic while sharing a screen or region, and off for a window share. The OSD works. The screen and window screenshots work, including "the window before the launcher"; the frozen region mode follows after the MVP. |
 | **M5** | Idle, lock, login | the idle timeline works, including through a Meet call. Lock via key, idle, suspend and lid. Crash recovery is tested. The greetd greeter shares the lock component. The keyring unlocks at login. The old sway, waybar, swaync, fuzzel and hyprlock configs are deleted from `conf`. |
 | **M6** | Screen sharing | a Meet share of a window, a 16:9 area and a whole screen, from Chrome; restore tokens where Chrome asks for them; the privacy pill and mic mute. |
 | **M7** | Theme + settings | one palette drives the shell, GTK 3/4, Qt and Hyprland; light/dark switches the shell, GTK and kitty live, and Qt live or at next launch as §15 says. A side-by-side screenshot of the shell, Nautilus, an adw-gtk3 app, a Qt app and Chrome, in light and in dark, looks like one desktop. The settings panel exists. |
