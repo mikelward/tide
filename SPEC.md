@@ -1224,9 +1224,13 @@ See [`screenshot.png`](docs/mocks/screenshot.png).
   **and** to `~/Pictures/Screenshots/YYYY-MM-DD_HH-MM-SS.png`. A notification
   follows, with a thumbnail and Open / Annotate (`satty`) / Delete.
   - A second capture in the same second gets `-2`, then `-3`, and so on.
-    The script claims each name with an exclusive create (`noclobber`), so
-    two captures racing for a name can't both get it, and nothing is
-    overwritten.
+    The script takes the shot into a hidden file beside the saved ones and
+    claims each name with a hard link to it. A link is atomic and is
+    refused for any name already in use, so two captures racing for a name
+    can't both get it, nothing is overwritten, and a name only appears on a
+    complete shot.
+  - Not `noclobber`: it refuses only regular files, so an existing FIFO
+    with the name would take the shot or block the script.
 - **Region mode.** It freezes the screen first, so hover menus and tooltips
   can be captured.
   - The freeze is a real capture: opening the overlay takes one `grim`
