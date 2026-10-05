@@ -187,10 +187,6 @@ packaged). It also runs
 The Quickshell bar replaces waybar piece by piece (SPEC.md §7), each piece
 tested where it can be without a live session.
 
-- A clock label with a line break makes the bar's clock two lines tall:
-  `clocks.json` takes any text. Reject breaks in `parseClocks`, naming the
-  entry like any other bad setting (found reviewing #117).
-
 - Keep awake (SPEC.md §10) is the bar toggle, and it also holds while the
   mic is live: an app's capture stream with an active PipeWire link from a
   microphone (`shell/MicData.qml`, `shell/lib/mic.mjs`), the same signal

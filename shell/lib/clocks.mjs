@@ -158,6 +158,11 @@ export function parseClocks(text, isZone) {
         if (typeof c.label !== "string") {
             return { error: `entry ${i + 1}: label must be text, or "abbr"` };
         }
+        // The bar is one line: a break would make the clock two lines tall.
+        // Any line or paragraph separator counts, Unicode's included.
+        if (/[\n\r\v\f\u0085\u2028\u2029]/.test(c.label)) {
+            return { error: `entry ${i + 1}: label must be one line` };
+        }
         clocks.push({ zone: c.zone, label: c.label });
     }
     return { clocks };

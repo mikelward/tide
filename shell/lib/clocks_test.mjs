@@ -44,6 +44,23 @@ test("parseClocks names what's wrong", () => {
     assert.equal(parseClocks("[null]").error, "entry 1: expected {zone, label}");
 });
 
+test("a label with a line break is an error, naming the entry", () => {
+    for (const brk of ["\\n", "\\r", "\\u000b", "\\f", "\\u0085", "\\u2028", "\\u2029"]) {
+        assert.equal(parseClocks(`[{"zone": "UTC", "label": "U"}, {"zone": "Asia/Tokyo", "label": "TY${brk}O"}]`).error,
+            "entry 2: label must be one line", JSON.stringify(brk));
+    }
+    // Spaces and tabs stay one line.
+    assert.deepEqual(parseClocks('[{"zone": "Asia/Tokyo", "label": "T\\tY O"}]'),
+        { clocks: [{ zone: "Asia/Tokyo", label: "T\tY O" }] });
+});
+
+test("a broken label keeps the last good clocks", () => {
+    const lastGood = [{ zone: "Asia/Tokyo", label: "TYO" }];
+    const r = loadClocks('[{"zone": "UTC", "label": "A\\nB"}]', null, lastGood);
+    assert.deepEqual(r.clocks, lastGood);
+    assert.deepEqual(r.errors, ["clocks.json: entry 1: label must be one line"]);
+});
+
 test("an unknown zone is an error at load, keeping the last good clocks", () => {
     const isZone = (z) => { try { canonical(z); return true; } catch { return false; } };
     const lastGood = [{ zone: "Asia/Tokyo", label: "TYO" }];
