@@ -136,6 +136,15 @@ once you have agreed with it or reversed it.
       says monocle shows the hidden count; with one window there's nothing
       hidden to count. It's `layoutSymbol` in `shell/lib/layouts.mjs`.
 
+## Run the shell tests on Qt's engine
+
+`make qtcheck` parses the modules with Qt, but the tests still run them only
+on Node, so behavior that differs between the engines isn't covered.
+
+- [ ] Run the `*_test.mjs` suites under QJSEngine (PySide6, as the parse
+  check does), with a small shim for the `node:test` and `node:assert`
+  parts they use.
+
 ## Transitional shell (M2)
 
 `tide.service` runs `bin/tide-shell`, not `qs -c tide`,

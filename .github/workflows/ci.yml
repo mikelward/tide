@@ -45,7 +45,15 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - run: make test
+      # Quickshell runs the shell's JavaScript on Qt's engine, which rejects
+      # syntax the node tests accept; this parses it with Qt itself, at the
+      # version shell/qtcheck/requirements.txt pins: the oldest Quickshell supports.
+      - name: Install Qt's engine
+        run: |
+          python3 -m venv "$RUNNER_TEMP/qt"
+          "$RUNNER_TEMP/qt/bin/pip" install --quiet --require-hashes --only-binary=:all: -r shell/qtcheck/requirements.txt
+      # REQUIRE_QTCHECK: here the Qt check fails the run rather than skipping.
+      - run: make test QT_PYTHON="$RUNNER_TEMP/qt/bin/python" REQUIRE_QTCHECK=1
 
   lanes:
     name: lanes

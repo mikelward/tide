@@ -1,6 +1,10 @@
 # tide
 #
 #   make test             run the tests
+#   make qtcheck          parse the shell's JavaScript and QML with Qt's
+#                         engine (needs PySide6: see shell/qtcheck); make
+#                         test runs it when PySide6 is there, and says so
+#                         when it isn't
 #   make build            build tide-grant and tide-tz (needs Go)
 #                         into build/
 #   make install          build, then install the per-user parts: the
@@ -32,8 +36,17 @@ OLD_AUTOSTART_DROPIN_MARK = \# A drop-in for another desktop's autostarted polki
 GO ?= go
 # The shell's pure logic (shell/lib) is tested with node --test (SPEC.md §20).
 NODE ?= node
+# Quickshell runs that logic on Qt's engine, which rejects syntax Node takes;
+# `make qtcheck` parses it there (shell/qtcheck/check.py).
+QT_PYTHON ?= python3
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
+
+
+.PHONY: qtcheck
+qtcheck:
+	$(QT_PYTHON) shell/qtcheck/check.py --expect-fail shell/qtcheck/bad.mjs shell/qtcheck/bad.qml
+	$(QT_PYTHON) shell/qtcheck/check.py $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs)) $(wildcard shell/*.qml)
 
 .PHONY: test build install install-session mocks palette
 test:
@@ -49,6 +62,15 @@ test:
 	$(NODE) theme/generate.mjs --check
 	$(GO) vet ./...
 	$(GO) test ./...
+	@# Only whether PySide6 is installed decides the skip: a broken install
+	@# runs the check and fails it, with the import error, rather than skipping.
+	@if $(QT_PYTHON) -c 'import importlib.util, sys; sys.exit(importlib.util.find_spec("PySide6") is None)' 2>/dev/null; then \
+		$(MAKE) --no-print-directory qtcheck; \
+	elif test -n "$(REQUIRE_QTCHECK)"; then \
+		echo "make test: no PySide6 for $(QT_PYTHON); the Qt check is required here" >&2; exit 1; \
+	else \
+		echo "make test: Qt check SKIPPED, no PySide6 for $(QT_PYTHON) (shell/qtcheck/requirements.txt)" >&2; \
+	fi
 
 palette:
 	$(NODE) theme/generate.mjs

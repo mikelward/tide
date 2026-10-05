@@ -1838,6 +1838,12 @@ are what "done" means.
   (schedule, sunrise and sunset, manual flip expiry), and config loading (`.local`
   merge rules; a bad file keeps the last good settings). The QML only binds
   to them.
+- **Parsed on Qt's engine too.** Quickshell runs those modules, and the
+  QML's inline JavaScript, on Qt's engine, which rejects syntax Node accepts
+  (object spread). So CI also loads every module and parses every `.qml`
+  file with Qt itself, and a parse error fails there, not at login. It uses
+  the oldest Qt Quickshell supports, since Qt's parser only gains syntax, so
+  one version covers every desktop. It parses; it doesn't run the tests.
 - **Clock fixtures.** Instants on both sides of every 2026–2027 US and EU DST
   change, asserting each zone's abbreviation and day offset. The `GMT+1`
   trap is a named test.

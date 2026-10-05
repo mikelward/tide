@@ -1,0 +1,10 @@
+# The Qt that check.py parses with. PySide6 6.x.y bundles Qt 6.x.y, so this
+# pins the engine: 6.6.3, the oldest Qt Quickshell 0.3.1 builds against
+# (its QT_MIN_VERSION). Qt's parser only gains syntax, so what parses here
+# parses on every Qt the desktops run. Raise it with Quickshell's minimum,
+# updating both hashes:
+#   pip download --only-binary=:all: PySide6-Essentials==VERSION && sha256sum *.whl
+PySide6-Essentials==6.6.3.1 \
+    --hash=sha256:1f41f357ce2384576581e76c9c3df1c4fa5b38e347f0bcd0cae7c5bce42a917c
+shiboken6==6.6.3.1 \
+    --hash=sha256:b1aeff0d79d84ddbdc9970144c1bbc3a52fcb45618d1b33d17d57f99f1246d45
