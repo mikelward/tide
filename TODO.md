@@ -187,6 +187,10 @@ packaged). It also runs
 The Quickshell bar replaces waybar piece by piece (SPEC.md §7), each piece
 tested where it can be without a live session.
 
+- A clock label with a line break makes the bar's clock two lines tall:
+  `clocks.json` takes any text. Reject breaks in `parseClocks`, naming the
+  entry like any other bad setting (found reviewing #117).
+
 - Keep awake (SPEC.md §10) is the bar toggle, and it also holds while the
   mic is live: an app's capture stream with an active PipeWire link from a
   microphone (`shell/MicData.qml`, `shell/lib/mic.mjs`), the same signal
@@ -440,8 +444,7 @@ an idle lock opens on (`tide idle-lock`). Only parsed with `qmlformat` and
 - On a real session, check the screensaver: an idle lock opens on it, the
   first pointer report doesn't wake it but a move does, and the first key
   lands in the field.
-- The zone clocks under the hostname and on the screensaver, and the
-  notification count in the corner, as the mock shows.
+- The notification count in the corner, as the mock shows.
 - On a real session, check Suspend, Restart and Shut down from the lock,
   and that an inhibitor's name shows instead of the action going through.
 - The keyboard layout badge by the field.

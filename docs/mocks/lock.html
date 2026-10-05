@@ -61,14 +61,14 @@
 <body class="sheet" data-width="1360" data-scale="2">
 
 <h1>Login and lock</h1>
-<p class="lede">One screen, drawn by the same QML component, serves as the greetd greeter at boot and the session lock (<code>ext-session-lock-v1</code>) afterwards, so you meet the same face either way. It leads with the machine’s short hostname, big: first label, with any leading <code>&lt;user&gt;-</code> removed, the rule <code>i3statusdwm</code> already uses. The clocks sit below it.</p>
+<p class="lede">One screen, drawn by the same QML component, serves as the greetd greeter at boot and the session lock (<code>ext-session-lock-v1</code>) afterwards, so you meet the same face either way. It leads with the machine’s short hostname, big: first label, with any leading <code>&lt;user&gt;-</code> removed, the rule <code>i3statusdwm</code> already uses. Local’s date and time sit below it; the zone clocks stay on the bar.</p>
 
 <div class="faces">
   <div>
     <div class="face">
       <span class="tag">Login · greetd</span>
       <div class="host">host1</div>
-      <div class="fclocks"><span><span class="tz">SF</span><b>00:12</b></span><span><span class="tz">NYC</span><b>03:12</b></span><span><span class="tz">LON</span><b>08:12</b></span><span>Mon Sep 28 <b>09:12</b></span></div>
+      <div class="fclocks"><span>Mon Sep 28 <b>09:12</b></span></div>
       <div class="who"><span class="av">U</span><div><div class="n">user</div><div class="s">last signed in yesterday</div></div></div>
       <div class="pw"><i class="ms">lock</i><span style="color:rgba(255,255,255,.45);letter-spacing:0;font-size:13px">Password</span><span class="kb">DVORAK</span></div>
       <div class="sess"><span class="chipx"><i class="ms">desktop_windows</i>tide<i class="ms">expand_more</i></span><span class="chipx"><i class="ms">person</i>Other user</span></div>
@@ -82,7 +82,7 @@
       <span class="tag">Lock · session</span>
       <div class="corner"><span><i class="ms">notifications</i> 2</span><span><i class="ms fill">battery_5_bar</i> 82%</span></div>
       <div class="host">host1</div>
-      <div class="fclocks"><span><span class="tz">SF</span><b>10:47</b></span><span><span class="tz">NYC</span><b>13:47</b></span><span><span class="tz">LON</span><b>18:47</b></span><span>Mon Sep 28 <b>19:47</b></span></div>
+      <div class="fclocks"><span>Mon Sep 28 <b>19:47</b></span></div>
       <div class="who"><span class="av">U</span><div><div class="n">user</div><div class="s">locked at 19:41</div></div></div>
       <div class="pw"><i class="ms">lock</i><span>••••••</span><span class="kb">DVORAK</span></div>
       <div class="sess"><span class="chipx"><i class="ms">bedtime</i>Suspend</span></div>
@@ -95,7 +95,7 @@
     <div class="face">
       <span class="tag">Lock · wrong password</span>
       <div class="host">host1</div>
-      <div class="fclocks"><span><span class="tz">SF</span><b>10:47</b></span><span><span class="tz">NYC</span><b>13:47</b></span><span><span class="tz">LON</span><b>18:47</b></span><span>Mon Sep 28 <b>19:47</b></span></div>
+      <div class="fclocks"><span>Mon Sep 28 <b>19:47</b></span></div>
       <div class="who"><span class="av">U</span><div><div class="n">user</div><div class="s">locked at 19:41</div></div></div>
       <div class="pw err"><i class="ms">lock</i><span style="letter-spacing:0;font-size:13px;color:rgba(255,255,255,.45)">Password</span><span class="kb">DVORAK</span></div>
       <div class="errmsg">Wrong password. Try again.</div>
@@ -112,7 +112,7 @@
       <div class="blk">
         <div class="host">host1</div>
         <div class="big">19:47</div>
-        <div class="fclocks"><span><span class="tz">SF</span><b>10:47</b></span><span><span class="tz">NYC</span><b>13:47</b></span><span><span class="tz">LON</span><b>18:47</b></span></div>
+        <div class="fclocks">Monday, September 28</div>
       </div>
     </div>
     <div class="cap"><b>Screensaver</b>: the lock’s idle face. Black, low contrast, and moved to a new spot each minute (the dashed boxes) to spare OLED panels. It shows for 30&nbsp;s, then the displays turn off. Any key or mouse move brings back the password face, and a typed key lands in the field.</div>
