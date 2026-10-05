@@ -20,13 +20,16 @@
 # made from data that arrives later (a clock, a notification), aren't
 # covered.
 #
-# Given the password of the user running it, it also unlocks the lock: it
-# types a wrong password and then the right one, and expects PAM to turn
-# down the first and the lock to unlock and exit on the second. That needs
-# wtype and tide-lock's PAM service in /etc/pam.d (`make install-session`).
+# With wtype, it also types into them. It opens the launcher, types the
+# name of an app only it installs, and expects Enter to run that app. Given
+# the password of the user running it, it also unlocks the lock: it types a
+# wrong password and then the right one, and expects PAM to turn down the
+# first and the lock to unlock and exit on the second. That needs
+# tide-lock's PAM service in /etc/pam.d (`make install-session`).
 #
 #   $QS                  the Quickshell command (default: qs)
-#   $TIDE_REQUIRE_QS     set (CI sets it) to fail, not skip, without qs or sway
+#   $TIDE_REQUIRE_QS     set (CI sets it) to fail, not skip, without qs,
+#                        sway or wtype
 #   $TIDE_LOAD_WAIT      seconds to wait for each step (default: 60)
 #   $TIDE_KEEP_LOG       a file to copy Quickshell's logs to
 #   $TIDE_LOCK_PASSWORD  the running user's password, to unlock the lock with.
@@ -68,9 +71,14 @@ missing() {
 qs=${QS:-qs}
 qs_path=$(command -v "$qs") || missing "$qs (Quickshell)"
 sway_path=$(command -v sway) || missing "sway (to run headless)"
-if test -n "${TIDE_LOCK_PASSWORD:-}" && ! wtype_path=$(command -v wtype); then
-    echo "FAIL: $prog: TIDE_LOCK_PASSWORD is set, but there's no wtype on PATH to type it" >&2
-    exit 1
+# Without wtype, nothing is typed, so the launcher and the lock's password
+# go untested.
+if ! wtype_path=$(command -v wtype); then
+    if test -n "${TIDE_REQUIRE_QS:-}" || test -n "${TIDE_LOCK_PASSWORD:-}"; then
+        echo "FAIL: $prog: no wtype on PATH to type into the launcher and the lock" >&2
+        exit 1
+    fi
+    wtype_path=
 fi
 
 wait=${TIDE_LOAD_WAIT:-60}
@@ -222,6 +230,134 @@ reports() {
     fi
 }
 
+# keyboard: holds a keyboard on the seat, if nothing does yet. The headless
+# seat has none, and the one wtype makes comes and goes with it: a window
+# would get its keyboard after the first keys had gone. One held from the
+# start keeps every key.
+keyboard() {
+    test -n "$keyboard_pid" && return
+    env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        "$wtype_path" -s 3600000 >"$tmp/keyboard.log" 2>&1 &
+    keyboard_pid=$!
+}
+
+# typed STATUS WHERE: fails the test unless wtype, which exited STATUS
+# under timeout, finished typing into WHERE.
+typed() {
+    case $1 in
+        0) ;;
+        124)
+            echo "FAIL: wtype didn't finish typing into $2 in $wait s" >&2
+            exit 1
+            ;;
+        *)
+            echo "FAIL: wtype couldn't type into $2: $(cat "$tmp/wtype.log")" >&2
+            exit 1
+            ;;
+    esac
+}
+
+# focused N: waits until the log shows the shell's Nth keyboard focus,
+# failing the test unless it comes in time. WAYLAND_DEBUG logs the protocol,
+# so the log shows each time a surface takes the keyboard
+# (wl_keyboard.enter); keys typed before it would go nowhere.
+focused() {
+    i=0
+    until test "$(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log")" -ge "$1"; do
+        if ! kill -0 "$qs_pid" 2>/dev/null; then
+            echo "FAIL: $_what exited before it took the keyboard:" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        if waited "$_what didn't take the keyboard" "$i"; then
+            cat "$tmp/keyboard.log" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+}
+
+# launch: starts the shell again, opens its launcher, types a query, and
+# fails the test unless Enter runs the app the query names, through `tide
+# launch`. The app is a desktop entry only this test installs, and the
+# query leaves out its accent ("Café"), so the match also checks the
+# accent folding runs in Qt's engine. A stand-in tide on the shell's PATH
+# keeps the command rather than running it. Its log is
+# $tmp/launch.qs.log.
+launch() {
+    _what="the launcher"
+    log=$tmp/launch.qs.log
+    : >"$log" || exit 1
+    mkdir -p "$tmp/home/.local/share/applications" "$tmp/bin" || exit 1
+    printf '[Desktop Entry]\nType=Application\nName=Café Probe\nExec=tide-test-probe --flag\n' \
+        >"$tmp/home/.local/share/applications/tide-test-probe.desktop" || exit 1
+    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s/launched"\n' "$tmp" >"$tmp/bin/tide" || exit 1
+    chmod +x "$tmp/bin/tide" || exit 1
+    keyboard
+    env -i PATH="$tmp/bin:$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
+        ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
+        LANG=C.UTF-8 QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
+        QS_DISABLE_FILE_WATCHER=1 WAYLAND_DEBUG=client \
+        "$qs_path" -c tide >"$log" 2>&1 &
+    qs_pid=$!
+    i=0
+    until grep -q 'Configuration Loaded' "$log"; do
+        if ! kill -0 "$qs_pid" 2>/dev/null || waited "Quickshell didn't start" "$i"; then
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    # What loading queued, the desktop entries Quickshell scanned among it,
+    # has been handed over once the shell has answered twice: it may answer
+    # before the rest of the pass a request arrives in, but a second
+    # request is only taken in a later pass.
+    for _ in 1 2; do
+        ipc show >/dev/null || exit 1
+    done
+    # The launcher's keyboard focus is the next one the log shows.
+    _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
+    ipc call launcher open >/dev/null || exit 1
+    focused "$_focus"
+    timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 "$wtype_path" "cafepro
+" >"$tmp/wtype.log" 2>&1
+    typed $? "the launcher"
+    i=0
+    until test -s "$tmp/launched"; do
+        if waited "the launcher didn't run Café Probe" "$i"; then
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    kill "$qs_pid"
+    wait "$qs_pid"
+    qs_pid=
+    _launched=$(cat "$tmp/launched")
+    if test "$_launched" != "launch --app tide-test-probe -- tide-test-probe --flag"; then
+        echo "FAIL: the launcher should run Café Probe as \`tide launch --app tide-test-probe -- tide-test-probe --flag\`; it ran \`tide $_launched\`" >&2
+        exit 1
+    fi
+    reports "the launcher ran an app"
+    echo "ok: the launcher finds an app by a query without its accent, and runs it"
+}
+
+# ipc ARG...: runs `qs ipc --pid` on the running shell, within the limit.
+ipc() {
+    if ! timeout "$wait" env -i PATH="$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
+        LANG=C.UTF-8 "$qs_path" ipc --pid "$qs_pid" "$@" 2>"$tmp/ipc.log"; then
+        echo "FAIL: $_what didn't answer \`qs ipc $*\` within $wait s:" >&2
+        cat "$tmp/ipc.log" >&2
+        grep -v '^\[' "$log" >&2
+        exit 1
+    fi
+}
+
 # unlock: starts the lock again, types a wrong password and the right one
 # in one go, and fails the test unless PAM turns down the first and the
 # lock unlocks and exits on the second. Keys typed while PAM checks are
@@ -230,53 +366,22 @@ reports() {
 unlock() {
     log=$tmp/unlock.qs.log
     : >"$log" || exit 1
-    # The headless seat has no keyboard, and the one wtype makes comes and
-    # goes with it: the lock would get its keyboard after the first keys
-    # had gone. One held from the start keeps every key.
-    env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
-        "$wtype_path" -s 3600000 >"$tmp/keyboard.log" 2>&1 &
-    keyboard_pid=$!
-    # WAYLAND_DEBUG logs the protocol, so the log shows the moment the lock
-    # surface takes the keyboard (wl_keyboard.enter); keys typed before it
-    # would go nowhere.
+    keyboard
     env -i PATH="$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
         ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
         LANG=C.UTF-8 QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
         QS_DISABLE_FILE_WATCHER=1 WAYLAND_DEBUG=client \
         "$qs_path" -p "$tmp/home/.config/quickshell/tide/lock.qml" >"$log" 2>&1 &
     qs_pid=$!
-    i=0
-    until grep -q '} wl_keyboard#[0-9]*\.enter(' "$log"; do
-        if ! kill -0 "$qs_pid" 2>/dev/null; then
-            echo "FAIL: the lock exited before it took the keyboard:" >&2
-            grep -v '^\[' "$log" >&2
-            exit 1
-        fi
-        if waited "the lock didn't take the keyboard" "$i"; then
-            cat "$tmp/keyboard.log" >&2
-            grep -v '^\[' "$log" >&2
-            exit 1
-        fi
-        sleep 0.1
-        i=$((i + 1))
-    done
+    _what="the lock"
+    focused 1
     # wtype reads its text in the locale's encoding, so a password beyond
     # ASCII needs a UTF-8 one.
     timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
         LANG=C.UTF-8 "$wtype_path" "not-$TIDE_LOCK_PASSWORD
 $TIDE_LOCK_PASSWORD
 " >"$tmp/wtype.log" 2>&1
-    case $? in
-        0) ;;
-        124)
-            echo "FAIL: wtype didn't finish typing into the lock in $wait s" >&2
-            exit 1
-            ;;
-        *)
-            echo "FAIL: wtype couldn't type into the lock: $(cat "$tmp/wtype.log")" >&2
-            exit 1
-            ;;
-    esac
+    typed $? "the lock"
     i=0
     while kill -0 "$qs_pid" 2>/dev/null; do
         if waited "the lock didn't unlock" "$i"; then
@@ -307,6 +412,11 @@ $TIDE_LOCK_PASSWORD
 
 load shell "the shell" -c tide
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
+if test -n "$wtype_path"; then
+    launch
+else
+    echo "$prog: no wtype, so nothing is typed into the launcher; CI types into it" >&2
+fi
 if test -n "${TIDE_LOCK_PASSWORD:-}"; then
     unlock
 else
