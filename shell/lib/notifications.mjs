@@ -132,35 +132,45 @@ export function siteFrom(text) {
     return m ? m[1] : null;
 }
 
-// The window class of Chrome's `--app` window for `site` (§14.4), or null
-// when none is open. Chrome names one `chrome-HOST_PATH-PROFILE`, its URL's
-// path's slashes made underscores (`chrome-chat.google.com__-Default`), so
-// the host runs to the first underscore; hosts have none. An installed web
+// The window classes of the browser's `--app` windows for `site` (§14.4),
+// the most recently focused first, or [] when none is open. Chrome names
+// one `chrome-HOST_PATH-PROFILE` (Chromium `chromium-…`), its URL's path's
+// slashes made underscores (`chrome-chat.google.com__-Default`), so the
+// host runs to the first underscore; hosts have none. An installed web
 // app's class (`chrome-<app id>-Default`) has no underscore and names no
 // site, so it never matches. A shortened site (`google.com`) matches its
-// subdomains. Of several, the most recently focused window's class wins.
-// `windows` is [{app, focus}], `focus` being Hyprland's focusHistoryID:
-// 0 for the window focused last, -1 for one never focused.
-export function siteWindowClass(site, windows) {
+// subdomains. Every match counts: a site open in two profiles is two
+// classes, and Chrome doesn't say which profile sent a notification.
+// `browser` is "chrome" or "chromium" (browserOf), so one browser's
+// notification doesn't land on the other's window. `windows` is [{app,
+// focus}], `focus` being Hyprland's focusHistoryID: 0 for the window
+// focused last, -1 for one never focused.
+export function siteWindowClasses(site, windows, browser = "chrome") {
     if (!site) {
-        return null;
+        return [];
     }
-    let best = null;
+    const best = new Map();
     for (const w of windows) {
-        const m = /^chrom(?:e|ium)-([^_]+)_.*-[^-]+$/i.exec(String(w.app ?? ""));
-        if (!m) {
+        const m = /^(chrome|chromium)-([^_]+)_.*-[^-]+$/i.exec(String(w.app ?? ""));
+        if (!m || m[1].toLowerCase() !== browser) {
             continue;
         }
-        const host = m[1].toLowerCase();
+        const host = m[2].toLowerCase();
         if (host !== site && !host.endsWith("." + site)) {
             continue;
         }
         const focus = Number.isInteger(w.focus) && w.focus >= 0 ? w.focus : Infinity;
-        if (best === null || focus < best.focus) {
-            best = { app: w.app, focus };
+        if (!best.has(w.app) || focus < best.get(w.app)) {
+            best.set(w.app, focus);
         }
     }
-    return best?.app ?? null;
+    return [...best.keys()].sort((x, y) => best.get(x) - best.get(y));
+}
+
+// Which browser's `--app` classes a Chrome or Chromium desktop entry's
+// notifications go to.
+export function browserOf(id) {
+    return /chromium/i.test(String(id ?? "")) ? "chromium" : "chrome";
 }
 
 // Whether an app ID (grantId's) is Chrome's or Chromium's own desktop
@@ -170,13 +180,14 @@ export function isChrome(id) {
     return /^(?:google-chrome(?:-beta|-unstable|-canary)?|chromium(?:-browser)?|org\.chromium\.chromium|com\.google\.chrome(?:\.[a-z]+)?)$/i.test(String(id ?? "").trim());
 }
 
-// The app a notification marks and a click on it brings up (§9, §14.4):
-// for Chrome's notification from a site with an `--app` window open, that
-// window's class, so Chat's notification goes to the Chat window and not
-// every Chrome window; else its grantId.
-export function targetApp(notification, windows) {
+// The apps a notification marks and a click on it grants (§9, §14.4), as a
+// list: for Chrome's notification from a site with `--app` windows open,
+// their classes, so Chat's notification goes to the Chat window and not
+// every Chrome window; else its grantId alone. null when it names no app.
+export function targetApps(notification, windows) {
     const id = grantId(notification);
-    return (isChrome(id) ? siteWindowClass(siteOf(notification), windows) : null) ?? id;
+    const sites = isChrome(id) ? siteWindowClasses(siteOf(notification), windows, browserOf(id)) : [];
+    return sites.length > 0 ? sites : id === null ? null : [id];
 }
 
 // Whether a notification's closing clears the bar marks it made (§14.4):

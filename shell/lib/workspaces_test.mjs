@@ -259,6 +259,15 @@ test("a notification marks the app's windows whatever case or form its ID takes"
     assert.deepEqual(updateMarks(marks, activatedEvent("n1", windows)), NO_MARKS);
 });
 
+test("a notification naming several apps marks each one's windows", () => {
+    // A Chrome site open as an --app window in two profiles.
+    const windows = [win("d", 4, "chrome-calendar.google.com__-Default"), win("p", 5, "chrome-calendar.google.com__-Profile_1"), win("k", 6, "kitty")];
+    const marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: ["chrome-calendar.google.com__-Default", "chrome-calendar.google.com__-Profile_1"], windows, visible: new Set([2]) });
+    assert.deepEqual(marked(marks, windows).sort(), ["d", "p"]);
+    // Either one's activation replaces the app-wide marks.
+    assert.deepEqual(updateMarks(marks, activatedEvent("p", windows)), NO_MARKS);
+});
+
 test("the workspaces on screen are each monitor's open special one, or else its active one", () => {
     const visible = visibleWorkspaces([{ workspace: 2, special: -98 }, { workspace: 5, special: 0 }, { workspace: null }]);
     assert.deepEqual([...visible].sort(), [-98, 5]);

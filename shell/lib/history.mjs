@@ -1,4 +1,4 @@
-import { isChrome, siteFrom, siteWindowClass } from "./notifications.mjs";
+import { browserOf, isChrome, siteFrom, siteWindowClasses } from "./notifications.mjs";
 
 // The notification center's history (SPEC.md §9), as pure functions the
 // QML binds to. Entries are plain objects, newest first, so they store as
@@ -184,18 +184,19 @@ export function parse(text) {
 // A live one does what clicking its popup does: runs its default action,
 // or dismisses it when it has none. One that has gone took its actions
 // with it, so the click brings up its app's most recent window instead:
-// the `--app` window of the site Chrome said it came from, when one is
-// open (Notes.targetApp; `windows` as there). Returns {action}, {dismiss:
-// true}, {app} (the id to focus), or null when a gone entry names no app.
+// the `--app` windows of the site Chrome said it came from, when any are
+// open (Notes.targetApps; `windows` as there). Returns {action}, {dismiss:
+// true}, {apps} (the ids to focus the most recent of), or null when a gone
+// entry names no app.
 export function clickTarget(entry, live, defaultAction, windows) {
     if (live) {
         const action = defaultAction(live.actions ?? []);
         return action ? { action } : { dismiss: true };
     }
     const id = [entry.entry, entry.app].map(i => (i ?? "").trim()).find(i => i !== "") ?? null;
-    const site = isChrome(id) ? siteWindowClass(siteFrom(entry.origin), windows ?? []) : null;
-    if (site) {
-        return { app: site };
+    const sites = isChrome(id) ? siteWindowClasses(siteFrom(entry.origin), windows ?? [], browserOf(id)) : [];
+    if (sites.length > 0) {
+        return { apps: sites };
     }
-    return id === null ? null : { app: id };
+    return id === null ? null : { apps: [id] };
 }

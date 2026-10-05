@@ -198,8 +198,8 @@ test("a click on a live entry runs its default action", () => {
 });
 
 test("a click on an entry whose notification is gone brings up its app", () => {
-    assert.deepEqual(clickTarget(note("1", "Chat", "hi", { entry: "org.example.Chat" }), null, byDefault), { app: "org.example.Chat" });
-    assert.deepEqual(clickTarget(note("1", "Chat", "hi"), null, byDefault), { app: "Chat" });
+    assert.deepEqual(clickTarget(note("1", "Chat", "hi", { entry: "org.example.Chat" }), null, byDefault), { apps: ["org.example.Chat"] });
+    assert.deepEqual(clickTarget(note("1", "Chat", "hi"), null, byDefault), { apps: ["Chat"] });
 });
 
 test("a live entry without a default action is dismissed, as its popup would be", () => {
@@ -209,25 +209,28 @@ test("a live entry without a default action is dismissed, as its popup would be"
 });
 
 test("a gone entry names its app by desktop entry, else app name", () => {
-    assert.deepEqual(clickTarget(note("1", "Chat", "hi", { entry: " " }), null, byDefault), { app: "Chat" });
+    assert.deepEqual(clickTarget(note("1", "Chat", "hi", { entry: " " }), null, byDefault), { apps: ["Chat"] });
 });
 
 test("a gone web notification brings up its site's --app window, if one is open", () => {
     const chat = note("1", "Google Chrome", "hi", { entry: "google-chrome", origin: "chat.google.com" });
     const windows = [{ app: "google-chrome", focus: 0 }, { app: "chrome-chat.google.com__-Default", focus: 1 }];
-    assert.deepEqual(clickTarget(chat, null, byDefault, windows), { app: "chrome-chat.google.com__-Default" });
-    assert.deepEqual(clickTarget(chat, null, byDefault, [{ app: "google-chrome", focus: 0 }]), { app: "google-chrome" });
-    assert.deepEqual(clickTarget(chat, null, byDefault), { app: "google-chrome" });
+    assert.deepEqual(clickTarget(chat, null, byDefault, windows), { apps: ["chrome-chat.google.com__-Default"] });
+    assert.deepEqual(clickTarget(chat, null, byDefault, [{ app: "google-chrome", focus: 0 }]), { apps: ["google-chrome"] });
+    // Open in two profiles, both, the more recently focused first.
+    const both = [{ app: "chrome-chat.google.com__-Profile_1", focus: 2 }, { app: "chrome-chat.google.com__-Default", focus: 1 }];
+    assert.deepEqual(clickTarget(chat, null, byDefault, both), { apps: ["chrome-chat.google.com__-Default", "chrome-chat.google.com__-Profile_1"] });
+    assert.deepEqual(clickTarget(chat, null, byDefault), { apps: ["google-chrome"] });
 });
 
 test("a gone entry from another app naming a site stays its own app", () => {
     const mail = note("1", "Mail", "hi", { entry: "org.example.Mail", origin: "chat.google.com" });
-    assert.deepEqual(clickTarget(mail, null, byDefault, [{ app: "chrome-chat.google.com__-Default", focus: 0 }]), { app: "org.example.Mail" });
+    assert.deepEqual(clickTarget(mail, null, byDefault, [{ app: "chrome-chat.google.com__-Default", focus: 0 }]), { apps: ["org.example.Mail"] });
 });
 
 test("an entry saved before the site was kept still brings up its app", () => {
     const old = note("1", "Google Chrome", "hi", { entry: "google-chrome" });
-    assert.deepEqual(clickTarget(old, null, byDefault, [{ app: "chrome-chat.google.com__-Default", focus: 0 }]), { app: "google-chrome" });
+    assert.deepEqual(clickTarget(old, null, byDefault, [{ app: "chrome-chat.google.com__-Default", focus: 0 }]), { apps: ["google-chrome"] });
     assert.equal(parse(JSON.stringify({ version: 1, entries: [Object.assign({ time: 1 }, old)] })).entries.length, 1);
 });
 

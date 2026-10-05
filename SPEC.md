@@ -930,6 +930,7 @@ See [`notifications.png`](docs/mocks/notifications.png).
   - A web notification from a site with an `--app` window open grants that
     window's class instead of Chrome's (§14.4), so Chat's notification
     brings up the Chat window, not whichever Chrome window was last used.
+    With the site open in two profiles, one grant covers both classes.
   - If nothing arrives and the app already has windows, it focuses the app's
     most recently focused window. Anything you do meanwhile (a key, moving
     the pointer into another window) cancels that, like any grant, so it
@@ -1617,12 +1618,16 @@ to be focused.
     underscores, so `--app=https://chat.google.com/` is
     `chrome-chat.google.com__-Default`. Chrome names a notification's site
     in the `x-kde-origin-name` hint (§9), so a Chat notification marks just
-    the Chat window, and a click on it brings that window up. With several
-    `--app` windows for one site, the most recently focused one's class
-    counts. A shortened site (`google.com`) matches its subdomains' windows.
+    the Chat window, and a click on it brings that window up. A shortened
+    site (`google.com`) matches its subdomains' windows.
+  - A site open in two profiles is two classes (`…-Default`,
+    `…-Profile_1`), and Chrome doesn't say which profile sent a
+    notification. So it marks both, and a click grants both: whichever
+    window Chrome raises takes focus, and if neither does, the one focused
+    last comes up.
   - Any app can send that hint, so a site counts only on a notification
-    whose desktop entry is Chrome's or Chromium's. Another app naming a
-    host marks its own windows.
+    whose desktop entry is Chrome's or Chromium's, and only that browser's
+    windows. Another app naming a host marks its own windows.
   - A notification from a site with no `--app` window open (a tab in an
     ordinary window) marks every ordinary Chrome window, as before.
   - An installed web app's class is `chrome-<app id>-Default`, which names

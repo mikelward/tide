@@ -34,7 +34,7 @@ Singleton {
         address: Ws.normalizeAddress(t.address),
         workspace: t.workspace ? t.workspace.id : null,
         app: t.lastIpcObject?.class || t.wayland?.appId || "",
-        // Lower is more recent (Notes.siteWindowClass, Ws.focusRank).
+        // Lower is more recent (Notes.siteWindowClasses, Ws.focusRank).
         focus: Ws.focusRank(root.focusOrder, Ws.normalizeAddress(t.address), t.lastIpcObject?.focusHistoryID),
     }))
 
@@ -46,7 +46,7 @@ Singleton {
     })))
 
     // A notification arrived, or was updated in place: it marks its app's
-    // windows that aren't on screen now. Each update adds to what it marked.
+    // windows that aren't on screen now (`app` an app or a list of them). Each update adds to what it marked.
     // `replaces` is the ID of one it took the place of, whose marks it
     // takes over, or undefined.
     function notified(id, app, replaces) {
