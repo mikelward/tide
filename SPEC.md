@@ -1106,6 +1106,13 @@ one of them:
   one, and Enter then is held until that check fails. "Checking" and PAM's
   messages show under the field. A wrong password clears the field; it
   doesn't shake.
+- **A prompt PAM wants answered visibly** (a one-time code it echoes, a
+  name) shows what's typed, not dots, and past 24 characters the end of
+  it. Keys typed while PAM checked the password were typed blind, as the
+  next password, so they don't carry over into a visible answer. The
+  password typed before Enter answers PAM's first hidden prompt, never a
+  visible one, so a visible prompt that comes first is answered from the
+  field.
 - **Editing the field:** Backspace drops a character; Escape and Ctrl+U
   erase it all. No other Control chord types into it.
 - **Notification count:** how many arrived since the notification center

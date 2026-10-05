@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { LAYOUT_INITIAL, layoutNext, layoutBadge, mainKeymap, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText } from "./lock.mjs";
+import { LAYOUT_INITIAL, layoutNext, layoutBadge, mainKeymap, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -148,6 +148,67 @@ test("a second prompt is answered from the field", () => {
     r = run(r.state, ...type("123"), { type: "submit" });
     assert.deepEqual(r.actions, [{ type: "respond", text: "123" }]);
     assert.equal(r.state.checking, true);
+});
+
+test("a prompt PAM wants answered visibly shows what's typed", () => {
+    const name = { type: "pam", text: "Name: ", isError: false, responseRequired: true, echo: true };
+    let r = run(INITIAL, ...type("pw"), { type: "submit" }, prompt, name);
+    assert.equal(r.state.awaiting, true);
+    assert.equal(r.state.echo, true);
+    assert.equal(fieldText(r.state), "Name");
+    r = run(r.state, ...type("ab c"));
+    assert.equal(fieldText(r.state), "ab c");
+    r = run(r.state, { type: "backspace" });
+    assert.equal(fieldText(r.state), "ab ");
+    r = run(r.state, { type: "submit" });
+    assert.deepEqual(r.actions, [{ type: "respond", text: "ab " }]);
+    assert.equal(r.state.echo, false);
+});
+
+test("a visible answer doesn't show keys typed blind while PAM checked", () => {
+    const name = { type: "pam", text: "Name: ", isError: false, responseRequired: true, echo: true };
+    const r = run(INITIAL, ...type("pw"), { type: "submit" }, prompt, ...type("hunter2"), name);
+    assert.equal(r.state.input, "");
+    assert.equal(fieldText(r.state), "Name");
+    // A hidden one keeps them, as dots: they may well be its answer.
+    const code = { type: "pam", text: "Verification code: ", isError: false, responseRequired: true, echo: false };
+    const hidden = run(INITIAL, ...type("pw"), { type: "submit" }, prompt, ...type("123"), code);
+    assert.equal(fieldText(hidden.state), "•••");
+});
+
+test("a visible prompt before the password's is answered from the field", () => {
+    const name = { type: "pam", text: "Name: ", isError: false, responseRequired: true, echo: true };
+    let r = run(INITIAL, ...type("pw"), { type: "submit" }, name);
+    // The password isn't the answer, and the prompt shows.
+    assert.deepEqual(r.actions, [{ type: "start" }]);
+    assert.equal(r.state.awaiting, true);
+    assert.equal(r.state.echo, true);
+    assert.equal(fieldText(r.state), "Name");
+    r = run(r.state, ...type("me"), { type: "submit" });
+    assert.deepEqual(r.actions, [{ type: "respond", text: "me" }]);
+    // The password answers the hidden prompt that follows.
+    r = run(r.state, prompt);
+    assert.deepEqual(r.actions, [{ type: "respond", text: "pw" }]);
+    r = run(r.state, { type: "done", result: "success" });
+    assert.equal(r.state.unlocked, true);
+    assert.equal(r.state.pending, null);
+});
+
+test("a long visible answer shows its end", () => {
+    const name = { type: "pam", text: "Name: ", isError: false, responseRequired: true, echo: true };
+    const long = "abcdefghijklmnopqrstuvwxyz0123456789";
+    const r = run(INITIAL, ...type("pw"), { type: "submit" }, prompt, name, ...type(long));
+    const shown = fieldText(r.state);
+    assert.equal(shown.length, MAX_ECHO);
+    assert.equal(shown, "…" + long.slice(long.length - MAX_ECHO + 1));
+    assert.notEqual(fieldText(run(r.state, ...type("!")).state), shown);
+});
+
+test("after a visible prompt fails, the next password shows as dots", () => {
+    const name = { type: "pam", text: "Name: ", isError: false, responseRequired: true, echo: true };
+    const r = run(INITIAL, ...type("pw"), { type: "submit" }, prompt, name, { type: "done", result: "failed" }, ...type("pw"));
+    assert.equal(r.state.echo, false);
+    assert.equal(fieldText(r.state), "••");
 });
 
 test("too many attempts and PAM errors say so", () => {

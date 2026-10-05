@@ -131,6 +131,7 @@ ShellRoot {
             text: pam.message,
             isError: pam.messageIsError,
             responseRequired: pam.responseRequired,
+            echo: pam.responseVisible,
         })
         onCompleted: result => root.dispatch({
             type: "done",

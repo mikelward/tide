@@ -4,15 +4,18 @@
 // "start" begins a PAM conversation, {respond} answers PAM's prompt.
 //
 // The state:
-//   input      the text in the field, never logged or shown; typing goes
-//              here even while PAM checks, so no key is ever dropped
+//   input      the text in the field, never logged, and shown only as dots
+//              unless `echo`; typing goes here even while PAM checks, so no
+//              key is ever dropped
 //   checking   PAM has the password; "Checking" shows under the field
 //   queued     Enter was pressed while PAM checked: the field is
 //              submitted as soon as that check fails
 //   pending    the password typed before PAM asked for it (Enter starts
-//              the conversation, and PAM's first prompt takes this)
+//              the conversation, and PAM's first hidden prompt takes this)
 //   awaiting   PAM asked and nothing was pending: the next Enter answers
 //   prompt     PAM's prompt text while awaiting, shown in the field
+//   echo       that prompt asks for an answer PAM wants visible (a one-time
+//              code it echoes, a name): the field shows what's typed
 //   message    PAM's last message, shown verbatim under the field
 //   error      whether that message, or the failure, is an error
 //   attempts   failed attempts since the lock started
@@ -35,6 +38,7 @@ export const INITIAL = Object.freeze({
     pending: null,
     awaiting: false,
     prompt: "",
+    echo: false,
     message: "",
     error: false,
     attempts: 0,
@@ -73,8 +77,9 @@ export function keyEvent({ key, text, ctrl }) {
 //   {type: "backspace"}
 //   {type: "clear"}           Escape or Ctrl+U
 //   {type: "submit"}          Enter
-//   {type: "pam", text, isError, responseRequired}
-//                             PAM's message (PamContext's pamMessage)
+//   {type: "pam", text, isError, responseRequired, echo}
+//                             PAM's message (PamContext's pamMessage);
+//                             `echo` is its responseVisible
 //   {type: "done", result}    "success", "failed", "maxtries" or "error"
 //                             (PamContext's completed)
 //   {type: "failed", detail}  PAM couldn't run at all (start() false, or
@@ -115,7 +120,7 @@ export function next(state, event) {
         if (state.checking) return result(with_(state, { queued: true }));
         if (state.awaiting) {
             return result(
-                with_(state, { input: "", checking: true, awaiting: false, prompt: "" }),
+                with_(state, { input: "", checking: true, awaiting: false, prompt: "", echo: false }),
                 [{ type: "respond", text: state.input }],
             );
         }
@@ -125,18 +130,24 @@ export function next(state, event) {
         );
     case "pam":
         if (event.responseRequired) {
-            // The prompt for the password Enter already took.
-            if (state.pending !== null) {
+            // The prompt for the password Enter already took. A visible
+            // prompt never is: the password waits for a hidden one.
+            if (state.pending !== null && !event.echo) {
                 return result(
                     with_(state, { pending: null }),
                     [{ type: "respond", text: state.pending }],
                 );
             }
-            // A second prompt (a one-time code, say): the field answers it.
+            // Any other prompt (a one-time code, say): the field answers
+            // it. Keys typed while PAM checked were typed blind, as the next
+            // password, so a visible answer starts empty rather than
+            // showing them.
             return result(with_(state, {
+                input: event.echo ? "" : state.input,
                 checking: false,
                 awaiting: true,
                 prompt: event.text || "",
+                echo: Boolean(event.echo),
             }));
         }
         return result(with_(state, { message: event.text || "", error: Boolean(event.isError) }));
@@ -163,6 +174,7 @@ function failure(state, fallback) {
         pending: null,
         awaiting: false,
         prompt: "",
+        echo: false,
         message: state.error && state.message ? state.message : fallback,
         error: true,
         attempts: state.attempts + 1,
@@ -179,10 +191,17 @@ function retry(state) {
 // next key still changes what's drawn rather than adding a dot off the end.
 export const MAX_DOTS = 20;
 
+// The most characters of a visible answer the field shows; past this it
+// shows the end, after an ellipsis, so the last key typed stays in view.
+export const MAX_ECHO = 24;
+
 // What the field shows: a dot per typed character (past MAX_DOTS, a count),
-// else PAM's prompt, else "" for the placeholder.
+// or the characters themselves when PAM wants the answer visible, else
+// PAM's prompt, else "" for the placeholder.
 export function fieldText(state) {
     const n = state.input.length;
+    if (state.echo && n > MAX_ECHO) return "…" + state.input.slice(n - MAX_ECHO + 1);
+    if (state.echo && n > 0) return state.input;
     if (n > MAX_DOTS) return "•".repeat(MAX_DOTS - 4) + " " + n;
     if (n > 0) return "•".repeat(n);
     if (state.awaiting && state.prompt) return state.prompt.replace(/:\s*$/, "");

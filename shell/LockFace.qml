@@ -280,16 +280,19 @@ Item {
                     Text {
                         id: entry
 
-                        readonly property bool dots: face.lockState.input !== ""
+                        readonly property bool typed: face.lockState.input !== ""
 
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
                         anchors.leftMargin: 12
                         text: field.shown || "Password"
-                        color: dots ? "#f2f2f6" : Qt.rgba(1, 1, 1, 0.45)
+                        // A visible answer and PAM's prompt: never markup.
+                        textFormat: Text.PlainText
+                        color: typed ? "#f2f2f6" : Qt.rgba(1, 1, 1, 0.45)
                         font.family: "Inter"
-                        font.pixelSize: dots ? 14 : 13
-                        font.letterSpacing: dots ? 3 : 0
+                        font.pixelSize: typed ? 14 : 13
+                        // Spaced out for dots, not for a visible answer.
+                        font.letterSpacing: typed && !face.lockState.echo ? 3 : 0
                     }
 
                     // The keyboard layout, so a failed password isn't a
