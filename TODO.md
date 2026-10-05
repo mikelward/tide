@@ -358,8 +358,8 @@ holds the queue, and
 (`tide grant`) before invoking the action. Only parsed with
 `qmlformat`; nothing has run in a live session. Still to do:
 
-- Try it on a real session: stop swaync, run the shell with
-  `TIDE_NOTIFICATIONS=1`, and check Chrome's notifications, a reply,
+- Try it on a real session: stop swaync, set `TIDE_NOTIFICATIONS=1` in
+  the user manager's environment (README), restart the shell, and check Chrome's notifications, a reply,
   and that a click brings up the right window.
 - When a click's app sends no activation and opens no window within 10 s,
   and you haven't moved on, the focus guard brings up its most recently
@@ -444,7 +444,10 @@ an idle lock opens on (`tide idle-lock`). Only parsed with `qmlformat` and
 - On a real session, check the screensaver: an idle lock opens on it, the
   first pointer report doesn't wake it but a move does, and the first key
   lands in the field.
-- The notification count in the corner, as the mock shows.
+- On a real session, check the notification count: a notification that
+  arrives while locked bumps it, and opening the center after unlocking
+  clears it. It follows the history file the bar rewrites atomically, so
+  this also checks that the file watch survives the rename.
 - On a real session, check Suspend, Restart and Shut down from the lock,
   and that an inhibitor's name shows instead of the action going through.
 - On a real session, check the layout badge: it names the main keyboard's

@@ -1,7 +1,7 @@
 // Tests for history.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_ENTRIES, GROUP_SHOWN, record, appOf, groups, clearApp, apply, shownItems, age, unread, serialize, parse, clickTarget } from "./history.mjs";
+import { MAX_ENTRIES, GROUP_SHOWN, record, appOf, groups, clearApp, apply, shownItems, age, unread, unreadCount, serialize, parse, clickTarget } from "./history.mjs";
 
 // Array.prototype.at, which the shell's engine lacks (qtjs_env_test.mjs).
 const last = (list) => list[list.length - 1];
@@ -214,4 +214,17 @@ test("a gone entry names its app by desktop entry, else app name", () => {
 
 test("an entry that names no app has nothing to bring up", () => {
     assert.equal(clickTarget(note("1", "", "hi"), null, byDefault), null);
+});
+
+test("the lock's count is the unread entries still in the history", () => {
+    const entry = (key) => ({ key, app: "App", icon: "", entry: "", summary: "s", body: "b", critical: false, time: 1 });
+    assert.equal(unreadCount({ entries: [entry("1"), entry("2"), entry("3")], unread: ["1", "3"] }), 2);
+    // A key whose entry was cleared doesn't count.
+    assert.equal(unreadCount({ entries: [entry("1")], unread: ["1", "gone"] }), 1);
+    assert.equal(unreadCount({ entries: [], unread: [] }), 0);
+    // As the lock reads it: from the file the shell writes.
+    const saved = serialize({ entries: [entry("1"), entry("2")], unread: ["2"] });
+    assert.equal(unreadCount(parse(saved)), 1);
+    assert.equal(unreadCount(parse(null)), 0);
+    assert.equal(unreadCount(parse("not json")), 0);
 });

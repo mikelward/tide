@@ -63,8 +63,11 @@ then log in to tide again (or `systemctl --user restart tide`).
 The clocks need `tide-tz` on `PATH`, and the system monitor's temperature
 and process lists need `tide-sysmon`. Its notification popups are off
 while swaync runs;
-to try them, stop swaync and restart the shell with
-`TIDE_NOTIFICATIONS=1` in its environment.
+to try them, stop swaync, run
+`systemctl --user set-environment TIDE_NOTIFICATIONS=1` (or put it in
+uwsm's `env`), and restart the shell. The lock reads the same setting to
+show the notification count, so set it for the session, not just one
+process.
 
 `tide doctor` checks the running session and prints one line per
 problem, with its fix: units that aren't running, D-Bus names owned by the

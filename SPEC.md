@@ -1080,6 +1080,11 @@ one of them:
   doesn't shake.
 - **Editing the field:** Backspace drops a character; Escape and Ctrl+U
   erase it all. No other Control chord types into it.
+- **Notification count:** how many arrived since the notification center
+  was last open, by the battery, from the history the bar saves (§9). A
+  count, never what they say; none when there are none, and none while
+  the shell isn't the notification server (`TIDE_NOTIFICATIONS` until
+  swaync retires), since nothing could then mark a leftover history seen.
 - **Layout badge:** the main keyboard's layout sits in the field ("DVORAK"),
   following a switch, so a failed password isn't a layout mystery. Main is
   Hyprland's word: the keyboard last typed on. It's read again on each
