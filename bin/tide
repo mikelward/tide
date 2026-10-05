@@ -70,6 +70,16 @@
 #     outside tide), the level changes and nothing else happens; a
 #     shell that fails to show it is reported, and still exits 0.
 #
+#   tide idle-lock
+#
+#     Locks the session for idleness: hypridle's lock step runs it in
+#     place of `loginctl lock-session`. It writes the time to
+#     $XDG_RUNTIME_DIR/tide-lock-idle, then runs `loginctl lock-session`,
+#     and tide-lock opens in its screensaver face when it finds the flag
+#     fresh (SPEC.md §10). Every lock still goes through logind; the flag
+#     only picks the face. Without XDG_RUNTIME_DIR, or if the flag can't
+#     be written, it still locks, on the password face, and says why.
+#
 #   tide doctor
 #
 #     Checks the running session and prints one line per problem, with
@@ -83,6 +93,7 @@ usage() {
     echo "       $prog focus ID" >&2
     echo "       $prog autostart-allowed UNIT" >&2
     echo "       $prog brightness STEP" >&2
+    echo "       $prog idle-lock" >&2
     echo "       $prog doctor" >&2
     exit 2
 }
@@ -434,12 +445,44 @@ brightness() {
     fi
 }
 
+idle_lock() {
+    test $# -eq 0 || usage
+    dir=${XDG_RUNTIME_DIR:-}
+    if test -z "$dir" || ! test -d "$dir"; then
+        echo "$prog idle-lock: no XDG_RUNTIME_DIR, so the lock opens on its password face" >&2
+    else
+        # Written whole, then renamed, so the lock never reads half a time.
+        flag=$dir/tide-lock-idle
+        if ! date +%s > "$flag.tmp" || ! mv -f "$flag.tmp" "$flag"; then
+            echo "$prog idle-lock: couldn't write $flag, so the lock opens on its password face" >&2
+            # A partial file goes. Whatever else is there (a directory, say)
+            # would fail every idle lock, so name it rather than hide it.
+            if ! err=$(rm -f "$flag.tmp" 2>&1); then
+                echo "$prog idle-lock: couldn't remove $flag.tmp, which blocks the flag: $err" >&2
+            fi
+        fi
+    fi
+    if loginctl lock-session; then
+        return 0
+    else
+        status=$?
+    fi
+    # No lock came of it, so the flag mustn't turn the next one, a
+    # Super+L say, into the screensaver.
+    if test -n "${flag:-}" && test -e "$flag" && ! err=$(rm -f "$flag" 2>&1); then
+        echo "$prog idle-lock: couldn't remove $flag after the lock failed: $err" >&2
+    fi
+    echo "$prog idle-lock: loginctl lock-session failed (exit $status)" >&2
+    return "$status"
+}
+
 case "${1:-}" in
     launch) shift; launch "$@" ;;
     grant) shift; grant_only "$@" ;;
     focus) shift; focus_app "$@" ;;
     autostart-allowed) shift; autostart_allowed "$@" ;;
     brightness) shift; brightness "$@" ;;
+    idle-lock) shift; idle_lock "$@" ;;
     # Installed beside this script.
     doctor) shift; exec sh "$(dirname "$0")/tide-doctor" "$@" ;;
     *) usage ;;

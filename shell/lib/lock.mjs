@@ -17,6 +17,9 @@
 //   error      whether that message, or the failure, is an error
 //   attempts   failed attempts since the lock started
 //   unlocked   PAM said yes
+//   saver      the screensaver face shows instead of the password face;
+//              any key or pointer motion brings the password face back,
+//              and a typed key lands in the field
 //
 // Every key changes what the field shows (see fieldText), and changes it at
 // once: no step here waits or animates, so each keystroke shows on the
@@ -33,6 +36,7 @@ export const INITIAL = Object.freeze({
     error: false,
     attempts: 0,
     unlocked: false,
+    saver: false,
 });
 
 // A failure's message when PAM gave none of its own.
@@ -57,8 +61,21 @@ function result(state, actions) {
 //                             (PamContext's completed)
 //   {type: "failed", detail}  PAM couldn't run at all (start() false, or
 //                             PamContext's error), so there's no result
+//   {type: "screensaver"}     show the screensaver face (an idle lock)
+//   {type: "wake"}            pointer motion: back to the password face
 export function next(state, event) {
+    // Any key wakes the screensaver, and then does what it does on the
+    // password face, so the first key typed is never lost.
+    const typing = event.type === "key" || event.type === "backspace"
+        || event.type === "clear" || event.type === "submit";
+    if (state.saver && typing) {
+        state = with_(state, { saver: false });
+    }
     switch (event.type) {
+    case "screensaver":
+        return result(state.saver ? state : with_(state, { saver: true }));
+    case "wake":
+        return result(state.saver ? with_(state, { saver: false }) : state);
     case "key":
         if (!event.text) return result(state);
         // A new attempt clears the last failure's message; while PAM
@@ -158,6 +175,50 @@ export function fieldText(state) {
 // or the failure.
 export function statusText(state) {
     return state.checking ? "Checking" : state.message;
+}
+
+// How long a `tide idle-lock` flag counts (seconds): longer than logind
+// and systemd take to start the lock, short enough that a flag left by an
+// idle lock that never happened can't turn a later Super+L into the
+// screensaver.
+export const IDLE_FLAG_SECONDS = 10;
+
+// Whether the idle flag's text (the Unix time `tide idle-lock` wrote) is
+// from this lock: written at most IDLE_FLAG_SECONDS before `nowMs`, and not
+// in the future.
+export function idleFlagFresh(text, nowMs) {
+    const written = Number(String(text || "").trim());
+    if (!Number.isFinite(written) || written <= 0) return false;
+    const age = nowMs / 1000 - written;
+    return age >= -1 && age <= IDLE_FLAG_SECONDS;
+}
+
+// Where the screensaver's block sits in `minute` (minutes since the epoch),
+// as its top-left corner in an area of areaW x areaH, for a block of
+// blockW x blockH (SPEC.md §10: a new spot each minute, to spare OLED
+// panels). It stays a margin inside the edges. The spots follow the R2
+// sequence (fractional parts of m·α), which spreads them evenly and moves
+// the block at least 24% of the free width every minute, so no spot holds
+// two minutes running. The same minute gives the same spot, so outputs of
+// one size agree and a redraw doesn't jump.
+const R2_X = 0.7548776662466927;
+const R2_Y = 0.5698402909980532;
+
+export function saverPosition(minute, areaW, areaH, blockW, blockH) {
+    const marginX = Math.round(areaW * 0.06);
+    const marginY = Math.round(areaH * 0.06);
+    const freeX = Math.max(0, areaW - blockW - 2 * marginX);
+    const freeY = Math.max(0, areaH - blockH - 2 * marginY);
+    // Modulo a large period keeps m·α exact enough in a double.
+    const m = Math.max(0, Math.floor(minute)) % 1000003;
+    return {
+        x: marginX + Math.round(frac(m * R2_X) * freeX),
+        y: marginY + Math.round(frac(m * R2_Y) * freeY),
+    };
+}
+
+function frac(v) {
+    return v - Math.floor(v);
 }
 
 // The hostname the lock leads with (SPEC.md §11): the first label, without

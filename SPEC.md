@@ -981,7 +981,7 @@ today's `hypridle.conf`:
 | After | What happens |
 |---|---|
 | 2 min 30 s | dim: backlight to 10% (saving the level first), and a 40% black overlay on outputs with no backlight; any input undoes both |
-| 5 min | lock (`loginctl lock-session`); the lock opens in its **screensaver face** |
+| 5 min | lock (`tide idle-lock`, which runs `loginctl lock-session`); the lock opens in its **screensaver face** |
 | 5 min 30 s | displays off (DPMS); back on at any input |
 | 30 min | suspend, on battery only. On AC it never suspends; the displays just stay off. Decided in review of this spec. |
 
@@ -1003,6 +1003,11 @@ today's `hypridle.conf`:
 - it moves to a new spot each minute to spare OLED panels;
 - any input brings back the password face, and a typed key lands in the
   password field.
+- Only an idle lock opens on it; `Super+L`, suspend and the lid open on the
+  password face. All of them reach the lock through logind, so the idle
+  step runs `tide idle-lock`, which writes the time to
+  `$XDG_RUNTIME_DIR/tide-lock-idle` before `loginctl lock-session`. The lock
+  opens on the screensaver when that flag is under 10 s old, and removes it.
 
 **Idle detection** is hypridle's job, not the shell's (§5.2):
 
