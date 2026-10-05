@@ -243,6 +243,18 @@ tested where it can be without a live session.
     with two monitors, check it takes the one the launcher was on.
   - On a live session, check that typing reaches it with the pointer over
     a window (§14.2), and that an app it starts takes focus.
+  - Accentless matching and word starts in every script. Qt's JavaScript
+    has no Unicode property escapes, so `fuzzy.mjs` spells out its classes
+    by hand. They fold Latin, Greek and Cyrillic accents, but miss some
+    punctuation, such as the Arabic comma and Armenian and Hebrew marks,
+    so a letter after one gets no word-start bonus. The fix is to generate
+    exact tables from Node's Unicode data, the way `palette.mjs` is
+    generated, and have `make test` check they're current.
+    A name in decomposed form (`e` then U+0301) also ranks below the same
+    name precomposed (`é`), in Node as in Qt: the combining mark counts as
+    a word break, and as a skipped letter between matches. Scoring should
+    pass over marks while keeping their positions for highlighting.
+    Deferred: other things come first.
 - The system monitor (SPEC.md §7.4) is built but unchecked on a live
   session: the CPU % against `top`, the sensor picked on an Intel and an
   AMD machine, and the throttling line under load.
