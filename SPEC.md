@@ -1917,6 +1917,8 @@ tide's own, and links out for the rest:
 | Layouts | default layout per aspect ratio, `mfact`, the rule for new windows |
 | Clocks | zones, order, 24 h, dedupe-local |
 | Idle | the four timings, suspend on AC (off by default) |
+| Mouse | for every mouse: speed, scroll speed, natural scrolling, left-handed |
+| Touchpad | for every touchpad: the same, plus tap to click and off while typing |
 | Sound | output and input devices; *advanced* opens `pavucontrol` |
 | Network, Bluetooth | *advanced* opens `nm-connection-editor` / `blueman-manager` |
 | Keys | a read-only list of the current bindings, generated from the config |
@@ -1924,6 +1926,26 @@ tide's own, and links out for the rest:
 Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
 stays hand-written.
+
+- **Mouse and Touchpad** are the first of these.
+  - The shell writes what's set to `~/.config/hypr/tide-input.lua`, as a
+    table in Hyprland's option names, and runs `hyprctl eval
+    'conf_input.reload()'`.
+  - `conf`'s `hyprland.lua` reads that file as data. It applies the
+    touchpad's `input.touchpad` options itself, then `apply-input.sh`
+    gives each mouse the mouse settings and each touchpad its own, one
+    device at a time (`hl.device`). So a left-handed mouse and a
+    right-handed touchpad can each have their own speed.
+  - Only what's set reaches Hyprland. The rest stays as `conf`'s config
+    has it, and the pages show those values until they're changed.
+  - `hyprland.local.lua` still wins, for a single device or an input
+    option it sets.
+  - A change the shell can't save is reported, as an idle time's is. One
+    it can't write or apply is reported once, and tried again every 30
+    seconds while the shell runs.
+  - The shell applies the file as it starts, too, even unchanged. Hyprland
+    outlives the shell, so a shell restarted before its retry would
+    otherwise leave a change unapplied, and a reload costs nothing.
 
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or

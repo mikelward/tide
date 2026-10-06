@@ -13,6 +13,20 @@ export const PAGES = Object.freeze([
         advanced: null,
     },
     {
+        id: "mouse",
+        label: "Mouse",
+        icon: "input-mouse-symbolic",
+        about: "For every mouse. A setting made here applies to all of them; one set for a single mouse in hyprland.local.lua still wins.",
+        advanced: null,
+    },
+    {
+        id: "touchpad",
+        label: "Touchpad",
+        icon: "input-touchpad-symbolic",
+        about: "For every touchpad, apart from the mice. One set for a single touchpad in hyprland.local.lua still wins.",
+        advanced: null,
+    },
+    {
         id: "sound",
         label: "Sound",
         icon: "audio-speakers-symbolic",

@@ -12,7 +12,7 @@ It answers requests only when drained, so the test decides when the shell
 hears back, and can tell when the shell has nothing left to ask. As
 hyprctl, which the shell runs as a command and the test waits for as one,
 it answers at once, from the same fixtures, and evaluates only the focus
-guard's calls that focus.lua defines. Its
+guard's calls that focus.lua defines, and conf's conf_input.reload(). Its
 monitors, workspaces and windows are fixed: an event that changes them
 isn't reflected in later answers, as it would be in Hyprland, so the shell
 sees some churn, as it can when windows come and go quickly.
@@ -201,9 +201,16 @@ GUARD_CALLS = [
 FOCUS_LUA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hypr", "tide", "focus.lua")
 
 
+# conf's hyprland.lua's call InputData.qml makes, applying tide's mouse and
+# touchpad settings; conf isn't here to check, so it's taken as defined.
+CONF_CALLS = ["conf_input.reload()"]
+
+
 def guard_call(code):
     """What Hyprland would say to `hyprctl eval CODE`: ok for a guard call
-    focus.lua defines, else why not."""
+    focus.lua defines, or conf's, else why not."""
+    if code in CONF_CALLS:
+        return None
     name = next((n for n, pattern in GUARD_CALLS if pattern.fullmatch(code)), None)
     if name is None:
         return f"the stand-in hyprctl doesn't evaluate {code!r}"

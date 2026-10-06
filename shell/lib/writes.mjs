@@ -38,9 +38,12 @@ function nextStep(state) {
 // has, since it read it as it started: a shell start that wants the same
 // leaves the program alone. Unless it couldn't be read before this (the
 // only failure there can be until it is): then the program couldn't
-// either, and has none of it.
-export function readTarget(state, text) {
-    const first = state.known ? {} : { applied: state.failure === "" ? text : null, known: true };
+// either, and has none of it. Or unless `reapply`, for a program that
+// outlives the shell and costs nothing to apply again: then the shell
+// applies it as it starts, in case the one before it died with an apply
+// still to retry.
+export function readTarget(state, text, reapply = false) {
+    const first = state.known ? {} : { applied: state.failure === "" && !reapply ? text : null, known: true };
     return { state: Object.assign({}, state, { onDisk: text }, first) };
 }
 
