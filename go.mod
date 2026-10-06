@@ -1,4 +1,4 @@
-module github.com/mikelward/quickspace
+module github.com/mikelward/tide
 
 go 1.22
 
