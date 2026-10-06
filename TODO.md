@@ -91,13 +91,12 @@ once you have agreed with it or reversed it.
       `shell/NotificationData.qml`.
 - [ ] **The shell puts back a color scheme set elsewhere.**
       `shell/AppearanceData.qml` owns the schedule (SPEC.md §15) and
-      watches `color-scheme`: when something else sets it (conf's
-      `theme-daemon.sh` still does, at 07:00 and 19:00), the shell sets its
-      own again at once. With other times in `appearance.json`, that's a
-      blink twice a day. The real fix is conf's: have the daemon leave the
-      color scheme to tide inside a tide session, and follow it for swaync,
-      waybar and the wallpaper. The alternative was leaving the daemon's
-      write in place until the shell's next change, which can be hours.
+      watches `color-scheme`: when something else sets it, the shell sets
+      its own again at once. conf's theme daemon stops setting it in a tide
+      session (mikelward/conf#386), and follows the shell through
+      `appearance-hook` instead. The alternative was leaving another
+      program's write in place until the shell's next change, which can be
+      hours.
 - [ ] **GTK 3 gets Adwaita and Adwaita-dark, not adw-gtk3.** SPEC.md §15
       names adw-gtk3, which no setup installs yet, so the shell sets what
       conf's theme script sets today. It's `schemeCommands` in

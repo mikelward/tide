@@ -7,7 +7,12 @@ import assert from "node:assert/strict";
 import {
     DEFAULTS, LOCAL, parseTime, parseAppearance, loadAppearance, sunDown,
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
+    hookCommand, TELL_IDLE, tellNext,
 } from "./appearance.mjs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const at = (y, m, d, h, min = 0) => LOCAL.time(y, m, d, h, min);
 const MIN = 60 * 1000;
@@ -221,8 +226,136 @@ test("gsettings output names the scheme", () => {
 
 test("the color scheme and GTK theme tell apps", () => {
     assert.deepEqual(schemeCommands(true), [
-        ["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "prefer-dark"],
-        ["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita-dark"],
+        ["timeout", "--verbose", "--kill-after=5", "10", "gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "prefer-dark"],
+        ["timeout", "--verbose", "--kill-after=5", "10", "gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita-dark"],
     ]);
-    assert.deepEqual(schemeCommands(false).map(c => c[4]), ["prefer-light", "Adwaita"]);
+    assert.deepEqual(schemeCommands(false).map(c => c[c.length - 1]), ["prefer-light", "Adwaita"]);
+});
+
+// A gsettings that never returns (dconf not answering) mustn't hold up the
+// switches queued behind it.
+test("a scheme command that hangs is stopped", () => {
+    const dir = mkdtempSync(join(tmpdir(), "scheme-"));
+    writeFileSync(join(dir, "gsettings"), "#!/bin/sh\nexec sleep 60\n", { mode: 0o755 });
+    const [cmd, ...args] = schemeCommands(true, 1)[0];
+    const started = Date.now();
+    const r = spawnSync(cmd, args, { env: { ...process.env, LC_ALL: "C", PATH: `${dir}:${process.env.PATH}` } });
+    assert.equal(r.status, 124);
+    assert.match(r.stderr.toString(), /timeout: sending signal TERM to command .gsettings./);
+    assert.ok(Date.now() - started < 10000);
+    rmSync(dir, { recursive: true });
+});
+
+// Runs hookCommand's command for real, as Launcher would. In the C locale,
+// so the messages matched below are timeout's untranslated ones.
+function runHook(dir, seconds) {
+    const [cmd, ...args] = hookCommand(dir, seconds);
+    return spawnSync(cmd, args, { encoding: "utf8", env: { ...process.env, LC_ALL: "C" } });
+}
+
+test("no appearance hook is nothing to run", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tide-hook-"));
+    try {
+        const r = runHook(dir);
+        assert.equal(r.status, 0);
+        assert.equal(r.stderr, "");
+    } finally {
+        rmSync(dir, { recursive: true });
+    }
+});
+
+test("the appearance hook runs with no arguments", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tide-hook-"));
+    try {
+        writeFileSync(join(dir, "appearance-hook"), `#!/bin/sh\necho "ran $#" > "${dir}/out"\n`);
+        chmodSync(join(dir, "appearance-hook"), 0o755);
+        assert.equal(runHook(dir).status, 0);
+        assert.equal(readFileSync(join(dir, "out"), "utf8"), "ran 0\n");
+    } finally {
+        rmSync(dir, { recursive: true });
+    }
+});
+
+test("an appearance hook that can't run says so", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tide-hook-"));
+    try {
+        writeFileSync(join(dir, "appearance-hook"), "#!/bin/sh\n");
+        chmodSync(join(dir, "appearance-hook"), 0o644);
+        const r = runHook(dir);
+        assert.equal(r.status, 1);
+        assert.match(r.stderr, /appearance-hook is not executable/);
+    } finally {
+        rmSync(dir, { recursive: true });
+    }
+});
+
+test("telling apps runs one run at a time, and the last tells the latest", () => {
+    let r = tellNext(TELL_IDLE, "change");
+    assert.equal(r.start, true);
+    // Two changes during a run make one more run, after it.
+    r = tellNext(r.state, "change");
+    assert.equal(r.start, false);
+    r = tellNext(r.state, "change");
+    assert.equal(r.start, false);
+    r = tellNext(r.state, "done");
+    assert.equal(r.start, true);
+    r = tellNext(r.state, "done");
+    assert.equal(r.start, false);
+    assert.deepEqual(r.state, TELL_IDLE);
+    assert.throws(() => tellNext(TELL_IDLE, "bogus"), /unknown tell event/);
+});
+
+test("an appearance hook that hangs is stopped, and says so", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tide-hook-"));
+    try {
+        writeFileSync(join(dir, "appearance-hook"), "#!/bin/sh\nexec sleep 30\n");
+        chmodSync(join(dir, "appearance-hook"), 0o755);
+        const started = Date.now();
+        const r = runHook(dir, 1);
+        assert.ok(Date.now() - started < 10000);
+        assert.equal(r.status, 124);
+        assert.match(r.stderr, /timeout: sending signal TERM to command .*appearance-hook/);
+    } finally {
+        rmSync(dir, { recursive: true });
+    }
+});
+
+test("an appearance hook that links to nothing says so", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tide-hook-"));
+    try {
+        symlinkSync(join(dir, "gone"), join(dir, "appearance-hook"));
+        const r = runHook(dir, 1);
+        assert.equal(r.status, 1);
+        assert.match(r.stderr, /appearance-hook is a link to nothing/);
+    } finally {
+        rmSync(dir, { recursive: true });
+    }
+});
+
+test("an appearance hook that exits 124 itself isn't reported as stopped", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tide-hook-"));
+    try {
+        writeFileSync(join(dir, "appearance-hook"), "#!/bin/sh\nexit 124\n");
+        chmodSync(join(dir, "appearance-hook"), 0o755);
+        const r = runHook(dir, 1);
+        assert.equal(r.status, 124);
+        assert.doesNotMatch(r.stderr, /sending signal/);
+    } finally {
+        rmSync(dir, { recursive: true });
+    }
+});
+
+test("an appearance hook that ignores TERM is killed", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tide-hook-"));
+    try {
+        writeFileSync(join(dir, "appearance-hook"), "#!/bin/sh\ntrap '' TERM\nwhile :; do sleep 1; done\n");
+        chmodSync(join(dir, "appearance-hook"), 0o755);
+        const started = Date.now();
+        const r = runHook(dir, 1);
+        assert.ok(Date.now() - started < 15000);
+        assert.equal(r.status, 137);
+        assert.match(r.stderr, /timeout: sending signal KILL to command .*appearance-hook/);
+    } finally {
+        rmSync(dir, { recursive: true });
+    }
 });
