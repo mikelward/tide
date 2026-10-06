@@ -793,6 +793,18 @@ See [`bar.png`](docs/mocks/bar.png).
 | Notifications | dot when unread, a bell with *z* for DND | notification center | middle-click toggles DND |
 | Session | — | lock, log out, suspend, restart, shut down | — |
 
+**Tray menus.**
+
+- The shell draws an app's menu itself, like its other menus, from the
+  app's DBusMenu.
+- It doesn't use Quickshell's own menus for this. Those are Qt widget
+  menus, which need Quickshell's QApplication mode (`PlatformMenuEntry`,
+  Quickshell 0.3.1), and they wouldn't follow tide's palette or its light
+  and dark.
+- A click on an entry sends it to the app and closes the menu.
+- A submenu opens in the menu's place, under a row that goes back.
+- A checked entry shows a check mark, as the battery's power profile does.
+
 **System monitor** ([`sysmon.png`](docs/mocks/sysmon.png)).
 
 - The bar's CPU % is the whole machine's, updated every 3 s; it's cheap

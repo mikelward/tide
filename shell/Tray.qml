@@ -7,8 +7,8 @@ import "lib/tray.mjs" as Tray
 // Third-party tray icons (SPEC.md §7.4): apps' StatusNotifierItems. Using
 // SystemTray makes the shell the org.kde.StatusNotifierWatcher, which
 // tide-shell waits for before the session's apps start. A left or
-// right click opens the app's menu (§7.4), a middle click activates the
-// app, and scrolling goes to the app.
+// right click opens the app's menu (§7.4), which TrayMenu draws, a middle
+// click activates the app, and scrolling goes to the app.
 Row {
     id: root
 
@@ -34,6 +34,13 @@ Row {
                 asynchronous: true
             }
 
+            TrayMenu {
+                id: menu
+
+                icon: slot
+                item: slot.modelData
+            }
+
             MouseArea {
                 anchors.fill: parent
                 acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
@@ -47,12 +54,8 @@ Row {
                         slot.modelData.secondaryActivate();
                         break;
                     case "menu":
-                        {
-                            // Under the icon, from the bar's window.
-                            const at = slot.mapToItem(null, 0, slot.height);
-                            slot.modelData.display(QsWindow.window, at.x, at.y + 6);
-                            break;
-                        }
+                        menu.toggle();
+                        break;
                     }
                 }
                 onWheel: wheel => {
