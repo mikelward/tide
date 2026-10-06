@@ -72,6 +72,15 @@ if fractional=$(grep -n -E 'pixelSize:.*[0-9]\.[0-9]' shell/*.qml); then
     exit 1
 fi
 
+# Theme.qml takes its sizes from the mocks (SPEC.md §15), so the bar is
+# as tall as the mocks show it.
+theme_bar=$(sed -n 's/^ *readonly property int barHeight: \([0-9]*\)$/\1/p' shell/Theme.qml)
+mock_bar=$(sed -n 's/^ *--bar-h: \([0-9]*\)px;$/\1/p' docs/mocks/common.css)
+if test -z "$theme_bar" || test "$theme_bar" != "$mock_bar"; then
+    echo "FAIL: Theme.qml's barHeight (${theme_bar:-none}) isn't docs/mocks/common.css's --bar-h (${mock_bar:-none})" >&2
+    exit 1
+fi
+
 # The shell and the lock name their icon theme, since Qt picks none for
 # tide's desktop. Quickshell reads the pragma only above the first import.
 # Its loss also fails the load below, as icons that won't load, but this
