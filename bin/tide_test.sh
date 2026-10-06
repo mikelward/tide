@@ -294,6 +294,25 @@ run XDG_CURRENT_DESKTOP=KDE "$qs" focus app
 check "outside tide focus does nothing" test $? -eq 0 -a ! -s "$log"
 run "$qs" focus
 check "focus with no ID is a usage error" test $? -eq 2
+
+run FAKE_HYPRCTL_REPLY=true "$qs" prompt-focus
+check "prompt-focus exits 0 when the guard lets the prompt focus" test $? -eq 0
+check "prompt-focus asks the guard with repl, which returns its answer" \
+    test "$(cat "$log")" = 'hyprctl repl tide_focus.prompt_may_focus()'
+run FAKE_HYPRCTL_REPLY=false "$qs" prompt-focus
+check "prompt-focus exits 1 when the guard says no" test $? -eq 1
+check "a no is an answer, not an error" test ! -s "$tmp/err"
+run FAKE_HYPRCTL_REPLY='error: attempt to call a nil value (field prompt_may_focus)' "$qs" prompt-focus
+check "prompt-focus exits 2 when the guard can't answer" test $? -eq 2
+check "prompt-focus says why it can't tell" \
+    contains "$(cat "$tmp/err")" "tide prompt-focus: couldn't ask the focus guard: error: attempt to call a nil value"
+run FAKE_HYPRCTL_REPLY=ok "$qs" prompt-focus
+check "eval's plain ok isn't an answer" \
+    test "$?:$(cat "$tmp/err")" = "2:tide prompt-focus: couldn't ask the focus guard: ok"
+run XDG_CURRENT_DESKTOP=KDE "$qs" prompt-focus
+check "outside tide prompt-focus can't tell" test $? -eq 2 -a ! -s "$log"
+run "$qs" prompt-focus now
+check "prompt-focus takes no arguments" test $? -eq 2
 run "$qs" grant
 check "grant with no ID is a usage error" test $? -eq 2
 run "$qs" grant ''
