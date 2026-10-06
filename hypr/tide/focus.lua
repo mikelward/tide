@@ -455,10 +455,25 @@ function M.on_open(w)
     end
 end
 
+-- Whether w hasn't mapped yet. `field` can't say, since it reads false as
+-- absent; a failed read counts as mapped, as every window did before this.
+local function unmapped(w)
+    local ok, mapped = pcall(function()
+        return w.mapped
+    end)
+    return ok and mapped == false
+end
+
 -- An existing window asked to be activated. Hyprland has already marked it
 -- urgent (misc:focus_on_activate is off); a launch grant lets it through,
 -- and otherwise it waits with the rest, so Super+Tab takes the latest of both.
 function M.on_urgent(w)
+    -- Chrome activates a new window before mapping it, and Hyprland reports
+    -- that as urgent. The window can't take focus yet, and using the grant
+    -- here would leave its window.open with none, so the open decides.
+    if unmapped(w) then
+        return
+    end
     -- A grant asked for on a new workspace focuses an existing window where
     -- it is: moving a window you already had would be a surprise.
     if take_grant(w) then

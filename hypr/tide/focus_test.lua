@@ -373,6 +373,27 @@ test("a wildcard grant covers an activation too", function()
     eq(is_focus(fire("window.urgent", chrome)[1], chrome), true, "focused")
 end)
 
+test("an activation before the window maps leaves the grant for its open", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("*")
+    local chrome = window("google-chrome")
+    chrome.mapped = false
+    eq(#fire("window.urgent", chrome), 0, "neither focused nor announced")
+    chrome.mapped = true
+    eq(is_focus(fire("window.open", chrome)[1], chrome), true, "focused as it opens")
+    eq(#S.notified, 0, "no notification")
+end)
+
+test("a mapped window's activation still uses the grant", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("*")
+    local chrome = window("google-chrome")
+    chrome.mapped = true
+    eq(is_focus(fire("window.urgent", chrome)[1], chrome), true, "focused")
+end)
+
 test("a named grant is used before a wildcard", function()
     local m = load()
     focused(window("kitty"), FFM)

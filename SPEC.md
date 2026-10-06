@@ -1526,6 +1526,11 @@ this spec.
   - **Used by** that app's first new window, or its first activation of a
     window it already had (a single-instance app reusing a window), within
     10 s.
+  - **An activation before the window maps** is left to the window's
+    opening. Chrome asks to activate each new window before showing it,
+    and Hyprland 0.56 reports that as urgent (`CWindow::activate`). The
+    window can't take focus yet, and using the grant there would leave it
+    opening unfocused and marked.
   - **A wildcard** (`tide launch --app '*'`) is used by the first
     window of any app. It's for a key bound to a wrapper script, whose app
     isn't known until its window appears. A grant naming the app is used
