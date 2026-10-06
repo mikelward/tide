@@ -4,13 +4,15 @@
 # wtype, notify-send and go, so they run without Quickshell: what the load
 # test does with a shell that loads cleanly, one whose files report an
 # error, one whose event loop never answers, one that ignores Hyprland, one
-# that doesn't run tide-tz or hyprctl, or whose tide-tz never ends, one
-# whose clocks, system monitor, title or focus guard calls warn, one whose
-# icon won't load, a notification server that records what it's sent or
-# doesn't, a launcher that runs the app typed or doesn't, a lock that
-# can't read its keyboards, or unlocks or doesn't, and a greeter that logs
-# in or doesn't. The stand-in Hyprland, hyprctl, tide-sysmon and greetd
-# are the load test's own.
+# that skips a call to tide-tz, hyprctl, gsettings or nmcli, or whose
+# tide-tz never ends, one whose clocks, system monitor, title, focus guard
+# calls, color scheme or VPNs warn, one whose icon won't load, a
+# notification server that records what it's sent or doesn't, a launcher
+# that runs the app typed or doesn't, a lock that can't read its
+# keyboards, or unlocks or doesn't, and a greeter that logs in or doesn't.
+# The stand-in Hyprland, hyprctl, tide-sysmon, gsettings, nmcli and greetd
+# are the load test's own, and the stand-in gsettings and nmcli answer as
+# GNOME's and NetworkManager's would.
 
 cd "$(dirname "$0")/.." || exit 1
 
@@ -38,7 +40,7 @@ tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
 # The calls the stub qs makes, as the shell and as the lock or the greeter.
-all_runs="tide-tz tide-sysmon title replay order keyboards"
+all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor keyboards"
 
 # stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN]]]]]]]:
 # a sway that listens on wayland-1 until it's killed; a qs whose `ipc`
@@ -56,8 +58,9 @@ all_runs="tide-tz tide-sysmon title replay order keyboards"
 # asking for windows). Loaded, qs also makes the calls COMMANDS names in
 # the background, all of $all_runs by default, and reaps them as they end,
 # as Quickshell does: as the shell (-c) tide-tz, tide-sysmon, the title's
-# hyprctl and the focus guard's replay and order, as the lock or the
-# greeter (-p) hyprctl for the keyboards. With LATE, it runs tide-tz that
+# hyprctl, the focus guard's replay and order, gsettings for the color
+# scheme and its monitor, and nmcli for the VPNs and its monitor, as the
+# lock or the greeter (-p) hyprctl for the keyboards. With LATE, it runs tide-tz that
 # many seconds late, as the shell does once it has read its clock files. Its
 # notify-send prints an id and adds the summary to the history, as the
 # shell's server would. Its go builds a tide-tz that runs TZ, by default
@@ -108,6 +111,21 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
         esac
         case " ${7-$all_runs} " in
             *" order "*) hyprctl eval 'tide_focus.set_order({})' >/dev/null 2>&1 & ;;
+        esac
+        case " ${7-$all_runs} " in
+            *" scheme "*)
+                gsettings set org.gnome.desktop.interface color-scheme prefer-dark >/dev/null 2>&1 &
+                gsettings set org.gnome.desktop.interface gtk-theme Adwaita-dark >/dev/null 2>&1 &
+                ;;
+        esac
+        case " ${7-$all_runs} " in
+            *" scheme-monitor "*) gsettings monitor org.gnome.desktop.interface color-scheme >/dev/null 2>&1 & ;;
+        esac
+        case " ${7-$all_runs} " in
+            *" vpns "*) env LC_ALL=C nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show >/dev/null 2>&1 & ;;
+        esac
+        case " ${7-$all_runs} " in
+            *" vpn-monitor "*) nmcli monitor >/dev/null 2>&1 & ;;
         esac
     else
         case " ${7-$all_runs} " in
@@ -340,7 +358,7 @@ run "$tmp/late"
 check "a shell that runs tide-tz only after reading its files passes" test "$code" -eq 0
 check "having waited for it" contains "$out" "ok: Quickshell loads the shell"
 
-stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon title replay order keyboards"
+stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor keyboards"
 run "$tmp/no-clocks"
 check "a shell that never runs tide-tz fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "tide-tz..." in 2 s'
@@ -366,25 +384,96 @@ run "$tmp/probe-fails"
 check "a shell whose system monitor warns fails" test "$code" -ne 0
 check "and says what it said" contains "$out" "tide: tide-sysmon probe exited 2"
 
-stubs "$tmp/no-title" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon replay order keyboards"
+stubs "$tmp/no-title" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon replay order scheme scheme-monitor vpns vpn-monitor keyboards"
 run "$tmp/no-title"
 check "a shell that never asks hyprctl for the focused window fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl activewindow -j..." in 2 s'
 
-stubs "$tmp/no-replay" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title order keyboards"
+stubs "$tmp/no-replay" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title order scheme scheme-monitor vpns vpn-monitor keyboards"
 run "$tmp/no-replay"
 check "a shell that never has the focus guard replay its windows fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.announce_waiting()..." in 2 s'
 
-stubs "$tmp/no-order" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay keyboards"
+stubs "$tmp/no-order" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay scheme scheme-monitor vpns vpn-monitor keyboards"
 run "$tmp/no-order"
 check "a shell that never tells the focus guard its marks fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.set_order(..." in 2 s'
 
-stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order"
+stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor"
 run "$tmp/no-keyboards"
 check "a lock that never asks hyprctl for the keyboards fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the lock never ran "hyprctl devices -j..." in 2 s'
+
+stubs "$tmp/no-scheme" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme-monitor vpns vpn-monitor keyboards"
+run "$tmp/no-scheme"
+check "a shell that never tells apps the color scheme fails" test "$code" -ne 0
+check "and says so" contains "$out" 'the shell never ran "gsettings set org.gnome.desktop.interface color-scheme..." in 2 s'
+
+stubs "$tmp/no-scheme-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme vpns vpn-monitor keyboards"
+run "$tmp/no-scheme-monitor"
+check "a shell that never follows the color scheme fails" test "$code" -ne 0
+check "and says so" contains "$out" 'the shell never ran "gsettings monitor org.gnome.desktop.interface color-scheme..." in 2 s'
+
+stubs "$tmp/no-vpns" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpn-monitor keyboards"
+run "$tmp/no-vpns"
+check "a shell that never lists the VPNs fails" test "$code" -ne 0
+check "and says so" contains "$out" 'the shell never ran "nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show..." in 2 s'
+
+stubs "$tmp/no-vpn-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns keyboards"
+run "$tmp/no-vpn-monitor"
+check "a shell that never follows the VPNs fails" test "$code" -ne 0
+check "and says so" contains "$out" 'the shell never ran "nmcli monitor..." in 2 s'
+
+stubs "$tmp/scheme-warns" "exit 0" "  WARN qml: tide: gsettings set org.gnome.desktop.interface color-scheme prefer-dark exited 1: No schemas installed
+$loaded"
+run "$tmp/scheme-warns"
+check "a shell that can't set the color scheme fails" test "$code" -ne 0
+check "and says what it said" contains "$out" "tide: gsettings set org.gnome.desktop.interface color-scheme prefer-dark exited 1"
+
+stubs "$tmp/vpns-warn" "exit 0" "  WARN qml: tide: nmcli: can't read connection line \"Home\"
+$loaded"
+run "$tmp/vpns-warn"
+check "a shell that can't read the VPNs fails" test "$code" -ne 0
+check "and says what it said" contains "$out" "tide: nmcli: can't read connection line"
+
+# The stand-in gsettings and nmcli answer the shell's calls as GNOME's and
+# NetworkManager's would, and refuse what they wouldn't.
+# stand_in NAME ARG...: what NAME's stand-in says to ARG..., in out and code.
+stand_in() {
+    _name=$1
+    shift
+    out=$(sh "shell/${_name}_stand_in.sh" "$@" 2>&1)
+    code=$?
+}
+stand_in gsettings set org.gnome.desktop.interface color-scheme prefer-dark
+check "the stand-in gsettings takes a color scheme" test "$code:$out" = 0:
+stand_in gsettings set org.gnome.desktop.interface gtk-theme Adwaita-dark
+check "and a GTK theme" test "$code:$out" = 0:
+stand_in gsettings set org.gnome.desktop.interface color-scheme prefer-darker
+check "but not a color scheme GNOME doesn't have" test "$code" -eq 1
+check "and says so" contains "$out" "outside of the valid range"
+stand_in gsettings set org.gnome.desktop.interface cursor-theme Adwaita
+check "or a key the shell doesn't set" test "$code" -eq 2
+stand_in gsettings set org.gnome.desktop.interface color-scheme prefer-dark extra
+check "or a set with more arguments than gsettings takes" test "$code" -eq 1
+check "and says how it's used" contains "$out" "set SCHEMA[:PATH] KEY VALUE"
+stand_in gsettings set org.gnome.desktop.interface gtk-theme
+check "or fewer" test "$code" -eq 1
+out=$(env LC_ALL=C sh shell/nmcli_stand_in.sh -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show 2>&1)
+code=$?
+check "the stand-in nmcli lists the connections" contains "$code:$out" "0:Home:"
+check "with a VPN that's up" contains "$out" "Office VPN:6c0d4c3e-1a2b-4c5d-8e9f-000000000002:vpn:yes:activated"
+check "and one with an escaped colon" contains "$out" 'Lab\: WireGuard:'
+out=$(env LC_ALL=en_US.UTF-8 sh shell/nmcli_stand_in.sh -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show 2>&1)
+code=$?
+check "but only in the C locale" test "$code" -eq 2
+stand_in nmcli connection up uuid 6c0d4c3e-1a2b-4c5d-8e9f-000000000003
+check "and answers nothing else" test "$code" -eq 2
+stand_in nmcli monitor extra
+check "not even its own calls with more arguments" test "$code" -eq 2
+out=$(env LC_ALL=C sh shell/nmcli_stand_in.sh "-t -f" NAME,UUID,TYPE,ACTIVE,STATE connection show 2>&1)
+code=$?
+check "or with two of them run together" test "$code" -eq 2
 
 stubs "$tmp/title-warns" "exit 0" "  WARN qml: tide: bar title: hyprctl activewindow gave no window; the title waits for the next focus change
 $loaded"

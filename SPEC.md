@@ -2041,9 +2041,27 @@ are what "done" means.
     get its `ok` only in the two forms `MarkData.qml` writes, and only for
     functions `hypr/tide/focus.lua` defines. Any other `eval` fails, as it
     would in Hyprland.
+  - `gsettings` and `nmcli` are stand-ins too
+    (`shell/gsettings_stand_in.sh`, `shell/nmcli_stand_in.sh`), each
+    checked against Ubuntu 26.04's packages.
+  - The shell sets the color scheme and GTK theme through `gsettings`. In
+    gsettings-desktop-schemas 50.0, `color-scheme` is an enum of
+    `default`, `prefer-dark` and `prefer-light`. GLib 2.88's `gsettings`
+    refuses any other value: "The provided value is outside of the valid
+    range", exit 1. The stand-in does the same.
+  - The shell lists NetworkManager's connections through `nmcli`, and the
+    list has a VPN that's up, so the bar draws its lock. The nmcli(1)
+    manual in NetworkManager 1.54.3 says to call it as `LC_ALL=C nmcli` in
+    a script, and that terse output escapes `:` and `\` by default. So the
+    stand-in lists only in the C locale, and one name has an escaped colon.
+  - Each starts a monitor too. The stand-ins' monitors report nothing and
+    wait for the shell to end, under a command line that no longer names
+    the test's wrappers, so settling doesn't wait on them. What the shell
+    does with a monitor's line isn't covered.
   - The test fails if the shell, the lock or the greeter never makes one
     of those calls, each told apart by its arguments. It also fails if the
-    title, a layout badge or the focus guard calls warn of anything.
+    title, a layout badge, the focus guard calls, `gsettings` or `nmcli`
+    warn of anything.
 - **The bar's clocks are drawn.** The shell's own commands are on its PATH
   in that test: `tide-tz`, built for the run, and a stand-in `tide-sysmon`.
   So the clocks get their zones from tzdata and are drawn.
