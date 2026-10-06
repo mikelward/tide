@@ -6,6 +6,7 @@ import Quickshell.Services.Pipewire
 import Quickshell.Wayland
 import "lib/audio.mjs" as Audio
 import "lib/idle.mjs" as Idle
+import "lib/input.mjs" as Input
 import "lib/settings.mjs" as Settings
 
 // The settings panel (SPEC.md §16), centered on the focused monitor over a
@@ -42,6 +43,13 @@ PanelWindow {
             close();
         } else {
             open();
+        }
+    }
+
+    // A change a page asked for and was refused, which the log has.
+    function report(error) {
+        if (error !== "") {
+            console.warn(`tide: ${error}`);
         }
     }
 
@@ -87,6 +95,13 @@ PanelWindow {
         function setIdle(key: string, seconds: int): string {
             return IdleData.set(key, seconds);
         }
+        // Sets one of the Mouse or Touchpad pages' settings: `qs -c tide ipc
+        // call settings setInput mouse leftHanded false`. Answers why not,
+        // or "".
+        function setInput(section: string, key: string, value: string): string {
+            const parsed = value === "true" ? true : value === "false" ? false : value.trim() === "" ? NaN : Number(value);
+            return InputData.set(section, key, parsed);
+        }
     }
 
     Connections {
@@ -113,17 +128,17 @@ PanelWindow {
         font.letterSpacing: 0.5
     }
 
-    // The Idle page's − or +: moves `key` from `seconds` one rung along
-    // idle.mjs's ladder, dimmed at its end.
+    // A page's − or +: dimmed when it wouldn't move `value`, and a click
+    // asks to move it to `next`.
     component StepButton: Rectangle {
         id: button
 
         property string name
-        property string key
-        property int seconds
-        property int towards
-        readonly property int next: Idle.stepped(seconds, towards)
-        readonly property bool moves: next !== seconds
+        property real value
+        property real next
+        readonly property bool moves: next !== value
+
+        signal activated
 
         anchors.verticalCenter: parent.verticalCenter
         width: 26
@@ -143,12 +158,7 @@ PanelWindow {
 
         TapHandler {
             enabled: button.moves
-            onTapped: {
-                const error = IdleData.set(button.key, button.next);
-                if (error !== "") {
-                    console.warn(`tide: ${error}`);
-                }
-            }
+            onTapped: button.activated()
         }
     }
 
@@ -309,9 +319,9 @@ PanelWindow {
 
                                     StepButton {
                                         name: "list-remove-symbolic"
-                                        key: step.modelData.key
-                                        seconds: step.seconds
-                                        towards: -1
+                                        value: step.seconds
+                                        next: Idle.stepped(step.seconds, -1)
+                                        onActivated: root.report(IdleData.set(step.modelData.key, next))
                                     }
 
                                     Text {
@@ -327,9 +337,108 @@ PanelWindow {
 
                                     StepButton {
                                         name: "list-add-symbolic"
-                                        key: step.modelData.key
-                                        seconds: step.seconds
-                                        towards: 1
+                                        value: step.seconds
+                                        next: Idle.stepped(step.seconds, 1)
+                                        onActivated: root.report(IdleData.set(step.modelData.key, next))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Mouse and Touchpad: each setting for that kind of
+                    // device, which − and + step along input.mjs's ladders,
+                    // or a click turns on or off. Until it's set, it shows
+                    // what conf's config has.
+                    Column {
+                        id: device
+
+                        readonly property string section: root.current.id === "mouse" || root.current.id === "touchpad" ? root.current.id : ""
+
+                        visible: section !== ""
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        Repeater {
+                            model: device.section === "" ? [] : Input.SECTIONS[device.section]
+
+                            Item {
+                                id: option
+
+                                required property var modelData
+                                readonly property var value: Input.shown(InputData.input, device.section, modelData.key)
+                                readonly property bool toggle: modelData.kind === "toggle"
+
+                                width: device.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: option.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Row {
+                                    visible: !option.toggle
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    StepButton {
+                                        name: "list-remove-symbolic"
+                                        value: option.toggle ? 0 : option.value
+                                        next: option.toggle ? 0 : Input.stepped(option.modelData.kind, option.value, -1)
+                                        onActivated: root.report(InputData.set(device.section, option.modelData.key, next))
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 92
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: option.toggle ? "" : Input.formatValue(option.modelData.kind, option.value)
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                        font.features: ({ "tnum": 1 })
+                                    }
+
+                                    StepButton {
+                                        name: "list-add-symbolic"
+                                        value: option.toggle ? 0 : option.value
+                                        next: option.toggle ? 0 : Input.stepped(option.modelData.kind, option.value, 1)
+                                        onActivated: root.report(InputData.set(device.section, option.modelData.key, next))
+                                    }
+                                }
+
+                                // On or off, in the accent color while on.
+                                Rectangle {
+                                    visible: option.toggle
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 56
+                                    height: 26
+                                    radius: 13
+                                    color: option.value === true ? Theme.accentBg : Theme.surface2
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: Input.formatValue("toggle", option.value === true)
+                                        color: option.value === true ? Theme.accentFg : Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 12
+                                        font.weight: Font.DemiBold
+                                    }
+
+                                    TapHandler {
+                                        enabled: option.toggle
+                                        onTapped: root.report(InputData.set(device.section, option.modelData.key, option.value !== true))
                                     }
                                 }
                             }

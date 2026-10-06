@@ -7,23 +7,28 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
-- [ ] **The settings files are read and written synchronously.** The
-  Idle settings' `FileView`s use `blockAllReads` and `blockWrites`, so each
-  change re-reads the file and writes it before returning, with no read or
-  write in flight for a change to race. It costs a blocking read or write
-  of a file under 1 KB on the shell's UI thread, on a settings click or a
-  change to the file; a slow home directory (NFS, say) would stall the bar
-  that long. The alternative was keeping the settings in memory and
-  sequencing changes around `FileView`'s background reads and writes,
-  which review kept finding races in (PR 151). It's the `SettingsFile`
-  component in `shell/IdleData.qml`.
+- [ ] **The settings files are read and written synchronously.** The Idle,
+  Mouse and Touchpad settings' `FileView`s use `blockAllReads` and
+  `blockWrites`, so each change re-reads the file and writes it before
+  returning, with no read or write in flight for a change to race. It costs
+  a blocking read or write of a file under 1 KB on the shell's UI thread, on
+  a settings click or a change to the file; a slow home directory (NFS, say)
+  would stall the bar that long. The alternative was keeping the settings in
+  memory and sequencing changes around `FileView`'s background reads and
+  writes, which review kept finding races in (PR 151). It's the
+  `SettingsFile` component in `shell/IdleData.qml` and
+  `shell/InputData.qml`.
 
 - [ ] **A setting that can't be applied is retried every 30 s, for as long
-  as it fails.** A failed write of `tide-idle.conf` or hypridle restart
-  is one notification, then tried again on a timer with no limit. Outside a session that has hypridle's
-  unit, `try-restart` does nothing and succeeds, so this costs nothing
-  there. The alternative is a few tries with a backoff, then giving up
-  until the next change; it's the `retry` timer in `shell/IdleData.qml`.
+  as it fails.** A failed write of `tide-idle.conf` or hypridle restart is
+  one notification, then tried again on a timer with no limit. Outside a
+  session that has hypridle's unit, `try-restart` does nothing and succeeds,
+  so this costs nothing there. The mouse and touchpad settings do the same,
+  but outside a Hyprland running `conf`'s config their `hyprctl eval` fails,
+  so the shell notifies once and runs it every 30 s for as long as it runs.
+  The alternative is a few tries with a backoff, then giving up until the
+  next change; it's the `retry` timer in `shell/IdleData.qml` and
+  `shell/InputData.qml`.
 
 - [ ] **A wrong password doesn't shake the lock's field.** The mock had it
   shake once; tide-lock only clears it and shows the error under it. You
@@ -449,10 +454,20 @@ from the keyboard (`shell/shell_test.sh`).
   - On a live session, check a change restarts hypridle with the new
     times, and that Fedora's hypridle is 0.1.7 or later for `source`
     (Ubuntu 26.04 has 0.1.7).
-- Next, in the maintainer's order: Mouse and Keyboard. Not in §16's table
-  yet, and nothing to link out to reaches Hyprland's input settings.
-  They'd apply through `hyprctl eval` and persist in the generated Lua
-  include §16 describes, which `conf`'s `hyprland.lua` would have to load.
+- Mouse and Touchpad (`shell/lib/input.mjs`, `shell/InputData.qml`)
+  write `~/.config/hypr/tide-input.lua` and run `hyprctl eval
+  'conf_input.reload()'`, which `conf`'s `hyprland.lua` defines (its PR
+  "Apply tide's Mouse, Touchpad and Keyboard settings"). CI checks the
+  shell writes no settings at startup, then one set over IPC, applying
+  each. Still to do:
+  - Keyboard: layouts, repeat delay and rate (the maintainer's first
+    milestone), through the same file's `keyboard` table, which `conf`
+    already reads.
+  - Settings for one device by name, not just every mouse or every
+    touchpad: what the maintainer said matters most, after the first
+    milestone.
+  - On a live session, check a change reaches a mouse and a touchpad at
+    once, and survives `hyprctl reload`.
 - Then the rest of §16's table: Appearance, Displays, Layouts, Clocks and
   Keys.
 

@@ -25,10 +25,11 @@
 # probe finds no sensors, so the system monitor parses one but reads no
 # sensor files; a stand-in hyprctl, answering from the stand-in
 # Hyprland's fixtures, for the bar's title, the lock's layout badge and
-# the focus guard's calls; stand-in gsettings and nmcli, for light and
-# dark and the VPNs, whose monitors report nothing; and a stand-in
-# systemctl, for restarting hypridle once the shell has written its
-# timings, which it checks are the defaults. Data from a timer, a file
+# the focus guard's calls and conf's conf_input.reload(); stand-in
+# gsettings and nmcli, for light and dark and the VPNs, whose monitors
+# report nothing; and a stand-in systemctl, for restarting hypridle once
+# the shell has written its timings, which it checks are the defaults, as
+# it checks the mouse and touchpad settings it writes are none. Data from a timer, a file
 # read, a monitor, or any other command isn't covered.
 #
 # With notify-send, it also runs the shell as the notification server
@@ -514,7 +515,7 @@ load() {
     # The commands' inputs are fixed (the default zones, $TZ, the system's
     # tzdata; the stand-ins' answers), so anything the shell's commands
     # warn of is a failure.
-    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|gsettings|nmcli|no nmcli|systemctl)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run nmcli|replay|tell)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl)" "$log" >"$tmp/reports"; then
+    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|gsettings|nmcli|no nmcli|systemctl)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run nmcli|replay|tell|apply)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl)" "$log" >"$tmp/reports"; then
         echo "FAIL: $_what loaded, but its commands warned:" >&2
         cat "$tmp/reports" >&2
         exit 1
@@ -569,14 +570,16 @@ EOF
     settle
 }
 
-# idle_settings: fails the test unless the shell started by writing
-# hypridle's default timings (SPEC.md §10), then, given a hand edit to
-# idle.local.json and straight after it two times over IPC as the Idle
-# page's + gives them, wrote all three to idle.local.json and to
-# hypridle's timings, and restarted hypridle again. The clicks come before
-# the shell need have heard of the hand edit, and the second before the
-# first could be written in the background. load runs it, as $after_load.
-idle_settings() {
+# written_settings: fails the test unless the shell started by writing
+# hypridle's default timings (SPEC.md §10), and no mouse or touchpad
+# settings for conf's hyprland.lua (§16); then, for each, given a hand edit
+# to its .local.json and straight after it two settings over IPC as the
+# settings panel's pages give them, wrote all three to its .local.json and
+# to the file read, and restarted hypridle or reapplied the devices again.
+# The clicks come before the shell need have heard of the hand edit, and
+# the second before the first could be written in the background. load
+# runs it, as $after_load.
+written_settings() {
     if ! grep -qxF '$tide_idle_lock = 300' "$idle_conf" 2>/dev/null; then
         echo "FAIL: the shell should write hypridle's default timings to $idle_conf; it has: $(cat "$idle_conf" 2>&1)" >&2
         exit 1
@@ -600,6 +603,37 @@ idle_settings() {
         test "$(cat "$idle_local")" = "$_want"; do
         if waited "the shell didn't write a lock time of 600 and a dim time of 120, keeping the hand-edited suspend time of 900, to $idle_conf and $idle_local, and restart hypridle" "$i"; then
             cat "$idle_conf" "$idle_local" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    if ! grep -qxF '    mouse = {},' "$input_conf" 2>/dev/null; then
+        echo "FAIL: the shell should write no mouse settings to $input_conf; it has: $(cat "$input_conf" 2>&1)" >&2
+        exit 1
+    fi
+    _applies=$(grep -c '^hyprctl eval conf_input.reload()$' "$tmp/helpers.log")
+    printf '{\n  "mouse": {\n    "speed": 0.5\n  }\n}\n' >"$input_local" || exit 1
+    ipc call settings setInput mouse leftHanded false >/dev/null || exit 1
+    ipc call settings setInput touchpad tapToClick false >/dev/null || exit 1
+    # As idle's: wait for both files.
+    _want='{
+  "mouse": {
+    "speed": 0.5,
+    "leftHanded": false
+  },
+  "touchpad": {
+    "tapToClick": false
+  }
+}'
+    i=0
+    until grep -qxF '    mouse = { sensitivity = 0.5, left_handed = false },' "$input_conf" 2>/dev/null &&
+        grep -qxF '    touchpad = { tap_to_click = false },' "$input_conf" &&
+        test "$(grep -c '^hyprctl eval conf_input.reload()$' "$tmp/helpers.log")" -gt "$_applies" &&
+        test "$(cat "$input_local")" = "$_want"; do
+        if waited "the shell didn't write a right-handed mouse and a touchpad without tap to click, keeping the hand-edited mouse speed of 0.5, to $input_conf and $input_local, and apply them" "$i"; then
+            cat "$input_conf" "$input_local" >&2
             grep -v '^\[' "$log" >&2
             exit 1
         fi
@@ -663,8 +697,8 @@ focused() {
 # launch`. The app is a desktop entry only this test installs, and the
 # query leaves out its accent ("Café"), so the match also checks the
 # accent folding runs in Qt's engine. Then it opens the settings panel and
-# expects Down twice, past Idle and Sound, and Enter to open the Network
-# page's app. A stand-in tide on
+# expects Down four times, past Idle, Mouse, Touchpad and Sound, and Enter
+# to open the Network page's app. A stand-in tide on
 # the shell's PATH keeps each command rather than running it. Its log is
 # $tmp/launch.qs.log.
 launch() {
@@ -726,7 +760,7 @@ launch() {
     ipc call settings open >/dev/null || exit 1
     focused "$_focus"
     timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
-        LANG=C.UTF-8 "$wtype_path" -k Down -k Down -k Return >"$tmp/wtype.log" 2>&1
+        LANG=C.UTF-8 "$wtype_path" -k Down -k Down -k Down -k Down -k Return >"$tmp/wtype.log" 2>&1
     typed $? "the settings panel"
     i=0
     until test "$(wc -l <"$tmp/launched")" -ge 2; do
@@ -944,8 +978,9 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # The shell makes all these calls; without them, the run says nothing
 # about the clocks, the system monitor, the title, the focus guard (its
 # replay of the waiting windows, and its order for Super+Tab), light and
-# dark, the VPNs, or hypridle's timings. The lock and the greeter only ask
-# for the keyboards, for their layout badges.
+# dark, the VPNs, hypridle's timings, or the mouse and touchpad settings.
+# The lock and the greeter only ask for the keyboards, for their layout
+# badges.
 shell_runs='tide-tz
 tide-sysmon probe
 hyprctl activewindow -j
@@ -956,17 +991,21 @@ gsettings set org.gnome.desktop.interface color-scheme
 gsettings set org.gnome.desktop.interface gtk-theme
 nmcli monitor
 nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show
-systemctl --user try-restart hypridle.service'
+systemctl --user try-restart hypridle.service
+hyprctl eval conf_input.reload()'
 load_runs=$shell_runs
 idle_conf=$tmp/home/.config/hypr/tide-idle.conf
 idle_local=$tmp/home/.config/tide/idle.local.json
-after_load=idle_settings
+input_conf=$tmp/home/.config/hypr/tide-input.lua
+input_local=$tmp/home/.config/tide/input.local.json
+after_load=written_settings
 load shell "the shell" -c tide
 after_load=
 # Gone again, so the next shell starts from the defaults, writes them, and
-# restarts hypridle, too.
-rm "$idle_conf" "$idle_local" || exit 1
+# restarts hypridle and reapplies the devices, too.
+rm "$idle_conf" "$idle_local" "$input_conf" "$input_local" || exit 1
 echo "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
+echo "ok: the shell writes the mouse and touchpad settings, and a new one, and applies them each time"
 load_runs='hyprctl devices -j'
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"

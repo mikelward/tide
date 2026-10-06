@@ -13,6 +13,15 @@ test("a start that wants what the file already says writes and applies nothing",
     assert.equal(started("x", "x").action, null);
 });
 
+test("a start that wants what the file already says applies it when asked to reapply", () => {
+    let r = wantTarget(readTarget(TARGET, "x", true).state, "x");
+    assert.deepEqual(r.action, { apply: true }, "the program may not have it");
+    r = targetApplied(r.state, "");
+    assert.equal(r.action, null);
+    r = wantTarget(readTarget(r.state, "x", true).state, "x");
+    assert.equal(r.action, null, "only the first read");
+});
+
 test("a change is written, then applied", () => {
     let r = started("x", "y");
     assert.deepEqual(r.action, { write: "y" });
