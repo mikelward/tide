@@ -75,14 +75,15 @@ FAKE
 # Stays up until the test kills it, or exits at once with $FAKE_AGENT_EXIT,
 # the first time only with $FAKE_AGENT_EXIT_ONCE; started again after that,
 # it says so on stderr. With $FAKE_AGENT_PIDFILE it records its pid there,
-# where the test's cleanup won't kill it, and says it's running.
+# where the test's cleanup won't kill it, and says it's running, in a
+# session of its own, where the kill after each run won't reach it either.
 cat > "$tmp/agent" <<'FAKE'
 #!/bin/sh
 printf 'agent\n' >> "$FAKE_LOG"
 if test -n "$FAKE_AGENT_PIDFILE"; then
     echo $$ > "$FAKE_AGENT_PIDFILE"
     echo "fake agent running" >&2
-    exec sleep 600 >/dev/null 2>&1
+    exec setsid sleep 600 >/dev/null 2>&1
 fi
 if test -n "$FAKE_AGENT_EXIT_ONCE" && test -e "$FAKE_OWNED/agent-ran"; then
     echo "fake agent started again" >&2
@@ -99,10 +100,17 @@ FAKE
 # They're in their own directory so a run can leave them off the PATH.
 swww=$tmp/swww-bin
 mkdir "$swww"
+# With $FAKE_SWWW_UNRECORDED, swww-daemon records its pid there instead,
+# where the test's cleanup doesn't look, as it would miss one still on its
+# way up.
 cat > "$swww/swww-daemon" <<'FAKE'
 #!/bin/sh
 : > "$FAKE_OWNED/swww-up"
-echo $$ >> "$FAKE_PIDS"
+if test -n "$FAKE_SWWW_UNRECORDED"; then
+    echo $$ > "$FAKE_SWWW_UNRECORDED"
+else
+    echo $$ >> "$FAKE_PIDS"
+fi
 exec sleep 600 >/dev/null 2>&1
 FAKE
 cat > "$swww/swww" <<'FAKE'
@@ -163,6 +171,13 @@ both="org.freedesktop.Notifications org.kde.StatusNotifierWatcher"
 # run ENV...: runs the shell with the fakes. With $stop_on set, the fakes are
 # stopped as soon as the shell prints a line containing it, which ends a
 # shell that would otherwise run for the session.
+#
+# The shell leads a session of its own, as it runs in a cgroup of its own in
+# tide.service, and whatever is left in it once the shell exits is killed,
+# as stopping the unit would. Stopping the fakes by their pids alone missed
+# one that hadn't recorded its pid yet: a daemon the shell started just as
+# it exited (the wallpaper's, when qs exits at once) held the pipe below
+# open, and the test hung.
 stop_on=
 run() {
     rm -rf "$tmp/owned"
@@ -172,12 +187,25 @@ run() {
     # has: the shell, and the agent's watcher once cleanup stops the agent.
     # The long-lived fakes drop the pipe, so they can't hold it open.
     {
+        # shellcheck disable=SC2016  # the session's own sh expands them
         env PATH="$fake:$swww:$PATH" TIDE_BAR=waybar XDG_CONFIG_HOME="$tmp/config" FAKE_OWNED="$tmp/owned" FAKE_LOG="$tmp/log" FAKE_PIDS="$tmp/pids" \
             TIDE_THEME_DAEMON="$tmp/theme-daemon" TIDE_POLKIT_AGENT="$tmp/agent" \
             TIDE_WALLPAPER="$tmp/wallpaper.jpg" TIDE_INPUT_SETUP="$tmp/input-setup" \
-            TIDE_SHELL_WAIT=1 "$@" sh "$shell" 2>&1 >/dev/null
+            TIDE_SHELL_WAIT=1 "$@" setsid -w sh -c 'echo $$ > "$1"; exec sh "$2"' sh "$tmp/session" "$shell" 2>&1 >/dev/null
         echo $? > "$tmp/status"
         cleanup
+        # Mostly nothing is left, and kill fails for that; it's a failure
+        # only if pgrep still finds something in the group (exit 0), or
+        # can't look (over 1). Its message is localized, so it isn't read.
+        session=$(cat "$tmp/session")
+        if ! err=$(kill -KILL "-$session" 2>&1); then
+            pgrep -g "$session" >/dev/null
+            case $? in
+                1) ;;
+                0) echo "$err" > "$tmp/sweep-err" ;;
+                *) echo "pgrep -g $session failed after kill failed ($err)" > "$tmp/sweep-err" ;;
+            esac
+        fi
     } | while IFS= read -r line; do
         printf '%s\n' "$line"
         if test -n "$stop_on"; then
@@ -185,7 +213,41 @@ run() {
         fi
     done > "$tmp/err"
     status=$(cat "$tmp/status")
+    if test -s "$tmp/sweep-err"; then
+        fail "couldn't kill what the shell left: $(cat "$tmp/sweep-err")"
+        rm -f "$tmp/sweep-err"
+    fi
 }
+
+# The race the session kill closes: a daemon the shell started just before
+# it exited, which hadn't recorded its pid for cleanup. Its watcher held the
+# pipe above, and the run never ended: it ends only once the daemon's
+# watcher is gone. The run goes in the background, so a hang fails this check
+# within the deadline instead of hanging the suite; the deadline only bounds a
+# failure, and a passing run ends as soon as the shell does.
+# A failure run reports from there, such as a kill that went wrong, counts
+# in that background copy of the counters, so it exits non-zero to say so.
+rm -f "$tmp/swww.pid"
+failures_before=$failures
+(
+    run FAKE_NAMES="$both" FAKE_SWWW_UNRECORDED="$tmp/swww.pid"
+    test "$failures" -eq "$failures_before"
+) &
+unrecorded_run=$!
+waited=0
+while kill -0 "$unrecorded_run" 2>/dev/null && test "$waited" -lt 300; do
+    sleep 0.1
+    waited=$((waited + 1))
+done
+if kill -0 "$unrecorded_run" 2>/dev/null; then
+    fail "a run whose wallpaper daemon hadn't recorded its pid ends"
+    kill -KILL "-$(cat "$tmp/session")" "$(cat "$tmp/swww.pid")"
+    wait "$unrecorded_run"
+elif wait "$unrecorded_run"; then
+    pass
+else
+    fail "a run whose wallpaper daemon hadn't recorded its pid ends cleanly"
+fi
 
 run FAKE_NAMES="$both"
 log=$(cat "$tmp/log")
