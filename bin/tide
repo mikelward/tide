@@ -90,6 +90,15 @@
 #     A failed suspend exits with its status: polkit refuses one from a
 #     session in the background ("Access denied").
 #
+#   tide prompt-focus
+#
+#     Asks the focus guard whether a polkit prompt opening now may take
+#     the keyboard (SPEC.md §14.1): exits 0 if you pressed a key in the last
+#     2 s, so the prompt follows your pkexec or button, and 1 if not. The
+#     shell's polkit agent asks it, and otherwise offers the prompt through
+#     a notification. Exits 2, saying why, if it can't tell: outside a tide
+#     session, or when the guard can't be asked.
+#
 #   tide doctor
 #
 #     Checks the running session and prints one line per problem, with
@@ -105,6 +114,7 @@ usage() {
     echo "       $prog brightness STEP" >&2
     echo "       $prog idle-lock" >&2
     echo "       $prog idle-suspend" >&2
+    echo "       $prog prompt-focus" >&2
     echo "       $prog doctor" >&2
     exit 2
 }
@@ -527,6 +537,29 @@ idle_suspend() {
     return "$status"
 }
 
+# `hyprctl repl CODE` is the one form that returns the call's value
+# (`eval` answers only ok): Hyprland 0.56's hyprctl/src/main.cpp sends it
+# as a single command with output, and src/config/lua/ConfigManager.cpp
+# prints each returned value.
+prompt_focus() {
+    test $# -eq 0 || usage
+    if ! in_tide; then
+        echo "$prog prompt-focus: not in a tide session, so there's no focus guard to ask" >&2
+        exit 2
+    fi
+    if ! command -v hyprctl >/dev/null 2>&1; then
+        echo "$prog prompt-focus: no hyprctl, so couldn't ask the focus guard" >&2
+        exit 2
+    fi
+    reply=$(hyprctl repl "tide_focus.prompt_may_focus()" 2>&1)
+    case "$reply" in
+        true) exit 0 ;;
+        false) exit 1 ;;
+    esac
+    echo "$prog prompt-focus: couldn't ask the focus guard: ${reply:-no answer}" >&2
+    exit 2
+}
+
 case "${1:-}" in
     launch) shift; launch "$@" ;;
     grant) shift; grant_only "$@" ;;
@@ -535,6 +568,7 @@ case "${1:-}" in
     brightness) shift; brightness "$@" ;;
     idle-lock) shift; idle_lock "$@" ;;
     idle-suspend) shift; idle_suspend "$@" ;;
+    prompt-focus) shift; prompt_focus "$@" ;;
     # Installed beside this script.
     doctor) shift; exec sh "$(dirname "$0")/tide-doctor" "$@" ;;
     *) usage ;;

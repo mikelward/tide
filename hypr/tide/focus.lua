@@ -59,8 +59,8 @@ M.defaults = {
     -- Window classes of polkit agents. Their password prompt takes focus
     -- when you pressed a key in the last prompt_seconds, since that's you
     -- running `pkexec` or pressing a button that asks (SPEC.md §14.1);
-    -- otherwise it waits like any other window. The Quickshell agent (M3)
-    -- replaces this.
+    -- otherwise it waits like any other window. The shell's own agent
+    -- (TIDE_POLKIT=1) draws no window, and asks prompt_may_focus instead.
     prompt_classes = {
         "hyprpolkitagent",
         "polkit-gnome-authentication-agent-1",
@@ -419,14 +419,19 @@ local function class_in(w, classes)
     return false
 end
 
--- A polkit agent's prompt right after a key press (§14.1). Lua sees key
--- presses but not clicks, and not which process asked, so this is the
--- keyboard half of the rule: a prompt after a click waits for Super+Tab.
+-- Whether a polkit prompt opening now follows a key press (§14.1). Lua
+-- sees key presses but not clicks, and not which process asked, so this is
+-- the keyboard half of the rule: a prompt after a click waits. The shell's
+-- own agent asks it too, through `tide prompt-focus`, before its prompt
+-- takes the keyboard.
+function M.prompt_may_focus()
+    return state.last_key ~= nil and M.clock() - state.last_key <= state.opts.prompt_seconds
+end
+
+-- An agent's prompt window: one right after a key press takes focus;
+-- otherwise it waits for Super+Tab.
 local function prompt_you_asked_for(w)
-    if not state.last_key or M.clock() - state.last_key > state.opts.prompt_seconds then
-        return false
-    end
-    return class_in(w, state.opts.prompt_classes)
+    return M.prompt_may_focus() and class_in(w, state.opts.prompt_classes)
 end
 
 -- A portal's file chooser opens for the app you're using. Lua can't see a

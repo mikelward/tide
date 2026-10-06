@@ -227,6 +227,27 @@ test("a polkit prompt long after the last key press waits", function()
     eq(is_attention(fire("window.open", prompt)[1], prompt), true, "waits")
 end)
 
+test("the shell's agent may focus its prompt only right after a key press", function()
+    local m = load()
+    eq(m.prompt_may_focus(), false, "before any key")
+    fire("input.keyboard.key", 28, 5000, 1)
+    now = now + 2
+    eq(m.prompt_may_focus(), true, "within prompt_seconds")
+    now = now + 1
+    eq(m.prompt_may_focus(), false, "after prompt_seconds")
+    fire("input.keyboard.key", 28, 5000, 0) -- a release isn't a press
+    eq(m.prompt_may_focus(), false, "after a release")
+end)
+
+test("prompt_seconds sets how recent the key press must be", function()
+    local m = load({ prompt_seconds = 5 })
+    fire("input.keyboard.key", 28, 5000, 1)
+    now = now + 5
+    eq(m.prompt_may_focus(), true, "within")
+    now = now + 1
+    eq(m.prompt_may_focus(), false, "after")
+end)
+
 test("a recent key press doesn't let other windows in", function()
     load()
     focused(window("kitty"), FFM)
