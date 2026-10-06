@@ -9,7 +9,8 @@
 # doctor"):
 #   - the session's units are running;
 #   - qs, where it's installed, is a Quickshell that loads tide's shell;
-#   - each D-Bus name in §5.2 is owned by the unit that should own it;
+#   - each D-Bus name in §5.2 is owned by the unit that should own it, and
+#     no D-Bus activation file can start a rival for it;
 #   - no daemon runs twice, and no rival to an owner runs at all;
 #   - tide-portals.conf is installed and XDG_CURRENT_DESKTOP selects it;
 #   - Hyprland reports no config errors;
@@ -87,6 +88,325 @@ for pair in \
         comm=$(printf '%s\n' "$out" | sed -n 's/^Comm=//p')
         problem "$name is owned by ${comm:-an unknown process} in ${unit:-no user unit}, not $want: stop that process and keep it from starting in tide"
     fi
+done
+
+# Activatable services (§5.4). A D-Bus activation file for one of those
+# names lets the bus start its daemon whenever the name has no owner, as it
+# has for a moment each time the theme daemon restarts swaync, and that
+# daemon then keeps the name. Every file that claims one is judged, in any
+# of the session bus's service directories: which one the bus would use
+# can't be told from here (it picks arbitrarily among files in one
+# directory, and caches $XDG_RUNTIME_DIR's), so none is taken to shadow
+# another. That's the rule scripts' `setup --tide` applies too, masking
+# each one's unit. That includes a misnamed file in $XDG_RUNTIME_DIR:
+# dbus-daemon ignores one there ("strict naming", dbus-daemon(1)), but
+# dbus-broker, the session bus on Fedora and Arch, loads it with a warning.
+# A file that can't be read can't be judged, and is reported. A file
+# starts nothing when:
+#   - it activates through a systemd unit that's masked or not installed:
+#     with a unit, the unit is what starts, whatever the Exec line says.
+#     `setup --tide` masks the packaged swaync's this way; the shell's own
+#     swaync is run by the theme daemon, not by its unit;
+#   - with no unit, its command is false itself (an override: `false`,
+#     /bin/false or /usr/bin/false, not a script of that name), or
+#     plasma_waitforname, KDE's: that waits for plasmashell, which owns the
+#     name itself under Plasma.
+# Besides the standard directories, the bus reads any its config names
+# with <servicedir>. The config is XML, so it's read with a parser,
+# python3's: from session.conf, through every <include> and <includedir>
+# the way dbus-daemon and dbus-broker follow them, with comments and
+# entities left to the parser. An element's text is taken as is, since
+# neither bus trims it: one spread over lines names no directory. A
+# relative include is relative to the file naming it, in both buses; a
+# relative <servicedir> is too in dbus-daemon, but dbus-broker opens it
+# as given, from its working directory, the home directory, so both are
+# searched. SELinux is judged as libselinux judges it for both buses: an
+# <include> marked if_selinux_enabled is read only while SELinux is on,
+# and one marked selinux_root_relative is relative to the policy root.
+# What can't be read is reported, not passed over: a missing <include>
+# is one only without ignore_missing, and a missing <includedir> never
+# is. $TIDE_DATADIR, $TIDE_SYSCONFDIR and $TIDE_PROC stand in for
+# /usr/share, the bus's own data directory, /etc and /proc in the tests.
+datadir=${TIDE_DATADIR:-/usr/share}
+bus_config=$datadir/dbus-1/session.conf
+# Before dbus 1.10 the config lived under /etc.
+if ! test -e "$bus_config"; then
+    bus_config=${TIDE_SYSCONFDIR:-/etc}/dbus-1/session.conf
+fi
+# Prints "dir PATH" for each <servicedir>, and "problem WHAT" for each
+# file or directory that couldn't be read.
+read_bus_config() {
+    python3 - "$1" "${TIDE_SYSCONFDIR:-/etc}" "${TIDE_PROC:-/proc}" <<'PY'
+import os
+import sys
+import xml.etree.ElementTree as ET
+
+sysconfdir, proc = sys.argv[2], sys.argv[3]
+selinux_config = os.path.join(sysconfdir, "selinux", "config")
+seen = set()
+
+
+def resolve(base, path):
+    return path if os.path.isabs(path) else os.path.join(base, path)
+
+
+def problem(path, why):
+    # One line per report: a newline in a path is shown, not printed.
+    print("problem " + path.replace("\n", "\\n") + " (" + why + ")")
+
+
+def selinux_enabled():
+    # libselinux's is_selinux_enabled(): selinuxfs is mounted and its
+    # config exists.
+    if not os.path.exists(selinux_config):
+        return False
+    mounts = os.path.join(proc, "self", "mounts")
+    try:
+        with open(mounts) as f:
+            return any(line.split()[2:3] == ["selinuxfs"] for line in f)
+    except OSError as e:
+        problem(mounts, e.strerror)
+        return False
+
+
+def selinux_policy_root():
+    # libselinux's selinux_policy_root(): its config's last SELINUXTYPE,
+    # or targeted.
+    policy = "targeted"
+    try:
+        with open(selinux_config) as f:
+            for line in f:
+                line = line.strip()
+                if line[:12].upper() == "SELINUXTYPE=":
+                    policy = line[12:].strip()
+    except OSError as e:
+        problem(selinux_config, e.strerror)
+        return None
+    return os.path.join(sysconfdir, "selinux", policy)
+
+
+def read(path, ignore_missing=False):
+    real = os.path.realpath(path)
+    if real in seen:
+        return
+    seen.add(real)
+    try:
+        root = ET.parse(path).getroot()
+    except FileNotFoundError:
+        if not ignore_missing:
+            problem(path, "it doesn't exist")
+        return
+    except OSError as e:
+        problem(path, e.strerror)
+        return
+    except ET.ParseError as e:
+        problem(path, f"not valid XML: {e}")
+        return
+    base = os.path.dirname(path)
+    for el in root:
+        text = el.text or ""
+        if not text:
+            continue
+        if el.tag == "servicedir":
+            dirs = [resolve(base, text)]
+            if not os.path.isabs(text):
+                dirs.append(os.path.join(os.path.expanduser("~"), text))
+            for d in dirs:
+                # The output is one path per line. A path with a newline
+                # comes from an element spread over lines, which names no
+                # directory either bus finds.
+                if "\n" not in d:
+                    print(f"dir {d}")
+        elif el.tag == "include":
+            if el.get("if_selinux_enabled") == "yes" and not selinux_enabled():
+                continue
+            root = base
+            if el.get("selinux_root_relative") == "yes":
+                root = selinux_policy_root()
+                if root is None:
+                    continue
+            read(resolve(root, text), el.get("ignore_missing") == "yes")
+        elif el.tag == "includedir":
+            d = resolve(base, text)
+            try:
+                names = sorted(n for n in os.listdir(d) if n.endswith(".conf"))
+            except FileNotFoundError:
+                continue
+            except OSError as e:
+                problem(d, e.strerror)
+                continue
+            for n in names:
+                read(os.path.join(d, n))
+
+
+read(sys.argv[1])
+PY
+}
+configured=
+if ! command -v python3 >/dev/null 2>&1; then
+    problem "python3 isn't installed, so service directories the session bus's config adds aren't searched: install python3 (scripts' setup does)"
+elif ! configured=$(read_bus_config "$bus_config" 2>&1); then
+    problem "couldn't read the session bus's config ($(printf '%s\n' "$configured" | tail -n 1)), so service directories it adds aren't searched"
+    configured=
+fi
+while IFS= read -r line; do
+    case "$line" in
+        "problem "*)
+            problem "couldn't read ${line#problem } while reading the session bus's config, so the activatable-services check may miss a service directory it adds"
+            ;;
+    esac
+done <<CONFIG
+$configured
+CONFIG
+dbus_dirs=$(
+    {
+        {
+            test -n "${XDG_RUNTIME_DIR:-}" && printf '%s\n' "$XDG_RUNTIME_DIR"
+            printf '%s\n' "${XDG_DATA_HOME:-$HOME/.local/share}"
+            IFS=:
+            for d in ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do
+                test -n "$d" && printf '%s\n' "$d"
+            done
+            printf '%s\n' "$datadir"
+        } | sed 's|$|/dbus-1/services|'
+        printf '%s\n' "$configured" | sed -n 's/^dir //p'
+    } | awk '!seen[$0]++'
+)
+# Every activation file that declares name $1, one per line.
+activation_files() {
+    while IFS= read -r dir; do
+        for f in "$dir"/*.service; do
+            if ! test -f "$f" || ! test -r "$f"; then
+                continue
+            fi
+            if sed -n '/^Name[[:space:]]*=/{ s/^Name[[:space:]]*=[[:space:]]*//; s/[[:space:]]*$//; p; }' "$f" | grep -qxF -- "$1"; then
+                printf '%s\n' "$f"
+            fi
+        done
+    done <<DIRS
+$dbus_dirs
+DIRS
+}
+# Which package ships file $1: "owned PACKAGE", "unowned", or "failed
+# ERROR" when a package manager couldn't say. Every one installed is asked,
+# since a foreign one (dpkg-query on Fedora, say) owns nothing and would
+# take a packaged file for an unowned one; it's unowned only when none
+# failed. Their messages are read, so they're asked for in English.
+package_of() {
+    asked=
+    failure=
+    for manager in dpkg-query rpm pacman; do
+        command -v "$manager" >/dev/null 2>&1 || continue
+        asked=yes
+        case "$manager" in
+            dpkg-query)
+                out=$(LC_ALL=C dpkg-query -S "$1" 2>&1)
+                status=$?
+                pkg=$(printf '%s\n' "$out" | sed -n '/^diversion /d; s/: .*//p' | head -n 1)
+                unowned='no path found matching pattern'
+                ;;
+            rpm)
+                out=$(LC_ALL=C rpm -qf --qf '%{NAME}\n' "$1" 2>&1)
+                status=$?
+                pkg=$(printf '%s\n' "$out" | head -n 1)
+                unowned='is not owned by any package'
+                ;;
+            pacman)
+                out=$(LC_ALL=C pacman -Qqo "$1" 2>&1)
+                status=$?
+                pkg=$(printf '%s\n' "$out" | head -n 1)
+                unowned='No package owns'
+                ;;
+        esac
+        if test "$status" -eq 0 && test -n "$pkg"; then
+            echo "owned $pkg"
+            return
+        fi
+        if ! { test "$status" -eq 1 && printf '%s\n' "$out" | grep -qF -- "$unowned"; }; then
+            if test -z "$failure"; then
+                failure=$(printf '%s\n' "$out" | tail -n 1)
+                failure=${failure:-$manager exited $status}
+            fi
+        fi
+    done
+    if test -z "$asked"; then
+        echo "failed no dpkg-query, rpm or pacman to ask"
+    elif test -n "$failure"; then
+        echo "failed $failure"
+    else
+        echo unowned
+    fi
+}
+while IFS= read -r dir; do
+    # A directory that can't be listed would look empty.
+    if test -d "$dir" && { ! test -r "$dir" || ! test -x "$dir"; }; then
+        problem "couldn't list $dir, so the activatable-services check is incomplete: check its permissions"
+        continue
+    fi
+    for f in "$dir"/*.service; do
+        if test -f "$f" && ! test -r "$f"; then
+            problem "couldn't read $f, so the activatable-services check is incomplete: check its permissions"
+        fi
+    done
+done <<DIRS
+$dbus_dirs
+DIRS
+# What the files miss, the bus can answer: a name it can start that no file
+# claims is one whose file was removed after the bus read it (it never
+# rereads $XDG_RUNTIME_DIR on its own), or one in a directory doctor
+# doesn't search.
+if activatable=$(busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ListActivatableNames 2>&1); then
+    activatable=$(printf '%s\n' "$activatable" | tr ' ' '\n' | sed -n 's/^"\(.*\)"$/\1/p')
+else
+    problem "couldn't ask the session bus which names it can start (${activatable}), so a rival with no activation file left isn't checked for"
+    activatable=
+fi
+for name in org.freedesktop.Notifications org.kde.StatusNotifierWatcher org.freedesktop.ScreenSaver; do
+    files=$(activation_files "$name")
+    if test -z "$files" && printf '%s\n' "$activatable" | grep -qxF -- "$name"; then
+        problem "D-Bus can start something for $name whenever it has no owner, but no activation file doctor reads names it: its file was removed after the bus read it, or is in a directory doctor doesn't search; \`busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig\` makes the bus forget a removed one"
+    fi
+    while IFS= read -r file; do
+        test -n "$file" || continue
+        unit=$(sed -n '/^SystemdService[[:space:]]*=/{ s/^SystemdService[[:space:]]*=[[:space:]]*//; s/[[:space:]]*$//; p; }' "$file" | head -n 1)
+        command=$(sed -n '/^Exec[[:space:]]*=/{ s/^Exec[[:space:]]*=[[:space:]]*//; s/[[:space:]]*$//; p; }' "$file" | head -n 1)
+        program=${command%%[[:space:]]*}
+        if test -z "$unit"; then
+            case "$program" in
+                false | /bin/false | /usr/bin/false | plasma_waitforname | */plasma_waitforname) continue ;;
+            esac
+        fi
+        found=$(package_of "$file")
+        case "$found" in
+            "owned "*)
+                pkg=${found#owned }
+                from="$file (from the $pkg package)"
+                remove="remove the $pkg package"
+                ;;
+            unowned)
+                from=$file
+                remove="remove that file"
+                ;;
+            *)
+                from="$file (which package ships it couldn't be told: ${found#failed })"
+                remove="remove the package that ships it, or the file if none does"
+                ;;
+        esac
+        if test -n "$unit"; then
+            if ! state=$(systemctl --user show -p LoadState --value "$unit" 2>&1); then
+                problem "couldn't check whether $unit is masked ($state), so $from may let D-Bus start it whenever $name has no owner"
+                continue
+            fi
+            case "$state" in
+                masked | not-found) continue ;;
+            esac
+            problem "$from lets D-Bus start $unit whenever $name has no owner, and it would then keep the name from tide: \`systemctl --user mask $unit\`"
+        else
+            problem "$from lets D-Bus start ${program:-its daemon} whenever $name has no owner, and it would then keep the name from tide; it has no unit to mask: $remove"
+        fi
+    done <<FILES
+$files
+FILES
 done
 
 # Processes. `pgrep -x` matches the process name, which the kernel cuts to

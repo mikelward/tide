@@ -502,10 +502,24 @@ flowchart TD
 
   It prints one line per problem, with the fix.
   - M2's `tide doctor` checks the transitional shell's owners
-    (swaync, waybar) and the units, rival daemons, portal config, config
-    errors, autostart entries and bars per monitor, and that `qs`, where
-    it's installed, is new enough to load the shell. Activatable services
-    wait for the Quickshell owners (TODO.md).
+    (swaync, waybar) and the units, activatable services, rival daemons,
+    portal config, config errors, autostart entries and bars per monitor,
+    and that `qs`, where it's installed, is new enough to load the shell.
+  - Every activation file in the session bus's service directories (the
+    standard ones and any its config adds) that names an owner's D-Bus
+    name is judged, since which one the bus would use can't be told from
+    outside. One is harmless when it activates
+    through a masked systemd unit, which is how `setup --tide` keeps out
+    the packaged notification daemons, swaync's included (the transitional
+    shell runs swaync itself). Otherwise doctor names the file, the package
+    that ships it, and the unit to mask or the package to remove.
+  - It also asks the bus which names it can start. One of those names
+    that no file claims is reported too: its file was removed after the
+    bus read it, or is in a directory doctor doesn't search.
+  - The directories the config adds are found by reading it as XML,
+    with python3, through its includes, the way both buses do. A config
+    file doctor can't read, or no python3, is reported, since either
+    leaves directories unsearched.
 
 ### 5.5 Coexisting with KDE
 
@@ -2560,6 +2574,52 @@ systemd 255's `systemd-analyze verify` in `session_test.sh`:
   `app-<desktop ID, unit-name escaped>@autostart.service`
   ([NEWS](https://github.com/systemd/systemd/blob/main/NEWS), "CHANGES WITH 246";
   [`xdg-autostart-service.c`](https://github.com/systemd/systemd/blob/main/src/xdg-autostart-generator/xdg-autostart-service.c))
+
+Checked 2026-10-06, for §5.4's activatable-services check:
+
+- dbus 1.16.2:
+  [`dbus-daemon(1)`](https://gitlab.freedesktop.org/dbus/dbus/-/blob/dbus-1.16.2/doc/dbus-daemon.1.xml.in)
+  (the standard session service directories; between two files in one
+  directory the pick is arbitrary; `$XDG_RUNTIME_DIR/dbus-1/services`
+  enforces strict naming and is never monitored) and
+  [`bus/activation.c`](https://gitlab.freedesktop.org/dbus/dbus/-/blob/dbus-1.16.2/bus/activation.c)
+  (with systemd activation, a file's `SystemdService` is sent to systemd,
+  and its `Exec` isn't run)
+- dbus-broker 37:
+  [`src/launch/launcher.c`](https://github.com/bus1/dbus-broker/blob/v37/src/launch/launcher.c)
+  (a service file needs `Name` but not `Exec`; on a user bus a misnamed
+  one is loaded, with a warning, in any directory) and
+  [`src/launch/service.c`](https://github.com/bus1/dbus-broker/blob/v37/src/launch/service.c)
+  (activation starts the `SystemdService` unit, or a transient unit for
+  `Exec`; a masked or missing unit fails it)
+- The session bus's config:
+  dbus 1.16.2's
+  [`bus/config-parser.c`](https://gitlab.freedesktop.org/dbus/dbus/-/blob/dbus-1.16.2/bus/config-parser.c)
+  and
+  [`bus/config-loader-expat.c`](https://gitlab.freedesktop.org/dbus/dbus/-/blob/dbus-1.16.2/bus/config-loader-expat.c),
+  and dbus-broker 37's
+  [`src/launch/config.c`](https://github.com/bus1/dbus-broker/blob/v37/src/launch/config.c).
+  An `<include>` or `<includedir>` is relative to the file naming it; an
+  `<includedir>` takes its `*.conf` files, and a missing one is skipped;
+  a missing `<include>` is an error unless `ignore_missing="yes"`. An
+  element's text is used as is, untrimmed. A relative `<servicedir>` is
+  relative to the file in dbus-daemon, but dbus-broker opens it as given
+  ([`src/launch/launcher.c`](https://github.com/bus1/dbus-broker/blob/v37/src/launch/launcher.c)),
+  from its working directory: a user unit's defaults to the home
+  directory (systemd v258,
+  [`systemd.exec(5)`](https://github.com/systemd/systemd/blob/v258/man/systemd.exec.xml),
+  `WorkingDirectory=`), and `dbus-broker.service` sets none. Both buses
+  read an `<include>` marked `if_selinux_enabled` only while SELinux is
+  on, and resolve one marked `selinux_root_relative` against the policy
+  root, asking libselinux for both.
+- libselinux 3.9:
+  [`enabled.c`](https://github.com/SELinuxProject/selinux/blob/3.9/libselinux/src/enabled.c)
+  and [`init.c`](https://github.com/SELinuxProject/selinux/blob/3.9/libselinux/src/init.c)
+  (SELinux is on when selinuxfs is mounted and `/etc/selinux/config`
+  exists) and
+  [`selinux_config.c`](https://github.com/SELinuxProject/selinux/blob/3.9/libselinux/src/selinux_config.c)
+  (the policy root is `/etc/selinux/` plus the config's `SELINUXTYPE`,
+  `targeted` by default)
 
 Checked 2026-10-05, for §21.2:
 

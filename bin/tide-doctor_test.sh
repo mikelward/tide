@@ -57,6 +57,19 @@ if test "$2" = show && test "$4" = ActiveEnterTimestampMonotonic; then
     echo "${FAKE_SESSION_START:-100}"
     exit 0
 fi
+# show -p LoadState --value UNIT: loaded, or $FAKE_LOADSTATE's state for the
+# unit it names (UNIT=STATE); it fails with $FAKE_LOADSTATE_FAILS.
+if test "$2" = show && test "$4" = LoadState; then
+    if test -n "$FAKE_LOADSTATE_FAILS"; then
+        echo "$FAKE_LOADSTATE_FAILS" >&2
+        exit 1
+    fi
+    case " $FAKE_LOADSTATE " in
+        *" $6="*) state=${FAKE_LOADSTATE#*"$6"=}; echo "${state%% *}"; exit 0 ;;
+    esac
+    echo loaded
+    exit 0
+fi
 if test "$2" = show; then
     if test -n "$FAKE_SHOW_FAILS"; then
         echo "$FAKE_SHOW_FAILS" >&2
@@ -81,6 +94,19 @@ FAKE
 # $FAKE_OWNED holding "COMM UNIT".
 cat > "$fake/busctl" <<'FAKE'
 #!/bin/sh
+# busctl --user call ... ListActivatableNames: the names in
+# $FAKE_ACTIVATABLE, or fails with $FAKE_ACTIVATABLE_FAILS.
+if test "$2" = call; then
+    if test -n "$FAKE_ACTIVATABLE_FAILS"; then
+        echo "$FAKE_ACTIVATABLE_FAILS" >&2
+        exit 1
+    fi
+    set -- $FAKE_ACTIVATABLE
+    printf 'as %s' "$#"
+    for n in "$@"; do printf ' "%s"' "$n"; done
+    printf '\n'
+    exit 0
+fi
 test -e "$FAKE_OWNED/$3" || { echo "Failed to get credentials: No such device or address" >&2; exit 1; }
 read -r comm unit < "$FAKE_OWNED/$3"
 printf 'PID=42\nComm=%s\nUserUnit=%s\n' "$comm" "$unit"
@@ -121,6 +147,47 @@ case "$*" in
     *) printf '%s' "$FAKE_CONFIGERRORS" ;;
 esac
 FAKE
+# dpkg-query -S PATH names the package $FAKE_PACKAGES gives for PATH's
+# file name (NAME=PACKAGE words), and fails as dpkg-query does for a file no
+# package owns, or with $FAKE_DPKG_FAILS as it does when it can't look.
+cat > "$fake/dpkg-query" <<'FAKE'
+#!/bin/sh
+if test -n "$FAKE_DPKG_FAILS"; then
+    echo "$FAKE_DPKG_FAILS" >&2
+    exit 2
+fi
+for p in $FAKE_PACKAGES; do
+    if test "${p%%=*}" = "${2##*/}"; then
+        printf '%s: %s\n' "${p#*=}" "$2"
+        exit 0
+    fi
+done
+echo "dpkg-query: no path found matching pattern $2" >&2
+exit 1
+FAKE
+# rpm -qf PATH answers the same way from $FAKE_RPM_PACKAGES, or fails with
+# $FAKE_RPM_FAILS. pacman owns nothing. With all three on PATH, a host's
+# own rpm or pacman database never enters a test.
+cat > "$fake/rpm" <<'FAKE'
+#!/bin/sh
+if test -n "$FAKE_RPM_FAILS"; then
+    echo "$FAKE_RPM_FAILS" >&2
+    exit 1
+fi
+for p in $FAKE_RPM_PACKAGES; do
+    if test "${p%%=*}" = "${4##*/}"; then
+        printf '%s\n' "${p#*=}"
+        exit 0
+    fi
+done
+echo "file $4 is not owned by any package"
+exit 1
+FAKE
+cat > "$fake/pacman" <<'FAKE'
+#!/bin/sh
+echo "error: No package owns $2" >&2
+exit 1
+FAKE
 # qs --version answers as Quickshell 0.3.1, or prints $FAKE_QS_VERSION and
 # exits $FAKE_QS_VERSION_STATUS. It comes before any real qs on PATH, and in
 # a directory of its own, so a run can leave it off.
@@ -145,7 +212,8 @@ chmod +x "$fake"/* "$tmp/qs-bin/qs"
 # A healthy session: every owner in place, one of each daemon, the portal
 # config installed, and no autostart unit running.
 healthy() {
-    rm -rf "${tmp:?}/owned" "${tmp:?}/proc" "${tmp:?}/config" "${tmp:?}/etc" "${tmp:?}/share"
+    rm -rf "${tmp:?}/owned" "${tmp:?}/proc" "${tmp:?}/config" "${tmp:?}/etc" "${tmp:?}/share" \
+        "${tmp:?}/runtime" "${tmp:?}/datadir" "${tmp:?}/sysconf" "${tmp:?}/no-data-home"
     mkdir -p "$tmp/owned" "$tmp/config/xdg-desktop-portal" "$tmp/etc" "$tmp/share"
     echo "swaync tide.service" > "$tmp/owned/org.freedesktop.Notifications"
     echo "waybar tide.service" > "$tmp/owned/org.kde.StatusNotifierWatcher"
@@ -158,6 +226,26 @@ healthy() {
     echo "0::/user.slice/user-1000.slice/user@1000.service/session.slice/hypridle.service" > "$tmp/proc/101/cgroup"
     printf 'HOME=/home/user\0' > "$tmp/proc/100/environ"
     cp xdg-desktop-portal/tide-portals.conf "$tmp/config/xdg-desktop-portal/"
+    # The session bus's config, laid out as dbus ships it: the standard
+    # directories, then the local files under (here) $tmp/sysconf.
+    mkdir -p "$tmp/datadir/dbus-1"
+    bus_conf
+}
+# bus_conf [LINE...]: writes the session bus's config, the one doctor
+# starts from, with LINEs inside <busconfig> after the shipped ones.
+bus_conf() {
+    {
+        printf '%s\n' '<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"' \
+            ' "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">' \
+            '<busconfig>' '  <standard_session_servicedirs />' \
+            "  <include ignore_missing=\"yes\">$tmp/sysconf/dbus-1/session.conf</include>" \
+            '  <includedir>session.d</includedir>' \
+            "  <includedir>$tmp/sysconf/dbus-1/session.d</includedir>" \
+            "  <include ignore_missing=\"yes\">$tmp/sysconf/dbus-1/session-local.conf</include>" \
+            '  <include if_selinux_enabled="yes" selinux_root_relative="yes">contexts/dbus_contexts</include>'
+        printf '%s\n' "$@"
+        printf '%s\n' '</busconfig>'
+    } > "$tmp/datadir/dbus-1/session.conf"
 }
 
 # run ENV...: runs the doctor in a tide session unless ENV says
@@ -166,6 +254,7 @@ run() {
     env PATH="$fake:$tmp/qs-bin:$PATH" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" \
         XDG_CURRENT_DESKTOP=tide:Hyprland XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" \
         XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_HOME="$tmp/no-data-home" XDG_DATA_DIRS="$tmp/share" \
+        XDG_RUNTIME_DIR="$tmp/runtime" TIDE_DATADIR="$tmp/datadir" TIDE_SYSCONFDIR="$tmp/sysconf" \
         FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_PID_hypridle=101 \
         "$@" sh "$doctor" > "$tmp/out" 2> "$tmp/err"
     status=$?
@@ -212,6 +301,256 @@ echo "dunst app-dunst@autostart.service" > "$tmp/owned/org.freedesktop.Notificat
 run
 check "a name owned by the wrong unit names the owner" \
     contains "$out" "org.freedesktop.Notifications is owned by dunst in app-dunst@autostart.service, not tide.service"
+
+# Activation files: service DIR NAME [LINE...] writes DIR/dbus-1/services/
+# NAME, declaring the name LINEs name.
+service() {
+    mkdir -p "$1/dbus-1/services"
+    _file=$1/dbus-1/services/$2
+    shift 2
+    printf '[D-BUS Service]\n' > "$_file"
+    printf '%s\n' "$@" >> "$_file"
+}
+dunst() {
+    service "$1" org.knopwob.dunst.service Name=org.freedesktop.Notifications \
+        Exec=/usr/bin/dunst SystemdService=dunst.service
+}
+healthy
+dunst "$tmp/datadir"
+service "$tmp/datadir" org.knopwob.other.service Name=org.knopwob.dunst Exec=/usr/bin/other
+run FAKE_PACKAGES="org.knopwob.dunst.service=dunst"
+check "an activatable rival is a problem" test "$status" -eq 1
+check "an activatable rival is named by its unit, file and package, with the fix" \
+    contains "$out" "$tmp/datadir/dbus-1/services/org.knopwob.dunst.service (from the dunst package) lets D-Bus start dunst.service whenever org.freedesktop.Notifications has no owner, and it would then keep the name from tide: \`systemctl --user mask dunst.service\`"
+check "an activation file for another name isn't a problem" test -z "$(grep 'other' "$tmp/out")"
+run
+check "an activation file no package owns is named alone" \
+    contains "$out" "$tmp/datadir/dbus-1/services/org.knopwob.dunst.service lets D-Bus start dunst.service"
+run FAKE_LOADSTATE="dunst.service=masked"
+check "an activation file whose unit is masked starts nothing" test "$out" = "No problems found."
+run FAKE_LOADSTATE="dunst.service=not-found"
+check "an activation file whose unit isn't installed starts nothing" test "$out" = "No problems found."
+run FAKE_LOADSTATE_FAILS="Failed to connect to bus"
+check "failing to read a unit's state is reported, not taken as masked" \
+    contains "$out" "couldn't check whether dunst.service is masked (Failed to connect to bus), so $tmp/datadir/dbus-1/services/org.knopwob.dunst.service may let D-Bus start it whenever org.freedesktop.Notifications has no owner"
+
+healthy
+service "$tmp/share" org.xfce.xfce4-notifyd.Notifications.service \
+    "Name = org.freedesktop.Notifications" "Exec = /usr/lib/xfce4/notifyd/xfce4-notifyd --replace"
+run FAKE_PACKAGES="org.xfce.xfce4-notifyd.Notifications.service=xfce4-notifyd"
+check "one with no unit is named by its command, with the package to remove" \
+    contains "$out" "$tmp/share/dbus-1/services/org.xfce.xfce4-notifyd.Notifications.service (from the xfce4-notifyd package) lets D-Bus start /usr/lib/xfce4/notifyd/xfce4-notifyd whenever org.freedesktop.Notifications has no owner, and it would then keep the name from tide; it has no unit to mask: remove the xfce4-notifyd package"
+run
+check "one with no unit and no package is the file to remove" \
+    contains "$out" "$tmp/share/dbus-1/services/org.xfce.xfce4-notifyd.Notifications.service lets D-Bus start /usr/lib/xfce4/notifyd/xfce4-notifyd whenever org.freedesktop.Notifications has no owner, and it would then keep the name from tide; it has no unit to mask: remove that file"
+run FAKE_DPKG_FAILS="dpkg-query: error: parsing file '/var/lib/dpkg/status' near line 9"
+check "a package lookup that fails is reported, not taken for no package" \
+    contains "$out" "(which package ships it couldn't be told: dpkg-query: error: parsing file '/var/lib/dpkg/status' near line 9)"
+check "a package lookup that fails doesn't say to remove the file alone" \
+    contains "$out" "it has no unit to mask: remove the package that ships it, or the file if none does"
+run FAKE_RPM_PACKAGES="org.xfce.xfce4-notifyd.Notifications.service=xfce4-notifyd"
+check "a file dpkg doesn't know is looked up in rpm too" \
+    contains "$out" "(from the xfce4-notifyd package) lets D-Bus start /usr/lib/xfce4/notifyd/xfce4-notifyd"
+run FAKE_RPM_FAILS="error: cannot open Packages database in /var/lib/rpm"
+check "one manager failing, with none owning the file, is a failed lookup" \
+    contains "$out" "(which package ships it couldn't be told: error: cannot open Packages database in /var/lib/rpm)"
+
+
+healthy
+service "$tmp/datadir" org.kde.plasma.Notifications.service Name=org.freedesktop.Notifications \
+    "Exec=/usr/bin/plasma_waitforname org.freedesktop.Notifications"
+run
+check "KDE's plasma_waitforname entry starts nothing" test "$out" = "No problems found."
+service "$tmp/datadir" org.example.Wrapped.service Name=org.freedesktop.Notifications \
+    "Exec=/usr/bin/env HELPER=plasma_waitforname /usr/bin/dunst"
+service "$tmp/datadir" org.example.False.service Name=org.freedesktop.Notifications \
+    "Exec=/home/user/bin/false"
+run
+check "plasma_waitforname as another command's argument isn't KDE's" \
+    contains "$out" "$tmp/datadir/dbus-1/services/org.example.Wrapped.service lets D-Bus start /usr/bin/env"
+check "a script named false isn't an override" \
+    contains "$out" "$tmp/datadir/dbus-1/services/org.example.False.service lets D-Bus start /home/user/bin/false"
+
+# Which file the bus uses can't be told from outside (an arbitrary pick in
+# one directory, a cached XDG_RUNTIME_DIR), so every one is judged and none
+# shadows another.
+healthy
+dunst "$tmp/datadir"
+service "$tmp/no-data-home" quiet.service Name=org.freedesktop.Notifications Exec=/bin/false
+run
+check "an Exec=false override is no problem itself" test -z "$(grep 'quiet.service' "$tmp/out")"
+check "an override doesn't excuse the rival it would shadow" \
+    contains "$out" "$tmp/datadir/dbus-1/services/org.knopwob.dunst.service lets D-Bus start dunst.service"
+service "$tmp/no-data-home" quiet.service Name=org.freedesktop.Notifications Exec=/bin/false SystemdService=quiet.service
+run
+check "Exec=false doesn't stop a unit from being activated" \
+    contains "$out" "$tmp/no-data-home/dbus-1/services/quiet.service lets D-Bus start quiet.service"
+rm -r "$tmp/no-data-home"
+service "$tmp/runtime" org.freedesktop.Notifications.service Name=org.freedesktop.Notifications Exec=/usr/bin/swaync SystemdService=swaync.service
+service "$tmp/runtime" misnamed.service Name=org.freedesktop.Notifications Exec=/usr/bin/mako
+run FAKE_LOADSTATE="dunst.service=masked"
+check "a file in XDG_RUNTIME_DIR named after its name is judged" \
+    contains "$out" "$tmp/runtime/dbus-1/services/org.freedesktop.Notifications.service lets D-Bus start swaync.service"
+check "so is a misnamed one, which dbus-broker loads though dbus-daemon doesn't" \
+    contains "$out" "$tmp/runtime/dbus-1/services/misnamed.service lets D-Bus start /usr/bin/mako"
+rm -r "$tmp/runtime"
+dunst "$tmp/share"
+chmod 000 "$tmp/share/dbus-1/services/org.knopwob.dunst.service"
+if ! cat "$tmp/share/dbus-1/services/org.knopwob.dunst.service" >/dev/null 2>&1; then
+    run FAKE_LOADSTATE="dunst.service=masked"
+    check "an unreadable activation file is reported, not passed over" \
+        contains "$out" "couldn't read $tmp/share/dbus-1/services/org.knopwob.dunst.service, so the activatable-services check is incomplete"
+fi # root reads it anyway
+rm -f "$tmp/share/dbus-1/services/org.knopwob.dunst.service"
+dunst "$tmp/share"
+chmod 000 "$tmp/share/dbus-1/services"
+if ! ls "$tmp/share/dbus-1/services" >/dev/null 2>&1; then
+    run FAKE_LOADSTATE="dunst.service=masked"
+    check "a service directory that can't be listed is reported, not taken for empty" \
+        contains "$out" "couldn't list $tmp/share/dbus-1/services, so the activatable-services check is incomplete"
+fi # root lists it anyway
+chmod 755 "$tmp/share/dbus-1/services"
+rm -f "$tmp/share/dbus-1/services/org.knopwob.dunst.service"
+service "$tmp/share" swaync.service Name=org.freedesktop.Notifications Exec=/usr/bin/swaync SystemdService=swaync.service
+run
+check "files in every directory are judged" \
+    test "$(grep -c 'lets D-Bus start' "$tmp/out")" -eq 2
+run FAKE_LOADSTATE="swaync.service=masked dunst.service=masked"
+check "every file masked is no problem" test "$out" = "No problems found."
+service "$tmp/datadir" org.erikreider.swaync.service Name=org.freedesktop.Notifications Exec=/usr/bin/swaync SystemdService=swaync-other.service
+run FAKE_LOADSTATE="swaync.service=masked dunst.service=masked"
+check "a second file in one directory is judged too, whichever the bus picks" \
+    contains "$out" "$tmp/datadir/dbus-1/services/org.erikreider.swaync.service lets D-Bus start swaync-other.service"
+
+# The bus config can add service directories, through its includes,
+# absolute or relative: to the file naming them for dbus-daemon, and to
+# the home directory for dbus-broker. It's read as XML, as the buses read
+# it: a commented-out one isn't one, and neither is one spread over lines,
+# since neither bus trims an element's text.
+healthy
+mkdir -p "$tmp/sysconf/dbus-1/session.d" "$tmp/datadir/dbus-1/session.d/more" "$tmp/extra" \
+    "$tmp/nested" "$tmp/commented" "$tmp/spread" "$tmp/home/more"
+printf '<busconfig>\n  <servicedir>%s</servicedir>\n  <!-- <servicedir>%s</servicedir> -->\n  <servicedir>\n    %s\n  </servicedir>\n</busconfig>\n' \
+    "$tmp/extra" "$tmp/commented" "$tmp/spread" > "$tmp/sysconf/dbus-1/session-local.conf"
+printf '<busconfig><servicedir>more</servicedir></busconfig>\n' > "$tmp/datadir/dbus-1/session.d/more.conf"
+printf '<busconfig><include>%s</include></busconfig>\n' "$tmp/nested/inner.xml" \
+    > "$tmp/sysconf/dbus-1/session.d/outer.conf"
+printf '<busconfig><servicedir>%s</servicedir><include>%s</include></busconfig>\n' \
+    "$tmp/nested" "$tmp/sysconf/dbus-1/session.d/outer.conf" > "$tmp/nested/inner.xml"
+printf '[D-BUS Service]\nName=org.freedesktop.Notifications\nExec=/usr/bin/mako\n' > "$tmp/extra/mako.service"
+printf '[D-BUS Service]\nName=org.freedesktop.Notifications\nExec=/usr/bin/fnott\n' \
+    > "$tmp/datadir/dbus-1/session.d/more/fnott.service"
+printf '[D-BUS Service]\nName=org.freedesktop.Notifications\nExec=/usr/bin/dunst\n' > "$tmp/home/more/dunst.service"
+printf '[D-BUS Service]\nName=org.freedesktop.Notifications\nExec=/usr/bin/nested\n' > "$tmp/nested/nested.service"
+printf '[D-BUS Service]\nName=org.freedesktop.Notifications\nExec=/usr/bin/commented\n' > "$tmp/commented/commented.service"
+printf '[D-BUS Service]\nName=org.freedesktop.Notifications\nExec=/usr/bin/spread\n' > "$tmp/spread/spread.service"
+run HOME="$tmp/home"
+check "a service directory the bus config's included file adds is searched" \
+    contains "$out" "$tmp/extra/mako.service lets D-Bus start /usr/bin/mako"
+check "a relative one is searched relative to the file naming it" \
+    contains "$out" "$tmp/datadir/dbus-1/session.d/more/fnott.service lets D-Bus start /usr/bin/fnott"
+check "and relative to the home directory" \
+    contains "$out" "$tmp/home/more/dunst.service lets D-Bus start /usr/bin/dunst"
+check "includes are followed through an includedir, and a cycle ends" \
+    contains "$out" "$tmp/nested/nested.service lets D-Bus start /usr/bin/nested"
+check "a commented-out service directory isn't searched" test -z "$(grep commented "$tmp/out")"
+check "nor is one spread over lines" test -z "$(grep spread "$tmp/out")"
+rm "$tmp/extra/mako.service" "$tmp/datadir/dbus-1/session.d/more/fnott.service" "$tmp/nested/nested.service" \
+    "$tmp/home/more/dunst.service"
+run HOME="$tmp/home"
+check "a bus config adding only clean directories is no problem" test "$out" = "No problems found."
+chmod 000 "$tmp/sysconf/dbus-1/session-local.conf"
+if ! cat "$tmp/sysconf/dbus-1/session-local.conf" >/dev/null 2>&1; then
+    run
+    check "an unreadable bus config file is reported" \
+        contains "$out" "couldn't read $tmp/sysconf/dbus-1/session-local.conf (Permission denied) while reading the session bus's config, so the activatable-services check may miss a service directory it adds"
+fi # root reads it anyway
+chmod 644 "$tmp/sysconf/dbus-1/session-local.conf"
+chmod 000 "$tmp/sysconf/dbus-1/session.d"
+if ! ls "$tmp/sysconf/dbus-1/session.d" >/dev/null 2>&1; then
+    run
+    check "an unreadable bus config directory is reported" \
+        contains "$out" "couldn't read $tmp/sysconf/dbus-1/session.d (Permission denied) while reading"
+fi # root lists it anyway
+chmod 755 "$tmp/sysconf/dbus-1/session.d"
+printf '<busconfig><servicedir>\n' > "$tmp/sysconf/dbus-1/session-local.conf"
+run
+check "a bus config file that isn't XML is reported" \
+    contains "$out" "couldn't read $tmp/sysconf/dbus-1/session-local.conf (not valid XML:"
+bus_conf "  <include>$tmp/sysconf/dbus-1/gone.conf</include>"
+rm "$tmp/sysconf/dbus-1/session-local.conf"
+run
+check "a missing include is reported" \
+    contains "$out" "couldn't read $tmp/sysconf/dbus-1/gone.conf (it doesn't exist) while reading"
+check "a missing ignore_missing one isn't" test -z "$(grep session-local "$tmp/out")"
+
+# SELinux decides two of the includes, as libselinux decides it for both
+# buses: one marked if_selinux_enabled is read only while selinuxfs is
+# mounted and SELinux's config exists, and one marked selinux_root_relative
+# is relative to the policy root SELINUXTYPE names.
+healthy
+mkdir -p "$tmp/selinux-only" "$tmp/sysconf/selinux/mls/contexts" "$tmp/proc/self"
+bus_conf "  <include if_selinux_enabled=\"yes\">$tmp/selinux-only.conf</include>"
+printf '<busconfig><servicedir>%s</servicedir></busconfig>\n' "$tmp/selinux-only" > "$tmp/selinux-only.conf"
+printf '[D-BUS Service]\nName=org.freedesktop.Notifications\nExec=/usr/bin/gated\n' > "$tmp/selinux-only/gated.service"
+printf '<busconfig><servicedir>%s</servicedir></busconfig>\n' "$tmp/selinux-only" \
+    > "$tmp/sysconf/selinux/mls/contexts/dbus_contexts"
+printf 'proc /proc proc rw 0 0\n' > "$tmp/proc/self/mounts"
+printf '# SELINUXTYPE=targeted\nSELINUXTYPE=mls\n' > "$tmp/sysconf/selinux/config"
+run
+check "with selinuxfs unmounted, an if_selinux_enabled include isn't read" \
+    test "$out" = "No problems found."
+printf 'selinuxfs /sys/fs/selinux selinuxfs rw 0 0\n' >> "$tmp/proc/self/mounts"
+rm "$tmp/sysconf/selinux/config"
+run
+check "nor without SELinux's config" test "$out" = "No problems found."
+printf '# SELINUXTYPE=targeted\nSELINUXTYPE=mls\n' > "$tmp/sysconf/selinux/config"
+run
+check "with SELinux on, an if_selinux_enabled include is read" \
+    contains "$out" "$tmp/selinux-only/gated.service lets D-Bus start /usr/bin/gated"
+rm "$tmp/selinux-only.conf"
+bus_conf
+run
+check "and a root-relative one is read from the policy root" \
+    contains "$out" "$tmp/selinux-only/gated.service lets D-Bus start /usr/bin/gated"
+rm "$tmp/sysconf/selinux/mls/contexts/dbus_contexts"
+run
+check "a missing root-relative include with ignore_missing unset is reported" \
+    contains "$out" "couldn't read $tmp/sysconf/selinux/mls/contexts/dbus_contexts (it doesn't exist)"
+
+healthy
+service "$tmp/datadir" org.example.Watcher.service Name=org.kde.StatusNotifierWatcher Exec=/usr/bin/snixembed
+service "$tmp/datadir" org.example.Saver.service Name=org.freedesktop.ScreenSaver Exec=/usr/bin/saver
+service "$tmp/datadir" org.example.Near.service Name=org.freedesktop.NotificationsX Exec=/usr/bin/near
+run
+check "an activatable tray watcher is a problem" \
+    contains "$out" "lets D-Bus start /usr/bin/snixembed whenever org.kde.StatusNotifierWatcher has no owner"
+check "an activatable screensaver is a problem" \
+    contains "$out" "lets D-Bus start /usr/bin/saver whenever org.freedesktop.ScreenSaver has no owner"
+check "a name is matched whole" test -z "$(grep 'near' "$tmp/out")"
+
+# A name the bus can start that no file claims is reported.
+healthy
+run FAKE_ACTIVATABLE="org.freedesktop.Notifications org.example.Other"
+check "a name the bus can start with no file left is a problem" \
+    contains "$out" "D-Bus can start something for org.freedesktop.Notifications whenever it has no owner, but no activation file doctor reads names it"
+check "another activatable name isn't" test -z "$(grep 'org.example.Other' "$tmp/out")"
+dunst "$tmp/datadir"
+run FAKE_ACTIVATABLE="org.freedesktop.Notifications" FAKE_LOADSTATE="dunst.service=masked"
+check "a name a judged file claims isn't reported again" test "$out" = "No problems found."
+run FAKE_ACTIVATABLE_FAILS="Failed to connect to bus: No such file or directory"
+check "failing to ask the bus is reported" \
+    contains "$out" "couldn't ask the session bus which names it can start (Failed to connect to bus: No such file or directory)"
+
+# The bus trims a value's trailing space, so doctor does too.
+healthy
+service "$tmp/datadir" org.example.Spaced.service "Name=org.freedesktop.Notifications   " \
+    "Exec=/usr/bin/spaced  " "SystemdService=spaced.service  "
+run
+check "a value's trailing space doesn't hide its name or unit" \
+    contains "$out" "lets D-Bus start spaced.service whenever org.freedesktop.Notifications has no owner, and it would then keep the name from tide: \`systemctl --user mask spaced.service\`"
+run FAKE_LOADSTATE="spaced.service=masked"
+check "the trimmed unit is the one looked up" test "$out" = "No problems found."
 
 healthy
 run FAKE_PROCS="hypridle hypridle swaync waybar hyprpolkitagent"
@@ -429,9 +768,12 @@ done
 healthy
 out=$(env PATH="$fake:$tmp/no-jq" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" XDG_CURRENT_DESKTOP=tide:Hyprland \
     XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_DIRS="$tmp/share" \
+    XDG_DATA_HOME="$tmp/no-data-home" XDG_RUNTIME_DIR="$tmp/runtime" TIDE_DATADIR="$tmp/datadir" TIDE_SYSCONFDIR="$tmp/sysconf" \
     FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_PID_hypridle=101 \
     "$tmp/no-jq/sh" "$doctor" 2>&1)
 check "no jq is reported" contains "$out" "jq isn't installed, so the one-bar-per-monitor check is skipped"
+check "no python3 is reported" \
+    contains "$out" "python3 isn't installed, so service directories the session bus's config adds aren't searched"
 check "no qs isn't a problem: waybar is the bar" test -z "$(printf '%s\n' "$out" | grep Quickshell)"
 
 healthy

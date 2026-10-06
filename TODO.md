@@ -639,9 +639,13 @@ Still to do:
 ## The rest of `tide doctor`
 
 M2's `tide doctor` (`bin/tide-doctor`) checks units, D-Bus
-owners, duplicate and rival daemons, the portal config, Hyprland's config
-errors, autostart entries, and a second bar on any monitor. SPEC.md §5.4
-also wants:
+owners and the activation files that could start a rival for them,
+duplicate and rival daemons, the portal config, Hyprland's config errors,
+autostart entries, and a second bar on any monitor. Still to do:
+
+- **Activatable services on a live session.** Check that doctor says
+  nothing about them after `setup --tide`, and that unmasking
+  `swaync.service` gets it named, with the package and the mask to restore.
 
 - **Bars by a better signal than geometry.** Where tide's bar (layer
   `tide-bar`) is on a monitor, the check now also reports space reserved
@@ -650,10 +654,6 @@ also wants:
   goes unseen; `hyprctl layers` has no anchors to say more. On a live
   session, check that the bar's reservation matches its height at each
   scale, so a lone tide bar reports nothing.
-- **Activatable services that could steal a name.** In M2 swaync's own
-  activation file names `org.freedesktop.Notifications`, so flagging every
-  activatable one would flag the owner. Check it once the shell owns the
-  name, naming the service file and the package that ships it.
 
 ## Grants for terminal commands
 
