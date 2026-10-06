@@ -23,10 +23,11 @@
 # queue. The shell's own commands are on its PATH: tide-tz built for the
 # run, so the clocks are drawn from tzdata; a stand-in tide-sysmon whose
 # probe finds no sensors, so the system monitor parses one but reads no
-# sensor files; and a stand-in hyprctl, answering from the stand-in
+# sensor files; a stand-in hyprctl, answering from the stand-in
 # Hyprland's fixtures, for the bar's title, the lock's layout badge and
-# the focus guard's calls. Data from a timer, a file read, or any other
-# command isn't covered.
+# the focus guard's calls; and stand-in gsettings and nmcli, for light and
+# dark and the VPNs, whose monitors report nothing. Data from a timer, a
+# file read, a monitor, or any other command isn't covered.
 #
 # With notify-send, it also runs the shell as the notification server
 # (TIDE_NOTIFICATIONS=1, SPEC.md §9), sends it notifications, and expects
@@ -183,6 +184,13 @@ cat >"$tmp/helpers/real/hyprctl" <<EOF || exit 1
 "$python_path" "$PWD/shell/hyprland_stand_in.py" ctl "\$@"
 EOF
 chmod +x "$tmp/helpers/real/hyprctl" || exit 1
+# gsettings and nmcli, for light and dark and the VPNs (their stand-ins
+# say what they answer), copied so their monitors can exec a tail that
+# ends with the shell.
+for _helper in gsettings nmcli; do
+    cp "shell/${_helper}_stand_in.sh" "$tmp/helpers/real/$_helper" || exit 1
+    chmod +x "$tmp/helpers/real/$_helper" || exit 1
+done
 # With the Go that's installed, as the Makefile builds. Without git's
 # status, which git refuses for a checkout another user owns (CI's, in its
 # container): a binary for this run needs no stamp.
@@ -190,7 +198,7 @@ if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/helpers/real/ti
     echo "FAIL: couldn't build tide-tz: $(cat "$tmp/go.log")" >&2
     exit 1
 fi
-helpers="tide-sysmon tide-tz hyprctl"
+helpers="tide-sysmon tide-tz hyprctl gsettings nmcli"
 : >"$tmp/helpers.log" || exit 1
 for _helper in $helpers; do
     cat >"$tmp/helpers/$_helper" <<EOF || exit 1
@@ -474,9 +482,9 @@ load() {
     fi
     reports "$_what loaded"
     # The commands' inputs are fixed (the default zones, $TZ, the system's
-    # tzdata; the stand-in probe), so anything the clocks or the system
-    # monitor warn of is a failure.
-    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title)|tide: couldn't (start (tide-|hyprctl)|replay|tell)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl)" "$log" >"$tmp/reports"; then
+    # tzdata; the stand-ins' answers), so anything the shell's commands
+    # warn of is a failure.
+    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|gsettings|nmcli|no nmcli)|tide: couldn't (start (tide-|hyprctl|gsettings)|run nmcli|replay|tell)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl)" "$log" >"$tmp/reports"; then
         echo "FAIL: $_what loaded, but its commands warned:" >&2
         cat "$tmp/reports" >&2
         exit 1
@@ -840,14 +848,20 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 }
 
 # The shell makes all these calls; without them, the run says nothing
-# about the clocks, the system monitor, the title or the focus guard: its
-# replay of the waiting windows, and its order for Super+Tab. The lock and
-# the greeter only ask for the keyboards, for their layout badges.
+# about the clocks, the system monitor, the title, the focus guard (its
+# replay of the waiting windows, and its order for Super+Tab), light and
+# dark, or the VPNs. The lock and the greeter only ask for the keyboards,
+# for their layout badges.
 shell_runs='tide-tz
 tide-sysmon probe
 hyprctl activewindow -j
 hyprctl eval tide_focus.announce_waiting()
-hyprctl eval tide_focus.set_order('
+hyprctl eval tide_focus.set_order(
+gsettings monitor org.gnome.desktop.interface color-scheme
+gsettings set org.gnome.desktop.interface color-scheme
+gsettings set org.gnome.desktop.interface gtk-theme
+nmcli monitor
+nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show'
 load_runs=$shell_runs
 load shell "the shell" -c tide
 load_runs='hyprctl devices -j'
