@@ -27,10 +27,11 @@ By hand, also install what the session runs: Hyprland 0.56 or later,
 Quickshell 0.3 (`qs`, which draws the bar; without it `tide-shell`
 falls back to waybar), hypridle, uwsm, waybar, swaync, a polkit agent, swww
 or swaybg, notify-send (libnotify), which the shell reports a bad settings
-file with, jq, which `tide doctor` reads Hyprland's JSON with, and
-NetworkManager's nmcli, which the network menu lists VPNs with.
-`setup-tide` installs them all. jq is a free distro package that runs locally, with no
-network calls; without it, the doctor reports its bar check as skipped.
+file with, jq, which `tide doctor` reads Hyprland's JSON with, python3,
+which it reads the session bus's config with, and NetworkManager's nmcli,
+which the network menu lists VPNs with. `setup-tide` installs them all.
+jq and python3 are free distro packages that run locally, with no network
+calls; without one, the doctor reports the check it skipped.
 
 Then pick **tide** at the display manager. It runs Hyprland through
 uwsm as `tide-hyprland`, which gives the session its own systemd
@@ -88,7 +89,8 @@ otherwise a notification offers **Authenticate**.
 
 `tide doctor` checks the running session and prints one line per
 problem, with its fix: units that aren't running, D-Bus names owned by the
-wrong process, daemons running twice or rivals to an owner, the portal
+wrong process or that D-Bus could start a rival for, daemons running twice
+or rivals to an owner, the portal
 config, Hyprland's config errors, and autostart entries that run in
 tide without being on its allowlist. It exits 1 if it found a problem.
 
