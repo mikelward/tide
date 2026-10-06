@@ -163,6 +163,10 @@ $name" ;;
     esac
 }
 agents_unknown=
+# With TIDE_POLKIT=1 the Quickshell shell is the agent, and no other runs.
+# It counts only while the shell runs in tide.service: under waybar it
+# doesn't, and tide-shell starts the agent it finds instead.
+shell_agent=
 if ! main=$(systemctl --user show -p MainPID --value tide.service 2>&1); then
     problem "couldn't read tide.service's MainPID ($main), so an agent set with TIDE_POLKIT_AGENT may be missed"
     agents_unknown=1
@@ -181,6 +185,7 @@ case "$main" in
             # tide-shell reads them.
             while IFS= read -r line; do
                 case "$line" in
+                    TIDE_POLKIT=1) shell_agent=1 ;;
                     TIDE_POLKIT_AGENT=?*) add_agent "${line#*=}" ;;
                     TIDE_POLKIT_AGENTS=*)
                         for path in ${line#*=}; do add_agent "$path"; done
@@ -195,6 +200,12 @@ EOF
         fi
         ;;
 esac
+if test -n "$shell_agent"; then
+    shell_agent=
+    for pid in $(pids_of qs) $(pids_of quickshell); do
+        test "$(unit_of "$pid")" = tide.service && shell_agent=1
+    done
+fi
 agent_pids=
 while IFS= read -r agent; do
     agent_pids="$agent_pids $(pids_of "$agent" | tr '\n' ' ')"
@@ -205,7 +216,7 @@ EOF
 agents=$(printf '%s\n' $agent_pids | grep -c .)
 # Zero is only known when pgrep could look and the configured agents are
 # known; a failure of either is reported on its own.
-if test "$agents" -eq 0 && ! test -s "$pgrep_err" && test -z "$agents_unknown"; then
+if test "$agents" -eq 0 && ! test -s "$pgrep_err" && test -z "$agents_unknown" && test -z "$shell_agent"; then
     problem "no polkit agent is running, so apps can't ask for a password: install hyprpolkitagent or polkit-gnome, then \`systemctl --user restart tide.service\`"
 elif test "$agents" -gt 1; then
     problem "$agents polkit agents are running: only tide.service's should; stop the others and remove them from autostart"
@@ -215,8 +226,34 @@ elif test "$agents" -eq 1; then
     # shellcheck disable=SC2086  # one pid per word
     agent_pid=$(printf '%s\n' $agent_pids | head -n 1)
     agent_unit=$(unit_of "$agent_pid")
-    if test "$agent_unit" != tide.service; then
+    if test "$agent_unit" != tide.service && test -n "$shell_agent"; then
+        problem "a polkit agent (pid $agent_pid) runs in ${agent_unit:-no user unit}, and polkit lets one agent register per session, so the shell's own (TIDE_POLKIT=1) can't: stop it and remove it from autostart"
+    elif test "$agent_unit" != tide.service; then
         problem "the polkit agent (pid $agent_pid) runs in ${agent_unit:-no user unit}, not tide.service: stop it and \`systemctl --user restart tide.service\`, whose shell starts its own"
+    fi
+fi
+# A shell that's the agent says whether its agent works: a Quickshell built
+# without polkit can't make one, and with TIDE_POLKIT=1 tide-shell starts
+# no other.
+if test -n "$shell_agent"; then
+    if ! state=$(qs -c tide ipc call polkit status 2>&1); then
+        problem "couldn't ask the shell whether its polkit agent works (qs ipc: $(printf '%s\n' "$state" | tail -n 1)), so whether apps can ask for a password isn't known"
+    else
+        case "$state" in
+            registered | off) ;;
+            missing)
+                problem "the shell couldn't make its polkit agent, and with TIDE_POLKIT=1 tide-shell starts no other, so apps can't ask for a password: \`journalctl --user -u tide.service\` says why; a Quickshell built without polkit can't be the agent, so unset TIDE_POLKIT or install one built with it"
+                ;;
+            unregistered)
+                # An agent outside the unit holding the session is named above.
+                if test "$agents" -eq 0; then
+                    problem "the shell's polkit agent hasn't registered with polkitd, so apps can't ask for a password: \`journalctl --user -u tide.service\` says why"
+                fi
+                ;;
+            *)
+                problem "couldn't tell whether the shell's polkit agent works (qs ipc said '$state')"
+                ;;
+        esac
     fi
 fi
 # The shell runs one wallpaper daemon or the other, never both.

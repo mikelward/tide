@@ -9,7 +9,8 @@ import Quickshell.Hyprland
 
 // tide's shell (SPEC.md §3.2): for now, the bar, the OSD and the
 // notification popups (opt-in; see NotificationData.qml) on every monitor,
-// the launcher and the settings panel.
+// the launcher, the settings panel and the polkit prompt (opt-in; see
+// PolkitData.qml).
 ShellRoot {
     Variants {
         model: Quickshell.screens
@@ -34,6 +35,9 @@ ShellRoot {
 
     // One settings panel, which does the same.
     SettingsWindow {}
+
+    // The polkit prompt (opt-in; see PolkitData.qml), which does the same.
+    PolkitPrompt {}
 
     // A toplevel's class and fullscreen state come from Hyprland's client
     // list, which Quickshell reads on request; ask again when they change.

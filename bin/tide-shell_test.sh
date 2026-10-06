@@ -478,6 +478,29 @@ check "the Quickshell bar runs the shell" contains "$log" "qs -c tide"
 check "the theme daemon is told the bar is Quickshell's" contains "$log" "theme-daemon bar=quickshell"
 check "the Quickshell bar's tray counts toward ready" contains "$log" "systemd-notify --ready"
 
+# With TIDE_POLKIT=1 the Quickshell shell is the agent, so none is started.
+run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell TIDE_POLKIT=1
+log=$(cat "$tmp/log")
+check "the shell as polkit agent starts no other" test -z "$(grep -x agent "$tmp/log")"
+check "the shell as polkit agent still runs the shell" contains "$log" "qs -c tide"
+check "the shell as polkit agent still gets ready" contains "$log" "systemd-notify --ready"
+check "the shell as polkit agent is said" \
+    contains "$(cat "$tmp/err")" "the Quickshell shell is the polkit agent (TIDE_POLKIT=1), so no other is started"
+check "the shell as polkit agent isn't a missing agent" test -z "$(grep 'no polkit agent found' "$tmp/err")"
+# Under waybar the shell doesn't run, so an agent found here stands in.
+run FAKE_NAMES="$both" TIDE_POLKIT=1
+check "TIDE_POLKIT=1 under waybar still starts an agent" test -n "$(grep -x agent "$tmp/log")"
+check "TIDE_POLKIT=1 under waybar says why" \
+    contains "$(cat "$tmp/err")" "TIDE_POLKIT=1 makes the Quickshell shell the polkit agent, but the bar is waybar"
+run FAKE_NAMES="$both" TIDE_POLKIT=0
+check "TIDE_POLKIT=0 starts the agent found" test -n "$(grep -x agent "$tmp/log")"
+check "TIDE_POLKIT=0 says nothing about it" test -z "$(grep TIDE_POLKIT= "$tmp/err")"
+run FAKE_NAMES="$both" TIDE_POLKIT=yes
+check "a bad TIDE_POLKIT fails, not to be retried" test "$status" -eq 78
+check "a bad TIDE_POLKIT is named" \
+    contains "$(cat "$tmp/err")" "TIDE_POLKIT must be 1 (the shell is the polkit agent) or 0, not 'yes'"
+check "a bad TIDE_POLKIT starts nothing" test ! -s "$tmp/log"
+
 # Unset, the bar is Quickshell's where qs and the shell are installed...
 run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=
 check "the bar defaults to Quickshell's when it's installed" contains "$(cat "$tmp/log")" "qs -c tide"

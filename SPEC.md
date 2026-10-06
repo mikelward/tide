@@ -358,6 +358,22 @@ waited for) and, once, `conf`'s
 `apply-input.sh`, which Hyprland's autostart ran before it shrank to
 `uwsm finalize`.
 
+With `TIDE_POLKIT=1` the shell is the polkit agent
+(`Quickshell.Services.Polkit`), opt-in until it has run in a live session,
+and `tide-shell` starts no other; under waybar, where the shell doesn't
+run, it still starts the agent it finds. The shell's agent isn't in the
+ready check yet either. It keeps the M2 agent's backoff: polkitd lets one
+agent register per session, and Quickshell 0.3.1 only logs a refusal, so a
+registration that hasn't happened 5 s on counts as refused, and the agent
+is made again, waiting twice as long each time, up to a minute.
+Quickshell's polkit module is optional at build time
+(`-DSERVICE_POLKIT=OFF`, Quickshell 0.3.1's `BUILD.md`), and a missing
+module fails every file that imports it. So the agent is a file of its
+own, loaded only with `TIDE_POLKIT=1`, and a Quickshell built without
+polkit still runs the shell when the agent is off. With it on, `tide
+doctor` asks the shell (`qs -c tide ipc call polkit status`) whether its
+agent was made and registered, since `tide-shell` then starts no other.
+
 ### 5.3 Start order
 
 ```mermaid
@@ -1532,7 +1548,11 @@ this spec.
   keyboard half of the §14.1 rule: a known agent's window takes focus when
   you pressed a key in the last 2 s, and otherwise waits for `Super+Tab`,
   marked on the bar (or, with no shell to mark it, with a Hyprland
-  notification). The Quickshell agent (M3) applies the full rule.
+  notification). The shell's own agent (`TIDE_POLKIT=1`, below) applies
+  the same half: its prompt takes the keyboard after a key press, asking
+  the guard through `tide prompt-focus`, and otherwise a notification
+  offers **Authenticate**. The requester half waits on Quickshell, whose
+  0.3.1 agent doesn't say which process asked (TODO.md).
 - **Portal dialogs in M2.** A file chooser from `xdg-desktop-portal-gtk`
   (or `-kde`, `-gnome`) is the portal's window, not the app's, and Lua
   can't see its parent. So the guard treats any portal dialog as the active

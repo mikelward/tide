@@ -80,6 +80,12 @@ uwsm's `env`), and restart the shell. The lock reads the same setting to
 show the notification count, so set it for the session, not just one
 process.
 
+The shell can be the polkit agent too, which asks for your password when
+an app needs privileges: set `TIDE_POLKIT=1` the same way and restart
+the shell, and `tide-shell` starts no other agent. Its prompt takes the
+keyboard only right after you press a key (a `pkexec` in a terminal);
+otherwise a notification offers **Authenticate**.
+
 `tide doctor` checks the running session and prints one line per
 problem, with its fix: units that aren't running, D-Bus names owned by the
 wrong process, daemons running twice or rivals to an owner, the portal
