@@ -609,8 +609,8 @@ also wants:
 ## Grants for terminal commands
 
 Every shell in `conf` runs `tide-grant` (SPEC.md §14.3) before a
-command except mesh, which waits until `conf` tests it (tracked in `conf`'s
-TODO.md). Nothing has run it in a live session yet.
+command, mesh included since mikelward/conf#398. Nothing has run it in a
+live session yet.
 
 ## Grants through desktop entries
 
