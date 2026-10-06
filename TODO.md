@@ -523,6 +523,10 @@ Hyprland yet. Still to do:
   variable in the session that raised `Lock`), and it must fail toward
   locking.
 - Crash it on purpose and walk the three ways out (§10).
+- `tide idle-suspend` is hypridle's 30-minute step in `conf`: it suspends
+  on battery only. It doesn't leave the flag for unplugging while idle
+  yet, and the shell doesn't watch for the switch to battery, so
+  unplugging after the 30 minutes doesn't suspend (§10).
 
 ## Login (M5)
 

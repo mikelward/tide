@@ -459,6 +459,39 @@ check "a failed lock is reported" contains "$(cat "$tmp/err")" "lock-session fai
 run "$qs" idle-lock now
 check "idle-lock takes no arguments" test $? -eq 2
 
+# idle-suspend: busctl answers UPower's OnBattery with $FAKE_ON_BATTERY
+# (on battery by default) and exits $FAKE_BUSCTL_STATUS.
+cat > "$fake/busctl" <<'FAKE'
+#!/bin/sh
+printf "busctl %s\n" "$*" >> "$FAKE_LOG"
+echo "${FAKE_ON_BATTERY-b true}"
+exit "${FAKE_BUSCTL_STATUS:-0}"
+FAKE
+chmod +x "$fake/busctl"
+run "$qs" idle-suspend
+check "idle-suspend exits 0" test $? -eq 0
+out=$(cat "$log")
+check "idle-suspend asks UPower whether it's on battery" \
+    contains "$out" "busctl get-property org.freedesktop.UPower /org/freedesktop/UPower org.freedesktop.UPower OnBattery"
+check "on battery, idle-suspend suspends" contains "$out" "systemctl suspend"
+check "a clean idle-suspend says nothing" test ! -s "$tmp/err"
+run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+check "on AC, idle-suspend exits 0" test $? -eq 0
+check "on AC, idle-suspend doesn't suspend" test "$(grep -c '^systemctl ' "$log")" -eq 0
+check "on AC, idle-suspend says nothing" test ! -s "$tmp/err"
+run FAKE_BUSCTL_STATUS=1 FAKE_ON_BATTERY="Failed to get property" "$qs" idle-suspend
+check "without UPower, idle-suspend fails" test $? -eq 1
+check "without UPower, idle-suspend doesn't suspend" test "$(grep -c '^systemctl ' "$log")" -eq 0
+check "without UPower, idle-suspend says why" contains "$(cat "$tmp/err")" "couldn't ask UPower"
+run FAKE_ON_BATTERY="s maybe" "$qs" idle-suspend
+check "an odd answer from UPower fails idle-suspend" test $? -eq 1
+check "an odd answer from UPower doesn't suspend" test "$(grep -c '^systemctl ' "$log")" -eq 0
+run FAKE_SYSTEMCTL_STATUS=1 "$qs" idle-suspend
+check "a refused suspend fails idle-suspend" test $? -eq 1
+check "a refused suspend is reported" contains "$(cat "$tmp/err")" "systemctl suspend failed (exit 1)"
+run "$qs" idle-suspend now
+check "idle-suspend takes no arguments" test $? -eq 2
+
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh "$qs" bin/tide_test.sh
 fi

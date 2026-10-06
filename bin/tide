@@ -81,6 +81,15 @@
 #     only picks the face. Without XDG_RUNTIME_DIR, or if the flag can't
 #     be written, it still locks, on the password face, and says why.
 #
+#   tide idle-suspend
+#
+#     Suspends for idleness: hypridle's 30-minute step runs it in place of
+#     `systemctl suspend` (SPEC.md §10). It suspends only on battery, as
+#     UPower reports it; on AC it does nothing, and the displays just stay
+#     off. If it can't tell, it says so and exits 1 without suspending.
+#     A failed suspend exits with its status: polkit refuses one from a
+#     session in the background ("Access denied").
+#
 #   tide doctor
 #
 #     Checks the running session and prints one line per problem, with
@@ -95,6 +104,7 @@ usage() {
     echo "       $prog autostart-allowed UNIT" >&2
     echo "       $prog brightness STEP" >&2
     echo "       $prog idle-lock" >&2
+    echo "       $prog idle-suspend" >&2
     echo "       $prog doctor" >&2
     exit 2
 }
@@ -493,6 +503,30 @@ idle_lock() {
     return "$status"
 }
 
+idle_suspend() {
+    test $# -eq 0 || usage
+    if ! power=$(busctl get-property org.freedesktop.UPower /org/freedesktop/UPower \
+        org.freedesktop.UPower OnBattery 2>&1); then
+        echo "$prog idle-suspend: couldn't ask UPower whether this is on battery, so not suspending: $power" >&2
+        return 1
+    fi
+    case "$power" in
+        "b true") ;;
+        "b false") return 0 ;;
+        *)
+            echo "$prog idle-suspend: UPower answered '$power' for OnBattery, so not suspending" >&2
+            return 1
+            ;;
+    esac
+    if systemctl suspend; then
+        return 0
+    else
+        status=$?
+    fi
+    echo "$prog idle-suspend: systemctl suspend failed (exit $status)" >&2
+    return "$status"
+}
+
 case "${1:-}" in
     launch) shift; launch "$@" ;;
     grant) shift; grant_only "$@" ;;
@@ -500,6 +534,7 @@ case "${1:-}" in
     autostart-allowed) shift; autostart_allowed "$@" ;;
     brightness) shift; brightness "$@" ;;
     idle-lock) shift; idle_lock "$@" ;;
+    idle-suspend) shift; idle_suspend "$@" ;;
     # Installed beside this script.
     doctor) shift; exec sh "$(dirname "$0")/tide-doctor" "$@" ;;
     *) usage ;;
