@@ -109,7 +109,7 @@ Row {
                     // Accent while scrubbed, so a moved time isn't taken for now.
                     color: ClockData.scrubAt !== 0 ? Theme.accent : Theme.fg
                     font.family: Theme.font
-                    font.pixelSize: 13
+                    font.pixelSize: 15
                     font.weight: clock.modelData.local ? Font.Bold : Font.Medium
                     font.features: ({ "tnum": 1 })
                 }

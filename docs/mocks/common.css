@@ -12,7 +12,7 @@
 :root {
   --font-ui: 'Inter', 'Adwaita Sans', 'Cantarell', sans-serif;
   --font-mono: 'Ubuntu Mono', 'DejaVu Sans Mono', monospace;
-  --bar-h: 34px;
+  --bar-h: 36px;
   --radius: 10px;
   --radius-lg: 16px;
   --dim: 0.07; /* Hyprland decoration:dim_strength */
@@ -294,7 +294,7 @@ body.sheet {
   letter-spacing: .04em;
   color: var(--fg-dim);
 }
-.clock .t { font-weight: 500; font-size: 13px; }
+.clock .t { font-weight: 500; font-size: 15px; }
 .clock .d {
   font-size: 9.5px;
   font-weight: 700;

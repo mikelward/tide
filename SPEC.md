@@ -248,7 +248,7 @@ gives the greeter the same layout badge as the lock.
   compared are in [`fonts.png`](docs/mocks/fonts.png)).
 - **Radii:** 10–16 px.
 - **Windows:** no gaps, no borders, inactive dim 0.07.
-- **Bar:** 34 px.
+- **Bar:** 36 px.
 
 ## 4. Requirements and how each is met
 
@@ -661,7 +661,7 @@ See [`bar.png`](docs/mocks/bar.png).
 
 ### 7.1 Layout
 
-- The bar is a top layer-shell panel on every monitor, 34 px tall, with an
+- The bar is a top layer-shell panel on every monitor, 36 px tall, with an
   exclusive zone so tiling starts below it.
 - **It is a plain rectangle flush with the top edge and both sides:** no
   margin, no corner radius, no shadow, no floating pill. Rounded corners

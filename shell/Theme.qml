@@ -13,7 +13,7 @@ Singleton {
 
     readonly property bool dark: AppearanceData.dark
 
-    readonly property int barHeight: 34
+    readonly property int barHeight: 36
     readonly property int chipHeight: 26
     readonly property int chipRadius: 7
 
