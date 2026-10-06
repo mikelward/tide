@@ -31,7 +31,9 @@
 #
 # With notify-send, it also runs the shell as the notification server
 # (TIDE_NOTIFICATIONS=1, SPEC.md §9), sends it notifications, and expects
-# them in its history. In every run, an icon that can't load fails the
+# them in its history. That run makes the shell the polkit agent too
+# (TIDE_POLKIT=1), so the agent is made, though with no polkitd or logind
+# session here it can't register, and no request comes to prompt for. In every run, an icon that can't load fails the
 # test: Quickshell draws a placeholder for it, which nothing else reports.
 # Every icon the shell asks for is Adwaita's (§15), so that needs Adwaita
 # installed.
@@ -91,6 +93,23 @@ for entry in shell/shell.qml shell/lock.qml shell/greeter.qml; do
         exit 1
     fi
 done
+
+# Quickshell's polkit module is optional (-DSERVICE_POLKIT=OFF), and an
+# import of a missing module fails every file that has it. So it's
+# imported only by polkit-agent.qml, which PolkitData loads only with
+# TIDE_POLKIT=1; its lowercase name keeps it from being a type that
+# anything compiles. A build without polkit isn't here to load, so this
+# is checked as text, with no Quickshell needed.
+if polkit_imports=$(grep -l '^import Quickshell\.Services\.Polkit' shell/*.qml) &&
+    test "$polkit_imports" != shell/polkit-agent.qml; then
+    echo "FAIL: only shell/polkit-agent.qml may import Quickshell.Services.Polkit, so the shell loads without it:" >&2
+    printf '%s\n' "$polkit_imports" >&2
+    exit 1
+fi
+if ! grep -q '^ *source: root\.enabled ? "polkit-agent\.qml" : ""$' shell/PolkitData.qml; then
+    echo "FAIL: PolkitData.qml must load polkit-agent.qml only when TIDE_POLKIT=1, so the shell loads without Quickshell's polkit module" >&2
+    exit 1
+fi
 
 # missing WHAT: skips the test, or fails it under $TIDE_REQUIRE_QS.
 missing() {
@@ -901,10 +920,10 @@ load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"
 load_runs=
 if test -n "$notify_path"; then
-    load_env=TIDE_NOTIFICATIONS=1
+    load_env="TIDE_NOTIFICATIONS=1 TIDE_POLKIT=1"
     load_runs=$shell_runs
     after_load=notify
-    load notifications "the notification server" -c tide
+    load notifications "the notification server and polkit agent" -c tide
     load_env=
     load_runs=
     after_load=

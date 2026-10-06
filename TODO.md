@@ -166,8 +166,9 @@ packaged). It also runs
 - Replace it piece by piece as M3 (bar, launcher) and M4 (notifications)
   land: each Quickshell owner joins the shell's ready check, and its old
   owner leaves `tide-shell`.
-- Until then the polkit agent isn't part of the ready check, and the tray
-  and notifications look like today's, not the mocks.
+- Until then the polkit agent isn't part of the ready check, the shell's
+  agent included, and the tray and notifications look like today's, not
+  the mocks.
 - The polkit agent is restarted on its own, with backoff, rather than
   failing the unit (SPEC.md §5.2's M2 note). The Quickshell agent has to
   keep that: another desktop's agent can hold the session first, and the
@@ -179,9 +180,33 @@ packaged). It also runs
   their loss would restart the whole shell at every theme change instead.
   It goes away with the Quickshell owners, which change theme without a
   restart (SPEC.md §5.4).
-- A polkit prompt takes focus only after a key press (the keyboard half of
-  SPEC.md §14.1); after a click it waits for `Super+Tab`, and there's no
-  **Authenticate** notification yet. Both come with the Quickshell agent.
+- The shell's polkit agent (`shell/PolkitData.qml`, `shell/PolkitPrompt.qml`,
+  `shell/lib/polkit.mjs`) is in, opt-in with `TIDE_POLKIT=1`, and
+  `tide-shell` then starts no other. Only parsed with `qmlformat`, and made
+  in CI's load test with no polkitd to register with. Still to do:
+  - Try it on a real session: `pkexec true` typed in a terminal gets the
+    prompt with the keyboard; `sleep 5; pkexec true`, with your hands off
+    the keyboard, gets the **Authenticate** notification, which opens it;
+    closing the notification says no; a wrong password, then the right
+    one; Cancel and Escape; GNOME Software or another app's Unlock click,
+    which takes the notification path (Lua sees no clicks).
+  - Check that `hyprctl repl` answers `true` or `false` for
+    `tide_focus.prompt_may_focus()` (Hyprland 0.56's source says it does;
+    `tide prompt-focus` relies on it).
+  - Check the backoff live: with hyprpolkitagent started by hand first,
+    the shell logs a refusal and takes over once it's stopped.
+  - The requester half of SPEC.md §14.1: Quickshell 0.3.1 keeps polkit's
+    details from the agent ("nothing seems to use them",
+    `src/services/polkit/listener.hpp`), and polkitd puts the requesting
+    process's pid there. It's an upstream change to expose them; then the
+    guard can check the requester descends from the focused window.
+  - Join the ready check, then make it the default and drop the opt-in and
+    `tide-shell`'s agent search.
+  - A mock for the prompt (`docs/mocks/`), which it's drawn without; it
+    follows the launcher's card.
+- A polkit prompt from an agent window (the M2 agents) takes focus only
+  after a key press (the keyboard half of SPEC.md §14.1); after a click it
+  waits for `Super+Tab`.
 - The Quickshell bar marks the windows the focus guard leaves waiting
   (`tide-attention`, in `shell/MarkData.qml`), and it's now the bar
   wherever Quickshell is installed. The guard shows a Hyprland notification

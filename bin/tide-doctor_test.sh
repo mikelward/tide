@@ -125,8 +125,18 @@ FAKE
 # exits $FAKE_QS_VERSION_STATUS. It comes before any real qs on PATH, and in
 # a directory of its own, so a run can leave it off.
 mkdir "$tmp/qs-bin"
+# qs -c tide ipc call polkit status answers $FAKE_QS_POLKIT (registered by
+# default), or fails with $FAKE_QS_IPC_FAILS.
 cat > "$tmp/qs-bin/qs" <<'FAKE'
 #!/bin/sh
+if test "$*" = "-c tide ipc call polkit status"; then
+    if test -n "$FAKE_QS_IPC_FAILS"; then
+        echo "$FAKE_QS_IPC_FAILS" >&2
+        exit 1
+    fi
+    printf '%s\n' "${FAKE_QS_POLKIT:-registered}"
+    exit 0
+fi
 printf '%s\n' "${FAKE_QS_VERSION:-Quickshell 0.3.1 (revision 1a4716c, distributed by test)}"
 exit "${FAKE_QS_VERSION_STATUS:-0}"
 FAKE
@@ -259,6 +269,39 @@ run FAKE_PROCS="hypridle swaync waybar agent+foo"
 check "a configured agent name is matched literally, not as a regex" test -z "$(grep 'polkit agent' "$tmp/out")"
 run FAKE_PROCS="hypridle swaync waybar agenttfoo"
 check "a configured agent name's metacharacters match only themselves" contains "$out" "no polkit agent is running"
+healthy
+
+healthy
+printf 'TIDE_POLKIT=1\0' > "$tmp/proc/100/environ"
+run FAKE_PROCS="hypridle swaync waybar qs"
+check "with the shell as polkit agent, no other agent is fine" test "$out" = "No problems found."
+run FAKE_PROCS="hypridle swaync waybar"
+check "with TIDE_POLKIT=1 but no shell running (waybar), no agent is still a problem" \
+    contains "$out" "no polkit agent is running"
+mkdir -p "$tmp/proc/300"
+echo "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-qs.scope" > "$tmp/proc/300/cgroup"
+run FAKE_PROCS="hypridle swaync waybar qs" FAKE_PID_qs=300
+check "a qs outside tide.service isn't the shell's agent" contains "$out" "no polkit agent is running"
+mkdir -p "$tmp/proc/200"
+printf '%s\n' '0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-polkit\x2dgnome@autostart.service' > "$tmp/proc/200/cgroup"
+run FAKE_PROCS="hypridle swaync waybar qs polkit-gnome-au" FAKE_PID_polkit_gnome_au=200
+check "with the shell as polkit agent, another agent holding the session is a problem" \
+    contains "$out" "a polkit agent (pid 200) runs in app-polkit\\x2dgnome@autostart.service, and polkit lets one agent register per session, so the shell's own (TIDE_POLKIT=1) can't"
+run FAKE_PROCS="hypridle swaync waybar qs" FAKE_QS_POLKIT=missing
+check "a shell that couldn't make its agent is a problem, with the fix" \
+    contains "$out" "the shell couldn't make its polkit agent, and with TIDE_POLKIT=1 tide-shell starts no other, so apps can't ask for a password"
+run FAKE_PROCS="hypridle swaync waybar qs" FAKE_QS_POLKIT=unregistered
+check "a shell agent polkitd hasn't taken is a problem" \
+    contains "$out" "the shell's polkit agent hasn't registered with polkitd"
+run FAKE_PROCS="hypridle swaync waybar qs polkit-gnome-au" FAKE_PID_polkit_gnome_au=200 FAKE_QS_POLKIT=unregistered
+check "one held off by another agent is named once, by that agent" \
+    test "$(grep -c polkit "$tmp/out")" -eq 1
+run FAKE_PROCS="hypridle swaync waybar qs" FAKE_QS_IPC_FAILS="ipc: no running instance"
+check "failing to ask the shell is reported" \
+    contains "$out" "couldn't ask the shell whether its polkit agent works (qs ipc: ipc: no running instance)"
+# Under waybar tide-shell starts an agent of its own in the unit.
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent"
+check "with the shell as polkit agent, tide-shell's stand-in under waybar is fine" test "$out" = "No problems found."
 healthy
 
 healthy

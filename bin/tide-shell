@@ -13,7 +13,8 @@
 #     restarts them at each theme boundary, so it runs here rather than from
 #     Hyprland's autostart. It's told which bar it is in $TIDE_BAR, so
 #     it doesn't start waybar beside the Quickshell bar;
-#   - the first polkit agent found on this system.
+#   - the first polkit agent found on this system, unless the Quickshell
+#     shell is the agent (TIDE_POLKIT=1, SPEC.md §5.2).
 #
 # All of them run in this unit's cgroup, so they stop with the session. The
 # unit is Type=notify: this reports ready once both D-Bus names are owned, so
@@ -33,6 +34,9 @@
 #                             `qs` and the shell's config are installed, and
 #                             qs is Quickshell 0.3 or newer)
 #   $TIDE_THEME_DAEMON  the theme daemon (default: conf's)
+#   $TIDE_POLKIT        1 to have the Quickshell shell be the polkit
+#                             agent, so none is started here; it needs the
+#                             Quickshell bar (default: 0)
 #   $TIDE_POLKIT_AGENT  a polkit agent to use instead of searching
 #   $TIDE_POLKIT_AGENTS the paths searched, in order (default below)
 #   $TIDE_AGENT_RETRY   seconds (1-60) before the agent's first restart (5),
@@ -170,6 +174,14 @@ if test "$agent_retry_ok" = no; then
     exit $EX_CONFIG
 fi
 
+case "${TIDE_POLKIT:-0}" in
+    0 | 1) ;;
+    *)
+        log "TIDE_POLKIT must be 1 (the shell is the polkit agent) or 0, not '$TIDE_POLKIT'"
+        exit $EX_CONFIG
+        ;;
+esac
+
 if test -n "${TIDE_POLKIT_AGENT:-}" && ! is_program "$TIDE_POLKIT_AGENT"; then
     log "TIDE_POLKIT_AGENT is '$TIDE_POLKIT_AGENT', which isn't an executable file"
     exit $EX_CONFIG
@@ -256,7 +268,21 @@ supervise() {
 }
 
 
-agent=$(polkit_agent)
+# The Quickshell shell is the agent only where it runs: under waybar the
+# agent found here stands in, so privileged actions can still ask.
+agent=
+if test "${TIDE_POLKIT:-0}" = 1 && test "$bar" = quickshell; then
+    log "the Quickshell shell is the polkit agent (TIDE_POLKIT=1), so no other is started"
+else
+    if test "${TIDE_POLKIT:-0}" = 1; then
+        log "TIDE_POLKIT=1 makes the Quickshell shell the polkit agent, but the bar is waybar, so the shell isn't running; starting another agent instead"
+    fi
+    agent=$(polkit_agent)
+    if test -z "$agent"; then
+        # Not fatal: the session works, but privileged actions can't prompt.
+        log "no polkit agent found; install hyprpolkitagent or polkit-gnome"
+    fi
+fi
 if test -n "$agent"; then
     agent_done=$(mktemp) || {
         log "couldn't create a temporary file for the polkit agent's restart loop"
@@ -302,9 +328,6 @@ if test -n "$agent"; then
         done
     ) &
     agent_loop=$!
-else
-    # Not fatal: the session works, but privileged actions can't prompt.
-    log "no polkit agent found; install hyprpolkitagent or polkit-gnome"
 fi
 
 # The Quickshell bar is an owner: it holds the tray watcher. It starts
