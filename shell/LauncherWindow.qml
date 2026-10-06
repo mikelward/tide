@@ -14,8 +14,9 @@ import "lib/workspaces.mjs" as Workspaces
 // dimmed backdrop. `Super+Space` (Hyprland's `tide:launcher` global
 // shortcut) or `qs -c tide ipc call launcher toggle` opens and closes it;
 // Escape or a click on the backdrop closes it. Its quick actions take
-// screenshots, run the session actions, flip Do not disturb and keep awake,
-// and reload the shell, and Ctrl+Enter opens an app on a new workspace.
+// screenshots, run the session actions, open the settings panel, flip Do
+// not disturb and keep awake, and reload the shell, and Ctrl+Enter opens an
+// app on a new workspace.
 PanelWindow {
     id: root
 
@@ -164,7 +165,9 @@ PanelWindow {
 
     function runQuick(id) {
         const what = Search.quickCommand(id);
-        if (what.shell === "dnd") {
+        if (what.shell === "settings") {
+            SettingsData.open();
+        } else if (what.shell === "dnd") {
             NotificationData.setDnd(!NotificationData.dnd);
         } else if (what.shell === "dark-style") {
             AppearanceData.flip();

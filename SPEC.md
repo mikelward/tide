@@ -1874,6 +1874,16 @@ Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
 stays hand-written.
 
+- **It opens like the launcher:** centered on the focused monitor over a
+  dimmed backdrop, from the launcher's Settings action or
+  `qs -c tide ipc call settings toggle`.
+- Escape or a click on the backdrop closes it.
+- The pages run down its side in this table's order. Up and Down change
+  the page.
+- A page's link out sits at its foot, and Enter opens it. A page with
+  nothing of its own yet is only that link, with a line saying what the
+  bar already does.
+
 ### 16.1 Shared config and per-machine `.local` overrides
 
 The same `.local` convention as `.shrc.local`, `hyprland.conf.local` and

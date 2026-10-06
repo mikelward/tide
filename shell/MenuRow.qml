@@ -14,6 +14,8 @@ Item {
     property string label
     // A chosen option among rows, such as the current power profile.
     property bool selected: false
+    // Shown as the current one without a check mark, such as a page.
+    property bool highlighted: false
     // Opens a submenu, so it ends in an arrow.
     property bool submenu: false
     signal clicked
@@ -26,7 +28,7 @@ Item {
         anchors.fill: parent
         radius: 7
         color: Theme.surface2
-        visible: hover.hovered || root.selected
+        visible: hover.hovered || root.selected || root.highlighted
     }
 
     Item {

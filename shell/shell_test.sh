@@ -601,8 +601,9 @@ focused() {
 # fails the test unless Enter runs the app the query names, through `tide
 # launch`. The app is a desktop entry only this test installs, and the
 # query leaves out its accent ("Café"), so the match also checks the
-# accent folding runs in Qt's engine. A stand-in tide on the shell's PATH
-# keeps the command rather than running it. Its log is
+# accent folding runs in Qt's engine. Then it opens the settings panel and
+# expects Down and Enter to open the Network page's app. A stand-in tide on
+# the shell's PATH keeps each command rather than running it. Its log is
 # $tmp/launch.qs.log.
 launch() {
     _what="the launcher"
@@ -653,16 +654,38 @@ launch() {
         sleep 0.1
         i=$((i + 1))
     done
-    kill "$qs_pid"
-    wait "$qs_pid"
-    qs_pid=
     _launched=$(cat "$tmp/launched")
     if test "$_launched" != "launch --app tide-test-probe -- tide-test-probe --flag"; then
         echo "FAIL: the launcher should run Café Probe as \`tide launch --app tide-test-probe -- tide-test-probe --flag\`; it ran \`tide $_launched\`" >&2
         exit 1
     fi
-    reports "the launcher ran an app"
+    _what="the settings panel"
+    _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
+    ipc call settings open >/dev/null || exit 1
+    focused "$_focus"
+    timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 "$wtype_path" -k Down -k Return >"$tmp/wtype.log" 2>&1
+    typed $? "the settings panel"
+    i=0
+    until test "$(wc -l <"$tmp/launched")" -ge 2; do
+        if waited "the settings panel didn't open the Network page's app" "$i"; then
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    kill "$qs_pid"
+    wait "$qs_pid"
+    qs_pid=
+    _launched=$(sed -n 2p "$tmp/launched")
+    if test "$_launched" != "launch -- nm-connection-editor"; then
+        echo "FAIL: the settings panel's Network page should run \`tide launch -- nm-connection-editor\`; it ran \`tide $_launched\`" >&2
+        exit 1
+    fi
+    reports "the launcher ran an app and the settings panel opened one"
     echo "ok: the launcher finds an app by a query without its accent, and runs it"
+    echo "ok: the settings panel changes page with the arrows and opens the page's app"
 }
 
 # ipc ARG...: runs `qs ipc --pid` on the running shell, within the limit.
