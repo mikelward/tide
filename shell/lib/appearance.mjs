@@ -275,11 +275,63 @@ export function clockTime(ms) {
 
 // The commands that tell apps (SPEC.md §15): the color scheme, which
 // xdg-desktop-portal-gtk publishes to them, and the GTK 3 theme. Adwaita
-// until setup installs adw-gtk3 (M7).
-export function schemeCommands(dark) {
-    const set = (key, value) => ["gsettings", "set", "org.gnome.desktop.interface", key, value];
+// until setup installs adw-gtk3 (M7). Switches wait for each other
+// (tellNext), so each is stopped after `seconds`, as the hook is: a
+// gsettings stuck on an unresponsive dconf would otherwise hold up every
+// later switch. `--verbose` has timeout itself say when it stops one, which
+// Launcher logs.
+export const SCHEME_SECONDS = 10;
+
+export function schemeCommands(dark, seconds = SCHEME_SECONDS) {
+    const set = (key, value) => ["timeout", "--verbose", "--kill-after=5", String(seconds),
+        "gsettings", "set", "org.gnome.desktop.interface", key, value];
     return [
         set("color-scheme", dark ? "prefer-dark" : "prefer-light"),
         set("gtk-theme", dark ? "Adwaita-dark" : "Adwaita"),
     ];
+}
+
+// The hook a user's config can install to follow the scheme with what the
+// shell doesn't draw (SPEC.md §15): `appearance-hook` in the tide config
+// directory `dir`, run with no arguments after each change, once the
+// scheme commands have finished, so it can read the scheme as it now is.
+// No hook is the usual case and does nothing; one that can't run says so,
+// a link to a file that's gone included.
+// Switches wait for each other (tellNext), so a hook still running after
+// `seconds` is stopped rather than holding up every later switch: TERM,
+// then KILL 5 s later for one that ignores TERM. timeout says so itself
+// (`--verbose`), since a hook's own exit status can't tell a stop apart.
+// Not exec'd: on KILL, timeout kills itself too, and sh turns that into
+// an exit of 137 for Launcher to log.
+export const HOOK_SECONDS = 30;
+
+export function hookCommand(dir, seconds = HOOK_SECONDS) {
+    return ["sh", "-c",
+        'if ! test -e "$1"; then if test -L "$1"; then echo "$1 is a link to nothing" >&2; exit 1; fi; exit 0; fi; if ! test -x "$1"; then echo "$1 is not executable" >&2; exit 1; fi; '
+        + 'timeout --verbose --kill-after=5 "$2" "$1"',
+        "sh", `${dir}/appearance-hook`, String(seconds)];
+}
+
+// Telling apps, one run at a time (SPEC.md §15): a change while a run is
+// going is held, and runs once that run ends, for the scheme as it is then,
+// so runs can't overtake each other and the last always tells the latest.
+// {running, again}; each step returns {state, start}: whether to start a
+// run now.
+export const TELL_IDLE = Object.freeze({ running: false, again: false });
+
+export function tellNext(state, event) {
+    switch (event) {
+    case "change":
+        if (state.running) {
+            return { state: Object.freeze({ running: true, again: true }), start: false };
+        }
+        return { state: Object.freeze({ running: true, again: false }), start: true };
+    case "done":
+        if (state.again) {
+            return { state: Object.freeze({ running: true, again: false }), start: true };
+        }
+        return { state: TELL_IDLE, start: false };
+    default:
+        throw new Error(`unknown tell event: ${event}`);
+    }
 }

@@ -50,21 +50,40 @@ Singleton {
     onLoadedChanged: root.tell()
 
     // Tells apps (Appearance.schemeCommands), once the settings are read so
-    // a login doesn't flash the defaults' scheme first. A failure is
-    // logged by Launcher, and tried again at the next change.
+    // a login doesn't flash the defaults' scheme first, then runs the
+    // user's hook (Appearance.hookCommand). The commands run one after
+    // another, so the hook reads the scheme as set, and one run at a time
+    // (Appearance.tellNext), so an older run can't finish last. A failure
+    // is logged by Launcher, the rest still run, and it's tried again at
+    // the next change.
+    property var telling: Appearance.TELL_IDLE
+
     function tell() {
         if (!root.loaded || root.told === root.dark) {
             return;
         }
         root.told = root.dark;
-        for (const command of Appearance.schemeCommands(root.dark)) {
-            Launcher.run(command, null);
+        root.tellStep("change");
+    }
+
+    function tellStep(event) {
+        const r = Appearance.tellNext(root.telling, event);
+        root.telling = r.state;
+        if (r.start) {
+            root.runInOrder(Appearance.schemeCommands(root.dark).concat([Appearance.hookCommand(root.dir)]));
         }
     }
 
-    // Anything else that sets the color scheme (conf's theme daemon, at its
-    // own 07:00 and 19:00) is put back at once, so apps can't disagree with
-    // the shell until its next change. The shell's own writes come back
+    function runInOrder(commands) {
+        if (commands.length === 0) {
+            root.tellStep("done");
+            return;
+        }
+        Launcher.run(commands[0], () => root.runInOrder(commands.slice(1)));
+    }
+
+    // Anything else that sets the color scheme is put back at once, so apps
+    // can't disagree with the shell until its next change. The shell's own writes come back
     // here too, and match.
     function heard(line) {
         const dark = Appearance.schemeIsDark(line);

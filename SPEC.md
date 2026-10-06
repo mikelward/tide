@@ -1759,7 +1759,15 @@ to be focused.
     `org.freedesktop.appearance color-scheme`;
   - flips `gtk-theme` between `adw-gtk3` and `adw-gtk3-dark` for GTK 3 apps;
   - selects the matching qt6ct/qt5ct color scheme;
-  - changes the shell's palette in place.
+  - changes the shell's palette in place;
+  - then runs `~/.config/tide/appearance-hook`, if there is one, with no
+    arguments, once the color scheme is set. It reads the scheme itself,
+    and switches run one at a time, a change during one running after it,
+    so the last run always sees the latest. So nothing can hold up later
+    switches, a `gsettings` still running after 10 s, or a hook after 30 s,
+    is stopped, and the log says so. conf's hook restyles swaync
+    and the wallpaper, which the shell doesn't draw yet; nothing needs to
+    watch for the change.
 
   GTK apps, kitty and the shell follow the switch live. Qt apps are the
   exception:
