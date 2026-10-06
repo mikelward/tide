@@ -8,6 +8,7 @@
 # This is the M2 subset, for the transitional shell (TODO.md "tide
 # doctor"):
 #   - the session's units are running;
+#   - qs, where it's installed, is a Quickshell that loads tide's shell;
 #   - each D-Bus name in §5.2 is owned by the unit that should own it;
 #   - no daemon runs twice, and no rival to an owner runs at all;
 #   - tide-portals.conf is installed and XDG_CURRENT_DESKTOP selects it;
@@ -39,6 +40,34 @@ for unit in tide.service hypridle.service; do
         problem "$unit is ${state:-not active}: see \`systemctl --user status $unit\` and \`journalctl --user -u $unit\`"
     fi
 done
+
+# Quickshell. tide-shell runs waybar when qs is too old for tide's shell,
+# and says so only in its log. Without qs, waybar is M2's bar and no
+# problem. 0.3.0 added IdleInhibitor, IdleMonitor and
+# Quickshell.Networking; tide-shell and scripts' setup-tide check the same.
+min_quickshell=0.3
+# True when version $1 is at least $2, comparing dot-separated numbers.
+version_at_least() {
+    awk -v a="$1" -v b="$2" 'BEGIN {
+        n = split(a, x, "."); m = split(b, y, ".")
+        for (i = 1; i <= (n > m ? n : m); i++)
+            if (x[i] + 0 != y[i] + 0) exit !(x[i] + 0 > y[i] + 0)
+    }'
+}
+if qs_path=$(command -v qs); then
+    # 0.2 prints "quickshell 0.2.1, revision ...", 0.3 "Quickshell 0.3.1
+    # (revision ...)".
+    if ! qs_out=$(qs --version 2>&1); then
+        problem "couldn't tell which Quickshell $qs_path is (qs --version: $(printf '%s\n' "$qs_out" | tail -n 1)), so the version check is skipped"
+    else
+        qs_version=$(printf '%s\n' "$qs_out" | sed -n 's/^[Qq]uickshell \([0-9][0-9]*\.[0-9][0-9.]*\).*/\1/p' | head -n 1)
+        if test -z "$qs_version"; then
+            problem "couldn't tell which Quickshell $qs_path is (qs --version printed '$(printf '%s\n' "$qs_out" | head -n 1)'), so the version check is skipped"
+        elif ! version_at_least "$qs_version" "$min_quickshell"; then
+            problem "qs ($qs_path) is Quickshell $qs_version, and tide's shell needs $min_quickshell or newer, so the bar is waybar: install a newer Quickshell (on Debian and Ubuntu, \`setup --tide\` builds one), then \`systemctl --user restart tide.service\`"
+        fi
+    fi
+fi
 
 # D-Bus names and the unit that should own each (§5.2). In M2 the
 # transitional shell's swaync and waybar own the first two, in

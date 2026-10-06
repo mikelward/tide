@@ -139,11 +139,16 @@ echo $$ >> "$FAKE_PIDS"
 exec sleep 600 >/dev/null 2>&1
 FAKE
 # qs claims the tray watcher and stays up, or exits with $FAKE_QS_EXIT; it's
-# in its own directory so a run can leave it off the PATH.
+# in its own directory so a run can leave it off the PATH. Its --version is
+# 0.3.1's, or prints $FAKE_QS_VERSION and exits $FAKE_QS_VERSION_STATUS.
 qs=$tmp/qs-bin
 mkdir "$qs"
 cat > "$qs/qs" <<'FAKE'
 #!/bin/sh
+if test "$*" = --version; then
+    printf '%s\n' "${FAKE_QS_VERSION:-Quickshell 0.3.1 (revision 1a4716c, distributed by test)}"
+    exit "${FAKE_QS_VERSION_STATUS:-0}"
+fi
 printf 'qs %s\n' "$*" >> "$FAKE_LOG"
 if test -n "$FAKE_QS_EXIT"; then
     # Lets a waiting theme daemon go too, so nothing outlives the run.
@@ -481,6 +486,34 @@ run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= XDG_CONFIG_HOME="$
 log=$(cat "$tmp/log")
 check "the bar falls back to waybar without the shell" contains "$log" "theme-daemon bar=waybar"
 check "waybar's bar runs no qs" test -z "$(grep '^qs ' "$tmp/log")"
+
+# A Quickshell older than 0.3 can't load the bar (Debian's 0.2.1), so the
+# bar is waybar, and the log says why.
+qs_021="quickshell 0.2.1, revision 0000000, distributed by: Debian"
+run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
+log=$(cat "$tmp/log")
+check "an old Quickshell's bar is waybar" contains "$log" "theme-daemon bar=waybar"
+check "an old Quickshell runs no shell" test -z "$(grep '^qs -c tide' "$tmp/log")"
+check "an old Quickshell is named, with what the shell needs" \
+    contains "$(cat "$tmp/err")" "qs ($qs/qs) is Quickshell 0.2.1, and tide's shell needs 0.3 or newer, so the bar is waybar"
+run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell FAKE_QS_VERSION="$qs_021"
+check "TIDE_BAR=quickshell with an old Quickshell fails, not to be retried" test "$status" -eq 78
+check "TIDE_BAR=quickshell with an old Quickshell is reported" \
+    contains "$(cat "$tmp/err")" "TIDE_BAR is quickshell, but qs ($qs/qs) is Quickshell 0.2.1"
+check "TIDE_BAR=quickshell with an old Quickshell starts nothing" test ! -s "$tmp/log"
+# 0.3.0 is new enough.
+run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= \
+    FAKE_QS_VERSION="Quickshell 0.3.0 (revision 0000000, distributed by Ubuntu)"
+check "Quickshell 0.3.0 runs the shell" contains "$(cat "$tmp/log")" "qs -c tide"
+# A version that can't be read doesn't cost the bar, but is logged.
+run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="Quickshell nightly"
+check "an unreadable Quickshell version still runs the shell" contains "$(cat "$tmp/log")" "qs -c tide"
+check "an unreadable Quickshell version is logged" \
+    contains "$(cat "$tmp/err")" "couldn't tell which Quickshell $qs/qs is (qs --version printed 'Quickshell nightly'); running its bar anyway"
+run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="qs: cannot open display" FAKE_QS_VERSION_STATUS=1
+check "a failing qs --version still runs the shell" contains "$(cat "$tmp/log")" "qs -c tide"
+check "a failing qs --version is logged" \
+    contains "$(cat "$tmp/err")" "couldn't tell which Quickshell $qs/qs is (qs --version: qs: cannot open display)"
 
 # The shell exiting ends the unit, to be restarted.
 # The theme daemon waits on the FIFO until qs exits, then exits too: the

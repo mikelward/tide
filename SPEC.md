@@ -214,6 +214,11 @@ else in this spec changes.
   via COPR (the official package is unverified). Ubuntu has only a third-party
   PPA. `setup` should prefer the distro package and fall back to a pinned
   source build against the distro's Qt.
+- **Version.** The shell needs Quickshell 0.3 or newer: 0.3.0 added
+  `IdleInhibitor`, `IdleMonitor` and `Quickshell.Networking`, and an older
+  `qs` can't load a file that names one, so there's no bar at all. Debian's
+  package is 0.2.1 (its `qs --version`, 2026-10-06), so `setup` builds
+  there, as it does where there's no package.
 - **Memory** is unmeasured; M2 measures it and sets a budget.
 
 ### 3.3 Session: uwsm and systemd user units
@@ -334,8 +339,10 @@ work". The old setup shows how it fought itself:
 
 **M2 transitional shell.** Until the Quickshell shell lands (M3 and M4),
 `tide.service` runs `tide-shell` instead of `qs -c tide`.
-It runs the Quickshell bar (`qs -c tide`) when Quickshell and the
-shell are installed, and waybar otherwise (`TIDE_BAR` picks). It
+It runs the Quickshell bar (`qs -c tide`) when Quickshell 0.3 or newer
+and the shell are installed, and waybar otherwise (`TIDE_BAR` picks). An
+older `qs` can't load the bar (§3.2), so the shell logs its version and
+runs waybar, and `doctor` reports it. It
 starts `conf`'s theme daemon, which runs swaync, and waybar when that's the
 bar, and the first polkit agent it finds. It reports ready once swaync
 owns `org.freedesktop.Notifications` and the bar's tray owns
@@ -480,7 +487,8 @@ flowchart TD
   It prints one line per problem, with the fix.
   - M2's `tide doctor` checks the transitional shell's owners
     (swaync, waybar) and the units, rival daemons, portal config, config
-    errors, autostart entries and bars per monitor. Activatable services
+    errors, autostart entries and bars per monitor, and that `qs`, where
+    it's installed, is new enough to load the shell. Activatable services
     wait for the Quickshell owners (TODO.md).
 
 ### 5.5 Coexisting with KDE

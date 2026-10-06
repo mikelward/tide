@@ -121,7 +121,16 @@ case "$*" in
     *) printf '%s' "$FAKE_CONFIGERRORS" ;;
 esac
 FAKE
-chmod +x "$fake"/*
+# qs --version answers as Quickshell 0.3.1, or prints $FAKE_QS_VERSION and
+# exits $FAKE_QS_VERSION_STATUS. It comes before any real qs on PATH, and in
+# a directory of its own, so a run can leave it off.
+mkdir "$tmp/qs-bin"
+cat > "$tmp/qs-bin/qs" <<'FAKE'
+#!/bin/sh
+printf '%s\n' "${FAKE_QS_VERSION:-Quickshell 0.3.1 (revision 1a4716c, distributed by test)}"
+exit "${FAKE_QS_VERSION_STATUS:-0}"
+FAKE
+chmod +x "$fake"/* "$tmp/qs-bin/qs"
 
 # A healthy session: every owner in place, one of each daemon, the portal
 # config installed, and no autostart unit running.
@@ -144,7 +153,7 @@ healthy() {
 # run ENV...: runs the doctor in a tide session unless ENV says
 # otherwise, with the given fakes' answers.
 run() {
-    env PATH="$fake:$PATH" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" \
+    env PATH="$fake:$tmp/qs-bin:$PATH" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" \
         XDG_CURRENT_DESKTOP=tide:Hyprland XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" \
         XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_HOME="$tmp/no-data-home" XDG_DATA_DIRS="$tmp/share" \
         FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_PID_hypridle=101 \
@@ -166,6 +175,21 @@ run FAKE_INACTIVE="hypridle.service=failed"
 check "a failed unit is a problem" test "$status" -eq 1
 check "a failed unit is named, with where to look" \
     contains "$out" "hypridle.service is failed: see \`systemctl --user status hypridle.service\`"
+
+# A Quickshell older than 0.3 can't load tide's shell (Debian's 0.2.1),
+# so tide-shell runs waybar, and says so only in its log.
+run FAKE_QS_VERSION="quickshell 0.2.1, revision 0000000, distributed by: Debian"
+check "an old Quickshell is a problem" test "$status" -eq 1
+check "an old Quickshell is named, with the fix" \
+    contains "$out" "qs ($tmp/qs-bin/qs) is Quickshell 0.2.1, and tide's shell needs 0.3 or newer, so the bar is waybar: install a newer Quickshell (on Debian and Ubuntu, \`setup --tide\` builds one), then \`systemctl --user restart tide.service\`"
+run FAKE_QS_VERSION="Quickshell 0.3.0 (revision 0000000, distributed by Ubuntu)"
+check "Quickshell 0.3.0 is no problem" test "$out" = "No problems found."
+run FAKE_QS_VERSION="Quickshell nightly"
+check "an unreadable Quickshell version is a problem" \
+    contains "$out" "couldn't tell which Quickshell $tmp/qs-bin/qs is (qs --version printed 'Quickshell nightly'), so the version check is skipped"
+run FAKE_QS_VERSION="qs: cannot open display" FAKE_QS_VERSION_STATUS=1
+check "a failing qs --version is a problem" \
+    contains "$out" "couldn't tell which Quickshell $tmp/qs-bin/qs is (qs --version: qs: cannot open display), so the version check is skipped"
 
 healthy
 rm "$tmp/owned/org.freedesktop.ScreenSaver"
@@ -365,6 +389,7 @@ out=$(env PATH="$fake:$tmp/no-jq" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" XDG_CU
     FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_PID_hypridle=101 \
     "$tmp/no-jq/sh" "$doctor" 2>&1)
 check "no jq is reported" contains "$out" "jq isn't installed, so the one-bar-per-monitor check is skipped"
+check "no qs isn't a problem: waybar is the bar" test -z "$(printf '%s\n' "$out" | grep Quickshell)"
 
 healthy
 run FAKE_AUTOSTART_UNITS="app-nm\\x2dapplet@autostart.service=123 app-hplip\\x2dsystray@autostart.service=789 app-oneshot@autostart.service=456 app-skipped@autostart.service=0 app-earlier@autostart.service=50"
