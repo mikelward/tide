@@ -371,9 +371,11 @@ tested where it can be without a live session.
     nm-applet secret agent.
   - The tray (`shell/Tray.qml`, from `shell/lib/tray.mjs`) shows apps'
     StatusNotifierItems, hiding passive ones as waybar did: a left or
-    right click opens the menu (§7.4), and a middle click activates.
+    right click opens the menu (§7.4), which `shell/TrayMenu.qml` draws,
+    and a middle click activates.
     With it the Quickshell bar replaced waybar in `tide-shell`.
-    Try it live: an app's menu, and an app that registers before the bar.
+    Try it live: an app's menu, with its submenus and checkboxes, and an
+    app that registers before the bar.
   - The clocks popover (§7.3) is `shell/ClocksPopover.qml`, from
     `shell/lib/popover.mjs` and `shell/lib/dst.mjs`. Scrolling over the
     clocks scrubs them (`scrubbed` in `shell/lib/clocks.mjs`).
