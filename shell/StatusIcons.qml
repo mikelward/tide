@@ -129,7 +129,7 @@ Row {
 
         anchors.verticalCenter: parent.verticalCenter
         visible: root.sink !== null
-        spacing: 3
+        spacing: 2
 
         SymbolicIcon {
             anchors.verticalCenter: parent.verticalCenter
@@ -139,13 +139,14 @@ Row {
             })
         }
 
-        // Wide enough for "100%" so the icons after it don't shift.
+        // Wide enough for "100%" so the icons after it don't shift, and
+        // left-aligned so the spare room falls before the next icon, not
+        // between this one and its %.
         Text {
             id: volumeText
 
             anchors.verticalCenter: parent.verticalCenter
             width: Math.max(implicitWidth, volumeWidth.width)
-            horizontalAlignment: Text.AlignRight
             text: Status.volumeText(root.sink?.audio?.volume)
             color: (root.sink?.audio?.muted ?? true) ? Theme.fgDim : Theme.fg
             font.family: Theme.font
@@ -202,7 +203,7 @@ Row {
 
         anchors.verticalCenter: parent.verticalCenter
         visible: view.visible
-        spacing: 3
+        spacing: 2
 
         TapHandler {
             onTapped: batteryPopover.toggle()
@@ -240,7 +241,7 @@ Row {
             : SysmonData.view.tone === "warn" ? Theme.warn : Theme.fg
 
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 3
+        spacing: 2
 
         TapHandler {
             onTapped: sysmonPopover.toggle()
@@ -258,13 +259,12 @@ Row {
             color: sysmon.ink
         }
 
-        // Wide enough for "100%" so the icons after it don't shift.
+        // Wide and aligned as the volume's %.
         Text {
             id: cpuText
 
             anchors.verticalCenter: parent.verticalCenter
             width: Math.max(implicitWidth, cpuWidth.width)
-            horizontalAlignment: Text.AlignRight
             text: SysmonData.view.text
             color: sysmon.ink
             font.family: Theme.font
