@@ -1471,7 +1471,10 @@ this spec.
   - a window's `pid` and `class`;
   - the `no_initial_focus` window rule.
 - **Where it lives.** `hypr/tide/focus.lua`, beside the layout, which
-  `conf`'s `hyprland.lua` loads. It publishes itself as the Lua global
+  `conf`'s `hyprland.lua` loads in the tide session only. Nothing outside
+  that session grants focus, so there the guard would keep every new
+  window unfocused, even an app just launched from a key. It publishes
+  itself as the Lua global
   `tide_focus`, and `tide launch` records a grant with
   `hyprctl eval 'tide_focus.grant("APP")'`. A window it keeps from
   focus is announced as `custom>>tide-attention>>ADDRESS`, and so is
