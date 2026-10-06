@@ -237,7 +237,8 @@ tested where it can be without a live session.
     their keys shown. A blocked power action
     keeps the launcher open and asks, naming what blocks it, as the
     session menu does. Dark style is in too: it flips light and dark
-    until the schedule's next change (§15). Still to come: Settings.
+    until the schedule's next change (§15). Settings opens the settings
+    panel (below).
   - Frecency is in: the empty query lists the apps you run most and most
     recently first, and a query puts them first among equal matches; kept in
     `$XDG_STATE_HOME/tide/launcher.json`.
@@ -379,6 +380,27 @@ tested where it can be without a live session.
   - The clocks popover (§7.3) is `shell/ClocksPopover.qml`, from
     `shell/lib/popover.mjs` and `shell/lib/dst.mjs`. Scrolling over the
     clocks scrubs them (`scrubbed` in `shell/lib/clocks.mjs`).
+
+## Settings panel (SPEC.md §16)
+
+`shell/SettingsWindow.qml`, from the launcher's Settings action or
+`qs -c tide ipc call settings toggle`, with its pages in
+`shell/lib/settings.mjs`. CI opens it and opens the Network page's app
+from the keyboard (`shell/shell_test.sh`).
+
+- In: Sound (the devices, as the volume popover lists them, and
+  `pavucontrol`), Network (`nm-connection-editor`) and Bluetooth
+  (`blueman-manager`).
+- Next, in the maintainer's order: Idle, then Mouse and Keyboard. Neither
+  has an app to link out to that reaches Hyprland or hypridle.
+  - Idle: the timings are hard-coded in `conf`'s `hypridle.conf` today.
+    The page needs tide to own them (`idle.json` and `idle.local.json`,
+    §16.1) and give them to hypridle.
+  - Mouse and Keyboard: not in §16's table yet. They'd apply through
+    `hyprctl eval` and persist in the generated Lua include §16
+    describes, which `conf`'s `hyprland.lua` would have to load.
+- Then the rest of §16's table: Appearance, Displays, Layouts, Clocks and
+  Keys.
 
 ## Notifications (M4)
 

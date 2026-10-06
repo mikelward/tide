@@ -8,7 +8,8 @@
 # tide-tz never ends, one whose clocks, system monitor, title, focus guard
 # calls, color scheme or VPNs warn, one whose icon won't load, a
 # notification server that records what it's sent or doesn't, a launcher
-# that runs the app typed or doesn't, a lock that can't read its
+# that runs the app typed or doesn't, a settings panel that opens the
+# Network page's app or doesn't, a lock that can't read its
 # keyboards, or unlocks or doesn't, and a greeter that logs in or doesn't.
 # The stand-in Hyprland, hyprctl, tide-sysmon, gsettings, nmcli and greetd
 # are the load test's own, and the stand-in gsettings and nmcli answer as
@@ -82,6 +83,7 @@ EOF
 if test "\$1" = ipc; then
     case "\$*" in
         *"call launcher open"*) : >"\$XDG_RUNTIME_DIR/launcher-open" ;;
+        *"call settings open"*) : >"\$XDG_RUNTIME_DIR/settings-open" ;;
     esac
     $2
 fi
@@ -226,6 +228,13 @@ EOF
 if test "$1" = -s; then
     exec sleep 3600
 fi
+# Keys pressed by name (-k) are a line of their own.
+if test "$1" = -k; then
+    printf '%s\n' "$*" >>"$(dirname "$0")/typed"
+    printf '%s\n' "$LANG" >>"$(dirname "$0")/typed-lang"
+    printf '%s\n' "$*" >"$XDG_RUNTIME_DIR/typed"
+    exit 0
+fi
 printf '%s' "$1" >>"$(dirname "$0")/typed"
 printf '%s\n' "$LANG" >>"$(dirname "$0")/typed-lang"
 printf '%s' "$1" >"$XDG_RUNTIME_DIR/typed"
@@ -267,11 +276,15 @@ run() {
 }
 
 # What a launcher says and does once the launch step opens it: it takes the
-# keyboard, then, once the query is typed, runs the app.
+# keyboard, then, once the query is typed, runs the app. Then the settings
+# panel does the same once it's opened and its keys are typed, running the
+# Network page's app.
 opened='until test -e "$XDG_RUNTIME_DIR/launcher-open"; do sleep 0.1; done'
 focused="echo '[1.0] {Default Queue} wl_keyboard#3.enter(1, wl_surface#2, array[0])'"
 typed='until test -s "$XDG_RUNTIME_DIR/typed"; do sleep 0.1; done; rm "$XDG_RUNTIME_DIR/typed"'
-launcher="$opened; $focused; $typed; tide launch --app tide-test-probe -- tide-test-probe --flag"
+ran="$opened; $focused; $typed; tide launch --app tide-test-probe -- tide-test-probe --flag"
+settings_opened='until test -e "$XDG_RUNTIME_DIR/settings-open"; do sleep 0.1; done'
+launcher="$ran; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor"
 # What a greeter does once the login step starts it: it takes the keyboard,
 # then logs in on the passwords typed, as greeter_client.py's MODE says.
 login_as() {
@@ -315,6 +328,8 @@ loaded="  INFO: Configuration Loaded"
 run "$tmp/clean"
 check "a launcher that runs the app typed passes" contains "$out" "ok: the launcher finds an app by a query without its accent, and runs it"
 check "having typed the query and Enter" test "$(head -n 1 "$tmp/clean/typed")" = cafepro
+check "and a settings panel that opens the Network page's app passes" contains "$out" "ok: the settings panel changes page with the arrows and opens the page's app"
+check "having pressed Down and Enter" test "$(sed -n 2p "$tmp/clean/typed")" = "-k Down -k Return"
 
 stubs "$tmp/runs-nothing" "exit 0" "$loaded" ":" "$opened; $focused; $typed"
 run "$tmp/runs-nothing"
@@ -331,6 +346,21 @@ stubs "$tmp/launcher-unfocused" "exit 0" "$loaded" ":" "$opened"
 run "$tmp/launcher-unfocused"
 check "a launcher that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the launcher didn't take the keyboard in 2 s"
+
+stubs "$tmp/settings-nothing" "exit 0" "$loaded" ":" "$ran; $settings_opened; $focused; $typed"
+run "$tmp/settings-nothing"
+check "a settings panel that runs nothing fails" test "$code" -ne 0
+check "and says so" contains "$out" "the settings panel didn't open the Network page's app in 2 s"
+
+stubs "$tmp/settings-wrong" "exit 0" "$loaded" ":" "$ran; $settings_opened; $focused; $typed; tide launch -- other"
+run "$tmp/settings-wrong"
+check "a settings panel that runs the wrong app fails" test "$code" -ne 0
+check "and says what it ran" contains "$out" "it ran \`tide launch -- other\`"
+
+stubs "$tmp/settings-unfocused" "exit 0" "$loaded" ":" "$ran; $settings_opened"
+run "$tmp/settings-unfocused"
+check "a settings panel that never takes the keyboard fails" test "$code" -ne 0
+check "and says so" contains "$out" "the settings panel didn't take the keyboard in 2 s"
 
 run "$tmp/clean"
 check "a server that records what it's sent passes" contains "$out" "ok: the notification server takes notifications and records them"
@@ -550,7 +580,7 @@ echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
 check "a lock that unlocks on the right password passes" test "$code" -eq 0
 check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
-check "having typed a wrong password, then the right one" test "$(sed -n 2,3p "$tmp/unlocks/typed")" = "not-pw
+check "having typed a wrong password, then the right one" test "$(sed -n 3,4p "$tmp/unlocks/typed")" = "not-pw
 pw"
 check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
 
@@ -607,7 +637,7 @@ run "$tmp/clean"
 check "a greeter that logs in to tide on the right password passes" \
     contains "$out" "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
 check "having typed a wrong password, then the right one, then the code" \
-    test "$(sed -n 2,4p "$tmp/clean/typed")" = "not-tide-greeter-test
+    test "$(sed -n 3,5p "$tmp/clean/typed")" = "not-tide-greeter-test
 tide-greeter-test
 246810"
 

@@ -203,10 +203,11 @@ test("moving the selection stops at the ends", () => {
     assert.equal(moved(0, 1, 0), -1);
 });
 
-test("the quick actions are the screenshots, the session, the toggles and reload", () => {
+test("the quick actions are the screenshots, the session, settings, the toggles and reload", () => {
     assert.deepEqual(quickActions({ notifications: true }).map(q => q.id), [
         "screenshot-window", "screenshot-screen", "screenshot-region",
         "lock", "logout", "suspend", "reboot", "poweroff",
+        "settings",
         "dnd", "dark-style", "keep-awake", "reload",
     ]);
     // Every one has something to run.
@@ -252,6 +253,13 @@ test("the toggles say whether they're on", () => {
     assert.equal(sub({ dark: true, darkUntil: "07:00" })["dark-style"], "On until 07:00");
     assert.equal(sub({ dark: false, darkUntil: "19:00" })["dark-style"], "Off until 19:00");
     assert.equal(sub({ dark: true, darkUntil: "" })["dark-style"], "On");
+});
+
+test("settings is found by what its pages cover, and opens the panel", () => {
+    for (const query of ["settings", "preferences", "sound", "network", "wifi", "bluetooth"]) {
+        assert.equal(search(quickActions(), query)[0].item.id, "settings", query);
+    }
+    assert.deepEqual(quickCommand("settings"), { shell: "settings" });
 });
 
 test("dark style is found by theme, light and night", () => {

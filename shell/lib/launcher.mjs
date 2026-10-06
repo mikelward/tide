@@ -68,7 +68,7 @@ export function launcherItems(entries) {
 // the bell is: under swaync it would hold nothing. Dark style says whether
 // it's on and until when (`state.dark`, `state.darkUntil` as "HH:MM", or ""
 // when it doesn't change on its own); running it flips it until then
-// (SPEC.md §15). Settings comes later (TODO.md).
+// (SPEC.md §15). Settings opens the settings panel (§16).
 export function quickActions(state = {}) {
     const quick = (id, name, sub, icon, keywords, hint = "") => ({
         kind: "quick",
@@ -96,6 +96,7 @@ export function quickActions(state = {}) {
         quick("suspend", session.suspend.label, "Session", session.suspend.icon, ["sleep"]),
         quick("reboot", session.reboot.label, "Session", session.reboot.icon, ["reboot"]),
         quick("poweroff", session.poweroff.label, "Session", session.poweroff.icon, ["power off", "halt"]),
+        quick("settings", "Settings", "Sound, network and Bluetooth", "preferences-system-symbolic", ["preferences", "control panel", "sound", "audio", "network", "wi-fi", "wifi", "bluetooth"]),
         state.notifications ? quick("dnd", "Do not disturb", onOff(state.dnd), "notifications-disabled-symbolic", ["dnd", "notifications", "quiet"]) : null,
         quick("dark-style", "Dark style", onOff(state.dark) + (state.darkUntil ? ` until ${state.darkUntil}` : ""), "night-light-symbolic", ["theme", "light", "night", "appearance", "mode"]),
         quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), "display-brightness-symbolic", ["caffeine", "idle", "inhibit"]),
@@ -127,7 +128,7 @@ export function windowScreenshot(address) {
 // What running a quick action takes: a command to run (`run`), with a
 // pause first for the launcher to leave the screen (`afterClose`, so a
 // screenshot doesn't catch it), or something the shell does itself
-// (`shell`: "dnd", "dark-style", "keep-awake", "reload"). "Screenshot window" takes the
+// (`shell`: "settings", "dnd", "dark-style", "keep-awake", "reload"). "Screenshot window" takes the
 // window recorded as the launcher opened (`context.window`, its normalized
 // Hyprland address; windowScreenshot), and "Screenshot screen" the monitor
 // it opened on (`context.output`, Hyprland's name for it), so a focus change
@@ -150,6 +151,7 @@ export function quickCommand(id, context = {}) {
         // blocked asks before going ahead (confirmRows); `power` says to
         // keep the launcher open until it knows.
         return { run: actionCommand(id, false), afterClose: false, power: ["suspend", "reboot", "poweroff"].includes(id) };
+    case "settings":
     case "dnd":
     case "dark-style":
     case "keep-awake":
