@@ -6,7 +6,8 @@
 # For M2 the owners are the ones already in daily use, with the bar moving
 # to Quickshell (M3):
 #   - the bar, and with it the tray's org.kde.StatusNotifierWatcher: the
-#     Quickshell shell (`qs -c tide`) when it's installed, else waybar;
+#     Quickshell shell (`qs -c tide`) when it's installed, in a Quickshell
+#     that can load it, else waybar;
 #   - swaync owns org.freedesktop.Notifications. conf's theme daemon starts
 #     it, and waybar when that's the bar, with the light/dark style and
 #     restarts them at each theme boundary, so it runs here rather than from
@@ -29,7 +30,8 @@
 # missing agent or the other one.
 #
 #   $TIDE_BAR           quickshell or waybar (default: quickshell when
-#                             `qs` and the shell's config are installed)
+#                             `qs` and the shell's config are installed, and
+#                             qs is Quickshell 0.3 or newer)
 #   $TIDE_THEME_DAEMON  the theme daemon (default: conf's)
 #   $TIDE_POLKIT_AGENT  a polkit agent to use instead of searching
 #   $TIDE_POLKIT_AGENTS the paths searched, in order (default below)
@@ -57,6 +59,11 @@ default_agents="
 theme_daemon=${TIDE_THEME_DAEMON:-$HOME/.config/hypr/scripts/theme-daemon.sh}
 # Where `make install` puts the shell, and where `qs -c tide` finds it.
 shell_config=${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/tide/shell.qml
+# The oldest Quickshell the shell loads in: 0.3.0 added IdleInhibitor,
+# IdleMonitor and Quickshell.Networking, and an older qs (Debian's 0.2.1)
+# fails the whole bar on the first one. tide-doctor and scripts'
+# setup-tide check the same.
+min_quickshell=0.3
 wallpaper=${TIDE_WALLPAPER:-$HOME/.config/hypr/wallpaper.jpg}
 input_setup=${TIDE_INPUT_SETUP:-$HOME/.config/hypr/scripts/apply-input.sh}
 
@@ -76,6 +83,35 @@ polkit_agent() {
             return
         fi
     done
+}
+
+# True when version $1 is at least $2, comparing dot-separated numbers.
+version_at_least() {
+    awk -v a="$1" -v b="$2" 'BEGIN {
+        n = split(a, x, "."); m = split(b, y, ".")
+        for (i = 1; i <= (n > m ? n : m); i++)
+            if (x[i] + 0 != y[i] + 0) exit !(x[i] + 0 > y[i] + 0)
+    }'
+}
+
+# quickshell_ok: false when qs is older than $min_quickshell, with what it
+# is in $qs_old. 0.2 prints its version as "quickshell 0.2.1, revision ...",
+# 0.3 as "Quickshell 0.3.1 (revision ...)". A version it can't read is
+# logged and let through, so a new format can't cost the bar.
+quickshell_ok() {
+    qs_path=$(command -v qs)
+    if ! out=$(qs --version 2>&1); then
+        log "couldn't tell which Quickshell $qs_path is (qs --version: $(printf '%s\n' "$out" | tail -n 1)); running its bar anyway"
+        return 0
+    fi
+    version=$(printf '%s\n' "$out" | sed -n 's/^[Qq]uickshell \([0-9][0-9]*\.[0-9][0-9.]*\).*/\1/p' | head -n 1)
+    if test -z "$version"; then
+        log "couldn't tell which Quickshell $qs_path is (qs --version printed '$(printf '%s\n' "$out" | head -n 1)'); running its bar anyway"
+        return 0
+    fi
+    version_at_least "$version" "$min_quickshell" && return 0
+    qs_old="qs ($qs_path) is Quickshell $version, and tide's shell needs $min_quickshell or newer"
+    return 1
 }
 
 unit=tide.service
@@ -150,10 +186,13 @@ fi
 
 case "${TIDE_BAR:-}" in
     '')
-        if command -v qs >/dev/null 2>&1 && test -f "$shell_config"; then
-            bar=quickshell
-        else
+        if ! command -v qs >/dev/null 2>&1 || ! test -f "$shell_config"; then
             bar=waybar
+        elif ! quickshell_ok; then
+            log "$qs_old, so the bar is waybar; \`tide doctor\` says how to fix it"
+            bar=waybar
+        else
+            bar=quickshell
         fi
         ;;
     quickshell | waybar) bar=$TIDE_BAR ;;
@@ -168,6 +207,10 @@ if test "$bar" = quickshell && ! command -v qs >/dev/null 2>&1; then
 fi
 if test "$bar" = quickshell && ! test -f "$shell_config"; then
     log "TIDE_BAR is quickshell, but there's no shell at $shell_config; run \`make install\` in tide"
+    exit $EX_CONFIG
+fi
+if test "${TIDE_BAR:-}" = quickshell && ! quickshell_ok; then
+    log "TIDE_BAR is quickshell, but $qs_old"
     exit $EX_CONFIG
 fi
 export TIDE_BAR="$bar"
