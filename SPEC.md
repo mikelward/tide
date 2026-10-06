@@ -1487,8 +1487,14 @@ this spec.
   order they were marked (`tide_focus.set_order`), and the guard
   follows it; without a shell, the guard's own order stands.
   `tide_focus.focus_attention()` goes to the most recently marked
-  window, and returns false when none is marked; `Super+Tab` then falls
-  back to Hyprland's `urgent_or_last`.
+  window, and returns false when none is marked. `Super+Tab` then goes to
+  Hyprland's urgent window, or else to the window you were last in
+  (`hl.dsp.focus({ last = true })`). So with one window marked, a press
+  takes you there and the next takes you back. With more marked, the next
+  press goes to the next mark; the fallback comes once none is left.
+  - It isn't Hyprland's `urgent_or_last`. In 0.56 that one's "last" reads
+    the focus history from the oldest end (`HISTORY[1]` in
+    `focusUrgentOrLast`), so pressing it again walked through every window.
   - Pressed again while Super is held, it steps to the next marked window,
     oldest last, and wraps, like Alt+Tab. Stepping clears no marks, so you
     can look through them all.
