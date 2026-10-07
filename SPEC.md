@@ -1919,8 +1919,8 @@ tide's own, and links out for the rest:
 | Idle | the four timings, suspend on AC (off by default) |
 | Sound | output and input devices; *advanced* opens `pavucontrol` |
 | Network, Bluetooth | *advanced* opens `nm-connection-editor` / `blueman-manager` |
-| Mouse | for every mouse: speed, scroll speed, natural scrolling, left-handed |
-| Touchpad | for every touchpad: the same, plus tap to click and off while typing |
+| Mouse | for every mouse, or one by name: speed, scroll speed, natural scrolling, left-handed |
+| Touchpad | for every touchpad, or one by name: the same, plus tap to click and off while typing |
 | Keyboard | for every keyboard: layouts and their variants, repeat delay and rate |
 | Keys | a read-only list of the current bindings, generated from the config |
 
@@ -1938,13 +1938,23 @@ stays hand-written.
     device at a time (`hl.device`). So a left-handed mouse and a
     right-handed touchpad can each have their own speed.
   - `conf` applies the keyboard's options itself, to every keyboard.
+  - A Mouse or Touchpad page sets every device of its kind, or one by
+    name. ‹ and › step through the ones connected and the ones with
+    settings of their own, and Reset clears a device's own settings.
+  - One device's settings apply over its kind's. They go in the file's
+    `devices` table, keyed by the name `hyprctl devices` gives it, and
+    `conf` applies them with `hl.device`, so two mice can differ.
+  - The shell lists the mice and touchpads with `hyprctl devices -j` as it
+    starts and as either page shows. A touchpad is one whose name says
+    touchpad, trackpad or synaptics, as `apply-input.sh` decides; every
+    other pointer is a mouse.
   - Only what's set reaches Hyprland. The rest stays as `conf`'s config
     has it, and the pages show those values until they're changed.
   - A keyboard layout and its variant are typed, as XKB's names (`us`, or
     `us,de` for two; `dvorak`, or none), and set with Enter. There's one
     variant, or one for each layout. Anything else is refused, and the page
-    says why; in the files, it's an error at load. Switching between two layouts
-    needs a key for it, which tide doesn't bind yet.
+    says why; in the files, it's an error at load. Switching between two
+    layouts needs a key for it, which tide doesn't bind yet.
   - `hyprland.local.lua` still wins, for a single device or an input
     option it sets.
   - A change the shell can't save is reported, as an idle time's is. One

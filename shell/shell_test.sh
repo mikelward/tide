@@ -619,6 +619,8 @@ written_settings() {
     ipc call settings setInput touchpad tapToClick false >/dev/null || exit 1
     # A name, which IPC passes as typed, not as a number.
     ipc call settings setInput keyboard layout us,de >/dev/null || exit 1
+    # And one mouse's own speed, over every mouse's.
+    ipc call settings setDevice logitech-usb-receiver speed 0.25 >/dev/null || exit 1
     # As idle's: wait for both files.
     _want='{
   "mouse": {
@@ -630,15 +632,21 @@ written_settings() {
   },
   "keyboard": {
     "layout": "us,de"
+  },
+  "devices": {
+    "logitech-usb-receiver": {
+      "speed": 0.25
+    }
   }
 }'
     i=0
     until grep -qxF '    mouse = { sensitivity = 0.5, left_handed = false },' "$input_conf" 2>/dev/null &&
         grep -qxF '    touchpad = { tap_to_click = false },' "$input_conf" &&
         grep -qxF '    keyboard = { kb_layout = "us,de" },' "$input_conf" &&
+        grep -qxF '        ["logitech-usb-receiver"] = { sensitivity = 0.25 },' "$input_conf" &&
         test "$(grep -c '^hyprctl eval conf_input.reload()$' "$tmp/helpers.log")" -gt "$_applies" &&
         test "$(cat "$input_local")" = "$_want"; do
-        if waited "the shell didn't write a right-handed mouse, a touchpad without tap to click and the us,de keyboard layouts, keeping the hand-edited mouse speed of 0.5, to $input_conf and $input_local, and apply them" "$i"; then
+        if waited "the shell didn't write a right-handed mouse, a touchpad without tap to click, the us,de keyboard layouts and one mouse's own speed, keeping the hand-edited mouse speed of 0.5, to $input_conf and $input_local, and apply them" "$i"; then
             cat "$input_conf" "$input_local" >&2
             grep -v '^\[' "$log" >&2
             exit 1
@@ -984,8 +992,8 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # The shell makes all these calls; without them, the run says nothing
 # about the clocks, the system monitor, the title, the focus guard (its
 # replay of the waiting windows, and its order for Super+Tab), light and
-# dark, the VPNs, hypridle's timings, or the mouse, touchpad and keyboard
-# settings.
+# dark, the VPNs, hypridle's timings, the mouse, touchpad and keyboard
+# settings, or the list of mice and touchpads.
 # The lock and the greeter only ask for the keyboards, for their layout
 # badges.
 shell_runs='tide-tz
@@ -999,7 +1007,8 @@ gsettings set org.gnome.desktop.interface gtk-theme
 nmcli monitor
 nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show
 systemctl --user try-restart hypridle.service
-hyprctl eval conf_input.reload()'
+hyprctl eval conf_input.reload()
+hyprctl devices -j'
 load_runs=$shell_runs
 idle_conf=$tmp/home/.config/hypr/tide-idle.conf
 idle_local=$tmp/home/.config/tide/idle.local.json

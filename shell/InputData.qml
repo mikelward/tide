@@ -23,6 +23,8 @@ Singleton {
     // The settings set: nothing until the files are read, then the last
     // good ones. Input.shown fills in what isn't.
     property var input: ({})
+    // The mice and touchpads connected, as [{name, kind}], as last listed.
+    property var connected: []
     // The errors and which have been reported (shell/lib/report.mjs).
     property var reports: Report.NOTHING
     // The settings files' errors, as the last load found them.
@@ -41,19 +43,44 @@ Singleton {
     // setting, a local file that doesn't parse, which is left as it is so a
     // hand edit gone wrong isn't lost, or one that can't be saved.
     function set(section, key, value) {
+        return root.change(`${section}.${key}`, (text, sharedText) => Input.withSetting(text, section, key, value, sharedText));
+    }
+
+    // Sets one setting of a single mouse or touchpad, by name, over its
+    // kind's, or clears it (`value` undefined); as set.
+    function setDevice(name, key, value) {
+        return root.change(`devices.${name}.${key}`, text => Input.withDeviceSetting(text, name, key, value));
+    }
+
+    // Clears every setting of a single mouse or touchpad, so it takes its
+    // kind's; as set.
+    function clearDevice(name) {
+        return root.change(`devices.${name}`, text => Input.withoutDevice(text, name));
+    }
+
+    // Changes input.local.json as `edit` says, from its text and input.json's
+    // to {text} or {error}, and returns why it didn't, or "".
+    function change(what, edit) {
         // The file as it is now, as IdleData.
         const text = root.readNow(local);
         if (local.broken !== "") {
-            return `${local.broken}; not changing ${section}.${key}`;
+            return `${local.broken}; not changing ${what}`;
         }
-        const result = Input.withSetting(text, section, key, value, root.readNow(shared));
+        const result = edit(text, root.readNow(shared));
         if (result.error) {
-            return `${result.error}; not changing ${section}.${key}`;
+            return `${result.error}; not changing ${what}`;
         }
         const error = root.writeNow(local, result.text);
         root.saveFailure = error === "" ? "" : `${error}; mouse, touchpad or keyboard setting not saved`;
         root.load();
         return root.saveFailure;
+    }
+
+    // Lists the connected mice and touchpads again, for the pages to name.
+    // A list that fails is logged, and the pages name only the devices that
+    // have settings of their own.
+    function listDevices() {
+        lister.createObject(root).running = true;
     }
 
     // As IdleData's.
@@ -253,6 +280,72 @@ Singleton {
                     run.errors = text;
                     run.errorsRead = true;
                     run.streamed();
+                }
+            }
+            onStarted: handle({ type: "started" })
+            onRunningChanged: {
+                if (!running) {
+                    handle({ type: "stopped" });
+                }
+            }
+            onExited: (code, status) => handle({ type: "exited", code: code })
+        }
+    }
+
+    // Lists the mice and touchpads: hyprctl devices -j, read once both its
+    // streams end, as the applier's are.
+    Component {
+        id: lister
+
+        Process {
+            id: listing
+
+            property var state: Run.initial()
+            property string out: ""
+            property bool outRead: false
+            property string errors: ""
+            property bool errorsRead: false
+
+            function streamed() {
+                if (outRead && errorsRead) {
+                    handle({ type: "stderr", text: errors });
+                }
+            }
+
+            function handle(event) {
+                if (state.done) {
+                    return;
+                }
+                state = Run.step(state, event, command);
+                if (!state.done) {
+                    return;
+                }
+                if (state.report?.level === "warn") {
+                    console.warn(state.report.message);
+                } else if (state.report?.level === "log") {
+                    console.log(state.report.message);
+                }
+                const r = Input.listedDevices(state.report?.level === "warn", out);
+                if (r.error) {
+                    console.warn(`tide: ${r.error}`);
+                }
+                root.connected = r.devices;
+                destroy();
+            }
+
+            command: ["hyprctl", "devices", "-j"]
+            stdout: StdioCollector {
+                onStreamFinished: {
+                    listing.out = text;
+                    listing.outRead = true;
+                    listing.streamed();
+                }
+            }
+            stderr: StdioCollector {
+                onStreamFinished: {
+                    listing.errors = text;
+                    listing.errorsRead = true;
+                    listing.streamed();
                 }
             }
             onStarted: handle({ type: "started" })
