@@ -44,7 +44,7 @@ trap 'rm -rf "$tmp"' EXIT
 # The calls the stub qs makes, as the shell and as the lock or the greeter.
 all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts keyboards"
 
-# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN [IDLE [HANDED [LABEL]]]]]]]]]]:
+# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN [IDLE [HANDED [LABEL [LATITUDE]]]]]]]]]]]:
 # a sway that listens on wayland-1 until it's killed; a qs whose `ipc`
 # runs IPC, and otherwise talks to Hyprland as HYPRLAND says, then prints
 # LOAD and waits, but started as the unlock step starts the lock
@@ -81,6 +81,9 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # default) then the hand-edited UTC once the last clock is moved over IPC.
 # Its layouts take tile's mfact, the hand-edited masters and twocol for
 # ultrawides once the last is set over IPC, applying each.
+# With the color scheme, it answers the Appearance page's refused mode,
+# and writes light from 06:30, the hand-edited dark from 20:00 and a
+# latitude of LATITUDE (51.5 by default) once the latitude is set over IPC.
 # DIR/load-CONFIG.txt, if it's there, is printed
 # before LOAD by that config alone: shell (-c), lock or greeter.
 stubs() {
@@ -104,6 +107,8 @@ if test "\$1" = ipc; then
         *"call settings setDevice logitech-usb-receiver speed 0.25"*) : >"\$XDG_RUNTIME_DIR/input-set" ;;
         *"call settings setLayout defaultMode.ultrawide twocol"*) : >"\$XDG_RUNTIME_DIR/layouts-set" ;;
         *"call settings moveClock UTC 1"*) : >"\$XDG_RUNTIME_DIR/clocks-set" ;;
+        *"call settings setAppearance latitude 51.5"*) : >"\$XDG_RUNTIME_DIR/appearance-set" ;;
+        *"call settings setAppearance mode sun"*) echo 'mode "sun" needs latitude and longitude; not changing mode' ;;
         *"call settings addClock US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the clocks" ;;
     esac
     $2
@@ -152,6 +157,16 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
             *" scheme "*)
                 gsettings set org.gnome.desktop.interface color-scheme prefer-dark >/dev/null 2>&1 &
                 gsettings set org.gnome.desktop.interface gtk-theme Adwaita-dark >/dev/null 2>&1 &
+                # Settings made over IPC, as the Appearance page makes them;
+                # gone with qs, as the idle one is.
+                {
+                    until test -e "\$XDG_RUNTIME_DIR/appearance-set"; do
+                        kill -0 \$\$ 2>/dev/null || exit 0
+                        sleep 0.1
+                    done
+                    rm "\$XDG_RUNTIME_DIR/appearance-set"
+                    printf '{\n  "light": "06:30",\n  "dark": "20:00",\n  "latitude": ${14:-51.5}\n}\n' >"\$HOME/.config/tide/appearance.local.json"
+                } &
                 ;;
         esac
         case " ${7-$all_runs} " in
@@ -399,6 +414,7 @@ check "and says it wrote hypridle's timings" contains "$out" "ok: the shell writ
 check "and the mouse, touchpad and keyboard settings" contains "$out" "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
 check "and the clocks" contains "$out" "ok: the shell changes the clocks as the Clocks page asks, and looks them up"
 check "and the layouts" contains "$out" "ok: the shell writes the layout settings, and new ones, and applies them"
+check "and the appearance settings" contains "$out" "ok: the shell sets the Appearance page's settings, and refuses one that wouldn't work"
 check "and says the lock loaded" contains "$out" "ok: Quickshell loads the lock"
 check "and says the greeter loaded" contains "$out" "ok: Quickshell loads the greeter"
 
@@ -597,6 +613,11 @@ stubs "$tmp/clocks-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" ""
 run "$tmp/clocks-unset"
 check "a shell that loses a clock's label fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell didn't write the clocks for Asia/Kolkata, labeled IST, then the hand-edited UTC to"
+
+stubs "$tmp/appearance-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" "" "" "" 12
+run "$tmp/appearance-unset"
+check "a shell that loses an appearance setting fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell didn't write light from 06:30 and a latitude of 51.5, keeping the hand-edited dark from 20:00, to"
 
 stubs "$tmp/input-warns" "exit 0" "  WARN qml: tide: couldn't apply the mouse, touchpad and keyboard settings: no conf_input
 $loaded"

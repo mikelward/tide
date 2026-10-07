@@ -335,3 +335,124 @@ export function tellNext(state, event) {
         throw new Error(`unknown tell event: ${event}`);
     }
 }
+
+// The settings panel's Appearance page (SPEC.md §16): its modes, in the
+// order ‹ and › step through them.
+export const MODE_CHOICES = Object.freeze([
+    Object.freeze({ mode: "schedule", label: "By the clock" }),
+    Object.freeze({ mode: "sun", label: "Sunrise and sunset" }),
+    Object.freeze({ mode: "light", label: "Always light" }),
+    Object.freeze({ mode: "dark", label: "Always dark" }),
+]);
+
+// The mode `steps` steps through MODE_CHOICES from the one at index `at`,
+// as an index, stopping at either end. "sun" is stepped past while
+// `settings` has no latitude and longitude, which it needs, so the modes
+// on its far side can still be reached.
+export function steppedModeAt(settings, at, steps) {
+    const located = settings.latitude !== undefined && settings.longitude !== undefined;
+    const dir = Math.sign(steps);
+    let i = at;
+    for (let n = Math.abs(steps); n > 0; n--) {
+        let j = i + dir;
+        while (!located && MODE_CHOICES[j]?.mode === "sun") {
+            j += dir;
+        }
+        if (j < 0 || j >= MODE_CHOICES.length) {
+            break;
+        }
+        i = j;
+    }
+    return i;
+}
+
+// The page's − and + move a time by this many minutes.
+export const TIME_STEP = 15;
+
+function hhmm(minutes) {
+    return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+// The time `steps` quarter hours from `text` ("HH:MM"), stopping at 00:00
+// and 23:45. One off a quarter hour goes to the next one that way first,
+// so 07:10 goes to 07:15 or 07:00.
+export function steppedTime(text, steps) {
+    const t = parseTime(text);
+    if (t === null || steps === 0) {
+        return text;
+    }
+    const at = t.h * 60 + t.min;
+    let next;
+    if (at % TIME_STEP === 0) {
+        next = at + steps * TIME_STEP;
+    } else {
+        const edge = steps > 0 ? Math.ceil(at / TIME_STEP) : Math.floor(at / TIME_STEP);
+        next = (edge + steps - Math.sign(steps)) * TIME_STEP;
+    }
+    const clamped = Math.max(0, Math.min(24 * 60 - TIME_STEP, next));
+    // Past the last quarter hour (23:50, typed by hand), + has nowhere to
+    // go, and stays rather than stepping back.
+    return (steps > 0 && clamped < at) || (steps < 0 && clamped > at) ? text : hhmm(clamped);
+}
+
+// As steppedTime, but a step that would land on `other`, the opposite
+// time, goes past it: light and dark can't be the same, and an overnight
+// schedule needs the two to cross. At the end of the day, with nowhere
+// past it, the time stays where it is.
+export function steppedTimePast(text, steps, other) {
+    const next = steppedTime(text, steps);
+    if (next !== other) {
+        return next;
+    }
+    const past = steppedTime(next, Math.sign(steps));
+    return past === next ? text : past;
+}
+
+// A latitude or longitude as typed on the page: a decimal number, east and
+// north positive. Returns {value} or {error} naming the setting.
+export function parseCoordinate(key, text) {
+    const trimmed = typeof text === "string" ? text.trim() : "";
+    if (!/^[-+]?\d+(\.\d+)?$/.test(trimmed)) {
+        return { error: `${key} must be a number in decimal degrees, such as ${key === "latitude" ? "37.77" : "-122.42"}` };
+    }
+    const value = Number(trimmed);
+    const bad = parseAppearance(JSON.stringify({ [key]: value }));
+    return bad.error ? { error: bad.error } : { value };
+}
+
+// appearance.local.json's text with `key` set to `value`, keeping whatever
+// else it says. Each text is the file's, or null when it doesn't exist. The
+// settings panel writes only the .local file (§16.1). A bad value, a file
+// that doesn't parse (never overwritten, so a hand edit gone wrong isn't
+// lost), or settings that wouldn't work together with the shared file's
+// (`mode` "sun" with no latitude and longitude, say) is an {error}.
+export function withSetting(localText, key, value, sharedText = null) {
+    const bad = parseAppearance(JSON.stringify({ [key]: value }));
+    if (bad.error) {
+        return { error: bad.error };
+    }
+    const files = {};
+    for (const [name, text] of [["appearance.json", sharedText], ["appearance.local.json", localText]]) {
+        if (text === null || text === undefined) {
+            files[name] = {};
+            continue;
+        }
+        const parsed = parseAppearance(text);
+        if (parsed.error) {
+            return { error: `${name}: ${parsed.error}` };
+        }
+        files[name] = parsed.settings;
+    }
+    const local = Object.assign({}, files["appearance.local.json"], { [key]: value });
+    const wrong = checkSettings(Object.assign({}, DEFAULTS, files["appearance.json"], local));
+    if (wrong) {
+        return { error: wrong };
+    }
+    const next = {};
+    for (const k of KEYS) {
+        if (local[k] !== undefined) {
+            next[k] = local[k];
+        }
+    }
+    return { text: JSON.stringify(next, null, 2) + "\n" };
+}

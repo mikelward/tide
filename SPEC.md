@@ -1936,7 +1936,6 @@ tide's own, and links out for the rest:
 
 | Page | Contents |
 |---|---|
-| Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
 | Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
 | Idle | the four timings, suspend on AC (off by default) |
 | Sound | output and input devices; *advanced* opens `pavucontrol` |
@@ -1947,6 +1946,7 @@ tide's own, and links out for the rest:
 | Clocks | zones, order, labels, 24 h, dedupe-local |
 | Keys | a read-only list of the current bindings, generated from the config |
 | Layouts | default layout per aspect ratio, `mfact`, master count, the rule for new windows |
+| Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
 
 Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
@@ -2041,6 +2041,24 @@ stays hand-written.
     follows the settings too.
   - The rule for new windows isn't a setting yet. A new window always
     joins the stack at the end.
+
+- **Appearance** sets §15's settings, in `appearance.local.json`.
+  - It shows light or dark now, and until when, with a button to switch
+    until the next change, as the launcher's flip does.
+  - ‹ and › step through the modes: by the clock, sunrise and sunset,
+    always light and always dark. They step past sunrise and sunset until
+    a location is set, so the modes beyond it are still reachable.
+  - By the clock, − and + move the light and dark times a quarter hour.
+    A step that would land on the other time goes past it, so the two can
+    cross, as an overnight schedule needs.
+  - The latitude and longitude are typed and set with Enter. They show in
+    every mode, since sunrise and sunset can't be chosen until they're set.
+  - A setting that wouldn't work with the rest, such as sunrise and sunset
+    with no location, or the same time for light and dark, is refused, and
+    the page says why. So is a file that doesn't parse, which is left as
+    it is.
+  - Dim strength and wallpaper aren't settings yet: the shell draws no
+    wallpaper, and the dim comes from the palette.
 
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or

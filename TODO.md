@@ -83,6 +83,11 @@ once you have agreed with it or reversed it.
   `hyprctl eval` answers only "ok", and a file written from the compositor
   is one more writer. It's `effectiveLayouts` in `shell/lib/layouts.mjs`.
 
+- [ ] **The Appearance page comes after Layouts.** §16's table had it first;
+  new pages go after the ones you ordered, so their order and CI's count
+  of Down presses to the Network page stay as they are. Moving it is a
+  line in `PAGES` in `shell/lib/settings.mjs` and the table row.
+
 - [ ] **A clock is added by typing its zone ID, and labeled with its
   city.** The Clocks page takes `Asia/Kolkata` typed and labels it
   Kolkata, refusing what isn't a canonical ID. The alternatives are a list
@@ -573,7 +578,19 @@ from the keyboard (`shell/shell_test.sh`).
   - On a live session, check a change re-lays the active workspace at
     once, and that `tide_layout.reload()` answers `hyprctl eval` with a
     bad file's error.
-- Then the rest of §16's table: Appearance and Displays.
+- Appearance (`shell/lib/appearance.mjs`, `shell/AppearanceData.qml`)
+  sets the mode, the light and dark times and the location, writing
+  `appearance.local.json`, and switches light or dark until the next
+  change. CI checks two settings over IPC on a hand edit, and sunrise and
+  sunset refused without a longitude. Still to do:
+  - Dim strength, once it's a setting rather than the palette's.
+  - Wallpaper, once the shell draws one (§15).
+  - On a live session, check a mode or a time changes the theme at once,
+    and that the location fields take and give back the keyboard.
+- `SettingsFile`, the synchronous `FileView`, is written out in each
+  settings singleton (`IdleData`, `InputData`, `ClockData`,
+  `LayoutsData`, `AppearanceData`); move it to one file once the pages settle.
+- Then the rest of §16's table: Displays.
 
 ## Notifications (M4)
 

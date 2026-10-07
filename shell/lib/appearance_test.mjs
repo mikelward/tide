@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
     DEFAULTS, LOCAL, parseTime, parseAppearance, loadAppearance, sunDown,
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
-    hookCommand, TELL_IDLE, tellNext,
+    hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
 } from "./appearance.mjs";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -358,4 +358,95 @@ test("an appearance hook that ignores TERM is killed", () => {
     } finally {
         rmSync(dir, { recursive: true });
     }
+});
+
+test("the Appearance page offers every mode, in order", () => {
+    assert.deepEqual(MODE_CHOICES.map(c => c.mode), ["schedule", "sun", "light", "dark"]);
+    for (const c of MODE_CHOICES) {
+        assert.deepEqual(parseAppearance(JSON.stringify({ mode: c.mode })).error, undefined, c.mode);
+    }
+});
+
+test("the mode steps past sunrise and sunset until there's a location", () => {
+    const at = mode => MODE_CHOICES.findIndex(c => c.mode === mode);
+    const nowhere = {};
+    assert.equal(steppedModeAt(nowhere, at("schedule"), 1), at("light"), "› skips sun");
+    assert.equal(steppedModeAt(nowhere, at("light"), -1), at("schedule"), "‹ skips sun");
+    assert.equal(steppedModeAt(nowhere, at("schedule"), -1), at("schedule"), "stops at the start");
+    assert.equal(steppedModeAt(nowhere, at("dark"), 1), at("dark"), "stops at the end");
+    const located = { latitude: 51.5, longitude: -0.1 };
+    assert.equal(steppedModeAt(located, at("schedule"), 1), at("sun"));
+    assert.equal(steppedModeAt(located, at("light"), -1), at("sun"));
+    assert.equal(steppedModeAt({ latitude: 51.5 }, at("schedule"), 1), at("light"), "half a location is none");
+    // What it steps to is a setting withSetting takes.
+    for (const mode of ["schedule", "sun", "light", "dark"]) {
+        const next = MODE_CHOICES[steppedModeAt(nowhere, at(mode), 1)].mode;
+        assert.equal(withSetting(null, "mode", next).error, undefined, `${mode} → ${next}`);
+    }
+});
+
+test("a time moves a quarter hour a step, stopping at either end of the day", () => {
+    assert.equal(steppedTime("07:00", 1), "07:15");
+    assert.equal(steppedTime("07:00", -1), "06:45");
+    assert.equal(steppedTime("07:00", 4), "08:00");
+    // Off a quarter hour, the first step lands on one.
+    assert.equal(steppedTime("07:10", 1), "07:15");
+    assert.equal(steppedTime("07:10", -1), "07:00");
+    assert.equal(steppedTime("07:10", 2), "07:30");
+    assert.equal(steppedTime("23:45", 1), "23:45");
+    // Past the last quarter hour, + stays and − comes back to it.
+    assert.equal(steppedTime("23:50", 1), "23:50");
+    assert.equal(steppedTime("23:59", 2), "23:59");
+    assert.equal(steppedTime("23:50", -1), "23:45");
+    assert.equal(steppedTime("00:00", -1), "00:00");
+    assert.equal(steppedTime("07:00", 0), "07:00");
+    // What steppedTime is given always parses back.
+    assert.notEqual(parseTime(steppedTime("19:00", -1)), null);
+});
+
+test("a typed latitude or longitude is a number in range", () => {
+    assert.deepEqual(parseCoordinate("latitude", " 37.77 "), { value: 37.77 });
+    assert.deepEqual(parseCoordinate("longitude", "-122.42"), { value: -122.42 });
+    assert.deepEqual(parseCoordinate("longitude", "+151"), { value: 151 });
+    assert.match(parseCoordinate("latitude", "91").error, /latitude must be a number from -90 to 90/);
+    assert.match(parseCoordinate("longitude", "200").error, /longitude must be a number from -180 to 180/);
+    for (const text of ["", "north", "37,77", "1e2", "0x10", "37.", ".5"]) {
+        assert.match(parseCoordinate("latitude", text).error, /latitude must be a number in decimal degrees/, JSON.stringify(text));
+    }
+});
+
+test("a setting goes into appearance.local.json, keeping the rest", () => {
+    assert.equal(withSetting(null, "mode", "dark").text, '{\n  "mode": "dark"\n}\n');
+    const local = '{\n  "light": "06:30"\n}\n';
+    assert.deepEqual(JSON.parse(withSetting(local, "dark", "20:00").text), { light: "06:30", dark: "20:00" });
+    // In KEYS order, whatever order they're set in.
+    assert.deepEqual(Object.keys(JSON.parse(withSetting('{"longitude": 1}', "latitude", 2).text)), ["latitude", "longitude"]);
+});
+
+test("a setting that wouldn't work with the rest is refused, the shared file's included", () => {
+    assert.deepEqual(withSetting(null, "mode", "sun"), { error: 'mode "sun" needs latitude and longitude' });
+    // With a location in either file, it's taken.
+    assert.equal(JSON.parse(withSetting(null, "mode", "sun", '{"latitude": 51.5, "longitude": -0.1}').text).mode, "sun");
+    assert.equal(JSON.parse(withSetting('{"latitude": 51.5, "longitude": -0.1}', "mode", "sun").text).mode, "sun");
+    assert.deepEqual(withSetting(null, "light", "19:00"), { error: "light and dark must be different times" });
+});
+
+test("a bad value or a file that doesn't parse is refused, never overwritten", () => {
+    assert.match(withSetting(null, "mode", "auto").error, /^mode must be one of/);
+    assert.match(withSetting(null, "light", "7am").error, /^light must be a time like/);
+    assert.match(withSetting(null, "wallpaper", "x").error, /^unknown setting "wallpaper"/);
+    assert.match(withSetting("{", "mode", "dark").error, /^appearance\.local\.json: line 1: /);
+    assert.match(withSetting(null, "mode", "dark", "[]").error, /^appearance\.json: expected an object/);
+});
+
+test("a time steps past the other one, so light and dark can cross", () => {
+    // From 07:00 and 19:00, light can go later than dark.
+    assert.equal(steppedTimePast("18:45", 1, "19:00"), "19:15");
+    assert.equal(steppedTimePast("19:15", -1, "19:00"), "18:45");
+    assert.equal(steppedTimePast("07:00", 1, "19:00"), "07:15", "anywhere else, one step");
+    // With nowhere past it, it stays.
+    assert.equal(steppedTimePast("23:30", 1, "23:45"), "23:30");
+    assert.equal(steppedTimePast("00:15", -1, "00:00"), "00:15");
+    // What it gives is never the other time, so withSetting takes it.
+    assert.equal(withSetting('{"light": "18:45"}', "light", steppedTimePast("18:45", 1, "19:00")).error, undefined);
 });
