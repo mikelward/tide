@@ -82,6 +82,13 @@ export const PAGES = Object.freeze([
         about: "Light or dark for the shell and apps. By the clock goes light and dark at the times below; sunrise and sunset needs this machine's latitude and longitude, north and east positive. A switch made now lasts until the next change.",
         advanced: null,
     },
+    {
+        id: "displays",
+        label: "Displays",
+        icon: "video-display-symbolic",
+        about: "Each monitor's scale and where it goes beside the others, kept with the monitor whichever port it's in. Hyprland may round a scale to one that divides the screen evenly. One set for a monitor in hyprland.local.lua still wins.",
+        advanced: { label: "Arrange displays", command: ["nwg-displays"] },
+    },
 ]);
 
 // The page after moving `step` pages from `index`, stopping at either end.

@@ -199,12 +199,14 @@ BINDS = [
 
 
 # What the shell runs hyprctl for: the focused window at startup, the
-# keyboards for the lock's layout badge, the key bindings for the settings
-# panel's Keys page, and the focus guard's calls.
+# keyboards for the lock's layout badge, the key bindings and the monitors
+# for the settings panel's Keys and Displays pages, and the focus guard's
+# calls.
 CTL = {
     ("activewindow", "-j"): lambda: json.dumps(ANSWERS["j/activewindow"]),
     ("devices", "-j"): lambda: json.dumps(ANSWERS["j/devices"]),
     ("binds", "-j"): lambda: json.dumps(BINDS),
+    ("monitors", "all", "-j"): lambda: json.dumps(ANSWERS["j/monitors"]),
 }
 
 
@@ -217,11 +219,11 @@ GUARD_CALLS = [
 FOCUS_LUA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hypr", "tide", "focus.lua")
 
 
-# conf's hyprland.lua's call InputData.qml makes, applying tide's mouse and
-# touchpad settings, and layout.lua's LayoutsData.qml makes, applying the
-# Layouts page's: neither config is loaded here, so they're taken as
-# defined.
-CONF_CALLS = ["conf_input.reload()", "tide_layout.reload()"]
+# conf's hyprland.lua's calls InputData.qml and OutputsData.qml make,
+# applying tide's mouse, touchpad and display settings, and layout.lua's
+# LayoutsData.qml makes, applying the Layouts page's: neither config is
+# loaded here, so they're taken as defined.
+CONF_CALLS = ["conf_input.reload()", "conf_outputs.reload()", "tide_layout.reload()"]
 
 
 def guard_call(code):
