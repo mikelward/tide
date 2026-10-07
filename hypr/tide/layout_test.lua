@@ -244,10 +244,10 @@ local function load_layout(settings_file)
     return qs
 end
 
-local function fresh()
+local function fresh(opts)
     hl = stub_hl()
     local qs = load_layout()
-    qs.setup({})
+    qs.setup(opts or {})
     return qs, hl.registered.tide
 end
 
@@ -516,6 +516,7 @@ test("setup rejects bad options with a message instead of failing later", functi
         { modes = { twocol = { nmaster = 1.5 } } },
         { mfact_step = 0 },
         { ultrawide_aspect = "wide" },
+        { new_window = "left" },
     }
     for i, opts in ipairs(bad) do
         hl = stub_hl()
@@ -695,6 +696,182 @@ test("reload refuses a settings file that can't be used, and changes nothing", f
     eq(#hl.dispatched, before, "nothing laid out again")
     local t = relayout(hl.registered.tide, HD, 1, 2)
     eq(t[1].placed.w, 1152, "the last good settings hold")
+    os.remove(path)
+end)
+
+-- new windows -----------------------------------------------------------------
+
+-- Targets on workspace `ws` for the windows `ids` (0x101 is 1), in
+-- Hyprland's order.
+local function windows(ws, ids)
+    local list = {}
+    for i, id in ipairs(ids) do
+        list[i] = {
+            window = { address = string.format("0x%x", 0x100 + id), workspace = { id = ws } },
+            place = function(self, box)
+                self.placed = box
+            end,
+        }
+    end
+    return list
+end
+
+local function lay(layout, area, ws, ids)
+    local t = windows(ws, ids)
+    layout.recalculate({ area = area, targets = t })
+    return t
+end
+
+local function order_of(qs, ws)
+    return table.concat(qs.order(ws), " ")
+end
+
+-- Tile's boxes for `n` windows on HD, by place in the order.
+local function tile_boxes(n)
+    return geometry.arrange("tile", HD, n, { mfact = 0.55, nmaster = 1 }, RULES)
+end
+
+test("a new window joins the end of the stack by default", function()
+    local qs, layout = fresh()
+    lay(layout, HD, 1, { 1, 2 })
+    local t = lay(layout, HD, 1, { 1, 2, 3 })
+    eq(order_of(qs, 1), "0x101 0x102 0x103", "order")
+    box_eq(t[3].placed, tile_boxes(3)[3], "last in the stack")
+end)
+
+test("new_window = master makes a new window the master, keeping the rest's order", function()
+    local qs, layout = fresh({ new_window = "master" })
+    lay(layout, HD, 1, { 1, 2 })
+    local t = lay(layout, HD, 1, { 1, 2, 3 })
+    eq(order_of(qs, 1), "0x103 0x101 0x102", "order")
+    local boxes = tile_boxes(3)
+    box_eq(t[3].placed, boxes[1], "the new window is the master")
+    box_eq(t[1].placed, boxes[2], "the old master tops the stack")
+    box_eq(t[2].placed, boxes[3], "and the stack follows")
+end)
+
+test("new_window = top puts a new window just after the masters", function()
+    local qs, layout = fresh({ new_window = "top" })
+    lay(layout, HD, 1, { 1, 2, 3 })
+    lay(layout, HD, 1, { 1, 2, 3, 4 })
+    eq(order_of(qs, 1), "0x101 0x104 0x102 0x103", "after tile's one master")
+    lay(layout, UW, 2, { 1, 2, 3 })
+    layout.layout_msg({ area = UW, targets = windows(2, { 1, 2, 3 }) }, "mode twocol")
+    lay(layout, UW, 2, { 1, 2, 3, 4 })
+    eq(order_of(qs, 2), "0x101 0x102 0x104 0x103", "after twocol's two")
+    lay(layout, HD, 3, { 1, 2 })
+    layout.layout_msg({ area = HD, targets = windows(3, { 1, 2 }) }, "mode monocle")
+    lay(layout, HD, 3, { 1, 2, 3 })
+    eq(order_of(qs, 3), "0x101 0x103 0x102", "monocle's first window counts as the master")
+    lay(layout, HD, 4, { 1 })
+    layout.layout_msg({ area = HD, targets = windows(4, { 1 }) }, "removemaster")
+    lay(layout, HD, 4, { 1, 2 })
+    eq(order_of(qs, 4), "0x102 0x101", "first, with no masters")
+end)
+
+test("new_window = next puts a new window after the focused one", function()
+    local qs, layout = fresh({ new_window = "next" })
+    lay(layout, HD, 1, { 1, 2, 3 })
+    hl.active_window = "0x101"
+    lay(layout, HD, 1, { 1, 2, 3, 4 })
+    eq(order_of(qs, 1), "0x101 0x104 0x102 0x103", "after the focused window")
+    hl.active_window = "0x199"
+    lay(layout, HD, 1, { 1, 2, 3, 4, 5 })
+    eq(order_of(qs, 1), "0x101 0x104 0x102 0x103 0x105", "at the end when the focused window is elsewhere")
+    hl.active_window = nil
+    lay(layout, HD, 1, { 1, 2, 3, 4, 5, 6 })
+    eq(order_of(qs, 1), "0x101 0x104 0x102 0x103 0x105 0x106", "at the end with none focused")
+end)
+
+test("two new windows at once keep their own order", function()
+    local qs, layout = fresh({ new_window = "master" })
+    lay(layout, HD, 1, { 1 })
+    lay(layout, HD, 1, { 1, 2, 3 })
+    eq(order_of(qs, 1), "0x102 0x103 0x101", "order")
+end)
+
+test("the layout makes Hyprland's swaps in its own order", function()
+    local qs, layout = fresh({ new_window = "master" })
+    lay(layout, HD, 1, { 1 })
+    lay(layout, HD, 1, { 1, 2 })
+    lay(layout, HD, 1, { 1, 2, 3 })
+    eq(order_of(qs, 1), "0x103 0x102 0x101", "each new window the master")
+    -- Super+Shift+J on the master swaps it with the next in the layout's
+    -- order, which is last in Hyprland's.
+    hl.active_window = "0x103"
+    qs.move(1)
+    eq(hl.dispatched[1].arg, "address:0x102", "swaps with the next")
+    local t = lay(layout, HD, 1, { 1, 3, 2 })
+    eq(order_of(qs, 1), "0x102 0x103 0x101", "the master moved down one")
+    box_eq(t[3].placed, tile_boxes(3)[1], "and its neighbor is the master")
+    -- Super+Return on the last window swaps it with the master.
+    hl.active_window = "0x101"
+    qs.swap_with_master()
+    eq(hl.dispatched[2].arg, "address:0x102", "swaps with the master")
+    lay(layout, HD, 1, { 2, 3, 1 })
+    eq(order_of(qs, 1), "0x101 0x103 0x102", "the last window is the master")
+end)
+
+test("a window that leaves takes nothing else with it", function()
+    local qs, layout = fresh({ new_window = "master" })
+    lay(layout, HD, 1, { 1 })
+    lay(layout, HD, 1, { 1, 2 })
+    lay(layout, HD, 1, { 1, 2, 3 })
+    local t = lay(layout, HD, 1, { 1, 3 })
+    eq(order_of(qs, 1), "0x103 0x101", "order")
+    box_eq(t[2].placed, tile_boxes(2)[1], "the master stays the master")
+end)
+
+test("a change that isn't one swap takes Hyprland's order", function()
+    local qs, layout = fresh({ new_window = "master" })
+    lay(layout, HD, 1, { 1 })
+    lay(layout, HD, 1, { 1, 2 })
+    lay(layout, HD, 1, { 1, 2, 3 })
+    lay(layout, HD, 1, { 2, 3, 1 })
+    eq(order_of(qs, 1), "0x102 0x103 0x101", "order")
+end)
+
+test("a config load takes the windows in Hyprland's order", function()
+    local qs, layout = fresh({ new_window = "master" })
+    lay(layout, HD, 1, { 1 })
+    lay(layout, HD, 1, { 1, 2 })
+    qs, layout = fresh({ new_window = "master" })
+    lay(layout, HD, 1, { 1, 2 })
+    eq(order_of(qs, 1), "0x101 0x102", "order")
+end)
+
+test("a window that can't be read takes a place after the rest", function()
+    local qs, layout = fresh({ new_window = "master" })
+    lay(layout, HD, 1, { 1 })
+    local t = windows(1, { 1, 2, 3 })
+    t[2].window = setmetatable({}, {
+        __index = function(_, k)
+            error("window is going away: " .. k)
+        end,
+    })
+    layout.recalculate({ area = HD, targets = t })
+    eq(order_of(qs, 1), "0x103 0x101", "order")
+    local boxes = tile_boxes(3)
+    box_eq(t[3].placed, boxes[1], "the new window is the master")
+    box_eq(t[1].placed, boxes[2], "then the old one")
+    box_eq(t[2].placed, boxes[3], "then the one going away")
+end)
+
+test("reload takes a new new_window for the next new window", function()
+    local path = settings_file("return { new_window = \"master\" }\n")
+    hl = stub_hl()
+    local qs = load_layout(path)
+    qs.setup({})
+    local layout = hl.registered.tide
+    lay(layout, HD, 1, { 1 })
+    lay(layout, HD, 1, { 1, 2 })
+    eq(order_of(qs, 1), "0x102 0x101", "master from the settings file")
+    local f = assert(io.open(path, "w"))
+    f:write("return { new_window = \"end\" }\n")
+    f:close()
+    tide_layout.reload()
+    lay(layout, HD, 1, { 1, 2, 3 })
+    eq(order_of(qs, 1), "0x102 0x101 0x103", "the end after a reload, the rest kept")
     os.remove(path)
 end)
 

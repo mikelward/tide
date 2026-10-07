@@ -35,6 +35,7 @@ export const DEFAULT_LAYOUTS = Object.freeze({
         Object.freeze({ minAspect: 2.1, width: 0.8 }),
         Object.freeze({ minAspect: 3.2, width: 0.6 }),
     ]),
+    newWindow: "end",
 });
 
 const PREFIX = "tide-layout>>";
@@ -83,7 +84,17 @@ export const MODE_NAMES = Object.freeze([
     Object.freeze({ mode: "monocle", label: "Monocle" }),
 ]);
 
+// Where a new window goes, in the order ‹ and › step through them, with
+// what the page calls them.
+export const NEW_WINDOW_NAMES = Object.freeze([
+    Object.freeze({ rule: "end", label: "End of stack" }),
+    Object.freeze({ rule: "top", label: "Top of stack" }),
+    Object.freeze({ rule: "next", label: "After focused" }),
+    Object.freeze({ rule: "master", label: "As master" }),
+]);
+
 const START_MODES = MODE_NAMES.map(m => m.mode);
+const NEW_WINDOW_RULES = NEW_WINDOW_NAMES.map(n => n.rule);
 // The fewest masters each mode takes, as layout.lua's removemaster allows.
 const MIN_MASTERS = Object.freeze({ tile: 0, threecol: 1, twocol: 1 });
 
@@ -140,6 +151,10 @@ function settingsError(v) {
                         }
                     }
                 }
+            }
+        } else if (key === "newWindow") {
+            if (!NEW_WINDOW_RULES.includes(x)) {
+                err = `newWindow must be one of ${NEW_WINDOW_RULES.join(", ")}`;
             }
         } else if (key === "single") {
             if (!Array.isArray(x)) {
@@ -318,19 +333,32 @@ export function layoutsLua(settings) {
         const rules = settings.single.map(r => `{ min_aspect = ${luaValue(r.minAspect)}, width = ${luaValue(r.width)} }`);
         lines.push(`    single = { ${rules.join(", ")} },`);
     }
+    if (settings.newWindow !== undefined) {
+        lines.push(`    new_window = ${luaValue(settings.newWindow)},`);
+    }
     lines.push("}");
     return lines.join("\n") + "\n";
 }
 
+// What ‹ and › step through for a "choice" row's setting, as {value,
+// label}s in order.
+export function layoutChoices(path) {
+    if (path === "newWindow") {
+        return NEW_WINDOW_NAMES.map(n => ({ value: n.rule, label: n.label }));
+    }
+    return MODE_NAMES.map(m => ({ value: m.mode, label: m.label }));
+}
+
 // The Layouts page's rows, from the settings in effect: a heading, a
-// mode ‹ and › step through ("mode"), a number − and + step ("number"),
-// or a lone window's width by aspect ("single", which sets the whole list,
-// since a list is set whole).
+// mode or where a new window goes, which ‹ and › step through ("choice"),
+// a number − and + step ("number"), or a lone window's width by aspect
+// ("single", which sets the whole list, since a list is set whole).
 export function layoutRows(effective) {
     const rows = [
         { kind: "number", path: "ultrawideAspect", label: "Ultrawide from aspect" },
-        { kind: "mode", path: "defaultMode.normal", label: "Other monitors start in" },
-        { kind: "mode", path: "defaultMode.ultrawide", label: "Ultrawides start in" },
+        { kind: "choice", path: "defaultMode.normal", label: "Other monitors start in" },
+        { kind: "choice", path: "defaultMode.ultrawide", label: "Ultrawides start in" },
+        { kind: "choice", path: "newWindow", label: "New windows go" },
         { kind: "heading", label: "MASTER WIDTH" },
     ];
     const modes = [["tile", "Tile"], ["threecol", "Three columns"], ["twocol", "Two columns"]];

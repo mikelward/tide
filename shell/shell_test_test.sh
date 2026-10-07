@@ -79,8 +79,9 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # over IPC, applying each. With tide-tz, it answers the Clocks page's
 # refused zone, and writes and looks up Asia/Kolkata labeled LABEL (IST by
 # default) then the hand-edited UTC once the last clock is moved over IPC.
-# Its layouts take tile's mfact, the hand-edited masters and twocol for
-# ultrawides once the last is set over IPC, applying each.
+# Its layouts take tile's mfact, the hand-edited masters, twocol for
+# ultrawides and new windows at the top of the stack once the last is set
+# over IPC, applying each.
 # With the color scheme, it answers the Appearance page's refused mode,
 # and writes light from 06:30, the hand-edited dark from 20:00 and a
 # latitude of LATITUDE (51.5 by default) once the latitude is set over IPC.
@@ -108,7 +109,7 @@ if test "\$1" = ipc; then
         *"call settings open"*) : >"\$XDG_RUNTIME_DIR/settings-open" ;;
         *"call settings setSuspendOnAC true"*) : >"\$XDG_RUNTIME_DIR/idle-set" ;;
         *"call settings setDevice logitech-usb-receiver speed 0.25"*) : >"\$XDG_RUNTIME_DIR/input-set" ;;
-        *"call settings setLayout defaultMode.ultrawide twocol"*) : >"\$XDG_RUNTIME_DIR/layouts-set" ;;
+        *"call settings setLayout newWindow top"*) : >"\$XDG_RUNTIME_DIR/layouts-set" ;;
         *"call settings setDisplay Headless position auto-left"*) : >"\$XDG_RUNTIME_DIR/outputs-set" ;;
         *"call settings resetDisplay Spare"*) : >"\$XDG_RUNTIME_DIR/outputs-reset" ;;
         *"call settings moveClock UTC 1"*) : >"\$XDG_RUNTIME_DIR/clocks-set" ;;
@@ -224,8 +225,8 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                         sleep 0.1
                     done
                     rm "\$XDG_RUNTIME_DIR/layouts-set"
-                    printf '{\n  "modes": {\n    "tile": {\n      "nmaster": 2,\n      "mfact": 0.6\n    }\n  },\n  "defaultMode": {\n    "ultrawide": "twocol"\n  }\n}\n' >"\$HOME/.config/tide/layouts.local.json"
-                    printf '%s\n' 'return {' '    default_mode = { ultrawide = "twocol" },' '    modes = { tile = { mfact = 0.6, nmaster = 2 } },' '}' >"\$HOME/.config/hypr/tide-layouts.lua"
+                    printf '{\n  "modes": {\n    "tile": {\n      "nmaster": 2,\n      "mfact": 0.6\n    }\n  },\n  "defaultMode": {\n    "ultrawide": "twocol"\n  },\n  "newWindow": "top"\n}\n' >"\$HOME/.config/tide/layouts.local.json"
+                    printf '%s\n' 'return {' '    default_mode = { ultrawide = "twocol" },' '    modes = { tile = { mfact = 0.6, nmaster = 2 } },' '    new_window = "top",' '}' >"\$HOME/.config/hypr/tide-layouts.lua"
                     hyprctl eval 'tide_layout.reload()' >/dev/null 2>&1
                 } &
                 ;;

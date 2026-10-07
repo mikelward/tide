@@ -711,6 +711,7 @@ written_settings() {
     printf '{\n  "modes": {\n    "tile": {\n      "nmaster": 2\n    }\n  }\n}\n' >"$layouts_local" || exit 1
     ipc call settings setLayout modes.tile.mfact 0.6 >/dev/null || exit 1
     ipc call settings setLayout defaultMode.ultrawide twocol >/dev/null || exit 1
+    ipc call settings setLayout newWindow top >/dev/null || exit 1
     _want='{
   "modes": {
     "tile": {
@@ -720,14 +721,16 @@ written_settings() {
   },
   "defaultMode": {
     "ultrawide": "twocol"
-  }
+  },
+  "newWindow": "top"
 }'
     i=0
     until grep -qxF '    modes = { tile = { mfact = 0.6, nmaster = 2 } },' "$layouts_conf" 2>/dev/null &&
         grep -qxF '    default_mode = { ultrawide = "twocol" },' "$layouts_conf" &&
+        grep -qxF '    new_window = "top",' "$layouts_conf" &&
         test "$(grep -c '^hyprctl eval tide_layout.reload()$' "$tmp/helpers.log")" -gt "$_reloads" &&
         test "$(cat "$layouts_local")" = "$_want"; do
-        if waited "the shell didn't write tile's mfact of 0.6 and twocol for ultrawides, keeping the hand-edited two masters, to $layouts_conf and $layouts_local, and apply them" "$i"; then
+        if waited "the shell didn't write tile's mfact of 0.6, twocol for ultrawides and new windows at the top of the stack, keeping the hand-edited two masters, to $layouts_conf and $layouts_local, and apply them" "$i"; then
             cat "$layouts_conf" "$layouts_local" >&2
             grep -v '^\[' "$log" >&2
             exit 1

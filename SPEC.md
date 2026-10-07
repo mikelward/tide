@@ -542,8 +542,13 @@ See [`layouts.png`](docs/mocks/layouts.png).
 | `\|\|=` | Two columns + stack | two full-height masters side by side, rest stacked on the right | — |
 | `[M]` | Monocle | one window fills the area; the bar shows `[n]`, the hidden count | — |
 
-- **New windows** join the stack at the end, and the master stays put
-  as today.
+- **New windows** join the stack at the end, and the master stays put,
+  unless the Layouts page says otherwise (§16).
+  - It can put them at the top of the stack, just after the masters; just
+    after the window that was focused; or in as the master. The others keep
+    their order.
+  - A window moved here from another workspace, or tiled again after
+    floating, counts as new.
 - **Per workspace.** Each workspace remembers its layout. The default comes
   from its monitor's aspect ratio. `mfact` and master count are per
   workspace too, and per mode.
@@ -557,6 +562,19 @@ See [`layouts.png`](docs/mocks/layouts.png).
   modes, so the single-window rule lives in one place. It keeps each
   workspace's mode, `mfact` and master count, and checks its settings when
   the config loads, so a typo is an error rather than silently ignored.
+  - It keeps each workspace's window order too. Hyprland 0.56.2 adds each
+    new window at the end of its own order, and a Lua layout can't change
+    that order (`CLuaTiledAlgorithm::newTarget`).
+  - Each of Hyprland's swaps exchanges two windows in its order, so the
+    layout makes the same swap in its own. The keys that move a window
+    swap it, so they keep working. A change that isn't one swap takes
+    Hyprland's order.
+  - Moving a new window with Hyprland's dispatchers instead would warp the
+    pointer to it, or with `no_warps`, focus its monitor
+    (`CPointerController::warpTo`). A window opening on the other monitor
+    would take its focus.
+  - A config load starts the layout afresh, so each workspace takes
+    Hyprland's order again, as it takes its default mode.
 - **Settings.** The mode a new workspace starts in, for an ultrawide and
   for any other monitor, and where ultrawide begins, are settings, as are
   each mode's `mfact` and master count and the single-window rule.
@@ -2039,8 +2057,9 @@ stays hand-written.
     press that would move it back across.
   - The bar's guess at a workspace's mode before its first announcement
     follows the settings too.
-  - The rule for new windows isn't a setting yet. A new window always
-    joins the stack at the end.
+  - ‹ and › step through where a new window goes (§6.1): the end of the
+    stack, its top, after the focused window, or in as the master. It's
+    `newWindow` in the files, and takes effect from the next new window.
 
 - **Appearance** sets §15's settings, in `appearance.local.json`.
   - It shows light or dark now, and until when, with a button to switch

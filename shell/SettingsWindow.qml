@@ -137,10 +137,11 @@ PanelWindow {
         }
         // Sets one of the Layouts page's settings, by its path, as that
         // page does: `qs -c tide ipc call settings setLayout
-        // modes.tile.mfact 0.6`, or a mode for defaultMode.normal or
-        // defaultMode.ultrawide. Answers why not, or "".
+        // modes.tile.mfact 0.6`, a mode for defaultMode.normal or
+        // defaultMode.ultrawide, or end, top, next or master for
+        // newWindow. Answers why not, or "".
         function setLayout(path: string, value: string): string {
-            return LayoutsData.set(path, path.startsWith("defaultMode.") ? value : Number(value));
+            return LayoutsData.set(path, path.startsWith("defaultMode.") || path === "newWindow" ? value : Number(value));
         }
         // Sets one of the Appearance page's settings, as it does: `qs -c
         // tide ipc call settings setAppearance mode dark`, or a time
@@ -1049,7 +1050,9 @@ PanelWindow {
                                 readonly property string kind: modelData.kind
                                 // A number row's value, or a lone window's width.
                                 readonly property real number: kind === "number" ? Layouts.shownLayout(LayoutsData.layouts, modelData.path) : kind === "single" ? layouts.effective.single[modelData.index].width : 0
-                                readonly property int modeAt: kind === "mode" ? Math.max(0, Layouts.MODE_NAMES.findIndex(m => m.mode === Layouts.shownLayout(LayoutsData.layouts, modelData.path))) : 0
+                                // A choice row's options, and which is in effect.
+                                readonly property var choices: kind === "choice" ? Layouts.layoutChoices(modelData.path) : []
+                                readonly property int choiceAt: kind === "choice" ? Math.max(0, choices.findIndex(c => c.value === Layouts.shownLayout(LayoutsData.layouts, modelData.path))) : 0
 
                                 function step(steps) {
                                     if (kind === "single") {
@@ -1095,7 +1098,7 @@ PanelWindow {
                                     StepButton {
                                         name: "list-remove-symbolic"
                                         value: layoutRow.number
-                                        next: layoutRow.kind === "heading" || layoutRow.kind === "mode" ? layoutRow.number : layoutRow.stepped(-1)
+                                        next: layoutRow.kind === "heading" || layoutRow.kind === "choice" ? layoutRow.number : layoutRow.stepped(-1)
                                         onActivated: layoutRow.step(-1)
                                     }
 
@@ -1113,14 +1116,15 @@ PanelWindow {
                                     StepButton {
                                         name: "list-add-symbolic"
                                         value: layoutRow.number
-                                        next: layoutRow.kind === "heading" || layoutRow.kind === "mode" ? layoutRow.number : layoutRow.stepped(1)
+                                        next: layoutRow.kind === "heading" || layoutRow.kind === "choice" ? layoutRow.number : layoutRow.stepped(1)
                                         onActivated: layoutRow.step(1)
                                     }
                                 }
 
-                                // A mode, which ‹ and › step through.
+                                // A mode, or where a new window goes, which ‹
+                                // and › step through.
                                 Row {
-                                    visible: layoutRow.kind === "mode"
+                                    visible: layoutRow.kind === "choice"
                                     anchors.right: parent.right
                                     anchors.rightMargin: 6
                                     anchors.verticalCenter: parent.verticalCenter
@@ -1128,16 +1132,16 @@ PanelWindow {
 
                                     StepButton {
                                         name: "go-previous-symbolic"
-                                        value: layoutRow.modeAt
-                                        next: Math.max(0, layoutRow.modeAt - 1)
-                                        onActivated: layouts.set(layoutRow.modelData.path, Layouts.MODE_NAMES[next].mode)
+                                        value: layoutRow.choiceAt
+                                        next: Math.max(0, layoutRow.choiceAt - 1)
+                                        onActivated: layouts.set(layoutRow.modelData.path, layoutRow.choices[next].value)
                                     }
 
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
                                         width: 120
                                         horizontalAlignment: Text.AlignHCenter
-                                        text: Layouts.MODE_NAMES[layoutRow.modeAt].label
+                                        text: layoutRow.kind === "choice" ? layoutRow.choices[layoutRow.choiceAt].label : ""
                                         color: Theme.fg
                                         font.family: Theme.font
                                         font.pixelSize: 13
@@ -1145,9 +1149,9 @@ PanelWindow {
 
                                     StepButton {
                                         name: "go-next-symbolic"
-                                        value: layoutRow.modeAt
-                                        next: Math.min(Layouts.MODE_NAMES.length - 1, layoutRow.modeAt + 1)
-                                        onActivated: layouts.set(layoutRow.modelData.path, Layouts.MODE_NAMES[next].mode)
+                                        value: layoutRow.choiceAt
+                                        next: Math.min(layoutRow.choices.length - 1, layoutRow.choiceAt + 1)
+                                        onActivated: layouts.set(layoutRow.modelData.path, layoutRow.choices[next].value)
                                     }
                                 }
                             }
