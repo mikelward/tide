@@ -30,7 +30,10 @@ jobs:
   # Tests run on Lua 5.4, which Ubuntu packages; Hyprland embeds 5.5 and the
   # layout uses nothing that differs between them. `make test` takes about
   # four minutes, and installing Lua and qmllint has taken four and a half
-  # on a slow mirror, so the limit leaves room for both.
+  # on a slow mirror, so the limit leaves room for both. A mirror that
+  # stalls mid-download is given up on after 30 s and tried again, rather
+  # than holding the job until its limit cancels it, as Azure's Ubuntu
+  # mirror has done.
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -41,7 +44,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Lua and qmllint
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends lua5.4 qt6-declarative-dev-tools
+        run: |
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3 install -y --no-install-recommends lua5.4 qt6-declarative-dev-tools
       # The oldest Go go.mod allows, so a newer-only API fails here and not
       # on a distro's Go.
       - uses: actions/setup-go@v6
@@ -81,6 +86,8 @@ jobs:
       # tzdata for the clocks.
       - name: Install Quickshell's build dependencies
         run: |
+          # A stalled mirror is given up on and tried again, as in `test`.
+          printf '%s\n' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' 'Acquire::Retries "3";' >/etc/apt/apt.conf.d/80-ci-timeouts
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build pkg-config git ca-certificates dbus-daemon sway wtype python3 \
