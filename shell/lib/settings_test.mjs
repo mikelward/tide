@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { PAGES, movedPage } from "./settings.mjs";
 
 test("the pages come in the sidebar's order, each with a label and an icon", () => {
-    assert.deepEqual(PAGES.map(p => p.id), ["idle", "mouse", "touchpad", "sound", "network", "bluetooth"]);
+    assert.deepEqual(PAGES.map(p => p.id), ["idle", "sound", "network", "bluetooth", "mouse", "touchpad"]);
     for (const page of PAGES) {
         assert.ok(page.label, `${page.id} has a label`);
         assert.ok(page.icon.endsWith("-symbolic"), `${page.id}'s icon is symbolic`);
@@ -23,11 +23,11 @@ test("each page links out to the app SPEC.md §16 names, and Idle, Mouse and Tou
     }
     assert.deepEqual(commands, {
         idle: null,
-        mouse: null,
-        touchpad: null,
         sound: ["pavucontrol"],
         network: ["nm-connection-editor"],
         bluetooth: ["blueman-manager"],
+        mouse: null,
+        touchpad: null,
     });
 });
 

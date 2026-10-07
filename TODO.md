@@ -30,6 +30,11 @@ once you have agreed with it or reversed it.
   next change; it's the `retry` timer in `shell/IdleData.qml` and
   `shell/InputData.qml`.
 
+- [ ] **The settings pages run Idle, Sound, Network, Bluetooth, then the
+  input devices.** That's the order you asked for; PR 155 had put Mouse and
+  Touchpad after Idle. It's `PAGES` in `shell/lib/settings.mjs`, and §16's
+  table, which the sidebar follows.
+
 - [ ] **A wrong password doesn't shake the lock's field.** The mock had it
   shake once; tide-lock only clears it and shows the error under it. You
   insisted keystrokes never wait on an animation, and weren't sure about
