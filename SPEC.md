@@ -1936,7 +1936,6 @@ tide's own, and links out for the rest:
 
 | Page | Contents |
 |---|---|
-| Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
 | Idle | the four timings, suspend on AC (off by default) |
 | Sound | output and input devices; *advanced* opens `pavucontrol` |
 | Network, Bluetooth | *advanced* opens `nm-connection-editor` / `blueman-manager` |
@@ -1947,6 +1946,7 @@ tide's own, and links out for the rest:
 | Keys | a read-only list of the current bindings, generated from the config |
 | Layouts | default layout per aspect ratio, `mfact`, master count, the rule for new windows |
 | Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
+| Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
 
 Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
@@ -2059,6 +2059,38 @@ stays hand-written.
     it is.
   - Dim strength and wallpaper aren't settings yet: the shell draws no
     wallpaper, and the dim comes from the palette.
+
+- **Displays** sets each monitor's scale and where it goes beside the
+  others, in `outputs.json` and `outputs.local.json`.
+  - A monitor is named by its description as `hyprctl monitors` gives it,
+    not its port, so its settings follow it from port to port.
+  - The page lists the monitors `hyprctl monitors all -j` gives, a closed
+    lid's panel included, then any with settings that isn't connected. It
+    lists them again as it shows and once a change applies, so a scale
+    Reset hands back to Hyprland shows as Hyprland's.
+  - − and + step a scale a quarter, from 0.5 to 3. Hyprland may round it to
+    one that divides the screen evenly; a scale between quarters goes to
+    the nearest one that way first. A scale set past either end by hand
+    stays put on a press that would move it back across.
+  - ‹ and › step its place: automatic, to the right, to the left, above or
+    below the others. An exact position is nwg-displays' (*advanced*).
+  - Reset clears what `outputs.local.json` sets for a monitor. It shows
+    only when there's something there to clear. A setting in
+    `outputs.json` still applies, as the panel never writes that file.
+  - Over IPC, `setDisplay DESCRIPTION scale auto` clears this machine's
+    scale, leaving `outputs.json`'s or else Hyprland's own. `position auto`
+    sets the automatic place, and `resetDisplay DESCRIPTION` does what
+    Reset does.
+  - The shell writes what's set to `~/.config/hypr/tide-outputs.lua`, each
+    monitor as `desc:` and its description, and runs `hyprctl eval
+    conf_outputs.reload()`. `conf` applies each with `hl.monitor`, leaves a
+    closed lid's panel off, and lets `hyprland.local.lua` win for a monitor
+    it sets.
+  - The shell applies the file as it starts, even unchanged, in case the
+    shell before it died with an apply still to retry. Hyprland 0.56 leaves
+    a monitor whose rule hasn't changed alone, so this costs nothing.
+  - The single-window width and threshold aren't per monitor here: the
+    Layouts page sets them by aspect.
 
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or

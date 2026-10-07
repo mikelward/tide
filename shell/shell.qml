@@ -50,6 +50,8 @@ ShellRoot {
         InputData.listDevices();
         KeysData.list();
         LayoutsData.load();
+        OutputsData.load();
+        OutputsData.listMonitors();
     }
 
     // A toplevel's class and fullscreen state come from Hyprland's client

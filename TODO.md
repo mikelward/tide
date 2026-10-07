@@ -88,6 +88,31 @@ once you have agreed with it or reversed it.
   of Down presses to the Network page stay as they are. Moving it is a
   line in `PAGES` in `shell/lib/settings.mjs` and the table row.
 
+- [ ] **The Displays page comes after Appearance.** §16's table had it second;
+  new pages go after the ones you ordered. Moving it is a line in `PAGES`
+  in `shell/lib/settings.mjs` and the table row.
+
+- [ ] **A monitor's place is one of Hyprland's automatic ones.** The
+  Displays page offers automatic, right, left, above and below; an exact
+  position is nwg-displays'. The alternative is a drag-to-arrange map,
+  which the panel has no widget for. `outputs.json` would take an exact
+  `"1920x0"` alongside. It's `POSITIONS` in `shell/lib/outputs.mjs`.
+
+- [ ] **A monitor is named by its description, not its port.** So a
+  monitor's scale follows it between docks and ports; two identical
+  monitors with the same description would share their settings. The
+  alternative is the port name (`DP-1`), which a dock can change. It's
+  `outputsLua` in `shell/lib/outputs.mjs` and conf's `desc:` outputs.
+
+- [ ] **Reset, and a scale of `auto` over IPC, clear only
+  `outputs.local.json`'s settings for a monitor.** A scale or place from
+  `outputs.json` still applies after them, since the panel writes only the
+  `.local` files (§16.1). The Mouse and Touchpad pages' per-device Reset
+  already works this way. The alternative is a local entry that masks the
+  shared one (`"scale": null`, say), which every reader of the files would
+  have to understand. It's `withoutMonitor` in `shell/lib/outputs.mjs` and
+  `setDisplay` in `shell/SettingsWindow.qml`.
+
 - [ ] **A clock is added by typing its zone ID, and labeled with its
   city.** The Clocks page takes `Asia/Kolkata` typed and labels it
   Kolkata, refusing what isn't a canonical ID. The alternatives are a list
@@ -587,10 +612,19 @@ from the keyboard (`shell/shell_test.sh`).
   - Wallpaper, once the shell draws one (§15).
   - On a live session, check a mode or a time changes the theme at once,
     and that the location fields take and give back the keyboard.
+- Displays (`shell/lib/outputs.mjs`, `shell/OutputsData.qml`) sets each
+  monitor's scale and place by its description, writing
+  `~/.config/hypr/tide-outputs.lua` and running `hyprctl eval
+  conf_outputs.reload()`, which `conf`'s `hyprland.lua` defines
+  (mikelward/conf#409). CI checks the startup write and apply, a scale and
+  a place over IPC on a hand edit, and a reset. Still to do:
+  - On a live session, check a scale and a place take at once, that a
+    closed lid's panel stays off, and what Hyprland does with a scale that
+    doesn't divide the screen.
 - `SettingsFile`, the synchronous `FileView`, is written out in each
   settings singleton (`IdleData`, `InputData`, `ClockData`,
-  `LayoutsData`, `AppearanceData`); move it to one file once the pages settle.
-- Then the rest of §16's table: Displays.
+  `LayoutsData`, `AppearanceData`, `OutputsData`); move it to one file
+  once the pages settle.
 
 ## Notifications (M4)
 

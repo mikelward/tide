@@ -583,7 +583,10 @@ EOF
 # settings over a hand edit, written to layouts.local.json and the file
 # layout.lua reads, and applied again. Then the Appearance page: two
 # settings set over a hand edit, and sunrise and sunset refused without a
-# longitude.
+# longitude. Then the Displays page: no monitor settings written at
+# startup, then a scale and a place for the stand-in's monitor over a hand
+# edit, written to outputs.local.json and the file conf reads, and applied
+# again; then the hand-edited monitor reset.
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
 # runs it, as $after_load.
@@ -752,6 +755,62 @@ written_settings() {
     until test "$(cat "$appearance_local")" = "$_want"; do
         if waited "the shell didn't write light from 06:30 and a latitude of 51.5, keeping the hand-edited dark from 20:00, to $appearance_local" "$i"; then
             cat "$appearance_local" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    if ! grep -qxF 'return {' "$outputs_conf" 2>/dev/null || grep -q '=' "$outputs_conf"; then
+        echo "FAIL: the shell should write no monitor settings to $outputs_conf; it has: $(cat "$outputs_conf" 2>&1)" >&2
+        exit 1
+    fi
+    _outputs=$(grep -c '^hyprctl eval conf_outputs.reload()$' "$tmp/helpers.log")
+    printf '{\n  "monitors": {\n    "Spare": {\n      "scale": 2\n    }\n  }\n}\n' >"$outputs_local" || exit 1
+    ipc call settings setDisplay Headless scale 1.5 >/dev/null || exit 1
+    ipc call settings setDisplay Headless position auto-left >/dev/null || exit 1
+    _want='{
+  "monitors": {
+    "Spare": {
+      "scale": 2
+    },
+    "Headless": {
+      "scale": 1.5,
+      "position": "auto-left"
+    }
+  }
+}'
+    i=0
+    until grep -qxF '    ["desc:Headless"] = { scale = 1.5, position = "auto-left" },' "$outputs_conf" 2>/dev/null &&
+        grep -qxF '    ["desc:Spare"] = { scale = 2 },' "$outputs_conf" &&
+        test "$(grep -c '^hyprctl eval conf_outputs.reload()$' "$tmp/helpers.log")" -gt "$_outputs" &&
+        test "$(cat "$outputs_local")" = "$_want"; do
+        if waited "the shell didn't write a scale of 1.5 to the left for the Headless monitor, keeping the hand-edited Spare one, to $outputs_conf and $outputs_local, and apply them" "$i"; then
+            cat "$outputs_conf" "$outputs_local" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    _outputs=$(grep -c '^hyprctl eval conf_outputs.reload()$' "$tmp/helpers.log")
+    _listed=$(grep -c '^hyprctl monitors all -j$' "$tmp/helpers.log")
+    ipc call settings resetDisplay Spare >/dev/null || exit 1
+    _want='{
+  "monitors": {
+    "Headless": {
+      "scale": 1.5,
+      "position": "auto-left"
+    }
+  }
+}'
+    i=0
+    until test "$(cat "$outputs_local" 2>/dev/null)" = "$_want" &&
+        ! grep -qF '"desc:Spare"' "$outputs_conf" &&
+        test "$(grep -c '^hyprctl eval conf_outputs.reload()$' "$tmp/helpers.log")" -gt "$_outputs" &&
+        test "$(grep -c '^hyprctl monitors all -j$' "$tmp/helpers.log")" -gt "$_listed"; do
+        if waited "the shell didn't reset the Spare monitor in $outputs_local and $outputs_conf, apply it, and list the monitors again" "$i"; then
+            cat "$outputs_conf" "$outputs_local" >&2
             grep -v '^\[' "$log" >&2
             exit 1
         fi
@@ -1097,8 +1156,8 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # about the clocks, the system monitor, the title, the focus guard (its
 # replay of the waiting windows, and its order for Super+Tab), light and
 # dark, the VPNs, hypridle's timings, the mouse, touchpad and keyboard
-# settings, the list of mice and touchpads, the key bindings, or the
-# layout settings.
+# settings, the list of mice and touchpads, the key bindings, the layout
+# settings, or the monitors and their settings.
 # The lock and the greeter only ask for the keyboards, for their layout
 # badges.
 shell_runs='tide-tz
@@ -1115,7 +1174,9 @@ systemctl --user try-restart hypridle.service
 hyprctl eval conf_input.reload()
 hyprctl devices -j
 hyprctl binds -j
-hyprctl eval tide_layout.reload()'
+hyprctl eval tide_layout.reload()
+hyprctl monitors all -j
+hyprctl eval conf_outputs.reload()'
 load_runs=$shell_runs
 idle_conf=$tmp/home/.config/hypr/tide-idle.conf
 idle_suspend_conf=$tmp/home/.config/hypr/tide-idle-suspend.conf
@@ -1126,17 +1187,20 @@ clocks_local=$tmp/home/.config/tide/clocks.local.json
 layouts_conf=$tmp/home/.config/hypr/tide-layouts.lua
 layouts_local=$tmp/home/.config/tide/layouts.local.json
 appearance_local=$tmp/home/.config/tide/appearance.local.json
+outputs_conf=$tmp/home/.config/hypr/tide-outputs.lua
+outputs_local=$tmp/home/.config/tide/outputs.local.json
 after_load=written_settings
 load shell "the shell" -c tide
 after_load=
 # Gone again, so the next shell starts from the defaults, writes them, and
 # restarts hypridle and reapplies the devices, too.
-rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" "$layouts_conf" "$layouts_local" "$appearance_local" || exit 1
+rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" "$layouts_conf" "$layouts_local" "$appearance_local" "$outputs_conf" "$outputs_local" || exit 1
 echo "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 echo "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
 echo "ok: the shell changes the clocks as the Clocks page asks, and looks them up"
 echo "ok: the shell writes the layout settings, and new ones, and applies them"
 echo "ok: the shell sets the Appearance page's settings, and refuses one that wouldn't work"
+echo "ok: the shell writes the display settings, and new ones, and applies them"
 load_runs='hyprctl devices -j'
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"

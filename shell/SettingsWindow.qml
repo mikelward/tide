@@ -9,6 +9,7 @@ import "lib/audio.mjs" as Audio
 import "lib/idle.mjs" as Idle
 import "lib/input.mjs" as Input
 import "lib/layouts.mjs" as Layouts
+import "lib/outputs.mjs" as Outputs
 import "lib/settings.mjs" as Settings
 
 // The settings panel (SPEC.md §16), centered on the focused monitor over a
@@ -150,6 +151,22 @@ PanelWindow {
                 return c.error ? `${c.error}; not changing ${key}` : AppearanceData.set(key, c.value);
             }
             return AppearanceData.set(key, value);
+        }
+        // Sets one monitor's scale or position, by its description, as the
+        // Displays page does: `qs -c tide ipc call settings setDisplay
+        // "Dell Inc. DELL U2720Q 1234ABC" scale 1.5`; a scale of auto
+        // clears this machine's, leaving outputs.json's or else Hyprland's
+        // own, and a position of auto is set. Answers why not, or "".
+        function setDisplay(description: string, key: string, value: string): string {
+            if (key === "scale" && value === "auto") {
+                return OutputsData.set(description, key, undefined);
+            }
+            return OutputsData.set(description, key, key === "scale" ? Number(value) : value);
+        }
+
+        // Clears a monitor's settings in outputs.local.json, as Reset does.
+        function resetDisplay(description: string): string {
+            return OutputsData.reset(description);
         }
     }
 
@@ -1416,6 +1433,200 @@ PanelWindow {
                             wrapMode: Text.Wrap
                             textFormat: Text.PlainText
                             text: appearance.refused
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Displays: each monitor's scale, which − and + step,
+                    // and where it goes, which ‹ and › step through; Reset
+                    // clears what this machine sets (SPEC.md §16).
+                    Column {
+                        id: displays
+
+                        // Why the last change made here was refused, until
+                        // the next one or another page.
+                        property string refused: ""
+
+                        function set(description, key, value) {
+                            refused = OutputsData.set(description, key, value);
+                            root.report(refused);
+                        }
+
+                        onVisibleChanged: {
+                            refused = "";
+                            if (visible) {
+                                OutputsData.listMonitors();
+                            }
+                        }
+                        visible: root.current.id === "displays"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        Repeater {
+                            model: Outputs.shownMonitors(OutputsData.outputs, OutputsData.connected)
+
+                            Column {
+                                id: monitor
+
+                                required property var modelData
+                                readonly property var own: Outputs.monitorSettings(OutputsData.outputs, modelData.description)
+                                readonly property real scale: own.scale !== undefined ? own.scale : (modelData.scale ?? 1)
+                                readonly property int placeAt: Math.max(0, Outputs.POSITIONS.findIndex(p => p.position === (own.position ?? "auto")))
+
+                                width: displays.width
+                                spacing: 2
+
+                                Item {
+                                    width: monitor.width
+                                    implicitHeight: monitorName.implicitHeight
+
+                                    Heading {
+                                        id: monitorName
+
+                                        width: parent.width - (resetMonitor.visible ? resetMonitor.width + 12 : 0)
+                                        elide: Text.ElideRight
+                                        // From the monitor's EDID: never markup.
+                                        textFormat: Text.PlainText
+                                        text: monitor.modelData.name === "" ? `${monitor.modelData.description} (not connected)` : `${monitor.modelData.description} (${monitor.modelData.name})`
+                                    }
+
+                                    Rectangle {
+                                        id: resetMonitor
+
+                                        visible: Object.keys(Outputs.monitorSettings(OutputsData.localSettings, monitor.modelData.description)).length > 0
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 6
+                                        anchors.bottom: parent.bottom
+                                        width: 56
+                                        height: 22
+                                        radius: 11
+                                        color: Theme.surface2
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Reset"
+                                            color: Theme.fg
+                                            font.family: Theme.font
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        TapHandler {
+                                            onTapped: {
+                                                displays.refused = OutputsData.reset(monitor.modelData.description);
+                                                root.report(displays.refused);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Item {
+                                    width: monitor.width
+                                    implicitHeight: 32
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 10
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Scale"
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                    }
+
+                                    Row {
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 6
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 4
+
+                                        StepButton {
+                                            name: "list-remove-symbolic"
+                                            value: monitor.scale
+                                            next: Outputs.steppedScale(monitor.scale, -1)
+                                            onActivated: displays.set(monitor.modelData.description, "scale", next)
+                                        }
+
+                                        Text {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: 120
+                                            horizontalAlignment: Text.AlignHCenter
+                                            text: Outputs.formatScale(monitor.own.scale, monitor.modelData.scale)
+                                            color: Theme.fg
+                                            font.family: Theme.font
+                                            font.pixelSize: 13
+                                            font.features: ({ "tnum": 1 })
+                                        }
+
+                                        StepButton {
+                                            name: "list-add-symbolic"
+                                            value: monitor.scale
+                                            next: Outputs.steppedScale(monitor.scale, 1)
+                                            onActivated: displays.set(monitor.modelData.description, "scale", next)
+                                        }
+                                    }
+                                }
+
+                                Item {
+                                    width: monitor.width
+                                    implicitHeight: 32
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 10
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Place"
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                    }
+
+                                    Row {
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 6
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 4
+
+                                        StepButton {
+                                            name: "go-previous-symbolic"
+                                            value: monitor.placeAt
+                                            next: Math.max(0, monitor.placeAt - 1)
+                                            onActivated: displays.set(monitor.modelData.description, "position", Outputs.POSITIONS[next].position)
+                                        }
+
+                                        Text {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: 120
+                                            horizontalAlignment: Text.AlignHCenter
+                                            text: Outputs.POSITIONS[monitor.placeAt].label
+                                            color: Theme.fg
+                                            font.family: Theme.font
+                                            font.pixelSize: 13
+                                        }
+
+                                        StepButton {
+                                            name: "go-next-symbolic"
+                                            value: monitor.placeAt
+                                            next: Math.min(Outputs.POSITIONS.length - 1, monitor.placeAt + 1)
+                                            onActivated: displays.set(monitor.modelData.description, "position", Outputs.POSITIONS[next].position)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // A setting that isn't one, say.
+                        Text {
+                            visible: displays.refused !== ""
+                            x: 10
+                            width: displays.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: displays.refused
                             color: Theme.danger
                             font.family: Theme.font
                             font.pixelSize: 12
