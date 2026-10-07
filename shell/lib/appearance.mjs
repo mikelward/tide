@@ -557,6 +557,28 @@ export function drawableCandidates(candidates, undrawable) {
     return candidates.filter(c => !undrawable.includes(c));
 }
 
+// What the shell writes for the lock to draw, blurred (SPEC.md §15): the
+// wallpaper it draws now, `path`, on a line, or an empty line for none.
+// Never empty: Quickshell 0.3.1's FileView.setText skips text equal to what
+// it holds, and a file that doesn't exist holds "", so it could never be
+// written empty.
+export function wallpaperRecord(path) {
+    return `${path}\n`;
+}
+
+// The wallpaper a record the shell wrote names: {path}, "" for none, or
+// {path: "", error} for one that isn't a file's absolute path on a line.
+export function recordedWallpaper(text) {
+    const path = text.endsWith("\n") ? text.slice(0, -1) : text;
+    if (path === "") {
+        return { path: "" };
+    }
+    if (!path.startsWith("/") || /[\n\r\0]/.test(path)) {
+        return { path: "", error: "expected a file's absolute path, on a line of its own" };
+    }
+    return { path };
+}
+
 // A file's path as a file: URL, each part escaped, so a name with a space,
 // a # or a ? still names the file.
 export function fileUrl(path) {

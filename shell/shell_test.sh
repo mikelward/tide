@@ -549,13 +549,14 @@ reports() {
     fi
 }
 
-# lock_clocks: waits for the lock to name the bad clocks.local.json the
-# test gave it, as it reads it after loading. load runs it, as
-# $after_load.
-lock_clocks() {
+# lock_files: waits for the lock to name the bad clocks.local.json and the
+# bad wallpaper record the test gave it, as it reads them after loading.
+# load runs it, as $after_load.
+lock_files() {
     i=0
-    until grep -qF 'tide-lock: clocks.local.json: hour24 must be true or false; the clock keeps its last settings' "$log"; do
-        if waited "the lock didn't name the bad hour24 in $clocks_local" "$i"; then
+    until grep -qF 'tide-lock: clocks.local.json: hour24 must be true or false; the clock keeps its last settings' "$log" &&
+        grep -qF "tide-lock: $wallpaper_record: expected a file's absolute path, on a line of its own; no wallpaper" "$log"; do
+        if waited "the lock didn't name the bad hour24 in $clocks_local and the relative path in $wallpaper_record" "$i"; then
             cat "$log" >&2
             exit 1
         fi
@@ -601,11 +602,20 @@ EOF
 # longitude. Then the Displays page: no monitor settings written at
 # startup, then a scale and a place for the stand-in's monitor over a hand
 # edit, written to outputs.local.json and the file conf reads, and applied
-# again; then the hand-edited monitor reset.
+# again; then the hand-edited monitor reset. Before all that, it checks the
+# shell recorded no wallpaper for the lock, having none to draw (§15).
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
 # runs it, as $after_load.
 written_settings() {
+    i=0
+    until test -e "$wallpaper_record" && test -z "$(cat "$wallpaper_record")"; do
+        if waited "the shell didn't record no wallpaper for the lock in $wallpaper_record" "$i"; then
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
     if ! grep -qxF '$tide_idle_lock = 300' "$idle_conf" 2>/dev/null ||
         ! grep -qxF '$tide_idle_suspend_on_ac = 0' "$idle_suspend_conf" 2>/dev/null; then
         echo "FAIL: the shell should write hypridle's default timings to $idle_conf, and no suspend on AC to $idle_suspend_conf; they have: $(cat "$idle_conf" "$idle_suspend_conf" 2>&1)" >&2
@@ -1239,6 +1249,7 @@ idle_local=$tmp/home/.config/tide/idle.local.json
 input_conf=$tmp/home/.config/hypr/tide-input.lua
 input_local=$tmp/home/.config/tide/input.local.json
 clocks_local=$tmp/home/.config/tide/clocks.local.json
+wallpaper_record=$tmp/run/tide-wallpaper
 layouts_conf=$tmp/home/.config/hypr/tide-layouts.lua
 layouts_local=$tmp/home/.config/tide/layouts.local.json
 appearance_local=$tmp/home/.config/tide/appearance.local.json
@@ -1258,14 +1269,17 @@ echo "ok: the shell writes the layout settings, and new ones, and applies them"
 echo "ok: the shell sets the Appearance page's settings, applies the dim, and refuses one that wouldn't work"
 echo "ok: the shell writes the display settings, and new ones, and applies them"
 load_runs='hyprctl devices -j'
-# A clocks.local.json the lock refuses, which it should name.
+# A clocks.local.json and a wallpaper record the lock refuses, which it
+# should name.
 printf '{\n  "hour24": "no"\n}\n' >"$clocks_local" || exit 1
-after_load=lock_clocks
+printf 'wallpaper.png\n' >"$wallpaper_record" || exit 1
+after_load=lock_files
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 after_load=
 # Gone again, or the shell after the greeter would report it too.
 rm "$clocks_local" || exit 1
 echo "ok: the lock names a clocks.local.json it can't take, and keeps its clock's settings"
+echo "ok: the lock names a wallpaper record it can't take"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"
 load_runs=
 if test -n "$notify_path"; then
@@ -1294,6 +1308,16 @@ else
     echo "$prog: no wtype, so nothing is typed into the launcher; CI types into it" >&2
 fi
 if test -n "${TIDE_LOCK_PASSWORD:-}"; then
+    # A wallpaper for the lock to draw, blurred, as it unlocks: a picture
+    # it can't load, or an effect it can't make, fails the run.
+    "$python_path" -c 'import struct, sys, zlib
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+rows = b"".join(b"\x00" + b"\x40\x80\xc0" * 2 for _ in range(2))
+with open(sys.argv[1], "wb") as f:
+    f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))' "$tmp/home/wallpaper.png" || exit 1
+    printf '%s\n' "$tmp/home/wallpaper.png" >"$wallpaper_record" || exit 1
     unlock
 else
     echo "$prog: no TIDE_LOCK_PASSWORD, so the lock isn't unlocked; CI unlocks it" >&2

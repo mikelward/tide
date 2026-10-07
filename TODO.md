@@ -143,6 +143,15 @@ once you have agreed with it or reversed it.
   `shell/lib/appearance.mjs`, and the daemon choice the wallpaper block of
   `bin/tide-shell`.
 
+- [ ] **The lock draws the wallpaper the shell records, and the greeter
+  none.** The shell writes the path it draws to `tide-wallpaper` in the
+  session's runtime directory, and the lock draws that, blurred, so the
+  two can't disagree. The alternative was the lock reading
+  `appearance.json` and working out light or dark itself. The greeter has
+  no user's settings before login, so it keeps its gradient; a system
+  wallpaper for it would be a greetd setting. It's `show` in
+  `shell/WallpaperData.qml` and the wallpaper reader in `shell/lock.qml`.
+
 - [ ] **The Appearance page comes after Layouts.** §16's table had it first;
   new pages go after the ones you ordered, so their order and CI's count
   of Down presses to the Network page stay as they are. Moving it is a
@@ -672,9 +681,9 @@ from the keyboard (`shell/shell_test.sh`).
   'conf_appearance.reload()'`. CI checks three settings over IPC on a hand
   edit, the dim's write and apply, and sunrise and sunset refused without
   a longitude. Still to do:
-  - The lock and greeter's blurred wallpaper (§15): `tide-lock` and the
-    greeter are their own processes, so each needs the wallpaper's
-    settings and the blur.
+  - On a live session, check the lock shows the wallpaper blurred, that
+    its text reads on a light picture, and that a switch to dark while
+    locked changes it.
   - On a live session, check the wallpaper fills each monitor, follows a
     switch to dark at once, and sits under every window and layer.
   - On a live session, check a mode or a time changes the theme at once,

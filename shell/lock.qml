@@ -8,6 +8,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Pam
 import Quickshell.Wayland
+import "lib/appearance.mjs" as Appearance
 import "lib/clocks.mjs" as Clocks
 import "lib/history.mjs" as History
 import "lib/lock.mjs" as Lock
@@ -111,6 +112,33 @@ ShellRoot {
                 console.warn(`tide-lock: ${path}: ${FileViewError.toString(error)}; no notification count`);
             }
             root.unread = 0;
+        }
+    }
+
+    // The wallpaper, drawn blurred behind the password face (SPEC.md §15):
+    // the one the shell draws now, as it records it in the session's runtime
+    // directory (WallpaperData.qml), followed as it changes. No record, or
+    // none in it, is the face's own gradient.
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
+    property string wallpaper: ""
+
+    FileView {
+        path: root.runtimeDir === "" ? "" : `${root.runtimeDir}/tide-wallpaper`
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            const r = Appearance.recordedWallpaper(text());
+            if (r.error) {
+                console.warn(`tide-lock: ${path}: ${r.error}; no wallpaper`);
+            }
+            root.wallpaper = r.path;
+        }
+        onLoadFailed: error => {
+            if (error !== FileViewError.FileNotFound) {
+                console.warn(`tide-lock: ${path}: ${FileViewError.toString(error)}; no wallpaper`);
+            }
+            root.wallpaper = "";
         }
     }
 
@@ -231,6 +259,7 @@ ShellRoot {
             user: root.user
             lockedAt: root.lockedAt
             hour24: root.hour24
+            wallpaper: root.wallpaper
             powerMessage: powerActions.message
             powerBusy: powerActions.busy
             layout: keymap.badge

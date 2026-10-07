@@ -91,7 +91,9 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # hand-edited Spare, once the place is set over IPC, then lose Spare once
 # it's reset over IPC, applying each and listing the monitors again.
 # Its lock names a clocks.local.json with a bad hour24, unless
-# DIR/lock-takes-any-clocks is there.
+# DIR/lock-takes-any-clocks is there, and a wallpaper record naming a
+# relative path, unless DIR/lock-takes-any-wallpaper is. Its shell records
+# no wallpaper for the lock, unless DIR/no-wallpaper-record is there.
 # DIR/load-CONFIG.txt, if it's there, is printed
 # before LOAD by that config alone: shell (-c), lock or greeter.
 stubs() {
@@ -318,6 +320,10 @@ case "\$1" in
     -c) config=shell ;;
     *) config=\$(basename "\$2" .qml) ;;
 esac
+# As the shell, with no wallpaper to draw, it records none for the lock.
+if test "\$config" = shell && ! test -e "\$(dirname "\$0")/no-wallpaper-record"; then
+    printf '\n' >"\$XDG_RUNTIME_DIR/tide-wallpaper"
+fi
 if test -f "\$(dirname "\$0")/load-\$config.txt"; then
     cat "\$(dirname "\$0")/load-\$config.txt"
 fi
@@ -327,6 +333,11 @@ cat "\$(dirname "\$0")/load.txt"
 if test "\$config" = lock && test -z "\$WAYLAND_DEBUG" && ! test -e "\$(dirname "\$0")/lock-takes-any-clocks" &&
     test -f "\$HOME/.config/tide/clocks.local.json" && grep -qF '"hour24": "no"' "\$HOME/.config/tide/clocks.local.json"; then
     echo '  WARN qml: tide-lock: clocks.local.json: hour24 must be true or false; the clock keeps its last settings'
+fi
+# And a wallpaper record that names a relative path.
+if test "\$config" = lock && test -z "\$WAYLAND_DEBUG" && ! test -e "\$(dirname "\$0")/lock-takes-any-wallpaper" &&
+    test "\$(cat "\$XDG_RUNTIME_DIR/tide-wallpaper" 2>/dev/null)" = wallpaper.png; then
+    echo "  WARN qml: tide-lock: \$XDG_RUNTIME_DIR/tide-wallpaper: expected a file's absolute path, on a line of its own; no wallpaper"
 fi
 if test -n "\$WAYLAND_DEBUG" && test "\$1" = -c; then
     ${5:-$launcher}
@@ -488,6 +499,7 @@ check "and the appearance settings" contains "$out" "ok: the shell sets the Appe
 check "and the displays" contains "$out" "ok: the shell writes the display settings, and new ones, and applies them"
 check "and says the lock loaded" contains "$out" "ok: Quickshell loads the lock"
 check "and named a clocks.local.json it can't take" contains "$out" "ok: the lock names a clocks.local.json it can't take, and keeps its clock's settings"
+check "and a wallpaper record it can't take" contains "$out" "ok: the lock names a wallpaper record it can't take"
 check "and says the greeter loaded" contains "$out" "ok: Quickshell loads the greeter"
 
 run "$tmp/clean" TIDE_KEEP_LOG="$tmp/kept.log"
@@ -631,6 +643,18 @@ stubs "$tmp/lock-takes-any-clocks" "exit 0" "$loaded"
 run "$tmp/lock-takes-any-clocks"
 check "a lock that doesn't name a clocks.local.json it can't take fails" test "$code" -ne 0
 check "and says so" contains "$out" "the lock didn't name the bad hour24 in"
+
+stubs "$tmp/lock-takes-any-wallpaper" "exit 0" "$loaded"
+: >"$tmp/lock-takes-any-wallpaper/lock-takes-any-wallpaper" || exit 1
+run "$tmp/lock-takes-any-wallpaper"
+check "a lock that doesn't name a wallpaper record it can't take fails" test "$code" -ne 0
+check "and says so" contains "$out" "and the relative path in"
+
+stubs "$tmp/no-wallpaper-record" "exit 0" "$loaded"
+: >"$tmp/no-wallpaper-record/no-wallpaper-record" || exit 1
+run "$tmp/no-wallpaper-record"
+check "a shell that records no wallpaper for the lock fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell didn't record no wallpaper for the lock in"
 
 stubs "$tmp/no-scheme" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim keyboards"
 run "$tmp/no-scheme"

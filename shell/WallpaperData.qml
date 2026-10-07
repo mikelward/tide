@@ -9,6 +9,10 @@ import "lib/appearance.mjs" as Appearance
 // Appearance.wallpaperCandidates that can be read, for light or dark as it
 // is now, looked for again whenever either changes. With none, the shell
 // draws no wallpaper.
+//
+// The lock draws the same one, blurred, from the record this keeps in the
+// session's runtime directory: so the two agree without the lock working
+// out light or dark, or the settings, itself.
 Singleton {
     id: root
 
@@ -23,6 +27,7 @@ Singleton {
     // Each lookup's number, so one that finishes after a newer one started
     // is dropped.
     property int generation: 0
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
 
     onCandidatesChanged: {
         root.undrawable = [];
@@ -42,7 +47,7 @@ Singleton {
     function find() {
         root.generation++;
         if (root.drawable.length === 0) {
-            root.path = "";
+            root.show("");
             return;
         }
         finder.createObject(root, {
@@ -56,12 +61,38 @@ Singleton {
             return; // superseded
         }
         if (code === 0 && text !== "") {
-            root.path = text;
+            root.show(text);
             return;
         }
         // Nothing to draw is a setup without a wallpaper, not an error.
         console.log(`tide: no wallpaper: none of ${root.drawable.join(", ")} can be read`);
-        root.path = "";
+        root.show("");
+    }
+
+    // Draws `path`, or none, and records it for the lock: each time, not
+    // only on a change, so a shell restarted with none still clears the
+    // last shell's. One that can't be recorded is logged; the lock shows
+    // the last one recorded, or none.
+    function show(path) {
+        root.path = path;
+        if (root.runtimeDir === "") {
+            return;
+        }
+        const text = Appearance.wallpaperRecord(path);
+        if (record.readNow() === text) {
+            return;
+        }
+        const error = record.writeNow(text);
+        if (error !== "") {
+            console.warn(`tide: ${error}; the lock may show another wallpaper`);
+        }
+    }
+
+    // The lock's record (lock.qml).
+    SettingsFile {
+        id: record
+
+        path: root.runtimeDir === "" ? "" : `${root.runtimeDir}/tide-wallpaper`
     }
 
     Component {
