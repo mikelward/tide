@@ -64,6 +64,14 @@ test("stopping without starting is a failed start", () => {
     assert.deepEqual(runs[0].report, { level: "warn", message: "tide: couldn't start tide launch -- blueman-manager" });
 });
 
+test("an exit code is proof it started, whatever order `started` arrives in", () => {
+    const quiet = last(play([exited(0), stderr("")]));
+    assert.equal(quiet.done, true);
+    assert.equal(quiet.started, true, "a caller that checks started sees it did");
+    assert.equal(quiet.report, null);
+    assert.deepEqual(reports([exited(0), STOPPED, stderr("")]), [], "not a failed start");
+});
+
 test("a finished run reports once, whatever arrives after", () => {
     assert.equal(reports([STARTED, exited(2), stderr("x"), STOPPED, stderr("y"), exited(3)]).length, 1);
     assert.equal(reports([STOPPED, STOPPED, exited(1), stderr("z")]).length, 1);

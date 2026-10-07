@@ -317,12 +317,11 @@ test("a power action that fails otherwise says why", () => {
 
 test("an exit before the started signal still counts as started", () => {
     // Run.step can finish a run on its exit code and stderr before
-    // `started` arrives (launch_test.mjs), so `started` stays false.
+    // `started` arrives (launch_test.mjs).
     let run = Run.initial();
     run = Run.step(run, { type: "exited", code: 0 }, ["systemctl"]);
     run = Run.step(run, { type: "stderr", text: "" }, ["systemctl"]);
     assert.equal(run.done, true);
-    assert.equal(run.started, false);
     assert.equal(powerMessage("Suspend", run), "");
     run = Run.step(Run.initial(), { type: "exited", code: 1 }, ["systemctl"]);
     run = Run.step(run, { type: "stderr", text: "Failed to suspend: Access denied\n" }, ["systemctl"]);

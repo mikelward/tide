@@ -38,6 +38,8 @@ function outcome(run, command) {
 // The run after `event`: {type: "started"}, {type: "stopped"},
 // {type: "exited", code} or {type: "stderr", text}. `done` turns true once,
 // on the event that finishes the run, which alone carries its `report`.
+// An exit code is proof it started, whatever order `started` arrives in: a
+// fast command can exit, and its stderr end, before it.
 export function step(run, event, command) {
     if (run.done) {
         return Object.freeze(Object.assign({}, run, { report: null }));
@@ -52,6 +54,7 @@ export function step(run, event, command) {
         break;
     case "exited":
         next.code = event.code;
+        next.started = true;
         break;
     case "stderr":
         next.errors = event.text;
