@@ -28,10 +28,12 @@ jobs:
           pr: ${{ github.event.pull_request.number }}
 
   # Tests run on Lua 5.4, which Ubuntu packages; Hyprland embeds 5.5 and the
-  # layout uses nothing that differs between them.
+  # layout uses nothing that differs between them. `make test` takes about
+  # four minutes, and installing Lua and qmllint has taken four and a half
+  # on a slow mirror, so the limit leaves room for both.
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
     needs: classify
     if: needs.classify.outputs.docs_only != 'true'
     steps:
