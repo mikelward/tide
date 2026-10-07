@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Services.UPower
+import "lib/clocks.mjs" as Clocks
 import "lib/lock.mjs" as Lock
 import "lib/status.mjs" as Status
 
@@ -31,6 +32,9 @@ Item {
     // Who is shown over the field: the user's name.
     property string user: ""
     property date lockedAt: new Date()
+    // 24-hour time, or "4:30 PM", as clocks.json's hour24 says (SPEC.md
+    // §7.3); the greeter, with no one's settings to read, keeps 24-hour.
+    property bool hour24: true
     // The line under the field; the greeter says which session is starting.
     property string status: Lock.statusText(lockState)
     // The last power action's trouble, if any (Lock.powerMessage).
@@ -283,7 +287,7 @@ Item {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: Qt.formatDateTime(clock.date, "ddd MMM d  HH:mm")
+                    text: `${Qt.formatDate(clock.date, "ddd MMM d")}  ${Clocks.formatWall(clock.date.getHours(), clock.date.getMinutes(), face.hour24)}`
                     color: Qt.rgba(1, 1, 1, 0.7)
                     font.family: "Inter"
                     font.pixelSize: 13
@@ -310,7 +314,7 @@ Item {
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         visible: !face.login
-                        text: `locked at ${Qt.formatTime(face.lockedAt, "HH:mm")}`
+                        text: `locked at ${Clocks.formatWall(face.lockedAt.getHours(), face.lockedAt.getMinutes(), face.hour24)}`
                         color: Qt.rgba(1, 1, 1, 0.6)
                         font.family: "Inter"
                         font.pixelSize: 12
@@ -471,7 +475,7 @@ Item {
             }
 
             Text {
-                text: Qt.formatTime(clock.date, "HH:mm")
+                text: Clocks.formatWall(clock.date.getHours(), clock.date.getMinutes(), face.hour24)
                 color: Qt.rgba(1, 1, 1, 0.5)
                 font.family: "Inter"
                 font.pixelSize: 64

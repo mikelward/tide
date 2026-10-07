@@ -55,11 +55,20 @@ once you have agreed with it or reversed it.
   alone but split one page across two files. It's `parseClocksFile` in
   `shell/lib/clocks.mjs`.
 
-- [ ] **12-hour time reads `4:30 PM`, and the lock screen stays 24-hour.**
-  The bar's and the popover's clocks follow `hour24`. The lock's big clock
-  doesn't yet; it would take `ClockData`'s switch in `LockFace.qml`. The
-  alternatives were `4:30p` or `4:30 pm`, which are shorter on a full bar.
-  It's `formatTime` in `shell/lib/clocks.mjs`.
+- [ ] **12-hour time reads `4:30 PM`, and the greeter stays 24-hour.**
+  The bar's, the popover's and the lock's clocks follow `hour24`; the
+  greeter runs before anyone logs in, so it has no `clocks.json` to read.
+  The alternatives were `4:30p` or `4:30 pm`, which are shorter on a full
+  bar. It's `formatWall` in `shell/lib/clocks.mjs`.
+
+- [ ] **The lock reads the clock files itself.** It keeps its last
+  switches when a file is wrong, as the bar does. It can't run `tide-tz`,
+  so it checks each zone's form only: a list naming a well-formed zone
+  tzdata lacks gives the lock its switch while the bar refuses it. The
+  alternative is the shell writing the switches it took to a file the
+  lock reads, as the notification count is, so the two always agree.
+  It's `lockClocks` in `shell/lib/clocks.mjs` and `loadClocks` in
+  `shell/lock.qml`.
 
 - [ ] **The Layouts page comes after Keys.** §16's table had it third;
   new pages go after the ones you ordered. Moving it is a line in `PAGES`

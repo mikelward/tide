@@ -8,7 +8,7 @@ import {
     formatTime, formatLocal, barClocks, scrubbed, SCRUB_STEP, zoneError,
     zoneFormError, cityLabel, editableClocks, editedClocks, movedClock, withoutClock,
     relabeledClock, withClock, DEFAULT_SWITCHES, SWITCH_ROWS, parseClocksFile, withClockSwitch,
-    loadPlan,
+    loadPlan, formatWall, lockClocks,
 } from "./clocks.mjs";
 
 function canonical(zone) {
@@ -509,4 +509,44 @@ test("a switch alone needs no lookup, and doesn't restart one running for the sa
     assert.equal(plan(utc, true, null).lookUp, true, "another list");
     assert.equal(plan(DEFAULT_CLOCKS, true, utc).lookUp, true, "a lookup running for another list");
     assert.equal(plan(good.map(c => ({ ...c, label: c.label + "!" })), true, null).lookUp, true, "a new label");
+});
+
+test("a wall-clock time is 24-hour, or 12-hour with AM and PM", () => {
+    assert.equal(formatWall(16, 30), "16:30");
+    assert.equal(formatWall(7, 5, true), "07:05");
+    assert.equal(formatWall(16, 30, false), "4:30 PM");
+    assert.equal(formatWall(0, 5, false), "12:05 AM", "midnight");
+    assert.equal(formatWall(12, 0, false), "12:00 PM", "noon");
+});
+
+test("the lock takes the clocks' switches as the bar does", () => {
+    const hour12 = JSON.stringify({ hour24: false });
+    let r = lockClocks(null, null);
+    assert.deepEqual(r.state, { clocks: DEFAULT_CLOCKS, switches: DEFAULT_SWITCHES }, "no files");
+    assert.deepEqual(r.errors, []);
+    assert.equal(lockClocks(hour12, null).state.switches.hour24, false, "the shared file");
+    assert.equal(lockClocks(hour12, JSON.stringify({ hour24: true })).state.switches.hour24, true, "the local file wins");
+    assert.equal(lockClocks(JSON.stringify([{ zone: "UTC", label: "" }]), null).state.switches.hour24, true, "a bare list says nothing");
+
+    // A file gone wrong keeps what was taken last, and is named.
+    const last = lockClocks(null, hour12).state;
+    r = lockClocks(null, "{", last);
+    assert.deepEqual(r.state, last, "a file that doesn't parse keeps the last switches");
+    assert.deepEqual(r.errors, [`clocks.local.json: ${jsonError("{")}`]);
+    r = lockClocks(null, JSON.stringify({ hour24: "no" }), last);
+    assert.equal(r.state.switches.hour24, false, "a bad switch keeps the last");
+    assert.deepEqual(r.errors, ["clocks.local.json: hour24 must be true or false"]);
+    r = lockClocks("{", "{", null);
+    assert.deepEqual(r.state.switches, DEFAULT_SWITCHES, "the first time, the defaults");
+    assert.equal(r.errors.length, 2, "every file wrong is named");
+
+    // A zone tide-tz would refuse by its form refuses the list, and the
+    // switch that came with it.
+    r = lockClocks(null, JSON.stringify({ clocks: [{ zone: "US/Pacific", label: "" }], hour24: false }), null);
+    assert.equal(r.state.switches.hour24, true, "a link name's list keeps the last switches");
+    assert.deepEqual(r.state.clocks, DEFAULT_CLOCKS);
+    assert.match(r.errors[0], /^clocks\.local\.json: clocks: entry 1: unknown time zone "US\/Pacific"$/);
+    r = lockClocks(null, JSON.stringify({ clocks: [{ zone: "Asia/Kolkata", label: "IST" }], hour24: false }), null);
+    assert.equal(r.state.switches.hour24, false, "a good list's switch is taken with it");
+    assert.deepEqual(r.state.clocks, [{ zone: "Asia/Kolkata", label: "IST" }]);
 });

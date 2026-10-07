@@ -11,6 +11,7 @@ WlSessionLockSurface {
     property string hostname: ""
     property string user: ""
     property date lockedAt: new Date()
+    property bool hour24: true
     property string powerMessage: ""
     property bool powerBusy: false
     property int unread: 0
@@ -28,6 +29,7 @@ WlSessionLockSurface {
         hostname: surface.hostname
         user: surface.user
         lockedAt: surface.lockedAt
+        hour24: surface.hour24
         powerMessage: surface.powerMessage
         powerBusy: surface.powerBusy
         unread: surface.unread

@@ -839,8 +839,9 @@ See [`bar.png`](docs/mocks/bar.png).
   - The file can instead be an object: the list as `clocks`, beside two
     switches, `hour24` and `dedupeLocal`, each `true` or `false`. Any of
     the three can be left out.
-  - `hour24` off shows the bar's and the popover's times as `4:30 PM`
-    rather than `16:30`. The lock screen stays 24-hour.
+  - `hour24` off shows the bar's, the popover's and the lock's times as
+    `4:30 PM` rather than `16:30`. The greeter stays 24-hour: it runs
+    before anyone logs in, with no one's settings to read.
   - `dedupeLocal` off shows a listed zone that is the local one, beside
     local, rather than hiding it.
   - Both default to on. A switch `clocks.local.json` sets wins over the
@@ -848,6 +849,8 @@ See [`bar.png`](docs/mocks/bar.png).
   - A switch changed alone shows at once. One changed with the list waits
     for the list's zones to load, so a list refused for an unknown zone
     keeps the last good switches as well.
+  - The lock reads the two files itself. It runs no `tide-tz`, so it
+    refuses a list only for a zone's form, as `tide-tz` does first.
 
 ### 7.4 Status icons
 
