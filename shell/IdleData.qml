@@ -38,6 +38,9 @@ Singleton {
 
     readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`
     readonly property string dir: `${root.configHome}/tide`
+    // Where the record of what hypridle was last given lives: this
+    // session's, so a new login starts without one.
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
 
     // Sets one step's seconds, or a switch's true or false, in
     // idle.local.json: the settings panel writes only the .local files
@@ -99,7 +102,11 @@ Singleton {
             // try-restart: only a hypridle that's running, which in the
             // tide session is its unit's (§5.3).
             Launcher.run(["systemctl", "--user", "try-restart", "hypridle.service"], (ok, errors) => {
-                root.stepped(Writes.targetApplied(root.target, ok ? "" : `couldn't restart hypridle: ${errors.trim() || "systemctl failed"}`));
+                const applied = Writes.targetApplied(root.target, ok ? "" : `couldn't restart hypridle: ${errors.trim() || "systemctl failed"}`);
+                if (ok) {
+                    root.record(Writes.recordOf(applied.state.applied));
+                }
+                root.stepped(applied);
             });
         }
         root.report();
@@ -158,8 +165,46 @@ Singleton {
             root.stepped(Writes.targetUnreadable(root.target, `${written.broken}; hypridle keeps its timings`));
             return;
         }
-        root.target = Writes.readTarget(root.target, writtenText).state;
+        root.target = Writes.readTarget(root.target, writtenText, root.target.known ? writtenText : root.firstApplied(writtenText)).state;
         root.stepped(Writes.wantTarget(root.target, Idle.hypridleConf(root.idle)));
+    }
+
+    // What hypridle has as this shell first reads its file: what the
+    // session's record of the last restart says, else the file, which
+    // hypridle read as it started, recorded now. A record that can't be
+    // read or written says nothing, so hypridle is restarted to be sure:
+    // a shell after this one would otherwise take the file for what it
+    // has. Nor does a file that couldn't be read until now, which hypridle
+    // couldn't either (Writes.readTarget).
+    function firstApplied(writtenText) {
+        if (root.target.failure !== "") {
+            return null;
+        }
+        if (root.runtimeDir === "") {
+            return writtenText;
+        }
+        const text = root.readNow(recorded);
+        if (recorded.broken !== "") {
+            console.warn(`tide: ${recorded.broken}; restarting hypridle to be sure it has its timings`);
+            return null;
+        }
+        const first = Writes.firstApplied(writtenText, text);
+        return Writes.afterRecord(first, first.record === null || root.record(first.record));
+    }
+
+    // Records what hypridle has now, returning whether it could. One that
+    // can't be written is logged: after a restart, it only costs another
+    // if this shell dies with an apply still to retry.
+    function record(text) {
+        if (root.runtimeDir === "") {
+            return true;
+        }
+        const error = root.writeNow(recorded, text);
+        if (error !== "") {
+            console.warn(`tide: ${error}; hypridle may be restarted again to be sure it has its timings`);
+            return false;
+        }
+        return true;
     }
 
     // Writes tide idle-suspend's file when it would say something else,
@@ -219,6 +264,13 @@ Singleton {
         id: written
 
         path: `${root.configHome}/hypr/tide-idle.conf`
+    }
+
+    // This session's record of what hypridle was last given (firstApplied).
+    SettingsFile {
+        id: recorded
+
+        path: root.runtimeDir === "" ? "" : `${root.runtimeDir}/tide-idle-applied`
     }
 
     // What tide idle-suspend reads, apart from hypridle's file

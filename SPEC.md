@@ -1088,6 +1088,10 @@ today's `hypridle.conf`:
     time. One it can't write to hypridle's file or restart hypridle for is
     reported once, and tried again every 30 seconds, for as long as the
     shell runs, until it's in.
+  - A shell restarted before then still gets it in. Each restart's
+    timings are recorded in `$XDG_RUNTIME_DIR/tide-idle-applied`, and so
+    is the file a shell first finds, if there's no record yet. A shell
+    whose record says something other than the file restarts hypridle.
 - **Suspend on AC** is a setting too, off by default: `suspendOnAC`, true
   or false, in the same files, and a switch on the Idle page.
   - The shell writes it to `~/.config/hypr/tide-idle-suspend.conf` as

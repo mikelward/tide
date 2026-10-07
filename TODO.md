@@ -469,11 +469,6 @@ from the keyboard (`shell/shell_test.sh`).
   CI checks the shell writes the default timings and restarts hypridle at
   startup, then three settings over IPC, Suspend on AC among them. Still
   to do:
-  - A failed hypridle restart is retried only while the shell runs. A
-    shell restarted before the retry works takes the file on disk as
-    applied, so hypridle keeps its old times until it next restarts.
-    Recording what hypridle was last given, in `$XDG_RUNTIME_DIR`, would
-    let the new shell tell (`readTarget` in `shell/lib/writes.mjs`).
   - On a live session, check a change restarts hypridle with the new
     times, and that Fedora's hypridle is 0.1.7 or later for `source`
     (Ubuntu 26.04 has 0.1.7).

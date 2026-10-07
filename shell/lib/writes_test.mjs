@@ -1,7 +1,7 @@
 // Tests for writes.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { TARGET, readTarget, targetApplied, targetUnreadable, targetWritten, wantTarget } from "./writes.mjs";
+import { TARGET, afterRecord, firstApplied, readTarget, recordOf, targetApplied, targetUnreadable, targetWritten, wantTarget } from "./writes.mjs";
 
 // The file read as `text`, then `wanted`.
 function started(text, wanted) {
@@ -13,13 +13,44 @@ test("a start that wants what the file already says writes and applies nothing",
     assert.equal(started("x", "x").action, null);
 });
 
-test("a start that wants what the file already says applies it when asked to reapply", () => {
-    let r = wantTarget(readTarget(TARGET, "x", true).state, "x");
+test("a start that wants what the file already says applies it when told the program has none of it", () => {
+    let r = wantTarget(readTarget(TARGET, "x", null).state, "x");
     assert.deepEqual(r.action, { apply: true }, "the program may not have it");
     r = targetApplied(r.state, "");
     assert.equal(r.action, null);
-    r = wantTarget(readTarget(r.state, "x", true).state, "x");
+    r = wantTarget(readTarget(r.state, "x", null).state, "x");
     assert.equal(r.action, null, "only the first read");
+});
+
+test("a start told the program has something else applies what's wanted, and one told it has that leaves it", () => {
+    assert.deepEqual(wantTarget(readTarget(TARGET, "y", "x").state, "y").action, { apply: true });
+    assert.equal(wantTarget(readTarget(TARGET, "y", "y").state, "y").action, null);
+});
+
+test("with no record yet, the file is what the program has, and is recorded", () => {
+    assert.deepEqual(firstApplied("x", null), { applied: "x", record: "x" });
+    assert.deepEqual(firstApplied(null, null), { applied: null, record: "" }, "no file is recorded as empty");
+});
+
+test("a record of the last apply is what the program has, whatever the file says", () => {
+    // A shell that wrote y and died before hypridle restarted for it.
+    const { applied, record } = firstApplied("y", "x");
+    assert.equal(applied, "x");
+    assert.equal(record, null, "the record stands");
+    assert.deepEqual(wantTarget(readTarget(TARGET, "y", applied).state, "y").action, { apply: true }, "so its successor applies y");
+    assert.equal(firstApplied("x", "").applied, null, "an empty record is no file");
+});
+
+test("a first record that can't be written leaves what the program has unknown, so it's applied", () => {
+    assert.equal(afterRecord(firstApplied("x", null), true), "x");
+    assert.equal(afterRecord(firstApplied("x", null), false), null);
+    assert.deepEqual(wantTarget(readTarget(TARGET, "x", afterRecord(firstApplied("x", null), false)).state, "x").action, { apply: true });
+    assert.equal(afterRecord(firstApplied("y", "x"), false), "x", "a record already there needs no writing");
+});
+
+test("what's applied is recorded as its text, and no file as empty", () => {
+    assert.equal(recordOf("x"), "x");
+    assert.equal(recordOf(null), "");
 });
 
 test("a change is written, then applied", () => {
