@@ -218,8 +218,10 @@ FOCUS_LUA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hypr
 
 
 # conf's hyprland.lua's call InputData.qml makes, applying tide's mouse and
-# touchpad settings; conf isn't here to check, so it's taken as defined.
-CONF_CALLS = ["conf_input.reload()"]
+# touchpad settings, and layout.lua's LayoutsData.qml makes, applying the
+# Layouts page's: neither config is loaded here, so they're taken as
+# defined.
+CONF_CALLS = ["conf_input.reload()", "tide_layout.reload()"]
 
 
 def guard_call(code):

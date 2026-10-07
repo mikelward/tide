@@ -557,6 +557,16 @@ See [`layouts.png`](docs/mocks/layouts.png).
   modes, so the single-window rule lives in one place. It keeps each
   workspace's mode, `mfact` and master count, and checks its settings when
   the config loads, so a typo is an error rather than silently ignored.
+- **Settings.** The mode a new workspace starts in, for an ultrawide and
+  for any other monitor, and where ultrawide begins, are settings, as are
+  each mode's `mfact` and master count and the single-window rule.
+  - `setup()` takes them as options, and the Layouts page's go over those,
+    from `~/.config/hypr/tide-layouts.lua`, which the shell writes (§16).
+  - The page and the bar see only the defaults and `layouts.json`, not
+    `setup()`'s options. So `conf` passes none, and its settings go in
+    `layouts.json`.
+  - A settings file that can't be used is a notification, and the layout
+    goes on without it, so a bad one never stops the config loading.
 - **The bar learns the layout** from Hyprland's event socket. The layout
   keys are Lua bindings in the Hyprland config, so they work even while the
   shell restarts, and each one announces the new mode as
@@ -1928,7 +1938,6 @@ tide's own, and links out for the rest:
 |---|---|
 | Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
 | Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
-| Layouts | default layout per aspect ratio, `mfact`, the rule for new windows |
 | Idle | the four timings, suspend on AC (off by default) |
 | Sound | output and input devices; *advanced* opens `pavucontrol` |
 | Network, Bluetooth | *advanced* opens `nm-connection-editor` / `blueman-manager` |
@@ -1937,6 +1946,7 @@ tide's own, and links out for the rest:
 | Keyboard | for every keyboard: layouts and their variants, repeat delay and rate |
 | Clocks | zones, order, labels, 24 h, dedupe-local |
 | Keys | a read-only list of the current bindings, generated from the config |
+| Layouts | default layout per aspect ratio, `mfact`, master count, the rule for new windows |
 
 Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
@@ -2010,6 +2020,24 @@ stays hand-written.
     listing includes it and says nothing of it, and `conf` turns none off.
   - A Lua binding by keycode (`SUPER + code:28`) shows only that it is
     one: 0.56.2's listing gives neither its key nor its code.
+
+- **Layouts** sets §6's: where ultrawide begins, the mode a new workspace
+  starts in on an ultrawide and on any other monitor, each mode's `mfact`
+  and master count, and the width of a lone window for each aspect.
+  - They're in `layouts.json` and `layouts.local.json`, in `setup()`'s
+    names camelCased (`ultrawideAspect`, `defaultMode`, `modes`,
+    `single`). The shell writes what's set to
+    `~/.config/hypr/tide-layouts.lua` and runs `hyprctl eval
+    'tide_layout.reload()'`, and the layout reads the file again.
+  - A change reaches every workspace. Each keeps its mode, takes the new
+    `mfact` and master count, and loses any it was given with the keys.
+    The active one is laid out at once, and the rest as they're shown.
+  - Since a reload resets those, the shell applies the file as it starts
+    only when it would change: the layout read it as the config loaded.
+  - The bar's guess at a workspace's mode before its first announcement
+    follows the settings too.
+  - The rule for new windows isn't a setting yet. A new window always
+    joins the stack at the end.
 
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or

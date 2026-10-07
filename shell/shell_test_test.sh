@@ -42,7 +42,7 @@ tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
 # The calls the stub qs makes, as the shell and as the lock or the greeter.
-all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds keyboards"
+all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts keyboards"
 
 # stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN [IDLE [HANDED [LABEL]]]]]]]]]]:
 # a sway that listens on wayland-1 until it's killed; a qs whose `ipc`
@@ -63,8 +63,9 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # hyprctl, the focus guard's replay and order, gsettings for the color
 # scheme and its monitor, nmcli for the VPNs and its monitor, and
 # hypridle's timings written and systemctl restarting it, and hyprctl
-# for the mice and touchpads and for the key bindings, as the lock or the
-# greeter (-p) hyprctl for the keyboards. With LATE, it runs tide-tz that
+# for the mice and touchpads and for the key bindings, and no layout
+# settings written and applied, as the lock or the greeter (-p) hyprctl
+# for the keyboards. With LATE, it runs tide-tz that
 # many seconds late, as the shell does once it has read its clock files. Its
 # notify-send prints an id and adds the summary to the history, as the
 # shell's server would. Its go builds a tide-tz that runs TZ, by default
@@ -78,6 +79,8 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # over IPC, applying each. With tide-tz, it answers the Clocks page's
 # refused zone, and writes and looks up Asia/Kolkata labeled LABEL (IST by
 # default) then the hand-edited UTC once the last clock is moved over IPC.
+# Its layouts take tile's mfact, the hand-edited masters and twocol for
+# ultrawides once the last is set over IPC, applying each.
 # DIR/load-CONFIG.txt, if it's there, is printed
 # before LOAD by that config alone: shell (-c), lock or greeter.
 stubs() {
@@ -99,6 +102,7 @@ if test "\$1" = ipc; then
         *"call settings open"*) : >"\$XDG_RUNTIME_DIR/settings-open" ;;
         *"call settings setSuspendOnAC true"*) : >"\$XDG_RUNTIME_DIR/idle-set" ;;
         *"call settings setDevice logitech-usb-receiver speed 0.25"*) : >"\$XDG_RUNTIME_DIR/input-set" ;;
+        *"call settings setLayout defaultMode.ultrawide twocol"*) : >"\$XDG_RUNTIME_DIR/layouts-set" ;;
         *"call settings moveClock UTC 1"*) : >"\$XDG_RUNTIME_DIR/clocks-set" ;;
         *"call settings addClock US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the clocks" ;;
     esac
@@ -186,6 +190,25 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
         esac
         case " ${7-$all_runs} " in
             *" binds "*) hyprctl binds -j >/dev/null 2>&1 & ;;
+        esac
+        case " ${7-$all_runs} " in
+            *" layouts "*)
+                {
+                    mkdir -p "\$HOME/.config/hypr" "\$HOME/.config/tide" &&
+                        printf '%s\n' 'return {' '}' >"\$HOME/.config/hypr/tide-layouts.lua" &&
+                        hyprctl eval 'tide_layout.reload()' >/dev/null 2>&1
+                    # Settings made over IPC, as the Layouts page makes
+                    # them; gone with qs, as the idle one is.
+                    until test -e "\$XDG_RUNTIME_DIR/layouts-set"; do
+                        kill -0 \$\$ 2>/dev/null || exit 0
+                        sleep 0.1
+                    done
+                    rm "\$XDG_RUNTIME_DIR/layouts-set"
+                    printf '{\n  "modes": {\n    "tile": {\n      "nmaster": 2,\n      "mfact": 0.6\n    }\n  },\n  "defaultMode": {\n    "ultrawide": "twocol"\n  }\n}\n' >"\$HOME/.config/tide/layouts.local.json"
+                    printf '%s\n' 'return {' '    default_mode = { ultrawide = "twocol" },' '    modes = { tile = { mfact = 0.6, nmaster = 2 } },' '}' >"\$HOME/.config/hypr/tide-layouts.lua"
+                    hyprctl eval 'tide_layout.reload()' >/dev/null 2>&1
+                } &
+                ;;
         esac
         case " ${7-$all_runs} " in
             *" input "*)
@@ -375,6 +398,7 @@ check "a shell that loads and answers passes" test "$code" -eq 0
 check "and says it wrote hypridle's timings" contains "$out" "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 check "and the mouse, touchpad and keyboard settings" contains "$out" "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
 check "and the clocks" contains "$out" "ok: the shell changes the clocks as the Clocks page asks, and looks them up"
+check "and the layouts" contains "$out" "ok: the shell writes the layout settings, and new ones, and applies them"
 check "and says the lock loaded" contains "$out" "ok: Quickshell loads the lock"
 check "and says the greeter loaded" contains "$out" "ok: Quickshell loads the greeter"
 
@@ -468,7 +492,7 @@ run "$tmp/late"
 check "a shell that runs tide-tz only after reading its files passes" test "$code" -eq 0
 check "having waited for it" contains "$out" "ok: Quickshell loads the shell"
 
-stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds keyboards"
+stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts keyboards"
 run "$tmp/no-clocks"
 check "a shell that never runs tide-tz fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "tide-tz..." in 2 s'
@@ -494,47 +518,47 @@ run "$tmp/probe-fails"
 check "a shell whose system monitor warns fails" test "$code" -ne 0
 check "and says what it said" contains "$out" "tide: tide-sysmon probe exited 2"
 
-stubs "$tmp/no-title" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds keyboards"
+stubs "$tmp/no-title" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts keyboards"
 run "$tmp/no-title"
 check "a shell that never asks hyprctl for the focused window fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl activewindow -j..." in 2 s'
 
-stubs "$tmp/no-replay" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title order scheme scheme-monitor vpns vpn-monitor idle input devices binds keyboards"
+stubs "$tmp/no-replay" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts keyboards"
 run "$tmp/no-replay"
 check "a shell that never has the focus guard replay its windows fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.announce_waiting()..." in 2 s'
 
-stubs "$tmp/no-order" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay scheme scheme-monitor vpns vpn-monitor idle input devices binds keyboards"
+stubs "$tmp/no-order" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts keyboards"
 run "$tmp/no-order"
 check "a shell that never tells the focus guard its marks fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.set_order(..." in 2 s'
 
-stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds"
+stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts"
 run "$tmp/no-keyboards"
 check "a lock that never asks hyprctl for the keyboards fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the lock never ran "hyprctl devices -j..." in 2 s'
 
-stubs "$tmp/no-scheme" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme-monitor vpns vpn-monitor idle input devices binds keyboards"
+stubs "$tmp/no-scheme" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme-monitor vpns vpn-monitor idle input devices binds layouts keyboards"
 run "$tmp/no-scheme"
 check "a shell that never tells apps the color scheme fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "gsettings set org.gnome.desktop.interface color-scheme..." in 2 s'
 
-stubs "$tmp/no-scheme-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme vpns vpn-monitor idle input devices binds keyboards"
+stubs "$tmp/no-scheme-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme vpns vpn-monitor idle input devices binds layouts keyboards"
 run "$tmp/no-scheme-monitor"
 check "a shell that never follows the color scheme fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "gsettings monitor org.gnome.desktop.interface color-scheme..." in 2 s'
 
-stubs "$tmp/no-vpns" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpn-monitor idle input devices binds keyboards"
+stubs "$tmp/no-vpns" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpn-monitor idle input devices binds layouts keyboards"
 run "$tmp/no-vpns"
 check "a shell that never lists the VPNs fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show..." in 2 s'
 
-stubs "$tmp/no-vpn-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns idle input devices binds keyboards"
+stubs "$tmp/no-vpn-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns idle input devices binds layouts keyboards"
 run "$tmp/no-vpn-monitor"
 check "a shell that never follows the VPNs fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "nmcli monitor..." in 2 s'
 
-stubs "$tmp/no-idle" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor input devices binds keyboards"
+stubs "$tmp/no-idle" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor input devices binds layouts keyboards"
 run "$tmp/no-idle"
 check "a shell that never restarts hypridle on its timings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "systemctl --user try-restart hypridle.service..." in 2 s'
@@ -544,20 +568,25 @@ run "$tmp/idle-unset"
 check "a shell that loses the first of two quick changes fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell didn't write a lock time of 600, a dim time of 120 and suspend on AC, keeping the hand-edited suspend time of 900, to"
 
-stubs "$tmp/no-input" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle devices binds keyboards"
+stubs "$tmp/no-input" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle devices binds layouts keyboards"
 run "$tmp/no-input"
 check "a shell that never applies the mouse, touchpad and keyboard settings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval conf_input.reload()..." in 2 s'
 
-stubs "$tmp/no-devices" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input binds keyboards"
+stubs "$tmp/no-devices" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input binds layouts keyboards"
 run "$tmp/no-devices"
 check "a shell that never lists the mice and touchpads fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl devices -j..." in 2 s'
 
-stubs "$tmp/no-binds" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices keyboards"
+stubs "$tmp/no-binds" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices layouts keyboards"
 run "$tmp/no-binds"
 check "a shell that never lists the key bindings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl binds -j..." in 2 s'
+
+stubs "$tmp/no-layouts" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds keyboards"
+run "$tmp/no-layouts"
+check "a shell that never applies the layout settings fails" test "$code" -ne 0
+check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_layout.reload()..." in 2 s'
 
 stubs "$tmp/input-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" "" true
 run "$tmp/input-unset"

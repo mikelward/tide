@@ -579,7 +579,9 @@ EOF
 # .local.json and to the file read, and restarted hypridle or reapplied the
 # devices again. Then the same for the Clocks page: a zone added, labeled
 # and moved, and one refused, written to clocks.local.json and looked up
-# by the bar.
+# by the bar. Then the Layouts page: none written at startup, then two
+# settings over a hand edit, written to layouts.local.json and the file
+# layout.lua reads, and applied again.
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
 # runs it, as $after_load.
@@ -690,6 +692,38 @@ written_settings() {
         grep -qxF 'tide-tz -- Asia/Kolkata UTC' "$tmp/helpers.log"; do
         if waited "the shell didn't write the clocks for Asia/Kolkata, labeled IST, then the hand-edited UTC to $clocks_local, and look them up" "$i"; then
             cat "$clocks_local" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    if ! grep -qxF 'return {' "$layouts_conf" 2>/dev/null || grep -q '=' "$layouts_conf"; then
+        echo "FAIL: the shell should write no layout settings to $layouts_conf; it has: $(cat "$layouts_conf" 2>&1)" >&2
+        exit 1
+    fi
+    _reloads=$(grep -c '^hyprctl eval tide_layout.reload()$' "$tmp/helpers.log")
+    printf '{\n  "modes": {\n    "tile": {\n      "nmaster": 2\n    }\n  }\n}\n' >"$layouts_local" || exit 1
+    ipc call settings setLayout modes.tile.mfact 0.6 >/dev/null || exit 1
+    ipc call settings setLayout defaultMode.ultrawide twocol >/dev/null || exit 1
+    _want='{
+  "modes": {
+    "tile": {
+      "nmaster": 2,
+      "mfact": 0.6
+    }
+  },
+  "defaultMode": {
+    "ultrawide": "twocol"
+  }
+}'
+    i=0
+    until grep -qxF '    modes = { tile = { mfact = 0.6, nmaster = 2 } },' "$layouts_conf" 2>/dev/null &&
+        grep -qxF '    default_mode = { ultrawide = "twocol" },' "$layouts_conf" &&
+        test "$(grep -c '^hyprctl eval tide_layout.reload()$' "$tmp/helpers.log")" -gt "$_reloads" &&
+        test "$(cat "$layouts_local")" = "$_want"; do
+        if waited "the shell didn't write tile's mfact of 0.6 and twocol for ultrawides, keeping the hand-edited two masters, to $layouts_conf and $layouts_local, and apply them" "$i"; then
+            cat "$layouts_conf" "$layouts_local" >&2
             grep -v '^\[' "$log" >&2
             exit 1
         fi
@@ -1035,7 +1069,8 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # about the clocks, the system monitor, the title, the focus guard (its
 # replay of the waiting windows, and its order for Super+Tab), light and
 # dark, the VPNs, hypridle's timings, the mouse, touchpad and keyboard
-# settings, the list of mice and touchpads, or the key bindings.
+# settings, the list of mice and touchpads, the key bindings, or the
+# layout settings.
 # The lock and the greeter only ask for the keyboards, for their layout
 # badges.
 shell_runs='tide-tz
@@ -1051,7 +1086,8 @@ nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show
 systemctl --user try-restart hypridle.service
 hyprctl eval conf_input.reload()
 hyprctl devices -j
-hyprctl binds -j'
+hyprctl binds -j
+hyprctl eval tide_layout.reload()'
 load_runs=$shell_runs
 idle_conf=$tmp/home/.config/hypr/tide-idle.conf
 idle_suspend_conf=$tmp/home/.config/hypr/tide-idle-suspend.conf
@@ -1059,15 +1095,18 @@ idle_local=$tmp/home/.config/tide/idle.local.json
 input_conf=$tmp/home/.config/hypr/tide-input.lua
 input_local=$tmp/home/.config/tide/input.local.json
 clocks_local=$tmp/home/.config/tide/clocks.local.json
+layouts_conf=$tmp/home/.config/hypr/tide-layouts.lua
+layouts_local=$tmp/home/.config/tide/layouts.local.json
 after_load=written_settings
 load shell "the shell" -c tide
 after_load=
 # Gone again, so the next shell starts from the defaults, writes them, and
 # restarts hypridle and reapplies the devices, too.
-rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" || exit 1
+rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" "$layouts_conf" "$layouts_local" || exit 1
 echo "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 echo "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
 echo "ok: the shell changes the clocks as the Clocks page asks, and looks them up"
+echo "ok: the shell writes the layout settings, and new ones, and applies them"
 load_runs='hyprctl devices -j'
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"

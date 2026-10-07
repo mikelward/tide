@@ -7,6 +7,7 @@ import Quickshell.Wayland
 import "lib/audio.mjs" as Audio
 import "lib/idle.mjs" as Idle
 import "lib/input.mjs" as Input
+import "lib/layouts.mjs" as Layouts
 import "lib/settings.mjs" as Settings
 
 // The settings panel (SPEC.md §16), centered on the focused monitor over a
@@ -131,6 +132,13 @@ PanelWindow {
         }
         function removeClock(zone: string): string {
             return ClockData.remove(undefined, zone);
+        }
+        // Sets one of the Layouts page's settings, by its path, as that
+        // page does: `qs -c tide ipc call settings setLayout
+        // modes.tile.mfact 0.6`, or a mode for defaultMode.normal or
+        // defaultMode.ultrawide. Answers why not, or "".
+        function setLayout(path: string, value: string): string {
+            return LayoutsData.set(path, path.startsWith("defaultMode.") ? value : Number(value));
         }
     }
 
@@ -975,6 +983,157 @@ PanelWindow {
                             wrapMode: Text.Wrap
                             textFormat: Text.PlainText
                             text: KeysData.error
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Layouts: how a new workspace starts and each layout's
+                    // master width and count, which − and + step, and the
+                    // modes, which ‹ and › step through (SPEC.md §6).
+                    Column {
+                        id: layouts
+
+                        readonly property var effective: LayoutsData.effective
+                        // Why the last change made here was refused, until
+                        // the next one or another page.
+                        property string refused: ""
+
+                        function set(path, value) {
+                            refused = LayoutsData.set(path, value);
+                            root.report(refused);
+                        }
+
+                        onVisibleChanged: refused = ""
+                        visible: root.current.id === "layouts"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        Repeater {
+                            model: Layouts.layoutRows(layouts.effective)
+
+                            Item {
+                                id: layoutRow
+
+                                required property var modelData
+                                readonly property string kind: modelData.kind
+                                // A number row's value, or a lone window's width.
+                                readonly property real number: kind === "number" ? Layouts.shownLayout(LayoutsData.layouts, modelData.path) : kind === "single" ? layouts.effective.single[modelData.index].width : 0
+                                readonly property int modeAt: kind === "mode" ? Math.max(0, Layouts.MODE_NAMES.findIndex(m => m.mode === Layouts.shownLayout(LayoutsData.layouts, modelData.path))) : 0
+
+                                function step(steps) {
+                                    if (kind === "single") {
+                                        layouts.set("single", Layouts.steppedSingle(layouts.effective.single, modelData.index, steps));
+                                    } else {
+                                        layouts.set(modelData.path, Layouts.steppedLayout(modelData.path, number, steps));
+                                    }
+                                }
+
+                                function stepped(steps) {
+                                    return Layouts.steppedLayout(kind === "single" ? "single.width" : modelData.path, number, steps);
+                                }
+
+                                width: layouts.width
+                                implicitHeight: kind === "heading" ? heading.implicitHeight : 32
+
+                                Heading {
+                                    id: heading
+
+                                    visible: layoutRow.kind === "heading"
+                                    text: layoutRow.kind === "heading" ? layoutRow.modelData.label : ""
+                                }
+
+                                Text {
+                                    visible: layoutRow.kind !== "heading"
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: layoutRow.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                // A number, or a lone window's width.
+                                Row {
+                                    visible: layoutRow.kind === "number" || layoutRow.kind === "single"
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    StepButton {
+                                        name: "list-remove-symbolic"
+                                        value: layoutRow.number
+                                        next: layoutRow.kind === "heading" || layoutRow.kind === "mode" ? layoutRow.number : layoutRow.stepped(-1)
+                                        onActivated: layoutRow.step(-1)
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 92
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: layoutRow.kind === "number" ? Layouts.formatLayout(layoutRow.modelData.path, layoutRow.number) : layoutRow.kind === "single" ? Layouts.formatLayout("single.width", layoutRow.number) : ""
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                        font.features: ({ "tnum": 1 })
+                                    }
+
+                                    StepButton {
+                                        name: "list-add-symbolic"
+                                        value: layoutRow.number
+                                        next: layoutRow.kind === "heading" || layoutRow.kind === "mode" ? layoutRow.number : layoutRow.stepped(1)
+                                        onActivated: layoutRow.step(1)
+                                    }
+                                }
+
+                                // A mode, which ‹ and › step through.
+                                Row {
+                                    visible: layoutRow.kind === "mode"
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    StepButton {
+                                        name: "go-previous-symbolic"
+                                        value: layoutRow.modeAt
+                                        next: Math.max(0, layoutRow.modeAt - 1)
+                                        onActivated: layouts.set(layoutRow.modelData.path, Layouts.MODE_NAMES[next].mode)
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 120
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: Layouts.MODE_NAMES[layoutRow.modeAt].label
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                    }
+
+                                    StepButton {
+                                        name: "go-next-symbolic"
+                                        value: layoutRow.modeAt
+                                        next: Math.min(Layouts.MODE_NAMES.length - 1, layoutRow.modeAt + 1)
+                                        onActivated: layouts.set(layoutRow.modelData.path, Layouts.MODE_NAMES[next].mode)
+                                    }
+                                }
+                            }
+                        }
+
+                        // A setting that isn't one, say.
+                        Text {
+                            visible: layouts.refused !== ""
+                            x: 10
+                            width: layouts.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: layouts.refused
                             color: Theme.danger
                             font.family: Theme.font
                             font.pixelSize: 12

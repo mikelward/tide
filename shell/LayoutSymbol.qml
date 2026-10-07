@@ -20,7 +20,7 @@ Text {
             height: root.monitor.height,
             scale: root.monitor.scale,
             transform: root.monitor.lastIpcObject?.transform ?? 0,
-        }, Theme.barHeight);
+        }, Theme.barHeight, LayoutsData.effective);
     }
     readonly property int tiled: Hyprland.toplevels.values.filter(t => t.workspace === root.workspace && !t.lastIpcObject?.floating).length
 
