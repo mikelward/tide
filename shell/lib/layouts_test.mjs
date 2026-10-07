@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
     SYMBOLS, defaultMode, parseAnnouncement, layoutSymbol, DEFAULT_LAYOUTS, MODE_NAMES,
-    parseLayouts, loadLayouts, effectiveLayouts, shownLayout, steppedLayout, formatLayout,
-    withLayoutSetting, layoutsLua, layoutRows, steppedSingle,
+    NEW_WINDOW_NAMES, parseLayouts, loadLayouts, effectiveLayouts, shownLayout, steppedLayout,
+    formatLayout, withLayoutSetting, layoutsLua, layoutChoices, layoutRows, steppedSingle,
 } from "./layouts.mjs";
 
 test("a workspace starts in threecol on an ultrawide work area, else tile", () => {
@@ -67,6 +67,7 @@ function luaDefaults() {
         for i, r in ipairs(d.single) do
             print("single." .. i .. "=" .. r.min_aspect .. "," .. r.width)
         end
+        print("newWindow=" .. d.new_window)
     `;
     for (const lua of [process.env.LUA, "lua5.5", "lua5.4", "lua"].filter(Boolean)) {
         const r = spawnSync(lua, ["-e", script], { encoding: "utf8" });
@@ -90,6 +91,7 @@ test("the page's defaults are layout.lua's", () => {
         lines.push(`modes.${m}.mfact=${d.modes[m].mfact}`, `modes.${m}.nmaster=${d.modes[m].nmaster}`);
     }
     d.single.forEach((r, i) => lines.push(`single.${i + 1}=${r.minAspect},${r.width}`));
+    lines.push(`newWindow=${d.newWindow}`);
     assert.deepEqual(luaDefaults(), lines);
 });
 
@@ -102,6 +104,19 @@ test("the bar's guess at a new workspace's mode follows the settings", () => {
 
 test("the page offers every mode a workspace can start in", () => {
     assert.deepEqual(MODE_NAMES.map(m => m.mode), Object.keys(SYMBOLS));
+    assert.deepEqual(layoutChoices("defaultMode.normal").map(c => c.value), Object.keys(SYMBOLS));
+});
+
+test("the page offers every place layout.lua puts a new window", () => {
+    assert.deepEqual(NEW_WINDOW_NAMES.map(n => n.rule), ["end", "top", "next", "master"]);
+    assert.deepEqual(layoutChoices("newWindow"), [
+        { value: "end", label: "End of stack" },
+        { value: "top", label: "Top of stack" },
+        { value: "next", label: "After focused" },
+        { value: "master", label: "As master" },
+    ]);
+    assert.equal(shownLayout({}, "newWindow"), "end", "the default");
+    assert.deepEqual(JSON.parse(withLayoutSetting(null, "newWindow", "master").text), { newWindow: "master" });
 });
 
 test("layouts.json reads layout.lua's settings in its own names", () => {
@@ -127,6 +142,8 @@ test("a bad setting names itself", () => {
         [{ single: [{ minAspect: 2.1 }] }, "single entry 1: width must be a number from 0.1 to 1"],
         [{ single: [{ minAspect: 2.1, width: 0.8, widht: 1 }] }, "single entry 1: widht is not a setting"],
         [{ single: { minAspect: 2.1, width: 0.8 } }, "single must be a list of {minAspect, width}"],
+        [{ newWindow: "first" }, "newWindow must be one of end, top, next, master"],
+        [{ newWindow: 1 }, "newWindow must be one of end, top, next, master"],
         [{ cycle: ["tile"] }, 'unknown setting "cycle"'],
         [[], "expected an object of settings"],
     ];
@@ -203,6 +220,7 @@ test("what's set is written as layout.lua's options", () => {
         defaultMode: { ultrawide: "twocol" },
         modes: { tile: { mfact: 0.6, nmaster: 0 }, twocol: { nmaster: 3 } },
         single: [{ minAspect: 2, width: 0.75 }],
+        newWindow: "top",
     });
     assert.equal(lua.split("\n").slice(3).join("\n"), [
         "return {",
@@ -210,6 +228,7 @@ test("what's set is written as layout.lua's options", () => {
         '    default_mode = { ultrawide = "twocol" },',
         "    modes = { tile = { mfact = 0.6, nmaster = 0 }, twocol = { nmaster = 3 } },",
         "    single = { { min_aspect = 2, width = 0.75 } },",
+        '    new_window = "top",',
         "}",
         "",
     ].join("\n"));
@@ -221,6 +240,7 @@ test("layout.lua takes what layoutsLua writes", () => {
         defaultMode: { normal: "monocle", ultrawide: "twocol" },
         modes: { tile: { mfact: 0.6, nmaster: 0 }, threecol: { mfact: 0.45 }, twocol: { nmaster: 3 } },
         single: [{ minAspect: 2, width: 0.75 }],
+        newWindow: "next",
     };
     const script = `
         local chunk = assert(load(io.read("a"), "tide-layouts.lua", "t", {}))
@@ -229,7 +249,7 @@ test("layout.lua takes what layoutsLua writes", () => {
         local M = dofile("hypr/tide/layout.lua")
         M.settings_file = "/nonexistent/tide-layouts.lua"
         M.setup(t)
-        print(t.modes.tile.mfact, t.default_mode.ultrawide, t.single[1].width)
+        print(t.modes.tile.mfact, t.default_mode.ultrawide, t.single[1].width, t.new_window)
     `;
     for (const lua of [process.env.LUA, "lua5.5", "lua5.4", "lua"].filter(Boolean)) {
         const r = spawnSync(lua, ["-e", script], { input: layoutsLua(settings), encoding: "utf8" });
@@ -237,7 +257,7 @@ test("layout.lua takes what layoutsLua writes", () => {
             continue;
         }
         assert.equal(r.status, 0, `${lua}: ${r.stderr}`);
-        assert.equal(r.stdout.trim(), "0.6\ttwocol\t0.75");
+        assert.equal(r.stdout.trim(), "0.6\ttwocol\t0.75\tnext");
         return;
     }
     assert.fail("no lua5.5, lua5.4 or lua on PATH");
@@ -247,7 +267,7 @@ test("the page has a row for each setting, and one per lone-window rule", () => 
     const rows = layoutRows(effectiveLayouts({}));
     const paths = rows.filter(r => r.kind !== "heading").map(r => r.kind === "single" ? `single[${r.index}]` : r.path);
     assert.deepEqual(paths, [
-        "ultrawideAspect", "defaultMode.normal", "defaultMode.ultrawide",
+        "ultrawideAspect", "defaultMode.normal", "defaultMode.ultrawide", "newWindow",
         "modes.tile.mfact", "modes.threecol.mfact", "modes.twocol.mfact",
         "modes.tile.nmaster", "modes.threecol.nmaster", "modes.twocol.nmaster",
         "single[0]", "single[1]",

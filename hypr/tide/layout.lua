@@ -2,9 +2,12 @@
 --
 -- Registers one Lua layout, `lua:tide`, that keeps a mode per
 -- workspace (tile, threecol, twocol, monocle) and applies the single-window
--- rule in every mode. Hyprland's own window order is the truth, so its swap
--- and move dispatchers keep working; the layout records that order so the
--- keybind helpers below can find the master and the neighbors.
+-- rule in every mode. Hyprland adds each new window at the end of its own
+-- order, and a Lua layout can't change that order, so the layout keeps its
+-- own: it makes each swap Hyprland makes, so Hyprland's swap and move
+-- dispatchers keep working, and it puts a window new to the workspace where
+-- `new_window` says. The keybind helpers below use it to find the master
+-- and the neighbors.
 --
 -- Usage, from hyprland.lua:
 --
@@ -55,6 +58,11 @@ M.defaults = {
     },
     -- What Super+. and Super+, cycle through; monocle has its own toggle.
     cycle = { "tile", "threecol", "twocol" },
+    -- Where a window new to a workspace's tiling goes in its order: "end"
+    -- of the stack, "top" of it (just after the masters), "next" after the
+    -- window that was focused, or "master". One moved here from another
+    -- workspace, or tiled again after floating, counts as new.
+    new_window = "end",
     mfact_step = 0.025,
 }
 
@@ -119,6 +127,15 @@ local function active_workspace_id()
     return ok and field(ws, "id") or nil
 end
 
+local function active_address()
+    local ok, w = pcall(hl.get_active_window)
+    return ok and field(w, "address") or nil
+end
+
+local function selector(address)
+    return "address:" .. address
+end
+
 -- The workspace a layout call is for, as named by its windows. Only a
 -- layoutmsg may fall back to the active workspace: it comes from a keybind
 -- on the focused monitor. A relayout can be for any monitor, so a guess
@@ -143,6 +160,8 @@ end
 local function state_for(id, area)
     local st = workspaces[id]
     if not st then
+        -- `order` is the layout's order and `seen` Hyprland's, as of the
+        -- last relayout; nil until the first.
         st = {
             mode = default_mode(area),
             opts = copy(config.modes),
@@ -151,6 +170,77 @@ local function state_for(id, area)
         workspaces[id] = st
     end
     return st
+end
+
+local function set_of(list)
+    local set = {}
+    for _, v in ipairs(list) do
+        set[v] = true
+    end
+    return set
+end
+
+local function only(list, set)
+    local out = {}
+    for _, v in ipairs(list) do
+        if set[v] then
+            out[#out + 1] = v
+        end
+    end
+    return out
+end
+
+-- Where `new_window` puts the first of the windows new to `order`. Asking
+-- for the focused window is a query, not a dispatch, so it's safe here; a
+-- new window isn't focused until after Hyprland lays it out.
+local function insert_at(st, order)
+    local rule = config.new_window
+    if rule == "master" then
+        return 1
+    elseif rule == "top" then
+        -- Monocle has no masters to go after, so its first window counts.
+        local masters = st.opts[st.mode].nmaster or 1
+        return math.min(masters, #order) + 1
+    elseif rule == "next" then
+        local me = active_address()
+        local i = me and index_of(order, me)
+        if i then
+            return i + 1
+        end
+    end
+    return #order + 1
+end
+
+-- The layout's order now that Hyprland's has gone from `st.seen` to `now`:
+-- without the windows that left, with the swap Hyprland made made here too
+-- (its swap and move dispatchers each make one, and each relayouts), and
+-- with each new window where `new_window` says. A change that's more than
+-- one swap takes Hyprland's order for the windows it already had.
+local function follow(st, now)
+    local here, before = set_of(now), set_of(st.seen)
+    local order = only(st.order, here)
+    local was, is = only(st.seen, here), only(now, before)
+    local moved = {}
+    for i = 1, #is do
+        if is[i] ~= was[i] then
+            moved[#moved + 1] = i
+        end
+    end
+    local a, b = moved[1], moved[2]
+    if #moved == 2 and is[a] == was[b] and is[b] == was[a] then
+        local i, j = index_of(order, was[a]), index_of(order, was[b])
+        order[i], order[j] = order[j], order[i]
+    elseif #moved > 0 then
+        order = is
+    end
+    local at
+    for _, address in ipairs(now) do
+        if not before[address] then
+            at = at and at + 1 or insert_at(st, order)
+            table.insert(order, at, address)
+        end
+    end
+    return order
 end
 
 local function recalculate(ctx)
@@ -172,16 +262,33 @@ local function recalculate(ctx)
         return
     end
     local st = state_for(id, ctx.area)
-    st.order = {}
+    -- A window whose address can't be read (it's going away) is left out
+    -- of the order, so it leaves no hole for the helpers to trip on, and
+    -- takes a place after the rest.
+    local addresses, now = {}, {}
+    for i, t in ipairs(ctx.targets) do
+        addresses[i] = field(field(t, "window"), "address")
+        if addresses[i] ~= nil then
+            now[#now + 1] = addresses[i]
+        end
+    end
+    -- The first relayout of a workspace, after a config load too, takes
+    -- Hyprland's order as it is.
+    st.order = st.seen and follow(st, now) or now
+    st.seen = now
+    local place = {}
+    for i, address in ipairs(st.order) do
+        place[address] = i
+    end
+    local spare = #st.order
     local boxes = geometry.arrange(st.mode, ctx.area, n, st.opts[st.mode], config.single)
     for i, t in ipairs(ctx.targets) do
-        t:place(boxes[i])
-        -- Append rather than index, so a window whose address can't be read
-        -- (it's going away) leaves no hole for the helpers to trip on.
-        local address = field(field(t, "window"), "address")
-        if address ~= nil then
-            st.order[#st.order + 1] = address
+        local p = addresses[i] and place[addresses[i]]
+        if not p then
+            spare = spare + 1
+            p = spare
         end
+        t:place(boxes[p])
     end
 end
 
@@ -301,15 +408,6 @@ function M.set_mode(mode)
     msg("mode " .. mode)()
 end
 
-local function active_address()
-    local ok, w = pcall(hl.get_active_window)
-    return ok and field(w, "address") or nil
-end
-
-local function selector(address)
-    return "address:" .. address
-end
-
 -- Super+Return: make the focused window the master. If it already is, swap
 -- it with the first stack window instead, as dwm's zoom does.
 function M.swap_with_master()
@@ -366,6 +464,7 @@ end
 local cycle_modes = { tile = true, threecol = true, twocol = true }
 -- Modes a workspace may start in: any of them.
 local all_modes = { tile = true, threecol = true, twocol = true, monocle = true }
+local new_window_rules = { ["end"] = true, top = true, next = true, master = true }
 
 -- `min_masters` matches removemaster's floor: tile can go to plain rows,
 -- the column modes always keep a master.
@@ -388,6 +487,7 @@ local schema = record({
     }),
     cycle = list({ kind = "mode" }, 1, true),
     mfact_step = number(0.001, 0.5),
+    new_window = { kind = "new_window" },
 })
 
 local function sorted_keys(t)
@@ -416,6 +516,10 @@ local function check(v, sch, path)
     elseif sch.kind == "start" then
         if not all_modes[v] then
             return path .. " must be tile, threecol, twocol or monocle, not " .. tostring(v)
+        end
+    elseif sch.kind == "new_window" then
+        if not new_window_rules[v] then
+            return path .. " must be end, top, next or master, not " .. tostring(v)
         end
     elseif sch.kind == "record" then
         if type(v) ~= "table" then

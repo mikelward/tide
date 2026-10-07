@@ -83,6 +83,23 @@ once you have agreed with it or reversed it.
   `hyprctl eval` answers only "ok", and a file written from the compositor
   is one more writer. It's `effectiveLayouts` in `shell/lib/layouts.mjs`.
 
+- [ ] **The layout keeps its own window order, so it can place a new
+  window.** Hyprland 0.56.2's Lua layouts add a new window at the end of
+  Hyprland's order and can't change it, so `lua:tide` keeps its own and
+  makes each of Hyprland's swaps in it. A change that isn't one swap takes
+  Hyprland's order. The alternative was moving a new window with
+  `hl.dsp.window.move` from a `window.open` handler, which warps the
+  pointer, or with `no_warps` focuses the window's monitor, so a window
+  opening on the other monitor would take its focus. It's `follow` in
+  `hypr/tide/layout.lua`.
+
+- [ ] **A new window can go to four places.** The end of the stack (the
+  default), its top, after the focused window, or in as the master, as
+  river's `default-attach-mode` and dwm's attach patches offer. A window
+  moved from another workspace, or tiled again after floating, counts as
+  new. Dropping one is a line in `NEW_WINDOW_NAMES` in
+  `shell/lib/layouts.mjs` and in layout.lua's `new_window_rules`.
+
 - [ ] **The Appearance page comes after Layouts.** §16's table had it first;
   new pages go after the ones you ordered, so their order and CI's count
   of Down presses to the Network page stay as they are. Moving it is a
@@ -595,14 +612,16 @@ from the keyboard (`shell/shell_test.sh`).
 - Layouts (`shell/lib/layouts.mjs`, `shell/LayoutsData.qml`,
   `hypr/tide/layout.lua`) sets where ultrawide begins, each monitor shape's
   starting mode, each mode's `mfact` and master count, and a lone window's
-  widths, writing `~/.config/hypr/tide-layouts.lua` and running `hyprctl
-  eval 'tide_layout.reload()'`. CI checks the startup write and apply, and
-  two settings over IPC on a hand edit. Still to do:
-  - The rule for new windows: layout.lua always puts one at the end of the
-    stack.
+  widths, and where a new window goes, writing
+  `~/.config/hypr/tide-layouts.lua` and running `hyprctl eval
+  'tide_layout.reload()'`. CI checks the startup write and apply, and
+  three settings over IPC on a hand edit. Still to do:
   - On a live session, check a change re-lays the active workspace at
     once, and that `tide_layout.reload()` answers `hyprctl eval` with a
     bad file's error.
+  - On a live session, check each place a new window goes, and that
+    Super+Return and Super+Shift+J and K still move the window they
+    should once a new window has gone somewhere other than the end.
 - Appearance (`shell/lib/appearance.mjs`, `shell/AppearanceData.qml`)
   sets the mode, the light and dark times and the location, writing
   `appearance.local.json`, and switches light or dark until the next
