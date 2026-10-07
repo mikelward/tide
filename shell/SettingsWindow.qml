@@ -95,6 +95,11 @@ PanelWindow {
         function setIdle(key: string, seconds: int): string {
             return IdleData.set(key, seconds);
         }
+        // Turns the Idle page's Suspend on AC on or off, as a click does:
+        // `qs -c tide ipc call settings setSuspendOnAC true`.
+        function setSuspendOnAC(on: bool): string {
+            return IdleData.set("suspendOnAC", on);
+        }
         // Sets one of the Mouse, Touchpad or Keyboard pages' settings: `qs
         // -c tide ipc call settings setInput mouse leftHanded false`.
         // Answers why not, or "".
@@ -353,6 +358,56 @@ PanelWindow {
                                         value: step.seconds
                                         next: Idle.stepped(step.seconds, 1)
                                         onActivated: root.report(IdleData.set(step.modelData.key, next))
+                                    }
+                                }
+                            }
+                        }
+
+                        // Suspend on AC, which a click turns on or off.
+                        Repeater {
+                            model: Idle.SWITCHES
+
+                            Item {
+                                id: idleSwitch
+
+                                required property var modelData
+                                readonly property bool on: IdleData.idle[modelData.key] === true
+
+                                width: idle.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: idleSwitch.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                // On or off, in the accent color while on,
+                                // as the Mouse page's switches.
+                                Rectangle {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 56
+                                    height: 26
+                                    radius: 13
+                                    color: idleSwitch.on ? Theme.accentBg : Theme.surface2
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: idleSwitch.on ? "On" : "Off"
+                                        color: idleSwitch.on ? Theme.accentFg : Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 12
+                                        font.weight: Font.DemiBold
+                                    }
+
+                                    TapHandler {
+                                        onTapped: root.report(IdleData.set(idleSwitch.modelData.key, !idleSwitch.on))
                                     }
                                 }
                             }

@@ -9,7 +9,7 @@ export const PAGES = Object.freeze([
         id: "idle",
         label: "Idle",
         icon: "weather-clear-night-symbolic",
-        about: "Each step counts from your last input. On AC power the machine never suspends; the displays just stay off.",
+        about: "Each step counts from your last input. On AC power the machine suspends only with Suspend on AC on; otherwise the displays just stay off.",
         advanced: null,
     },
     {

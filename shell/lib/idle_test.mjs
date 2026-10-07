@@ -1,11 +1,12 @@
 // Tests for idle.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_IDLE, LADDER, STEPS, formatDuration, hypridleConf, loadIdle, parseIdle, stepped, withSetting } from "./idle.mjs";
+import { DEFAULT_IDLE, LADDER, STEPS, SWITCHES, formatDuration, hypridleConf, loadIdle, parseIdle, stepped, suspendConf, withSetting } from "./idle.mjs";
 
 test("the defaults are SPEC.md §10's timeline", () => {
-    assert.deepEqual(DEFAULT_IDLE, { dim: 150, lock: 300, displaysOff: 330, suspend: 1800 });
+    assert.deepEqual(DEFAULT_IDLE, { dim: 150, lock: 300, displaysOff: 330, suspend: 1800, suspendOnAC: false });
     assert.deepEqual(STEPS.map(s => s.key), ["dim", "lock", "displaysOff", "suspend"]);
+    assert.deepEqual(SWITCHES.map(s => s.key), ["suspendOnAC"]);
 });
 
 test("a file sets any of the steps, in whole seconds", () => {
@@ -26,7 +27,7 @@ test("a bad setting is an error naming it", () => {
 
 test("the local file merges key by key over the shared one and the defaults", () => {
     const result = loadIdle('{"lock": 600, "suspend": 3600}', '{"suspend": 900}');
-    assert.deepEqual(result, { idle: { dim: 150, lock: 600, displaysOff: 330, suspend: 900 }, errors: [] });
+    assert.deepEqual(result, { idle: { dim: 150, lock: 600, displaysOff: 330, suspend: 900, suspendOnAC: false }, errors: [] });
     assert.deepEqual(loadIdle(null, null), { idle: DEFAULT_IDLE, errors: [] });
 });
 
@@ -36,12 +37,12 @@ test("a file that fails keeps the last good timings, and every bad file is named
     assert.equal(result.idle, lastGood);
     assert.deepEqual(result.errors, [
         "idle.json: dim must be a whole number of seconds above 0",
-        'idle.local.json: unknown setting "oops"; expected dim, lock, displaysOff, suspend',
+        'idle.local.json: unknown setting "oops"; expected dim, lock, displaysOff, suspend, suspendOnAC',
     ]);
 });
 
 test("hypridle gets each step as the variable conf's hypridle.conf uses", () => {
-    const text = hypridleConf({ dim: 150, lock: 300, displaysOff: 330, suspend: 1800 });
+    const text = hypridleConf(DEFAULT_IDLE);
     assert.ok(text.startsWith("# Written by tide"));
     assert.ok(text.endsWith("\n"));
     const variables = text.split("\n").filter(l => l.startsWith("$"));
@@ -51,6 +52,23 @@ test("hypridle gets each step as the variable conf's hypridle.conf uses", () => 
         "$tide_idle_displays_off = 330",
         "$tide_idle_suspend = 1800",
     ]);
+});
+
+test("suspend on AC goes to idle-suspend's own file, so changing it doesn't restart hypridle", () => {
+    const on = Object.assign({}, DEFAULT_IDLE, { suspendOnAC: true });
+    assert.equal(hypridleConf(on), hypridleConf(DEFAULT_IDLE), "hypridle's file, which a change restarts it for, stays the same");
+    assert.deepEqual(suspendConf(DEFAULT_IDLE).split("\n").filter(l => l.startsWith("$")), ["$tide_idle_suspend_on_ac = 0"]);
+    assert.deepEqual(suspendConf(on).split("\n").filter(l => l.startsWith("$")), ["$tide_idle_suspend_on_ac = 1"]);
+    assert.ok(suspendConf(on).startsWith("# Written by tide"));
+});
+
+test("suspend on AC is a switch, true or false", () => {
+    assert.deepEqual(parseIdle('{"suspendOnAC": true, "lock": 600}'), { settings: { suspendOnAC: true, lock: 600 } });
+    assert.match(parseIdle('{"suspendOnAC": 1}').error, /^suspendOnAC must be true or false/);
+    assert.match(parseIdle('{"suspendOnAC": "yes"}').error, /^suspendOnAC must be true or false/);
+    assert.deepEqual(loadIdle(null, '{"suspendOnAC": true}').idle.suspendOnAC, true);
+    assert.deepEqual(withSetting('{"suspend": 900}', "suspendOnAC", true), { text: '{\n  "suspend": 900,\n  "suspendOnAC": true\n}\n' });
+    assert.match(withSetting(null, "suspendOnAC", 0).error, /^suspendOnAC must be true or false/);
 });
 
 test("setting a step keeps the rest of the local file", () => {

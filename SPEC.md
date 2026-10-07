@@ -1069,7 +1069,7 @@ today's `hypridle.conf`:
 | 2 min 30 s | dim: backlight to 10% (saving the level first), and a 40% black overlay on outputs with no backlight; any input undoes both |
 | 5 min | lock (`tide idle-lock`, which runs `loginctl lock-session`); the lock opens in its **screensaver face** |
 | 5 min 30 s | displays off (DPMS); back on at any input |
-| 30 min | suspend, on battery only. On AC it never suspends; the displays just stay off. Decided in review of this spec. |
+| 30 min | suspend, on battery only. On AC it doesn't suspend, by default; the displays just stay off. Decided in review of this spec. |
 
 - **The times are settings.** They're `dim`, `lock`, `displaysOff` and
   `suspend`, in seconds, in `idle.json` and `idle.local.json` (§16.1), and
@@ -1088,6 +1088,15 @@ today's `hypridle.conf`:
     time. One it can't write to hypridle's file or restart hypridle for is
     reported once, and tried again every 30 seconds, for as long as the
     shell runs, until it's in.
+- **Suspend on AC** is a setting too, off by default: `suspendOnAC`, true
+  or false, in the same files, and a switch on the Idle page.
+  - The shell writes it to `~/.config/hypr/tide-idle-suspend.conf` as
+    `$tide_idle_suspend_on_ac`, 1 or 0, and `tide idle-suspend` reads that
+    line. With it on, it suspends without asking UPower.
+  - It's not in `tide-idle.conf`, since hypridle doesn't use it. A change
+    there would restart hypridle for nothing, and drop the apps' D-Bus
+    inhibits with it.
+  - A file it can't read is reported, and it suspends on battery only.
 - **Unplugging while idle.** If you unplug after the 30 minutes have
   passed, the machine suspends then. The 30-minute step runs
   `tide idle-suspend`, which suspends on battery and otherwise leaves
@@ -2589,8 +2598,9 @@ Decided in review of this spec:
 - **Light and dark** switch automatically, light 07:00–19:00 by default
   (§15).
 - **Fonts:** Inter for UI and Ubuntu Mono for code (§15).
-- **Suspend on AC:** never. After idle the displays just turn off; on
-  battery it suspends after 30 minutes (§10).
+- **Suspend on AC:** off by default. After idle the displays just turn
+  off; on battery it suspends after 30 minutes (§10). The Idle page's
+  Suspend on AC turns it on.
 - **File manager:** Nautilus, with yazi kept for keyboard use (§16.2).
 - **The old stack:** once M5 lands, the sway config and the
   waybar/swaync/fuzzel/hyprlock configs are deleted from `conf`. KDE Plasma

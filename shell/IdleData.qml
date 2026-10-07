@@ -31,25 +31,27 @@ Singleton {
     property var fileErrors: []
     // Why the panel's last change couldn't be saved, or "".
     property string saveFailure: ""
+    // Why tide idle-suspend's file couldn't be written, or "".
+    property string suspendFailure: ""
     // hypridle's timings file, written and applied (shell/lib/writes.mjs).
     property var target: Writes.TARGET
 
     readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`
     readonly property string dir: `${root.configHome}/tide`
 
-    // Sets one step, in idle.local.json: the settings panel writes only
-    // the .local files (§16.1). Returns why it didn't, or "": an unknown
-    // step, a bad time, a local file that doesn't parse, which is left as
-    // it is so a hand edit gone wrong isn't lost, or one that can't be
-    // saved.
-    function set(key, seconds) {
+    // Sets one step's seconds, or a switch's true or false, in
+    // idle.local.json: the settings panel writes only the .local files
+    // (§16.1). Returns why it didn't, or "": an unknown setting, a bad
+    // value, a local file that doesn't parse, which is left as it is so a
+    // hand edit gone wrong isn't lost, or one that can't be saved.
+    function set(key, value) {
         // The file as it is now, not as it last loaded, so a hand edit made
         // a moment ago is built on, not written over.
         const text = root.readNow(local);
         if (local.broken !== "") {
             return `${local.broken}; not changing ${key}`;
         }
-        const result = Idle.withSetting(text, key, seconds);
+        const result = Idle.withSetting(text, key, value);
         if (result.error) {
             return `${result.error}; not changing ${key}`;
         }
@@ -107,7 +109,7 @@ Singleton {
     // saved, and one that hasn't reached hypridle. Each is a notification
     // once; one that hasn't reached hypridle is tried again until it does.
     function report() {
-        const failures = [root.target.failure].filter(f => f !== "");
+        const failures = [root.target.failure, root.suspendFailure].filter(f => f !== "");
         const errors = root.fileErrors.concat(root.saveFailure !== "" ? [root.saveFailure] : [], failures);
         const v = Report.verdict(root.reports, errors);
         root.reports = v.state;
@@ -148,6 +150,7 @@ Singleton {
             return;
         }
         root.idle = result.idle;
+        root.writeSuspend();
         const writtenText = root.readNow(written);
         if (written.broken !== "") {
             // Unreadable, it isn't written over either; it's read again on
@@ -157,6 +160,19 @@ Singleton {
         }
         root.target = Writes.readTarget(root.target, writtenText).state;
         root.stepped(Writes.wantTarget(root.target, Idle.hypridleConf(root.idle)));
+    }
+
+    // Writes tide idle-suspend's file when it would say something else,
+    // with no restart: hypridle doesn't read it. One that can't be written
+    // is reported, and tried again with the rest.
+    function writeSuspend() {
+        const text = Idle.suspendConf(root.idle);
+        if (root.readNow(suspended) === text) {
+            root.suspendFailure = "";
+            return;
+        }
+        const error = root.writeNow(suspended, text);
+        root.suspendFailure = error === "" ? "" : `${error}; idle-suspend keeps its last Suspend on AC`;
     }
 
     component SettingsFile: FileView {
@@ -203,6 +219,14 @@ Singleton {
         id: written
 
         path: `${root.configHome}/hypr/tide-idle.conf`
+    }
+
+    // What tide idle-suspend reads, apart from hypridle's file
+    // (Idle.suspendConf).
+    SettingsFile {
+        id: suspended
+
+        path: `${root.configHome}/hypr/tide-idle-suspend.conf`
     }
 
     // A change that couldn't be written or applied, tried again: load reads

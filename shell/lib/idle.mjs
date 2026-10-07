@@ -14,15 +14,26 @@ export const STEPS = Object.freeze([
     Object.freeze({ key: "suspend", label: "Suspend, on battery", variable: "tide_idle_suspend" }),
 ]);
 
-// §10's timeline, as conf's hypridle.conf also falls back to.
-export const DEFAULT_IDLE = Object.freeze({ dim: 150, lock: 300, displaysOff: 330, suspend: 1800 });
+// The switches, after the steps: each one's setting, what the Idle page
+// calls it, and the variable it's written to, as 1 or 0. hypridle doesn't
+// read them; tide idle-suspend does, from its own file (suspendConf).
+export const SWITCHES = Object.freeze([
+    Object.freeze({ key: "suspendOnAC", label: "Suspend on AC too", variable: "tide_idle_suspend_on_ac" }),
+]);
+
+// The settings' names, in the page's order.
+const KEYS = Object.freeze(STEPS.concat(SWITCHES).map(s => s.key));
+
+// §10's timeline, as conf's hypridle.conf also falls back to, and no
+// suspend on AC: there, the displays just stay off.
+export const DEFAULT_IDLE = Object.freeze({ dim: 150, lock: 300, displaysOff: 330, suspend: 1800, suspendOnAC: false });
 
 // What the Idle page's − and + step through, in seconds.
 export const LADDER = Object.freeze([30, 60, 120, 150, 180, 300, 330, 600, 900, 1200, 1800, 2700, 3600, 5400, 7200]);
 
 // Parses one idle.json: an object of any of the steps' settings, each a
-// whole number of seconds above 0. Returns {settings} or {error}, never
-// throws; the error names the setting.
+// whole number of seconds above 0, and the switches, each true or false.
+// Returns {settings} or {error}, never throws; the error names the setting.
 export function parseIdle(text) {
     let value;
     try {
@@ -31,12 +42,19 @@ export function parseIdle(text) {
         return { error: jsonError(text) };
     }
     if (value === null || typeof value !== "object" || Array.isArray(value)) {
-        return { error: `expected an object of ${STEPS.map(s => s.key).join(", ")}` };
+        return { error: `expected an object of ${KEYS.join(", ")}` };
     }
     const settings = {};
     for (const key of Object.keys(value)) {
-        if (!STEPS.some(s => s.key === key)) {
-            return { error: `unknown setting "${key}"; expected ${STEPS.map(s => s.key).join(", ")}` };
+        if (!KEYS.includes(key)) {
+            return { error: `unknown setting "${key}"; expected ${KEYS.join(", ")}` };
+        }
+        if (SWITCHES.some(s => s.key === key)) {
+            if (typeof value[key] !== "boolean") {
+                return { error: `${key} must be true or false` };
+            }
+            settings[key] = value[key];
+            continue;
         }
         const seconds = value[key];
         if (typeof seconds !== "number" || !Number.isInteger(seconds) || seconds <= 0) {
@@ -85,12 +103,29 @@ export function hypridleConf(idle) {
     return lines.join("\n") + "\n";
 }
 
-// idle.local.json's text with `key` set to `seconds`, keeping whatever else
-// it says. `localText` is null when the file doesn't exist. An unknown key
-// or a bad time is an {error} naming it, and so is a file that doesn't
-// parse, so a hand edit gone wrong is never overwritten.
-export function withSetting(localText, key, seconds) {
-    const bad = parseIdle(JSON.stringify({ [key]: seconds }));
+// The file tide idle-suspend reads, setting each switch's variable. It's
+// apart from hypridle's because hypridle reads that only as it starts, so
+// a switch there would restart hypridle for nothing, and a restart drops
+// the idle inhibits apps hold over D-Bus (SPEC.md §10).
+export function suspendConf(idle) {
+    const lines = [
+        "# Written by tide from idle.json and idle.local.json (tide SPEC.md §10,",
+        "# §16), for tide idle-suspend. Change those, or the Idle page of tide's",
+        "# settings, not this file.",
+    ];
+    for (const s of SWITCHES) {
+        lines.push(`$${s.variable} = ${idle[s.key] ? 1 : 0}`);
+    }
+    return lines.join("\n") + "\n";
+}
+
+// idle.local.json's text with `key` set to `value` (a step's seconds or a
+// switch's true or false), keeping whatever else it says. `localText` is
+// null when the file doesn't exist. An unknown key or a bad value is an
+// {error} naming it, and so is a file that doesn't parse, so a hand edit
+// gone wrong is never overwritten.
+export function withSetting(localText, key, value) {
+    const bad = parseIdle(JSON.stringify({ [key]: value }));
     if (bad.error) {
         return { error: bad.error };
     }
@@ -103,11 +138,11 @@ export function withSetting(localText, key, seconds) {
         settings = parsed.settings;
     }
     const next = {};
-    for (const step of STEPS) {
-        if (step.key === key) {
-            next[key] = seconds;
-        } else if (settings[step.key] !== undefined) {
-            next[step.key] = settings[step.key];
+    for (const k of KEYS) {
+        if (k === key) {
+            next[key] = value;
+        } else if (settings[k] !== undefined) {
+            next[k] = settings[k];
         }
     }
     return { text: JSON.stringify(next, null, 2) + "\n" };

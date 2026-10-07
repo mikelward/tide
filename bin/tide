@@ -86,9 +86,11 @@
 #     Suspends for idleness: hypridle's 30-minute step runs it in place of
 #     `systemctl suspend` (SPEC.md §10). It suspends only on battery, as
 #     UPower reports it; on AC it does nothing, and the displays just stay
-#     off. If it can't tell, it says so and exits 1 without suspending.
-#     A failed suspend exits with its status: polkit refuses one from a
-#     session in the background ("Access denied").
+#     off, unless the Idle page's Suspend on AC is on, as the shell writes
+#     it to ~/.config/hypr/tide-idle-suspend.conf. If it can't tell, it
+#     says so and exits 1 without suspending. A failed suspend exits with
+#     its status: polkit refuses one from a session in the background
+#     ("Access denied").
 #
 #   tide prompt-focus
 #
@@ -515,19 +517,41 @@ idle_lock() {
 
 idle_suspend() {
     test $# -eq 0 || usage
-    if ! power=$(busctl get-property org.freedesktop.UPower /org/freedesktop/UPower \
-        org.freedesktop.UPower OnBattery 2>&1); then
-        echo "$prog idle-suspend: couldn't ask UPower whether this is on battery, so not suspending: $power" >&2
-        return 1
-    fi
-    case "$power" in
-        "b true") ;;
-        "b false") return 0 ;;
+    # Suspend on AC, as the shell wrote it beside hypridle's timings, in a
+    # file of its own so changing it doesn't restart hypridle; off with no
+    # file yet, as it is by default.
+    idle_conf=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/tide-idle-suspend.conf
+    on_ac=no
+    # In the C locale, so grep's error is strerror's own words.
+    err=$(LC_ALL=C grep -qxF "\$tide_idle_suspend_on_ac = 1" "$idle_conf" 2>&1)
+    case $? in
+        0) on_ac=yes ;;
+        1) ;;
         *)
-            echo "$prog idle-suspend: UPower answered '$power' for OnBattery, so not suspending" >&2
-            return 1
+            # No file yet is the default. Anything else that stops grep,
+            # anywhere along the path, is reported: a file that can't be
+            # read, a directory that can't be searched, one that's a file.
+            case "$err" in
+                *"No such file or directory"*) ;;
+                *) echo "$prog idle-suspend: couldn't read $idle_conf, so suspending on battery only: $err" >&2 ;;
+            esac
             ;;
     esac
+    if test "$on_ac" = no; then
+        if ! power=$(busctl get-property org.freedesktop.UPower /org/freedesktop/UPower \
+            org.freedesktop.UPower OnBattery 2>&1); then
+            echo "$prog idle-suspend: couldn't ask UPower whether this is on battery, so not suspending: $power" >&2
+            return 1
+        fi
+        case "$power" in
+            "b true") ;;
+            "b false") return 0 ;;
+            *)
+                echo "$prog idle-suspend: UPower answered '$power' for OnBattery, so not suspending" >&2
+                return 1
+                ;;
+        esac
+    fi
     if systemctl suspend; then
         return 0
     else
