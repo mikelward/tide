@@ -24,7 +24,7 @@ export const DEFAULTS = Object.freeze({ mode: "schedule", light: "07:00", dark: 
 const MODES = ["schedule", "sun", "light", "dark"];
 // The settings that decide light or dark, and every one there is.
 const THEME_KEYS = ["mode", "light", "dark", "latitude", "longitude"];
-const KEYS = THEME_KEYS.concat(["dimStrength"]);
+const KEYS = THEME_KEYS.concat(["dimStrength", "lightWallpaper", "darkWallpaper"]);
 const DAY = 24 * 60 * 60 * 1000;
 
 // "HH:MM" as {h, min}, or null when it isn't a 24-hour time.
@@ -74,6 +74,12 @@ export function parseAppearance(text) {
             // Hyprland's decoration:dim_strength, as conf takes it.
             if (typeof v !== "number" || !(v >= 0 && v <= 1)) {
                 return { error: "dimStrength must be a number from 0 to 1" };
+            }
+            break;
+        case "lightWallpaper":
+        case "darkWallpaper":
+            if (wallpaperError(key, v)) {
+                return { error: wallpaperError(key, v) };
             }
             break;
         default:
@@ -505,4 +511,54 @@ export function appearanceLua(settings) {
     }
     lines.push("}");
     return lines.join("\n") + "\n";
+}
+
+// What's wrong with a wallpaper setting, or "": a file's path, absolute or
+// from ~/, on one line, or "" for the default.
+function wallpaperError(key, v) {
+    if (typeof v !== "string" || /[\n\r]/.test(v) || (v !== "" && !v.startsWith("/") && !v.startsWith("~/"))) {
+        return `${key} must be a file's path, such as "~/Pictures/day.jpg", or "" for the default`;
+    }
+    return "";
+}
+
+// `path` with a leading ~/ as `home`.
+export function expandHome(path, home) {
+    return path.startsWith("~/") ? `${home}/${path.slice(2)}` : path;
+}
+
+// The wallpapers to try, in order, for light or `dark` (SPEC.md §15): the
+// one set for it, then $TIDE_WALLPAPER (`env`, "" when it's unset), then
+// conf's per-mode image and its one for both, as theme.sh and tide-shell
+// have them. The shell shows the first that can be read.
+export function wallpaperCandidates(settings, dark, home, env = "") {
+    const mode = dark ? "dark" : "light";
+    const set = settings[`${mode}Wallpaper`] ?? "";
+    const out = [];
+    for (const path of [set, env, `~/.config/hypr/wallpaper-${mode}.jpg`, "~/.config/hypr/wallpaper.jpg"]) {
+        const full = path === "" ? "" : expandHome(path, home);
+        if (full !== "" && !out.includes(full)) {
+            out.push(full);
+        }
+    }
+    return out;
+}
+
+// The command that prints the first of `paths` that's a regular file it
+// can read, or exits 1 with none: so a directory, which `test -r` alone
+// passes, isn't taken for a picture.
+export function findCommand(paths) {
+    return ["sh", "-c", 'for f; do if test -f "$f" && test -r "$f"; then printf %s "$f"; exit 0; fi; done; exit 1', "sh"].concat(paths);
+}
+
+// `candidates` less those the shell found it couldn't draw, a corrupt
+// image say, so the next is tried.
+export function drawableCandidates(candidates, undrawable) {
+    return candidates.filter(c => !undrawable.includes(c));
+}
+
+// A file's path as a file: URL, each part escaped, so a name with a space,
+// a # or a ? still names the file.
+export function fileUrl(path) {
+    return "file://" + path.split("/").map(encodeURIComponent).join("/");
 }

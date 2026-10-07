@@ -352,11 +352,11 @@ unit, either: an agent exits at once when another already holds the
 session, and failing the unit for that restarted the bar in a loop at
 login. The shell starts the agent alone again instead, after 5 s, doubling
 to once a minute, so it takes over when the other agent goes and comes
-back after a crash; `doctor` names the other agent. It also runs the
-wallpaper (swww, or swaybg where swww isn't packaged; supervised but not
-waited for) and, once, `conf`'s
-`apply-input.sh`, which Hyprland's autostart ran before it shrank to
-`uwsm finalize`.
+back after a crash; `doctor` names the other agent. With waybar's bar it
+also runs the wallpaper (swww, or swaybg where swww isn't packaged;
+supervised but not waited for); the Quickshell shell draws its own (§15).
+It runs `conf`'s `apply-input.sh` once, which Hyprland's autostart ran
+before it shrank to `uwsm finalize`.
 
 With `TIDE_POLKIT=1` the shell is the polkit agent
 (`Quickshell.Services.Polkit`), opt-in until it has run in a live session,
@@ -1909,9 +1909,9 @@ to be focused.
     and switches run one at a time, a change during one running after it,
     so the last run always sees the latest. So nothing can hold up later
     switches, a `gsettings` still running after 10 s, or a hook after 30 s,
-    is stopped, and the log says so. conf's hook restyles swaync
-    and the wallpaper, which the shell doesn't draw yet; nothing needs to
-    watch for the change.
+    is stopped, and the log says so. conf's hook restyles swaync, and the
+    wallpaper where the shell doesn't draw it (waybar's bar); nothing needs
+    to watch for the change.
 
   GTK apps, kitty and the shell follow the switch live. Qt apps are the
   exception:
@@ -1941,6 +1941,21 @@ to be focused.
 
 - **Wallpaper.** Optional light and dark images, drawn by the shell on the
   background layer, and blurred for the lock and greeter.
+  - The shell shows the first of these it can read, for the mode it is:
+    - the mode's own, `lightWallpaper` or `darkWallpaper` in
+      `appearance.json`;
+    - `$TIDE_WALLPAPER`, as `tide-shell` takes it;
+    - `conf`'s `~/.config/hypr/wallpaper-light.jpg` or `-dark.jpg`, as
+      `theme.sh` names them;
+    - `conf`'s `~/.config/hypr/wallpaper.jpg`.
+  - It fills each monitor, cropping what doesn't fit, as swaybg's `fill`
+    does. A directory isn't one it can read, and one it can't decode is
+    logged and passed over for the next. With none, it draws no wallpaper,
+    and logs which it tried.
+  - It's looked for again as the mode or the settings change, so a switch
+    to dark shows the dark one at once.
+  - So `tide-shell` runs no wallpaper daemon beside the Quickshell shell.
+  - The lock and the greeter don't show it yet.
 - **Fonts and icons:**
   - **Inter** for UI and **Ubuntu Mono** (roughly 11 pt) for code. That is
     one setting in `appearance.json`, handed to GTK (`font-name`,
@@ -2121,7 +2136,9 @@ stays hand-written.
     `conf`'s own stands. One `hyprland.local.lua` sets still wins.
   - The shell applies it as it starts, too, even unchanged, as it does the
     input settings: setting the same strength again changes nothing.
-  - Wallpaper isn't a setting yet: the shell draws no wallpaper.
+  - The light and dark wallpapers (§15) are a file's path each, typed
+    and set with Enter as the location is: absolute, or from `~/`. Empty
+    is the default, `conf`'s images.
 
 - **Displays** sets each monitor's scale and where it goes beside the
   others, in `outputs.json` and `outputs.local.json`.

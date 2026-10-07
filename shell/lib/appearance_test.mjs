@@ -9,9 +9,10 @@ import {
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
+    expandHome, wallpaperCandidates, fileUrl, findCommand, drawableCandidates,
 } from "./appearance.mjs";
-import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -505,4 +506,71 @@ test("only a dim that's set reaches Hyprland", () => {
         return;
     }
     assert.fail("no lua5.5, lua5.4 or lua on PATH");
+});
+
+test("a wallpaper is a file's path, absolute or from ~/, or empty for the default", () => {
+    assert.deepEqual(parseAppearance('{"lightWallpaper": "~/Pictures/day.jpg", "darkWallpaper": "/srv/night.png"}').settings,
+        { lightWallpaper: "~/Pictures/day.jpg", darkWallpaper: "/srv/night.png" });
+    assert.deepEqual(parseAppearance('{"darkWallpaper": ""}').settings, { darkWallpaper: "" });
+    for (const bad of ["day.jpg", "~user/day.jpg", "/a\nb.jpg", 5, null]) {
+        assert.match(parseAppearance(JSON.stringify({ lightWallpaper: bad })).error, /^lightWallpaper must be a file's path/, JSON.stringify(bad));
+    }
+    assert.deepEqual(JSON.parse(withSetting('{"dark": "20:00"}', "darkWallpaper", "~/night.jpg").text), { dark: "20:00", darkWallpaper: "~/night.jpg" });
+});
+
+test("the wallpaper is the mode's own, then $TIDE_WALLPAPER, then conf's", () => {
+    const home = "/home/user";
+    assert.deepEqual(wallpaperCandidates({ lightWallpaper: "~/day.jpg", darkWallpaper: "/srv/night.png" }, true, home), [
+        "/srv/night.png",
+        "/home/user/.config/hypr/wallpaper-dark.jpg",
+        "/home/user/.config/hypr/wallpaper.jpg",
+    ]);
+    assert.deepEqual(wallpaperCandidates({ lightWallpaper: "~/day.jpg" }, false, home, "/srv/both.jpg"), [
+        "/home/user/day.jpg",
+        "/srv/both.jpg",
+        "/home/user/.config/hypr/wallpaper-light.jpg",
+        "/home/user/.config/hypr/wallpaper.jpg",
+    ]);
+    assert.deepEqual(wallpaperCandidates({ darkWallpaper: "" }, true, home), [
+        "/home/user/.config/hypr/wallpaper-dark.jpg",
+        "/home/user/.config/hypr/wallpaper.jpg",
+    ], "empty is the default");
+    assert.deepEqual(wallpaperCandidates({ lightWallpaper: "~/.config/hypr/wallpaper.jpg" }, false, home), [
+        "/home/user/.config/hypr/wallpaper.jpg",
+        "/home/user/.config/hypr/wallpaper-light.jpg",
+    ], "each once");
+    assert.equal(expandHome("~/a", home), "/home/user/a");
+    assert.equal(expandHome("/a/~/b", home), "/a/~/b");
+});
+
+test("a wallpaper's path is escaped in its URL", () => {
+    assert.equal(fileUrl("/home/user/My Pictures/#1?.jpg"), "file:///home/user/My%20Pictures/%231%3F.jpg");
+});
+
+test("a flip outlives a change to a wallpaper", () => {
+    const noon = at(2026, 10, 5, 12);
+    const o = flip(DEFAULTS, noon, null);
+    const pictured = Object.assign({}, DEFAULTS, { darkWallpaper: "~/night.jpg" });
+    assert.equal(themeAt(pictured, noon + MIN, o).override, o);
+});
+
+test("the wallpaper is the first candidate that's a file it can read, not a directory", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tide-wallpaper-"));
+    try {
+        mkdirSync(join(dir, "folder.jpg"));
+        writeFileSync(join(dir, "day.jpg"), "");
+        const run = paths => {
+            const [cmd, ...args] = findCommand(paths);
+            return execFileSync(cmd, args, { encoding: "utf8" });
+        };
+        assert.equal(run([join(dir, "missing.jpg"), join(dir, "folder.jpg"), join(dir, "day.jpg")]), join(dir, "day.jpg"));
+        assert.throws(() => run([join(dir, "folder.jpg")]), e => e.status === 1, "a directory alone is none");
+    } finally {
+        rmSync(dir, { recursive: true });
+    }
+});
+
+test("a wallpaper the shell couldn't draw is passed over for the next", () => {
+    assert.deepEqual(drawableCandidates(["/a.jpg", "/b.jpg", "/c.jpg"], ["/a.jpg"]), ["/b.jpg", "/c.jpg"]);
+    assert.deepEqual(drawableCandidates(["/a.jpg"], []), ["/a.jpg"]);
 });

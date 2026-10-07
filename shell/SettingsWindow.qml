@@ -153,8 +153,9 @@ PanelWindow {
         }
         // Sets one of the Appearance page's settings, as it does: `qs -c
         // tide ipc call settings setAppearance mode dark`, a time
-        // ("07:15"), a latitude or longitude, or a dimStrength (0.1).
-        // Answers why not, or "".
+        // ("07:15"), a latitude or longitude, a dimStrength (0.1), or a
+        // lightWallpaper or darkWallpaper ("" for the default). Answers why
+        // not, or "".
         function setAppearance(key: string, value: string): string {
             if (key === "latitude" || key === "longitude") {
                 const c = Appearance.parseCoordinate(key, value);
@@ -1530,6 +1531,80 @@ PanelWindow {
                                     value: AppearanceData.dimStrength
                                     next: Appearance.steppedDim(AppearanceData.dimStrength, 1)
                                     onActivated: appearance.set("dimStrength", next)
+                                }
+                            }
+                        }
+
+                        // The wallpapers, light and dark (§15): a file's
+                        // path, typed and set with Enter as the location is.
+                        // Empty is the default, conf's images.
+                        Repeater {
+                            model: [{ key: "lightWallpaper", label: "Light wallpaper" }, { key: "darkWallpaper", label: "Dark wallpaper" }]
+
+                            Item {
+                                id: wallpaper
+
+                                required property var modelData
+
+                                function shown() {
+                                    return appearance.settings[modelData.key] ?? "";
+                                }
+
+                                width: appearance.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: wallpaper.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Rectangle {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 220
+                                    height: 26
+                                    radius: 6
+                                    color: Theme.surface2
+                                    border.width: file.activeFocus ? 1 : 0
+                                    border.color: Theme.accent
+
+                                    TextInput {
+                                        id: file
+
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 8
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        clip: true
+                                        text: wallpaper.shown()
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                        onAccepted: {
+                                            appearance.set(wallpaper.modelData.key, text.trim());
+                                            keys.forceActiveFocus();
+                                        }
+                                        Keys.onEscapePressed: keys.forceActiveFocus()
+                                        onActiveFocusChanged: {
+                                            if (!activeFocus) {
+                                                text = Qt.binding(() => wallpaper.shown());
+                                            }
+                                        }
+
+                                        Text {
+                                            visible: file.text === "" && !file.activeFocus
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "default"
+                                            color: Theme.fgFaint
+                                            font: file.font
+                                        }
+                                    }
                                 }
                             }
                         }
