@@ -68,6 +68,13 @@ export const PAGES = Object.freeze([
         about: "The key bindings Hyprland has now, from conf's hyprland.lua and hyprland.local.lua, in their order. What one does is its description in hl.bind.",
         advanced: null,
     },
+    {
+        id: "layouts",
+        label: "Layouts",
+        icon: "view-dual-symbolic",
+        about: "How a new workspace starts, by its monitor's shape, and each layout's master width and count. A change applies to every workspace, which keeps its layout but loses a width or count changed with the keys.",
+        advanced: null,
+    },
 ]);
 
 // The page after moving `step` pages from `index`, stopping at either end.

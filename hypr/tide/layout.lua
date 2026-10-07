@@ -9,9 +9,15 @@
 -- Usage, from hyprland.lua:
 --
 --   local qs = dofile(os.getenv("HOME") .. "/.config/hypr/tide/layout.lua")
---   qs.setup({})   -- or override M.defaults' keys
+--   qs.setup({})   -- or override M.defaults' keys, which the settings
+--                  -- panel and the bar don't see; layouts.json's they do
 --   hl.config({ general = { layout = "lua:tide" } })
 --   hl.bind("SUPER + period", qs.cycle_next)
+--
+-- The settings panel's Layouts page (SPEC.md §16) writes its settings to
+-- ~/.config/hypr/tide-layouts.lua, a Lua table in setup()'s option names,
+-- which setup() reads over its own options and `tide_layout.reload()`
+-- (through `hyprctl eval`) reads again.
 --
 -- The helpers dispatch `layoutmsg`s and then announce the new mode on the
 -- IPC socket as `custom>>tide-layout>>WORKSPACE,MODE`, which the bar
@@ -30,9 +36,12 @@ local M = { geometry = geometry }
 
 M.defaults = {
     -- Work-area aspect ratio (width / height) at and above which a new
-    -- workspace starts in three-column instead of tile. The work area
-    -- excludes the bar: a 3440x1440 monitor gives about 2.45, 16:9 about 1.84.
+    -- workspace starts in the ultrawide mode below instead of the normal
+    -- one. The work area excludes the bar: a 3440x1440 monitor gives about
+    -- 2.45, 16:9 about 1.84.
     ultrawide_aspect = 2.1,
+    -- The mode a new workspace starts in, by its monitor's aspect.
+    default_mode = { normal = "tile", ultrawide = "threecol" },
     -- The single-window rule: a lone window's width by work-area aspect.
     single = {
         { min_aspect = 2.1, width = 0.8 },
@@ -128,7 +137,7 @@ end
 
 local function default_mode(area)
     local aspect = area and area.h > 0 and area.w / area.h or 0
-    return aspect >= config.ultrawide_aspect and "threecol" or "tile"
+    return aspect >= config.ultrawide_aspect and config.default_mode.ultrawide or config.default_mode.normal
 end
 
 local function state_for(id, area)
@@ -177,11 +186,12 @@ local function recalculate(ctx)
 end
 
 -- A mode the cycle doesn't list (a workspace that started in threecol under
--- `cycle = { "tile", "twocol" }`) sits before its first entry for next and
--- after its last for prev, so one press lands on an end of the cycle.
+-- `cycle = { "tile", "twocol" }`, or in monocle, with no mode before it)
+-- sits before its first entry for next and after its last for prev, so one
+-- press lands on an end of the cycle.
 local function cycle(st, delta)
     local list = config.cycle
-    local from = st.mode == "monocle" and (st.previous or list[1]) or st.mode
+    local from = st.mode == "monocle" and st.previous or st.mode
     local i = index_of(list, from)
     if not i then
         return delta > 0 and list[1] or list[#list]
@@ -200,7 +210,8 @@ end
 
 -- `layoutmsg` commands:
 --   mode <tile|threecol|twocol|monocle>, next, prev, monocle (toggle),
---   mfact <+d|-d|value>, addmaster, removemaster, reset
+--   mfact <+d|-d|value>, addmaster, removemaster, reset, and refresh, which
+--   changes nothing so the workspace is laid out again
 local function layout_msg(ctx, msg)
     local id = workspace_id(ctx, true)
     if id == nil then
@@ -238,8 +249,10 @@ local function layout_msg(ctx, msg)
         o.nmaster = math.max(floor, o.nmaster + (cmd == "addmaster" and 1 or -1))
     elseif cmd == "reset" then
         st.opts[st.mode] = copy(config.modes[st.mode])
+    elseif cmd == "refresh" then
+        return true
     else
-        return "tide: expected mode, next, prev, monocle, mfact, addmaster, removemaster or reset"
+        return "tide: expected mode, next, prev, monocle, mfact, addmaster, removemaster, reset or refresh"
     end
     return true
 end
@@ -351,6 +364,8 @@ end
 -- Modes the cycle may list. Monocle has its own toggle, and entering it from
 -- the cycle would leave next/prev computing from the mode before it forever.
 local cycle_modes = { tile = true, threecol = true, twocol = true }
+-- Modes a workspace may start in: any of them.
+local all_modes = { tile = true, threecol = true, twocol = true, monocle = true }
 
 -- `min_masters` matches removemaster's floor: tile can go to plain rows,
 -- the column modes always keep a master.
@@ -363,6 +378,7 @@ end
 
 local schema = record({
     ultrawide_aspect = number(0.1, 100),
+    default_mode = record({ normal = { kind = "start" }, ultrawide = { kind = "start" } }),
     single = list(record({ min_aspect = number(0, 100), width = number(0.1, 1) }, true)),
     modes = record({
         tile = mode_opts(0),
@@ -396,6 +412,10 @@ local function check(v, sch, path)
     elseif sch.kind == "mode" then
         if not cycle_modes[v] then
             return path .. " must be tile, threecol or twocol, not " .. tostring(v)
+        end
+    elseif sch.kind == "start" then
+        if not all_modes[v] then
+            return path .. " must be tile, threecol, twocol or monocle, not " .. tostring(v)
         end
     elseif sch.kind == "record" then
         if type(v) ~= "table" then
@@ -462,13 +482,104 @@ local function validate(c)
     return err and err:gsub("^setup%.", "") or nil
 end
 
+-- Where the Layouts page's settings are, as `$XDG_CONFIG_HOME/hypr`
+-- (`~/.config/hypr` by default) has them. A field, so the tests can point
+-- it elsewhere before setup().
+do
+    local config_home = os.getenv("XDG_CONFIG_HOME")
+    if config_home == nil or config_home == "" then
+        config_home = (os.getenv("HOME") or "") .. "/.config"
+    end
+    M.settings_file = config_home .. "/hypr/tide-layouts.lua"
+end
+
+-- The settings file's table: {} when there's none, else nil and why it
+-- can't be used. It's data, so it runs with no globals.
+local function read_settings(path)
+    local f, open_err, code = io.open(path, "r")
+    if not f then
+        if code == 2 then -- ENOENT: nothing set
+            return {}
+        end
+        return nil, "couldn't open " .. path .. ": " .. tostring(open_err)
+    end
+    local max = 64 * 1024
+    local text, read_err = f:read(max + 1)
+    f:close()
+    if text == nil and read_err then
+        return nil, "couldn't read " .. path .. ": " .. tostring(read_err)
+    end
+    text = text or ""
+    if #text > max then
+        return nil, path .. " is larger than " .. max .. " bytes"
+    end
+    local chunk, load_err = load(text, "@" .. path, "t", {})
+    if not chunk then
+        return nil, tostring(load_err)
+    end
+    local ok, value = pcall(chunk)
+    if not ok then
+        return nil, tostring(value)
+    end
+    if type(value) ~= "table" then
+        return nil, path .. ": expected a table, not " .. type(value)
+    end
+    return value
+end
+
+-- setup()'s options, merged over the defaults; kept for reload().
+local base = copy(M.defaults)
+
+-- The config with the settings file over `base`, or nil and why not, which
+-- names the file.
+local function with_settings()
+    local settings, err = read_settings(M.settings_file)
+    if not settings then
+        return nil, err
+    end
+    local c = merge(base, settings)
+    err = validate(c)
+    if err then
+        return nil, M.settings_file .. ": " .. err
+    end
+    return c
+end
+
+-- Reads the settings file again and takes it, as the Layouts page asks
+-- through `hyprctl eval 'tide_layout.reload()'`. Each workspace keeps its
+-- mode and takes the new mfact and master counts, and the active one is
+-- laid out again; the others are as they're next shown. A file that
+-- can't be used is an error, which `hyprctl eval` answers with, and
+-- changes nothing.
+function M.reload()
+    local c, err = with_settings()
+    if not c then
+        error("tide: " .. err, 0)
+    end
+    config = c
+    for _, st in pairs(workspaces) do
+        st.opts = copy(config.modes)
+    end
+    hl.dispatch(hl.dsp.layout("refresh"))
+end
+
 function M.setup(opts)
     local c = merge(M.defaults, opts)
     local err = validate(c)
     if err then
         error("tide.setup: " .. err, 2)
     end
-    config = c
+    base = c
+    -- A settings file that can't be used is reported, and the config goes
+    -- ahead without it: it's tide's to write, and a bad one mustn't stop
+    -- Hyprland's config loading.
+    local with, settings_err = with_settings()
+    if with then
+        config = with
+    else
+        config = c
+        hl.notification.create({ text = "tide layouts: " .. settings_err, duration = 15000, icon = "error" })
+    end
     workspaces = {}
     hl.layout.register("tide", {
         recalculate = recalculate,
@@ -477,6 +588,8 @@ function M.setup(opts)
     hl.on("workspace.active", function(ws)
         announce(field(ws, "id"))
     end)
+    -- For the shell, which calls it through `hyprctl eval`.
+    _G.tide_layout = { reload = M.reload }
     return M
 end
 

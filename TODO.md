@@ -56,6 +56,33 @@ once you have agreed with it or reversed it.
   needed nothing new. They can be added later without changing what's
   written now.
 
+- [ ] **The Layouts page comes after Keys.** §16's table had it third;
+  new pages go after the ones you ordered. Moving it is a line in `PAGES`
+  in `shell/lib/settings.mjs` and the table row.
+
+- [ ] **A layout change resets every workspace's `mfact` and master
+  count.** `tide_layout.reload()` gives each workspace the new values and
+  keeps its mode, so a width set with Super+\ on one workspace is lost.
+  The alternative is that only workspaces made after the change take them,
+  which would leave the page's change invisible until then. It's
+  `M.reload` in `hypr/tide/layout.lua`.
+
+- [ ] **The shell doesn't reapply the layout settings as it starts.** Since
+  a reload resets each workspace's `mfact` and master count, a shell start
+  applies them only when `tide-layouts.lua` would change, trusting that
+  layout.lua read the file as the config loaded. A shell that died with an
+  apply still to retry leaves the change unapplied until the next one. The
+  alternative is IdleData's record of the last apply. It's `load` in
+  `shell/LayoutsData.qml`.
+
+- [ ] **The page and the bar don't see options passed to `setup()`.**
+  They assume layout.lua's defaults under `layouts.json`, so an override in
+  `hyprland.lua`'s `setup()` call reaches the layout and nothing else. `conf`
+  passes none, so its settings go in `layouts.json`. The alternative is
+  having layout.lua tell the shell what's in effect, but Hyprland 0.56's
+  `hyprctl eval` answers only "ok", and a file written from the compositor
+  is one more writer. It's `effectiveLayouts` in `shell/lib/layouts.mjs`.
+
 - [ ] **A clock is added by typing its zone ID, and labeled with its
   city.** The Clocks page takes `Asia/Kolkata` typed and labels it
   Kolkata, refusing what isn't a canonical ID. The alternatives are a list
@@ -535,7 +562,18 @@ from the keyboard (`shell/shell_test.sh`).
     their keys.
   - On a live session, check the listing parses as 0.56.2 gives it, and
     that a binding added to `hyprland.local.lua` shows after a reload.
-- Then the rest of §16's table: Appearance, Displays and Layouts.
+- Layouts (`shell/lib/layouts.mjs`, `shell/LayoutsData.qml`,
+  `hypr/tide/layout.lua`) sets where ultrawide begins, each monitor shape's
+  starting mode, each mode's `mfact` and master count, and a lone window's
+  widths, writing `~/.config/hypr/tide-layouts.lua` and running `hyprctl
+  eval 'tide_layout.reload()'`. CI checks the startup write and apply, and
+  two settings over IPC on a hand edit. Still to do:
+  - The rule for new windows: layout.lua always puts one at the end of the
+    stack.
+  - On a live session, check a change re-lays the active workspace at
+    once, and that `tide_layout.reload()` answers `hyprctl eval` with a
+    bad file's error.
+- Then the rest of §16's table: Appearance and Displays.
 
 ## Notifications (M4)
 

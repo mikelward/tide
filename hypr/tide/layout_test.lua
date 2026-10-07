@@ -172,10 +172,15 @@ end)
 -- layout.lua against a stub hl ---------------------------------------------
 
 local function stub_hl()
-    local h = { registered = {}, dispatched = {}, handlers = {}, active_ws = 1, active_window = nil }
+    local h = { registered = {}, dispatched = {}, handlers = {}, notifications = {}, active_ws = 1, active_window = nil }
     h.on = function(ev, fn)
         h.handlers[ev] = fn
     end
+    h.notification = {
+        create = function(t)
+            table.insert(h.notifications, t)
+        end,
+    }
     h.layout = {
         register = function(name, t)
             h.registered[name] = t
@@ -227,11 +232,32 @@ local function targets(ws, n)
     return list
 end
 
+-- A file that doesn't exist, so a test never reads the real settings.
+local NO_SETTINGS = os.tmpname()
+os.remove(NO_SETTINGS)
+
+-- layout.lua, fresh, reading its settings from `settings_file` (none by
+-- default).
+local function load_layout(settings_file)
+    local qs = dofile(dir .. "layout.lua")
+    qs.settings_file = settings_file or NO_SETTINGS
+    return qs
+end
+
 local function fresh()
     hl = stub_hl()
-    local qs = dofile(dir .. "layout.lua")
+    local qs = load_layout()
     qs.setup({})
     return qs, hl.registered.tide
+end
+
+-- A settings file holding `text`, as the shell writes tide-layouts.lua.
+local function settings_file(text)
+    local path = os.tmpname()
+    local f = assert(io.open(path, "w"))
+    f:write(text)
+    f:close()
+    return path
 end
 
 local function relayout(layout, area, ws, n)
@@ -461,7 +487,7 @@ end)
 
 test("setup options merge objects and replace lists", function()
     hl = stub_hl()
-    local qs = dofile(dir .. "layout.lua")
+    local qs = load_layout()
     qs.setup({ modes = { tile = { mfact = 0.6 } }, single = { { min_aspect = 2.0, width = 0.5 } } })
     local layout = hl.registered.tide
     local t = relayout(layout, HD, 1, 2)
@@ -474,7 +500,7 @@ end)
 
 test("an empty list override replaces the default list", function()
     hl = stub_hl()
-    local qs = dofile(dir .. "layout.lua")
+    local qs = load_layout()
     qs.setup({ single = {} })
     local t = relayout(hl.registered.tide, UW, 1, 1)
     box_eq(t[1].placed, UW, "no single-window rule means full width")
@@ -493,7 +519,7 @@ test("setup rejects bad options with a message instead of failing later", functi
     }
     for i, opts in ipairs(bad) do
         hl = stub_hl()
-        local qs = dofile(dir .. "layout.lua")
+        local qs = load_layout()
         local ok, err = pcall(qs.setup, opts)
         eq(ok, false, "bad option set " .. i .. " accepted")
         eq(tostring(err):find("tide.setup: ", 1, true) ~= nil, true, "message for set " .. i .. ": " .. tostring(err))
@@ -518,7 +544,7 @@ test("setup names the path of a typo or a hole", function()
     }
     for _, case in ipairs(cases) do
         hl = stub_hl()
-        local qs = dofile(dir .. "layout.lua")
+        local qs = load_layout()
         local ok, err = pcall(qs.setup, case[1])
         eq(ok, false, case[2] .. " accepted")
         eq(tostring(err):find(case[2], 1, true) ~= nil, true, "message: " .. tostring(err))
@@ -527,7 +553,7 @@ end)
 
 test("next and prev enter a cycle that omits the current mode at its ends", function()
     hl = stub_hl()
-    local qs = dofile(dir .. "layout.lua")
+    local qs = load_layout()
     qs.setup({ cycle = { "tile", "twocol" } })
     local layout = hl.registered.tide
     relayout(layout, UW, 1, 3)
@@ -553,25 +579,123 @@ test("setup rejects NaN and a zero master count where a mode needs one", functio
     }
     for _, case in ipairs(cases) do
         hl = stub_hl()
-        local qs = dofile(dir .. "layout.lua")
+        local qs = load_layout()
         local ok, err = pcall(qs.setup, case[1])
         eq(ok, false, case[2] .. " accepted")
         eq(tostring(err):find(case[2], 1, true) ~= nil, true, "message: " .. tostring(err))
     end
     hl = stub_hl()
-    local qs = dofile(dir .. "layout.lua")
+    local qs = load_layout()
     qs.setup({ modes = { tile = { nmaster = 0 } } })
     eq(hl.registered.tide ~= nil, true, "tile still accepts no master")
 end)
 
 test("setup accepts a one-mode cycle and an empty single list", function()
     hl = stub_hl()
-    local qs = dofile(dir .. "layout.lua")
+    local qs = load_layout()
     qs.setup({ cycle = { "tile" }, single = {} })
     local layout = hl.registered.tide
     relayout(layout, HD, 1, 2)
     layout.layout_msg({ area = HD, targets = targets(1, 2) }, "next")
     eq(qs.mode(1), "tile", "a one-mode cycle stays put")
+end)
+
+test("a new workspace starts in the mode set for its aspect", function()
+    hl = stub_hl()
+    local qs = load_layout()
+    qs.setup({ default_mode = { normal = "monocle", ultrawide = "twocol" } })
+    local layout = hl.registered.tide
+    relayout(layout, HD, 1, 2)
+    relayout(layout, UW, 2, 2)
+    eq(qs.mode(1), "monocle", "16:9")
+    eq(qs.mode(2), "twocol", "ultrawide")
+    -- Started in monocle, there's no mode before it to go on from.
+    layout.layout_msg({ area = HD, targets = targets(1, 2) }, "next")
+    eq(qs.mode(1), "tile", "next from a starting monocle enters at the first entry")
+    relayout(layout, HD, 3, 2)
+    layout.layout_msg({ area = HD, targets = targets(3, 2) }, "prev")
+    eq(qs.mode(3), "twocol", "prev from a starting monocle enters at the last entry")
+    hl = stub_hl()
+    local ok, err = pcall(load_layout().setup, { default_mode = { normal = "spiral" } })
+    eq(ok, false, "an unknown mode accepted")
+    eq(tostring(err):find("default_mode.normal must be tile, threecol, twocol or monocle, not spiral", 1, true) ~= nil, true, "message: " .. tostring(err))
+end)
+
+test("the settings file goes over setup's options", function()
+    hl = stub_hl()
+    local path = settings_file('return { modes = { tile = { mfact = 0.6 } }, default_mode = { ultrawide = "tile" } }\n')
+    local qs = load_layout(path)
+    qs.setup({ modes = { tile = { mfact = 0.5 } } })
+    local layout = hl.registered.tide
+    local t = relayout(layout, HD, 1, 2)
+    eq(t[1].placed.w, 1152, "the file's tile mfact")
+    relayout(layout, UW, 2, 2)
+    eq(qs.mode(2), "tile", "the file's ultrawide mode")
+    eq(#hl.notifications, 0, "nothing to report")
+    os.remove(path)
+end)
+
+test("a settings file that can't be used is reported, and setup goes on without it", function()
+    for _, case in ipairs({
+        { "return { modes = { tile = { mfat = 0.6 } } }\n", "modes.tile.mfat is not an option" },
+        { "return {\n", "expected" },
+        { "return 5\n", "expected a table, not number" },
+        -- It runs with no globals, so it can do nothing but return data.
+        { "return os.exit(1)\n", "os" },
+    }) do
+        hl = stub_hl()
+        local path = settings_file(case[1])
+        local qs = load_layout(path)
+        qs.setup({})
+        eq(hl.registered.tide ~= nil, true, "registered anyway for " .. case[2])
+        eq(#hl.notifications, 1, "one notification for " .. case[2])
+        local text = hl.notifications[1].text
+        eq(text:find(case[2], 1, true) ~= nil, true, "names the problem: " .. text)
+        relayout(hl.registered.tide, UW, 1, 2)
+        eq(qs.mode(1), "threecol", "the defaults hold for " .. case[2])
+        os.remove(path)
+    end
+end)
+
+test("reload takes the settings file again, keeping each workspace's mode", function()
+    hl = stub_hl()
+    local path = os.tmpname()
+    os.remove(path)
+    local qs = load_layout(path)
+    qs.setup({})
+    local layout = hl.registered.tide
+    relayout(layout, UW, 1, 3)
+    layout.layout_msg({ area = UW, targets = targets(1, 3) }, "mode tile")
+    local f = assert(io.open(path, "w"))
+    f:write('return { modes = { tile = { mfact = 0.6 } }, default_mode = { ultrawide = "twocol" } }\n')
+    f:close()
+    tide_layout.reload()
+    eq(qs.mode(1), "tile", "the mode stays")
+    local t = relayout(layout, UW, 1, 3)
+    eq(t[1].placed.w, 2064, "the new tile mfact")
+    relayout(layout, UW, 2, 3)
+    eq(qs.mode(2), "twocol", "a new workspace takes the new default")
+    local last = hl.dispatched[#hl.dispatched]
+    eq(last.kind .. " " .. last.arg, "layout refresh", "the active workspace is laid out again")
+    os.remove(path)
+end)
+
+test("reload refuses a settings file that can't be used, and changes nothing", function()
+    hl = stub_hl()
+    local path = settings_file("return { modes = { tile = { mfact = 0.6 } } }\n")
+    local qs = load_layout(path)
+    qs.setup({})
+    local f = assert(io.open(path, "w"))
+    f:write("return { cycle = {} }\n")
+    f:close()
+    local before = #hl.dispatched
+    local ok, err = pcall(tide_layout.reload)
+    eq(ok, false, "a bad file accepted")
+    eq(tostring(err):find(path .. ": cycle must have at least 1 entry", 1, true) ~= nil, true, "message: " .. tostring(err))
+    eq(#hl.dispatched, before, "nothing laid out again")
+    local t = relayout(hl.registered.tide, HD, 1, 2)
+    eq(t[1].placed.w, 1152, "the last good settings hold")
+    os.remove(path)
 end)
 
 print(string.format("%d passed, %d failed", passed, failures))
