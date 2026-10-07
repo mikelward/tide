@@ -135,6 +135,12 @@ PanelWindow {
         function removeClock(zone: string): string {
             return ClockData.remove(undefined, zone);
         }
+        // Turns one of the Clocks page's switches, hour24 or dedupeLocal,
+        // on or off: `qs -c tide ipc call settings setClockSwitch hour24
+        // false`. Answers why not, or "".
+        function setClockSwitch(key: string, on: bool): string {
+            return ClockData.setSwitch(key, on);
+        }
         // Sets one of the Layouts page's settings, by its path, as that
         // page does: `qs -c tide ipc call settings setLayout
         // modes.tile.mfact 0.6`, a mode for defaultMode.normal or
@@ -838,7 +844,7 @@ PanelWindow {
                                     anchors.verticalCenter: parent.verticalCenter
                                     elide: Text.ElideRight
                                     textFormat: Text.PlainText
-                                    text: clock.modelData.zone === clocks.localZone ? `${clock.modelData.zone} · local, hidden` : clock.modelData.zone
+                                    text: clock.modelData.zone !== clocks.localZone ? clock.modelData.zone : ClockData.switches.dedupeLocal ? `${clock.modelData.zone} · local, hidden` : `${clock.modelData.zone} · local`
                                     color: Theme.fgDim
                                     font.family: Theme.font
                                     font.pixelSize: 13
@@ -924,6 +930,55 @@ PanelWindow {
                                         text: "Add a zone, such as Asia/Kolkata"
                                         color: Theme.fgFaint
                                         font: newZone.font
+                                    }
+                                }
+                            }
+                        }
+
+                        // 24-hour time and hiding the local zone's clock,
+                        // which a click turns on or off, as Idle's switches.
+                        Repeater {
+                            model: ClockData.switchRows
+
+                            Item {
+                                id: clockSwitch
+
+                                required property var modelData
+                                readonly property bool on: ClockData.switches[modelData.key] === true
+
+                                width: clocks.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: clockSwitch.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Rectangle {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 56
+                                    height: 26
+                                    radius: 13
+                                    color: clockSwitch.on ? Theme.accentBg : Theme.surface2
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: clockSwitch.on ? "On" : "Off"
+                                        color: clockSwitch.on ? Theme.accentFg : Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 12
+                                        font.weight: Font.DemiBold
+                                    }
+
+                                    TapHandler {
+                                        onTapped: clocks.changed(ClockData.setSwitch(clockSwitch.modelData.key, !clockSwitch.on))
                                     }
                                 }
                             }

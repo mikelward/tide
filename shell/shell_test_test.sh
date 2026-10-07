@@ -78,7 +78,8 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # mouse's left_handed as HANDED (false by default) once all four are set
 # over IPC, applying each. With tide-tz, it answers the Clocks page's
 # refused zone, and writes and looks up Asia/Kolkata labeled LABEL (IST by
-# default) then the hand-edited UTC once the last clock is moved over IPC.
+# default) then the hand-edited UTC once the last clock is moved over IPC,
+# and keeps them with 24-hour time off once that's set over IPC.
 # Its layouts take tile's mfact, the hand-edited masters, twocol for
 # ultrawides and new windows at the top of the stack once the last is set
 # over IPC, applying each.
@@ -113,6 +114,7 @@ if test "\$1" = ipc; then
         *"call settings setDisplay Headless position auto-left"*) : >"\$XDG_RUNTIME_DIR/outputs-set" ;;
         *"call settings resetDisplay Spare"*) : >"\$XDG_RUNTIME_DIR/outputs-reset" ;;
         *"call settings moveClock UTC 1"*) : >"\$XDG_RUNTIME_DIR/clocks-set" ;;
+        *"call settings setClockSwitch hour24 false"*) : >"\$XDG_RUNTIME_DIR/clocks-switch" ;;
         *"call settings setAppearance latitude 51.5"*) : >"\$XDG_RUNTIME_DIR/appearance-set" ;;
         *"call settings setAppearance mode sun"*) echo 'mode "sun" needs latitude and longitude; not changing mode' ;;
         *"call settings addClock US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the clocks" ;;
@@ -144,6 +146,12 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                     rm "\$XDG_RUNTIME_DIR/clocks-set"
                     printf '[\n  {\n    "zone": "Asia/Kolkata",\n    "label": "${13:-IST}"\n  },\n  {\n    "zone": "UTC",\n    "label": ""\n  }\n]\n' >"\$HOME/.config/tide/clocks.local.json"
                     tide-tz -- Asia/Kolkata UTC >/dev/null 2>&1
+                    until test -e "\$XDG_RUNTIME_DIR/clocks-switch"; do
+                        kill -0 \$\$ 2>/dev/null || exit 0
+                        sleep 0.1
+                    done
+                    rm "\$XDG_RUNTIME_DIR/clocks-switch"
+                    printf '{\n  "clocks": [\n    {\n      "zone": "Asia/Kolkata",\n      "label": "${13:-IST}"\n    },\n    {\n      "zone": "UTC",\n      "label": ""\n    }\n  ],\n  "hour24": false\n}\n' >"\$HOME/.config/tide/clocks.local.json"
                 } &
                 ;;
         esac

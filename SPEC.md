@@ -779,7 +779,8 @@ See [`bar.png`](docs/mocks/bar.png).
   for the next 400 days, local's included, and the shell re-reads it at
   each transition. Tests pin both sides of every DST change (§20).
 - **Local is always last, on the far right.** Any listed zone that is the
-  same zone as local is hidden, whichever zone that is: in London the bar
+  same zone as local is hidden, whichever zone that is, while
+  `dedupeLocal` is on, as it is by default (below): in London the bar
   shows SF, NYC and local, and in New York it shows SF, LON and local.
   Decided in review of this spec.
   - "Same zone" compares zone IDs. When `$TZ` is set, local's ID is the
@@ -835,6 +836,18 @@ See [`bar.png`](docs/mocks/bar.png).
     shows the right time, but never counts as the local zone.
   - `label` is any one line of text, `""` for just the time, or `"abbr"`
     (above). A line break is an error, since the bar is one line.
+  - The file can instead be an object: the list as `clocks`, beside two
+    switches, `hour24` and `dedupeLocal`, each `true` or `false`. Any of
+    the three can be left out.
+  - `hour24` off shows the bar's and the popover's times as `4:30 PM`
+    rather than `16:30`. The lock screen stays 24-hour.
+  - `dedupeLocal` off shows a listed zone that is the local one, beside
+    local, rather than hiding it.
+  - Both default to on. A switch `clocks.local.json` sets wins over the
+    shared file's; a list there still replaces the shared list whole.
+  - A switch changed alone shows at once. One changed with the list waits
+    for the list's zones to load, so a list refused for an unknown zone
+    keeps the last good switches as well.
 
 ### 7.4 Status icons
 
@@ -2016,13 +2029,15 @@ stays hand-written.
     listed already, is refused, and the page says why.
   - A label is typed and set with Enter. The arrows move a clock, and the
     bin takes it out; with none left, the bar shows local alone.
-  - The local zone is marked in the list, since the bar hides it.
+  - The local zone is marked as local in the list, and as hidden while
+    dedupe-local hides it from the bar.
   - A change names the clock it was made on by its place and zone, so a
     hand edit that has moved the clocks since is refused, not built on.
   - While either file can't be read or doesn't parse, the bar keeps its
     last good list, and the page refuses changes, naming the file.
-  - 24 h and dedupe-local aren't settings yet. The bar is always 24-hour,
-    and always hides the local zone.
+  - Two switches turn 24-hour time and hiding the local zone's clock on
+    or off (§7.3). A click writes it to `clocks.local.json`, keeping the
+    file's list, and the bar changes at once, with no lookup.
 
 - **Keys** lists the bindings Hyprland has now, from `hyprctl binds -j`,
   as the shell starts and again as the page shows.
@@ -2731,7 +2746,7 @@ Decided in review of this spec:
   marked urgent, and `Super+Tab` jumps there (§14).
 - **Clock labels:** `SF` / `NYC` / `LON`, with abbreviations in the popover
   (§7.3). Local is always last, and a listed zone that is the local zone is
-  hidden.
+  hidden, unless dedupe-local is turned off.
 - **Per-machine settings** live in `.local` overrides (§16.1).
 - **Light and dark** switch automatically, light 07:00–19:00 by default
   (§15).

@@ -83,6 +83,12 @@ test("now and the heading are in local time", () => {
     assert.deepEqual(heading(instant, 120), { time: "19:41", date: "Monday, September 28" });
     // Still Sunday in Los Angeles at 03:00 UTC on Monday.
     assert.equal(heading(Date.parse("2026-09-28T03:00:00Z"), -420).date, "Sunday, September 27");
+    assert.equal(heading(instant, 120, false).time, "7:41 PM", "with 24-hour time off");
+});
+
+test("with 24-hour time off, each row's time has AM or PM", () => {
+    const rows = popoverZones({ clocks, localZone: "Europe/Berlin", instant, offsetOf, abbrOf, hour24: false });
+    assert.deepEqual(rows.map(r => r.time), ["10:41 AM", "1:41 PM", "6:41 PM", "7:41 PM"]);
 });
 
 test("ISO weeks start on Monday, and week 1 holds the year's first Thursday", () => {

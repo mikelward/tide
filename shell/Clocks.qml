@@ -74,10 +74,8 @@ Row {
             id: clock
 
             required property var modelData
-            // barClocks's text is "LABEL HH:MM", the time last.
-            readonly property int cut: modelData.text.lastIndexOf(" ")
-            readonly property string label: cut < 0 ? "" : modelData.text.slice(0, cut)
-            readonly property string time: modelData.text.slice(cut + 1)
+            readonly property string label: modelData.label
+            readonly property string time: modelData.time
 
             visible: !root.compact || modelData.local
             height: Theme.chipHeight

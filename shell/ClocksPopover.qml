@@ -24,6 +24,7 @@ PopupWindow {
         instant: now,
         offsetOf: Tz.offsetOf(table),
         abbrOf: Tz.abbrOf(table),
+        hour24: ClockData.switches.hour24,
     }) : []
     readonly property var change: table ? Dst.nextDstChange({
         clocks: Pop.dstClocks(listed, table.localZone),
@@ -31,6 +32,8 @@ PopupWindow {
         now: now,
     }) : null
     readonly property var today: Pop.localDate(now, localOffset)
+    // The time column: "19:41", or the wider "10:41 AM".
+    readonly property int timeWidth: ClockData.switches.hour24 ? 58 : 84
 
     // The month the calendar shows; back to today's each time it opens.
     property int year: today.year
@@ -82,7 +85,7 @@ PopupWindow {
                 Text {
                     id: big
 
-                    text: Pop.heading(root.now, root.localOffset).time
+                    text: Pop.heading(root.now, root.localOffset, ClockData.switches.hour24).time
                     color: Theme.fg
                     font.family: Theme.font
                     font.pixelSize: 34
@@ -140,7 +143,7 @@ PopupWindow {
                     }
 
                     Text {
-                        Layout.preferredWidth: 58
+                        Layout.preferredWidth: root.timeWidth
                         text: zone.modelData.time
                         color: Theme.fg
                         font.family: Theme.font
@@ -172,7 +175,7 @@ PopupWindow {
             Item {
                 Layout.fillWidth: true
                 Layout.topMargin: 2
-                Layout.leftMargin: 40 + 150 + 58 + 30
+                Layout.leftMargin: 40 + 150 + root.timeWidth + 30
                 Layout.rightMargin: 54 + 10
                 implicitHeight: 14
 

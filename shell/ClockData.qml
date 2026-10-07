@@ -25,6 +25,10 @@ Singleton {
     // The list the Clocks page shows and changes, as the files last parsed:
     // a zone tide-tz can't load is in it, so it can be taken out.
     property var listed: Clocks.DEFAULT_CLOCKS
+    // 24-hour time and hiding the local zone's clock, as the last good
+    // files say, and the Clocks page's rows for them.
+    property var switches: Clocks.DEFAULT_SWITCHES
+    readonly property var switchRows: Clocks.SWITCH_ROWS
     // Why the panel's last change couldn't be saved, or "".
     property string saveFailure: ""
     property var table: null
@@ -109,7 +113,7 @@ Singleton {
         // one is still checked, so the report always holds every current
         // error, whichever file is broken.
         const broken = [shared.broken, local.broken].filter(b => b !== "");
-        const result = Clocks.loadClocks(shared.broken ? null : textOf(shared), local.broken ? null : textOf(local), root.good);
+        const result = Clocks.loadClocks(shared.broken ? null : textOf(shared), local.broken ? null : textOf(local), root.good, undefined, root.switches);
         for (const error of result.errors) {
             console.warn(`tide: ${error}`);
         }
@@ -139,7 +143,24 @@ Singleton {
         // retried, never reported. With files that parse, their zones'
         // errors replace this verdict once tide-tz has read them.
         root.reportErrors(errors);
-        root.lookUp(result.clocks, errors.length === 0 && result.source !== null ? result.source : "");
+        // A switch alone changes nothing tide-tz would read, so it shows at
+        // once; with a new list, it waits for the lookup that takes it.
+        const plan = Clocks.loadPlan(result.clocks, root.good, root.table !== null && errors.length === 0, root.lookup ? root.lookup.clocks : null);
+        const source = errors.length === 0 && result.source !== null ? result.source : "";
+        if (plan.lookUp) {
+            root.lookUp(result.clocks, source, result.switches);
+            return;
+        }
+        // The running lookup takes the list's file as it is now too, so a
+        // zone it refuses is reported against the file that has it.
+        if (plan.pending) {
+            root.lookup.source = source;
+            root.lookup.switches = result.switches;
+        }
+        if (plan.now && JSON.stringify(result.switches) !== JSON.stringify(root.switches)) {
+            root.switches = result.switches;
+            root.update();
+        }
     }
 
     // Moves, takes out, relabels or adds a clock, as the Clocks page does.
@@ -194,6 +215,29 @@ Singleton {
         return root.saveFailure;
     }
 
+    // Turns switch `key` (hour24 or dedupeLocal) on or off, in
+    // clocks.local.json, as the Clocks page does. Returns why it didn't,
+    // or "", as edit.
+    function setSwitch(key, on) {
+        const sharedText = root.readNow(sharedNow);
+        const localText = root.readNow(localNow);
+        const broken = [sharedNow.broken, localNow.broken].filter(b => b !== "");
+        if (broken.length > 0) {
+            return `${broken[0]}; not changing ${key}`;
+        }
+        const result = Clocks.withClockSwitch(sharedText, localText, key, on);
+        if (result.error) {
+            return `${result.error}; not changing ${key}`;
+        }
+        const error = root.writeNow(localNow, result.text);
+        root.saveFailure = error === "" ? "" : `${error}; clocks not saved`;
+        if (error !== "") {
+            console.warn(`tide: ${root.saveFailure}`);
+        }
+        local.reload();
+        return root.saveFailure;
+    }
+
     // As IdleData's.
     function readNow(file) {
         file.reload();
@@ -224,13 +268,15 @@ Singleton {
     }
 
     // Looks up `clocks`' zones. `source` names the file they came from, when
-    // their zones' errors are the files' to report; "" otherwise.
-    function lookUp(clocks, source) {
+    // their zones' errors are the files' to report; "" otherwise. The bar
+    // takes `switches` with the list, when its zones load; null keeps its own.
+    function lookUp(clocks, source, switches = null) {
         root.supersede();
         root.lookup = tz.createObject(root, {
             generation: root.generation,
             clocks: clocks,
             source: source,
+            switches: switches,
             // After "--", so a zone that looks like a flag is reported as
             // a bad zone rather than taken for one.
             command: ["tide-tz", "--"].concat(clocks.map(c => c.zone))
@@ -273,6 +319,9 @@ Singleton {
             return;
         }
         root.good = lookup.clocks;
+        if (lookup.switches !== null) {
+            root.switches = lookup.switches;
+        }
         root.table = table;
         root.update();
         refresh.interval = Math.max(1000, Tz.refreshAt(table, Date.now()) - Date.now());
@@ -300,6 +349,8 @@ Singleton {
             instant: root.scrubAt || root.now,
             offsetOf: Tz.offsetOf(table),
             abbrOf: Tz.abbrOf(table),
+            hour24: root.switches.hour24,
+            dedupeLocal: root.switches.dedupeLocal,
         });
     }
 
@@ -407,6 +458,9 @@ Singleton {
             property int generation: 0
             property var clocks: []
             property string source: ""
+            // The switches that came with the list, taken with it, or null
+            // to keep the bar's.
+            property var switches: null
             property bool current: generation === root.generation
             // Through shell/lib/launch.mjs only to catch a failed start
             // (tide-tz not on PATH): Quickshell 0.3 then sends no exit
