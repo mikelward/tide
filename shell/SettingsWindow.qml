@@ -907,6 +907,80 @@ PanelWindow {
                         }
                     }
 
+                    // Keys: each binding's keys and what it does, listed
+                    // again as the page shows.
+                    Column {
+                        id: keyList
+
+                        onVisibleChanged: {
+                            if (visible) {
+                                KeysData.list();
+                            }
+                        }
+                        visible: root.current.id === "keys"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        Repeater {
+                            model: KeysData.binds
+
+                            Item {
+                                id: binding
+
+                                required property var modelData
+
+                                width: keyList.width
+                                implicitHeight: 26
+
+                                Text {
+                                    id: bindingKeys
+
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 170
+                                    elide: Text.ElideRight
+                                    // From the config: never markup.
+                                    textFormat: Text.PlainText
+                                    text: binding.modelData.submap === "" ? binding.modelData.keys : `${binding.modelData.submap}: ${binding.modelData.keys}`
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                }
+
+                                Text {
+                                    anchors.left: bindingKeys.right
+                                    anchors.leftMargin: 10
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    textFormat: Text.PlainText
+                                    text: binding.modelData.does === "" ? "no description" : binding.modelData.does
+                                    color: binding.modelData.does === "" ? Theme.fgFaint : Theme.fgDim
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+                            }
+                        }
+
+                        // Why there are none, if they couldn't be listed.
+                        Text {
+                            visible: KeysData.error !== ""
+                            x: 10
+                            width: keyList.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: KeysData.error
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
                     // Sound: the output and input devices, as the volume
                     // popover lists them, with the level and mute of each
                     // one in use.

@@ -184,11 +184,27 @@ def serve(directory):
             conn.sendall(reply.encode())
 
 
+# Two of conf's key bindings, as Hyprland 0.56.2's `hyprctl binds -j`
+# gives them: one with a description, and one without.
+BINDS = [
+    {"locked": False, "mouse": False, "release": False, "repeat": False, "longPress": False,
+     "non_consuming": False, "auto_consuming": False, "has_description": True, "modmask": 64,
+     "submap": "", "submap_universal": "false", "key": "T", "keycode": 0, "catch_all": False,
+     "description": "Terminal", "allow_input_capture": False, "dispatcher": "__lua", "arg": "1"},
+    {"locked": False, "mouse": False, "release": False, "repeat": True, "longPress": False,
+     "non_consuming": False, "auto_consuming": False, "has_description": False, "modmask": 64,
+     "submap": "", "submap_universal": "false", "key": "backslash", "keycode": 0, "catch_all": False,
+     "description": "", "allow_input_capture": False, "dispatcher": "__lua", "arg": "2"},
+]
+
+
 # What the shell runs hyprctl for: the focused window at startup, the
-# keyboards for the lock's layout badge, and the focus guard's calls.
+# keyboards for the lock's layout badge, the key bindings for the settings
+# panel's Keys page, and the focus guard's calls.
 CTL = {
     ("activewindow", "-j"): lambda: json.dumps(ANSWERS["j/activewindow"]),
     ("devices", "-j"): lambda: json.dumps(ANSWERS["j/devices"]),
+    ("binds", "-j"): lambda: json.dumps(BINDS),
 }
 
 

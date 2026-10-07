@@ -64,6 +64,13 @@ once you have agreed with it or reversed it.
   page would change; `clocks.local.json` holds the same either way. It's
   `withClock` and `cityLabel` in `shell/lib/clocks.mjs`.
 
+- [ ] **The Keys page lists a binding turned off with `set_enabled(false)`
+  as if it were on.** Hyprland 0.56.2's `hyprctl binds -j` lists every
+  binding and has no enabled field, and `conf` turns none off. The
+  alternative is reading the bindings through `hyprctl eval` from Lua,
+  whose binding objects know `is_enabled()`, which needs `conf` to define
+  a function that returns them. It's `parseBinds` in `shell/lib/keys.mjs`.
+
 - [ ] **A mouse or touchpad is chosen by name with ‹ and ›, not from a
   list.** The Mouse and Touchpad pages step through every device of the kind
   and each one by name, in one row, as the − and + steppers do. The
@@ -521,7 +528,14 @@ from the keyboard (`shell/shell_test.sh`).
     would take as well as a bare list.
   - On a live session, check the page's fields take the keyboard and give
     it back as the Keyboard page's do, and that the bar changes at once.
-- Then the rest of §16's table: Appearance, Displays, Layouts and Keys.
+- Keys (`shell/lib/keys.mjs`, `shell/KeysData.qml`) lists `hyprctl
+  binds -j` as the shell starts and as the page shows. CI checks the shell
+  lists them. Still to do:
+  - `conf`'s bindings need a `description` each, or the page shows only
+    their keys.
+  - On a live session, check the listing parses as 0.56.2 gives it, and
+    that a binding added to `hyprland.local.lua` shows after a reload.
+- Then the rest of §16's table: Appearance, Displays and Layouts.
 
 ## Notifications (M4)
 

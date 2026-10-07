@@ -25,7 +25,8 @@
 # probe finds no sensors, so the system monitor parses one but reads no
 # sensor files; a stand-in hyprctl, answering from the stand-in
 # Hyprland's fixtures, for the bar's title, the lock's layout badge and
-# the focus guard's calls and conf's conf_input.reload(); stand-in
+# the focus guard's calls, conf's conf_input.reload() and the Keys page's
+# bindings; stand-in
 # gsettings and nmcli, for light and dark and the VPNs, whose monitors
 # report nothing; and a stand-in systemctl, for restarting hypridle once
 # the shell has written its timings, which it checks are the defaults, as
@@ -515,7 +516,7 @@ load() {
     # The commands' inputs are fixed (the default zones, $TZ, the system's
     # tzdata; the stand-ins' answers), so anything the shell's commands
     # warn of is a failure.
-    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|gsettings|nmcli|no nmcli|systemctl)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run nmcli|replay|tell|apply)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl)" "$log" >"$tmp/reports"; then
+    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl)|replay|tell|apply)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl)" "$log" >"$tmp/reports"; then
         echo "FAIL: $_what loaded, but its commands warned:" >&2
         cat "$tmp/reports" >&2
         exit 1
@@ -1034,7 +1035,7 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # about the clocks, the system monitor, the title, the focus guard (its
 # replay of the waiting windows, and its order for Super+Tab), light and
 # dark, the VPNs, hypridle's timings, the mouse, touchpad and keyboard
-# settings, or the list of mice and touchpads.
+# settings, the list of mice and touchpads, or the key bindings.
 # The lock and the greeter only ask for the keyboards, for their layout
 # badges.
 shell_runs='tide-tz
@@ -1049,7 +1050,8 @@ nmcli monitor
 nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show
 systemctl --user try-restart hypridle.service
 hyprctl eval conf_input.reload()
-hyprctl devices -j'
+hyprctl devices -j
+hyprctl binds -j'
 load_runs=$shell_runs
 idle_conf=$tmp/home/.config/hypr/tide-idle.conf
 idle_suspend_conf=$tmp/home/.config/hypr/tide-idle-suspend.conf
