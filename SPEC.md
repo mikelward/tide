@@ -687,6 +687,7 @@ with new keys in **bold**:
 | Keys | Action |
 |---|---|
 | **tap `Super`**, `Super+Space` | launcher |
+| **`Super+Alt+Space`** | next keyboard layout, once there are two, on every keyboard (§16) |
 | `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `C` / `Shift+C` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
 | `Super+Backspace` | close window |
 | `Super+L` | lock |
@@ -2011,8 +2012,16 @@ stays hand-written.
   - A keyboard layout and its variant are typed, as XKB's names (`us`, or
     `us,de` for two; `dvorak`, or none), and set with Enter. There's one
     variant, or one for each layout. Anything else is refused, and the page
-    says why; in the files, it's an error at load. Switching between two
-    layouts needs a key for it, which tide doesn't bind yet.
+    says why; in the files, it's an error at load.
+  - `Super+Alt+Space` moves every keyboard to the layout after the main
+    keyboard's (§6.6), on the lock screen too. Setting one layout on all
+    of them keeps them in step. Hyprland 0.56.2's own `switchxkblayout all
+    next` moves each on from its own layout, so a keyboard plugged in after
+    a switch would stay out of step.
+  - Hyprland 0.56.2's Lua has no dispatcher or query for layouts, so
+    `conf`'s `next-layout.sh` reads `hyprctl devices -j` and runs
+    `hyprctl switchxkblayout all` with the layout's index.
+  - `Super+Space` would be GNOME's key, but it's the launcher.
   - `hyprland.local.lua` still wins, for a single device or an input
     option it sets.
   - A change the shell can't save is reported, as an idle time's is. One
