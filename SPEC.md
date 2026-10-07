@@ -1940,7 +1940,7 @@ to be focused.
   | kitty | its existing light and dark themes |
 
 - **Wallpaper.** Optional light and dark images, drawn by the shell on the
-  background layer, and blurred for the lock and greeter.
+  background layer, and blurred for the lock.
   - The shell shows the first of these it can read, for the mode it is:
     - the mode's own, `lightWallpaper` or `darkWallpaper` in
       `appearance.json`;
@@ -1955,7 +1955,15 @@ to be focused.
   - It's looked for again as the mode or the settings change, so a switch
     to dark shows the dark one at once.
   - So `tide-shell` runs no wallpaper daemon beside the Quickshell shell.
-  - The lock and the greeter don't show it yet.
+  - The lock shows the same one behind its password face, blurred and
+    darkened so the face's light text reads on a light picture. The
+    screensaver face stays black.
+  - The shell records the path it draws in the session's runtime
+    directory (`tide-wallpaper`), and the lock follows that. So the two
+    agree without the lock working out the mode or the settings itself.
+    With no record, or none in it, the lock keeps its own gradient.
+  - The greeter runs before anyone logs in, with no one's wallpaper to
+    show, so it keeps its gradient too.
 - **Fonts and icons:**
   - **Inter** for UI and **Ubuntu Mono** (roughly 11 pt) for code. That is
     one setting in `appearance.json`, handed to GTK (`font-name`,

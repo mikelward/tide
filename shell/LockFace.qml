@@ -1,6 +1,8 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Services.UPower
+import "lib/appearance.mjs" as Appearance
 import "lib/clocks.mjs" as Clocks
 import "lib/lock.mjs" as Lock
 import "lib/status.mjs" as Status
@@ -35,6 +37,9 @@ Item {
     // 24-hour time, or "4:30 PM", as clocks.json's hour24 says (SPEC.md
     // §7.3); the greeter, with no one's settings to read, keeps 24-hour.
     property bool hour24: true
+    // The wallpaper's path, drawn blurred behind the password face (SPEC.md
+    // §15), or "" for the face's own gradient; the greeter has none.
+    property string wallpaper: ""
     // The line under the field; the greeter says which session is starting.
     property string status: Lock.statusText(lockState)
     // The last power action's trouble, if any (Lock.powerMessage).
@@ -158,6 +163,38 @@ Item {
                 orientation: Gradient.Horizontal
                 GradientStop { position: 0.0; color: "#13303a" }
                 GradientStop { position: 1.0; color: "#241a3a" }
+            }
+
+            // The wallpaper, over the gradient once it has loaded: drawn
+            // through the blur, and darkened, so the face's light text
+            // reads on a light picture. Decoded at the face's size, which
+            // the blur leaves no detail to spare.
+            Image {
+                id: backdrop
+
+                anchors.fill: parent
+                visible: false
+                source: face.wallpaper === "" ? "" : Appearance.fileUrl(face.wallpaper)
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                sourceSize.width: face.width
+                sourceSize.height: face.height
+                onStatusChanged: {
+                    if (status === Image.Error) {
+                        console.warn(`tide-lock: wallpaper: couldn't load ${face.wallpaper}`);
+                    }
+                }
+            }
+
+            MultiEffect {
+                anchors.fill: parent
+                visible: backdrop.status === Image.Ready
+                source: backdrop
+                autoPaddingEnabled: false
+                blurEnabled: true
+                blur: 1.0
+                blurMax: 64
+                brightness: -0.25
             }
 
             // The notification count and the battery, top left, as the mock

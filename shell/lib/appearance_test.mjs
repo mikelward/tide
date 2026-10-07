@@ -9,7 +9,7 @@ import {
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
-    expandHome, wallpaperCandidates, fileUrl, findCommand, drawableCandidates,
+    expandHome, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
 } from "./appearance.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -573,4 +573,16 @@ test("the wallpaper is the first candidate that's a file it can read, not a dire
 test("a wallpaper the shell couldn't draw is passed over for the next", () => {
     assert.deepEqual(drawableCandidates(["/a.jpg", "/b.jpg", "/c.jpg"], ["/a.jpg"]), ["/b.jpg", "/c.jpg"]);
     assert.deepEqual(drawableCandidates(["/a.jpg"], []), ["/a.jpg"]);
+});
+
+test("the shell records the wallpaper it draws for the lock, which reads it back", () => {
+    assert.equal(wallpaperRecord("/home/user/Pictures/day 1.jpg"), "/home/user/Pictures/day 1.jpg\n");
+    assert.equal(wallpaperRecord(""), "\n", "none, as an empty line, which a missing file's FileView can still write");
+    assert.deepEqual(recordedWallpaper(wallpaperRecord("")), { path: "" });
+    assert.deepEqual(recordedWallpaper(wallpaperRecord("/home/user/Pictures/day 1.jpg")), { path: "/home/user/Pictures/day 1.jpg" });
+    assert.deepEqual(recordedWallpaper(""), { path: "" });
+    assert.deepEqual(recordedWallpaper("/srv/night.png"), { path: "/srv/night.png" }, "with no newline");
+    assert.match(recordedWallpaper("Pictures/day.jpg\n").error, /absolute path/);
+    assert.equal(recordedWallpaper("Pictures/day.jpg\n").path, "");
+    assert.match(recordedWallpaper("/a.jpg\n/b.jpg\n").error, /on a line of its own/);
 });
