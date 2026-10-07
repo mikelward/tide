@@ -14,6 +14,7 @@ export const SYMBOLS = Object.freeze({
 });
 
 import { jsonError } from "./clocks.mjs";
+import { stepped } from "./steps.mjs";
 
 // layout.lua's default `ultrawide_aspect`: a workspace starts in the
 // ultrawide mode at and above this work-area aspect, and in the normal one
@@ -230,19 +231,15 @@ const STEPS = Object.freeze({
     width: { step: 0.05, lo: 0.1, hi: 1 },
 });
 
-// A number setting moved `steps` steps, stopping at either end; `path`'s
-// last part names its kind, and a mode's nmaster stops at that mode's
-// fewest masters. The files accept more than the page's range, and a value
-// set past an end stays put rather than jumping back across it.
+// A number setting moved `steps` steps, as shell/lib/steps.mjs moves one;
+// `path`'s last part names its kind, and a mode's nmaster stops at that
+// mode's fewest masters.
 export function steppedLayout(path, value, steps) {
     const parts = path.split(".");
     const kind = parts[parts.length - 1];
     const s = STEPS[kind];
     const lo = kind === "nmaster" ? MIN_MASTERS[parts[1]] : s.lo;
-    const next = Math.round((value + steps * s.step) / s.step) * s.step;
-    // Rounded to the step's places, so 0.55 + 0.05 is 0.6, not 0.6000000001.
-    const clamped = Math.max(lo, Math.min(s.hi, Number(next.toFixed(2))));
-    return (steps > 0 && clamped < value) || (steps < 0 && clamped > value) ? value : clamped;
+    return stepped(value, steps, s.step, lo, s.hi);
 }
 
 // How the page shows a number setting: a share as a percentage.
