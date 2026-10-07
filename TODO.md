@@ -7,6 +7,24 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **The settings files are read and written synchronously.** The
+  Idle settings' `FileView`s use `blockAllReads` and `blockWrites`, so each
+  change re-reads the file and writes it before returning, with no read or
+  write in flight for a change to race. It costs a blocking read or write
+  of a file under 1 KB on the shell's UI thread, on a settings click or a
+  change to the file; a slow home directory (NFS, say) would stall the bar
+  that long. The alternative was keeping the settings in memory and
+  sequencing changes around `FileView`'s background reads and writes,
+  which review kept finding races in (PR 151). It's the `SettingsFile`
+  component in `shell/IdleData.qml`.
+
+- [ ] **A setting that can't be applied is retried every 30 s, for as long
+  as it fails.** A failed write of `tide-idle.conf` or hypridle restart
+  is one notification, then tried again on a timer with no limit. Outside a session that has hypridle's
+  unit, `try-restart` does nothing and succeeds, so this costs nothing
+  there. The alternative is a few tries with a backoff, then giving up
+  until the next change; it's the `retry` timer in `shell/IdleData.qml`.
+
 - [ ] **A wrong password doesn't shake the lock's field.** The mock had it
   shake once; tide-lock only clears it and shows the error under it. You
   insisted keystrokes never wait on an animation, and weren't sure about
@@ -413,17 +431,28 @@ tested where it can be without a live session.
 `shell/lib/settings.mjs`. CI opens it and opens the Network page's app
 from the keyboard (`shell/shell_test.sh`).
 
-- In: Sound (the devices, as the volume popover lists them, and
-  `pavucontrol`), Network (`nm-connection-editor`) and Bluetooth
+- In: Idle (below), Sound (the devices, as the volume popover lists them,
+  and `pavucontrol`), Network (`nm-connection-editor`) and Bluetooth
   (`blueman-manager`).
-- Next, in the maintainer's order: Idle, then Mouse and Keyboard. Neither
-  has an app to link out to that reaches Hyprland or hypridle.
-  - Idle: the timings are hard-coded in `conf`'s `hypridle.conf` today.
-    The page needs tide to own them (`idle.json` and `idle.local.json`,
-    §16.1) and give them to hypridle.
-  - Mouse and Keyboard: not in §16's table yet. They'd apply through
-    `hyprctl eval` and persist in the generated Lua include §16
-    describes, which `conf`'s `hyprland.lua` would have to load.
+- Idle steps each of SPEC.md §10's times along a ladder of durations
+  (`shell/lib/idle.mjs`), writing `idle.local.json`; `shell/IdleData.qml`
+  writes `~/.config/hypr/tide-idle.conf` and restarts hypridle. CI checks
+  the shell writes the default timings and restarts hypridle at startup.
+  Still to do:
+  - A failed hypridle restart is retried only while the shell runs. A
+    shell restarted before the retry works takes the file on disk as
+    applied, so hypridle keeps its old times until it next restarts.
+    Recording what hypridle was last given, in `$XDG_RUNTIME_DIR`, would
+    let the new shell tell (`readTarget` in `shell/lib/writes.mjs`).
+  - Suspend on AC, §16's other Idle setting: `tide idle-suspend` would
+    read it.
+  - On a live session, check a change restarts hypridle with the new
+    times, and that Fedora's hypridle is 0.1.7 or later for `source`
+    (Ubuntu 26.04 has 0.1.7).
+- Next, in the maintainer's order: Mouse and Keyboard. Not in §16's table
+  yet, and nothing to link out to reaches Hyprland's input settings.
+  They'd apply through `hyprctl eval` and persist in the generated Lua
+  include §16 describes, which `conf`'s `hyprland.lua` would have to load.
 - Then the rest of §16's table: Appearance, Displays, Layouts, Clocks and
   Keys.
 

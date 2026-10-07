@@ -39,6 +39,10 @@ ShellRoot {
     // The polkit prompt (opt-in; see PolkitData.qml), which does the same.
     PolkitPrompt {}
 
+    // hypridle's timings are written from the start (IdleData), not when
+    // the settings panel first shows them.
+    Component.onCompleted: IdleData.load()
+
     // A toplevel's class and fullscreen state come from Hyprland's client
     // list, which Quickshell reads on request; ask again when they change.
     Connections {

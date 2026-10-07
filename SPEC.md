@@ -1071,6 +1071,23 @@ today's `hypridle.conf`:
 | 5 min 30 s | displays off (DPMS); back on at any input |
 | 30 min | suspend, on battery only. On AC it never suspends; the displays just stay off. Decided in review of this spec. |
 
+- **The times are settings.** They're `dim`, `lock`, `displaysOff` and
+  `suspend`, in seconds, in `idle.json` and `idle.local.json` (§16.1), and
+  the settings panel's Idle page changes them.
+  - The shell writes them to `~/.config/hypr/tide-idle.conf` as hyprlang
+    variables. `conf`'s `hypridle.conf` sets the numbers above first, then
+    sources that file (`source`, hypridle 0.1.7), so its commands stay
+    hand-written and a missing file leaves today's timeline.
+  - hypridle reads its config only as it starts (its source, 0.1.8), so the
+    shell restarts it after writing. A restart drops the idle inhibits apps
+    hold over D-Bus until they ask again; the bar's keep awake goes through
+    the compositor and isn't affected.
+  - A file that fails to parse changes nothing: it's reported once, and
+    hypridle keeps the last good timings.
+  - A change the shell can't save is reported, and the page keeps the old
+    time. One it can't write to hypridle's file or restart hypridle for is
+    reported once, and tried again every 30 seconds, for as long as the
+    shell runs, until it's in.
 - **Unplugging while idle.** If you unplug after the 30 minutes have
   passed, the machine suspends then. The 30-minute step runs
   `tide idle-suspend`, which suspends on battery and otherwise leaves
@@ -1939,6 +1956,9 @@ sway's `config.local`:
 - **The settings panel writes only `.local` files.** It never edits a file
   that `conf` manages, so a `conf` update can't clobber a setting, and a
   setting can't dirty the `conf` checkout.
+  - The shell reads the file just before each change and writes it at
+    once, so a change builds on the one before it, and on a hand edit
+    made a moment earlier.
 - **Reloads are live.** Either file changing on disk triggers a live reload.
   A file that fails to parse is reported once, as a notification naming the
   file and line, and the last good settings stay in effect.
@@ -2061,7 +2081,7 @@ light/dark switch.
 | Repo | Gets |
 |---|---|
 | **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, launcher, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide grant` and `tide idle-suspend`. The Lua tiling layout. `make install`. |
-| **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf` timings; uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts), with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
+| **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts), with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **scripts** | `setup --tide`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |
 | **dwl** (exploration) | The tide fork of dwl that §21.1 is exploring, on upstream's history, under dwl's GPL-3.0-or-later license: the layouts, dimming and IPC it would add. Nothing else depends on it until §21.1's next steps are done and §3.1 is rewritten around it. |
