@@ -1917,10 +1917,10 @@ tide's own, and links out for the rest:
 | Layouts | default layout per aspect ratio, `mfact`, the rule for new windows |
 | Clocks | zones, order, 24 h, dedupe-local |
 | Idle | the four timings, suspend on AC (off by default) |
-| Mouse | for every mouse: speed, scroll speed, natural scrolling, left-handed |
-| Touchpad | for every touchpad: the same, plus tap to click and off while typing |
 | Sound | output and input devices; *advanced* opens `pavucontrol` |
 | Network, Bluetooth | *advanced* opens `nm-connection-editor` / `blueman-manager` |
+| Mouse | for every mouse: speed, scroll speed, natural scrolling, left-handed |
+| Touchpad | for every touchpad: the same, plus tap to click and off while typing |
 | Keys | a read-only list of the current bindings, generated from the config |
 
 Hyprland-side settings are applied live through `hyprctl eval` and

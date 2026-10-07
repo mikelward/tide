@@ -697,8 +697,8 @@ focused() {
 # launch`. The app is a desktop entry only this test installs, and the
 # query leaves out its accent ("Café"), so the match also checks the
 # accent folding runs in Qt's engine. Then it opens the settings panel and
-# expects Down four times, past Idle, Mouse, Touchpad and Sound, and Enter
-# to open the Network page's app. A stand-in tide on
+# expects Down twice, past Idle and Sound, and Enter to open the Network
+# page's app. A stand-in tide on
 # the shell's PATH keeps each command rather than running it. Its log is
 # $tmp/launch.qs.log.
 launch() {
@@ -760,7 +760,7 @@ launch() {
     ipc call settings open >/dev/null || exit 1
     focused "$_focus"
     timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
-        LANG=C.UTF-8 "$wtype_path" -k Down -k Down -k Down -k Down -k Return >"$tmp/wtype.log" 2>&1
+        LANG=C.UTF-8 "$wtype_path" -k Down -k Down -k Return >"$tmp/wtype.log" 2>&1
     typed $? "the settings panel"
     i=0
     until test "$(wc -l <"$tmp/launched")" -ge 2; do

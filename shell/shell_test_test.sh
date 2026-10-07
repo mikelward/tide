@@ -380,7 +380,7 @@ run "$tmp/clean"
 check "a launcher that runs the app typed passes" contains "$out" "ok: the launcher finds an app by a query without its accent, and runs it"
 check "having typed the query and Enter" test "$(head -n 1 "$tmp/clean/typed")" = cafepro
 check "and a settings panel that opens the Network page's app passes" contains "$out" "ok: the settings panel changes page with the arrows and opens the page's app"
-check "having pressed Down four times and Enter" test "$(sed -n 2p "$tmp/clean/typed")" = "-k Down -k Down -k Down -k Down -k Return"
+check "having pressed Down twice and Enter" test "$(sed -n 2p "$tmp/clean/typed")" = "-k Down -k Down -k Return"
 
 stubs "$tmp/runs-nothing" "exit 0" "$loaded" ":" "$opened; $focused; $typed"
 run "$tmp/runs-nothing"
