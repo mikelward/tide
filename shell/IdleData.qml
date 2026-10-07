@@ -16,9 +16,8 @@ import "lib/writes.mjs" as Writes
 // (shell/lib/writes.mjs).
 //
 // The files are read and written as they're needed, synchronously
-// (FileView's blockAllReads and blockWrites): they're under 1 KB, and it
-// means what the shell reads is the file, with no read or write in flight
-// for a change to race.
+// (SettingsFile.qml): they're under 1 KB, and it means what the shell
+// reads is the file, with no read or write in flight for a change to race.
 Singleton {
     id: root
 
@@ -50,7 +49,7 @@ Singleton {
     function set(key, value) {
         // The file as it is now, not as it last loaded, so a hand edit made
         // a moment ago is built on, not written over.
-        const text = root.readNow(local);
+        const text = local.readNow();
         if (local.broken !== "") {
             return `${local.broken}; not changing ${key}`;
         }
@@ -58,43 +57,16 @@ Singleton {
         if (result.error) {
             return `${result.error}; not changing ${key}`;
         }
-        const error = root.writeNow(local, result.text);
+        const error = local.writeNow(result.text);
         root.saveFailure = error === "" ? "" : `${error}; idle setting not saved`;
         root.load();
         return root.saveFailure;
     }
 
-    // The file's text now, or null when it doesn't exist or can't be read
-    // (which sets its `broken`). blockAllReads makes text() read it before
-    // returning, so loaded or loadFailed has fired by then.
-    function readNow(file) {
-        file.reload();
-        const text = file.text();
-        return file.loaded && file.broken === "" ? text : null;
-    }
-
-    // Writes the file now, returning why it couldn't, or "". blockWrites
-    // makes setText() write before returning, so saved or saveFailed has
-    // fired by then. A failed write leaves FileView holding the text it
-    // couldn't write, which the next readNow replaces with the file's.
-    function writeNow(file, text) {
-        file.failure = "";
-        file.setText(text);
-        if (file.failure !== "") {
-            return file.failure;
-        }
-        // An atomic write whose commit fails is only logged, and still
-        // signals saved (Quickshell 0.3.1), so read it back.
-        if (root.readNow(file) !== text) {
-            return file.broken !== "" ? file.broken : `${file.path}: the write didn't take`;
-        }
-        return "";
-    }
-
     function stepped(r) {
         root.target = r.state;
         if (r.action?.write !== undefined) {
-            const error = root.writeNow(written, r.action.write);
+            const error = written.writeNow(r.action.write);
             root.stepped(Writes.targetWritten(root.target, error === "" ? "" : `${error}; hypridle keeps its timings`));
             return;
         }
@@ -142,8 +114,8 @@ Singleton {
     // a settings file changes on disk, after the panel's changes, and on a
     // retry.
     function load() {
-        const sharedText = root.readNow(shared);
-        const localText = root.readNow(local);
+        const sharedText = shared.readNow();
+        const localText = local.readNow();
         const broken = [shared.broken, local.broken].filter(b => b !== "");
         const result = Idle.loadIdle(sharedText, localText, root.idle);
         for (const error of result.errors) {
@@ -158,7 +130,7 @@ Singleton {
         }
         root.idle = result.idle;
         root.writeSuspend();
-        const writtenText = root.readNow(written);
+        const writtenText = written.readNow();
         if (written.broken !== "") {
             // Unreadable, it isn't written over either; it's read again on
             // the retry.
@@ -183,7 +155,7 @@ Singleton {
         if (root.runtimeDir === "") {
             return writtenText;
         }
-        const text = root.readNow(recorded);
+        const text = recorded.readNow();
         if (recorded.broken !== "") {
             console.warn(`tide: ${recorded.broken}; restarting hypridle to be sure it has its timings`);
             return null;
@@ -199,7 +171,7 @@ Singleton {
         if (root.runtimeDir === "") {
             return true;
         }
-        const error = root.writeNow(recorded, text);
+        const error = recorded.writeNow(text);
         if (error !== "") {
             console.warn(`tide: ${error}; hypridle may be restarted again to be sure it has its timings`);
             return false;
@@ -212,34 +184,12 @@ Singleton {
     // is reported, and tried again with the rest.
     function writeSuspend() {
         const text = Idle.suspendConf(root.idle);
-        if (root.readNow(suspended) === text) {
+        if (suspended.readNow() === text) {
             root.suspendFailure = "";
             return;
         }
-        const error = root.writeNow(suspended, text);
+        const error = suspended.writeNow(text);
         root.suspendFailure = error === "" ? "" : `${error}; idle-suspend keeps its last Suspend on AC`;
-    }
-
-    component SettingsFile: FileView {
-        // Why it can't be read, or "" when it can (or doesn't exist).
-        property string broken: ""
-        // Why the last write failed, or "".
-        property string failure: ""
-
-        preload: false
-        blockAllReads: true
-        blockWrites: true
-        atomicWrites: true
-        printErrors: false
-        onLoaded: broken = ""
-        onLoadFailed: error => {
-            // A missing file is the defaults' cue, not an error.
-            broken = error === FileViewError.FileNotFound ? "" : `${path}: ${FileViewError.toString(error)}`;
-            if (broken !== "") {
-                console.warn(`tide: ${broken}`);
-            }
-        }
-        onSaveFailed: error => failure = `${path}: ${FileViewError.toString(error)}`
     }
 
     SettingsFile {

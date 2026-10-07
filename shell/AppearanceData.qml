@@ -14,8 +14,8 @@ import "lib/writes.mjs" as Writes
 // shell's own palette (Theme) in place. The launcher's flip
 // (`flip`) lasts until the schedule's next change. The settings panel's
 // Appearance page (§16) changes the settings through `set`, in
-// appearance.local.json, read and written synchronously as IdleData's
-// files. The inactive dim's strength reaches Hyprland as LayoutsData's
+// appearance.local.json, read and written synchronously
+// (SettingsFile.qml). The inactive dim's strength reaches Hyprland as LayoutsData's
 // settings do: written to ~/.config/hypr/tide-appearance.lua, which conf's
 // hyprland.lua reads, and applied with `hyprctl eval
 // conf_appearance.reload()`, tried again until it is (shell/lib/writes.mjs).
@@ -157,7 +157,7 @@ Singleton {
 
     // Writes what Hyprland is to have and applies it, when it's changed.
     function writeDim() {
-        const writtenText = root.readNow(written);
+        const writtenText = written.readNow();
         if (written.broken !== "") {
             // Unreadable, it isn't written over either; it's read again on
             // the retry.
@@ -174,7 +174,7 @@ Singleton {
     function stepped(r) {
         root.target = r.state;
         if (r.action?.write !== undefined) {
-            const error = root.writeNow(written, r.action.write);
+            const error = written.writeNow(r.action.write);
             root.stepped(Writes.targetWritten(root.target, error === "" ? "" : `${error}; the dim keeps its strength`));
             return;
         }
@@ -203,8 +203,8 @@ Singleton {
     // last loaded, so a hand edit made a moment ago is built on, and one
     // that doesn't parse is left as it is. Returns why it didn't, or "".
     function set(key, value) {
-        const sharedText = root.readNow(sharedNow);
-        const localText = root.readNow(localNow);
+        const sharedText = sharedNow.readNow();
+        const localText = localNow.readNow();
         const broken = [sharedNow.broken, localNow.broken].filter(b => b !== "");
         if (broken.length > 0) {
             return `${broken[0]}; not changing ${key}`;
@@ -213,7 +213,7 @@ Singleton {
         if (result.error) {
             return `${result.error}; not changing ${key}`;
         }
-        const error = root.writeNow(localNow, result.text);
+        const error = localNow.writeNow(result.text);
         root.saveFailure = error === "" ? "" : `${error}; appearance setting not saved`;
         if (error !== "") {
             console.warn(`tide: ${root.saveFailure}`);
@@ -222,26 +222,6 @@ Singleton {
         // reports a save failure, or that it's gone.
         local.reload();
         return root.saveFailure;
-    }
-
-    // As IdleData's.
-    function readNow(file) {
-        file.reload();
-        const text = file.text();
-        return file.loaded && file.broken === "" ? text : null;
-    }
-
-    // As IdleData's, read back since a failed atomic commit only logs.
-    function writeNow(file, text) {
-        file.failure = "";
-        file.setText(text);
-        if (file.failure !== "") {
-            return file.failure;
-        }
-        if (root.readNow(file) !== text) {
-            return file.broken !== "" ? file.broken : `${file.path}: the write didn't take`;
-        }
-        return "";
     }
 
     // A bad file is a notification naming it and the line (SPEC.md §16.1),
@@ -306,31 +286,9 @@ Singleton {
         }
     }
 
-    // The files again, for the Appearance page's changes, as IdleData's:
-    // read and written as they're needed, synchronously, so a change builds
-    // on the file as it is.
-    component SettingsFile: FileView {
-        // Why it can't be read, or "" when it can (or doesn't exist).
-        property string broken: ""
-        // Why the last write failed, or "".
-        property string failure: ""
-
-        preload: false
-        blockAllReads: true
-        blockWrites: true
-        atomicWrites: true
-        printErrors: false
-        onLoaded: broken = ""
-        onLoadFailed: error => {
-            // A missing file is nothing set, not an error.
-            broken = error === FileViewError.FileNotFound ? "" : `${path}: ${FileViewError.toString(error)}`;
-            if (broken !== "") {
-                console.warn(`tide: ${broken}`);
-            }
-        }
-        onSaveFailed: error => failure = `${path}: ${FileViewError.toString(error)}`
-    }
-
+    // The files again, for the Appearance page's changes: read and written as
+    // they're needed, synchronously (SettingsFile.qml), so a change builds on
+    // the file as it is.
     SettingsFile {
         id: sharedNow
 

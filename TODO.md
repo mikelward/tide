@@ -15,9 +15,8 @@ once you have agreed with it or reversed it.
   a settings click or a change to the file; a slow home directory (NFS, say)
   would stall the bar that long. The alternative was keeping the settings in
   memory and sequencing changes around `FileView`'s background reads and
-  writes, which review kept finding races in (PR 151). It's the
-  `SettingsFile` component in `shell/IdleData.qml` and
-  `shell/InputData.qml`.
+  writes, which review kept finding races in (PR 151). It's
+  `shell/SettingsFile.qml`, which every settings page's data uses.
 
 - [ ] **A setting that can't be applied is retried every 30 s, for as long as
   it fails.** A failed write of `tide-idle.conf` or hypridle restart is one
@@ -657,10 +656,6 @@ from the keyboard (`shell/shell_test.sh`).
   - On a live session, check a scale and a place take at once, that a
     closed lid's panel stays off, and what Hyprland does with a scale that
     doesn't divide the screen.
-- `SettingsFile`, the synchronous `FileView`, is written out in each
-  settings singleton (`IdleData`, `InputData`, `ClockData`,
-  `LayoutsData`, `AppearanceData`, `OutputsData`); move it to one file
-  once the pages settle.
 
 ## Notifications (M4)
 

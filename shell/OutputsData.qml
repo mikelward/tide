@@ -16,7 +16,7 @@ import "lib/writes.mjs" as Writes
 // once, and changes nothing. So is a change that can't be saved; one that
 // can't be written or applied is tried again until it is
 // (shell/lib/writes.mjs). The files are read and written as they're
-// needed, synchronously, as IdleData's are.
+// needed, synchronously (SettingsFile.qml).
 Singleton {
     id: root
 
@@ -47,8 +47,8 @@ Singleton {
     // edit gone wrong isn't lost, or one that can't be saved.
     function set(description, key, value) {
         // The files as they are now, as IdleData.
-        const sharedText = root.readNow(shared);
-        const localText = root.readNow(local);
+        const sharedText = shared.readNow();
+        const localText = local.readNow();
         const broken = [shared.broken, local.broken].filter(b => b !== "");
         if (broken.length > 0) {
             return `${broken[0]}; not changing ${description}'s ${key}`;
@@ -63,8 +63,8 @@ Singleton {
     // Clears every setting outputs.local.json has for a monitor, as the
     // page's Reset does; outputs.json's, if any, still apply. As set.
     function reset(description) {
-        const sharedText = root.readNow(shared);
-        const localText = root.readNow(local);
+        const sharedText = shared.readNow();
+        const localText = local.readNow();
         const broken = [shared.broken, local.broken].filter(b => b !== "");
         if (broken.length > 0) {
             return `${broken[0]}; not resetting ${description}`;
@@ -77,7 +77,7 @@ Singleton {
     }
 
     function save(text) {
-        const error = root.writeNow(local, text);
+        const error = local.writeNow(text);
         root.saveFailure = error === "" ? "" : `${error}; display setting not saved`;
         root.load();
         return root.saveFailure;
@@ -90,30 +90,10 @@ Singleton {
         lister.createObject(root).running = true;
     }
 
-    // As IdleData's.
-    function readNow(file) {
-        file.reload();
-        const text = file.text();
-        return file.loaded && file.broken === "" ? text : null;
-    }
-
-    // As IdleData's, read back since a failed atomic commit only logs.
-    function writeNow(file, text) {
-        file.failure = "";
-        file.setText(text);
-        if (file.failure !== "") {
-            return file.failure;
-        }
-        if (root.readNow(file) !== text) {
-            return file.broken !== "" ? file.broken : `${file.path}: the write didn't take`;
-        }
-        return "";
-    }
-
     function stepped(r) {
         root.target = r.state;
         if (r.action?.write !== undefined) {
-            const error = root.writeNow(written, r.action.write);
+            const error = written.writeNow(r.action.write);
             root.stepped(Writes.targetWritten(root.target, error === "" ? "" : `${error}; the monitors keep their settings`));
             return;
         }
@@ -152,8 +132,8 @@ Singleton {
     // Reads both settings files and the file conf reads, and writes and
     // applies the settings when they've changed, as IdleData.load.
     function load() {
-        const sharedText = root.readNow(shared);
-        const localText = root.readNow(local);
+        const sharedText = shared.readNow();
+        const localText = local.readNow();
         const broken = [shared.broken, local.broken].filter(b => b !== "");
         const result = Outputs.loadOutputs(sharedText, localText, root.outputs);
         for (const error of result.errors) {
@@ -167,7 +147,7 @@ Singleton {
         }
         root.outputs = result.settings;
         root.localSettings = Outputs.localOutputs(localText);
-        const writtenText = root.readNow(written);
+        const writtenText = written.readNow();
         if (written.broken !== "") {
             // Unreadable, it isn't written over either; it's read again on
             // the retry.
@@ -181,28 +161,6 @@ Singleton {
         // rule hasn't changed alone.
         root.target = Writes.readTarget(root.target, writtenText, null).state;
         root.stepped(Writes.wantTarget(root.target, Outputs.outputsLua(root.outputs)));
-    }
-
-    component SettingsFile: FileView {
-        // Why it can't be read, or "" when it can (or doesn't exist).
-        property string broken: ""
-        // Why the last write failed, or "".
-        property string failure: ""
-
-        preload: false
-        blockAllReads: true
-        blockWrites: true
-        atomicWrites: true
-        printErrors: false
-        onLoaded: broken = ""
-        onLoadFailed: error => {
-            // A missing file is nothing set, not an error.
-            broken = error === FileViewError.FileNotFound ? "" : `${path}: ${FileViewError.toString(error)}`;
-            if (broken !== "") {
-                console.warn(`tide: ${broken}`);
-            }
-        }
-        onSaveFailed: error => failure = `${path}: ${FileViewError.toString(error)}`
     }
 
     SettingsFile {
