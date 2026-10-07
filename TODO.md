@@ -656,8 +656,6 @@ from the keyboard (`shell/shell_test.sh`).
 - Keys (`shell/lib/keys.mjs`, `shell/KeysData.qml`) lists `hyprctl
   binds -j` as the shell starts and as the page shows. CI checks the shell
   lists them. Still to do:
-  - `conf`'s bindings need a `description` each, or the page shows only
-    their keys.
   - On a live session, check the listing parses as 0.56.2 gives it, and
     that a binding added to `hyprland.local.lua` shows after a reload.
 - Layouts (`shell/lib/layouts.mjs`, `shell/LayoutsData.qml`,
