@@ -44,6 +44,14 @@ once you have agreed with it or reversed it.
   Touchpad after Idle. It's `PAGES` in `shell/lib/settings.mjs`, and §16's
   table, which the sidebar follows.
 
+- [ ] **A mouse or touchpad is chosen by name with ‹ and ›, not from a
+  list.** The Mouse and Touchpad pages step through every device of the kind
+  and each one by name, in one row, as the − and + steppers do. The
+  alternative is a list of the devices, which takes more of the page than
+  two or three mice need. Only the page's control would change; the
+  `devices` table holds the same either way. It's the chooser in
+  `shell/SettingsWindow.qml`'s device column.
+
 - [ ] **A wrong password doesn't shake the lock's field.** The mock had it
   shake once; tide-lock only clears it and shows the error under it. You
   insisted keystrokes never wait on an animation, and weren't sure about
@@ -472,16 +480,18 @@ from the keyboard (`shell/shell_test.sh`).
   `shell/InputData.qml`) write `~/.config/hypr/tide-input.lua` and run
   `hyprctl eval 'conf_input.reload()'`, which `conf`'s `hyprland.lua`
   defines (its PR "Apply tide's Mouse, Touchpad and Keyboard settings").
-  CI checks the shell writes no settings at startup, then three set over
-  IPC, a keyboard layout among them, applying each. Still to do:
-  - Settings for one device by name, not just every mouse or every
-    touchpad: what the maintainer said matters most, after the first
-    milestone.
+  CI checks the shell writes no settings at startup, then four set over
+  IPC, a keyboard layout and one mouse's own speed among them, applying
+  each, and lists the mice and touchpads. Still to do:
+  - A keyboard by name, as a mouse or touchpad can be: `hl.device` takes
+    the keyboard's options too.
   - A key to switch between two keyboard layouts. `conf` sets
     `kb_options` without a `grp:` toggle, so a second layout is only
     reachable with `hyprctl switchxkblayout`.
   - On a live session, check a change reaches a mouse and a touchpad at
-    once, and survives `hyprctl reload`; that a layout typed on the
+    once, and survives `hyprctl reload`; that one mouse chosen by name
+    takes its own speed while another keeps every mouse's, and that Reset
+    gives it back; that a layout typed on the
     Keyboard page takes at once, and what a name XKB doesn't know does;
     and that the text field takes the keyboard and gives it back on Enter,
     on Escape, and on a click on a button or blank space, which also puts

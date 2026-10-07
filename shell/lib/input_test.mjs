@@ -1,7 +1,10 @@
 // Tests for input.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { LADDERS, SECTIONS, formatValue, inputLua, isText, loadInput, pairError, parseInput, parseValue, settingError, shown, stepped, withSetting } from "./input.mjs";
+import {
+    LADDERS, SECTIONS, connectedDevices, deviceKind, listedDevices, deviceSettingError, deviceShown, formatValue, hasOwn, inputLua, isText, loadInput,
+    pairError, parseInput, parseValue, settingError, shown, stepped, targetLabel, targets, withDeviceSetting, withSetting, withoutDevice,
+} from "./input.mjs";
 
 test("mice and touchpads have their own settings, in Hyprland's option names", () => {
     assert.deepEqual(SECTIONS.mouse.map(s => [s.key, s.option]), [
@@ -212,4 +215,112 @@ test("a section named after something every object has is unknown, not a crash",
     assert.match(parseInput('{"__proto__": {"speed": 1}}').error, /^unknown section "__proto__"/);
     assert.match(settingError("toString", "speed", 1), /^unknown section "toString"/);
     assert.match(withSetting(null, "constructor", "speed", 1).error, /^unknown section "constructor"/);
+});
+
+test("a pointer is a touchpad when its name says so, else a mouse, as conf's apply-input.sh decides", () => {
+    assert.equal(deviceKind("synps/2-synaptics-touchpad"), "touchpad");
+    assert.equal(deviceKind("apple-magic-trackpad"), "touchpad");
+    assert.equal(deviceKind("elan0670:00-04f3:3150-touchpad"), "touchpad");
+    assert.equal(deviceKind("logitech-usb-receiver"), "mouse");
+    assert.equal(deviceKind("tpps/2-elan-trackpoint"), "mouse");
+});
+
+test("a device takes its kind's settings, named for it", () => {
+    assert.deepEqual(parseInput('{"devices": {"logitech-usb-receiver": {"speed": 0.5}, "synps/2-synaptics-touchpad": {"tapToClick": false}}}'), {
+        settings: { devices: { "logitech-usb-receiver": { speed: 0.5 }, "synps/2-synaptics-touchpad": { tapToClick: false } } },
+    });
+    assert.match(parseInput('{"devices": {"logitech-usb-receiver": {"tapToClick": false}}}').error,
+        /^devices\.logitech-usb-receiver: unknown setting "mouse\.tapToClick"/, "a mouse has no tap to click");
+    assert.match(parseInput('{"devices": {"trackball": {"speed": 3}}}').error, /^devices\.trackball\.speed must be from -1 to 1/);
+    assert.match(parseInput('{"devices": {"bad\\"name": {}}}').error, /^devices: "bad"name" isn't a name/, "nothing that needs escaping reaches Lua");
+    assert.match(parseInput('{"devices": {"__proto__": {"speed": 0}}}').error, /^devices: "__proto__" isn't a name/);
+    assert.match(parseInput('{"devices": []}').error, /^devices must be an object/);
+    assert.match(parseInput('{"devices": {"trackball": 1}}').error, /^devices\.trackball must be an object/);
+    assert.equal(deviceSettingError("trackball", "leftHanded", false), "");
+});
+
+test("each file's devices merge key by key, and a device shows its own setting, else its kind's", () => {
+    const { input, errors } = loadInput(
+        '{"mouse": {"speed": -0.5}, "devices": {"trackball": {"speed": 0.25, "leftHanded": false}}}',
+        '{"devices": {"trackball": {"speed": 0.75}, "constructor": {"speed": 0}}}');
+    assert.deepEqual(errors, []);
+    assert.deepEqual(input.devices.trackball, { speed: 0.75, leftHanded: false });
+    assert.equal(deviceShown(input, "trackball", "speed"), 0.75);
+    assert.equal(deviceShown(input, "trackball", "scrollSpeed"), 3, "conf's, through every mouse");
+    assert.equal(deviceShown(input, "other-mouse", "speed"), -0.5, "every mouse's");
+    assert.equal(deviceShown(input, "toString", "speed"), -0.5, "a name every object has is just a device without settings");
+    assert.equal(hasOwn(input, "trackball"), true);
+    assert.equal(hasOwn(input, "other-mouse"), false);
+});
+
+test("a device's own settings reach hyprland.lua under its name, and none means no devices table", () => {
+    const text = inputLua({ devices: { "synps/2-synaptics-touchpad": { tapToClick: false, speed: -0.25 }, trackball: { leftHanded: false }, empty: {} } });
+    assert.ok(text.endsWith([
+        "    keyboard = {},",
+        "    devices = {",
+        '        ["synps/2-synaptics-touchpad"] = { sensitivity = -0.25, tap_to_click = false },',
+        '        ["trackball"] = { left_handed = false },',
+        "    },",
+        "}",
+        "",
+    ].join("\n")), text);
+    assert.ok(!inputLua({ devices: {} }).includes("devices"));
+});
+
+test("a device's own setting is set and cleared in the local file, keeping the rest", () => {
+    let r = withDeviceSetting('{"mouse": {"speed": 0}}', "trackball", "leftHanded", false);
+    assert.equal(r.text, '{\n  "mouse": {\n    "speed": 0\n  },\n  "devices": {\n    "trackball": {\n      "leftHanded": false\n    }\n  }\n}\n');
+    r = withDeviceSetting(r.text, "trackball", "speed", 0.5);
+    assert.deepEqual(JSON.parse(r.text).devices.trackball, { speed: 0.5, leftHanded: false }, "in the page's order");
+    r = withDeviceSetting(r.text, "trackball", "speed", undefined);
+    assert.deepEqual(JSON.parse(r.text).devices.trackball, { leftHanded: false });
+    r = withDeviceSetting(r.text, "trackball", "leftHanded", undefined);
+    assert.deepEqual(JSON.parse(r.text), { mouse: { speed: 0 } }, "a device with nothing of its own is gone");
+    assert.match(withDeviceSetting(null, "trackball", "tapToClick", true).error, /unknown setting "mouse\.tapToClick"/);
+    assert.match(withDeviceSetting(null, "bad\\name", "speed", undefined).error, /^devices: "bad\\name" isn't/);
+    assert.match(withDeviceSetting('{"mouse": ', "trackball", "speed", 0).error, /^input\.local\.json: line 1:/);
+});
+
+test("a device's own settings are cleared all at once", () => {
+    const r = withoutDevice('{"devices": {"trackball": {"speed": 0.5}, "other": {"speed": 0}}}', "trackball");
+    assert.deepEqual(JSON.parse(r.text), { devices: { other: { speed: 0 } } });
+    assert.deepEqual(JSON.parse(withoutDevice(null, "trackball").text), {});
+});
+
+test("a page sets every device of its kind, or one by name, connected or with settings of its own", () => {
+    const connected = [{ name: "logitech-usb-receiver", kind: "mouse" }, { name: "synps/2-synaptics-touchpad", kind: "touchpad" }];
+    const input = { devices: { trackball: { speed: 0 }, "apple-magic-trackpad": { speed: 0 } } };
+    assert.deepEqual(targets(input, connected, "mouse"), ["", "logitech-usb-receiver", "trackball"]);
+    assert.deepEqual(targets(input, connected, "touchpad"), ["", "apple-magic-trackpad", "synps/2-synaptics-touchpad"]);
+    assert.deepEqual(targets({}, [], "mouse"), [""]);
+    assert.deepEqual(targets(input, connected.concat([{ name: "trackball", kind: "mouse" }]), "mouse"), ["", "logitech-usb-receiver", "trackball"], "once each");
+    assert.equal(targetLabel("mouse", ""), "Every mouse");
+    assert.equal(targetLabel("touchpad", ""), "Every touchpad");
+    assert.equal(targetLabel("mouse", "trackball"), "trackball");
+});
+
+test("hyprctl's devices are read for their mice and touchpads", () => {
+    const json = JSON.stringify({
+        mice: [
+            { address: "0x1", name: "logitech-usb-receiver", defaultSpeed: 0, scrollFactor: -1 },
+            { address: "0x2", name: "synps/2-synaptics-touchpad", defaultSpeed: 0, scrollFactor: -1 },
+            { address: "0x3", name: 'bad"name' },
+            { address: "0x4" },
+        ],
+        keyboards: [{ name: "at-translated-set-2-keyboard" }],
+    });
+    assert.deepEqual(connectedDevices(json), {
+        devices: [{ name: "logitech-usb-receiver", kind: "mouse" }, { name: "synps/2-synaptics-touchpad", kind: "touchpad" }],
+    });
+    assert.match(connectedDevices("{").error, /^hyprctl devices -j: line 1:/);
+    assert.match(connectedDevices("{}").error, /no list of mice/);
+});
+
+test("a listing that fails, or doesn't read, names no devices, not the last list's", () => {
+    const json = JSON.stringify({ mice: [{ name: "trackball" }] });
+    assert.deepEqual(listedDevices(false, json), { devices: [{ name: "trackball", kind: "mouse" }], error: "" });
+    assert.deepEqual(listedDevices(true, json), { devices: [], error: "" }, "a failed run's output isn't read");
+    const bad = listedDevices(false, "{");
+    assert.deepEqual(bad.devices, []);
+    assert.match(bad.error, /^hyprctl devices -j: line 1:/);
 });

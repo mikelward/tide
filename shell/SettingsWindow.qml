@@ -101,6 +101,16 @@ PanelWindow {
         function setInput(section: string, key: string, value: string): string {
             return InputData.set(section, key, Input.parseValue(section, key, value));
         }
+        // Sets one mouse's or touchpad's own setting, by its name in
+        // `hyprctl devices`, as those pages do with that device chosen: `qs
+        // -c tide ipc call settings setDevice trackball speed 0.5`.
+        function setDevice(name: string, key: string, value: string): string {
+            return InputData.setDevice(name, key, Input.parseValue(Input.deviceKind(name), key, value));
+        }
+        // Clears every setting of that device's own, as Reset does.
+        function clearDevice(name: string): string {
+            return InputData.clearDevice(name);
+        }
     }
 
     Connections {
@@ -358,21 +368,118 @@ PanelWindow {
                         id: device
 
                         readonly property string section: ["mouse", "touchpad", "keyboard"].includes(root.current.id) ? root.current.id : ""
+                        readonly property bool pointer: section === "mouse" || section === "touchpad"
+                        // Every device of the kind (""), then each one by
+                        // name, which ‹ and › step through.
+                        readonly property var targets: pointer ? Input.targets(InputData.input, InputData.connected, section) : [""]
+                        // The one the settings below are for: "" for every
+                        // device of the kind, or one by name.
+                        property string name: ""
+                        readonly property int at: Math.max(0, targets.indexOf(name))
                         // Why the last change made here was refused, until
                         // the next one or another page.
                         property string refused: ""
 
                         function set(key, value) {
-                            refused = InputData.set(section, key, value);
+                            refused = name === "" ? InputData.set(section, key, value) : InputData.setDevice(name, key, value);
                             root.report(refused);
                         }
 
-                        onSectionChanged: refused = ""
+                        function shown(key) {
+                            return name === "" ? Input.shown(InputData.input, section, key) : Input.deviceShown(InputData.input, name, key);
+                        }
+
+                        onSectionChanged: {
+                            refused = "";
+                            name = "";
+                            if (pointer) {
+                                InputData.listDevices();
+                            }
+                        }
+                        // One unplugged with nothing of its own, or just
+                        // reset, has gone from the list.
+                        onTargetsChanged: {
+                            if (!targets.includes(name)) {
+                                name = "";
+                            }
+                        }
 
                         visible: section !== ""
                         width: parent.width
                         topPadding: 6
                         spacing: 2
+
+                        // Which the settings are for, once there's a
+                        // device to choose; a device with settings of its
+                        // own can go back to its kind's.
+                        Item {
+                            visible: device.targets.length > 1
+                            width: device.width
+                            implicitHeight: 32
+
+                            Row {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+
+                                StepButton {
+                                    name: "go-previous-symbolic"
+                                    value: device.at
+                                    next: Math.max(0, device.at - 1)
+                                    onActivated: device.name = device.targets[next]
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 300
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideMiddle
+                                    // Device names come from the hardware:
+                                    // never markup.
+                                    textFormat: Text.PlainText
+                                    text: Input.targetLabel(device.section, device.name)
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                }
+
+                                StepButton {
+                                    name: "go-next-symbolic"
+                                    value: device.at
+                                    next: Math.min(device.targets.length - 1, device.at + 1)
+                                    onActivated: device.name = device.targets[next]
+                                }
+                            }
+
+                            Rectangle {
+                                visible: device.name !== "" && Input.hasOwn(InputData.input, device.name)
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 56
+                                height: 26
+                                radius: 13
+                                color: Theme.surface2
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Reset"
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                }
+
+                                TapHandler {
+                                    onTapped: {
+                                        device.refused = InputData.clearDevice(device.name);
+                                        root.report(device.refused);
+                                    }
+                                }
+                            }
+                        }
 
                         Repeater {
                             model: device.section === "" ? [] : Input.SECTIONS[device.section]
@@ -381,7 +488,7 @@ PanelWindow {
                                 id: option
 
                                 required property var modelData
-                                readonly property var value: Input.shown(InputData.input, device.section, modelData.key)
+                                readonly property var value: device.shown(modelData.key)
                                 readonly property bool toggle: modelData.kind === "toggle"
                                 readonly property bool typed: Input.isText(modelData.kind)
 

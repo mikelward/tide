@@ -42,9 +42,12 @@ ShellRoot {
     // hypridle's timings and the mice's and touchpads' settings are
     // written from the start (IdleData, InputData), not when the settings
     // panel first shows them.
+    // The mice and touchpads are listed then too, and again as a Mouse or
+    // Touchpad page shows.
     Component.onCompleted: {
         IdleData.load();
         InputData.load();
+        InputData.listDevices();
     }
 
     // A toplevel's class and fullscreen state come from Hyprland's client

@@ -63,6 +63,40 @@ export const LADDERS = Object.freeze({
 const LAYOUT = /^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+){0,3}$/;
 const VARIANT = /^[A-Za-z0-9_-]*(,[A-Za-z0-9_-]*){0,3}$/;
 
+// A device's name, as hyprctl devices gives it: printable ASCII with no
+// quote or backslash, so it needs no escapes in the Lua file.
+const DEVICE_NAME = /^[ !#-[\]-~]{1,128}$/;
+
+// Which kind of device a pointer's name is, as conf's apply-input.sh
+// decides: a touchpad says so in its name, and every other is a mouse.
+export function deviceKind(name) {
+    return /touchpad|trackpad|synaptics/.test(name) ? "touchpad" : "mouse";
+}
+
+// Why `name` can't be a device's, or "".
+function deviceNameError(name) {
+    // __proto__ would set an object's prototype, not a key of it.
+    if (!DEVICE_NAME.test(name) || name === "__proto__") {
+        return `"${name}" isn't a name hyprctl devices gives a mouse or touchpad`;
+    }
+    return "";
+}
+
+// Why `value` can't be device `name`'s own `key`, or "": one of its kind's
+// settings.
+export function deviceSettingError(name, key, value) {
+    const nameError = deviceNameError(name);
+    if (nameError) {
+        return `devices: ${nameError}`;
+    }
+    const kind = deviceKind(name);
+    const error = settingError(kind, key, value);
+    if (error.startsWith(`${kind}.`)) {
+        return `devices.${name}.${error.slice(kind.length + 1)}`;
+    }
+    return error ? `devices.${name}: ${error}` : "";
+}
+
 // SECTIONS' own entry for `name`, or undefined: never "constructor" or the
 // like, which every object inherits.
 function sectionSettings(name) {
@@ -125,6 +159,14 @@ export function parseInput(text) {
     const settings = {};
     for (const section of Object.keys(value)) {
         const given = value[section];
+        if (section === "devices") {
+            const parsed = parseDevices(given);
+            if (parsed.error) {
+                return { error: parsed.error };
+            }
+            settings.devices = parsed.devices;
+            continue;
+        }
         if (!sectionSettings(section)) {
             return { error: `unknown section "${section}"; expected ${Object.keys(SECTIONS).join(", ")}` };
         }
@@ -141,6 +183,34 @@ export function parseInput(text) {
         }
     }
     return { settings };
+}
+
+// input.json's devices: an object of mice and touchpads by name, each an
+// object of any of its kind's settings, which it takes over its kind's.
+function parseDevices(given) {
+    if (given === null || typeof given !== "object" || Array.isArray(given)) {
+        return { error: "devices must be an object of mice and touchpads, by name" };
+    }
+    const devices = {};
+    for (const name of Object.keys(given)) {
+        const nameError = deviceNameError(name);
+        if (nameError) {
+            return { error: `devices: ${nameError}` };
+        }
+        const set = given[name];
+        if (set === null || typeof set !== "object" || Array.isArray(set)) {
+            return { error: `devices.${name} must be an object of its settings` };
+        }
+        devices[name] = {};
+        for (const key of Object.keys(set)) {
+            const error = deviceSettingError(name, key, set[key]);
+            if (error) {
+                return { error };
+            }
+            devices[name][key] = set[key];
+        }
+    }
+    return { devices };
 }
 
 // Why the keyboard's layouts and variants don't pair up, or "": XKB takes
@@ -174,7 +244,11 @@ export function loadInput(sharedText, localText, lastGood = {}) {
             continue;
         }
         for (const section of Object.keys(parsed.settings)) {
-            input[section] = Object.assign({}, input[section] || {}, parsed.settings[section]);
+            if (section === "devices") {
+                input.devices = mergeDevices(input.devices || {}, parsed.settings.devices);
+            } else {
+                input[section] = Object.assign({}, input[section] || {}, parsed.settings[section]);
+            }
         }
         const keyboard = parsed.settings.keyboard || {};
         if (keyboard.layout !== undefined || keyboard.variant !== undefined) {
@@ -188,6 +262,79 @@ export function loadInput(sharedText, localText, lastGood = {}) {
         return { input: lastGood, errors };
     }
     return { input, errors };
+}
+
+// `over`'s devices over `under`'s, each key by key.
+function mergeDevices(under, over) {
+    const devices = Object.assign({}, under);
+    for (const name of Object.keys(over)) {
+        devices[name] = Object.assign({}, ownDevice(under, name), over[name]);
+    }
+    return devices;
+}
+
+// The settings `devices` has for `name`, or {}: never one every object
+// inherits.
+function ownDevice(devices, name) {
+    return devices && Object.prototype.hasOwnProperty.call(devices, name) ? devices[name] : {};
+}
+
+// What the page shows for device `name`'s `key`: its own setting if it has
+// one, else its kind's.
+export function deviceShown(input, name, key) {
+    const set = ownDevice(input.devices, name)[key];
+    return set === undefined ? shown(input, deviceKind(name), key) : set;
+}
+
+// Whether device `name` has any settings of its own.
+export function hasOwn(input, name) {
+    return Object.keys(ownDevice(input.devices, name)).length > 0;
+}
+
+// What a Mouse or Touchpad page can set, in order: every device of `kind`
+// (""), then each one by name, connected (`connected`, from
+// connectedDevices) or with settings of its own.
+export function targets(input, connected, kind) {
+    const names = connected.filter(d => d.kind === kind).map(d => d.name)
+        .concat(Object.keys(input.devices || {}).filter(n => deviceKind(n) === kind));
+    return [""].concat(names.filter((n, i) => names.indexOf(n) === i).sort());
+}
+
+// A target as the page names it.
+export function targetLabel(kind, name) {
+    if (name !== "") {
+        return name;
+    }
+    return kind === "touchpad" ? "Every touchpad" : "Every mouse";
+}
+
+// The mice and touchpads in `hyprctl devices -j`'s output, as [{name,
+// kind}], or {error}. Hyprland lists every pointer as one of its mice.
+export function connectedDevices(text) {
+    let value;
+    try {
+        value = JSON.parse(text);
+    } catch (e) {
+        return { error: `hyprctl devices -j: ${jsonError(text)}` };
+    }
+    if (value === null || typeof value !== "object" || !Array.isArray(value.mice)) {
+        return { error: "hyprctl devices -j: no list of mice" };
+    }
+    const devices = value.mice
+        .filter(m => m !== null && typeof m === "object" && typeof m.name === "string" && deviceNameError(m.name) === "")
+        .map(m => ({ name: m.name, kind: deviceKind(m.name) }));
+    return { devices };
+}
+
+// The devices a run of hyprctl devices -j lists, with why its output didn't
+// read ("" if it did): none when the run failed (`failed`) or its output
+// didn't read, not the last list's, since those may have gone since.
+export function listedDevices(failed, text) {
+    if (failed) {
+        return { devices: [], error: "" };
+    }
+    const r = connectedDevices(text);
+    return r.error ? { devices: [], error: r.error } : { devices: r.devices, error: "" };
 }
 
 // What the page shows for `section`.`key`: the setting if it's set, else
@@ -219,6 +366,20 @@ export function inputLua(input) {
             .map(s => `${s.option} = ${luaValue(set[s.key])}`);
         lines.push(`    ${section} = {${fields.length > 0 ? ` ${fields.join(", ")} ` : ""}},`);
     }
+    // Only when there are some, so a conf from before devices doesn't
+    // report the section as unknown.
+    const devices = Object.keys(input.devices || {}).filter(n => hasOwn(input, n)).sort();
+    if (devices.length > 0) {
+        lines.push("    devices = {");
+        for (const name of devices) {
+            const set = input.devices[name];
+            const fields = SECTIONS[deviceKind(name)]
+                .filter(s => set[s.key] !== undefined)
+                .map(s => `${s.option} = ${luaValue(set[s.key])}`);
+            lines.push(`        ["${name}"] = { ${fields.join(", ")} },`);
+        }
+        lines.push("    },");
+    }
     lines.push("}");
     return lines.join("\n") + "\n";
 }
@@ -234,39 +395,106 @@ export function withSetting(localText, section, key, value, sharedText = null) {
     if (error) {
         return { error };
     }
-    let settings = {};
-    if (localText !== null && localText !== undefined) {
-        const parsed = parseInput(localText);
-        if (parsed.error) {
-            return { error: `input.local.json: ${parsed.error}` };
-        }
-        settings = parsed.settings;
+    const local = localSettings(localText);
+    if (local.error) {
+        return local;
     }
-    const next = {};
-    for (const name of Object.keys(SECTIONS)) {
-        const set = Object.assign({}, settings[name] || {});
-        if (name === section) {
-            set[key] = value;
-        }
-        if (Object.keys(set).length > 0) {
-            next[name] = {};
-            // In the page's order, so the file reads the same way.
-            for (const s of SECTIONS[name]) {
-                if (set[s.key] !== undefined) {
-                    next[name][s.key] = set[s.key];
-                }
-            }
-        }
-    }
+    const settings = local.settings;
+    settings[section] = Object.assign({}, settings[section] || {}, { [key]: value });
     if (section === "keyboard") {
         // A shared file that doesn't parse is load's to report.
         const shared = sharedText === null || sharedText === undefined ? {} : parseInput(sharedText).settings || {};
-        const error = pairError({ keyboard: Object.assign({}, shared.keyboard || {}, next.keyboard) });
+        const error = pairError({ keyboard: Object.assign({}, shared.keyboard || {}, settings.keyboard) });
         if (error) {
             return { error };
         }
     }
-    return { text: JSON.stringify(next, null, 2) + "\n" };
+    return { text: settingsText(settings) };
+}
+
+// input.local.json's text with device `name`'s own `key` set to `value`,
+// or cleared when `value` is undefined, keeping whatever else it says; as
+// withSetting.
+export function withDeviceSetting(localText, name, key, value) {
+    if (value !== undefined) {
+        const error = deviceSettingError(name, key, value);
+        if (error) {
+            return { error };
+        }
+    } else if (deviceNameError(name)) {
+        return { error: `devices: ${deviceNameError(name)}` };
+    }
+    const local = localSettings(localText);
+    if (local.error) {
+        return local;
+    }
+    const settings = local.settings;
+    const devices = Object.assign({}, settings.devices || {});
+    devices[name] = Object.assign({}, ownDevice(devices, name), { [key]: value });
+    settings.devices = devices;
+    return { text: settingsText(settings) };
+}
+
+// input.local.json's text with none of device `name`'s own settings, so it
+// takes its kind's; as withSetting.
+export function withoutDevice(localText, name) {
+    const local = localSettings(localText);
+    if (local.error) {
+        return local;
+    }
+    const settings = local.settings;
+    settings.devices = Object.assign({}, settings.devices || {});
+    delete settings.devices[name];
+    return { text: settingsText(settings) };
+}
+
+// input.local.json's settings, {} when there's no file, or an {error} when
+// it doesn't parse.
+function localSettings(localText) {
+    if (localText === null || localText === undefined) {
+        return { settings: {} };
+    }
+    const parsed = parseInput(localText);
+    if (parsed.error) {
+        return { error: `input.local.json: ${parsed.error}` };
+    }
+    return { settings: parsed.settings };
+}
+
+// `set`'s settings in `list`'s order, so the file reads as the page does,
+// leaving out any that are undefined.
+function ordered(list, set) {
+    const out = {};
+    for (const s of list) {
+        if (set[s.key] !== undefined) {
+            out[s.key] = set[s.key];
+        }
+    }
+    return out;
+}
+
+// input.local.json's text for `settings`: each section in the page's order,
+// then the devices, each with its settings in its kind's order. A section
+// or device with nothing set is left out.
+function settingsText(settings) {
+    const next = {};
+    for (const name of Object.keys(SECTIONS)) {
+        const set = ordered(SECTIONS[name], settings[name] || {});
+        if (Object.keys(set).length > 0) {
+            next[name] = set;
+        }
+    }
+    const devices = {};
+    for (const name of Object.keys(settings.devices || {})) {
+        const set = ordered(SECTIONS[deviceKind(name)], settings.devices[name]);
+        if (Object.keys(set).length > 0) {
+            devices[name] = set;
+        }
+    }
+    if (Object.keys(devices).length > 0) {
+        next.devices = devices;
+    }
+    return JSON.stringify(next, null, 2) + "\n";
 }
 
 // The next value along `kind`'s ladder from `value`, up (`step` 1) or down
