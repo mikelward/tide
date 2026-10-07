@@ -61,6 +61,13 @@ export const PAGES = Object.freeze([
         about: "The bar's clocks, left to right, before the local one, which is always last; a clock in the local zone is hidden. A label is any text, none for just the time, or abbr for the zone's abbreviation, such as PDT. The list is this machine's own once changed.",
         advanced: null,
     },
+    {
+        id: "keys",
+        label: "Keys",
+        icon: "preferences-desktop-keyboard-shortcuts-symbolic",
+        about: "The key bindings Hyprland has now, from conf's hyprland.lua and hyprland.local.lua, in their order. What one does is its description in hl.bind.",
+        advanced: null,
+    },
 ]);
 
 // The page after moving `step` pages from `index`, stopping at either end.

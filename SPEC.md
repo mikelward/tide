@@ -1996,6 +1996,21 @@ stays hand-written.
   - 24 h and dedupe-local aren't settings yet. The bar is always 24-hour,
     and always hides the local zone.
 
+- **Keys** lists the bindings Hyprland has now, from `hyprctl binds -j`,
+  as the shell starts and again as the page shows.
+  - That needs Hyprland 0.56.2, the pinned version. 0.56.0 gives each
+    value one field late from `has_description` on, so its JSON doesn't
+    parse, and the page says so.
+  - Every Lua binding's dispatcher is `__lua`, so what one does is only
+    its `description`, which `conf` gives in `hl.bind`'s options. One
+    without says so.
+  - Each shows its keys as they're printed on the keyboard (`Super+\`,
+    `Super+PgUp`), in the config's order, with its submap if it has one.
+  - A binding turned off with `set_enabled(false)` still shows. 0.56.2's
+    listing includes it and says nothing of it, and `conf` turns none off.
+  - A Lua binding by keycode (`SUPER + code:28`) shows only that it is
+    one: 0.56.2's listing gives neither its key nor its code.
+
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or
   `qs -c tide ipc call settings toggle`.
