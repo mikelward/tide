@@ -71,8 +71,8 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # hypridle, then a dim time of 120, a lock time of IDLE (600 by default)
 # and the hand-edited suspend time once both are set over IPC; and no
 # mouse settings, then the hand-edited mouse speed, a touchpad without tap
-# to click and the mouse's left_handed as HANDED (false by default) once
-# both are set over IPC, applying each.
+# to click, the us,de keyboard layouts and the mouse's left_handed as
+# HANDED (false by default) once all three are set over IPC, applying each.
 # DIR/load-CONFIG.txt, if it's there, is printed
 # before LOAD by that config alone: shell (-c), lock or greeter.
 stubs() {
@@ -93,7 +93,7 @@ if test "\$1" = ipc; then
         *"call launcher open"*) : >"\$XDG_RUNTIME_DIR/launcher-open" ;;
         *"call settings open"*) : >"\$XDG_RUNTIME_DIR/settings-open" ;;
         *"call settings setIdle dim 120"*) : >"\$XDG_RUNTIME_DIR/idle-set" ;;
-        *"call settings setInput touchpad tapToClick false"*) : >"\$XDG_RUNTIME_DIR/input-set" ;;
+        *"call settings setInput keyboard layout us,de"*) : >"\$XDG_RUNTIME_DIR/input-set" ;;
     esac
     $2
 fi
@@ -165,15 +165,15 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                     mkdir -p "\$HOME/.config/hypr" "\$HOME/.config/tide" &&
                         printf '%s\n' '    mouse = {},' >"\$HOME/.config/hypr/tide-input.lua" &&
                         hyprctl eval 'conf_input.reload()' >/dev/null 2>&1
-                    # Settings made over IPC, as the Mouse and Touchpad pages make them;
-                    # gone with qs, as the idle one is.
+                    # Settings made over IPC, as the Mouse, Touchpad and Keyboard pages
+                    # make them; gone with qs, as the idle one is.
                     until test -e "\$XDG_RUNTIME_DIR/input-set"; do
                         kill -0 \$\$ 2>/dev/null || exit 0
                         sleep 0.1
                     done
                     rm "\$XDG_RUNTIME_DIR/input-set"
-                    printf '{\n  "mouse": {\n    "speed": 0.5,\n    "leftHanded": ${12:-false}\n  },\n  "touchpad": {\n    "tapToClick": false\n  }\n}\n' >"\$HOME/.config/tide/input.local.json"
-                    printf '%s\n' '    mouse = { sensitivity = 0.5, left_handed = ${12:-false} },' '    touchpad = { tap_to_click = false },' >"\$HOME/.config/hypr/tide-input.lua"
+                    printf '{\n  "mouse": {\n    "speed": 0.5,\n    "leftHanded": ${12:-false}\n  },\n  "touchpad": {\n    "tapToClick": false\n  },\n  "keyboard": {\n    "layout": "us,de"\n  }\n}\n' >"\$HOME/.config/tide/input.local.json"
+                    printf '%s\n' '    mouse = { sensitivity = 0.5, left_handed = ${12:-false} },' '    touchpad = { tap_to_click = false },' '    keyboard = { kb_layout = "us,de" },' >"\$HOME/.config/hypr/tide-input.lua"
                     hyprctl eval 'conf_input.reload()' >/dev/null 2>&1
                 } &
                 ;;
@@ -345,7 +345,7 @@ stubs "$tmp/clean" "exit 0" "  INFO: Configuration Loaded"
 run "$tmp/clean"
 check "a shell that loads and answers passes" test "$code" -eq 0
 check "and says it wrote hypridle's timings" contains "$out" "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
-check "and the mouse and touchpad settings" contains "$out" "ok: the shell writes the mouse and touchpad settings, and a new one, and applies them each time"
+check "and the mouse, touchpad and keyboard settings" contains "$out" "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
 check "and says the lock loaded" contains "$out" "ok: Quickshell loads the lock"
 check "and says the greeter loaded" contains "$out" "ok: Quickshell loads the greeter"
 
@@ -517,19 +517,19 @@ check "and says so" contains "$out" "the shell didn't write a lock time of 600 a
 
 stubs "$tmp/no-input" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle keyboards"
 run "$tmp/no-input"
-check "a shell that never applies the mouse and touchpad settings fails" test "$code" -ne 0
+check "a shell that never applies the mouse, touchpad and keyboard settings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval conf_input.reload()..." in 2 s'
 
 stubs "$tmp/input-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" "" true
 run "$tmp/input-unset"
-check "a shell that loses the first of two quick device settings fails" test "$code" -ne 0
-check "and says so" contains "$out" "the shell didn't write a right-handed mouse and a touchpad without tap to click, keeping the hand-edited mouse speed of 0.5, to"
+check "a shell that loses the first of three quick device settings fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell didn't write a right-handed mouse, a touchpad without tap to click and the us,de keyboard layouts, keeping the hand-edited mouse speed of 0.5, to"
 
-stubs "$tmp/input-warns" "exit 0" "  WARN qml: tide: couldn't apply the mouse and touchpad settings: no conf_input
+stubs "$tmp/input-warns" "exit 0" "  WARN qml: tide: couldn't apply the mouse, touchpad and keyboard settings: no conf_input
 $loaded"
 run "$tmp/input-warns"
 check "a shell whose settings don't apply fails" test "$code" -ne 0
-check "and says what it warned" contains "$out" "tide: couldn't apply the mouse and touchpad settings"
+check "and says what it warned" contains "$out" "tide: couldn't apply the mouse, touchpad and keyboard settings"
 
 stubs "$tmp/idle-warns" "exit 0" "  WARN qml: tide: systemctl --user try-restart hypridle.service exited 1: Failed to connect to bus
 $loaded"

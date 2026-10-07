@@ -47,6 +47,13 @@ export const PAGES = Object.freeze([
         about: "For every touchpad, apart from the mice. One set for a single touchpad in hyprland.local.lua still wins.",
         advanced: null,
     },
+    {
+        id: "keyboard",
+        label: "Keyboard",
+        icon: "input-keyboard-symbolic",
+        about: "For every keyboard. A layout is XKB's name for it, such as us, or us,de for two; a variant is one such as dvorak, or none. One set in hyprland.local.lua still wins.",
+        advanced: null,
+    },
 ]);
 
 // The page after moving `step` pages from `index`, stopping at either end.

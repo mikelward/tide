@@ -1921,13 +1921,14 @@ tide's own, and links out for the rest:
 | Network, Bluetooth | *advanced* opens `nm-connection-editor` / `blueman-manager` |
 | Mouse | for every mouse: speed, scroll speed, natural scrolling, left-handed |
 | Touchpad | for every touchpad: the same, plus tap to click and off while typing |
+| Keyboard | for every keyboard: layouts and their variants, repeat delay and rate |
 | Keys | a read-only list of the current bindings, generated from the config |
 
 Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
 stays hand-written.
 
-- **Mouse and Touchpad** are the first of these.
+- **Mouse, Touchpad and Keyboard** are the first of these.
   - The shell writes what's set to `~/.config/hypr/tide-input.lua`, as a
     table in Hyprland's option names, and runs `hyprctl eval
     'conf_input.reload()'`.
@@ -1936,8 +1937,14 @@ stays hand-written.
     gives each mouse the mouse settings and each touchpad its own, one
     device at a time (`hl.device`). So a left-handed mouse and a
     right-handed touchpad can each have their own speed.
+  - `conf` applies the keyboard's options itself, to every keyboard.
   - Only what's set reaches Hyprland. The rest stays as `conf`'s config
     has it, and the pages show those values until they're changed.
+  - A keyboard layout and its variant are typed, as XKB's names (`us`, or
+    `us,de` for two; `dvorak`, or none), and set with Enter. There's one
+    variant, or one for each layout. Anything else is refused, and the page
+    says why; in the files, it's an error at load. Switching between two layouts
+    needs a key for it, which tide doesn't bind yet.
   - `hyprland.local.lua` still wins, for a single device or an input
     option it sets.
   - A change the shell can't save is reported, as an idle time's is. One
