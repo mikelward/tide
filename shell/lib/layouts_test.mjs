@@ -159,6 +159,8 @@ test("− and + step a setting, stopping at either end", () => {
     assert.equal(steppedLayout("modes.tile.mfact", 0.55, -1), 0.5);
     assert.equal(steppedLayout("modes.tile.mfact", 0.9, 1), 0.9);
     assert.equal(steppedLayout("modes.tile.mfact", 0.72, 1), 0.75, "off a step, onto the next");
+    assert.equal(steppedLayout("modes.tile.mfact", 0.72, -1), 0.7, "and the same the other way");
+    assert.equal(steppedLayout("modes.tile.mfact", 0.73, 1), 0.75, "never past the next");
     assert.equal(steppedLayout("modes.tile.nmaster", 0, -1), 0, "tile goes down to plain rows");
     assert.equal(steppedLayout("modes.threecol.nmaster", 1, -1), 1, "a column mode keeps a master");
     assert.equal(steppedLayout("ultrawideAspect", 2.1, 1), 2.2);

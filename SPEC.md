@@ -2034,6 +2034,9 @@ stays hand-written.
     The active one is laid out at once, and the rest as they're shown.
   - Since a reload resets those, the shell applies the file as it starts
     only when it would change: the layout read it as the config loaded.
+  - − and + step to the next mark. A value set by hand between marks goes
+    to the nearest one that way first, and one past an end stays put on a
+    press that would move it back across.
   - The bar's guess at a workspace's mode before its first announcement
     follows the settings too.
   - The rule for new windows isn't a setting yet. A new window always
