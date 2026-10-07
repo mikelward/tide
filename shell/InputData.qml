@@ -169,7 +169,7 @@ Singleton {
         // Hyprland outlives the shell, and reloading the file costs it
         // nothing, so a shell start applies it even unchanged: a shell
         // restarted with an apply still to retry would leave it undone.
-        root.target = Writes.readTarget(root.target, writtenText, true).state;
+        root.target = Writes.readTarget(root.target, writtenText, null).state;
         root.stepped(Writes.wantTarget(root.target, Input.inputLua(root.input)));
     }
 

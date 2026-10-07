@@ -34,17 +34,45 @@ function nextStep(state) {
     return { state: state.failure === "" ? state : Object.assign({}, state, { failure: "" }), action: null };
 }
 
-// The file was read. The first time, what it says is what the program
-// has, since it read it as it started: a shell start that wants the same
-// leaves the program alone. Unless it couldn't be read before this (the
-// only failure there can be until it is): then the program couldn't
-// either, and has none of it. Or unless `reapply`, for a program that
-// outlives the shell and costs nothing to apply again: then the shell
-// applies it as it starts, in case the one before it died with an apply
-// still to retry.
-export function readTarget(state, text, reapply = false) {
-    const first = state.known ? {} : { applied: state.failure === "" && !reapply ? text : null, known: true };
+// The file was read. The first time, `applied` is what the program has:
+// by default what the file says, since it read it as it started, so a
+// shell start that wants the same leaves the program alone. Null says it
+// has none of it, so the shell applies what's wanted as it starts: for a
+// program that outlives the shell and costs nothing to apply again, in
+// case the shell before died with an apply still to retry. And it has
+// none if the file couldn't be read before this (the only failure there
+// can be until it is), since then the program couldn't either.
+export function readTarget(state, text, applied = text) {
+    const first = state.known ? {} : { applied: state.failure === "" ? applied : null, known: true };
     return { state: Object.assign({}, state, { onDisk: text }, first) };
+}
+
+// For a program that outlives the shell, and that an apply costs
+// something (a restart), what it has the first time the file is read: what
+// this session's record of the last apply says (`record`: its text, "" for
+// no file, or null when there's no record yet), else the file itself, as
+// it read it when it started. Returns {applied, record}: what to pass
+// readTarget, and the record to write now, or null when there's one.
+// Without the record, a shell that died with an apply still to retry
+// would leave its successor taking the file for what the program has.
+export function firstApplied(text, record) {
+    if (record === null) {
+        return { applied: text, record: recordOf(text) };
+    }
+    return { applied: record === "" ? null : record, record: null };
+}
+
+// What to pass readTarget once firstApplied's record, if it asked for one,
+// has been written (`recorded`) or couldn't be: its `applied`, or none,
+// since with no record a shell after this one would take the file for what
+// the program has.
+export function afterRecord(first, recorded) {
+    return first.record === null || recorded ? first.applied : null;
+}
+
+// The record of `applied`, what the program has: "" for no file.
+export function recordOf(applied) {
+    return applied === null ? "" : applied;
 }
 
 // The file couldn't be read (permissions, say). Nothing is written over
