@@ -23,7 +23,8 @@ Singleton {
     // The settings set: nothing until the files are read, then the last
     // good ones. Input.shown fills in what isn't.
     property var input: ({})
-    // The mice and touchpads connected, as [{name, kind}], as last listed.
+    // The mice, touchpads and keyboards connected, as [{name, kind}], as
+    // last listed.
     property var connected: []
     // The errors and which have been reported (shell/lib/report.mjs).
     property var reports: Report.NOTHING
@@ -46,16 +47,17 @@ Singleton {
         return root.change(`${section}.${key}`, (text, sharedText) => Input.withSetting(text, section, key, value, sharedText));
     }
 
-    // Sets one setting of a single mouse or touchpad, by name, over its
-    // kind's, or clears it (`value` undefined); as set.
+    // Sets one setting of a single mouse, touchpad or keyboard, by name,
+    // over its kind's, or clears it (`value` undefined); as set.
     function setDevice(name, key, value) {
-        return root.change(`devices.${name}.${key}`, text => Input.withDeviceSetting(text, name, key, value));
+        return root.change(`devices.${name}.${key}`, (text, sharedText) => Input.withDeviceSetting(text, name, key, value, sharedText));
     }
 
-    // Clears every setting of a single mouse or touchpad, so it takes its
-    // kind's; as set.
-    function clearDevice(name) {
-        return root.change(`devices.${name}`, text => Input.withoutDevice(text, name));
+    // Clears a single device's own settings, so it takes its kind's: those
+    // of `section` (mouse, touchpad or keyboard), or with none, every one;
+    // as set.
+    function clearDevice(name, section) {
+        return root.change(`devices.${name}`, text => Input.withoutDevice(text, name, section));
     }
 
     // Changes input.local.json as `edit` says, from its text and input.json's
@@ -76,7 +78,8 @@ Singleton {
         return root.saveFailure;
     }
 
-    // Lists the connected mice and touchpads again, for the pages to name.
+    // Lists the connected mice, touchpads and keyboards again, for the pages
+    // to name.
     // A list that fails is logged, and the pages name only the devices that
     // have settings of their own.
     function listDevices() {
@@ -250,7 +253,7 @@ Singleton {
         }
     }
 
-    // Lists the mice and touchpads: hyprctl devices -j, read once both its
+    // Lists the devices: hyprctl devices -j, read once both its
     // streams end, as the applier's are.
     Component {
         id: lister

@@ -649,7 +649,9 @@ written_settings() {
     ipc call settings setInput touchpad tapToClick false >/dev/null || exit 1
     # A name, which IPC passes as typed, not as a number.
     ipc call settings setInput keyboard layout us,de >/dev/null || exit 1
-    # And one mouse's own speed, over every mouse's.
+    # A receiver's own key repeat, as a keyboard, and its own speed, as a
+    # mouse, each over its kind's.
+    ipc call settings setDevice logitech-usb-receiver repeatRate 40 >/dev/null || exit 1
     ipc call settings setDevice logitech-usb-receiver speed 0.25 >/dev/null || exit 1
     # As idle's: wait for both files.
     _want='{
@@ -665,7 +667,8 @@ written_settings() {
   },
   "devices": {
     "logitech-usb-receiver": {
-      "speed": 0.25
+      "speed": 0.25,
+      "repeatRate": 40
     }
   }
 }'
@@ -673,10 +676,10 @@ written_settings() {
     until grep -qxF '    mouse = { sensitivity = 0.5, left_handed = false },' "$input_conf" 2>/dev/null &&
         grep -qxF '    touchpad = { tap_to_click = false },' "$input_conf" &&
         grep -qxF '    keyboard = { kb_layout = "us,de" },' "$input_conf" &&
-        grep -qxF '        ["logitech-usb-receiver"] = { sensitivity = 0.25 },' "$input_conf" &&
+        grep -qxF '        ["logitech-usb-receiver"] = { sensitivity = 0.25, repeat_rate = 40 },' "$input_conf" &&
         test "$(grep -c '^hyprctl eval conf_input.reload()$' "$tmp/helpers.log")" -gt "$_applies" &&
         test "$(cat "$input_local")" = "$_want"; do
-        if waited "the shell didn't write a right-handed mouse, a touchpad without tap to click, the us,de keyboard layouts and one mouse's own speed, keeping the hand-edited mouse speed of 0.5, to $input_conf and $input_local, and apply them" "$i"; then
+        if waited "the shell didn't write a right-handed mouse, a touchpad without tap to click, the us,de keyboard layouts and a receiver's own speed and key repeat, keeping the hand-edited mouse speed of 0.5, to $input_conf and $input_local, and apply them" "$i"; then
             cat "$input_conf" "$input_local" >&2
             grep -v '^\[' "$log" >&2
             exit 1

@@ -70,6 +70,12 @@ once you have agreed with it or reversed it.
   It's `lockClocks` in `shell/lib/clocks.mjs` and `loadClocks` in
   `shell/lock.qml`.
 
+- [ ] **The Keyboard page lists every keyboard Hyprland lists.** That
+  includes the power and sleep buttons, the video bus's keys and virtual
+  keyboards, which have no layout worth setting. The alternative is leaving out names that
+  look like buttons, which would hide a real keyboard named oddly. It's
+  `connectedDevices` in `shell/lib/input.mjs`.
+
 - [ ] **The Layouts page comes after Keys.** §16's table had it third;
   new pages go after the ones you ordered. Moving it is a line in `PAGES`
   in `shell/lib/settings.mjs` and the table row.
@@ -603,13 +609,14 @@ from the keyboard (`shell/shell_test.sh`).
   `shell/InputData.qml`) write `~/.config/hypr/tide-input.lua` and run
   `hyprctl eval 'conf_input.reload()'`, which `conf`'s `hyprland.lua`
   defines (its PR "Apply tide's Mouse, Touchpad and Keyboard settings").
-  CI checks the shell writes no settings at startup, then four set over
-  IPC, a keyboard layout and one mouse's own speed among them, applying
-  each, and lists the mice and touchpads. Still to do:
-  - A keyboard by name, as a mouse or touchpad can be: `hl.device` takes
-    the keyboard's options too.
+  CI checks the shell writes no settings at startup, then five set over
+  IPC, a keyboard layout and a receiver's own speed and key repeat among
+  them, applying each, and lists the devices. Still to do:
   - On a live session, check `Super+Alt+Space` switches every keyboard to
     the next layout, and on the lock screen too.
+  - On a live session, check that one keyboard chosen by name takes its
+    own layout while another keeps every keyboard's, and that a settings
+    change leaves each keyboard on the layout it was switched to.
   - On a live session, check a change reaches a mouse and a touchpad at
     once, and survives `hyprctl reload`; that one mouse chosen by name
     takes its own speed while another keeps every mouse's, and that Reset
