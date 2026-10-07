@@ -90,6 +90,8 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # Its monitors take a scale and a place for Headless, keeping the
 # hand-edited Spare, once the place is set over IPC, then lose Spare once
 # it's reset over IPC, applying each and listing the monitors again.
+# Its lock names a clocks.local.json with a bad hour24, unless
+# DIR/lock-takes-any-clocks is there.
 # DIR/load-CONFIG.txt, if it's there, is printed
 # before LOAD by that config alone: shell (-c), lock or greeter.
 stubs() {
@@ -320,6 +322,12 @@ if test -f "\$(dirname "\$0")/load-\$config.txt"; then
     cat "\$(dirname "\$0")/load-\$config.txt"
 fi
 cat "\$(dirname "\$0")/load.txt"
+# As the lock, it names a clocks.local.json whose hour24 isn't true or
+# false, as the lock does once it has read it.
+if test "\$config" = lock && test -z "\$WAYLAND_DEBUG" && ! test -e "\$(dirname "\$0")/lock-takes-any-clocks" &&
+    test -f "\$HOME/.config/tide/clocks.local.json" && grep -qF '"hour24": "no"' "\$HOME/.config/tide/clocks.local.json"; then
+    echo '  WARN qml: tide-lock: clocks.local.json: hour24 must be true or false; the clock keeps its last settings'
+fi
 if test -n "\$WAYLAND_DEBUG" && test "\$1" = -c; then
     ${5:-$launcher}
 fi
@@ -479,6 +487,7 @@ check "and the layouts" contains "$out" "ok: the shell writes the layout setting
 check "and the appearance settings" contains "$out" "ok: the shell sets the Appearance page's settings, applies the dim, and refuses one that wouldn't work"
 check "and the displays" contains "$out" "ok: the shell writes the display settings, and new ones, and applies them"
 check "and says the lock loaded" contains "$out" "ok: Quickshell loads the lock"
+check "and named a clocks.local.json it can't take" contains "$out" "ok: the lock names a clocks.local.json it can't take, and keeps its clock's settings"
 check "and says the greeter loaded" contains "$out" "ok: Quickshell loads the greeter"
 
 run "$tmp/clean" TIDE_KEEP_LOG="$tmp/kept.log"
@@ -616,6 +625,12 @@ stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon ti
 run "$tmp/no-keyboards"
 check "a lock that never asks hyprctl for the keyboards fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the lock never ran "hyprctl devices -j..." in 2 s'
+
+stubs "$tmp/lock-takes-any-clocks" "exit 0" "$loaded"
+: >"$tmp/lock-takes-any-clocks/lock-takes-any-clocks" || exit 1
+run "$tmp/lock-takes-any-clocks"
+check "a lock that doesn't name a clocks.local.json it can't take fails" test "$code" -ne 0
+check "and says so" contains "$out" "the lock didn't name the bad hour24 in"
 
 stubs "$tmp/no-scheme" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim keyboards"
 run "$tmp/no-scheme"

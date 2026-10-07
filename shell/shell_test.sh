@@ -549,6 +549,21 @@ reports() {
     fi
 }
 
+# lock_clocks: waits for the lock to name the bad clocks.local.json the
+# test gave it, as it reads it after loading. load runs it, as
+# $after_load.
+lock_clocks() {
+    i=0
+    until grep -qF 'tide-lock: clocks.local.json: hour24 must be true or false; the clock keeps its last settings' "$log"; do
+        if waited "the lock didn't name the bad hour24 in $clocks_local" "$i"; then
+            cat "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+}
+
 # notify: sends the shell, the notification server in this run, a
 # notification whose icon no theme has and a critical one, then lets it
 # take them in. load runs it, as $after_load.
@@ -1240,7 +1255,14 @@ echo "ok: the shell writes the layout settings, and new ones, and applies them"
 echo "ok: the shell sets the Appearance page's settings, applies the dim, and refuses one that wouldn't work"
 echo "ok: the shell writes the display settings, and new ones, and applies them"
 load_runs='hyprctl devices -j'
+# A clocks.local.json the lock refuses, which it should name.
+printf '{\n  "hour24": "no"\n}\n' >"$clocks_local" || exit 1
+after_load=lock_clocks
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
+after_load=
+# Gone again, or the shell after the greeter would report it too.
+rm "$clocks_local" || exit 1
+echo "ok: the lock names a clocks.local.json it can't take, and keeps its clock's settings"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"
 load_runs=
 if test -n "$notify_path"; then

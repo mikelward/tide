@@ -8,6 +8,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Pam
 import Quickshell.Wayland
+import "lib/clocks.mjs" as Clocks
 import "lib/history.mjs" as History
 import "lib/lock.mjs" as Lock
 
@@ -113,6 +114,74 @@ ShellRoot {
         }
     }
 
+    // The clocks' 24-hour switch (SPEC.md §7.3), from clocks.json and
+    // clocks.local.json as the bar reads them, followed as they change. A
+    // file that's wrong, or can't be read, is logged and keeps the last
+    // switch, as the bar's does (Clocks.lockClocks).
+    readonly property string clocksDir: (Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`) + "/tide"
+    // Each file's text, or null with none; undefined until it's read.
+    property var clocksShared: undefined
+    property var clocksLocal: undefined
+    // What the clock took last, as Clocks.lockClocks says; null until both
+    // files are read.
+    property var clockState: null
+    readonly property bool hour24: root.clockState ? root.clockState.switches.hour24 : true
+
+    function loadClocks() {
+        // Both first, as the bar waits for both, or the shared file's
+        // switch could show before the local one's replaces it.
+        if (root.clocksShared === undefined || root.clocksLocal === undefined) {
+            return;
+        }
+        const broken = [sharedClocks.broken, localClocks.broken].filter(b => b !== "");
+        for (const error of broken) {
+            console.warn(`tide-lock: ${error}; the clock keeps its last settings`);
+        }
+        if (broken.length > 0) {
+            return;
+        }
+        const result = Clocks.lockClocks(root.clocksShared, root.clocksLocal, root.clockState);
+        for (const error of result.errors) {
+            console.warn(`tide-lock: ${error}; the clock keeps its last settings`);
+        }
+        root.clockState = result.state;
+    }
+
+    component ClocksFile: FileView {
+        // Where its text goes on the root.
+        required property string key
+        // Why it couldn't be read, or "".
+        property string broken: ""
+
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            broken = "";
+            root[key] = text();
+            root.loadClocks();
+        }
+        onLoadFailed: error => {
+            broken = error === FileViewError.FileNotFound ? "" : `${path}: ${FileViewError.toString(error)}`;
+            root[key] = null;
+            root.loadClocks();
+        }
+    }
+
+    ClocksFile {
+        id: sharedClocks
+
+        key: "clocksShared"
+        path: `${root.clocksDir}/clocks.json`
+    }
+
+    ClocksFile {
+        id: localClocks
+
+        key: "clocksLocal"
+        path: `${root.clocksDir}/clocks.local.json`
+    }
+
     function startPam() {
         if (!pam.start()) {
             root.dispatch({ type: "failed", detail: "PAM didn't start" });
@@ -161,6 +230,7 @@ ShellRoot {
             hostname: root.hostname
             user: root.user
             lockedAt: root.lockedAt
+            hour24: root.hour24
             powerMessage: powerActions.message
             powerBusy: powerActions.busy
             layout: keymap.badge

@@ -493,10 +493,15 @@ export function dayOffset(ms, zoneOffset, localOffset) {
 // "HH:MM", 24-hour, or "h:MM AM" with `hour24` off.
 export function formatTime(ms, offset, hour24 = true) {
     const w = wallClock(ms, offset);
+    return formatWall(w.hours, w.minutes, hour24);
+}
+
+// A wall-clock time: "16:30", or "4:30 PM" with `hour24` off.
+export function formatWall(hours, minutes, hour24 = true) {
     if (hour24) {
-        return `${pad(w.hours)}:${pad(w.minutes)}`;
+        return `${pad(hours)}:${pad(minutes)}`;
     }
-    return `${w.hours % 12 || 12}:${pad(w.minutes)} ${w.hours < 12 ? "AM" : "PM"}`;
+    return `${hours % 12 || 12}:${pad(minutes)} ${hours < 12 ? "AM" : "PM"}`;
 }
 
 // The local clock's date: "MMM d".
@@ -550,4 +555,17 @@ export function scrubbed(from, notches) {
     }
     const edge = n > 0 ? Math.ceil(from / SCRUB_STEP) : Math.floor(from / SCRUB_STEP);
     return edge * SCRUB_STEP + (n - Math.sign(n)) * SCRUB_STEP;
+}
+
+// What the lock's clock takes from clocks.json and clocks.local.json, each
+// the file's text or null when it doesn't exist, after `last`, what it
+// took before (null the first time): {state: {clocks, switches}, errors}.
+// As the bar, files that are wrong keep `last`, and `errors` names each.
+// The lock runs no tide-tz, so it checks each zone by form only, as
+// tide-tz does first: a list naming a well-formed zone tzdata lacks is
+// taken here, with its switches, where the bar refuses it.
+export function lockClocks(sharedText, localText, last = null) {
+    const before = last ?? { clocks: DEFAULT_CLOCKS, switches: DEFAULT_SWITCHES };
+    const result = loadClocks(sharedText, localText, before.clocks, zone => zoneFormError(zone) === "", before.switches);
+    return { state: { clocks: result.clocks, switches: result.switches }, errors: result.errors };
 }
