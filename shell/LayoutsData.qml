@@ -15,7 +15,7 @@ import "lib/writes.mjs" as Writes
 // file is a notification naming it, once, and changes nothing. So is a
 // change that can't be saved; one that can't be written or applied is
 // tried again until it is (shell/lib/writes.mjs). The files are read and
-// written as they're needed, synchronously, as IdleData's are.
+// written as they're needed, synchronously (SettingsFile.qml).
 Singleton {
     id: root
 
@@ -42,8 +42,8 @@ Singleton {
     // edit gone wrong isn't lost, or one that can't be saved.
     function set(path, value) {
         // The files as they are now, as IdleData.
-        const sharedText = root.readNow(shared);
-        const localText = root.readNow(local);
+        const sharedText = shared.readNow();
+        const localText = local.readNow();
         const broken = [shared.broken, local.broken].filter(b => b !== "");
         if (broken.length > 0) {
             return `${broken[0]}; not changing ${path}`;
@@ -52,36 +52,16 @@ Singleton {
         if (result.error) {
             return `${result.error}; not changing ${path}`;
         }
-        const error = root.writeNow(local, result.text);
+        const error = local.writeNow(result.text);
         root.saveFailure = error === "" ? "" : `${error}; layout setting not saved`;
         root.load();
         return root.saveFailure;
     }
 
-    // As IdleData's.
-    function readNow(file) {
-        file.reload();
-        const text = file.text();
-        return file.loaded && file.broken === "" ? text : null;
-    }
-
-    // As IdleData's, read back since a failed atomic commit only logs.
-    function writeNow(file, text) {
-        file.failure = "";
-        file.setText(text);
-        if (file.failure !== "") {
-            return file.failure;
-        }
-        if (root.readNow(file) !== text) {
-            return file.broken !== "" ? file.broken : `${file.path}: the write didn't take`;
-        }
-        return "";
-    }
-
     function stepped(r) {
         root.target = r.state;
         if (r.action?.write !== undefined) {
-            const error = root.writeNow(written, r.action.write);
+            const error = written.writeNow(r.action.write);
             root.stepped(Writes.targetWritten(root.target, error === "" ? "" : `${error}; the layouts keep their settings`));
             return;
         }
@@ -119,8 +99,8 @@ Singleton {
     // Reads both settings files and the file layout.lua reads, and writes
     // and applies the settings when they've changed, as IdleData.load.
     function load() {
-        const sharedText = root.readNow(shared);
-        const localText = root.readNow(local);
+        const sharedText = shared.readNow();
+        const localText = local.readNow();
         const broken = [shared.broken, local.broken].filter(b => b !== "");
         const result = Layouts.loadLayouts(sharedText, localText, root.layouts);
         for (const error of result.errors) {
@@ -133,7 +113,7 @@ Singleton {
             return;
         }
         root.layouts = result.settings;
-        const writtenText = root.readNow(written);
+        const writtenText = written.readNow();
         if (written.broken !== "") {
             // Unreadable, it isn't written over either; it's read again on
             // the retry.
@@ -145,28 +125,6 @@ Singleton {
         // workspace's mfact and master count back to the settings'.
         root.target = Writes.readTarget(root.target, writtenText).state;
         root.stepped(Writes.wantTarget(root.target, Layouts.layoutsLua(root.layouts)));
-    }
-
-    component SettingsFile: FileView {
-        // Why it can't be read, or "" when it can (or doesn't exist).
-        property string broken: ""
-        // Why the last write failed, or "".
-        property string failure: ""
-
-        preload: false
-        blockAllReads: true
-        blockWrites: true
-        atomicWrites: true
-        printErrors: false
-        onLoaded: broken = ""
-        onLoadFailed: error => {
-            // A missing file is nothing set, not an error.
-            broken = error === FileViewError.FileNotFound ? "" : `${path}: ${FileViewError.toString(error)}`;
-            if (broken !== "") {
-                console.warn(`tide: ${broken}`);
-            }
-        }
-        onSaveFailed: error => failure = `${path}: ${FileViewError.toString(error)}`
     }
 
     SettingsFile {
