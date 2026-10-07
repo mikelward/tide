@@ -8,6 +8,7 @@ import {
     DEFAULTS, LOCAL, parseTime, parseAppearance, loadAppearance, sunDown,
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
+    DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
 } from "./appearance.mjs";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -203,6 +204,13 @@ test("a flip made under other settings is dropped", () => {
     const later = { mode: "schedule", light: "07:00", dark: "20:00" };
     assert.deepEqual(themeAt(later, at(2026, 10, 5, 13), o).override, null);
     assert.equal(themeAt(later, at(2026, 10, 5, 13), o).dark, false);
+});
+
+test("a flip outlives a change to the dim", () => {
+    const noon = at(2026, 10, 5, 12);
+    const o = flip(DEFAULTS, noon, null);
+    const dimmer = Object.assign({}, DEFAULTS, { dimStrength: 0.12 });
+    assert.deepEqual(themeAt(dimmer, noon + MIN, o), { dark: true, next: at(2026, 10, 5, 19), override: o });
 });
 
 test("the settings key ignores order", () => {
@@ -449,4 +457,52 @@ test("a time steps past the other one, so light and dark can cross", () => {
     assert.equal(steppedTimePast("00:15", -1, "00:00"), "00:15");
     // What it gives is never the other time, so withSetting takes it.
     assert.equal(withSetting('{"light": "18:45"}', "light", steppedTimePast("18:45", 1, "19:00")).error, undefined);
+});
+
+test("the dim strength is a number from 0 to 1, conf's 0.07 until it's set", () => {
+    assert.deepEqual(parseAppearance('{"dimStrength": 0.12}'), { settings: { dimStrength: 0.12 } });
+    assert.equal(parseAppearance('{"dimStrength": 1.5}').error, "dimStrength must be a number from 0 to 1");
+    assert.equal(parseAppearance('{"dimStrength": "strong"}').error, "dimStrength must be a number from 0 to 1");
+    assert.equal(DIM_STRENGTH, 0.07);
+    assert.equal(dimStrength(DEFAULTS), 0.07);
+    assert.equal(dimStrength(loadAppearance(null, '{"dimStrength": 0}').settings), 0, "none at all is a strength");
+    assert.equal(dimStrength(loadAppearance('{"dimStrength": 0.2}', '{"dimStrength": 0.1}').settings), 0.1, "the local file's wins");
+});
+
+test("the dim strength goes into appearance.local.json, keeping the rest", () => {
+    assert.deepEqual(JSON.parse(withSetting('{"dark": "20:00"}', "dimStrength", 0.12).text), { dark: "20:00", dimStrength: 0.12 });
+    assert.match(withSetting(null, "dimStrength", 2).error, /^dimStrength must be/);
+});
+
+test("− and + step the dim a point at a time, from none to half", () => {
+    assert.equal(steppedDim(0.07, 1), 0.08);
+    assert.equal(steppedDim(0.07, -1), 0.06);
+    assert.equal(steppedDim(0, -1), 0, "none is the bottom");
+    assert.equal(steppedDim(0.5, 1), 0.5, "half is the top");
+    assert.equal(steppedDim(0.075, 1), 0.08, "off a point, onto the next");
+    assert.equal(steppedDim(0.8, -1), 0.5, "set past the top by hand, − comes back into range");
+    assert.equal(steppedDim(0.8, 1), 0.8, "and + stays");
+    assert.equal(formatDim(0.07), "7%");
+    assert.equal(formatDim(0.125), "13%");
+});
+
+test("only a dim that's set reaches Hyprland", () => {
+    const body = lua => lua.split("\n").slice(3).join("\n");
+    assert.equal(body(appearanceLua(DEFAULTS)), "return {\n}\n");
+    assert.equal(body(appearanceLua({ mode: "dark", dimStrength: 0.12 })), "return {\n    dim_strength = 0.12,\n}\n");
+    // It's Lua that loads as data, as conf's hyprland.lua loads it.
+    const script = `
+        local t = assert(load(io.read("a"), "tide-appearance.lua", "t", {}))()
+        print(t.dim_strength)
+    `;
+    for (const lua of [process.env.LUA, "lua5.5", "lua5.4", "lua"].filter(Boolean)) {
+        const r = spawnSync(lua, ["-e", script], { input: appearanceLua({ dimStrength: 0.12 }), encoding: "utf8" });
+        if (r.error && r.error.code === "ENOENT") {
+            continue;
+        }
+        assert.equal(r.status, 0, `${lua}: ${r.stderr}`);
+        assert.equal(r.stdout.trim(), "0.12");
+        return;
+    }
+    assert.fail("no lua5.5, lua5.4 or lua on PATH");
 });

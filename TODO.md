@@ -106,6 +106,14 @@ once you have agreed with it or reversed it.
   new. Dropping one is a line in `NEW_WINDOW_NAMES` in
   `shell/lib/layouts.mjs` and in layout.lua's `new_window_rules`.
 
+- [ ] **The dim strength steps a point at a time, from none to 50%.**
+  Hyprland takes 0 to 1, and the files do too, but past half an inactive
+  window is hard to read, and a point is the smallest step you'd see.
+  It's applied as the shell starts even unchanged, as the input settings
+  are, rather than trusting Hyprland read the file at its config load. The
+  alternative ranges and steps are `DIM_STEP` and `DIM_HI` in
+  `shell/lib/appearance.mjs`.
+
 - [ ] **The Appearance page comes after Layouts.** §16's table had it first;
   new pages go after the ones you ordered, so their order and CI's count
   of Down presses to the Network page stay as they are. Moving it is a
@@ -628,14 +636,18 @@ from the keyboard (`shell/shell_test.sh`).
     Super+Return and Super+Shift+J and K still move the window they
     should once a new window has gone somewhere other than the end.
 - Appearance (`shell/lib/appearance.mjs`, `shell/AppearanceData.qml`)
-  sets the mode, the light and dark times and the location, writing
-  `appearance.local.json`, and switches light or dark until the next
-  change. CI checks two settings over IPC on a hand edit, and sunrise and
-  sunset refused without a longitude. Still to do:
-  - Dim strength, once it's a setting rather than the palette's.
+  sets the mode, the light and dark times, the location and the inactive
+  dim's strength, writing `appearance.local.json`, and switches light or
+  dark until the next change. The dim goes to
+  `~/.config/hypr/tide-appearance.lua`, applied with `hyprctl eval
+  'conf_appearance.reload()'`. CI checks three settings over IPC on a hand
+  edit, the dim's write and apply, and sunrise and sunset refused without
+  a longitude. Still to do:
   - Wallpaper, once the shell draws one (§15).
   - On a live session, check a mode or a time changes the theme at once,
     and that the location fields take and give back the keyboard.
+  - On a live session, check a dim step shows at once on an inactive
+    window, and that a `dim_strength` in `hyprland.local.lua` holds.
 - Displays (`shell/lib/outputs.mjs`, `shell/OutputsData.qml`) sets each
   monitor's scale and place by its description, writing
   `~/.config/hypr/tide-outputs.lua` and running `hyprctl eval

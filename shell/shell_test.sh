@@ -25,8 +25,8 @@
 # probe finds no sensors, so the system monitor parses one but reads no
 # sensor files; a stand-in hyprctl, answering from the stand-in
 # Hyprland's fixtures, for the bar's title, the lock's layout badge and
-# the focus guard's calls, conf's conf_input.reload() and the Keys page's
-# bindings; stand-in
+# the focus guard's calls, conf's conf_input.reload() and
+# conf_appearance.reload() and the Keys page's bindings; stand-in
 # gsettings and nmcli, for light and dark and the VPNs, whose monitors
 # report nothing; and a stand-in systemctl, for restarting hypridle once
 # the shell has written its timings, which it checks are the defaults, as
@@ -762,9 +762,15 @@ written_settings() {
         sleep 0.1
         i=$((i + 1))
     done
+    if ! grep -qxF 'return {' "$appearance_conf" 2>/dev/null || grep -q '=' "$appearance_conf"; then
+        echo "FAIL: the shell should write no dim strength to $appearance_conf; it has: $(cat "$appearance_conf" 2>&1)" >&2
+        exit 1
+    fi
+    _dims=$(grep -c '^hyprctl eval conf_appearance.reload()$' "$tmp/helpers.log")
     printf '{\n  "dark": "20:00"\n}\n' >"$appearance_local" || exit 1
     ipc call settings setAppearance light 06:30 >/dev/null || exit 1
     ipc call settings setAppearance latitude 51.5 >/dev/null || exit 1
+    ipc call settings setAppearance dimStrength 0.12 >/dev/null || exit 1
     _refused=$(ipc call settings setAppearance mode sun) || exit 1
     case $_refused in
         *'mode "sun" needs latitude and longitude'*) ;;
@@ -776,12 +782,15 @@ written_settings() {
     _want='{
   "light": "06:30",
   "dark": "20:00",
-  "latitude": 51.5
+  "latitude": 51.5,
+  "dimStrength": 0.12
 }'
     i=0
-    until test "$(cat "$appearance_local")" = "$_want"; do
-        if waited "the shell didn't write light from 06:30 and a latitude of 51.5, keeping the hand-edited dark from 20:00, to $appearance_local" "$i"; then
-            cat "$appearance_local" >&2
+    until test "$(cat "$appearance_local")" = "$_want" &&
+        grep -qxF '    dim_strength = 0.12,' "$appearance_conf" &&
+        test "$(grep -c '^hyprctl eval conf_appearance.reload()$' "$tmp/helpers.log")" -gt "$_dims"; do
+        if waited "the shell didn't write light from 06:30, a latitude of 51.5 and a dim strength of 0.12, keeping the hand-edited dark from 20:00, to $appearance_local and $appearance_conf, and apply the dim" "$i"; then
+            cat "$appearance_local" "$appearance_conf" >&2
             grep -v '^\[' "$log" >&2
             exit 1
         fi
@@ -1184,7 +1193,7 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # replay of the waiting windows, and its order for Super+Tab), light and
 # dark, the VPNs, hypridle's timings, the mouse, touchpad and keyboard
 # settings, the list of mice and touchpads, the key bindings, the layout
-# settings, or the monitors and their settings.
+# settings, the monitors and their settings, or the dim strength.
 # The lock and the greeter only ask for the keyboards, for their layout
 # badges.
 shell_runs='tide-tz
@@ -1203,7 +1212,8 @@ hyprctl devices -j
 hyprctl binds -j
 hyprctl eval tide_layout.reload()
 hyprctl monitors all -j
-hyprctl eval conf_outputs.reload()'
+hyprctl eval conf_outputs.reload()
+hyprctl eval conf_appearance.reload()'
 load_runs=$shell_runs
 idle_conf=$tmp/home/.config/hypr/tide-idle.conf
 idle_suspend_conf=$tmp/home/.config/hypr/tide-idle-suspend.conf
@@ -1214,6 +1224,7 @@ clocks_local=$tmp/home/.config/tide/clocks.local.json
 layouts_conf=$tmp/home/.config/hypr/tide-layouts.lua
 layouts_local=$tmp/home/.config/tide/layouts.local.json
 appearance_local=$tmp/home/.config/tide/appearance.local.json
+appearance_conf=$tmp/home/.config/hypr/tide-appearance.lua
 outputs_conf=$tmp/home/.config/hypr/tide-outputs.lua
 outputs_local=$tmp/home/.config/tide/outputs.local.json
 after_load=written_settings
@@ -1221,12 +1232,12 @@ load shell "the shell" -c tide
 after_load=
 # Gone again, so the next shell starts from the defaults, writes them, and
 # restarts hypridle and reapplies the devices, too.
-rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" "$layouts_conf" "$layouts_local" "$appearance_local" "$outputs_conf" "$outputs_local" || exit 1
+rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" "$layouts_conf" "$layouts_local" "$appearance_local" "$appearance_conf" "$outputs_conf" "$outputs_local" || exit 1
 echo "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 echo "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
 echo "ok: the shell changes the clocks as the Clocks page asks, and looks them up"
 echo "ok: the shell writes the layout settings, and new ones, and applies them"
-echo "ok: the shell sets the Appearance page's settings, and refuses one that wouldn't work"
+echo "ok: the shell sets the Appearance page's settings, applies the dim, and refuses one that wouldn't work"
 echo "ok: the shell writes the display settings, and new ones, and applies them"
 load_runs='hyprctl devices -j'
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"

@@ -9,6 +9,7 @@
 // time zone and its daylight saving changes.
 
 import { jsonError } from "./clocks.mjs";
+import { stepped } from "./steps.mjs";
 
 export const LOCAL = Object.freeze({
     time: (y, m, d, h, min) => new Date(y, m - 1, d, h, min).getTime(),
@@ -21,7 +22,9 @@ export const LOCAL = Object.freeze({
 export const DEFAULTS = Object.freeze({ mode: "schedule", light: "07:00", dark: "19:00" });
 
 const MODES = ["schedule", "sun", "light", "dark"];
-const KEYS = ["mode", "light", "dark", "latitude", "longitude"];
+// The settings that decide light or dark, and every one there is.
+const THEME_KEYS = ["mode", "light", "dark", "latitude", "longitude"];
+const KEYS = THEME_KEYS.concat(["dimStrength"]);
 const DAY = 24 * 60 * 60 * 1000;
 
 // "HH:MM" as {h, min}, or null when it isn't a 24-hour time.
@@ -65,6 +68,12 @@ export function parseAppearance(text) {
         case "longitude":
             if (typeof v !== "number" || !(v >= -180 && v <= 180)) {
                 return { error: "longitude must be a number from -180 to 180" };
+            }
+            break;
+        case "dimStrength":
+            // Hyprland's decoration:dim_strength, as conf takes it.
+            if (typeof v !== "number" || !(v >= 0 && v <= 1)) {
+                return { error: "dimStrength must be a number from 0 to 1" };
             }
             break;
         default:
@@ -222,10 +231,11 @@ export function scheduled(s, now, clock = LOCAL) {
     return { dark, next: next ? next.at : null };
 }
 
-// The settings as a key, so a flip made under some settings is dropped
-// when they change.
+// The settings that decide light or dark as a key, so a flip made under
+// some settings is dropped when they change, and kept when only the dim
+// does.
 export function settingsKey(s) {
-    return JSON.stringify(KEYS.filter(k => s[k] !== undefined).map(k => [k, s[k]]));
+    return JSON.stringify(THEME_KEYS.filter(k => s[k] !== undefined).map(k => [k, s[k]]));
 }
 
 // What shows at `now`: the schedule, unless a flip still holds. A flip
@@ -455,4 +465,44 @@ export function withSetting(localText, key, value, sharedText = null) {
         }
     }
     return { text: JSON.stringify(next, null, 2) + "\n" };
+}
+
+// The inactive dim's strength (SPEC.md §6.2) when nothing sets it: conf's
+// hyprland.lua's, which applies then.
+export const DIM_STRENGTH = 0.07;
+
+// The page's − and + for it: a point at a time, from none to half.
+const DIM_STEP = 0.01;
+const DIM_HI = 0.5;
+
+// The dim strength in effect.
+export function dimStrength(settings) {
+    return settings.dimStrength ?? DIM_STRENGTH;
+}
+
+// The dim strength moved `steps` steps, as shell/lib/steps.mjs moves one.
+export function steppedDim(value, steps) {
+    return stepped(value, steps, DIM_STEP, 0, DIM_HI);
+}
+
+// How the page shows a dim strength: as a percentage.
+export function formatDim(value) {
+    return `${Math.round(value * 100)}%`;
+}
+
+// What reaches Hyprland, as the Lua table conf's hyprland.lua reads from
+// ~/.config/hypr/tide-appearance.lua: only what's set, so the config's own
+// stands for the rest. A number is all it holds, so it needs no escapes.
+export function appearanceLua(settings) {
+    const lines = [
+        "-- Written by tide from appearance.json and appearance.local.json (tide SPEC.md §16).",
+        "-- Change those, or the Appearance page of tide's settings, not this file. Only",
+        "-- what's set is here; hyprland.lua has the rest.",
+        "return {",
+    ];
+    if (settings.dimStrength !== undefined) {
+        lines.push(`    dim_strength = ${settings.dimStrength},`);
+    }
+    lines.push("}");
+    return lines.join("\n") + "\n";
 }

@@ -150,14 +150,15 @@ PanelWindow {
             return LayoutsData.set(path, path.startsWith("defaultMode.") || path === "newWindow" ? value : Number(value));
         }
         // Sets one of the Appearance page's settings, as it does: `qs -c
-        // tide ipc call settings setAppearance mode dark`, or a time
-        // ("07:15") or a latitude or longitude. Answers why not, or "".
+        // tide ipc call settings setAppearance mode dark`, a time
+        // ("07:15"), a latitude or longitude, or a dimStrength (0.1).
+        // Answers why not, or "".
         function setAppearance(key: string, value: string): string {
             if (key === "latitude" || key === "longitude") {
                 const c = Appearance.parseCoordinate(key, value);
                 return c.error ? `${c.error}; not changing ${key}` : AppearanceData.set(key, c.value);
             }
-            return AppearanceData.set(key, value);
+            return AppearanceData.set(key, key === "dimStrength" ? Number(value) : value);
         }
         // Sets one monitor's scale or position, by its description, as the
         // Displays page does: `qs -c tide ipc call settings setDisplay
@@ -1479,6 +1480,55 @@ PanelWindow {
                                             font: degrees.font
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        // The inactive dim's strength (§6.2), which − and +
+                        // step a point at a time.
+                        Item {
+                            width: appearance.width
+                            implicitHeight: 32
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Dim inactive windows"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+
+                                StepButton {
+                                    name: "list-remove-symbolic"
+                                    value: AppearanceData.dimStrength
+                                    next: Appearance.steppedDim(AppearanceData.dimStrength, -1)
+                                    onActivated: appearance.set("dimStrength", next)
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 92
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: Appearance.formatDim(AppearanceData.dimStrength)
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                    font.features: ({ "tnum": 1 })
+                                }
+
+                                StepButton {
+                                    name: "list-add-symbolic"
+                                    value: AppearanceData.dimStrength
+                                    next: Appearance.steppedDim(AppearanceData.dimStrength, 1)
+                                    onActivated: appearance.set("dimStrength", next)
                                 }
                             }
                         }

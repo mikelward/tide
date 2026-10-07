@@ -12,7 +12,7 @@ It answers requests only when drained, so the test decides when the shell
 hears back, and can tell when the shell has nothing left to ask. As
 hyprctl, which the shell runs as a command and the test waits for as one,
 it answers at once, from the same fixtures, and evaluates only the focus
-guard's calls that focus.lua defines, and conf's conf_input.reload(). Its
+guard's calls that focus.lua defines, and conf's and layout.lua's reloads. Its
 monitors, workspaces and windows are fixed: an event that changes them
 isn't reflected in later answers, as it would be in Hyprland, so the shell
 sees some churn, as it can when windows come and go quickly.
@@ -219,11 +219,11 @@ GUARD_CALLS = [
 FOCUS_LUA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hypr", "tide", "focus.lua")
 
 
-# conf's hyprland.lua's calls InputData.qml and OutputsData.qml make,
-# applying tide's mouse, touchpad and display settings, and layout.lua's
-# LayoutsData.qml makes, applying the Layouts page's: neither config is
-# loaded here, so they're taken as defined.
-CONF_CALLS = ["conf_input.reload()", "conf_outputs.reload()", "tide_layout.reload()"]
+# conf's hyprland.lua's calls InputData.qml, OutputsData.qml and
+# AppearanceData.qml make, applying tide's mouse, touchpad, display and dim
+# settings, and layout.lua's LayoutsData.qml makes, applying the Layouts
+# page's: neither config is loaded here, so they're taken as defined.
+CONF_CALLS = ["conf_input.reload()", "conf_outputs.reload()", "conf_appearance.reload()", "tide_layout.reload()"]
 
 
 def guard_call(code):

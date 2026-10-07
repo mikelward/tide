@@ -603,8 +603,8 @@ See [`layouts.png`](docs/mocks/layouts.png).
 - Video, picture-in-picture and screen-share preview windows get a `nodim`
   window rule, so a call on the other monitor doesn't look washed out.
 - 0.07 is subtle on dark apps: a dark terminal next to a dark editor.
-  Strength is a setting; if dark-on-dark focus is hard to see, 0.1 is the
-  first thing to try.
+  Strength is a setting, on the Appearance page (§16); if dark-on-dark
+  focus is hard to see, 0.1 is the first thing to try.
 
 ### 6.3 One window big: monocle, maximize, fullscreen
 
@@ -2091,8 +2091,16 @@ stays hand-written.
     with no location, or the same time for light and dark, is refused, and
     the page says why. So is a file that doesn't parse, which is left as
     it is.
-  - Dim strength and wallpaper aren't settings yet: the shell draws no
-    wallpaper, and the dim comes from the palette.
+  - − and + step the inactive dim's strength (§6.2) a point at a time,
+    from none to 50%. It's `dimStrength` in the files, 0 to 1, and shows
+    `conf`'s 0.07 until it's set.
+  - The shell writes a dim that's set to `~/.config/hypr/tide-appearance.lua`,
+    as Hyprland's `dim_strength`, and runs `hyprctl eval
+    'conf_appearance.reload()'`, as the Layouts page does. With none set,
+    `conf`'s own stands. One `hyprland.local.lua` sets still wins.
+  - The shell applies it as it starts, too, even unchanged, as it does the
+    input settings: setting the same strength again changes nothing.
+  - Wallpaper isn't a setting yet: the shell draws no wallpaper.
 
 - **Displays** sets each monitor's scale and where it goes beside the
   others, in `outputs.json` and `outputs.local.json`.

@@ -4,7 +4,9 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "lib/appearance.mjs" as Appearance
+import "lib/launch.mjs" as Run
 import "lib/report.mjs" as Report
+import "lib/writes.mjs" as Writes
 
 // Light or dark (SPEC.md §15). The shell owns the schedule: it reads
 // appearance.json and appearance.local.json (§16.1), works out which it is
@@ -13,7 +15,10 @@ import "lib/report.mjs" as Report
 // (`flip`) lasts until the schedule's next change. The settings panel's
 // Appearance page (§16) changes the settings through `set`, in
 // appearance.local.json, read and written synchronously as IdleData's
-// files.
+// files. The inactive dim's strength reaches Hyprland as LayoutsData's
+// settings do: written to ~/.config/hypr/tide-appearance.lua, which conf's
+// hyprland.lua reads, and applied with `hyprctl eval
+// conf_appearance.reload()`, tried again until it is (shell/lib/writes.mjs).
 Singleton {
     id: root
 
@@ -29,6 +34,12 @@ Singleton {
     property var reports: Report.NOTHING
     // Why the panel's last change couldn't be saved, or "".
     property string saveFailure: ""
+    // The settings files' errors, as the last load found them.
+    property var fileErrors: []
+    // The inactive dim's strength in effect, for the page.
+    readonly property real dimStrength: Appearance.dimStrength(root.settings)
+    // The file hyprland.lua reads, written and applied (shell/lib/writes.mjs).
+    property var target: Writes.TARGET
 
     // A config reload keeps a flip, so reloading the shell doesn't undo it.
     PersistentProperties {
@@ -110,7 +121,8 @@ Singleton {
         }
     }
 
-    readonly property string dir: (Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`) + "/tide"
+    readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`
+    readonly property string dir: `${root.configHome}/tide`
 
     function textOf(file) {
         // A missing file is the defaults' cue, not an error.
@@ -135,9 +147,55 @@ Singleton {
             root.settings = result.settings;
         }
         root.loaded = true;
-        const v = Report.verdict(root.reports, errors.concat(root.saveFailure !== "" ? [root.saveFailure] : []));
+        root.fileErrors = errors;
+        // Only settings every file agrees on reach Hyprland.
+        if (errors.length === 0) {
+            root.writeDim();
+        }
+        root.report();
+    }
+
+    // Writes what Hyprland is to have and applies it, when it's changed.
+    function writeDim() {
+        const writtenText = root.readNow(written);
+        if (written.broken !== "") {
+            // Unreadable, it isn't written over either; it's read again on
+            // the retry.
+            root.stepped(Writes.targetUnreadable(root.target, `${written.broken}; the dim keeps its strength`));
+            return;
+        }
+        // Applied as the shell starts even unchanged, as InputData's: a shell
+        // that died with an apply still to retry would otherwise leave it
+        // unapplied, and setting the same strength again changes nothing.
+        root.target = Writes.readTarget(root.target, writtenText, null).state;
+        root.stepped(Writes.wantTarget(root.target, Appearance.appearanceLua(root.settings)));
+    }
+
+    function stepped(r) {
+        root.target = r.state;
+        if (r.action?.write !== undefined) {
+            const error = root.writeNow(written, r.action.write);
+            root.stepped(Writes.targetWritten(root.target, error === "" ? "" : `${error}; the dim keeps its strength`));
+            return;
+        }
+        if (r.action?.apply) {
+            applier.createObject(root).running = true;
+        }
+        root.report();
+    }
+
+    // Every error there is now: the files', a change that couldn't be
+    // saved, and a dim that hasn't reached Hyprland. Each is a
+    // notification once; the dim is tried again until it does.
+    function report() {
+        const failures = [root.target.failure].filter(f => f !== "");
+        const errors = root.fileErrors.concat(root.saveFailure !== "" ? [root.saveFailure] : [], failures);
+        const v = Report.verdict(root.reports, errors);
         root.reports = v.state;
         root.send(v.send);
+        if (failures.length > 0 && !retry.running) {
+            retry.start();
+        }
     }
 
     // Sets one setting, in appearance.local.json: the settings panel writes
@@ -283,6 +341,91 @@ Singleton {
         id: localNow
 
         path: local.path
+    }
+
+    // What hyprland.lua reads. Written only when it would say something
+    // else.
+    SettingsFile {
+        id: written
+
+        path: `${root.configHome}/hypr/tide-appearance.lua`
+    }
+
+    // Has hyprland.lua take what was written, as LayoutsData's applier:
+    // `hyprctl eval` answers "ok", or why not, on stdout.
+    Component {
+        id: applier
+
+        Process {
+            id: run
+
+            property var state: Run.initial()
+            property string reply: ""
+            property bool replyRead: false
+            property string errors: ""
+            property bool errorsRead: false
+
+            function streamed() {
+                if (replyRead && errorsRead) {
+                    handle({ type: "stderr", text: errors });
+                }
+            }
+
+            function handle(event) {
+                if (state.done) {
+                    return;
+                }
+                state = Run.step(state, event, command);
+                if (!state.done) {
+                    return;
+                }
+                let error = "";
+                if (!state.started) {
+                    console.warn(state.report.message);
+                    error = state.report.message.replace(/^tide: /, "");
+                } else if (state.code !== 0 || reply.trim() !== "ok") {
+                    // A hyprland.lua from before conf_appearance, say.
+                    error = `couldn't apply the dim strength: ${(reply + state.errors).trim()}`;
+                    console.warn(`tide: ${error}`);
+                } else if (state.report?.level === "log") {
+                    console.log(state.report.message);
+                }
+                root.stepped(Writes.targetApplied(root.target, error));
+                destroy();
+            }
+
+            command: ["hyprctl", "eval", "conf_appearance.reload()"]
+            stdout: StdioCollector {
+                onStreamFinished: {
+                    run.reply = text;
+                    run.replyRead = true;
+                    run.streamed();
+                }
+            }
+            stderr: StdioCollector {
+                onStreamFinished: {
+                    run.errors = text;
+                    run.errorsRead = true;
+                    run.streamed();
+                }
+            }
+            onStarted: handle({ type: "started" })
+            onRunningChanged: {
+                if (!running) {
+                    handle({ type: "stopped" });
+                }
+            }
+            onExited: (code, status) => handle({ type: "exited", code: code })
+        }
+    }
+
+    // A dim that couldn't be written or applied, tried again: load reads
+    // the settings afresh and carries on from there.
+    Timer {
+        id: retry
+
+        interval: 30 * 1000
+        onTriggered: root.load()
     }
 
     Timer {
