@@ -3,23 +3,26 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PAGES, movedPage } from "./settings.mjs";
 
-test("the pages come in the sidebar's order, each with a link out", () => {
-    assert.deepEqual(PAGES.map(p => p.id), ["sound", "network", "bluetooth"]);
+test("the pages come in the sidebar's order, each with a label and an icon", () => {
+    assert.deepEqual(PAGES.map(p => p.id), ["idle", "sound", "network", "bluetooth"]);
     for (const page of PAGES) {
         assert.ok(page.label, `${page.id} has a label`);
         assert.ok(page.icon.endsWith("-symbolic"), `${page.id}'s icon is symbolic`);
-        assert.equal(typeof page.about, "string", `${page.id} says what the bar does, or ""`);
-        assert.ok(page.advanced.label, `${page.id}'s link out has a label`);
-        assert.ok(page.advanced.command.length > 0, `${page.id}'s link out has a command`);
+        assert.equal(typeof page.about, "string", `${page.id} says what to know first, or ""`);
+        if (page.advanced !== null) {
+            assert.ok(page.advanced.label, `${page.id}'s link out has a label`);
+            assert.ok(page.advanced.command.length > 0, `${page.id}'s link out has a command`);
+        }
     }
 });
 
-test("each page links out to the app SPEC.md §16 names", () => {
+test("each page links out to the app SPEC.md §16 names, and Idle to none", () => {
     const commands = {};
     for (const page of PAGES) {
-        commands[page.id] = page.advanced.command;
+        commands[page.id] = page.advanced === null ? null : page.advanced.command;
     }
     assert.deepEqual(commands, {
+        idle: null,
         sound: ["pavucontrol"],
         network: ["nm-connection-editor"],
         bluetooth: ["blueman-manager"],

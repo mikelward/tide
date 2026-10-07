@@ -1,10 +1,17 @@
 // The settings panel (SPEC.md §16), as pure functions the QML binds to.
 
-// Its pages, in the sidebar's order. Each links out to the app that does
-// the rest (`advanced`), which runs through `tide launch`, and says what
-// the bar already does (`about`); a page with nothing of its own yet is
-// only those.
+// Its pages, in the sidebar's order. Each says what to know first
+// (`about`, or ""), and links out to the app that does the rest
+// (`advanced`, run through `tide launch`), unless nothing does (null); a
+// page with nothing of its own yet is only those.
 export const PAGES = Object.freeze([
+    {
+        id: "idle",
+        label: "Idle",
+        icon: "weather-clear-night-symbolic",
+        about: "Each step counts from your last input. On AC power the machine never suspends; the displays just stay off.",
+        advanced: null,
+    },
     {
         id: "sound",
         label: "Sound",

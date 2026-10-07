@@ -1,0 +1,230 @@
+pragma Singleton
+
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import "lib/idle.mjs" as Idle
+import "lib/report.mjs" as Report
+import "lib/writes.mjs" as Writes
+
+// The idle timeline's timings (SPEC.md §10, §16), from idle.json and
+// idle.local.json (§16.1). They're written to ~/.config/hypr/tide-idle.conf,
+// which conf's hypridle.conf sources, and hypridle restarts to read them:
+// it reads its config only as it starts. A bad file is a notification
+// naming it, once, and changes nothing. So is a change that can't be saved;
+// one that can't be written or applied is tried again until it is
+// (shell/lib/writes.mjs).
+//
+// The files are read and written as they're needed, synchronously
+// (FileView's blockAllReads and blockWrites): they're under 1 KB, and it
+// means what the shell reads is the file, with no read or write in flight
+// for a change to race.
+Singleton {
+    id: root
+
+    // The timings in effect: the defaults until the files are read, then
+    // the last good ones.
+    property var idle: Idle.DEFAULT_IDLE
+    // The errors and which have been reported (shell/lib/report.mjs).
+    property var reports: Report.NOTHING
+    // The settings files' errors, as the last load found them.
+    property var fileErrors: []
+    // Why the panel's last change couldn't be saved, or "".
+    property string saveFailure: ""
+    // hypridle's timings file, written and applied (shell/lib/writes.mjs).
+    property var target: Writes.TARGET
+
+    readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`
+    readonly property string dir: `${root.configHome}/tide`
+
+    // Sets one step, in idle.local.json: the settings panel writes only
+    // the .local files (§16.1). Returns why it didn't, or "": an unknown
+    // step, a bad time, a local file that doesn't parse, which is left as
+    // it is so a hand edit gone wrong isn't lost, or one that can't be
+    // saved.
+    function set(key, seconds) {
+        // The file as it is now, not as it last loaded, so a hand edit made
+        // a moment ago is built on, not written over.
+        const text = root.readNow(local);
+        if (local.broken !== "") {
+            return `${local.broken}; not changing ${key}`;
+        }
+        const result = Idle.withSetting(text, key, seconds);
+        if (result.error) {
+            return `${result.error}; not changing ${key}`;
+        }
+        const error = root.writeNow(local, result.text);
+        root.saveFailure = error === "" ? "" : `${error}; idle setting not saved`;
+        root.load();
+        return root.saveFailure;
+    }
+
+    // The file's text now, or null when it doesn't exist or can't be read
+    // (which sets its `broken`). blockAllReads makes text() read it before
+    // returning, so loaded or loadFailed has fired by then.
+    function readNow(file) {
+        file.reload();
+        const text = file.text();
+        return file.loaded && file.broken === "" ? text : null;
+    }
+
+    // Writes the file now, returning why it couldn't, or "". blockWrites
+    // makes setText() write before returning, so saved or saveFailed has
+    // fired by then. A failed write leaves FileView holding the text it
+    // couldn't write, which the next readNow replaces with the file's.
+    function writeNow(file, text) {
+        file.failure = "";
+        file.setText(text);
+        if (file.failure !== "") {
+            return file.failure;
+        }
+        // An atomic write whose commit fails is only logged, and still
+        // signals saved (Quickshell 0.3.1), so read it back.
+        if (root.readNow(file) !== text) {
+            return file.broken !== "" ? file.broken : `${file.path}: the write didn't take`;
+        }
+        return "";
+    }
+
+    function stepped(r) {
+        root.target = r.state;
+        if (r.action?.write !== undefined) {
+            const error = root.writeNow(written, r.action.write);
+            root.stepped(Writes.targetWritten(root.target, error === "" ? "" : `${error}; hypridle keeps its timings`));
+            return;
+        }
+        if (r.action?.apply) {
+            // try-restart: only a hypridle that's running, which in the
+            // tide session is its unit's (§5.3).
+            Launcher.run(["systemctl", "--user", "try-restart", "hypridle.service"], (ok, errors) => {
+                root.stepped(Writes.targetApplied(root.target, ok ? "" : `couldn't restart hypridle: ${errors.trim() || "systemctl failed"}`));
+            });
+        }
+        root.report();
+    }
+
+    // Every error there is now: the files', a change that couldn't be
+    // saved, and one that hasn't reached hypridle. Each is a notification
+    // once; one that hasn't reached hypridle is tried again until it does.
+    function report() {
+        const failures = [root.target.failure].filter(f => f !== "");
+        const errors = root.fileErrors.concat(root.saveFailure !== "" ? [root.saveFailure] : [], failures);
+        const v = Report.verdict(root.reports, errors);
+        root.reports = v.state;
+        root.send(v.send);
+        if (failures.length > 0 && !retry.running) {
+            retry.start();
+        }
+    }
+
+    function send(errors) {
+        for (const error of errors) {
+            Launcher.run(Report.notifyCommand("Idle settings not applied", error), ok => {
+                root.reports = Report.sent(root.reports, error, ok);
+                if (!ok) {
+                    resend.restart();
+                }
+            });
+        }
+    }
+
+    // Reads both settings files and hypridle's timings file, and writes and
+    // applies the timings when they've changed. Run at the start, whenever
+    // a settings file changes on disk, after the panel's changes, and on a
+    // retry.
+    function load() {
+        const sharedText = root.readNow(shared);
+        const localText = root.readNow(local);
+        const broken = [shared.broken, local.broken].filter(b => b !== "");
+        const result = Idle.loadIdle(sharedText, localText, root.idle);
+        for (const error of result.errors) {
+            console.warn(`tide: ${error}`);
+        }
+        root.fileErrors = broken.concat(result.errors);
+        // Only timings every file agrees on reach hypridle: a typo isn't
+        // the cue to put the defaults back over yesterday's settings.
+        if (root.fileErrors.length > 0) {
+            root.report();
+            return;
+        }
+        root.idle = result.idle;
+        const writtenText = root.readNow(written);
+        if (written.broken !== "") {
+            // Unreadable, it isn't written over either; it's read again on
+            // the retry.
+            root.stepped(Writes.targetUnreadable(root.target, `${written.broken}; hypridle keeps its timings`));
+            return;
+        }
+        root.target = Writes.readTarget(root.target, writtenText).state;
+        root.stepped(Writes.wantTarget(root.target, Idle.hypridleConf(root.idle)));
+    }
+
+    component SettingsFile: FileView {
+        // Why it can't be read, or "" when it can (or doesn't exist).
+        property string broken: ""
+        // Why the last write failed, or "".
+        property string failure: ""
+
+        preload: false
+        blockAllReads: true
+        blockWrites: true
+        atomicWrites: true
+        printErrors: false
+        onLoaded: broken = ""
+        onLoadFailed: error => {
+            // A missing file is the defaults' cue, not an error.
+            broken = error === FileViewError.FileNotFound ? "" : `${path}: ${FileViewError.toString(error)}`;
+            if (broken !== "") {
+                console.warn(`tide: ${broken}`);
+            }
+        }
+        onSaveFailed: error => failure = `${path}: ${FileViewError.toString(error)}`
+    }
+
+    SettingsFile {
+        id: shared
+
+        path: `${root.dir}/idle.json`
+        watchChanges: true
+        onFileChanged: root.load()
+    }
+
+    SettingsFile {
+        id: local
+
+        path: `${root.dir}/idle.local.json`
+        watchChanges: true
+        onFileChanged: root.load()
+    }
+
+    // What hypridle sources. Written only when it would say something
+    // else, so a shell start with nothing changed leaves hypridle alone.
+    SettingsFile {
+        id: written
+
+        path: `${root.configHome}/hypr/tide-idle.conf`
+    }
+
+    // A change that couldn't be written or applied, tried again: load reads
+    // every file afresh and carries on from there.
+    Timer {
+        id: retry
+
+        interval: 30 * 1000
+        onTriggered: root.load()
+    }
+
+    // An error counts as reported only once notify-send delivers it; one
+    // that fails (at login, before the notification server is up) is sent
+    // again, for as long as it lasts.
+    Timer {
+        id: resend
+
+        interval: 30 * 1000
+        onTriggered: {
+            const r = Report.retry(root.reports);
+            root.reports = r.state;
+            root.send(r.send);
+        }
+    }
+}

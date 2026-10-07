@@ -25,9 +25,11 @@
 # probe finds no sensors, so the system monitor parses one but reads no
 # sensor files; a stand-in hyprctl, answering from the stand-in
 # Hyprland's fixtures, for the bar's title, the lock's layout badge and
-# the focus guard's calls; and stand-in gsettings and nmcli, for light and
-# dark and the VPNs, whose monitors report nothing. Data from a timer, a
-# file read, a monitor, or any other command isn't covered.
+# the focus guard's calls; stand-in gsettings and nmcli, for light and
+# dark and the VPNs, whose monitors report nothing; and a stand-in
+# systemctl, for restarting hypridle once the shell has written its
+# timings, which it checks are the defaults. Data from a timer, a file
+# read, a monitor, or any other command isn't covered.
 #
 # With notify-send, it also runs the shell as the notification server
 # (TIDE_NOTIFICATIONS=1, SPEC.md §9), sends it notifications, and expects
@@ -215,7 +217,7 @@ chmod +x "$tmp/helpers/real/hyprctl" || exit 1
 # gsettings and nmcli, for light and dark and the VPNs (their stand-ins
 # say what they answer), copied so their monitors can exec a tail that
 # ends with the shell.
-for _helper in gsettings nmcli; do
+for _helper in gsettings nmcli systemctl; do
     cp "shell/${_helper}_stand_in.sh" "$tmp/helpers/real/$_helper" || exit 1
     chmod +x "$tmp/helpers/real/$_helper" || exit 1
 done
@@ -226,7 +228,7 @@ if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/helpers/real/ti
     echo "FAIL: couldn't build tide-tz: $(cat "$tmp/go.log")" >&2
     exit 1
 fi
-helpers="tide-sysmon tide-tz hyprctl gsettings nmcli"
+helpers="tide-sysmon tide-tz hyprctl gsettings nmcli systemctl"
 : >"$tmp/helpers.log" || exit 1
 for _helper in $helpers; do
     cat >"$tmp/helpers/$_helper" <<EOF || exit 1
@@ -512,7 +514,7 @@ load() {
     # The commands' inputs are fixed (the default zones, $TZ, the system's
     # tzdata; the stand-ins' answers), so anything the shell's commands
     # warn of is a failure.
-    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|gsettings|nmcli|no nmcli)|tide: couldn't (start (tide-|hyprctl|gsettings)|run nmcli|replay|tell)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl)" "$log" >"$tmp/reports"; then
+    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|gsettings|nmcli|no nmcli|systemctl)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run nmcli|replay|tell)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl)" "$log" >"$tmp/reports"; then
         echo "FAIL: $_what loaded, but its commands warned:" >&2
         cat "$tmp/reports" >&2
         exit 1
@@ -563,6 +565,46 @@ EOF
             grep -v '^\[' "$log" >&2
             exit 1
         fi
+    done
+    settle
+}
+
+# idle_settings: fails the test unless the shell started by writing
+# hypridle's default timings (SPEC.md §10), then, given a hand edit to
+# idle.local.json and straight after it two times over IPC as the Idle
+# page's + gives them, wrote all three to idle.local.json and to
+# hypridle's timings, and restarted hypridle again. The clicks come before
+# the shell need have heard of the hand edit, and the second before the
+# first could be written in the background. load runs it, as $after_load.
+idle_settings() {
+    if ! grep -qxF '$tide_idle_lock = 300' "$idle_conf" 2>/dev/null; then
+        echo "FAIL: the shell should write hypridle's default timings to $idle_conf; it has: $(cat "$idle_conf" 2>&1)" >&2
+        exit 1
+    fi
+    _restarts=$(grep -c '^systemctl --user try-restart hypridle.service$' "$tmp/helpers.log")
+    mkdir -p "${idle_local%/*}" || exit 1
+    printf '{\n  "suspend": 900\n}\n' >"$idle_local" || exit 1
+    ipc call settings setIdle lock 600 >/dev/null || exit 1
+    ipc call settings setIdle dim 120 >/dev/null || exit 1
+    # Both files are written, and either can be last: wait for both.
+    _want='{
+  "dim": 120,
+  "lock": 600,
+  "suspend": 900
+}'
+    i=0
+    until grep -qxF '$tide_idle_lock = 600' "$idle_conf" 2>/dev/null &&
+        grep -qxF '$tide_idle_dim = 120' "$idle_conf" &&
+        grep -qxF '$tide_idle_suspend = 900' "$idle_conf" &&
+        test "$(grep -c '^systemctl --user try-restart hypridle.service$' "$tmp/helpers.log")" -gt "$_restarts" &&
+        test "$(cat "$idle_local")" = "$_want"; do
+        if waited "the shell didn't write a lock time of 600 and a dim time of 120, keeping the hand-edited suspend time of 900, to $idle_conf and $idle_local, and restart hypridle" "$i"; then
+            cat "$idle_conf" "$idle_local" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
     done
     settle
 }
@@ -621,7 +663,8 @@ focused() {
 # launch`. The app is a desktop entry only this test installs, and the
 # query leaves out its accent ("Café"), so the match also checks the
 # accent folding runs in Qt's engine. Then it opens the settings panel and
-# expects Down and Enter to open the Network page's app. A stand-in tide on
+# expects Down twice, past Idle and Sound, and Enter to open the Network
+# page's app. A stand-in tide on
 # the shell's PATH keeps each command rather than running it. Its log is
 # $tmp/launch.qs.log.
 launch() {
@@ -683,7 +726,7 @@ launch() {
     ipc call settings open >/dev/null || exit 1
     focused "$_focus"
     timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
-        LANG=C.UTF-8 "$wtype_path" -k Down -k Return >"$tmp/wtype.log" 2>&1
+        LANG=C.UTF-8 "$wtype_path" -k Down -k Down -k Return >"$tmp/wtype.log" 2>&1
     typed $? "the settings panel"
     i=0
     until test "$(wc -l <"$tmp/launched")" -ge 2; do
@@ -901,8 +944,8 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # The shell makes all these calls; without them, the run says nothing
 # about the clocks, the system monitor, the title, the focus guard (its
 # replay of the waiting windows, and its order for Super+Tab), light and
-# dark, or the VPNs. The lock and the greeter only ask for the keyboards,
-# for their layout badges.
+# dark, the VPNs, or hypridle's timings. The lock and the greeter only ask
+# for the keyboards, for their layout badges.
 shell_runs='tide-tz
 tide-sysmon probe
 hyprctl activewindow -j
@@ -912,9 +955,18 @@ gsettings monitor org.gnome.desktop.interface color-scheme
 gsettings set org.gnome.desktop.interface color-scheme
 gsettings set org.gnome.desktop.interface gtk-theme
 nmcli monitor
-nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show'
+nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show
+systemctl --user try-restart hypridle.service'
 load_runs=$shell_runs
+idle_conf=$tmp/home/.config/hypr/tide-idle.conf
+idle_local=$tmp/home/.config/tide/idle.local.json
+after_load=idle_settings
 load shell "the shell" -c tide
+after_load=
+# Gone again, so the next shell starts from the defaults, writes them, and
+# restarts hypridle, too.
+rm "$idle_conf" "$idle_local" || exit 1
+echo "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 load_runs='hyprctl devices -j'
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"

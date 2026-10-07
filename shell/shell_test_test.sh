@@ -4,7 +4,8 @@
 # wtype, notify-send and go, so they run without Quickshell: what the load
 # test does with a shell that loads cleanly, one whose files report an
 # error, one whose event loop never answers, one that ignores Hyprland, one
-# that skips a call to tide-tz, hyprctl, gsettings or nmcli, or whose
+# that skips a call to tide-tz, hyprctl, gsettings, nmcli or systemctl,
+# or whose
 # tide-tz never ends, one whose clocks, system monitor, title, focus guard
 # calls, color scheme or VPNs warn, one whose icon won't load, a
 # notification server that records what it's sent or doesn't, a launcher
@@ -41,9 +42,9 @@ tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
 # The calls the stub qs makes, as the shell and as the lock or the greeter.
-all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor keyboards"
+all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle keyboards"
 
-# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN]]]]]]]:
+# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN [IDLE]]]]]]]]:
 # a sway that listens on wayland-1 until it's killed; a qs whose `ipc`
 # runs IPC, and otherwise talks to Hyprland as HYPRLAND says, then prints
 # LOAD and waits, but started as the unlock step starts the lock
@@ -60,12 +61,16 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # the background, all of $all_runs by default, and reaps them as they end,
 # as Quickshell does: as the shell (-c) tide-tz, tide-sysmon, the title's
 # hyprctl, the focus guard's replay and order, gsettings for the color
-# scheme and its monitor, and nmcli for the VPNs and its monitor, as the
-# lock or the greeter (-p) hyprctl for the keyboards. With LATE, it runs tide-tz that
+# scheme and its monitor, nmcli for the VPNs and its monitor, and
+# hypridle's timings written and systemctl restarting it, as the lock or
+# the greeter (-p) hyprctl for the keyboards. With LATE, it runs tide-tz that
 # many seconds late, as the shell does once it has read its clock files. Its
 # notify-send prints an id and adds the summary to the history, as the
 # shell's server would. Its go builds a tide-tz that runs TZ, by default
-# one that ends at once. DIR/load-CONFIG.txt, if it's there, is printed
+# one that ends at once. Its shell writes the default lock time for
+# hypridle, then a dim time of 120, a lock time of IDLE (600 by default)
+# and the hand-edited suspend time once both are set over IPC.
+# DIR/load-CONFIG.txt, if it's there, is printed
 # before LOAD by that config alone: shell (-c), lock or greeter.
 stubs() {
     mkdir -p "$1" || exit 1
@@ -84,6 +89,7 @@ if test "\$1" = ipc; then
     case "\$*" in
         *"call launcher open"*) : >"\$XDG_RUNTIME_DIR/launcher-open" ;;
         *"call settings open"*) : >"\$XDG_RUNTIME_DIR/settings-open" ;;
+        *"call settings setIdle dim 120"*) : >"\$XDG_RUNTIME_DIR/idle-set" ;;
     esac
     $2
 fi
@@ -128,6 +134,26 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
         esac
         case " ${7-$all_runs} " in
             *" vpn-monitor "*) nmcli monitor >/dev/null 2>&1 & ;;
+        esac
+        case " ${7-$all_runs} " in
+            *" idle "*)
+                {
+                    mkdir -p "\$HOME/.config/hypr" "\$HOME/.config/tide" &&
+                        printf '%s\n' '\$tide_idle_lock = 300' >"\$HOME/.config/hypr/tide-idle.conf" &&
+                        systemctl --user try-restart hypridle.service >/dev/null 2>&1
+                    # A time set over IPC, as the settings panel's Idle page
+                    # sets one; gone with the qs that started it, since
+                    # killing qs leaves this behind.
+                    until test -e "\$XDG_RUNTIME_DIR/idle-set"; do
+                        kill -0 \$\$ 2>/dev/null || exit 0
+                        sleep 0.1
+                    done
+                    rm "\$XDG_RUNTIME_DIR/idle-set"
+                    printf '{\n  "dim": 120,\n  "lock": ${11:-600},\n  "suspend": 900\n}\n' >"\$HOME/.config/tide/idle.local.json"
+                    printf '%s\n' '\$tide_idle_dim = 120' '\$tide_idle_lock = ${11:-600}' '\$tide_idle_suspend = 900' >"\$HOME/.config/hypr/tide-idle.conf"
+                    systemctl --user try-restart hypridle.service >/dev/null 2>&1
+                } &
+                ;;
         esac
     else
         case " ${7-$all_runs} " in
@@ -295,6 +321,7 @@ greeter=$(login_as tide)
 stubs "$tmp/clean" "exit 0" "  INFO: Configuration Loaded"
 run "$tmp/clean"
 check "a shell that loads and answers passes" test "$code" -eq 0
+check "and says it wrote hypridle's timings" contains "$out" "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 check "and says the lock loaded" contains "$out" "ok: Quickshell loads the lock"
 check "and says the greeter loaded" contains "$out" "ok: Quickshell loads the greeter"
 
@@ -329,7 +356,7 @@ run "$tmp/clean"
 check "a launcher that runs the app typed passes" contains "$out" "ok: the launcher finds an app by a query without its accent, and runs it"
 check "having typed the query and Enter" test "$(head -n 1 "$tmp/clean/typed")" = cafepro
 check "and a settings panel that opens the Network page's app passes" contains "$out" "ok: the settings panel changes page with the arrows and opens the page's app"
-check "having pressed Down and Enter" test "$(sed -n 2p "$tmp/clean/typed")" = "-k Down -k Return"
+check "having pressed Down twice and Enter" test "$(sed -n 2p "$tmp/clean/typed")" = "-k Down -k Down -k Return"
 
 stubs "$tmp/runs-nothing" "exit 0" "$loaded" ":" "$opened; $focused; $typed"
 run "$tmp/runs-nothing"
@@ -388,7 +415,7 @@ run "$tmp/late"
 check "a shell that runs tide-tz only after reading its files passes" test "$code" -eq 0
 check "having waited for it" contains "$out" "ok: Quickshell loads the shell"
 
-stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor keyboards"
+stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle keyboards"
 run "$tmp/no-clocks"
 check "a shell that never runs tide-tz fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "tide-tz..." in 2 s'
@@ -414,45 +441,61 @@ run "$tmp/probe-fails"
 check "a shell whose system monitor warns fails" test "$code" -ne 0
 check "and says what it said" contains "$out" "tide: tide-sysmon probe exited 2"
 
-stubs "$tmp/no-title" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon replay order scheme scheme-monitor vpns vpn-monitor keyboards"
+stubs "$tmp/no-title" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon replay order scheme scheme-monitor vpns vpn-monitor idle keyboards"
 run "$tmp/no-title"
 check "a shell that never asks hyprctl for the focused window fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl activewindow -j..." in 2 s'
 
-stubs "$tmp/no-replay" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title order scheme scheme-monitor vpns vpn-monitor keyboards"
+stubs "$tmp/no-replay" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title order scheme scheme-monitor vpns vpn-monitor idle keyboards"
 run "$tmp/no-replay"
 check "a shell that never has the focus guard replay its windows fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.announce_waiting()..." in 2 s'
 
-stubs "$tmp/no-order" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay scheme scheme-monitor vpns vpn-monitor keyboards"
+stubs "$tmp/no-order" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay scheme scheme-monitor vpns vpn-monitor idle keyboards"
 run "$tmp/no-order"
 check "a shell that never tells the focus guard its marks fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.set_order(..." in 2 s'
 
-stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor"
+stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle"
 run "$tmp/no-keyboards"
 check "a lock that never asks hyprctl for the keyboards fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the lock never ran "hyprctl devices -j..." in 2 s'
 
-stubs "$tmp/no-scheme" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme-monitor vpns vpn-monitor keyboards"
+stubs "$tmp/no-scheme" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme-monitor vpns vpn-monitor idle keyboards"
 run "$tmp/no-scheme"
 check "a shell that never tells apps the color scheme fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "gsettings set org.gnome.desktop.interface color-scheme..." in 2 s'
 
-stubs "$tmp/no-scheme-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme vpns vpn-monitor keyboards"
+stubs "$tmp/no-scheme-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme vpns vpn-monitor idle keyboards"
 run "$tmp/no-scheme-monitor"
 check "a shell that never follows the color scheme fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "gsettings monitor org.gnome.desktop.interface color-scheme..." in 2 s'
 
-stubs "$tmp/no-vpns" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpn-monitor keyboards"
+stubs "$tmp/no-vpns" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpn-monitor idle keyboards"
 run "$tmp/no-vpns"
 check "a shell that never lists the VPNs fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show..." in 2 s'
 
-stubs "$tmp/no-vpn-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns keyboards"
+stubs "$tmp/no-vpn-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns idle keyboards"
 run "$tmp/no-vpn-monitor"
 check "a shell that never follows the VPNs fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "nmcli monitor..." in 2 s'
+
+stubs "$tmp/no-idle" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor keyboards"
+run "$tmp/no-idle"
+check "a shell that never restarts hypridle on its timings fails" test "$code" -ne 0
+check "and says so" contains "$out" 'the shell never ran "systemctl --user try-restart hypridle.service..." in 2 s'
+
+stubs "$tmp/idle-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" 300
+run "$tmp/idle-unset"
+check "a shell that loses the first of two quick changes fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell didn't write a lock time of 600 and a dim time of 120, keeping the hand-edited suspend time of 900, to"
+
+stubs "$tmp/idle-warns" "exit 0" "  WARN qml: tide: systemctl --user try-restart hypridle.service exited 1: Failed to connect to bus
+$loaded"
+run "$tmp/idle-warns"
+check "a shell whose hypridle restart warns fails" test "$code" -ne 0
+check "and says what it warned" contains "$out" "tide: systemctl --user try-restart hypridle.service exited 1"
 
 stubs "$tmp/scheme-warns" "exit 0" "  WARN qml: tide: gsettings set org.gnome.desktop.interface color-scheme prefer-dark exited 1: No schemas installed
 $loaded"
