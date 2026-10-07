@@ -53,8 +53,8 @@ export function stripSegments([from, to], zoneOffset, localOffset) {
 // One row per listed clock, in order, then local, each as {label, city,
 // abbr, time, offset, local, day, work}. A listed clock in the local zone
 // (hidden on the bar) is the local row, in its place, rather than a second
-// one.
-export function popoverZones({ clocks, localZone, instant, offsetOf, abbrOf }) {
+// one. `hour24` is the Clocks page's switch.
+export function popoverZones({ clocks, localZone, instant, offsetOf, abbrOf, hour24 = true }) {
     const localOffset = offsetOf(localZone, instant);
     const row = (zone, label, local) => {
         const offset = offsetOf(zone, instant);
@@ -62,7 +62,7 @@ export function popoverZones({ clocks, localZone, instant, offsetOf, abbrOf }) {
             label,
             city: cityOf(zone) || "Local",
             abbr: abbrOf(zone, instant),
-            time: formatTime(instant, offset),
+            time: formatTime(instant, offset, hour24),
             offset: formatOffset(offset - localOffset),
             local,
             day: stripSegments(DAY_HOURS, offset, localOffset),
@@ -96,11 +96,12 @@ export function nowFraction(instant, localOffset) {
     return (((ms % DAY) + DAY) % DAY) / DAY;
 }
 
-// The popover's heading: {time: "19:41", date: "Monday, September 28"}.
-export function heading(instant, localOffset) {
+// The popover's heading: {time: "19:41", date: "Monday, September 28"},
+// the time as formatTime gives it with `hour24`.
+export function heading(instant, localOffset, hour24 = true) {
     const d = new Date(instant + localOffset * MINUTE);
     return {
-        time: formatTime(instant, localOffset),
+        time: formatTime(instant, localOffset, hour24),
         date: `${WEEKDAYS[d.getUTCDay()]}, ${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`,
     };
 }

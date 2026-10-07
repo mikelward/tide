@@ -7,7 +7,8 @@ import {
     DEFAULT_CLOCKS, jsonError, parseClocks, loadClocks, visibleClocks, dayOffset,
     formatTime, formatLocal, barClocks, scrubbed, SCRUB_STEP, zoneError,
     zoneFormError, cityLabel, editableClocks, editedClocks, movedClock, withoutClock,
-    relabeledClock, withClock,
+    relabeledClock, withClock, DEFAULT_SWITCHES, SWITCH_ROWS, parseClocksFile, withClockSwitch,
+    loadPlan,
 } from "./clocks.mjs";
 
 function canonical(zone) {
@@ -141,7 +142,7 @@ test("a JSON error names its line", () => {
 });
 
 test("no files means the defaults", () => {
-    assert.deepEqual(loadClocks(null, null), { clocks: DEFAULT_CLOCKS, errors: [], source: null });
+    assert.deepEqual(loadClocks(null, null), { clocks: DEFAULT_CLOCKS, switches: DEFAULT_SWITCHES, errors: [], source: null });
 });
 
 test("the local list replaces the shared one whole", () => {
@@ -252,7 +253,7 @@ for (const { zone, before, after } of DST) {
                 clocks: [{ zone, label: "abbr" }], localZone: "Pacific/Honolulu",
                 instant: at(iso), offsetOf, abbrOf: abbrAt,
             });
-            assert.deepEqual(bar[0], { text, dayOffset: days }, iso);
+            assert.deepEqual({ text: bar[0].text, dayOffset: bar[0].dayOffset }, { text, dayOffset: days }, iso);
             assert.equal(bar[1].local, true);
         }
     });
@@ -275,9 +276,9 @@ test("the bar ends with local and marks other days", () => {
         offsetOf, abbrOf: () => "",
     });
     assert.deepEqual(bar, [
-        { text: "SF 16:30", dayOffset: -1 },
-        { text: "NYC 19:30", dayOffset: -1 },
-        { text: "Oct 3 00:30", dayOffset: 0, local: true },
+        { text: "SF 16:30", label: "SF", time: "16:30", dayOffset: -1 },
+        { text: "NYC 19:30", label: "NYC", time: "19:30", dayOffset: -1 },
+        { text: "Oct 3 00:30", label: "Oct 3", time: "00:30", dayOffset: 0, local: true },
     ]);
 });
 
@@ -374,7 +375,7 @@ test("the panel's first change copies the list into clocks.local.json", () => {
 test("the panel never writes over a file that doesn't parse", () => {
     assert.match(editedClocks(null, "[{", c => withClock(c, "UTC")).error, /^clocks\.local\.json: line 1: /);
     // With no local file, the shared list is the one to change.
-    assert.match(editedClocks("{}", null, c => withClock(c, "UTC")).error, /^clocks\.json: expected a list/);
+    assert.match(editedClocks('{"zone": "UTC", "label": ""}', null, c => withClock(c, "UTC")).error, /^clocks\.json: expected a list/);
 });
 
 test("a refused change writes nothing", () => {
@@ -422,4 +423,90 @@ test("a zone already listed isn't added twice", () => {
     const clocks = DEFAULT_CLOCKS.map(c => ({ ...c }));
     assert.deepEqual(withClock(clocks, "Europe/London"), { error: "Europe/London is listed already" });
     assert.deepEqual(withClock(clocks, "UTC").clocks[3], { zone: "UTC", label: "UTC" });
+});
+
+test("clocks.json can be an object of the list and the switches", () => {
+    const text = '{"clocks": [{"zone": "Asia/Tokyo", "label": "TYO"}], "hour24": false, "dedupeLocal": false}';
+    assert.deepEqual(parseClocksFile(text).settings, {
+        clocks: [{ zone: "Asia/Tokyo", label: "TYO" }], hour24: false, dedupeLocal: false,
+    });
+    assert.deepEqual(parseClocksFile('{"hour24": false}').settings, { hour24: false }, "the list is optional");
+    assert.deepEqual(parseClocksFile('[{"zone": "UTC", "label": ""}]').settings, { clocks: [{ zone: "UTC", label: "" }] });
+    assert.equal(parseClocksFile('{"hour24": "no"}').error, "hour24 must be true or false");
+    assert.equal(parseClocksFile('{"seconds": true}').error, 'unknown setting "seconds"');
+    assert.equal(parseClocksFile('{"clocks": [{"zone": "UTC"}]}').error, 'clocks: entry 1: label must be text, or "abbr"');
+    assert.equal(parseClocksFile('{"zone": "UTC", "label": ""}').error, "expected a list of {zone, label}");
+});
+
+test("the local file's switches win, and its list still replaces the shared one", () => {
+    const shared = '{"clocks": [{"zone": "Asia/Tokyo", "label": "TYO"}], "hour24": false, "dedupeLocal": false}';
+    let r = loadClocks(shared, '{"hour24": true}');
+    assert.deepEqual(r.clocks, [{ zone: "Asia/Tokyo", label: "TYO" }], "the local file has no list");
+    assert.equal(r.source, "clocks.json");
+    assert.deepEqual(r.switches, { hour24: true, dedupeLocal: false });
+    r = loadClocks(shared, '[{"zone": "UTC", "label": ""}]');
+    assert.deepEqual(r.clocks, [{ zone: "UTC", label: "" }]);
+    assert.deepEqual(r.switches, { hour24: false, dedupeLocal: false }, "a list sets no switch");
+    // A bad file keeps the last good of both.
+    r = loadClocks(shared, '{"hour24": 1}', DEFAULT_CLOCKS, undefined, { hour24: false, dedupeLocal: true });
+    assert.deepEqual(r.switches, { hour24: false, dedupeLocal: true });
+    assert.deepEqual(r.errors, ["clocks.local.json: hour24 must be true or false"]);
+});
+
+test("a switch goes into clocks.local.json, keeping its list", () => {
+    let text = withClockSwitch(null, null, "hour24", false).text;
+    assert.deepEqual(JSON.parse(text), { hour24: false });
+    text = withClockSwitch(null, '[{"zone": "UTC", "label": ""}]', "dedupeLocal", false).text;
+    assert.deepEqual(JSON.parse(text), { clocks: [{ zone: "UTC", label: "" }], dedupeLocal: false });
+    text = withClockSwitch(null, text, "dedupeLocal", true).text;
+    assert.deepEqual(JSON.parse(text), { clocks: [{ zone: "UTC", label: "" }], dedupeLocal: true });
+    assert.equal(withClockSwitch(null, null, "seconds", true).error, 'unknown setting "seconds"');
+    assert.equal(withClockSwitch(null, null, "hour24", "no").error, "hour24 must be true or false");
+    assert.match(withClockSwitch("[{", null, "hour24", false).error, /^clocks\.json: line 1/);
+    assert.match(withClockSwitch(null, "[{", "hour24", false).error, /^clocks\.local\.json: line 1/);
+});
+
+test("a change to the list keeps the local file's switches", () => {
+    const r = editedClocks(null, '{"hour24": false}', c => withClock(c, "UTC"));
+    assert.deepEqual(JSON.parse(r.text).hour24, false);
+    assert.equal(JSON.parse(r.text).clocks.length, DEFAULT_CLOCKS.length + 1);
+    // A list stays a list.
+    assert.ok(Array.isArray(JSON.parse(editedClocks(null, '[{"zone": "UTC", "label": ""}]', c => withClock(c, "Asia/Tokyo")).text)));
+});
+
+test("with 24-hour time off, the bar shows the time with AM or PM", () => {
+    const bar = barClocks({
+        clocks: DEFAULT_CLOCKS, localZone: "Europe/London", instant: at("2026-10-02T23:30:00Z"),
+        offsetOf, abbrOf: () => "", hour24: false,
+    });
+    assert.deepEqual(bar.map(c => [c.label, c.time]), [["SF", "4:30 PM"], ["NYC", "7:30 PM"], ["Oct 3", "12:30 AM"]]);
+    assert.equal(bar[0].text, "SF 4:30 PM");
+    const noon = barClocks({ clocks: [], localZone: "UTC", instant: at("2026-10-02T12:05:00Z"), offsetOf: () => 0, abbrOf: () => "", hour24: false });
+    assert.equal(noon[0].time, "12:05 PM");
+});
+
+test("with dedupe-local off, a listed zone that is the local one shows too", () => {
+    const t = at("2026-10-02T23:30:00Z");
+    const shown = dedupeLocal => barClocks({
+        clocks: DEFAULT_CLOCKS, localZone: "Europe/London", instant: t, offsetOf, abbrOf: () => "", dedupeLocal,
+    }).map(c => c.label);
+    assert.deepEqual(shown(true), ["SF", "NYC", "Oct 3"]);
+    assert.deepEqual(shown(false), ["SF", "NYC", "LON", "Oct 3"]);
+});
+
+test("the Clocks page lists every switch", () => {
+    assert.deepEqual(SWITCH_ROWS.map(r => r.key), Object.keys(DEFAULT_SWITCHES));
+});
+
+test("a switch alone needs no lookup, and doesn't restart one running for the same list", () => {
+    const good = DEFAULT_CLOCKS.map(c => ({ ...c }));
+    const utc = [{ zone: "UTC", label: "" }];
+    const plan = (clocks, shown, pending) => loadPlan(clocks, good, shown, pending);
+    assert.deepEqual(plan(DEFAULT_CLOCKS, true, null), { lookUp: false, now: true, pending: false }, "shown");
+    assert.deepEqual(plan(DEFAULT_CLOCKS, true, good), { lookUp: false, now: true, pending: true }, "shown, a refresh running");
+    assert.deepEqual(plan(utc, true, utc), { lookUp: false, now: false, pending: true }, "the lookup running is for it");
+    assert.equal(plan(DEFAULT_CLOCKS, false, null).lookUp, true, "nothing shown yet");
+    assert.equal(plan(utc, true, null).lookUp, true, "another list");
+    assert.equal(plan(DEFAULT_CLOCKS, true, utc).lookUp, true, "a lookup running for another list");
+    assert.equal(plan(good.map(c => ({ ...c, label: c.label + "!" })), true, null).lookUp, true, "a new label");
 });

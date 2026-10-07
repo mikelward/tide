@@ -49,12 +49,18 @@ once you have agreed with it or reversed it.
   CI's count of Down presses to the Network page stay as they are. Moving
   it is a line in `PAGES` in `shell/lib/settings.mjs` and the table row.
 
-- [ ] **The Clocks page has no 24 h or dedupe-local switch yet.** §16's
-  table lists both; the bar is always 24-hour and always hides the local
-  zone (§7.3). Adding them needs `clocks.json` to hold more than its list,
-  which every reader of it would have to take; zones, order and labels
-  needed nothing new. They can be added later without changing what's
-  written now.
+- [ ] **`clocks.json` may be an object, its list under `clocks`, for the
+  24 h and dedupe-local switches.** A bare list is still read as before,
+  and the page keeps one a list until a switch is set. The alternative was
+  a separate file for the switches, which would leave the list's format
+  alone but split one page across two files. It's `parseClocksFile` in
+  `shell/lib/clocks.mjs`.
+
+- [ ] **12-hour time reads `4:30 PM`, and the lock screen stays 24-hour.**
+  The bar's and the popover's clocks follow `hour24`. The lock's big clock
+  doesn't yet; it would take `ClockData`'s switch in `LockFace.qml`. The
+  alternatives were `4:30p` or `4:30 pm`, which are shorter on a full bar.
+  It's `formatTime` in `shell/lib/clocks.mjs`.
 
 - [ ] **The Layouts page comes after Keys.** §16's table had it third;
   new pages go after the ones you ordered. Moving it is a line in `PAGES`
@@ -597,9 +603,8 @@ from the keyboard (`shell/shell_test.sh`).
   relabels and takes out the bar's clocks, writing `clocks.local.json`, and
   has the bar look them up at once. CI checks three changes over IPC on a
   hand-edited list, and a zone refused. Still to do:
-  - 24 h and dedupe-local, which need `clocks.json` to hold more than the
-    list: an object with the list under `zones`, say, which every reader
-    would take as well as a bare list.
+  - On a live session, check the switches change the bar and the popover
+    at once, and that a 12-hour bar still fits beside the title.
   - On a live session, check the page's fields take the keyboard and give
     it back as the Keyboard page's do, and that the bar changes at once.
 - Keys (`shell/lib/keys.mjs`, `shell/KeysData.qml`) lists `hyprctl

@@ -579,7 +579,7 @@ EOF
 # .local.json and to the file read, and restarted hypridle or reapplied the
 # devices again. Then the same for the Clocks page: a zone added, labeled
 # and moved, and one refused, written to clocks.local.json and looked up
-# by the bar. Then the Layouts page: none written at startup, then two
+# by the bar, then 24-hour time turned off there. Then the Layouts page: none written at startup, then two
 # settings over a hand edit, written to layouts.local.json and the file
 # layout.lua reads, and applied again. Then the Appearance page: two
 # settings set over a hand edit, and sunrise and sunset refused without a
@@ -696,6 +696,30 @@ written_settings() {
     until test "$(cat "$clocks_local")" = "$_want" &&
         grep -qxF 'tide-tz -- Asia/Kolkata UTC' "$tmp/helpers.log"; do
         if waited "the shell didn't write the clocks for Asia/Kolkata, labeled IST, then the hand-edited UTC to $clocks_local, and look them up" "$i"; then
+            cat "$clocks_local" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    ipc call settings setClockSwitch hour24 false >/dev/null || exit 1
+    _want='{
+  "clocks": [
+    {
+      "zone": "Asia/Kolkata",
+      "label": "IST"
+    },
+    {
+      "zone": "UTC",
+      "label": ""
+    }
+  ],
+  "hour24": false
+}'
+    i=0
+    until test "$(cat "$clocks_local")" = "$_want"; do
+        if waited "the shell didn't turn 24-hour time off in $clocks_local, keeping its clocks" "$i"; then
             cat "$clocks_local" >&2
             grep -v '^\[' "$log" >&2
             exit 1

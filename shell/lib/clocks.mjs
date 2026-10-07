@@ -11,6 +11,17 @@ export const DEFAULT_CLOCKS = Object.freeze([
     Object.freeze({ zone: "Europe/London", label: "LON" }),
 ]);
 
+// The switches clocks.json can set beside the list (SPEC.md §16), as they
+// are when no file sets them: 24-hour time, and a listed zone that is the
+// local one hidden on the bar (§7.3).
+export const DEFAULT_SWITCHES = Object.freeze({ hour24: true, dedupeLocal: true });
+
+// The switches as the Clocks page lists them, in order.
+export const SWITCH_ROWS = Object.freeze([
+    Object.freeze({ key: "hour24", label: "24-hour time" }),
+    Object.freeze({ key: "dedupeLocal", label: "Hide a zone that's the local one" }),
+]);
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MINUTE = 60 * 1000;
@@ -129,10 +140,10 @@ export function jsonError(text) {
     return `line ${text.split("\n").length}: invalid JSON`;
 }
 
-// Parses one clocks.json: a list of {zone, label}. Returns {clocks} or
-// {error}, never throws. `isZone(zone)`, when given, says whether the time
-// zone reader knows a zone, so an unknown one is an error here rather than
-// a broken clock later.
+// Parses a list of {zone, label}. Returns {clocks} or {error}, never
+// throws. `isZone(zone)`, when given, says whether the time zone reader
+// knows a zone, so an unknown one is an error here rather than a broken
+// clock later.
 export function parseClocks(text, isZone) {
     let value;
     try {
@@ -140,6 +151,48 @@ export function parseClocks(text, isZone) {
     } catch (e) {
         return { error: jsonError(text) };
     }
+    return clockList(value, isZone);
+}
+
+// One clocks.json: a list of {zone, label}, or an object with that list as
+// `clocks` beside the switches (DEFAULT_SWITCHES), each of which it may
+// leave out. Returns {settings}, holding what the file sets, or {error}.
+export function parseClocksFile(text, isZone) {
+    let value;
+    try {
+        value = JSON.parse(text);
+    } catch (e) {
+        return { error: jsonError(text) };
+    }
+    if (Array.isArray(value)) {
+        const list = clockList(value, isZone);
+        return list.error ? list : { settings: { clocks: list.clocks } };
+    }
+    // One clock not in a list is the likelier mistake than an unknown setting.
+    if (value === null || typeof value !== "object" || "zone" in value || "label" in value) {
+        return { error: "expected a list of {zone, label}" };
+    }
+    const settings = {};
+    for (const key of Object.keys(value)) {
+        if (key === "clocks") {
+            const list = clockList(value.clocks, isZone);
+            if (list.error) {
+                return { error: `clocks: ${list.error}` };
+            }
+            settings.clocks = list.clocks;
+        } else if (Object.prototype.hasOwnProperty.call(DEFAULT_SWITCHES, key)) {
+            if (typeof value[key] !== "boolean") {
+                return { error: `${key} must be true or false` };
+            }
+            settings[key] = value[key];
+        } else {
+            return { error: `unknown setting "${key}"` };
+        }
+    }
+    return { settings };
+}
+
+function clockList(value, isZone) {
     if (!Array.isArray(value)) {
         return { error: "expected a list of {zone, label}" };
     }
@@ -168,33 +221,43 @@ export function parseClocks(text, isZone) {
     return { clocks };
 }
 
-// The clocks to show, from clocks.json and clocks.local.json (SPEC.md
-// §16.1). Each text is the file's contents, or null when it doesn't exist.
-// The local list replaces the shared one whole. A file that fails to parse,
-// or names a zone `isZone` doesn't know, keeps `lastGood` (the defaults the
-// first time). Every file is checked, so `errors` names each one that's
-// wrong, not just the first. `source` names the file the clocks came from,
-// or is null for the defaults and `lastGood`.
-export function loadClocks(sharedText, localText, lastGood = DEFAULT_CLOCKS, isZone = undefined) {
+// The clocks to show, and the switches, from clocks.json and
+// clocks.local.json (SPEC.md §16.1). Each text is the file's contents, or
+// null when it doesn't exist. The local list replaces the shared one
+// whole, and a switch the local file sets wins. A file that fails to
+// parse, or names a zone `isZone` doesn't know, keeps `lastGood` and
+// `lastSwitches` (the defaults the first time). Every file is checked, so
+// `errors` names each one that's wrong, not just the first. `source` names
+// the file the clocks came from, or is null for the defaults and
+// `lastGood`.
+export function loadClocks(sharedText, localText, lastGood = DEFAULT_CLOCKS, isZone = undefined, lastSwitches = DEFAULT_SWITCHES) {
     const errors = [];
     let clocks = DEFAULT_CLOCKS;
     let source = null;
+    const switches = Object.assign({}, DEFAULT_SWITCHES);
     for (const [name, text] of [["clocks.json", sharedText], ["clocks.local.json", localText]]) {
         if (text === null || text === undefined) {
             continue;
         }
-        const parsed = parseClocks(text, isZone);
+        const parsed = parseClocksFile(text, isZone);
         if (parsed.error) {
             errors.push(`${name}: ${parsed.error}`);
             continue;
         }
-        clocks = parsed.clocks;
-        source = name;
+        if (parsed.settings.clocks) {
+            clocks = parsed.settings.clocks;
+            source = name;
+        }
+        for (const key of Object.keys(DEFAULT_SWITCHES)) {
+            if (parsed.settings[key] !== undefined) {
+                switches[key] = parsed.settings[key];
+            }
+        }
     }
     if (errors.length > 0) {
-        return { clocks: lastGood, errors, source: null };
+        return { clocks: lastGood, switches: lastSwitches, errors, source: null };
     }
-    return { clocks, errors, source };
+    return { clocks, switches, errors, source };
 }
 
 // A zone tide-tz couldn't load, as an error naming where it was set: the
@@ -256,11 +319,13 @@ export function editableClocks(sharedText, localText) {
         if (text === null || text === undefined) {
             continue;
         }
-        const parsed = parseClocks(text);
+        const parsed = parseClocksFile(text);
         if (parsed.error) {
             return { error: `${name}: ${parsed.error}` };
         }
-        found = { clocks: parsed.clocks, source: name };
+        if (parsed.settings.clocks) {
+            found = { clocks: parsed.settings.clocks, source: name };
+        }
     }
     return found;
 }
@@ -279,7 +344,37 @@ export function editedClocks(sharedText, localText, change) {
     if (result.error) {
         return { error: result.error };
     }
-    return { text: JSON.stringify(result.clocks, null, 2) + "\n", clocks: result.clocks };
+    // A local file of switches keeps them; a list stays a list.
+    const local = localText === null || localText === undefined ? null : JSON.parse(localText);
+    const value = local !== null && !Array.isArray(local)
+        ? Object.assign({}, parseClocksFile(localText).settings, { clocks: result.clocks })
+        : result.clocks;
+    return { text: JSON.stringify(value, null, 2) + "\n", clocks: result.clocks };
+}
+
+// clocks.local.json's text with switch `key` (hour24 or dedupeLocal) set to
+// `value`, keeping its list if it has one. Each text is the file's, or null
+// when it doesn't exist. A file that doesn't parse is an {error}, as
+// editedClocks's: the bar keeps its last good settings while it doesn't.
+export function withClockSwitch(sharedText, localText, key, value) {
+    if (!Object.prototype.hasOwnProperty.call(DEFAULT_SWITCHES, key)) {
+        return { error: `unknown setting "${key}"` };
+    }
+    if (typeof value !== "boolean") {
+        return { error: `${key} must be true or false` };
+    }
+    let settings = {};
+    for (const [name, text] of [["clocks.json", sharedText], ["clocks.local.json", localText]]) {
+        if (text === null || text === undefined) {
+            continue;
+        }
+        const parsed = parseClocksFile(text);
+        if (parsed.error) {
+            return { error: `${name}: ${parsed.error}` };
+        }
+        settings = name === "clocks.local.json" ? parsed.settings : settings;
+    }
+    return { text: JSON.stringify(Object.assign({}, settings, { [key]: value }), null, 2) + "\n" };
 }
 
 // The clock a change is for: entry `index` (from 0), if it still names
@@ -348,12 +443,28 @@ export function withClock(clocks, zone) {
     return { clocks: clocks.concat([{ zone, label: cityLabel(zone) }]) };
 }
 
+// What loaded settings need, given the list the bar shows (`good`, and
+// `shown` once its zones' table is in with no file errors) and the list a
+// lookup still running is for (`pending`, or null). Returns {lookUp: true}
+// when tide-tz has to read `clocks`' zones, the switches waiting for it,
+// since a list it refuses keeps the last good switches too. Otherwise the
+// list is unchanged and only the switches can be new: `now` when the bar
+// shows that list already, `pending` when the lookup running is for it,
+// so it lands with them rather than restarting.
+export function loadPlan(clocks, good, shown, pending) {
+    const same = other => JSON.stringify(other) === JSON.stringify(clocks);
+    if (pending !== null ? !same(pending) : !(shown && same(good))) {
+        return { lookUp: true, now: false, pending: false };
+    }
+    return { lookUp: false, now: shown && same(good), pending: pending !== null };
+}
+
 // The listed clocks minus any in the local zone, compared by zone ID; zones
 // are canonical IDs (SPEC.md §7.3). A local zone with no ID ("") hides
 // none. A zone that only shares the current offset stays, so no clock comes
-// and goes at a DST change.
-export function visibleClocks(clocks, localZone) {
-    return clocks.filter((c) => c.zone !== localZone);
+// and goes at a DST change. With `dedupeLocal` off, none is hidden.
+export function visibleClocks(clocks, localZone, dedupeLocal = true) {
+    return dedupeLocal ? clocks.filter((c) => c.zone !== localZone) : clocks;
 }
 
 function pad(n) {
@@ -379,33 +490,46 @@ export function dayOffset(ms, zoneOffset, localOffset) {
     return wallClock(ms, zoneOffset).days - wallClock(ms, localOffset).days;
 }
 
-// "HH:MM", 24-hour.
-export function formatTime(ms, offset) {
+// "HH:MM", 24-hour, or "h:MM AM" with `hour24` off.
+export function formatTime(ms, offset, hour24 = true) {
     const w = wallClock(ms, offset);
-    return `${pad(w.hours)}:${pad(w.minutes)}`;
+    if (hour24) {
+        return `${pad(w.hours)}:${pad(w.minutes)}`;
+    }
+    return `${w.hours % 12 || 12}:${pad(w.minutes)} ${w.hours < 12 ? "AM" : "PM"}`;
 }
 
-// The local clock: "MMM d HH:MM".
-export function formatLocal(ms, offset) {
+// The local clock's date: "MMM d".
+function formatDate(ms, offset) {
     const w = wallClock(ms, offset);
-    return `${MONTHS[w.month]} ${w.date} ${pad(w.hours)}:${pad(w.minutes)}`;
+    return `${MONTHS[w.month]} ${w.date}`;
 }
 
-// What the bar shows, left to right: each visible clock as
-// {text, dayOffset}, then local as {text, dayOffset: 0, local: true}. A
-// label of "abbr" shows the zone's current tzdata abbreviation.
-export function barClocks({ clocks, localZone, instant, offsetOf, abbrOf }) {
+// The local clock: "MMM d HH:MM", or its time as formatTime gives it.
+export function formatLocal(ms, offset, hour24 = true) {
+    return `${formatDate(ms, offset)} ${formatTime(ms, offset, hour24)}`;
+}
+
+// What the bar shows, left to right: each visible clock as {text, label,
+// time, dayOffset}, then local, its date the label, with dayOffset 0 and
+// local true. A label of "abbr" shows the zone's current tzdata
+// abbreviation. `hour24` and `dedupeLocal` are the switches.
+export function barClocks({ clocks, localZone, instant, offsetOf, abbrOf, hour24 = true, dedupeLocal = true }) {
     const localOffset = offsetOf(localZone, instant);
-    const shown = visibleClocks(clocks, localZone).map((c) => {
+    const shown = visibleClocks(clocks, localZone, dedupeLocal).map((c) => {
         const offset = offsetOf(c.zone, instant);
         const label = c.label === "abbr" ? abbrOf(c.zone, instant) : c.label;
-        const time = formatTime(instant, offset);
+        const time = formatTime(instant, offset, hour24);
         return {
             text: label === "" ? time : `${label} ${time}`,
+            label,
+            time,
             dayOffset: dayOffset(instant, offset, localOffset),
         };
     });
-    shown.push({ text: formatLocal(instant, localOffset), dayOffset: 0, local: true });
+    const date = formatDate(instant, localOffset);
+    const time = formatTime(instant, localOffset, hour24);
+    shown.push({ text: `${date} ${time}`, label: date, time, dayOffset: 0, local: true });
     return shown;
 }
 
