@@ -26,7 +26,8 @@ this is the way to install by hand:
 By hand, also install what the session runs: Hyprland 0.56 or later,
 Quickshell 0.3 (`qs`, which draws the bar; without it `tide-shell`
 falls back to waybar), hypridle, uwsm, waybar, swaync, a polkit agent, swww
-or swaybg, notify-send (libnotify), which the shell reports a bad settings
+or swaybg (for waybar's bar; the Quickshell shell draws its own wallpaper),
+notify-send (libnotify), which the shell reports a bad settings
 file with, jq, which `tide doctor` reads Hyprland's JSON with, python3,
 which it reads the session bus's config with, and NetworkManager's nmcli,
 which the network menu lists VPNs with. `setup-tide` installs them all.
@@ -61,8 +62,9 @@ Until the Quickshell shell is complete, `tide.service` runs
 `tide-shell`, a transitional shell. It runs the Quickshell bar
 (`qs -c tide`) when Quickshell and the shell are installed, and waybar
 otherwise; conf's theme daemon, which runs swaync (and waybar, when that's
-the bar); a polkit agent; and swww (or swaybg where swww isn't packaged) for
-the wallpaper. It also runs conf's input setup once. It reports ready once
+the bar); a polkit agent; and, with waybar, swww (or swaybg where swww
+isn't packaged) for the wallpaper, which the Quickshell shell draws itself.
+It also runs conf's input setup once. It reports ready once
 swaync owns the notification name and the bar's tray owns the watcher (see
 `TODO.md`). `TIDE_BAR=waybar` in `~/.config/uwsm/env` keeps waybar.
 

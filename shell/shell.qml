@@ -7,11 +7,17 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 
-// tide's shell (SPEC.md §3.2): for now, the bar, the OSD and the
-// notification popups (opt-in; see NotificationData.qml) on every monitor,
+// tide's shell (SPEC.md §3.2): for now, the wallpaper, the bar, the OSD and
+// the notification popups (opt-in; see NotificationData.qml) on every monitor,
 // the launcher, the settings panel and the polkit prompt (opt-in; see
 // PolkitData.qml).
 ShellRoot {
+    Variants {
+        model: Quickshell.screens
+
+        Wallpaper {}
+    }
+
     Variants {
         model: Quickshell.screens
 

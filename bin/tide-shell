@@ -41,8 +41,9 @@
 #   $TIDE_POLKIT_AGENTS the paths searched, in order (default below)
 #   $TIDE_AGENT_RETRY   seconds (1-60) before the agent's first restart (5),
 #                             doubling to at most 60
-#   $TIDE_WALLPAPER     the wallpaper swww or swaybg shows (default:
-#                             conf's)
+#   $TIDE_WALLPAPER     the wallpaper swww or swaybg shows with waybar's
+#                             bar, or the Quickshell shell's fallback
+#                             (default: conf's)
 #   $TIDE_INPUT_SETUP   a one-shot input setup (default: conf's
 #                             apply-input.sh), run once Hyprland is up
 
@@ -195,6 +196,16 @@ if test -n "${TIDE_WALLPAPER:-}" && ! test -f "$TIDE_WALLPAPER"; then
     log "TIDE_WALLPAPER is '$TIDE_WALLPAPER', which isn't a file"
     exit $EX_CONFIG
 fi
+# The Quickshell shell draws it from a file: URL, which can't be relative,
+# so one found from here is passed on as from here.
+case ${TIDE_WALLPAPER:-} in
+'' | /*) ;;
+*)
+    TIDE_WALLPAPER=$PWD/$TIDE_WALLPAPER
+    export TIDE_WALLPAPER
+    wallpaper=$TIDE_WALLPAPER
+    ;;
+esac
 
 case "${TIDE_BAR:-}" in
     '')
@@ -340,12 +351,15 @@ else
     tray_owner="waybar's tray"
 fi
 
-# The wallpaper (§5.2 puts it in the shell). Not an owner apps wait for, so
-# it isn't part of the ready check, but its daemon is supervised like one.
-# swaybg stands in where swww isn't packaged (Ubuntu 26.04): it shows one
-# image and needs no client, so there's nothing to wait for.
+# The wallpaper (§5.2 puts it in the shell). The Quickshell shell draws its
+# own (§15); with waybar's bar, a daemon does. Not an owner apps wait for,
+# so it isn't part of the ready check, but its daemon is supervised like
+# one. swaybg stands in where swww isn't packaged (Ubuntu 26.04): it shows
+# one image and needs no client, so there's nothing to wait for.
 wallpaper_pending=no
-if command -v swww-daemon >/dev/null 2>&1 && command -v swww >/dev/null 2>&1; then
+if test "$bar" = quickshell; then
+    : # the shell's Wallpaper.qml, which takes $TIDE_WALLPAPER too
+elif command -v swww-daemon >/dev/null 2>&1 && command -v swww >/dev/null 2>&1; then
     supervise "the wallpaper daemon (swww-daemon)" swww-daemon
     wallpaper_pending=yes
 elif command -v swaybg >/dev/null 2>&1; then

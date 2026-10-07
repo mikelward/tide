@@ -132,6 +132,17 @@ once you have agreed with it or reversed it.
   `Super+Space`, which tide's launcher has; KDE's is `Meta+Alt+K`. It's
   one `hl.bind` in `conf`'s `hyprland.lua` and a row in §6.6.
 
+- [ ] **The shell's wallpaper falls back to conf's images, and replaces
+  swww under the Quickshell shell.** It shows the mode's own setting, then
+  `$TIDE_WALLPAPER`, then `wallpaper-light.jpg` or `-dark.jpg`, then
+  `wallpaper.jpg`, so a setup that had a wallpaper keeps it without a
+  setting. `tide-shell` stops starting swww or swaybg when the Quickshell
+  shell runs, rather than running both and leaving their order on the
+  background layer to chance. One that can't be read or decoded is logged,
+  not a notification, and the next is tried. The order is `wallpaperCandidates` in
+  `shell/lib/appearance.mjs`, and the daemon choice the wallpaper block of
+  `bin/tide-shell`.
+
 - [ ] **The Appearance page comes after Layouts.** §16's table had it first;
   new pages go after the ones you ordered, so their order and CI's count
   of Down presses to the Network page stay as they are. Moving it is a
@@ -661,7 +672,11 @@ from the keyboard (`shell/shell_test.sh`).
   'conf_appearance.reload()'`. CI checks three settings over IPC on a hand
   edit, the dim's write and apply, and sunrise and sunset refused without
   a longitude. Still to do:
-  - Wallpaper, once the shell draws one (§15).
+  - The lock and greeter's blurred wallpaper (§15): `tide-lock` and the
+    greeter are their own processes, so each needs the wallpaper's
+    settings and the blur.
+  - On a live session, check the wallpaper fills each monitor, follows a
+    switch to dark at once, and sits under every window and layer.
   - On a live session, check a mode or a time changes the theme at once,
     and that the location fields take and give back the keyboard.
   - On a live session, check a dim step shows at once on an inactive

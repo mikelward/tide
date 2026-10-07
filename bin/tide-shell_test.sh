@@ -150,6 +150,7 @@ if test "$*" = --version; then
     exit "${FAKE_QS_VERSION_STATUS:-0}"
 fi
 printf 'qs %s\n' "$*" >> "$FAKE_LOG"
+printf 'qs TIDE_WALLPAPER=%s\n' "${TIDE_WALLPAPER-}" >> "$FAKE_LOG"
 if test -n "$FAKE_QS_EXIT"; then
     # Lets a waiting theme daemon go too, so nothing outlives the run.
     if test -n "$FAKE_DAEMON_UNTIL"; then
@@ -477,6 +478,16 @@ log=$(cat "$tmp/log")
 check "the Quickshell bar runs the shell" contains "$log" "qs -c tide"
 check "the theme daemon is told the bar is Quickshell's" contains "$log" "theme-daemon bar=quickshell"
 check "the Quickshell bar's tray counts toward ready" contains "$log" "systemd-notify --ready"
+check "the Quickshell shell draws the wallpaper, so no daemon is started" test ! -e "$tmp/owned/swww-up"
+check "nor is it set through swww" test -z "$(grep '^swww img' "$tmp/log")"
+check "the shell is given TIDE_WALLPAPER" contains "$log" "qs TIDE_WALLPAPER=$tmp/wallpaper.jpg"
+# A relative TIDE_WALLPAPER reaches the shell absolute: it draws the file
+# from a file: URL, which can't be relative.
+cd "$tmp" || exit 1
+run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell TIDE_WALLPAPER=wallpaper.jpg
+cd "${shell%/bin/tide-shell}" || exit 1
+check "a relative TIDE_WALLPAPER is found from where tide-shell runs" test "$status" -ne 78
+check "and reaches the shell absolute" contains "$(cat "$tmp/log")" "qs TIDE_WALLPAPER=$tmp/wallpaper.jpg"
 
 # With TIDE_POLKIT=1 the Quickshell shell is the agent, so none is started.
 run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell TIDE_POLKIT=1
