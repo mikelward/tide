@@ -116,6 +116,22 @@ PanelWindow {
         function clearDevice(name: string): string {
             return InputData.clearDevice(name);
         }
+        // Add, move (a step to the right on the bar), relabel or take out
+        // one of the Clocks page's clocks, by its zone, as that page does:
+        // `qs -c tide ipc call settings addClock Asia/Kolkata`. Each
+        // answers why not, or "".
+        function addClock(zone: string): string {
+            return ClockData.add(zone);
+        }
+        function moveClock(zone: string, step: int): string {
+            return ClockData.move(undefined, zone, step);
+        }
+        function setClockLabel(zone: string, label: string): string {
+            return ClockData.relabel(undefined, zone, label);
+        }
+        function removeClock(zone: string): string {
+            return ClockData.remove(undefined, zone);
+        }
     }
 
     Connections {
@@ -686,6 +702,205 @@ PanelWindow {
                             wrapMode: Text.Wrap
                             textFormat: Text.PlainText
                             text: device.refused
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Clocks: the bar's zones in its order, each with its
+                    // label, typed and set with Enter; the arrows move one
+                    // and the bin takes it out, and a zone typed at the
+                    // foot is added before local (SPEC.md §7.3).
+                    Column {
+                        id: clocks
+
+                        readonly property string localZone: ClockData.table ? ClockData.table.localZone : ""
+                        // Why the last change made here was refused, until
+                        // the next one or another page.
+                        property string refused: ""
+
+                        function changed(error) {
+                            refused = error;
+                            root.report(error);
+                        }
+
+                        onVisibleChanged: refused = ""
+                        visible: root.current.id === "clocks"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        Repeater {
+                            model: ClockData.listed
+
+                            Item {
+                                id: clock
+
+                                required property var modelData
+                                required property int index
+
+                                width: clocks.width
+                                implicitHeight: 32
+
+                                // As the Keyboard page's names: Escape or a
+                                // click elsewhere puts back what's set.
+                                Rectangle {
+                                    id: labelBox
+
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 96
+                                    height: 26
+                                    radius: 6
+                                    color: Theme.surface2
+                                    border.width: labelField.activeFocus ? 1 : 0
+                                    border.color: Theme.accent
+
+                                    TextInput {
+                                        id: labelField
+
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 8
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        clip: true
+                                        text: clock.modelData.label
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                        onAccepted: {
+                                            clocks.changed(ClockData.relabel(clock.index, clock.modelData.zone, text));
+                                            keys.forceActiveFocus();
+                                        }
+                                        Keys.onEscapePressed: keys.forceActiveFocus()
+                                        onActiveFocusChanged: {
+                                            if (!activeFocus) {
+                                                text = Qt.binding(() => clock.modelData.label);
+                                            }
+                                        }
+
+                                        // No label shows as none, not a
+                                        // blank field.
+                                        Text {
+                                            visible: labelField.text === "" && !labelField.activeFocus
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "none"
+                                            color: Theme.fgFaint
+                                            font: labelField.font
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    anchors.left: labelBox.right
+                                    anchors.leftMargin: 10
+                                    anchors.right: clockButtons.left
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    textFormat: Text.PlainText
+                                    text: clock.modelData.zone === clocks.localZone ? `${clock.modelData.zone} · local, hidden` : clock.modelData.zone
+                                    color: Theme.fgDim
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Row {
+                                    id: clockButtons
+
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    StepButton {
+                                        name: "go-up-symbolic"
+                                        value: clock.index
+                                        next: Math.max(0, clock.index - 1)
+                                        onActivated: clocks.changed(ClockData.move(clock.index, clock.modelData.zone, -1))
+                                    }
+
+                                    StepButton {
+                                        name: "go-down-symbolic"
+                                        value: clock.index
+                                        next: Math.min(ClockData.listed.length - 1, clock.index + 1)
+                                        onActivated: clocks.changed(ClockData.move(clock.index, clock.modelData.zone, 1))
+                                    }
+
+                                    StepButton {
+                                        name: "edit-delete-symbolic"
+                                        value: 0
+                                        next: 1
+                                        onActivated: clocks.changed(ClockData.remove(clock.index, clock.modelData.zone))
+                                    }
+                                }
+                            }
+                        }
+
+                        // A zone to add, typed as its ID: Enter adds it, and
+                        // one refused stays to be fixed.
+                        Item {
+                            width: clocks.width
+                            implicitHeight: 32
+
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 6
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: 26
+                                radius: 6
+                                color: Theme.surface2
+                                border.width: newZone.activeFocus ? 1 : 0
+                                border.color: Theme.accent
+
+                                TextInput {
+                                    id: newZone
+
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    anchors.rightMargin: 8
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    clip: true
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                    onAccepted: {
+                                        const error = ClockData.add(text.trim());
+                                        clocks.changed(error);
+                                        if (error === "") {
+                                            text = "";
+                                            keys.forceActiveFocus();
+                                        }
+                                    }
+                                    Keys.onEscapePressed: {
+                                        text = "";
+                                        keys.forceActiveFocus();
+                                    }
+
+                                    Text {
+                                        visible: newZone.text === "" && !newZone.activeFocus
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Add a zone, such as Asia/Kolkata"
+                                        color: Theme.fgFaint
+                                        font: newZone.font
+                                    }
+                                }
+                            }
+                        }
+
+                        // A zone that isn't one, say.
+                        Text {
+                            visible: clocks.refused !== ""
+                            x: 10
+                            width: clocks.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: clocks.refused
                             color: Theme.danger
                             font.family: Theme.font
                             font.pixelSize: 12

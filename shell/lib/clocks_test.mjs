@@ -6,6 +6,8 @@ import assert from "node:assert/strict";
 import {
     DEFAULT_CLOCKS, jsonError, parseClocks, loadClocks, visibleClocks, dayOffset,
     formatTime, formatLocal, barClocks, scrubbed, SCRUB_STEP, zoneError,
+    zoneFormError, cityLabel, editableClocks, editedClocks, movedClock, withoutClock,
+    relabeledClock, withClock,
 } from "./clocks.mjs";
 
 function canonical(zone) {
@@ -316,4 +318,108 @@ test("scrolling moves the clocks to the next quarter hour, then a quarter a notc
     assert.equal(scrubbed(q, -1), q - SCRUB_STEP);
     // Seconds count: 17:45:30 is past the quarter.
     assert.equal(scrubbed(q + 30000, -1), q);
+});
+
+test("the settings panel takes a zone by tide-tz's check of its form", () => {
+    for (const zone of ["America/Los_Angeles", "Asia/Kolkata", "America/Argentina/Buenos_Aires",
+                        "America/Port-au-Prince", "UTC"]) {
+        assert.equal(zoneFormError(zone), "", zone);
+    }
+    for (const zone of ["US/Pacific", "GB", "PST", "+05:30", "Etc/UTC", "/etc/localtime",
+                        "America//New_York", "America/New_York/", "Europe/../Asia/Tokyo",
+                        "America/New York", "Asia", ""]) {
+        assert.match(zoneFormError(zone), /^unknown time zone .*timedatectl list-timezones/, zone);
+    }
+});
+
+test("a clock added on the settings panel is labeled with its city", () => {
+    assert.equal(cityLabel("America/Los_Angeles"), "Los Angeles");
+    assert.equal(cityLabel("America/Argentina/Buenos_Aires"), "Buenos Aires");
+    assert.equal(cityLabel("UTC"), "UTC");
+});
+
+test("the panel changes the local list when there is one, else the shared one, else the defaults", () => {
+    const shared = JSON.stringify([{ zone: "Asia/Tokyo", label: "TYO" }]);
+    const local = JSON.stringify([{ zone: "UTC", label: "" }]);
+    assert.deepEqual(editableClocks(shared, local), { clocks: [{ zone: "UTC", label: "" }], source: "clocks.local.json" });
+    assert.deepEqual(editableClocks(shared, null), { clocks: [{ zone: "Asia/Tokyo", label: "TYO" }], source: "clocks.json" });
+    assert.deepEqual(editableClocks(null, null), { clocks: DEFAULT_CLOCKS.map(c => ({ ...c })), source: null });
+});
+
+test("a bad shared file stops the panel even under a local list, as it stops the bar", () => {
+    const local = JSON.stringify([{ zone: "UTC", label: "" }]);
+    assert.match(editableClocks("[", local).error, /^clocks\.json: line 1: /);
+    assert.match(editedClocks("[", local, c => withClock(c, "Asia/Tokyo")).error, /^clocks\.json: line 1: /);
+    // The bar keeps its last good list for the same file.
+    assert.deepEqual(loadClocks("[", local, DEFAULT_CLOCKS).clocks, DEFAULT_CLOCKS);
+});
+
+test("the panel's first change copies the list into clocks.local.json", () => {
+    const shared = JSON.stringify([{ zone: "Asia/Tokyo", label: "TYO" }]);
+    const r = editedClocks(shared, null, c => withClock(c, "Asia/Kolkata"));
+    assert.equal(r.text, `[
+  {
+    "zone": "Asia/Tokyo",
+    "label": "TYO"
+  },
+  {
+    "zone": "Asia/Kolkata",
+    "label": "Kolkata"
+  }
+]
+`);
+    assert.deepEqual(parseClocks(r.text).clocks, r.clocks);
+});
+
+test("the panel never writes over a file that doesn't parse", () => {
+    assert.match(editedClocks(null, "[{", c => withClock(c, "UTC")).error, /^clocks\.local\.json: line 1: /);
+    // With no local file, the shared list is the one to change.
+    assert.match(editedClocks("{}", null, c => withClock(c, "UTC")).error, /^clocks\.json: expected a list/);
+});
+
+test("a refused change writes nothing", () => {
+    assert.deepEqual(editedClocks(null, null, c => withClock(c, "US/Pacific")),
+                     { error: zoneFormError("US/Pacific") });
+});
+
+test("a clock moves left or right, stopping at either end", () => {
+    const clocks = DEFAULT_CLOCKS.map(c => ({ ...c }));
+    const zones = r => r.clocks.map(c => c.label);
+    assert.deepEqual(zones(movedClock(clocks, 1, "America/New_York", -1)), ["NYC", "SF", "LON"]);
+    assert.deepEqual(zones(movedClock(clocks, 1, "America/New_York", 1)), ["SF", "LON", "NYC"]);
+    assert.deepEqual(zones(movedClock(clocks, 0, "America/Los_Angeles", -1)), ["SF", "NYC", "LON"]);
+    assert.deepEqual(zones(movedClock(clocks, 2, "Europe/London", 1)), ["SF", "NYC", "LON"]);
+    // Unchanged.
+    assert.deepEqual(clocks.map(c => c.label), ["SF", "NYC", "LON"]);
+});
+
+test("a change is for the clock the page showed, not whatever a hand edit put there", () => {
+    const clocks = DEFAULT_CLOCKS.map(c => ({ ...c }));
+    assert.deepEqual(movedClock(clocks, 0, "Europe/London", 1), { error: "entry 1 isn't Europe/London" });
+    assert.deepEqual(withoutClock(clocks, 5, "Europe/London"), { error: "entry 6 isn't Europe/London" });
+    assert.deepEqual(relabeledClock(clocks, 2, "Asia/Tokyo", "TYO"), { error: "entry 3 isn't Asia/Tokyo" });
+    // With no entry, as IPC gives it, the first clock for the zone.
+    assert.deepEqual(withoutClock(clocks, undefined, "America/New_York").clocks.map(c => c.label), ["SF", "LON"]);
+    assert.deepEqual(withoutClock(clocks, undefined, "Asia/Tokyo"), { error: "no clock for Asia/Tokyo" });
+});
+
+test("removing every clock leaves the bar local's alone", () => {
+    let clocks = [{ zone: "UTC", label: "" }];
+    clocks = withoutClock(clocks, 0, "UTC").clocks;
+    assert.deepEqual(clocks, []);
+    assert.deepEqual(parseClocks(editedClocks(null, "[]", c => ({ clocks: c })).text).clocks, []);
+});
+
+test("a label is any one line, empty, or abbr", () => {
+    const clocks = DEFAULT_CLOCKS.map(c => ({ ...c }));
+    assert.equal(relabeledClock(clocks, 0, "America/Los_Angeles", "abbr").clocks[0].label, "abbr");
+    assert.equal(relabeledClock(clocks, 0, "America/Los_Angeles", "").clocks[0].label, "");
+    assert.equal(relabeledClock(clocks, 0, "America/Los_Angeles", "Bay Area").clocks[0].label, "Bay Area");
+    assert.deepEqual(relabeledClock(clocks, 0, "America/Los_Angeles", "two\nlines"), { error: "label must be one line" });
+});
+
+test("a zone already listed isn't added twice", () => {
+    const clocks = DEFAULT_CLOCKS.map(c => ({ ...c }));
+    assert.deepEqual(withClock(clocks, "Europe/London"), { error: "Europe/London is listed already" });
+    assert.deepEqual(withClock(clocks, "UTC").clocks[3], { zone: "UTC", label: "UTC" });
 });

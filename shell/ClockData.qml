@@ -12,6 +12,8 @@ import "lib/tzdata.mjs" as Tz
 // clocks.local.json (§16.1) and runs tide-tz for their zones' offsets
 // and abbreviations: at startup, when either file changes, and when a
 // period ends. A minute's tick only redraws from what it already has.
+// The settings panel's Clocks page (§16) changes the list through it, in
+// clocks.local.json, read and written synchronously as IdleData's files.
 Singleton {
     id: root
 
@@ -20,6 +22,11 @@ Singleton {
 
     // The last list whose zones all loaded.
     property var good: Clocks.DEFAULT_CLOCKS
+    // The list the Clocks page shows and changes, as the files last parsed:
+    // a zone tide-tz can't load is in it, so it can be taken out.
+    property var listed: Clocks.DEFAULT_CLOCKS
+    // Why the panel's last change couldn't be saved, or "".
+    property string saveFailure: ""
     property var table: null
     // The files' errors and which have been reported (shell/lib/report.mjs),
     // so each distinct error is a notification at most once per run of the
@@ -68,9 +75,10 @@ Singleton {
     }
 
     // A bad file is a notification naming it and the line (SPEC.md
-    // §16.1), once; the log has it every time.
+    // §16.1), once; the log has it every time. So is a change the panel
+    // couldn't save, for as long as it's the last one.
     function reportErrors(errors) {
-        const v = Report.verdict(root.reports, errors);
+        const v = Report.verdict(root.reports, errors.concat(root.saveFailure !== "" ? [root.saveFailure] : []));
         root.reports = v.state;
         root.send(v.send);
     }
@@ -106,6 +114,14 @@ Singleton {
             console.warn(`tide: ${error}`);
         }
         const errors = broken.concat(result.errors);
+        if (broken.length === 0) {
+            const editable = Clocks.editableClocks(textOf(shared), textOf(local));
+            // Only when it differs: a new list remakes the page's rows, and
+            // with them a label being typed.
+            if (!editable.error && JSON.stringify(editable.clocks) !== JSON.stringify(root.listed)) {
+                root.listed = editable.clocks;
+            }
+        }
         if (broken.length > 0) {
             // A lookup still running is of contents this verdict replaces.
             root.supersede();
@@ -124,6 +140,78 @@ Singleton {
         // errors replace this verdict once tide-tz has read them.
         root.reportErrors(errors);
         root.lookUp(result.clocks, errors.length === 0 && result.source !== null ? result.source : "");
+    }
+
+    // Moves, takes out, relabels or adds a clock, as the Clocks page does.
+    // `index` is the entry the page showed it at, from 0, so a hand edit
+    // that has moved the clocks since is refused rather than built on; IPC
+    // gives none, for the first clock in the zone. Each returns why it
+    // didn't, or "".
+    function move(index, zone, step) {
+        return root.edit(clocks => Clocks.movedClock(clocks, index, zone, step));
+    }
+
+    function remove(index, zone) {
+        return root.edit(clocks => Clocks.withoutClock(clocks, index, zone));
+    }
+
+    function relabel(index, zone, label) {
+        return root.edit(clocks => Clocks.relabeledClock(clocks, index, zone, label));
+    }
+
+    function add(zone) {
+        return root.edit(clocks => Clocks.withClock(clocks, zone));
+    }
+
+    // Changes the list as `change` says, in clocks.local.json: the settings
+    // panel writes only the .local files (§16.1). The files as they are
+    // now, not as they last loaded, so a hand edit made a moment ago is
+    // built on, and one that doesn't parse is left as it is.
+    function edit(change) {
+        const sharedText = root.readNow(sharedNow);
+        const localText = root.readNow(localNow);
+        // Either file unreadable keeps the bar on its last good list, as
+        // one that doesn't parse does.
+        const broken = [sharedNow.broken, localNow.broken].filter(b => b !== "");
+        if (broken.length > 0) {
+            return `${broken[0]}; not changing the clocks`;
+        }
+        const result = Clocks.editedClocks(sharedText, localText, change);
+        if (result.error) {
+            return `${result.error}; not changing the clocks`;
+        }
+        const error = root.writeNow(localNow, result.text);
+        root.saveFailure = error === "" ? "" : `${error}; clocks not saved`;
+        if (error === "") {
+            // The page at once, not when the bar's reader has it.
+            root.listed = result.clocks;
+        } else {
+            console.warn(`tide: ${root.saveFailure}`);
+        }
+        // The bar's reader, now rather than when its watch fires: its load
+        // reports a save failure, or that it's gone.
+        local.reload();
+        return root.saveFailure;
+    }
+
+    // As IdleData's.
+    function readNow(file) {
+        file.reload();
+        const text = file.text();
+        return file.loaded && file.broken === "" ? text : null;
+    }
+
+    // As IdleData's, read back since a failed atomic commit only logs.
+    function writeNow(file, text) {
+        file.failure = "";
+        file.setText(text);
+        if (file.failure !== "") {
+            return file.failure;
+        }
+        if (root.readNow(file) !== text) {
+            return file.broken !== "" ? file.broken : `${file.path}: the write didn't take`;
+        }
+        return "";
     }
 
     // Drops whatever lookup is running: its result won't count.
@@ -269,6 +357,43 @@ Singleton {
                 root.unreadable(this, error);
             }
         }
+    }
+
+    // The files again, for the Clocks page's changes, as IdleData's: read
+    // and written as they're needed, synchronously, so a change builds on
+    // the file as it is.
+    component SettingsFile: FileView {
+        // Why it can't be read, or "" when it can (or doesn't exist).
+        property string broken: ""
+        // Why the last write failed, or "".
+        property string failure: ""
+
+        preload: false
+        blockAllReads: true
+        blockWrites: true
+        atomicWrites: true
+        printErrors: false
+        onLoaded: broken = ""
+        onLoadFailed: error => {
+            // A missing file is nothing set, not an error.
+            broken = error === FileViewError.FileNotFound ? "" : `${path}: ${FileViewError.toString(error)}`;
+            if (broken !== "") {
+                console.warn(`tide: ${broken}`);
+            }
+        }
+        onSaveFailed: error => failure = `${path}: ${FileViewError.toString(error)}`
+    }
+
+    SettingsFile {
+        id: sharedNow
+
+        path: shared.path
+    }
+
+    SettingsFile {
+        id: localNow
+
+        path: local.path
     }
 
     // One tide-tz run per lookup, carrying what it was asked, so its result

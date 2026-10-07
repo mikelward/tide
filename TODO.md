@@ -44,6 +44,26 @@ once you have agreed with it or reversed it.
   Touchpad after Idle. It's `PAGES` in `shell/lib/settings.mjs`, and §16's
   table, which the sidebar follows.
 
+- [ ] **The Clocks page comes last, after Keyboard.** §16's table had it
+  before Idle; it went after the pages you ordered, so their order and
+  CI's count of Down presses to the Network page stay as they are. Moving
+  it is a line in `PAGES` in `shell/lib/settings.mjs` and the table row.
+
+- [ ] **The Clocks page has no 24 h or dedupe-local switch yet.** §16's
+  table lists both; the bar is always 24-hour and always hides the local
+  zone (§7.3). Adding them needs `clocks.json` to hold more than its list,
+  which every reader of it would have to take; zones, order and labels
+  needed nothing new. They can be added later without changing what's
+  written now.
+
+- [ ] **A clock is added by typing its zone ID, and labeled with its
+  city.** The Clocks page takes `Asia/Kolkata` typed and labels it
+  Kolkata, refusing what isn't a canonical ID. The alternatives are a list
+  from `timedatectl list-timezones` to pick from, which needs a searchable
+  picker the panel hasn't got, and a label of `abbr` or none. Only the
+  page would change; `clocks.local.json` holds the same either way. It's
+  `withClock` and `cityLabel` in `shell/lib/clocks.mjs`.
+
 - [ ] **A mouse or touchpad is chosen by name with ‹ and ›, not from a
   list.** The Mouse and Touchpad pages step through every device of the kind
   and each one by name, in one row, as the − and + steppers do. The
@@ -492,8 +512,16 @@ from the keyboard (`shell/shell_test.sh`).
     and that the text field takes the keyboard and gives it back on Enter,
     on Escape, and on a click on a button or blank space, which also puts
     back a name typed but not set.
-- Then the rest of §16's table: Appearance, Displays, Layouts, Clocks and
-  Keys.
+- Clocks (`shell/lib/clocks.mjs`, `shell/ClockData.qml`) adds, moves,
+  relabels and takes out the bar's clocks, writing `clocks.local.json`, and
+  has the bar look them up at once. CI checks three changes over IPC on a
+  hand-edited list, and a zone refused. Still to do:
+  - 24 h and dedupe-local, which need `clocks.json` to hold more than the
+    list: an object with the list under `zones`, say, which every reader
+    would take as well as a bare list.
+  - On a live session, check the page's fields take the keyboard and give
+    it back as the Keyboard page's do, and that the bar changes at once.
+- Then the rest of §16's table: Appearance, Displays, Layouts and Keys.
 
 ## Notifications (M4)
 

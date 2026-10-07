@@ -216,6 +216,138 @@ export function zoneError(clocks, source, zone, error) {
     return source ? `${source}: ${where}${error}` : `${where}${error}`;
 }
 
+// The tzdata areas a canonical zone ID starts with, as tide-tz's (SPEC.md
+// §7.3). Link names such as US/Pacific and GB fall outside them.
+const AREAS = ["Africa/", "America/", "Antarctica/", "Arctic/", "Asia/", "Atlantic/",
+               "Australia/", "Europe/", "Indian/", "Pacific/"];
+
+// Why `zone` isn't a canonical zone ID, or "": tide-tz's check by form,
+// so the settings panel refuses at once what the bar would. Stricter on
+// the characters, which tzdata's names keep to, so a space typed for an
+// underscore is caught here rather than when tide-tz can't find it.
+export function zoneFormError(zone) {
+    const parts = zone.split("/");
+    const canonical = zone === "UTC" || (AREAS.some(a => zone.startsWith(a)) &&
+        // No empty part, and no . or .., as path.Clean would change.
+        parts.every(p => /^[A-Za-z0-9_+-][A-Za-z0-9._+-]*$/.test(p)));
+    if (canonical) {
+        return "";
+    }
+    return `unknown time zone ${zone}; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles`;
+}
+
+// What a clock added on the settings panel is labeled: its city, as the
+// zone ID names it, with spaces for underscores ("Los Angeles").
+export function cityLabel(zone) {
+    const parts = zone.split("/");
+    return parts[parts.length - 1].replace(/_/g, " ");
+}
+
+// The list the settings panel shows and changes (SPEC.md §16), as
+// loadClocks takes it: clocks.local.json's when it exists, since it
+// replaces the shared one whole, else clocks.json's, else the defaults.
+// Each text is the file's, or null when it doesn't exist. Returns {clocks,
+// source}, `source` being the file or null for the defaults, or {error}
+// naming a file that doesn't parse: either one keeps the bar on its last
+// good list, so the page has none to show or change until it's fixed.
+export function editableClocks(sharedText, localText) {
+    let found = { clocks: DEFAULT_CLOCKS.map(c => ({ zone: c.zone, label: c.label })), source: null };
+    for (const [name, text] of [["clocks.json", sharedText], ["clocks.local.json", localText]]) {
+        if (text === null || text === undefined) {
+            continue;
+        }
+        const parsed = parseClocks(text);
+        if (parsed.error) {
+            return { error: `${name}: ${parsed.error}` };
+        }
+        found = { clocks: parsed.clocks, source: name };
+    }
+    return found;
+}
+
+// clocks.local.json's text after `change`, a function from the list to
+// {clocks} or {error}, such as movedClock's, as {text, clocks}. The
+// settings panel writes only the .local file (§16.1), so the first change
+// copies the shared list or the defaults into it. A file that doesn't
+// parse is an {error}, so a hand edit gone wrong is never overwritten.
+export function editedClocks(sharedText, localText, change) {
+    const base = editableClocks(sharedText, localText);
+    if (base.error) {
+        return { error: base.error };
+    }
+    const result = change(base.clocks);
+    if (result.error) {
+        return { error: result.error };
+    }
+    return { text: JSON.stringify(result.clocks, null, 2) + "\n", clocks: result.clocks };
+}
+
+// The clock a change is for: entry `index` (from 0), if it still names
+// `zone`, so a change can't land on another clock after a hand edit has
+// moved them; with no index, the first that names it. -1 when none does.
+function clockIndex(clocks, index, zone) {
+    if (index === undefined || index === null) {
+        return clocks.findIndex(c => c.zone === zone);
+    }
+    return index >= 0 && index < clocks.length && clocks[index].zone === zone ? index : -1;
+}
+
+function missing(index, zone) {
+    return index === undefined || index === null
+        ? { error: `no clock for ${zone}` }
+        : { error: `entry ${index + 1} isn't ${zone}` };
+}
+
+// The list with the clock for `zone` moved `step` places (negative is
+// left on the bar), stopping at either end.
+export function movedClock(clocks, index, zone, step) {
+    const from = clockIndex(clocks, index, zone);
+    if (from < 0) {
+        return missing(index, zone);
+    }
+    const to = Math.max(0, Math.min(clocks.length - 1, from + step));
+    const next = clocks.slice();
+    next.splice(to, 0, next.splice(from, 1)[0]);
+    return { clocks: next };
+}
+
+// The list without the clock for `zone`.
+export function withoutClock(clocks, index, zone) {
+    const at = clockIndex(clocks, index, zone);
+    if (at < 0) {
+        return missing(index, zone);
+    }
+    return { clocks: clocks.filter((c, i) => i !== at) };
+}
+
+// The list with the clock for `zone` labeled `label`: any one line of
+// text, "" for just the time, or "abbr" (SPEC.md §7.3).
+export function relabeledClock(clocks, index, zone, label) {
+    const at = clockIndex(clocks, index, zone);
+    if (at < 0) {
+        return missing(index, zone);
+    }
+    const bad = parseClocks(JSON.stringify([{ zone, label }]));
+    if (bad.error) {
+        return { error: bad.error.replace(/^entry 1: /, "") };
+    }
+    return { clocks: clocks.map((c, i) => i === at ? { zone: c.zone, label } : c) };
+}
+
+// The list with a clock for `zone` added at the end, just before local on
+// the bar, labeled with its city. A zone that isn't a canonical ID, or is
+// listed already, is an {error}.
+export function withClock(clocks, zone) {
+    const bad = zoneFormError(zone);
+    if (bad !== "") {
+        return { error: bad };
+    }
+    if (clocks.some(c => c.zone === zone)) {
+        return { error: `${zone} is listed already` };
+    }
+    return { clocks: clocks.concat([{ zone, label: cityLabel(zone) }]) };
+}
+
 // The listed clocks minus any in the local zone, compared by zone ID; zones
 // are canonical IDs (SPEC.md §7.3). A local zone with no ID ("") hides
 // none. A zone that only shares the current offset stays, so no clock comes

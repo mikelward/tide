@@ -791,7 +791,8 @@ See [`bar.png`](docs/mocks/bar.png).
 - **Config:** a list of `{zone, label}` in `~/.config/tide/clocks.json`,
   defaulting to the three above. A machine that needs other zones sets its
   own list in **`clocks.local.json`**, which replaces the shared list
-  (§16.1). `setup` can seed the local file from the existing `~/.timezones`
+  (§16.1), by hand or on the settings panel's Clocks page (§16). `setup`
+  can seed the local file from the existing `~/.timezones`
   that the `clocks` script reads.
   - **`zone` is a canonical IANA zone ID:** the `Area/City` form, such as
     `America/Los_Angeles`, `Europe/London` or `Asia/Kolkata`, plus `UTC`.
@@ -1928,13 +1929,13 @@ tide's own, and links out for the rest:
 | Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
 | Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
 | Layouts | default layout per aspect ratio, `mfact`, the rule for new windows |
-| Clocks | zones, order, 24 h, dedupe-local |
 | Idle | the four timings, suspend on AC (off by default) |
 | Sound | output and input devices; *advanced* opens `pavucontrol` |
 | Network, Bluetooth | *advanced* opens `nm-connection-editor` / `blueman-manager` |
 | Mouse | for every mouse, or one by name: speed, scroll speed, natural scrolling, left-handed |
 | Touchpad | for every touchpad, or one by name: the same, plus tap to click and off while typing |
 | Keyboard | for every keyboard: layouts and their variants, repeat delay and rate |
+| Clocks | zones, order, labels, 24 h, dedupe-local |
 | Keys | a read-only list of the current bindings, generated from the config |
 
 Hyprland-side settings are applied live through `hyprctl eval` and
@@ -1976,6 +1977,24 @@ stays hand-written.
   - The shell applies the file as it starts, too, even unchanged. Hyprland
     outlives the shell, so a shell restarted before its retry would
     otherwise leave a change unapplied, and a reload costs nothing.
+
+- **Clocks** sets the bar's zones, their order and their labels (§7.3).
+  - It shows the list the bar takes: `clocks.local.json`'s, else
+    `clocks.json`'s, else the defaults. The first change copies that list
+    into `clocks.local.json`, since a local list replaces the shared one
+    whole (§16.1).
+  - A zone is typed as its ID and added with Enter, just before local,
+    labeled with its city. One that isn't a canonical ID (§7.3), or is
+    listed already, is refused, and the page says why.
+  - A label is typed and set with Enter. The arrows move a clock, and the
+    bin takes it out; with none left, the bar shows local alone.
+  - The local zone is marked in the list, since the bar hides it.
+  - A change names the clock it was made on by its place and zone, so a
+    hand edit that has moved the clocks since is refused, not built on.
+  - While either file can't be read or doesn't parse, the bar keeps its
+    last good list, and the page refuses changes, naming the file.
+  - 24 h and dedupe-local aren't settings yet. The bar is always 24-hour,
+    and always hides the local zone.
 
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or
