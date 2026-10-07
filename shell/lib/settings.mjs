@@ -54,6 +54,13 @@ export const PAGES = Object.freeze([
         about: "For every keyboard. A layout is XKB's name for it, such as us, or us,de for two; a variant is one such as dvorak, or none. One set in hyprland.local.lua still wins.",
         advanced: null,
     },
+    {
+        id: "clocks",
+        label: "Clocks",
+        icon: "preferences-system-time-symbolic",
+        about: "The bar's clocks, left to right, before the local one, which is always last; a clock in the local zone is hidden. A label is any text, none for just the time, or abbr for the zone's abbreviation, such as PDT. The list is this machine's own once changed.",
+        advanced: null,
+    },
 ]);
 
 // The page after moving `step` pages from `index`, stopping at either end.

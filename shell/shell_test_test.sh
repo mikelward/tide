@@ -44,7 +44,7 @@ trap 'rm -rf "$tmp"' EXIT
 # The calls the stub qs makes, as the shell and as the lock or the greeter.
 all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices keyboards"
 
-# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN [IDLE [HANDED]]]]]]]]]:
+# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN [IDLE [HANDED [LABEL]]]]]]]]]]:
 # a sway that listens on wayland-1 until it's killed; a qs whose `ipc`
 # runs IPC, and otherwise talks to Hyprland as HYPRLAND says, then prints
 # LOAD and waits, but started as the unlock step starts the lock
@@ -75,7 +75,9 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # then the hand-edited mouse speed, a touchpad without tap
 # to click, the us,de keyboard layouts, one mouse's own speed and the
 # mouse's left_handed as HANDED (false by default) once all four are set
-# over IPC, applying each.
+# over IPC, applying each. With tide-tz, it answers the Clocks page's
+# refused zone, and writes and looks up Asia/Kolkata labeled LABEL (IST by
+# default) then the hand-edited UTC once the last clock is moved over IPC.
 # DIR/load-CONFIG.txt, if it's there, is printed
 # before LOAD by that config alone: shell (-c), lock or greeter.
 stubs() {
@@ -97,6 +99,8 @@ if test "\$1" = ipc; then
         *"call settings open"*) : >"\$XDG_RUNTIME_DIR/settings-open" ;;
         *"call settings setSuspendOnAC true"*) : >"\$XDG_RUNTIME_DIR/idle-set" ;;
         *"call settings setDevice logitech-usb-receiver speed 0.25"*) : >"\$XDG_RUNTIME_DIR/input-set" ;;
+        *"call settings moveClock UTC 1"*) : >"\$XDG_RUNTIME_DIR/clocks-set" ;;
+        *"call settings addClock US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the clocks" ;;
     esac
     $2
 fi
@@ -113,7 +117,20 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
     rm "\$XDG_RUNTIME_DIR/hyprland_client.ready" || exit 1
     if test "\$1" = -c; then
         case " ${7-$all_runs} " in
-            *" tide-tz "*) { ${9:+sleep $9;} tide-tz -- America/Los_Angeles; } >/dev/null 2>&1 & ;;
+            *" tide-tz "*)
+                { ${9:+sleep $9;} tide-tz -- America/Los_Angeles; } >/dev/null 2>&1 &
+                # The clocks changed over IPC, as the Clocks page changes
+                # them; gone with qs, as the idle one is.
+                {
+                    until test -e "\$XDG_RUNTIME_DIR/clocks-set"; do
+                        kill -0 \$\$ 2>/dev/null || exit 0
+                        sleep 0.1
+                    done
+                    rm "\$XDG_RUNTIME_DIR/clocks-set"
+                    printf '[\n  {\n    "zone": "Asia/Kolkata",\n    "label": "${13:-IST}"\n  },\n  {\n    "zone": "UTC",\n    "label": ""\n  }\n]\n' >"\$HOME/.config/tide/clocks.local.json"
+                    tide-tz -- Asia/Kolkata UTC >/dev/null 2>&1
+                } &
+                ;;
         esac
         case " ${7-$all_runs} " in
             *" tide-sysmon "*) tide-sysmon probe >/dev/null 2>&1 & ;;
@@ -354,6 +371,7 @@ run "$tmp/clean"
 check "a shell that loads and answers passes" test "$code" -eq 0
 check "and says it wrote hypridle's timings" contains "$out" "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 check "and the mouse, touchpad and keyboard settings" contains "$out" "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
+check "and the clocks" contains "$out" "ok: the shell changes the clocks as the Clocks page asks, and looks them up"
 check "and says the lock loaded" contains "$out" "ok: Quickshell loads the lock"
 check "and says the greeter loaded" contains "$out" "ok: Quickshell loads the greeter"
 
@@ -537,6 +555,11 @@ stubs "$tmp/input-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" "" 
 run "$tmp/input-unset"
 check "a shell that loses the first of four quick device settings fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell didn't write a right-handed mouse, a touchpad without tap to click, the us,de keyboard layouts and one mouse's own speed, keeping the hand-edited mouse speed of 0.5, to"
+
+stubs "$tmp/clocks-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" "" "" Kolkata
+run "$tmp/clocks-unset"
+check "a shell that loses a clock's label fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell didn't write the clocks for Asia/Kolkata, labeled IST, then the hand-edited UTC to"
 
 stubs "$tmp/input-warns" "exit 0" "  WARN qml: tide: couldn't apply the mouse, touchpad and keyboard settings: no conf_input
 $loaded"

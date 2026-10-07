@@ -576,7 +576,9 @@ EOF
 # given a hand edit to its .local.json and straight after it settings over
 # IPC as the settings panel's pages give them, wrote them all to its
 # .local.json and to the file read, and restarted hypridle or reapplied the
-# devices again.
+# devices again. Then the same for the Clocks page: a zone added, labeled
+# and moved, and one refused, written to clocks.local.json and looked up
+# by the bar.
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
 # runs it, as $after_load.
@@ -653,6 +655,40 @@ written_settings() {
         test "$(cat "$input_local")" = "$_want"; do
         if waited "the shell didn't write a right-handed mouse, a touchpad without tap to click, the us,de keyboard layouts and one mouse's own speed, keeping the hand-edited mouse speed of 0.5, to $input_conf and $input_local, and apply them" "$i"; then
             cat "$input_conf" "$input_local" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    printf '[\n  {\n    "zone": "UTC",\n    "label": ""\n  }\n]\n' >"$clocks_local" || exit 1
+    ipc call settings addClock Asia/Kolkata >/dev/null || exit 1
+    ipc call settings setClockLabel Asia/Kolkata IST >/dev/null || exit 1
+    ipc call settings moveClock UTC 1 >/dev/null || exit 1
+    # A link name, which the bar wouldn't take either, refused and said so.
+    _refused=$(ipc call settings addClock US/Pacific) || exit 1
+    case $_refused in
+        *"unknown time zone US/Pacific"*) ;;
+        *)
+            echo "FAIL: the shell should refuse the clock US/Pacific, saying it's an unknown time zone; it answered: $_refused" >&2
+            exit 1
+            ;;
+    esac
+    _want='[
+  {
+    "zone": "Asia/Kolkata",
+    "label": "IST"
+  },
+  {
+    "zone": "UTC",
+    "label": ""
+  }
+]'
+    i=0
+    until test "$(cat "$clocks_local")" = "$_want" &&
+        grep -qxF 'tide-tz -- Asia/Kolkata UTC' "$tmp/helpers.log"; do
+        if waited "the shell didn't write the clocks for Asia/Kolkata, labeled IST, then the hand-edited UTC to $clocks_local, and look them up" "$i"; then
+            cat "$clocks_local" >&2
             grep -v '^\[' "$log" >&2
             exit 1
         fi
@@ -1020,14 +1056,16 @@ idle_suspend_conf=$tmp/home/.config/hypr/tide-idle-suspend.conf
 idle_local=$tmp/home/.config/tide/idle.local.json
 input_conf=$tmp/home/.config/hypr/tide-input.lua
 input_local=$tmp/home/.config/tide/input.local.json
+clocks_local=$tmp/home/.config/tide/clocks.local.json
 after_load=written_settings
 load shell "the shell" -c tide
 after_load=
 # Gone again, so the next shell starts from the defaults, writes them, and
 # restarts hypridle and reapplies the devices, too.
-rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" || exit 1
+rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" || exit 1
 echo "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 echo "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
+echo "ok: the shell changes the clocks as the Clocks page asks, and looks them up"
 load_runs='hyprctl devices -j'
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"
