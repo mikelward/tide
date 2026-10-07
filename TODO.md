@@ -8,7 +8,7 @@ Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
 - [ ] **The settings files are read and written synchronously.** The Idle,
-  Mouse and Touchpad settings' `FileView`s use `blockAllReads` and
+  Mouse, Touchpad and Keyboard settings' `FileView`s use `blockAllReads` and
   `blockWrites`, so each change re-reads the file and writes it before
   returning, with no read or write in flight for a change to race. It costs
   a blocking read or write of a file under 1 KB on the shell's UI thread, on
@@ -19,16 +19,25 @@ once you have agreed with it or reversed it.
   `SettingsFile` component in `shell/IdleData.qml` and
   `shell/InputData.qml`.
 
-- [ ] **A setting that can't be applied is retried every 30 s, for as long
-  as it fails.** A failed write of `tide-idle.conf` or hypridle restart is
-  one notification, then tried again on a timer with no limit. Outside a
-  session that has hypridle's unit, `try-restart` does nothing and succeeds,
-  so this costs nothing there. The mouse and touchpad settings do the same,
-  but outside a Hyprland running `conf`'s config their `hyprctl eval` fails,
-  so the shell notifies once and runs it every 30 s for as long as it runs.
-  The alternative is a few tries with a backoff, then giving up until the
-  next change; it's the `retry` timer in `shell/IdleData.qml` and
-  `shell/InputData.qml`.
+- [ ] **A setting that can't be applied is retried every 30 s, for as long as
+  it fails.** A failed write of `tide-idle.conf` or hypridle restart is one
+  notification, then tried again on a timer with no limit. Outside a session
+  that has hypridle's unit, `try-restart` does nothing and succeeds, so this
+  costs nothing there. The input settings do the same, but outside a Hyprland
+  running `conf`'s config their `hyprctl eval` fails, so the shell notifies
+  once and runs it every 30 s for as long as it runs. The alternative is a few
+  tries with a backoff, then giving up until the next change; it's the `retry`
+  timer in `shell/IdleData.qml` and `shell/InputData.qml`.
+
+- [ ] **A keyboard layout is typed as XKB's name, not picked from a list.**
+  The Keyboard page has two text fields, Layout (`us`, or `us,de`) and Variant
+  (`dvorak`, or empty), which take any XKB-shaped name and leave it to XKB to
+  know it, so a name XKB doesn't have still reaches Hyprland (what it does
+  then is a live-session check below). The alternative is a list read from
+  xkeyboard-config's `evdev.lst`, which knows every name and its description,
+  but needs a picker the panel hasn't got. Only the page's control would
+  change; `input.json` holds the same names either way. It's `kind: "layout"`
+  and `"variant"` in `shell/lib/input.mjs`.
 
 - [ ] **The settings pages run Idle, Sound, Network, Bluetooth, then the
   input devices.** That's the order you asked for; PR 155 had put Mouse and
@@ -459,20 +468,24 @@ from the keyboard (`shell/shell_test.sh`).
   - On a live session, check a change restarts hypridle with the new
     times, and that Fedora's hypridle is 0.1.7 or later for `source`
     (Ubuntu 26.04 has 0.1.7).
-- Mouse and Touchpad (`shell/lib/input.mjs`, `shell/InputData.qml`)
-  write `~/.config/hypr/tide-input.lua` and run `hyprctl eval
-  'conf_input.reload()'`, which `conf`'s `hyprland.lua` defines (its PR
-  "Apply tide's Mouse, Touchpad and Keyboard settings"). CI checks the
-  shell writes no settings at startup, then one set over IPC, applying
-  each. Still to do:
-  - Keyboard: layouts, repeat delay and rate (the maintainer's first
-    milestone), through the same file's `keyboard` table, which `conf`
-    already reads.
+- Mouse, Touchpad and Keyboard (`shell/lib/input.mjs`,
+  `shell/InputData.qml`) write `~/.config/hypr/tide-input.lua` and run
+  `hyprctl eval 'conf_input.reload()'`, which `conf`'s `hyprland.lua`
+  defines (its PR "Apply tide's Mouse, Touchpad and Keyboard settings").
+  CI checks the shell writes no settings at startup, then three set over
+  IPC, a keyboard layout among them, applying each. Still to do:
   - Settings for one device by name, not just every mouse or every
     touchpad: what the maintainer said matters most, after the first
     milestone.
+  - A key to switch between two keyboard layouts. `conf` sets
+    `kb_options` without a `grp:` toggle, so a second layout is only
+    reachable with `hyprctl switchxkblayout`.
   - On a live session, check a change reaches a mouse and a touchpad at
-    once, and survives `hyprctl reload`.
+    once, and survives `hyprctl reload`; that a layout typed on the
+    Keyboard page takes at once, and what a name XKB doesn't know does;
+    and that the text field takes the keyboard and gives it back on Enter,
+    on Escape, and on a click on a button or blank space, which also puts
+    back a name typed but not set.
 - Then the rest of §16's table: Appearance, Displays, Layouts, Clocks and
   Keys.
 

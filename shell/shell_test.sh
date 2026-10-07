@@ -29,7 +29,7 @@
 # gsettings and nmcli, for light and dark and the VPNs, whose monitors
 # report nothing; and a stand-in systemctl, for restarting hypridle once
 # the shell has written its timings, which it checks are the defaults, as
-# it checks the mouse and touchpad settings it writes are none. Data from a timer, a file
+# it checks the mouse, touchpad and keyboard settings it writes are none. Data from a timer, a file
 # read, a monitor, or any other command isn't covered.
 #
 # With notify-send, it also runs the shell as the notification server
@@ -617,6 +617,8 @@ written_settings() {
     printf '{\n  "mouse": {\n    "speed": 0.5\n  }\n}\n' >"$input_local" || exit 1
     ipc call settings setInput mouse leftHanded false >/dev/null || exit 1
     ipc call settings setInput touchpad tapToClick false >/dev/null || exit 1
+    # A name, which IPC passes as typed, not as a number.
+    ipc call settings setInput keyboard layout us,de >/dev/null || exit 1
     # As idle's: wait for both files.
     _want='{
   "mouse": {
@@ -625,14 +627,18 @@ written_settings() {
   },
   "touchpad": {
     "tapToClick": false
+  },
+  "keyboard": {
+    "layout": "us,de"
   }
 }'
     i=0
     until grep -qxF '    mouse = { sensitivity = 0.5, left_handed = false },' "$input_conf" 2>/dev/null &&
         grep -qxF '    touchpad = { tap_to_click = false },' "$input_conf" &&
+        grep -qxF '    keyboard = { kb_layout = "us,de" },' "$input_conf" &&
         test "$(grep -c '^hyprctl eval conf_input.reload()$' "$tmp/helpers.log")" -gt "$_applies" &&
         test "$(cat "$input_local")" = "$_want"; do
-        if waited "the shell didn't write a right-handed mouse and a touchpad without tap to click, keeping the hand-edited mouse speed of 0.5, to $input_conf and $input_local, and apply them" "$i"; then
+        if waited "the shell didn't write a right-handed mouse, a touchpad without tap to click and the us,de keyboard layouts, keeping the hand-edited mouse speed of 0.5, to $input_conf and $input_local, and apply them" "$i"; then
             cat "$input_conf" "$input_local" >&2
             grep -v '^\[' "$log" >&2
             exit 1
@@ -978,7 +984,8 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # The shell makes all these calls; without them, the run says nothing
 # about the clocks, the system monitor, the title, the focus guard (its
 # replay of the waiting windows, and its order for Super+Tab), light and
-# dark, the VPNs, hypridle's timings, or the mouse and touchpad settings.
+# dark, the VPNs, hypridle's timings, or the mouse, touchpad and keyboard
+# settings.
 # The lock and the greeter only ask for the keyboards, for their layout
 # badges.
 shell_runs='tide-tz
@@ -1005,7 +1012,7 @@ after_load=
 # restarts hypridle and reapplies the devices, too.
 rm "$idle_conf" "$idle_local" "$input_conf" "$input_local" || exit 1
 echo "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
-echo "ok: the shell writes the mouse and touchpad settings, and a new one, and applies them each time"
+echo "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
 load_runs='hyprctl devices -j'
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"

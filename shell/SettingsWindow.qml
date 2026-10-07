@@ -95,12 +95,11 @@ PanelWindow {
         function setIdle(key: string, seconds: int): string {
             return IdleData.set(key, seconds);
         }
-        // Sets one of the Mouse or Touchpad pages' settings: `qs -c tide ipc
-        // call settings setInput mouse leftHanded false`. Answers why not,
-        // or "".
+        // Sets one of the Mouse, Touchpad or Keyboard pages' settings: `qs
+        // -c tide ipc call settings setInput mouse leftHanded false`.
+        // Answers why not, or "".
         function setInput(section: string, key: string, value: string): string {
-            const parsed = value === "true" ? true : value === "false" ? false : value.trim() === "" ? NaN : Number(value);
-            return InputData.set(section, key, parsed);
+            return InputData.set(section, key, Input.parseValue(section, key, value));
         }
     }
 
@@ -179,8 +178,12 @@ PanelWindow {
         color: Theme.surface
         border.color: Theme.edge
 
+        // Takes every press on the card, under its buttons too, whose tap
+        // handlers grab only passively, so a click anywhere but a field
+        // takes the keyboard back from one being typed in.
         MouseArea {
             anchors.fill: parent
+            onPressed: keys.forceActiveFocus()
         }
 
         // Holds the keyboard while it's open.
@@ -346,14 +349,25 @@ PanelWindow {
                         }
                     }
 
-                    // Mouse and Touchpad: each setting for that kind of
-                    // device, which − and + step along input.mjs's ladders,
-                    // or a click turns on or off. Until it's set, it shows
-                    // what conf's config has.
+                    // Mouse, Touchpad and Keyboard: each setting for that
+                    // kind of device, which − and + step along input.mjs's
+                    // ladders, a click turns on or off, or is typed and set
+                    // with Enter. Until it's set, it shows what conf's
+                    // config has.
                     Column {
                         id: device
 
-                        readonly property string section: root.current.id === "mouse" || root.current.id === "touchpad" ? root.current.id : ""
+                        readonly property string section: ["mouse", "touchpad", "keyboard"].includes(root.current.id) ? root.current.id : ""
+                        // Why the last change made here was refused, until
+                        // the next one or another page.
+                        property string refused: ""
+
+                        function set(key, value) {
+                            refused = InputData.set(section, key, value);
+                            root.report(refused);
+                        }
+
+                        onSectionChanged: refused = ""
 
                         visible: section !== ""
                         width: parent.width
@@ -369,6 +383,7 @@ PanelWindow {
                                 required property var modelData
                                 readonly property var value: Input.shown(InputData.input, device.section, modelData.key)
                                 readonly property bool toggle: modelData.kind === "toggle"
+                                readonly property bool typed: Input.isText(modelData.kind)
 
                                 width: device.width
                                 implicitHeight: 32
@@ -384,7 +399,7 @@ PanelWindow {
                                 }
 
                                 Row {
-                                    visible: !option.toggle
+                                    visible: !option.toggle && !option.typed
                                     anchors.right: parent.right
                                     anchors.rightMargin: 6
                                     anchors.verticalCenter: parent.verticalCenter
@@ -394,7 +409,7 @@ PanelWindow {
                                         name: "list-remove-symbolic"
                                         value: option.toggle ? 0 : option.value
                                         next: option.toggle ? 0 : Input.stepped(option.modelData.kind, option.value, -1)
-                                        onActivated: root.report(InputData.set(device.section, option.modelData.key, next))
+                                        onActivated: device.set(option.modelData.key, next)
                                     }
 
                                     Text {
@@ -412,7 +427,7 @@ PanelWindow {
                                         name: "list-add-symbolic"
                                         value: option.toggle ? 0 : option.value
                                         next: option.toggle ? 0 : Input.stepped(option.modelData.kind, option.value, 1)
-                                        onActivated: root.report(InputData.set(device.section, option.modelData.key, next))
+                                        onActivated: device.set(option.modelData.key, next)
                                     }
                                 }
 
@@ -438,10 +453,80 @@ PanelWindow {
 
                                     TapHandler {
                                         enabled: option.toggle
-                                        onTapped: root.report(InputData.set(device.section, option.modelData.key, option.value !== true))
+                                        onTapped: device.set(option.modelData.key, option.value !== true)
+                                    }
+                                }
+
+                                // A name, typed: Enter sets it, and Escape
+                                // or a click elsewhere puts back what's set.
+                                Rectangle {
+                                    visible: option.typed
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 148
+                                    height: 26
+                                    radius: 6
+                                    color: Theme.surface2
+                                    border.width: field.activeFocus ? 1 : 0
+                                    border.color: Theme.accent
+
+                                    TextInput {
+                                        id: field
+
+                                        function shown() {
+                                            return option.typed ? String(option.value) : "";
+                                        }
+
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 8
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        enabled: option.typed
+                                        clip: true
+                                        text: shown()
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                        onAccepted: {
+                                            device.set(option.modelData.key, text);
+                                            keys.forceActiveFocus();
+                                        }
+                                        Keys.onEscapePressed: keys.forceActiveFocus()
+                                        // Typing may have left it saying
+                                        // something that isn't set.
+                                        onActiveFocusChanged: {
+                                            if (!activeFocus) {
+                                                text = Qt.binding(() => field.shown());
+                                            }
+                                        }
+
+                                        // No variant shows as none, not a
+                                        // blank field.
+                                        Text {
+                                            visible: field.text === "" && !field.activeFocus
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "none"
+                                            color: Theme.fgFaint
+                                            font: field.font
+                                        }
                                     }
                                 }
                             }
+                        }
+
+                        // A typed name that isn't one, say.
+                        Text {
+                            visible: device.refused !== ""
+                            x: 10
+                            width: device.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: device.refused
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
                         }
                     }
 

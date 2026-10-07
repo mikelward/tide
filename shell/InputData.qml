@@ -8,15 +8,15 @@ import "lib/launch.mjs" as Run
 import "lib/report.mjs" as Report
 import "lib/writes.mjs" as Writes
 
-// The Mouse and Touchpad settings (SPEC.md §16), from input.json and
-// input.local.json (§16.1). What's set is written to
+// The Mouse, Touchpad and Keyboard settings (SPEC.md §16), from input.json
+// and input.local.json (§16.1). What's set is written to
 // ~/.config/hypr/tide-input.lua, which conf's hyprland.lua reads, and
-// `hyprctl eval conf_input.reload()` applies it to every mouse and touchpad
-// without reloading the rest of the config. A bad file is a notification
-// naming it, once, and changes nothing. So is a change that can't be saved;
-// one that can't be written or applied is tried again until it is
-// (shell/lib/writes.mjs). The files are read and written as they're
-// needed, synchronously, as IdleData's are.
+// `hyprctl eval conf_input.reload()` applies it to every mouse, touchpad and
+// keyboard without reloading the rest of the config. A bad file is a
+// notification naming it, once, and changes nothing. So is a change that
+// can't be saved; one that can't be written or applied is tried again
+// until it is (shell/lib/writes.mjs). The files are read and written as
+// they're needed, synchronously, as IdleData's are.
 Singleton {
     id: root
 
@@ -46,12 +46,12 @@ Singleton {
         if (local.broken !== "") {
             return `${local.broken}; not changing ${section}.${key}`;
         }
-        const result = Input.withSetting(text, section, key, value);
+        const result = Input.withSetting(text, section, key, value, root.readNow(shared));
         if (result.error) {
             return `${result.error}; not changing ${section}.${key}`;
         }
         const error = root.writeNow(local, result.text);
-        root.saveFailure = error === "" ? "" : `${error}; mouse or touchpad setting not saved`;
+        root.saveFailure = error === "" ? "" : `${error}; mouse, touchpad or keyboard setting not saved`;
         root.load();
         return root.saveFailure;
     }
@@ -80,7 +80,7 @@ Singleton {
         root.target = r.state;
         if (r.action?.write !== undefined) {
             const error = root.writeNow(written, r.action.write);
-            root.stepped(Writes.targetWritten(root.target, error === "" ? "" : `${error}; mice and touchpads keep their settings`));
+            root.stepped(Writes.targetWritten(root.target, error === "" ? "" : `${error}; mice, touchpads and keyboards keep their settings`));
             return;
         }
         if (r.action?.apply) {
@@ -106,7 +106,7 @@ Singleton {
 
     function send(errors) {
         for (const error of errors) {
-            Launcher.run(Report.notifyCommand("Mouse and touchpad settings not applied", error), ok => {
+            Launcher.run(Report.notifyCommand("Mouse, touchpad and keyboard settings not applied", error), ok => {
                 root.reports = Report.sent(root.reports, error, ok);
                 if (!ok) {
                     resend.restart();
@@ -136,7 +136,7 @@ Singleton {
         if (written.broken !== "") {
             // Unreadable, it isn't written over either; it's read again on
             // the retry.
-            root.stepped(Writes.targetUnreadable(root.target, `${written.broken}; mice and touchpads keep their settings`));
+            root.stepped(Writes.targetUnreadable(root.target, `${written.broken}; mice, touchpads and keyboards keep their settings`));
             return;
         }
         // Hyprland outlives the shell, and reloading the file costs it
@@ -230,7 +230,7 @@ Singleton {
                     error = state.report.message.replace(/^tide: /, "");
                 } else if (state.code !== 0 || reply.trim() !== "ok") {
                     // A conf without conf_input.reload, say.
-                    error = `couldn't apply the mouse and touchpad settings: ${(reply + state.errors).trim()}`;
+                    error = `couldn't apply the mouse, touchpad and keyboard settings: ${(reply + state.errors).trim()}`;
                     console.warn(`tide: ${error}`);
                 } else if (state.report?.level === "log") {
                     // It worked, but said something on the way, as MarkData's.
