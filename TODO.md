@@ -122,6 +122,10 @@ once you have agreed with it or reversed it.
   alternative ranges and steps are `DIM_STEP` and `DIM_HI` in
   `shell/lib/appearance.mjs`.
 
+- [ ] **The next keyboard layout is `Super+Alt+Space`.** GNOME's is
+  `Super+Space`, which tide's launcher has; KDE's is `Meta+Alt+K`. It's
+  one `hl.bind` in `conf`'s `hyprland.lua` and a row in §6.6.
+
 - [ ] **The Appearance page comes after Layouts.** §16's table had it first;
   new pages go after the ones you ordered, so their order and CI's count
   of Down presses to the Network page stay as they are. Moving it is a
@@ -604,9 +608,8 @@ from the keyboard (`shell/shell_test.sh`).
   each, and lists the mice and touchpads. Still to do:
   - A keyboard by name, as a mouse or touchpad can be: `hl.device` takes
     the keyboard's options too.
-  - A key to switch between two keyboard layouts. `conf` sets
-    `kb_options` without a `grp:` toggle, so a second layout is only
-    reachable with `hyprctl switchxkblayout`.
+  - On a live session, check `Super+Alt+Space` switches every keyboard to
+    the next layout, and on the lock screen too.
   - On a live session, check a change reaches a mouse and a touchpad at
     once, and survives `hyprctl reload`; that one mouse chosen by name
     takes its own speed while another keeps every mouse's, and that Reset
