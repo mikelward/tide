@@ -581,7 +581,9 @@ EOF
 # and moved, and one refused, written to clocks.local.json and looked up
 # by the bar. Then the Layouts page: none written at startup, then two
 # settings over a hand edit, written to layouts.local.json and the file
-# layout.lua reads, and applied again.
+# layout.lua reads, and applied again. Then the Appearance page: two
+# settings set over a hand edit, and sunrise and sunset refused without a
+# longitude.
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
 # runs it, as $after_load.
@@ -724,6 +726,32 @@ written_settings() {
         test "$(cat "$layouts_local")" = "$_want"; do
         if waited "the shell didn't write tile's mfact of 0.6 and twocol for ultrawides, keeping the hand-edited two masters, to $layouts_conf and $layouts_local, and apply them" "$i"; then
             cat "$layouts_conf" "$layouts_local" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    printf '{\n  "dark": "20:00"\n}\n' >"$appearance_local" || exit 1
+    ipc call settings setAppearance light 06:30 >/dev/null || exit 1
+    ipc call settings setAppearance latitude 51.5 >/dev/null || exit 1
+    _refused=$(ipc call settings setAppearance mode sun) || exit 1
+    case $_refused in
+        *'mode "sun" needs latitude and longitude'*) ;;
+        *)
+            echo "FAIL: the shell should refuse sunrise and sunset without a longitude, saying so; it answered: $_refused" >&2
+            exit 1
+            ;;
+    esac
+    _want='{
+  "light": "06:30",
+  "dark": "20:00",
+  "latitude": 51.5
+}'
+    i=0
+    until test "$(cat "$appearance_local")" = "$_want"; do
+        if waited "the shell didn't write light from 06:30 and a latitude of 51.5, keeping the hand-edited dark from 20:00, to $appearance_local" "$i"; then
+            cat "$appearance_local" >&2
             grep -v '^\[' "$log" >&2
             exit 1
         fi
@@ -1097,16 +1125,18 @@ input_local=$tmp/home/.config/tide/input.local.json
 clocks_local=$tmp/home/.config/tide/clocks.local.json
 layouts_conf=$tmp/home/.config/hypr/tide-layouts.lua
 layouts_local=$tmp/home/.config/tide/layouts.local.json
+appearance_local=$tmp/home/.config/tide/appearance.local.json
 after_load=written_settings
 load shell "the shell" -c tide
 after_load=
 # Gone again, so the next shell starts from the defaults, writes them, and
 # restarts hypridle and reapplies the devices, too.
-rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" "$layouts_conf" "$layouts_local" || exit 1
+rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" "$layouts_conf" "$layouts_local" "$appearance_local" || exit 1
 echo "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 echo "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
 echo "ok: the shell changes the clocks as the Clocks page asks, and looks them up"
 echo "ok: the shell writes the layout settings, and new ones, and applies them"
+echo "ok: the shell sets the Appearance page's settings, and refuses one that wouldn't work"
 load_runs='hyprctl devices -j'
 load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"

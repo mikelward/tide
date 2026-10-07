@@ -10,7 +10,10 @@ import "lib/report.mjs" as Report
 // appearance.json and appearance.local.json (§16.1), works out which it is
 // each minute, and when that changes tells apps through gsettings and the
 // shell's own palette (Theme) in place. The launcher's flip
-// (`flip`) lasts until the schedule's next change.
+// (`flip`) lasts until the schedule's next change. The settings panel's
+// Appearance page (§16) changes the settings through `set`, in
+// appearance.local.json, read and written synchronously as IdleData's
+// files.
 Singleton {
     id: root
 
@@ -24,6 +27,8 @@ Singleton {
     // The last scheme apps were told, or null before the first time.
     property var told: null
     property var reports: Report.NOTHING
+    // Why the panel's last change couldn't be saved, or "".
+    property string saveFailure: ""
 
     // A config reload keeps a flip, so reloading the shell doesn't undo it.
     PersistentProperties {
@@ -130,9 +135,55 @@ Singleton {
             root.settings = result.settings;
         }
         root.loaded = true;
-        const v = Report.verdict(root.reports, errors);
+        const v = Report.verdict(root.reports, errors.concat(root.saveFailure !== "" ? [root.saveFailure] : []));
         root.reports = v.state;
         root.send(v.send);
+    }
+
+    // Sets one setting, in appearance.local.json: the settings panel writes
+    // only the .local files (§16.1). The files as they are now, not as they
+    // last loaded, so a hand edit made a moment ago is built on, and one
+    // that doesn't parse is left as it is. Returns why it didn't, or "".
+    function set(key, value) {
+        const sharedText = root.readNow(sharedNow);
+        const localText = root.readNow(localNow);
+        const broken = [sharedNow.broken, localNow.broken].filter(b => b !== "");
+        if (broken.length > 0) {
+            return `${broken[0]}; not changing ${key}`;
+        }
+        const result = Appearance.withSetting(localText, key, value, sharedText);
+        if (result.error) {
+            return `${result.error}; not changing ${key}`;
+        }
+        const error = root.writeNow(localNow, result.text);
+        root.saveFailure = error === "" ? "" : `${error}; appearance setting not saved`;
+        if (error !== "") {
+            console.warn(`tide: ${root.saveFailure}`);
+        }
+        // The shell's reader, now rather than when its watch fires: its load
+        // reports a save failure, or that it's gone.
+        local.reload();
+        return root.saveFailure;
+    }
+
+    // As IdleData's.
+    function readNow(file) {
+        file.reload();
+        const text = file.text();
+        return file.loaded && file.broken === "" ? text : null;
+    }
+
+    // As IdleData's, read back since a failed atomic commit only logs.
+    function writeNow(file, text) {
+        file.failure = "";
+        file.setText(text);
+        if (file.failure !== "") {
+            return file.failure;
+        }
+        if (root.readNow(file) !== text) {
+            return file.broken !== "" ? file.broken : `${file.path}: the write didn't take`;
+        }
+        return "";
     }
 
     // A bad file is a notification naming it and the line (SPEC.md §16.1),
@@ -195,6 +246,43 @@ Singleton {
             broken = error === FileViewError.FileNotFound ? "" : `${path}: ${FileViewError.toString(error)}`;
             root.load();
         }
+    }
+
+    // The files again, for the Appearance page's changes, as IdleData's:
+    // read and written as they're needed, synchronously, so a change builds
+    // on the file as it is.
+    component SettingsFile: FileView {
+        // Why it can't be read, or "" when it can (or doesn't exist).
+        property string broken: ""
+        // Why the last write failed, or "".
+        property string failure: ""
+
+        preload: false
+        blockAllReads: true
+        blockWrites: true
+        atomicWrites: true
+        printErrors: false
+        onLoaded: broken = ""
+        onLoadFailed: error => {
+            // A missing file is nothing set, not an error.
+            broken = error === FileViewError.FileNotFound ? "" : `${path}: ${FileViewError.toString(error)}`;
+            if (broken !== "") {
+                console.warn(`tide: ${broken}`);
+            }
+        }
+        onSaveFailed: error => failure = `${path}: ${FileViewError.toString(error)}`
+    }
+
+    SettingsFile {
+        id: sharedNow
+
+        path: shared.path
+    }
+
+    SettingsFile {
+        id: localNow
+
+        path: local.path
     }
 
     Timer {

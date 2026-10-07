@@ -75,6 +75,13 @@ export const PAGES = Object.freeze([
         about: "How a new workspace starts, by its monitor's shape, and each layout's master width and count. A change applies to every workspace, which keeps its layout but loses a width or count changed with the keys.",
         advanced: null,
     },
+    {
+        id: "appearance",
+        label: "Appearance",
+        icon: "night-light-symbolic",
+        about: "Light or dark for the shell and apps. By the clock goes light and dark at the times below; sunrise and sunset needs this machine's latitude and longitude, north and east positive. A switch made now lasts until the next change.",
+        advanced: null,
+    },
 ]);
 
 // The page after moving `step` pages from `index`, stopping at either end.

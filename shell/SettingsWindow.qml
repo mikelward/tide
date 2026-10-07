@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Pipewire
 import Quickshell.Wayland
+import "lib/appearance.mjs" as Appearance
 import "lib/audio.mjs" as Audio
 import "lib/idle.mjs" as Idle
 import "lib/input.mjs" as Input
@@ -139,6 +140,16 @@ PanelWindow {
         // defaultMode.ultrawide. Answers why not, or "".
         function setLayout(path: string, value: string): string {
             return LayoutsData.set(path, path.startsWith("defaultMode.") ? value : Number(value));
+        }
+        // Sets one of the Appearance page's settings, as it does: `qs -c
+        // tide ipc call settings setAppearance mode dark`, or a time
+        // ("07:15") or a latitude or longitude. Answers why not, or "".
+        function setAppearance(key: string, value: string): string {
+            if (key === "latitude" || key === "longitude") {
+                const c = Appearance.parseCoordinate(key, value);
+                return c.error ? `${c.error}; not changing ${key}` : AppearanceData.set(key, c.value);
+            }
+            return AppearanceData.set(key, value);
         }
     }
 
@@ -1134,6 +1145,277 @@ PanelWindow {
                             wrapMode: Text.Wrap
                             textFormat: Text.PlainText
                             text: layouts.refused
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Appearance: light or dark now, with a switch until
+                    // the next change; the mode, which ‹ and › step
+                    // through; the times, which − and + move a quarter hour;
+                    // and the location, typed and set with Enter (SPEC.md
+                    // §15).
+                    Column {
+                        id: appearance
+
+                        readonly property var settings: AppearanceData.settings
+                        readonly property int modeAt: Math.max(0, Appearance.MODE_CHOICES.findIndex(c => c.mode === settings.mode))
+                        // Why the last change made here was refused, until
+                        // the next one or another page.
+                        property string refused: ""
+
+                        function set(key, value) {
+                            refused = AppearanceData.set(key, value);
+                            root.report(refused);
+                        }
+
+                        onVisibleChanged: refused = ""
+                        visible: root.current.id === "appearance"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        Item {
+                            width: appearance.width
+                            implicitHeight: 32
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: (AppearanceData.dark ? "Dark" : "Light") + (AppearanceData.until === "" ? "" : ` until ${AppearanceData.until}`)
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                                font.features: ({ "tnum": 1 })
+                            }
+
+                            Rectangle {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 92
+                                height: 26
+                                radius: 13
+                                color: Theme.surface2
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: AppearanceData.dark ? "Light now" : "Dark now"
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                }
+
+                                TapHandler {
+                                    onTapped: AppearanceData.flip()
+                                }
+                            }
+                        }
+
+                        Item {
+                            width: appearance.width
+                            implicitHeight: 32
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Mode"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+
+                                StepButton {
+                                    name: "go-previous-symbolic"
+                                    value: appearance.modeAt
+                                    next: Appearance.steppedModeAt(appearance.settings, appearance.modeAt, -1)
+                                    onActivated: appearance.set("mode", Appearance.MODE_CHOICES[next].mode)
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 140
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: Appearance.MODE_CHOICES[appearance.modeAt].label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                StepButton {
+                                    name: "go-next-symbolic"
+                                    value: appearance.modeAt
+                                    next: Appearance.steppedModeAt(appearance.settings, appearance.modeAt, 1)
+                                    onActivated: appearance.set("mode", Appearance.MODE_CHOICES[next].mode)
+                                }
+                            }
+                        }
+
+                        // Light from and dark from, by the clock.
+                        Repeater {
+                            model: appearance.settings.mode === "schedule" ? [{ key: "light", label: "Light from" }, { key: "dark", label: "Dark from" }] : []
+
+                            Item {
+                                id: time
+
+                                required property var modelData
+                                readonly property string value: appearance.settings[modelData.key]
+
+                                // Past the other time, so the two can cross.
+                                function stepped(steps) {
+                                    return Appearance.steppedTimePast(value, steps, appearance.settings[modelData.key === "light" ? "dark" : "light"]);
+                                }
+
+                                width: appearance.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: time.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    StepButton {
+                                        name: "list-remove-symbolic"
+                                        value: 0
+                                        next: time.stepped(-1) === time.value ? 0 : 1
+                                        onActivated: appearance.set(time.modelData.key, time.stepped(-1))
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 92
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: time.value
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                        font.features: ({ "tnum": 1 })
+                                    }
+
+                                    StepButton {
+                                        name: "list-add-symbolic"
+                                        value: 0
+                                        next: time.stepped(1) === time.value ? 0 : 1
+                                        onActivated: appearance.set(time.modelData.key, time.stepped(1))
+                                    }
+                                }
+                            }
+                        }
+
+                        // The location, for sunrise and sunset: shown in any
+                        // mode, since sunrise and sunset can't be chosen
+                        // until it's set.
+                        Repeater {
+                            model: [{ key: "latitude", label: "Latitude" }, { key: "longitude", label: "Longitude" }]
+
+                            Item {
+                                id: coordinate
+
+                                required property var modelData
+
+                                function shown() {
+                                    const v = appearance.settings[modelData.key];
+                                    return v === undefined ? "" : String(v);
+                                }
+
+                                width: appearance.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: coordinate.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                // As the Keyboard page's names: Enter sets
+                                // it, and Escape or a click elsewhere puts
+                                // back what's set.
+                                Rectangle {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 148
+                                    height: 26
+                                    radius: 6
+                                    color: Theme.surface2
+                                    border.width: degrees.activeFocus ? 1 : 0
+                                    border.color: Theme.accent
+
+                                    TextInput {
+                                        id: degrees
+
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 8
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        clip: true
+                                        text: coordinate.shown()
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                        onAccepted: {
+                                            const c = Appearance.parseCoordinate(coordinate.modelData.key, text);
+                                            if (c.error) {
+                                                appearance.refused = `${c.error}; not changing ${coordinate.modelData.key}`;
+                                                root.report(appearance.refused);
+                                            } else {
+                                                appearance.set(coordinate.modelData.key, c.value);
+                                            }
+                                            keys.forceActiveFocus();
+                                        }
+                                        Keys.onEscapePressed: keys.forceActiveFocus()
+                                        onActiveFocusChanged: {
+                                            if (!activeFocus) {
+                                                text = Qt.binding(() => coordinate.shown());
+                                            }
+                                        }
+
+                                        Text {
+                                            visible: degrees.text === "" && !degrees.activeFocus
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "none"
+                                            color: Theme.fgFaint
+                                            font: degrees.font
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // A time or a location that isn't one, say.
+                        Text {
+                            visible: appearance.refused !== ""
+                            x: 10
+                            width: appearance.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: appearance.refused
                             color: Theme.danger
                             font.family: Theme.font
                             font.pixelSize: 12
