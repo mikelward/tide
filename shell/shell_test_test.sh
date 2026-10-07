@@ -69,9 +69,10 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # notify-send prints an id and adds the summary to the history, as the
 # shell's server would. Its go builds a tide-tz that runs TZ, by default
 # one that ends at once. Its shell writes the default lock time for
-# hypridle, then a dim time of 120, a lock time of IDLE (600 by default)
-# and the hand-edited suspend time once both are set over IPC; and no
-# mouse settings, then the hand-edited mouse speed, a touchpad without tap
+# hypridle and no suspend on AC for idle-suspend, then a dim time of 120, a
+# lock time of IDLE (600 by default), suspend on AC and the hand-edited
+# suspend time once all three are set over IPC; and no mouse settings,
+# then the hand-edited mouse speed, a touchpad without tap
 # to click, the us,de keyboard layouts, one mouse's own speed and the
 # mouse's left_handed as HANDED (false by default) once all four are set
 # over IPC, applying each.
@@ -94,7 +95,7 @@ if test "\$1" = ipc; then
     case "\$*" in
         *"call launcher open"*) : >"\$XDG_RUNTIME_DIR/launcher-open" ;;
         *"call settings open"*) : >"\$XDG_RUNTIME_DIR/settings-open" ;;
-        *"call settings setIdle dim 120"*) : >"\$XDG_RUNTIME_DIR/idle-set" ;;
+        *"call settings setSuspendOnAC true"*) : >"\$XDG_RUNTIME_DIR/idle-set" ;;
         *"call settings setDevice logitech-usb-receiver speed 0.25"*) : >"\$XDG_RUNTIME_DIR/input-set" ;;
     esac
     $2
@@ -146,6 +147,7 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                 {
                     mkdir -p "\$HOME/.config/hypr" "\$HOME/.config/tide" &&
                         printf '%s\n' '\$tide_idle_lock = 300' >"\$HOME/.config/hypr/tide-idle.conf" &&
+                        printf '%s\n' '\$tide_idle_suspend_on_ac = 0' >"\$HOME/.config/hypr/tide-idle-suspend.conf" &&
                         systemctl --user try-restart hypridle.service >/dev/null 2>&1
                     # A time set over IPC, as the settings panel's Idle page
                     # sets one; gone with the qs that started it, since
@@ -155,7 +157,8 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                         sleep 0.1
                     done
                     rm "\$XDG_RUNTIME_DIR/idle-set"
-                    printf '{\n  "dim": 120,\n  "lock": ${11:-600},\n  "suspend": 900\n}\n' >"\$HOME/.config/tide/idle.local.json"
+                    printf '{\n  "dim": 120,\n  "lock": ${11:-600},\n  "suspend": 900,\n  "suspendOnAC": true\n}\n' >"\$HOME/.config/tide/idle.local.json"
+                    printf '%s\n' '\$tide_idle_suspend_on_ac = 1' >"\$HOME/.config/hypr/tide-idle-suspend.conf"
                     printf '%s\n' '\$tide_idle_dim = 120' '\$tide_idle_lock = ${11:-600}' '\$tide_idle_suspend = 900' >"\$HOME/.config/hypr/tide-idle.conf"
                     systemctl --user try-restart hypridle.service >/dev/null 2>&1
                 } &
@@ -518,7 +521,7 @@ check "and says so" contains "$out" 'the shell never ran "systemctl --user try-r
 stubs "$tmp/idle-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" 300
 run "$tmp/idle-unset"
 check "a shell that loses the first of two quick changes fails" test "$code" -ne 0
-check "and says so" contains "$out" "the shell didn't write a lock time of 600 and a dim time of 120, keeping the hand-edited suspend time of 900, to"
+check "and says so" contains "$out" "the shell didn't write a lock time of 600, a dim time of 120 and suspend on AC, keeping the hand-edited suspend time of 900, to"
 
 stubs "$tmp/no-input" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle devices keyboards"
 run "$tmp/no-input"

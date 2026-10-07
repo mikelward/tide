@@ -80,6 +80,7 @@ run() {
     : > "$log"
     env PATH="$fake:$PATH" FAKE_LOG="$log" XDG_CURRENT_DESKTOP=tide:Hyprland \
         XDG_DATA_HOME="$tmp/home-data" XDG_DATA_DIRS="$tmp/sys-data" \
+        XDG_CONFIG_HOME="$tmp/run-config" \
         "$@" 2> "$tmp/err"
 }
 
@@ -510,6 +511,43 @@ check "a refused suspend fails idle-suspend" test $? -eq 1
 check "a refused suspend is reported" contains "$(cat "$tmp/err")" "systemctl suspend failed (exit 1)"
 run "$qs" idle-suspend now
 check "idle-suspend takes no arguments" test $? -eq 2
+# Suspend on AC, as the shell writes it for idle-suspend.
+mkdir -p "$tmp/run-config/hypr"
+printf '%s\n' '# Written by tide' "\$tide_idle_suspend_on_ac = 1" >"$tmp/run-config/hypr/tide-idle-suspend.conf"
+run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+check "with suspend on AC, idle-suspend exits 0 on AC" test $? -eq 0
+check "with suspend on AC, idle-suspend suspends on AC" contains "$(cat "$log")" "systemctl suspend"
+check "with suspend on AC, idle-suspend needn't ask UPower" test "$(grep -c '^busctl ' "$log")" -eq 0
+check "with suspend on AC, idle-suspend says nothing" test ! -s "$tmp/err"
+printf '%s\n' "\$tide_idle_suspend_on_ac = 0" >"$tmp/run-config/hypr/tide-idle-suspend.conf"
+run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+check "with suspend on AC off, idle-suspend doesn't suspend on AC" test "$(grep -c '^systemctl ' "$log")" -eq 0
+rm "$tmp/run-config/hypr/tide-idle-suspend.conf"
+mkdir "$tmp/run-config/hypr/tide-idle-suspend.conf"
+run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+check "an unreadable Suspend on AC file is reported" contains "$(cat "$tmp/err")" "couldn't read $tmp/run-config/hypr/tide-idle-suspend.conf, so suspending on battery only"
+check "and suspends on battery only" test "$(grep -c '^systemctl ' "$log")" -eq 0
+run "$qs" idle-suspend
+check "on battery, it still suspends" contains "$(cat "$log")" "systemctl suspend"
+rmdir "$tmp/run-config/hypr/tide-idle-suspend.conf"
+# A directory that isn't one can't be searched for the file: that's
+# reported too, not taken for no file yet.
+rmdir "$tmp/run-config/hypr"
+: >"$tmp/run-config/hypr"
+run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+check "a directory that can't be searched for it is reported" contains "$(cat "$tmp/err")" "couldn't read $tmp/run-config/hypr/tide-idle-suspend.conf, so suspending on battery only"
+check "and doesn't suspend on AC" test "$(grep -c '^systemctl ' "$log")" -eq 0
+rm "$tmp/run-config/hypr"
+run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+check "no timings directory yet says nothing" test ! -s "$tmp/err"
+check "and doesn't suspend on AC" test "$(grep -c '^systemctl ' "$log")" -eq 0
+# So is one higher up the path: the config directory itself, say.
+: >"$tmp/run-config-file"
+run FAKE_ON_BATTERY="b false" XDG_CONFIG_HOME="$tmp/run-config-file" "$qs" idle-suspend
+check "a config directory that can't be searched is reported" contains "$(cat "$tmp/err")" "couldn't read $tmp/run-config-file/hypr/tide-idle-suspend.conf, so suspending on battery only"
+rm "$tmp/run-config-file"
+run FAKE_ON_BATTERY="b false" XDG_CONFIG_HOME="$tmp/no-such-config" "$qs" idle-suspend
+check "no config directory at all says nothing" test ! -s "$tmp/err"
 
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh "$qs" bin/tide_test.sh

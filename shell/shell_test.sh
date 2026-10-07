@@ -571,17 +571,19 @@ EOF
 }
 
 # written_settings: fails the test unless the shell started by writing
-# hypridle's default timings (SPEC.md §10), and no mouse or touchpad
-# settings for conf's hyprland.lua (§16); then, for each, given a hand edit
-# to its .local.json and straight after it two settings over IPC as the
-# settings panel's pages give them, wrote all three to its .local.json and
-# to the file read, and restarted hypridle or reapplied the devices again.
+# hypridle's default timings and no suspend on AC (SPEC.md §10), and no
+# mouse or touchpad settings for conf's hyprland.lua (§16); then, for each,
+# given a hand edit to its .local.json and straight after it settings over
+# IPC as the settings panel's pages give them, wrote them all to its
+# .local.json and to the file read, and restarted hypridle or reapplied the
+# devices again.
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
 # runs it, as $after_load.
 written_settings() {
-    if ! grep -qxF '$tide_idle_lock = 300' "$idle_conf" 2>/dev/null; then
-        echo "FAIL: the shell should write hypridle's default timings to $idle_conf; it has: $(cat "$idle_conf" 2>&1)" >&2
+    if ! grep -qxF '$tide_idle_lock = 300' "$idle_conf" 2>/dev/null ||
+        ! grep -qxF '$tide_idle_suspend_on_ac = 0' "$idle_suspend_conf" 2>/dev/null; then
+        echo "FAIL: the shell should write hypridle's default timings to $idle_conf, and no suspend on AC to $idle_suspend_conf; they have: $(cat "$idle_conf" "$idle_suspend_conf" 2>&1)" >&2
         exit 1
     fi
     _restarts=$(grep -c '^systemctl --user try-restart hypridle.service$' "$tmp/helpers.log")
@@ -589,20 +591,23 @@ written_settings() {
     printf '{\n  "suspend": 900\n}\n' >"$idle_local" || exit 1
     ipc call settings setIdle lock 600 >/dev/null || exit 1
     ipc call settings setIdle dim 120 >/dev/null || exit 1
+    ipc call settings setSuspendOnAC true >/dev/null || exit 1
     # Both files are written, and either can be last: wait for both.
     _want='{
   "dim": 120,
   "lock": 600,
-  "suspend": 900
+  "suspend": 900,
+  "suspendOnAC": true
 }'
     i=0
     until grep -qxF '$tide_idle_lock = 600' "$idle_conf" 2>/dev/null &&
         grep -qxF '$tide_idle_dim = 120' "$idle_conf" &&
         grep -qxF '$tide_idle_suspend = 900' "$idle_conf" &&
+        grep -qxF '$tide_idle_suspend_on_ac = 1' "$idle_suspend_conf" &&
         test "$(grep -c '^systemctl --user try-restart hypridle.service$' "$tmp/helpers.log")" -gt "$_restarts" &&
         test "$(cat "$idle_local")" = "$_want"; do
-        if waited "the shell didn't write a lock time of 600 and a dim time of 120, keeping the hand-edited suspend time of 900, to $idle_conf and $idle_local, and restart hypridle" "$i"; then
-            cat "$idle_conf" "$idle_local" >&2
+        if waited "the shell didn't write a lock time of 600, a dim time of 120 and suspend on AC, keeping the hand-edited suspend time of 900, to $idle_conf, $idle_suspend_conf and $idle_local, and restart hypridle" "$i"; then
+            cat "$idle_conf" "$idle_suspend_conf" "$idle_local" >&2
             grep -v '^\[' "$log" >&2
             exit 1
         fi
@@ -1011,6 +1016,7 @@ hyprctl eval conf_input.reload()
 hyprctl devices -j'
 load_runs=$shell_runs
 idle_conf=$tmp/home/.config/hypr/tide-idle.conf
+idle_suspend_conf=$tmp/home/.config/hypr/tide-idle-suspend.conf
 idle_local=$tmp/home/.config/tide/idle.local.json
 input_conf=$tmp/home/.config/hypr/tide-input.lua
 input_local=$tmp/home/.config/tide/input.local.json
@@ -1019,7 +1025,7 @@ load shell "the shell" -c tide
 after_load=
 # Gone again, so the next shell starts from the defaults, writes them, and
 # restarts hypridle and reapplies the devices, too.
-rm "$idle_conf" "$idle_local" "$input_conf" "$input_local" || exit 1
+rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" || exit 1
 echo "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 echo "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
 load_runs='hyprctl devices -j'

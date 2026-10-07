@@ -462,17 +462,18 @@ from the keyboard (`shell/shell_test.sh`).
   and `pavucontrol`), Network (`nm-connection-editor`) and Bluetooth
   (`blueman-manager`).
 - Idle steps each of SPEC.md §10's times along a ladder of durations
-  (`shell/lib/idle.mjs`), writing `idle.local.json`; `shell/IdleData.qml`
-  writes `~/.config/hypr/tide-idle.conf` and restarts hypridle. CI checks
-  the shell writes the default timings and restarts hypridle at startup.
-  Still to do:
+  (`shell/lib/idle.mjs`), and switches Suspend on AC, writing
+  `idle.local.json`; `shell/IdleData.qml` writes
+  `~/.config/hypr/tide-idle.conf` and restarts hypridle, and Suspend on AC
+  to `tide-idle-suspend.conf` beside it, which `tide idle-suspend` reads.
+  CI checks the shell writes the default timings and restarts hypridle at
+  startup, then three settings over IPC, Suspend on AC among them. Still
+  to do:
   - A failed hypridle restart is retried only while the shell runs. A
     shell restarted before the retry works takes the file on disk as
     applied, so hypridle keeps its old times until it next restarts.
     Recording what hypridle was last given, in `$XDG_RUNTIME_DIR`, would
     let the new shell tell (`readTarget` in `shell/lib/writes.mjs`).
-  - Suspend on AC, §16's other Idle setting: `tide idle-suspend` would
-    read it.
   - On a live session, check a change restarts hypridle with the new
     times, and that Fedora's hypridle is 0.1.7 or later for `source`
     (Ubuntu 26.04 has 0.1.7).
