@@ -1976,7 +1976,7 @@ tide's own, and links out for the rest:
 | Network, Bluetooth | *advanced* opens `nm-connection-editor` / `blueman-manager` |
 | Mouse | for every mouse, or one by name: speed, scroll speed, natural scrolling, left-handed |
 | Touchpad | for every touchpad, or one by name: the same, plus tap to click and off while typing |
-| Keyboard | for every keyboard: layouts and their variants, repeat delay and rate |
+| Keyboard | for every keyboard, or one by name: layouts and their variants, repeat delay and rate |
 | Clocks | zones, order, labels, 24 h, dedupe-local |
 | Keys | a read-only list of the current bindings, generated from the config |
 | Layouts | default layout per aspect ratio, `mfact`, master count, the rule for new windows |
@@ -1996,23 +1996,32 @@ stays hand-written.
     gives each mouse the mouse settings and each touchpad its own, one
     device at a time (`hl.device`). So a left-handed mouse and a
     right-handed touchpad can each have their own speed.
-  - `conf` applies the keyboard's options itself, to every keyboard.
-  - A Mouse or Touchpad page sets every device of its kind, or one by
-    name. ‹ and › step through the ones connected and the ones with
-    settings of their own, and Reset clears a device's own settings.
+  - `conf` applies the keyboard's options itself. Then `apply-input.sh`
+    gives each keyboard them, or its own.
+  - A Mouse, Touchpad or Keyboard page sets every device of its kind, or
+    one by name. ‹ and › step through the ones connected and the ones with
+    settings of their own of that kind, and Reset clears them.
   - One device's settings apply over its kind's. They go in the file's
     `devices` table, keyed by the name `hyprctl devices` gives it, and
     `conf` applies them with `hl.device`, so two mice can differ.
-  - The shell lists the mice and touchpads with `hyprctl devices -j` as it
-    starts and as either page shows. A touchpad is one whose name says
-    touchpad, trackpad or synaptics, as `apply-input.sh` decides; every
-    other pointer is a mouse.
+  - One name can be a mouse and a keyboard both, as a wireless receiver
+    is. It can have a mouse's settings and a keyboard's, since none share a
+    name, and Reset on one page leaves the other's.
+  - The shell lists the mice, touchpads and keyboards with `hyprctl
+    devices -j` as it starts and as any of the pages shows. A touchpad is
+    one whose name says touchpad, trackpad or synaptics, as
+    `apply-input.sh` decides; every other pointer is a mouse. Every
+    keyboard Hyprland lists is one, power buttons included.
+  - Hyprland 0.56.2 leaves a keyboard whose options haven't changed alone
+    (`applyConfigToKeyboard`). So applying the settings again doesn't put
+    a keyboard back on its first layout.
   - Only what's set reaches Hyprland. The rest stays as `conf`'s config
     has it, and the pages show those values until they're changed.
   - A keyboard layout and its variant are typed, as XKB's names (`us`, or
     `us,de` for two; `dvorak`, or none), and set with Enter. There's one
-    variant, or one for each layout. Anything else is refused, and the page
-    says why; in the files, it's an error at load.
+    variant, or one for each layout, a keyboard's own paired with every
+    keyboard's where it sets only one. Anything else is refused, and the
+    page says why; in the files, it's an error at load.
   - `Super+Alt+Space` moves every keyboard to the layout after the main
     keyboard's (§6.6), on the lock screen too. Setting one layout on all
     of them keeps them in step. Hyprland 0.56.2's own `switchxkblayout all

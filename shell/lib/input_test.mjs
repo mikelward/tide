@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    LADDERS, SECTIONS, connectedDevices, deviceKind, listedDevices, deviceSettingError, deviceShown, formatValue, hasOwn, inputLua, isText, loadInput,
+    LADDERS, SECTIONS, connectedDevices, deviceKind, deviceSection, listedDevices, deviceSettingError, deviceShown, formatValue, hasOwn, inputLua, isText, loadInput,
     pairError, parseInput, parseValue, settingError, shown, stepped, targetLabel, targets, withDeviceSetting, withSetting, withoutDevice,
 } from "./input.mjs";
 
@@ -287,6 +287,63 @@ test("a device's own settings are cleared all at once", () => {
     assert.deepEqual(JSON.parse(withoutDevice(null, "trackball").text), {});
 });
 
+test("a keyboard by name takes a keyboard's settings, beside a mouse's under the same name", () => {
+    assert.equal(deviceSection("logitech-usb-receiver", "layout"), "keyboard");
+    assert.equal(deviceSection("logitech-usb-receiver", "speed"), "mouse");
+    assert.equal(deviceSection("synps/2-synaptics-touchpad", "tapToClick"), "touchpad");
+    assert.deepEqual(parseInput('{"devices": {"logitech-usb-receiver": {"speed": 0.5, "layout": "gb", "repeatRate": 40}}}'), {
+        settings: { devices: { "logitech-usb-receiver": { speed: 0.5, layout: "gb", repeatRate: 40 } } },
+    });
+    assert.match(parseInput('{"devices": {"at-keyboard": {"layout": "us de"}}}').error, /^devices\.at-keyboard\.layout must be up to four XKB layouts/);
+    assert.match(parseInput('{"devices": {"at-keyboard": {"repeatDelay": 5}}}').error, /^devices\.at-keyboard\.repeatDelay must be a whole number/);
+
+    const { input, errors } = loadInput('{"keyboard": {"layout": "us,de", "variant": "dvorak,"}}',
+        '{"devices": {"logitech-usb-receiver": {"speed": 0.5, "layout": "gb", "variant": ""}}}');
+    assert.deepEqual(errors, []);
+    assert.equal(deviceShown(input, "logitech-usb-receiver", "layout"), "gb");
+    assert.equal(deviceShown(input, "logitech-usb-receiver", "repeatRate"), 25, "conf's, through every keyboard");
+    assert.equal(deviceShown(input, "at-keyboard", "variant"), "dvorak,", "every keyboard's");
+    assert.equal(hasOwn(input, "logitech-usb-receiver", "keyboard"), true);
+    assert.equal(hasOwn(input, "logitech-usb-receiver", "mouse"), true);
+    assert.equal(hasOwn(input, "logitech-usb-receiver", "touchpad"), false);
+    assert.equal(hasOwn(input, "logitech-usb-receiver"), true);
+
+    const text = inputLua(input);
+    assert.ok(text.includes('        ["logitech-usb-receiver"] = { sensitivity = 0.5, kb_layout = "gb", kb_variant = "" },\n'), text);
+});
+
+test("a keyboard's own layouts and variants pair up, with every keyboard's where it has none of its own", () => {
+    assert.equal(pairError({ keyboard: { layout: "us,de" }, devices: { kb: { variant: "dvorak," } } }), "");
+    assert.equal(pairError({ keyboard: { layout: "us,de" }, devices: { mouse: { speed: 0 } } }), "", "a device with no layout of its own");
+    assert.match(pairError({ keyboard: { layout: "us,de", variant: "dvorak," }, devices: { kb: { layout: "gb" } } }),
+        /^devices\.kb\.variant has 2 variants for 1 layout;/, "every keyboard's two variants for its own one layout");
+    let r = loadInput('{"keyboard": {"layout": "us,de", "variant": "dvorak,"}}', '{"devices": {"kb": {"layout": "us,de,fr"}}}');
+    assert.deepEqual(r.errors, ["input.local.json: devices.kb.variant has 2 variants for 3 layouts; it takes one, or one for each layout"]);
+    r = loadInput('{"devices": {"aaa": {"layout": "us,de", "variant": "a,b,c"}}}', '{"devices": {"zzz": {"layout": "gb"}}}');
+    assert.deepEqual(r.errors, ["input.json: devices.aaa.variant has 3 variants for 2 layouts; it takes one, or one for each layout"],
+        "the file that set that keyboard's, not the last to set any keyboard's");
+    r = loadInput('{"devices": {"kb": {"variant": "a,b"}}}', '{"keyboard": {"layout": "us,de,fr"}}');
+    assert.deepEqual(r.errors, ["input.local.json: devices.kb.variant has 2 variants for 3 layouts; it takes one, or one for each layout"],
+        "every keyboard's layout, which it pairs its own variant with");
+    r = loadInput('{"keyboard": {"layout": "us,de", "variant": "a,b,c"}, "devices": {"kb": {"layout": "gb", "variant": "x,y"}}}', null);
+    assert.equal(r.errors.length, 2, "each keyboard that doesn't pair up");
+    assert.match(withDeviceSetting(null, "kb", "layout", "gb", '{"keyboard": {"layout": "us,de", "variant": "dvorak,"}}').error,
+        /^devices\.kb\.variant has 2 variants for 1 layout;/, "refused as it's set");
+    assert.equal(withDeviceSetting(null, "kb", "layout", "gb,fr", '{"keyboard": {"layout": "us,de", "variant": "dvorak,"}}').error, undefined);
+    r = withSetting('{"devices": {"kb": {"variant": "dvorak,"}}}', "keyboard", "layout", "us");
+    assert.match(r.error, /^devices\.kb\.variant has 2 variants for 1 layout;/, "every keyboard's layout, which a keyboard's own variant pairs with");
+});
+
+test("a receiver's keyboard settings are cleared apart from its mouse's", () => {
+    const text = '{"devices": {"logitech-usb-receiver": {"speed": 0.5, "layout": "gb"}}}';
+    assert.deepEqual(JSON.parse(withoutDevice(text, "logitech-usb-receiver", "keyboard").text),
+        { devices: { "logitech-usb-receiver": { speed: 0.5 } } });
+    assert.deepEqual(JSON.parse(withoutDevice(text, "logitech-usb-receiver", "mouse").text),
+        { devices: { "logitech-usb-receiver": { layout: "gb" } } });
+    assert.deepEqual(JSON.parse(withoutDevice('{"devices": {"kb": {"layout": "gb"}}}', "kb", "keyboard").text), {}, "nothing left, no device");
+    assert.deepEqual(JSON.parse(withoutDevice(text, "logitech-usb-receiver").text), {}, "all of it, as IPC's clearDevice");
+});
+
 test("a page sets every device of its kind, or one by name, connected or with settings of its own", () => {
     const connected = [{ name: "logitech-usb-receiver", kind: "mouse" }, { name: "synps/2-synaptics-touchpad", kind: "touchpad" }];
     const input = { devices: { trackball: { speed: 0 }, "apple-magic-trackpad": { speed: 0 } } };
@@ -297,9 +354,15 @@ test("a page sets every device of its kind, or one by name, connected or with se
     assert.equal(targetLabel("mouse", ""), "Every mouse");
     assert.equal(targetLabel("touchpad", ""), "Every touchpad");
     assert.equal(targetLabel("mouse", "trackball"), "trackball");
+    assert.equal(targetLabel("keyboard", ""), "Every keyboard");
+    const keyboards = [{ name: "at-keyboard", kind: "keyboard" }, { name: "logitech-usb-receiver", kind: "mouse" }];
+    const own = { devices: { "logitech-usb-receiver": { layout: "gb" }, trackball: { speed: 0 } } };
+    assert.deepEqual(targets(own, keyboards, "keyboard"), ["", "at-keyboard", "logitech-usb-receiver"], "a receiver with a keyboard's settings");
+    assert.deepEqual(targets(own, keyboards, "mouse"), ["", "logitech-usb-receiver", "trackball"]);
+    assert.deepEqual(targets({ devices: { "logitech-usb-receiver": { layout: "gb" } } }, [], "mouse"), [""], "a keyboard's settings don't make it a mouse to set");
 });
 
-test("hyprctl's devices are read for their mice and touchpads", () => {
+test("hyprctl's devices are read for their mice, touchpads and keyboards", () => {
     const json = JSON.stringify({
         mice: [
             { address: "0x1", name: "logitech-usb-receiver", defaultSpeed: 0, scrollFactor: -1 },
@@ -307,17 +370,21 @@ test("hyprctl's devices are read for their mice and touchpads", () => {
             { address: "0x3", name: 'bad"name' },
             { address: "0x4" },
         ],
-        keyboards: [{ name: "at-translated-set-2-keyboard" }],
+        keyboards: [{ name: "at-translated-set-2-keyboard" }, { name: "logitech-usb-receiver" }, { name: 'bad"name' }],
     });
     assert.deepEqual(connectedDevices(json), {
-        devices: [{ name: "logitech-usb-receiver", kind: "mouse" }, { name: "synps/2-synaptics-touchpad", kind: "touchpad" }],
+        devices: [
+            { name: "logitech-usb-receiver", kind: "mouse" }, { name: "synps/2-synaptics-touchpad", kind: "touchpad" },
+            { name: "at-translated-set-2-keyboard", kind: "keyboard" }, { name: "logitech-usb-receiver", kind: "keyboard" },
+        ],
     });
     assert.match(connectedDevices("{").error, /^hyprctl devices -j: line 1:/);
     assert.match(connectedDevices("{}").error, /no list of mice/);
+    assert.match(connectedDevices('{"mice": []}').error, /no list of keyboards/);
 });
 
 test("a listing that fails, or doesn't read, names no devices, not the last list's", () => {
-    const json = JSON.stringify({ mice: [{ name: "trackball" }] });
+    const json = JSON.stringify({ mice: [{ name: "trackball" }], keyboards: [] });
     assert.deepEqual(listedDevices(false, json), { devices: [{ name: "trackball", kind: "mouse" }], error: "" });
     assert.deepEqual(listedDevices(true, json), { devices: [], error: "" }, "a failed run's output isn't read");
     const bad = listedDevices(false, "{");

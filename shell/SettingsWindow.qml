@@ -109,13 +109,15 @@ PanelWindow {
         function setInput(section: string, key: string, value: string): string {
             return InputData.set(section, key, Input.parseValue(section, key, value));
         }
-        // Sets one mouse's or touchpad's own setting, by its name in
-        // `hyprctl devices`, as those pages do with that device chosen: `qs
-        // -c tide ipc call settings setDevice trackball speed 0.5`.
+        // Sets one mouse's, touchpad's or keyboard's own setting, by its
+        // name in `hyprctl devices`, as those pages do with that device
+        // chosen: `qs -c tide ipc call settings setDevice trackball speed
+        // 0.5`.
         function setDevice(name: string, key: string, value: string): string {
-            return InputData.setDevice(name, key, Input.parseValue(Input.deviceKind(name), key, value));
+            return InputData.setDevice(name, key, Input.parseValue(Input.deviceSection(name, key), key, value));
         }
-        // Clears every setting of that device's own, as Reset does.
+        // Clears every setting of that device's own, as Reset does on each
+        // page it's on.
         function clearDevice(name: string): string {
             return InputData.clearDevice(name);
         }
@@ -483,10 +485,9 @@ PanelWindow {
                         id: device
 
                         readonly property string section: ["mouse", "touchpad", "keyboard"].includes(root.current.id) ? root.current.id : ""
-                        readonly property bool pointer: section === "mouse" || section === "touchpad"
                         // Every device of the kind (""), then each one by
                         // name, which ‹ and › step through.
-                        readonly property var targets: pointer ? Input.targets(InputData.input, InputData.connected, section) : [""]
+                        readonly property var targets: section !== "" ? Input.targets(InputData.input, InputData.connected, section) : [""]
                         // The one the settings below are for: "" for every
                         // device of the kind, or one by name.
                         property string name: ""
@@ -507,7 +508,7 @@ PanelWindow {
                         onSectionChanged: {
                             refused = "";
                             name = "";
-                            if (pointer) {
+                            if (section !== "") {
                                 InputData.listDevices();
                             }
                         }
@@ -569,7 +570,7 @@ PanelWindow {
                             }
 
                             Rectangle {
-                                visible: device.name !== "" && Input.hasOwn(InputData.input, device.name)
+                                visible: device.name !== "" && Input.hasOwn(InputData.input, device.name, device.section)
                                 anchors.right: parent.right
                                 anchors.rightMargin: 6
                                 anchors.verticalCenter: parent.verticalCenter
@@ -589,7 +590,7 @@ PanelWindow {
 
                                 TapHandler {
                                     onTapped: {
-                                        device.refused = InputData.clearDevice(device.name);
+                                        device.refused = InputData.clearDevice(device.name, device.section);
                                         root.report(device.refused);
                                     }
                                 }

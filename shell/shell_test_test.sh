@@ -74,9 +74,9 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # lock time of IDLE (600 by default), suspend on AC and the hand-edited
 # suspend time once all three are set over IPC; and no mouse settings,
 # then the hand-edited mouse speed, a touchpad without tap
-# to click, the us,de keyboard layouts, one mouse's own speed and the
-# mouse's left_handed as HANDED (false by default) once all four are set
-# over IPC, applying each. With tide-tz, it answers the Clocks page's
+# to click, the us,de keyboard layouts, a receiver's own speed and key
+# repeat, and the mouse's left_handed as HANDED (false by default) once all
+# are set over IPC, applying each. With tide-tz, it answers the Clocks page's
 # refused zone, and writes and looks up Asia/Kolkata labeled LABEL (IST by
 # default) then the hand-edited UTC once the last clock is moved over IPC,
 # and keeps them with 24-hour time off once that's set over IPC.
@@ -302,8 +302,8 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                         sleep 0.1
                     done
                     rm "\$XDG_RUNTIME_DIR/input-set"
-                    printf '{\n  "mouse": {\n    "speed": 0.5,\n    "leftHanded": ${12:-false}\n  },\n  "touchpad": {\n    "tapToClick": false\n  },\n  "keyboard": {\n    "layout": "us,de"\n  },\n  "devices": {\n    "logitech-usb-receiver": {\n      "speed": 0.25\n    }\n  }\n}\n' >"\$HOME/.config/tide/input.local.json"
-                    printf '%s\n' '    mouse = { sensitivity = 0.5, left_handed = ${12:-false} },' '    touchpad = { tap_to_click = false },' '    keyboard = { kb_layout = "us,de" },' '    devices = {' '        ["logitech-usb-receiver"] = { sensitivity = 0.25 },' '    },' >"\$HOME/.config/hypr/tide-input.lua"
+                    printf '{\n  "mouse": {\n    "speed": 0.5,\n    "leftHanded": ${12:-false}\n  },\n  "touchpad": {\n    "tapToClick": false\n  },\n  "keyboard": {\n    "layout": "us,de"\n  },\n  "devices": {\n    "logitech-usb-receiver": {\n      "speed": 0.25,\n      "repeatRate": 40\n    }\n  }\n}\n' >"\$HOME/.config/tide/input.local.json"
+                    printf '%s\n' '    mouse = { sensitivity = 0.5, left_handed = ${12:-false} },' '    touchpad = { tap_to_click = false },' '    keyboard = { kb_layout = "us,de" },' '    devices = {' '        ["logitech-usb-receiver"] = { sensitivity = 0.25, repeat_rate = 40 },' '    },' >"\$HOME/.config/hypr/tide-input.lua"
                     hyprctl eval 'conf_input.reload()' >/dev/null 2>&1
                 } &
                 ;;
@@ -695,7 +695,7 @@ check "and says so" contains "$out" 'the shell never ran "hyprctl eval conf_appe
 stubs "$tmp/input-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" "" true
 run "$tmp/input-unset"
 check "a shell that loses the first of four quick device settings fails" test "$code" -ne 0
-check "and says so" contains "$out" "the shell didn't write a right-handed mouse, a touchpad without tap to click, the us,de keyboard layouts and one mouse's own speed, keeping the hand-edited mouse speed of 0.5, to"
+check "and says so" contains "$out" "the shell didn't write a right-handed mouse, a touchpad without tap to click, the us,de keyboard layouts and a receiver's own speed and key repeat, keeping the hand-edited mouse speed of 0.5, to"
 
 stubs "$tmp/clocks-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" "" "" Kolkata
 run "$tmp/clocks-unset"
