@@ -79,7 +79,10 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # are set over IPC, applying each. With tide-tz, it answers the Clocks page's
 # refused zone, and writes and looks up Asia/Kolkata labeled LABEL (IST by
 # default) then the hand-edited UTC once the last clock is moved over IPC,
-# and keeps them with 24-hour time off once that's set over IPC.
+# and keeps them with 24-hour time off once that's set over IPC; then it
+# answers the refused system time zone, and sets Asia/Tokyo with
+# timedatectl and looks the clocks up again, unless DIR/no-system-zone is
+# there.
 # Its layouts take tile's mfact, the hand-edited masters, twocol for
 # ultrawides and new windows at the top of the stack once the last is set
 # over IPC, applying each.
@@ -123,6 +126,8 @@ if test "\$1" = ipc; then
         *"call settings setAppearance dimStrength 0.12"*) : >"\$XDG_RUNTIME_DIR/appearance-set" && : >"\$XDG_RUNTIME_DIR/dim-set" ;;
         *"call settings setAppearance mode sun"*) echo 'mode "sun" needs latitude and longitude; not changing mode' ;;
         *"call settings addClock US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the clocks" ;;
+        *"call settings setSystemZone US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the time zone" ;;
+        *"call settings setSystemZone Asia/Tokyo"*) : >"\$XDG_RUNTIME_DIR/zone-set" ;;
     esac
     $2
 fi
@@ -157,6 +162,15 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                     done
                     rm "\$XDG_RUNTIME_DIR/clocks-switch"
                     printf '{\n  "clocks": [\n    {\n      "zone": "Asia/Kolkata",\n      "label": "${13:-IST}"\n    },\n    {\n      "zone": "UTC",\n      "label": ""\n    }\n  ],\n  "hour24": false\n}\n' >"\$HOME/.config/tide/clocks.local.json"
+                    until test -e "\$XDG_RUNTIME_DIR/zone-set"; do
+                        kill -0 \$\$ 2>/dev/null || exit 0
+                        sleep 0.1
+                    done
+                    rm "\$XDG_RUNTIME_DIR/zone-set"
+                    if ! test -e "\$(dirname "\$0")/no-system-zone"; then
+                        timedatectl set-timezone Asia/Tokyo >/dev/null 2>&1
+                        tide-tz -- Asia/Kolkata UTC >/dev/null 2>&1
+                    fi
                 } &
                 ;;
         esac
@@ -655,6 +669,12 @@ stubs "$tmp/no-wallpaper-record" "exit 0" "$loaded"
 run "$tmp/no-wallpaper-record"
 check "a shell that records no wallpaper for the lock fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell didn't record no wallpaper for the lock in"
+
+stubs "$tmp/no-system-zone" "exit 0" "$loaded"
+: >"$tmp/no-system-zone/no-system-zone" || exit 1
+run "$tmp/no-system-zone"
+check "a shell that never sets the system time zone fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell didn't set the time zone to Asia/Tokyo with timedatectl and look the clocks up again"
 
 stubs "$tmp/no-scheme" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim keyboards"
 run "$tmp/no-scheme"

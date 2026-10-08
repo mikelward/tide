@@ -218,8 +218,9 @@ EOF
 chmod +x "$tmp/helpers/real/hyprctl" || exit 1
 # gsettings and nmcli, for light and dark and the VPNs (their stand-ins
 # say what they answer), copied so their monitors can exec a tail that
-# ends with the shell.
-for _helper in gsettings nmcli systemctl; do
+# ends with the shell; systemctl and timedatectl, for hypridle and the
+# system's time zone.
+for _helper in gsettings nmcli systemctl timedatectl; do
     cp "shell/${_helper}_stand_in.sh" "$tmp/helpers/real/$_helper" || exit 1
     chmod +x "$tmp/helpers/real/$_helper" || exit 1
 done
@@ -230,7 +231,7 @@ if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/helpers/real/ti
     echo "FAIL: couldn't build tide-tz: $(cat "$tmp/go.log")" >&2
     exit 1
 fi
-helpers="tide-sysmon tide-tz hyprctl gsettings nmcli systemctl"
+helpers="tide-sysmon tide-tz hyprctl gsettings nmcli systemctl timedatectl"
 : >"$tmp/helpers.log" || exit 1
 for _helper in $helpers; do
     cat >"$tmp/helpers/$_helper" <<EOF || exit 1
@@ -749,6 +750,29 @@ written_settings() {
     until test "$(cat "$clocks_local")" = "$_want"; do
         if waited "the shell didn't turn 24-hour time off in $clocks_local, keeping its clocks" "$i"; then
             cat "$clocks_local" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    # The system's time zone: a link name refused, as for a clock, then a
+    # zone set with timedatectl, after which the clocks are looked up again
+    # for the local zone tide-tz reads.
+    _refused=$(ipc call settings setSystemZone US/Pacific) || exit 1
+    case $_refused in
+        "unknown time zone US/Pacific; "*"; not changing the time zone") ;;
+        *)
+            echo "FAIL: the shell should refuse the time zone US/Pacific, saying it's an unknown time zone; it answered: $_refused" >&2
+            exit 1
+            ;;
+    esac
+    _lookups=$(grep -c '^tide-tz ' "$tmp/helpers.log")
+    ipc call settings setSystemZone Asia/Tokyo >/dev/null || exit 1
+    i=0
+    until grep -qxF 'timedatectl set-timezone Asia/Tokyo' "$tmp/helpers.log" &&
+        test "$(grep -c '^tide-tz ' "$tmp/helpers.log")" -gt "$_lookups"; do
+        if waited "the shell didn't set the time zone to Asia/Tokyo with timedatectl and look the clocks up again" "$i"; then
             grep -v '^\[' "$log" >&2
             exit 1
         fi
