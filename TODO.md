@@ -76,6 +76,13 @@ once you have agreed with it or reversed it.
   look like buttons, which would hide a real keyboard named oddly. It's
   `connectedDevices` in `shell/lib/input.mjs`.
 
+- [ ] **The system's time zone is on the Clocks page.** It's local's
+  zone, which the page's list already marks, and it's typed as the list's
+  zones are. The alternative was a page of its own, or a searchable list
+  of `timedatectl list-timezones`, which the panel has no widget for. It's
+  the time zone row in `shell/SettingsWindow.qml` and `setSystemZone` in
+  `shell/ClockData.qml`.
+
 - [ ] **The Layouts page comes after Keys.** §16's table had it third;
   new pages go after the ones you ordered. Moving it is a line in `PAGES`
   in `shell/lib/settings.mjs` and the table row.
@@ -653,6 +660,9 @@ from the keyboard (`shell/shell_test.sh`).
     at once, and that a 12-hour bar still fits beside the title.
   - On a live session, check the page's fields take the keyboard and give
     it back as the Keyboard page's do, and that the bar changes at once.
+  - On a live session, check setting the time zone asks for a password
+    once, moves the bar's local clock at once, and that a cancel shows on
+    the page.
 - Keys (`shell/lib/keys.mjs`, `shell/KeysData.qml`) lists `hyprctl
   binds -j` as the shell starts and as the page shows. CI checks the shell
   lists them. Still to do:

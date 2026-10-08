@@ -2000,7 +2000,7 @@ tide's own, and links out for the rest:
 | Mouse | for every mouse, or one by name: speed, scroll speed, natural scrolling, left-handed |
 | Touchpad | for every touchpad, or one by name: the same, plus tap to click and off while typing |
 | Keyboard | for every keyboard, or one by name: layouts and their variants, repeat delay and rate |
-| Clocks | zones, order, labels, 24 h, dedupe-local |
+| Clocks | the system's time zone; zones, order, labels, 24 h, dedupe-local |
 | Keys | a read-only list of the current bindings, generated from the config |
 | Layouts | default layout per aspect ratio, `mfact`, master count, the rule for new windows |
 | Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
@@ -2064,6 +2064,19 @@ stays hand-written.
     otherwise leave a change unapplied, and a reload costs nothing.
 
 - **Clocks** sets the bar's zones, their order and their labels (§7.3).
+  It also sets the system's time zone, which is local's.
+  - The time zone row shows the local zone's ID. One typed and set with
+    Enter runs `timedatectl set-timezone`, for systemd-timedated to set.
+  - It's checked first as a zone the bar would take is: a canonical ID
+    (§7.3). Anything else is refused, and the page says why.
+  - systemd v258's polkit policy makes setting it `auth_admin_keep`
+    (`org.freedesktop.timedate1.set-timezone`), so it asks for a password
+    through the session's polkit agent. A failure, a cancel included, is
+    shown on the page and logged.
+  - Once it's set, the clocks are looked up again: `tide-tz` reads the
+    local zone as it starts, so the bar's local clock follows at once.
+  - With `$TZ` set in the session, local stays `$TZ`'s zone (§7.3), and the
+    page says so: the system's zone changes, the bar's local clock doesn't.
   - It shows the list the bar takes: `clocks.local.json`'s, else
     `clocks.json`'s, else the defaults. The first change copies that list
     into `clocks.local.json`, since a local list replaces the shared one

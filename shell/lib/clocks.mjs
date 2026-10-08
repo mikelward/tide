@@ -299,6 +299,22 @@ export function zoneFormError(zone) {
     return `unknown time zone ${zone}; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles`;
 }
 
+// Why `zone` can't be the system's time zone, or "": a canonical zone ID,
+// as a clock's must be (zoneFormError), which timedatectl takes as it is.
+export function systemZoneError(zone) {
+    if (zone === "") {
+        return "type a zone ID, such as Europe/London";
+    }
+    return zoneFormError(zone);
+}
+
+// What sets the system's time zone to `zone` (SPEC.md §16): timedatectl,
+// which asks systemd-timedated, which asks polkit, so it may ask for a
+// password. A zone systemZoneError passed can't look like an option.
+export function systemZoneCommand(zone) {
+    return ["timedatectl", "set-timezone", zone];
+}
+
 // What a clock added on the settings panel is labeled: its city, as the
 // zone ID names it, with spaces for underscores ("Los Angeles").
 export function cityLabel(zone) {

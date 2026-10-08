@@ -8,7 +8,7 @@ import {
     formatTime, formatLocal, barClocks, scrubbed, SCRUB_STEP, zoneError,
     zoneFormError, cityLabel, editableClocks, editedClocks, movedClock, withoutClock,
     relabeledClock, withClock, DEFAULT_SWITCHES, SWITCH_ROWS, parseClocksFile, withClockSwitch,
-    loadPlan, formatWall, lockClocks,
+    loadPlan, formatWall, lockClocks, systemZoneError, systemZoneCommand,
 } from "./clocks.mjs";
 
 function canonical(zone) {
@@ -549,4 +549,13 @@ test("the lock takes the clocks' switches as the bar does", () => {
     r = lockClocks(null, JSON.stringify({ clocks: [{ zone: "Asia/Kolkata", label: "IST" }], hour24: false }), null);
     assert.equal(r.state.switches.hour24, false, "a good list's switch is taken with it");
     assert.deepEqual(r.state.clocks, [{ zone: "Asia/Kolkata", label: "IST" }]);
+});
+
+test("the system's time zone is a canonical zone ID, set with timedatectl", () => {
+    assert.equal(systemZoneError("Europe/London"), "");
+    assert.equal(systemZoneError("UTC"), "");
+    assert.match(systemZoneError(""), /^type a zone ID/);
+    assert.match(systemZoneError("US/Pacific"), /^unknown time zone US\/Pacific; use a zone ID/, "a link name, as for a clock");
+    assert.match(systemZoneError("--help"), /^unknown time zone/, "nothing that looks like an option");
+    assert.deepEqual(systemZoneCommand("Asia/Kolkata"), ["timedatectl", "set-timezone", "Asia/Kolkata"]);
 });

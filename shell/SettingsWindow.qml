@@ -137,6 +137,13 @@ PanelWindow {
         function removeClock(zone: string): string {
             return ClockData.remove(undefined, zone);
         }
+        // Sets the system's time zone, as the Clocks page does: `qs -c tide
+        // ipc call settings setSystemZone Europe/London`. Answers why it
+        // didn't start, or ""; it may ask for a password, and a failure
+        // after that is logged.
+        function setSystemZone(zone: string): string {
+            return ClockData.setSystemZone(zone);
+        }
         // Turns one of the Clocks page's switches, hour24 or dedupeLocal,
         // on or off: `qs -c tide ipc call settings setClockSwitch hour24
         // false`. Answers why not, or "".
@@ -776,6 +783,85 @@ PanelWindow {
                         width: parent.width
                         topPadding: 6
                         spacing: 2
+
+                        // The system's time zone, local's: its ID, typed and
+                        // set with Enter, as a clock's label is. Setting it
+                        // may ask for a password.
+                        Item {
+                            width: clocks.width
+                            implicitHeight: 32
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Time zone"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Rectangle {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 220
+                                height: 26
+                                radius: 6
+                                color: Theme.surface2
+                                border.width: systemZone.activeFocus ? 1 : 0
+                                border.color: Theme.accent
+
+                                TextInput {
+                                    id: systemZone
+
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    anchors.rightMargin: 8
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    clip: true
+                                    text: clocks.localZone
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                    onAccepted: {
+                                        clocks.changed(ClockData.setSystemZone(text.trim()));
+                                        keys.forceActiveFocus();
+                                    }
+                                    Keys.onEscapePressed: keys.forceActiveFocus()
+                                    onActiveFocusChanged: {
+                                        if (!activeFocus) {
+                                            text = Qt.binding(() => clocks.localZone);
+                                        }
+                                    }
+
+                                    Text {
+                                        visible: systemZone.text === "" && !systemZone.activeFocus
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "such as Europe/London"
+                                        color: Theme.fgFaint
+                                        font: systemZone.font
+                                    }
+                                }
+                            }
+                        }
+
+                        // How setting it went, and why the bar may not
+                        // follow: a session with $TZ set keeps that zone.
+                        Text {
+                            readonly property string sessionZone: Quickshell.env("TZ") || ""
+
+                            visible: text !== ""
+                            x: 10
+                            width: clocks.width - 20
+                            bottomPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: ClockData.settingSystemZone ? "Setting the time zone…" : ClockData.systemZoneFailure !== "" ? ClockData.systemZoneFailure : sessionZone !== "" ? `TZ is ${sessionZone} in this session, so the bar keeps that zone` : ""
+                            color: ClockData.systemZoneFailure !== "" && !ClockData.settingSystemZone ? Theme.danger : Theme.fgDim
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
 
                         Repeater {
                             model: ClockData.listed

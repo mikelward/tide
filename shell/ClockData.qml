@@ -31,6 +31,10 @@ Singleton {
     readonly property var switchRows: Clocks.SWITCH_ROWS
     // Why the panel's last change couldn't be saved, or "".
     property string saveFailure: ""
+    // Why the last change to the system's time zone failed, or "", for the
+    // Clocks page; and whether one is under way.
+    property string systemZoneFailure: ""
+    property bool settingSystemZone: false
     property var table: null
     // The files' errors and which have been reported (shell/lib/report.mjs),
     // so each distinct error is a notification at most once per run of the
@@ -236,6 +240,39 @@ Singleton {
         }
         local.reload();
         return root.saveFailure;
+    }
+
+    // Sets the system's time zone, as the Clocks page does (SPEC.md §16).
+    // timedatectl asks systemd-timedated, which asks polkit, so it may ask
+    // for a password. Returns why it didn't start, or "": how it went comes
+    // later, in systemZoneFailure. Once it's set, the clocks are looked up
+    // again, since tide-tz reads the local zone as it starts.
+    function setSystemZone(zone) {
+        if (root.settingSystemZone) {
+            return "the time zone is still being set";
+        }
+        const error = Clocks.systemZoneError(zone);
+        if (error) {
+            return `${error}; not changing the time zone`;
+        }
+        root.systemZoneFailure = "";
+        root.settingSystemZone = true;
+        Launcher.run(Clocks.systemZoneCommand(zone), (ok, errors) => {
+            root.settingSystemZone = false;
+            if (!ok) {
+                root.systemZoneFailure = `couldn't set the time zone to ${zone}: ${errors.trim() || "timedatectl failed"}`;
+                console.warn(`tide: ${root.systemZoneFailure}`);
+                return;
+            }
+            // Again, the list a lookup still running has, else the good one.
+            const pending = root.lookup;
+            if (pending) {
+                root.lookUp(pending.clocks, pending.source, pending.switches);
+            } else {
+                root.lookUp(root.good, "");
+            }
+        });
+        return "";
     }
 
     // Drops whatever lookup is running: its result won't count.
