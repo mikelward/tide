@@ -290,11 +290,6 @@ once you have agreed with it or reversed it.
       `no_screen_share` layer rule to black it out of the stream. The
       alternative holds every popup during a share. It's `quiet` in
       `shell/NotificationData.qml`.
-- [ ] **The launcher isn't hidden from a screen share.** SPEC.md §12 puts
-      `no_screen_share` on popups, the notification center and the
-      launcher, but `conf`'s `hyprland.lua` sets it only on the
-      `tide-notifications` namespace. Add a `tide-launcher` layer rule and
-      its test in `hyprland_test.lua`.
 - [ ] **Do not disturb lasts until the shell restarts.** It survives a
       config reload (`PersistentProperties` in `shell/NotificationData.qml`),
       but a new shell starts with it off, so it can't be left on by
