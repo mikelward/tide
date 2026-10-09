@@ -268,20 +268,20 @@ test("an Enter while greetd checks isn't held, but the keys typed are kept", () 
     assert.equal(takes(state, { type: "submit" }), true);
 });
 
-test("another user can be picked except while a login is under way", () => {
+test("another user can be picked mid-login, but not once the session is starting", () => {
     assert.equal(canPickUser(INITIAL), true);
     let state = next(INITIAL, { type: "key", text: "x" }).state;
     assert.equal(canPickUser(state), true);
     state = next(state, { type: "submit" }).state;
-    assert.equal(canPickUser(state), false);
-    // A second prompt waiting for its answer is still the same login.
+    assert.equal(state.checking, true);
+    assert.equal(canPickUser(state), true);
     state = next(state, { type: "pam", text: "Password: ", isError: false, responseRequired: true }).state;
     state = next(state, { type: "pam", text: "Code: ", isError: false, responseRequired: true }).state;
     assert.equal(state.awaiting, true);
-    assert.equal(canPickUser(state), false);
-    state = next(state, { type: "key", text: "1" }).state;
-    state = next(state, { type: "submit" }).state;
-    assert.equal(canPickUser(state), false);
+    assert.equal(canPickUser(state), true);
     state = next(state, { type: "done", result: "failed" }).state;
     assert.equal(canPickUser(state), true);
+    state = next(next(state, { type: "submit" }).state, { type: "done", result: "success" }).state;
+    assert.equal(state.unlocked, true);
+    assert.equal(canPickUser(state), false);
 });

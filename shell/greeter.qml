@@ -116,7 +116,7 @@ ShellRoot {
     }
 
     // Another user: whatever greetd was doing for the last one stops, and
-    // the field starts over. Not while a login is under way
+    // the field starts over. Not once the session is starting
     // (Greeter.canPickUser), which the face shows by disabling the picker.
     function pickUser(name) {
         if (!Greeter.canPickUser(root.face)) {

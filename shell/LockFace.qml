@@ -57,8 +57,8 @@ Item {
     property var sessions: []
     property string sessionId: ""
     readonly property string sessionName: sessions.find(s => s.id === sessionId)?.name ?? ""
-    // Whether another user can be picked now; the greeter says no while a
-    // login is under way (Greeter.canPickUser).
+    // Whether another user can be picked now; the greeter says no once the
+    // session is starting (Greeter.canPickUser).
     property bool userPickable: true
     // Which picker's list is open: "", "session" or "user".
     property string menu: ""
