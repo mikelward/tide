@@ -866,27 +866,14 @@ SPEC.md §11's greeter is `tide-greeter`: Hyprland with
 installs it under `$(PREFIX)`, with a greetd config template. CI loads it in
 Quickshell under headless sway and logs in on a stand-in greetd
 (`shell/shell_test.sh`); nothing has run it under greetd or Hyprland yet.
-Still to do:
+`setup --tide` makes greetd the display manager (mikelward/scripts#288):
+it installs greetd and the template, gives the greeter user a home, builds
+Hyprland and Quickshell under `/opt` where the greeter user can run them,
+and adds the keyring to greetd's PAM stack. It switches only when everything
+greetd and the greeter run is root's alone, and `--no-greeter` switches
+back. The checks it doesn't make yet are in `scripts`' TODO.md, under
+*greetd in setup-tide*. Still to do:
 
-- `setup --tide` (scripts repo): make greetd the display manager. That
-  means:
-  - install greetd;
-  - put the template in `/etc/greetd/config.toml`, with the greeter user the
-    distro's package created;
-  - enable greetd in place of GDM or SDDM;
-  - give the greeter user a writable home, where the greeter remembers the
-    last login.
-
-  It's a switch with a lockout risk, so it wants a way back, and Plasma
-  stays a session at the new greeter.
-- The greeter user can't run the Hyprland and Quickshell that
-  `setup-tide` builds from source. It builds them under `~/.local/opt` and
-  links them from `/usr/local/bin`, and a home directory isn't readable by
-  other users (750 on Ubuntu). They need to go somewhere system-wide, such
-  as `/usr/local/opt`, before greetd can use them.
-- The keyring (SPEC.md §11): `pam_gnome_keyring` in greetd's PAM stack,
-  `auth optional` and `session optional ... auto_start`. That's
-  `/etc/pam.d/greetd`, the distro's file, so `setup --tide` owns the edit.
 - Try it on a real machine:
   - every monitor gets the face, and the keyboard goes to one of them;
   - the badge reads the system layout;
