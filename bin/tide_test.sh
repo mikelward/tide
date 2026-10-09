@@ -495,10 +495,69 @@ check "idle-suspend asks UPower whether it's on battery" \
     contains "$out" "busctl get-property org.freedesktop.UPower /org/freedesktop/UPower org.freedesktop.UPower OnBattery"
 check "on battery, idle-suspend suspends" contains "$out" "systemctl suspend"
 check "a clean idle-suspend says nothing" test ! -s "$tmp/err"
-run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+run XDG_RUNTIME_DIR="$runtime" FAKE_ON_BATTERY="b false" "$qs" idle-suspend
 check "on AC, idle-suspend exits 0" test $? -eq 0
 check "on AC, idle-suspend doesn't suspend" test "$(grep -c '^systemctl ' "$log")" -eq 0
 check "on AC, idle-suspend says nothing" test ! -s "$tmp/err"
+left=$(cat "$runtime/tide-idle-suspend")
+check "on AC, idle-suspend leaves the time for an unplug" test "$left" -ge "$before"
+check "and nothing half written" test ! -e "$runtime/tide-idle-suspend.tmp"
+# Unplugged with no one back since, it suspends, and the flag goes.
+run XDG_RUNTIME_DIR="$runtime" "$qs" idle-suspend --unplugged
+check "unplugged while idle, idle-suspend exits 0" test $? -eq 0
+check "unplugged while idle, idle-suspend suspends" contains "$(cat "$log")" "systemctl suspend"
+check "unplugged while idle, idle-suspend says nothing" test ! -s "$tmp/err"
+check "the flag counts once" test ! -e "$runtime/tide-idle-suspend"
+run XDG_RUNTIME_DIR="$runtime" "$qs" idle-suspend --unplugged
+check "with no flag, an unplug exits 0" test $? -eq 0
+check "with no flag, an unplug doesn't suspend" test "$(grep -c '^systemctl ' "$log")" -eq 0
+check "or ask UPower" test "$(grep -c '^busctl ' "$log")" -eq 0
+check "or say anything" test ! -s "$tmp/err"
+# Someone back: hypridle's step runs --cancel on the first input after it.
+printf '%s\n' "$left" >"$runtime/tide-idle-suspend"
+run XDG_RUNTIME_DIR="$runtime" "$qs" idle-suspend --cancel
+check "cancel exits 0" test $? -eq 0
+check "cancel removes the flag" test ! -e "$runtime/tide-idle-suspend"
+check "cancel doesn't suspend" test "$(grep -c '^systemctl ' "$log")" -eq 0
+check "cancel says nothing" test ! -s "$tmp/err"
+run XDG_RUNTIME_DIR="$runtime" "$qs" idle-suspend --unplugged
+check "after a cancel, an unplug doesn't suspend" test "$(grep -c '^systemctl ' "$log")" -eq 0
+run XDG_RUNTIME_DIR="$runtime" "$qs" idle-suspend --cancel
+check "cancel with no flag exits 0" test $? -eq 0
+check "and says nothing" test ! -s "$tmp/err"
+run XDG_RUNTIME_DIR= "$qs" idle-suspend --cancel
+check "cancel without XDG_RUNTIME_DIR exits 0" test $? -eq 0
+# Plugged back in by the time it asks: still idle, so the flag is left again.
+printf '%s\n' "$left" >"$runtime/tide-idle-suspend"
+run XDG_RUNTIME_DIR="$runtime" FAKE_ON_BATTERY="b false" "$qs" idle-suspend --unplugged
+check "back on AC, an unplug doesn't suspend" test "$(grep -c '^systemctl ' "$log")" -eq 0
+check "back on AC, the flag is left again" test -e "$runtime/tide-idle-suspend"
+# A flag that can't be removed would count again, so it doesn't count.
+rm "$runtime/tide-idle-suspend"
+mkdir -p "$runtime/tide-idle-suspend/x"
+run XDG_RUNTIME_DIR="$runtime" "$qs" idle-suspend --unplugged
+check "a flag that can't be removed fails an unplug" test $? -eq 1
+check "and doesn't suspend" test "$(grep -c '^systemctl ' "$log")" -eq 0
+check "and says so" contains "$(cat "$tmp/err")" "couldn't remove $runtime/tide-idle-suspend, so not suspending"
+run XDG_RUNTIME_DIR="$runtime" "$qs" idle-suspend --cancel
+check "one that can't be canceled fails" test $? -eq 1
+check "and says unplugging may still suspend" contains "$(cat "$tmp/err")" "so unplugging may still suspend"
+rm -r "$runtime/tide-idle-suspend"
+for bad in "--unplugged now" "--cancel now" "--unplugged --cancel" "--soon"; do
+    # shellcheck disable=SC2086  # each is the arguments
+    run XDG_RUNTIME_DIR="$runtime" "$qs" idle-suspend $bad
+    check "idle-suspend $bad is a usage error" test $? -eq 2
+done
+run XDG_RUNTIME_DIR= FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+check "on AC without XDG_RUNTIME_DIR, idle-suspend fails" test $? -eq 1
+check "and says unplugging won't suspend" contains "$(cat "$tmp/err")" "no XDG_RUNTIME_DIR to note it in, so unplugging won't suspend"
+check "and doesn't suspend" test "$(grep -c '^systemctl ' "$log")" -eq 0
+mkdir "$runtime/tide-idle-suspend.tmp"
+run XDG_RUNTIME_DIR="$runtime" FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+check "on AC with a flag that can't be written, idle-suspend fails" test $? -eq 1
+check "and says so" contains "$(cat "$tmp/err")" "couldn't write $runtime/tide-idle-suspend, so unplugging won't suspend"
+check "and names what blocks it" contains "$(cat "$tmp/err")" "couldn't remove $runtime/tide-idle-suspend.tmp"
+rmdir "$runtime/tide-idle-suspend.tmp"
 run FAKE_BUSCTL_STATUS=1 FAKE_ON_BATTERY="Failed to get property" "$qs" idle-suspend
 check "without UPower, idle-suspend fails" test $? -eq 1
 check "without UPower, idle-suspend doesn't suspend" test "$(grep -c '^systemctl ' "$log")" -eq 0
@@ -514,17 +573,17 @@ check "idle-suspend takes no arguments" test $? -eq 2
 # Suspend on AC, as the shell writes it for idle-suspend.
 mkdir -p "$tmp/run-config/hypr"
 printf '%s\n' '# Written by tide' "\$tide_idle_suspend_on_ac = 1" >"$tmp/run-config/hypr/tide-idle-suspend.conf"
-run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+run XDG_RUNTIME_DIR="$runtime" FAKE_ON_BATTERY="b false" "$qs" idle-suspend
 check "with suspend on AC, idle-suspend exits 0 on AC" test $? -eq 0
 check "with suspend on AC, idle-suspend suspends on AC" contains "$(cat "$log")" "systemctl suspend"
 check "with suspend on AC, idle-suspend needn't ask UPower" test "$(grep -c '^busctl ' "$log")" -eq 0
 check "with suspend on AC, idle-suspend says nothing" test ! -s "$tmp/err"
 printf '%s\n' "\$tide_idle_suspend_on_ac = 0" >"$tmp/run-config/hypr/tide-idle-suspend.conf"
-run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+run XDG_RUNTIME_DIR="$runtime" FAKE_ON_BATTERY="b false" "$qs" idle-suspend
 check "with suspend on AC off, idle-suspend doesn't suspend on AC" test "$(grep -c '^systemctl ' "$log")" -eq 0
 rm "$tmp/run-config/hypr/tide-idle-suspend.conf"
 mkdir "$tmp/run-config/hypr/tide-idle-suspend.conf"
-run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+run XDG_RUNTIME_DIR="$runtime" FAKE_ON_BATTERY="b false" "$qs" idle-suspend
 check "an unreadable Suspend on AC file is reported" contains "$(cat "$tmp/err")" "couldn't read $tmp/run-config/hypr/tide-idle-suspend.conf, so suspending on battery only"
 check "and suspends on battery only" test "$(grep -c '^systemctl ' "$log")" -eq 0
 run "$qs" idle-suspend
@@ -534,19 +593,19 @@ rmdir "$tmp/run-config/hypr/tide-idle-suspend.conf"
 # reported too, not taken for no file yet.
 rmdir "$tmp/run-config/hypr"
 : >"$tmp/run-config/hypr"
-run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+run XDG_RUNTIME_DIR="$runtime" FAKE_ON_BATTERY="b false" "$qs" idle-suspend
 check "a directory that can't be searched for it is reported" contains "$(cat "$tmp/err")" "couldn't read $tmp/run-config/hypr/tide-idle-suspend.conf, so suspending on battery only"
 check "and doesn't suspend on AC" test "$(grep -c '^systemctl ' "$log")" -eq 0
 rm "$tmp/run-config/hypr"
-run FAKE_ON_BATTERY="b false" "$qs" idle-suspend
+run XDG_RUNTIME_DIR="$runtime" FAKE_ON_BATTERY="b false" "$qs" idle-suspend
 check "no timings directory yet says nothing" test ! -s "$tmp/err"
 check "and doesn't suspend on AC" test "$(grep -c '^systemctl ' "$log")" -eq 0
 # So is one higher up the path: the config directory itself, say.
 : >"$tmp/run-config-file"
-run FAKE_ON_BATTERY="b false" XDG_CONFIG_HOME="$tmp/run-config-file" "$qs" idle-suspend
+run XDG_RUNTIME_DIR="$runtime" FAKE_ON_BATTERY="b false" XDG_CONFIG_HOME="$tmp/run-config-file" "$qs" idle-suspend
 check "a config directory that can't be searched is reported" contains "$(cat "$tmp/err")" "couldn't read $tmp/run-config-file/hypr/tide-idle-suspend.conf, so suspending on battery only"
 rm "$tmp/run-config-file"
-run FAKE_ON_BATTERY="b false" XDG_CONFIG_HOME="$tmp/no-such-config" "$qs" idle-suspend
+run XDG_RUNTIME_DIR="$runtime" FAKE_ON_BATTERY="b false" XDG_CONFIG_HOME="$tmp/no-such-config" "$qs" idle-suspend
 check "no config directory at all says nothing" test ! -s "$tmp/err"
 
 if command -v shellcheck >/dev/null 2>&1; then
