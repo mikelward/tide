@@ -2,10 +2,10 @@
 -- in it but the greeter. greetd runs `tide-greeter` as its greeter user,
 -- which runs Hyprland with this file. Every monitor gets its preferred
 -- mode, the keyboard is the system's, none of Hyprland's own popups show,
--- and there are no key bindings: Hyprland's built-in VT switch is the only
--- key it acts on. It runs one program, the greeter, and exits when the
--- greeter does, which is once greetd has the session to start; greetd
--- then starts it.
+-- input turns the displays back on, and there are no key bindings:
+-- Hyprland's built-in VT switch is the only key it acts on. It runs one
+-- program, the greeter, and exits when the greeter does, which is once
+-- greetd has the session to start; greetd then starts it.
 --
 -- tide-greeter passes what this needs in the environment:
 --   TIDE_GREETER_QML      the greeter's QML (share/tide/shell/greeter.qml)
@@ -59,6 +59,11 @@ hl.config({
         -- so start-hyprland's watchdog has nothing to add.
         disable_watchdog_warning = true,
         disable_hyprland_guiutils_check = true,
+        -- The greeter turns the displays off when no one's there (SPEC.md
+        -- §11); a key or a move turns them back on, before the greeter
+        -- hears of it.
+        key_press_enables_dpms = true,
+        mouse_move_enables_dpms = true,
     },
     ecosystem = {
         no_update_news = true,

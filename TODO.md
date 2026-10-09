@@ -355,6 +355,12 @@ once you have agreed with it or reversed it.
 - [ ] **Monocle with nothing hidden shows `[M]`, not `[0]`.** SPEC.md §6.1
       says monocle shows the hidden count; with one window there's nothing
       hidden to count. It's `layoutSymbol` in `shell/lib/layouts.mjs`.
+- [ ] **The greeter idles at the lock's default times, with no dim.**
+      SPEC.md §11 said nothing about it; the screensaver at 5 minutes and
+      the displays off at 5:30 are `idle.json`'s defaults. A dim would
+      need the backlight, which the greeter user may not be allowed to
+      set. The times are two constants in `shell/lib/greeter.mjs`, and a
+      dim could be added beside them.
 
 ## Transitional shell (M2)
 
@@ -910,8 +916,9 @@ back. The checks it doesn't make yet are in `scripts`' TODO.md, under
   (quickshell-mirror/quickshell#1266). CI logs in through it on the
   stand-in greetd. On a real machine, check a wrong password, then the
   right one at once, logs in, with no "session is not ready".
-- The greeter has no idle: no dim, no screensaver and no DPMS, so a
-  machine left at the greeter keeps its screens lit.
+- On a real machine, check the greeter's idle (SPEC.md §11): the
+  screensaver after 5 minutes, the displays off at 5 minutes 30 seconds,
+  and a key, a move and a click each turn them back on.
 - SPEC.md §15 has the greeter follow the default light/dark schedule. Its
   face is the lock's, which is dark only, like the lock.
 
