@@ -175,6 +175,26 @@ export function selectionLine(option, reuse) {
     return `[SELECTION]${reuse ? "r" : ""}/${option.key}`;
 }
 
+// The command that writes `line` to the picker's pipe at `reply`. dd's
+// nocreat opens the path or fails: a pipe the picker has removed, at any
+// moment before the write, fails it rather than leaving a file that reads
+// as delivered. A pipe nobody reads blocks the open, so it's bounded.
+export function answerCommand(line, reply) {
+    return ["timeout", "5", "sh", "-c", 'printf "%s\\n" "$1" | dd of="$2" conv=nocreat status=none', "sh", line, reply];
+}
+
+// What the shell does once that write ends, with `code` its exit status
+// and `kind` what the answer shares ("" for no): the kind to tell
+// ShareData, only once the picker has the answer, since a choice that never
+// reached xdph has no stream to pair with (§12); and a warning for a write
+// that failed, a picker that stopped waiting among them.
+export function answerOutcome(code, kind) {
+    if (code === 0) {
+        return { chose: kind || null, warning: null };
+    }
+    return { chose: null, warning: `answering tide-share-picker failed (exit ${code}), so it went nowhere` };
+}
+
 // The share button's label for the highlighted option.
 export function shareLabel(option) {
     if (!option) {
