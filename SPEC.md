@@ -1404,21 +1404,33 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
     Chrome.
 - **The picker.** xdph's `screencopy:custom_picker_binary` runs
   `tide-share-picker`, a small script.
-  - It reads xdph's two lists: `XDPH_OUTPUT_SHARING_LIST`, entries of
-    `<len>:<name>:<x>:<y>:<w>:<h>;`, and `XDPH_WINDOW_SHARING_LIST`, entries
-    of `<id>[HC>]<class>[HT>]<title>[HE>]<addr>[HA>]`.
-  - It asks the running shell (`qs ipc`) to show the dialog.
+  - It reads xdph's window list, `XDPH_WINDOW_SHARING_LIST`: entries of
+    `<id>[HC>]<class>[HT>]<title>[HE>]<addr>[HA>]`, the address Hyprland's
+    in decimal. xdph 1.4.1 sends no list of outputs; the shell lists them
+    itself.
+  - It asks the running shell (`qs ipc`) to show the dialog, and waits on a
+    pipe in `$XDG_RUNTIME_DIR` for the answer, since the IPC call returns
+    first. After 5 minutes with no answer it closes the dialog and cancels.
   - It prints one line: `[SELECTION]<flags>/screen:<output>`,
     `…/window:<id>`, or `…/region:<output>@<x>,<y>,<w>,<h>`. No
     `[SELECTION]` means cancel.
+  - With no tide shell running, as in a plain Hyprland login with the same
+    `xdph.conf`, it runs xdph's own `hyprland-share-picker` if that's
+    installed, so a share still works.
 
   The dialog offers:
   - **Screens:** each output, with a live `ScreencopyView` thumbnail.
-  - **Windows:** every window, current workspace first.
-  - **Area:** a **16:9 slice** centered on the ultrawide. For 3440×1440 that
-    is `region:DP-1@440,0,2560,1440`. Or drag a region.
-  - **Default on an ultrawide:** the focused window, since a whole 3440×1440
-    screen arrives letterboxed and unreadable in Meet.
+  - **Windows:** every window, current workspace first, each with a
+    thumbnail.
+  - **Area:** a **16:9 slice** centered on each monitor wider than that, in
+    its logical pixels. For 3440×1440 at scale 1 that is
+    `region:DP-1@440,0,2560,1440`.
+  - **Default on an ultrawide** (2:1 or wider): the focused window, since a
+    whole 3440×1440 screen arrives letterboxed and unreadable in Meet.
+    Elsewhere it's the focused monitor.
+
+  The arrow keys move through the options, Enter or a double-click shares
+  the highlighted one, and Escape or Cancel says no.
 - **Chrome asks more than once.** Chromium opens 2–4 portal sessions for one
   share.
   - The picker still **shows the dialog for every request**, because it isn't

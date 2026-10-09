@@ -116,6 +116,8 @@ if test "\$1" = ipc; then
     case "\$*" in
         *"call launcher open"*) : >"\$XDG_RUNTIME_DIR/launcher-open" ;;
         *"call settings open"*) : >"\$XDG_RUNTIME_DIR/settings-open" ;;
+        *"call sharepicker pick \$XDG_RUNTIME_DIR/"*) printf '%s' "\$7" >"\$XDG_RUNTIME_DIR/sharepicker-open" && echo shown ;;
+        *"call sharepicker pick "*) echo "refused: \$7 isn't a tide-share-picker pipe" ;;
         *"call settings setSuspendOnAC true"*) : >"\$XDG_RUNTIME_DIR/idle-set" ;;
         *"call settings setDevice logitech-usb-receiver speed 0.25"*) : >"\$XDG_RUNTIME_DIR/input-set" ;;
         *"call settings setLayout newWindow top"*) : >"\$XDG_RUNTIME_DIR/layouts-set" ;;
@@ -499,7 +501,15 @@ focused="echo '[1.0] {Default Queue} wl_keyboard#3.enter(1, wl_surface#2, array[
 typed='until test -s "$XDG_RUNTIME_DIR/typed"; do sleep 0.1; done; rm "$XDG_RUNTIME_DIR/typed"'
 ran="$opened; $focused; $typed; tide launch --app tide-test-probe -- tide-test-probe --flag"
 settings_opened='until test -e "$XDG_RUNTIME_DIR/settings-open"; do sleep 0.1; done'
-launcher="$ran; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor"
+settings_ran="$ran; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor"
+# Then the share picker opens on tide-share-picker's pipe, takes the
+# keyboard, and once its keys are typed, writes ANSWER there.
+share_opened='until test -s "$XDG_RUNTIME_DIR/sharepicker-open"; do sleep 0.1; done'
+shared() {
+    printf '%s; %s; %s; printf "%%s\\n" "%s" >"$(cat "$XDG_RUNTIME_DIR/sharepicker-open")"' \
+        "$share_opened" "$focused" "$typed" "$1"
+}
+launcher="$settings_ran; $(shared '[SELECTION]r/window:7')"
 # What a greeter does once the login step starts it: it takes the keyboard,
 # then logs in on the passwords typed, as greeter_client.py's MODE says.
 login_as() {
@@ -553,6 +563,8 @@ check "a launcher that runs the app typed passes" contains "$out" "ok: the launc
 check "having typed the query and Enter" test "$(head -n 1 "$tmp/clean/typed")" = cafepro
 check "and a settings panel that opens the Network page's app passes" contains "$out" "ok: the settings panel changes page with the arrows and opens the page's app"
 check "having pressed Down twice and Enter" test "$(sed -n 2p "$tmp/clean/typed")" = "-k Down -k Down -k Return"
+check "and a share picker that answers the window chosen passes" contains "$out" "ok: the share picker answers tide-share-picker's pipe with the window chosen"
+check "having pressed Right and Enter" test "$(sed -n 3p "$tmp/clean/typed")" = "-k Right -k Return"
 
 stubs "$tmp/runs-nothing" "exit 0" "$loaded" ":" "$opened; $focused; $typed"
 run "$tmp/runs-nothing"
@@ -584,6 +596,16 @@ stubs "$tmp/settings-unfocused" "exit 0" "$loaded" ":" "$ran; $settings_opened"
 run "$tmp/settings-unfocused"
 check "a settings panel that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the settings panel didn't take the keyboard in 2 s"
+
+stubs "$tmp/share-wrong" "exit 0" "$loaded" ":" "$settings_ran; $(shared '[SELECTION]/screen:HEADLESS-1')"
+run "$tmp/share-wrong"
+check "a share picker that answers the wrong choice fails" test "$code" -ne 0
+check "and says what it answered" contains "$out" "it answered: [SELECTION]/screen:HEADLESS-1"
+
+stubs "$tmp/share-unfocused" "exit 0" "$loaded" ":" "$settings_ran; $share_opened"
+run "$tmp/share-unfocused"
+check "a share picker that never takes the keyboard fails" test "$code" -ne 0
+check "and says so" contains "$out" "the share picker didn't take the keyboard in 2 s"
 
 run "$tmp/clean"
 check "a server that records what it's sent passes" contains "$out" "ok: the notification server takes notifications and records them"
@@ -894,7 +916,7 @@ echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
 check "a lock that unlocks on the right password passes" test "$code" -eq 0
 check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
-check "having typed a wrong password, then the right one" test "$(sed -n 3,4p "$tmp/unlocks/typed")" = "not-pw
+check "having typed a wrong password, then the right one" test "$(sed -n 4,5p "$tmp/unlocks/typed")" = "not-pw
 pw"
 check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
 
@@ -951,7 +973,7 @@ run "$tmp/clean"
 check "a greeter that logs in to tide on the right password passes" \
     contains "$out" "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
 check "having typed a wrong password, then the right one, then the code" \
-    test "$(sed -n 3,5p "$tmp/clean/typed")" = "not-tide-greeter-test
+    test "$(sed -n 4,6p "$tmp/clean/typed")" = "not-tide-greeter-test
 tide-greeter-test
 246810"
 
