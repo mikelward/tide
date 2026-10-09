@@ -1151,8 +1151,11 @@ today's `hypridle.conf`:
 - **Unplugging while idle.** If you unplug after the 30 minutes have
   passed, the machine suspends then. The 30-minute step runs
   `tide idle-suspend`, which suspends on battery and otherwise leaves
-  a flag. The shell checks that flag when UPower reports the switch to
-  battery, and any input clears it.
+  a flag, `$XDG_RUNTIME_DIR/tide-idle-suspend`. The first input after the
+  step clears it: the step's `on-resume` runs `tide idle-suspend
+  --cancel`. When UPower reports the switch to battery, the shell runs
+  `tide idle-suspend --unplugged`, which suspends if the flag is still
+  there.
 
 - **Undoing the dim.** The dim listener's `on-resume` restores the saved
   backlight level (`brightnessctl -r` after `brightnessctl -s set 10%`)

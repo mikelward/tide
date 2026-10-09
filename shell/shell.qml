@@ -45,6 +45,9 @@ ShellRoot {
     // The polkit prompt (opt-in; see PolkitData.qml), which does the same.
     PolkitPrompt {}
 
+    // Suspends on unplugging after the idle suspend step skipped it on AC.
+    UnplugSuspend {}
+
     // hypridle's timings and the mice's and touchpads' settings are
     // written from the start (IdleData, InputData), not when the settings
     // panel first shows them.

@@ -81,16 +81,22 @@
 #     only picks the face. Without XDG_RUNTIME_DIR, or if the flag can't
 #     be written, it still locks, on the password face, and says why.
 #
-#   tide idle-suspend
+#   tide idle-suspend [--unplugged | --cancel]
 #
 #     Suspends for idleness: hypridle's 30-minute step runs it in place of
 #     `systemctl suspend` (SPEC.md §10). It suspends only on battery, as
-#     UPower reports it; on AC it does nothing, and the displays just stay
-#     off, unless the Idle page's Suspend on AC is on, as the shell writes
-#     it to ~/.config/hypr/tide-idle-suspend.conf. If it can't tell, it
-#     says so and exits 1 without suspending. A failed suspend exits with
-#     its status: polkit refuses one from a session in the background
-#     ("Access denied").
+#     UPower reports it; on AC the displays just stay off, unless the Idle
+#     page's Suspend on AC is on, as the shell writes it to
+#     ~/.config/hypr/tide-idle-suspend.conf. If it can't tell, it says so
+#     and exits 1 without suspending. A failed suspend exits with its
+#     status: polkit refuses one from a session in the background ("Access
+#     denied").
+#     On AC, it leaves a flag, $XDG_RUNTIME_DIR/tide-idle-suspend, so
+#     unplugging later still suspends. The shell runs it with --unplugged
+#     when UPower reports the switch to battery: if the flag is there, it
+#     removes it and suspends as above. hypridle's suspend step runs it
+#     with --cancel on the first input after the step, which removes the
+#     flag: someone is back.
 #
 #   tide prompt-focus
 #
@@ -115,7 +121,7 @@ usage() {
     echo "       $prog autostart-allowed UNIT" >&2
     echo "       $prog brightness STEP" >&2
     echo "       $prog idle-lock" >&2
-    echo "       $prog idle-suspend" >&2
+    echo "       $prog idle-suspend [--unplugged | --cancel]" >&2
     echo "       $prog prompt-focus" >&2
     echo "       $prog doctor" >&2
     exit 2
@@ -515,8 +521,75 @@ idle_lock() {
     return "$status"
 }
 
+# Leaves the time this idle suspend was skipped for being on AC, for
+# `idle-suspend --unplugged`. Written whole, then renamed, so it's never
+# read half written.
+idle_suspend_flag() {
+    dir=${XDG_RUNTIME_DIR:-}
+    if test -z "$dir" || ! test -d "$dir"; then
+        echo "$prog idle-suspend: on AC, and no XDG_RUNTIME_DIR to note it in, so unplugging won't suspend" >&2
+        return 1
+    fi
+    flag=$dir/tide-idle-suspend
+    if date +%s > "$flag.tmp" && mv -f "$flag.tmp" "$flag"; then
+        return 0
+    fi
+    echo "$prog idle-suspend: on AC, and couldn't write $flag, so unplugging won't suspend" >&2
+    if ! err=$(rm -f "$flag.tmp" 2>&1); then
+        echo "$prog idle-suspend: couldn't remove $flag.tmp, which blocks the flag: $err" >&2
+    fi
+    return 1
+}
+
+# For `idle-suspend --unplugged`: 0 if there's a flag idle_suspend_flag
+# left, which it removes; 1 if there's none, since no suspend was skipped
+# or someone has been back since; 2, saying why, if it can't be removed,
+# since it would count again.
+idle_suspend_unplugged() {
+    dir=${XDG_RUNTIME_DIR:-}
+    test -n "$dir" || return 1
+    flag=$dir/tide-idle-suspend
+    test -e "$flag" || return 1
+    if ! err=$(rm -f "$flag" 2>&1); then
+        echo "$prog idle-suspend: couldn't remove $flag, so not suspending: $err" >&2
+        return 2
+    fi
+}
+
+# For `idle-suspend --cancel`: someone is back, so an unplug no longer
+# suspends.
+idle_suspend_cancel() {
+    dir=${XDG_RUNTIME_DIR:-}
+    test -n "$dir" || return 0
+    flag=$dir/tide-idle-suspend
+    if ! err=$(rm -f "$flag" 2>&1); then
+        echo "$prog idle-suspend: couldn't remove $flag, so unplugging may still suspend: $err" >&2
+        return 1
+    fi
+}
+
 idle_suspend() {
-    test $# -eq 0 || usage
+    case $# in
+        0) ;;
+        1)
+            case "$1" in
+                --unplugged)
+                    idle_suspend_unplugged
+                    case $? in
+                        0) ;;
+                        1) return 0 ;;
+                        *) return 1 ;;
+                    esac
+                    ;;
+                --cancel)
+                    idle_suspend_cancel
+                    return
+                    ;;
+                *) usage ;;
+            esac
+            ;;
+        *) usage ;;
+    esac
     # Suspend on AC, as the shell wrote it beside hypridle's timings, in a
     # file of its own so changing it doesn't restart hypridle; off with no
     # file yet, as it is by default.
@@ -545,7 +618,10 @@ idle_suspend() {
         fi
         case "$power" in
             "b true") ;;
-            "b false") return 0 ;;
+            "b false")
+                idle_suspend_flag
+                return
+                ;;
             *)
                 echo "$prog idle-suspend: UPower answered '$power' for OnBattery, so not suspending" >&2
                 return 1

@@ -355,6 +355,17 @@ once you have agreed with it or reversed it.
 - [ ] **Monocle with nothing hidden shows `[M]`, not `[0]`.** SPEC.md §6.1
       says monocle shows the hidden count; with one window there's nothing
       hidden to count. It's `layoutSymbol` in `shell/lib/layouts.mjs`.
+- [ ] **Input clears the unplug flag from hypridle, not the shell.**
+      Taken on autopilot (maintainer, 2026-10-09). The first version of
+      mikelward/tide#182 had the shell keep the time of the last input and
+      `tide idle-suspend --unplugged` compare it with the flag's, and review
+      found five edges in that comparison: a shell restart, a clock
+      stepped back, and input around the check. Now the suspend listener
+      in `conf` runs `tide idle-suspend --cancel` on resume, as SPEC.md
+      §10's "any input clears it" reads, and nothing compares times. The
+      cost is one line in `conf`'s `hypridle.conf`
+      (mikelward/conf#414), which has to land first; going back is
+      reverting both.
 - [ ] **The greeter idles at the lock's default times, with no dim.**
       SPEC.md §11 said nothing about it; the screensaver at 5 minutes and
       the displays off at 5:30 are `idle.json`'s defaults. A dim would
@@ -860,9 +871,20 @@ Hyprland yet. Still to do:
   locking.
 - Crash it on purpose and walk the three ways out (§10).
 - `tide idle-suspend` is hypridle's 30-minute step in `conf`: it suspends
-  on battery only. It doesn't leave the flag for unplugging while idle
-  yet, and the shell doesn't watch for the switch to battery, so
-  unplugging after the 30 minutes doesn't suspend (§10).
+  on battery only, and on AC leaves the flag for unplugging while idle,
+  which `shell/UnplugSuspend.qml` acts on (§10, `shell/lib/unplug.mjs`),
+  and the step's `on-resume` clears (mikelward/conf#414). UPower is on the
+  system bus, which the load test doesn't fake, so the switch to battery
+  is only driven in node. On a real session, check that unplugging after
+  the 30 minutes suspends, and that unplugging after coming back to the
+  machine doesn't. Two edges are left:
+  - Input in the moment between `--unplugged` taking the flag and logind
+    suspending still suspends. Logind takes no "unless there's input"
+    condition, so no design removes it.
+  - A hypridle restarted after the flag was left, by the shell applying
+    new Idle timings or by a crash, has no step to resume, so input
+    doesn't clear the flag and a later unplug suspends. Open question:
+    have the shell clear the flag when it restarts hypridle, or leave it.
 - Keep Hyprland's own notifications off the lock. One showed on the lock
   screen (maintainer, 2026-10-08). tide's popups can't show there: once the
   lock client has locked, Hyprland 0.56.2 draws no layer except one with
