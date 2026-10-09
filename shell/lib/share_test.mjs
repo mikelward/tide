@@ -1,7 +1,7 @@
 // Tests for share.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isShareNode, shareLinks, liveShares, holdsPopups, sharingPill, PAIRING, PAIR_MS, chose, nodesSeen, settle, settleIn, kindOf } from "./share.mjs";
+import { isShareNode, shareLinks, liveShares, holdsPopups, sharingPill, PAIRING, PAIR_MS, chose, nodesSeen, settle, settleIn, kindOf, shareRows } from "./share.mjs";
 
 const ACTIVE = 4;
 const PAUSED = 3;
@@ -30,12 +30,13 @@ test("a share is live while something actively consumes it", () => {
 });
 
 // Runs steps from PAIRING, settling after each as ShareData does:
-// ["chose", kind, time], ["nodes", ids, time] or ["settle", null, time].
+// ["chose", kind, time, label], ["nodes", ids, time] or
+// ["settle", null, time].
 function pair(steps) {
     let state = PAIRING;
-    for (const [what, arg, time] of steps) {
+    for (const [what, arg, time, label] of steps) {
         if (what === "chose") {
-            state = chose(state, arg, time);
+            state = chose(state, arg, time, label);
         } else if (what === "nodes") {
             state = nodesSeen(state, arg, time);
         }
@@ -159,4 +160,30 @@ test("only the links out of share nodes are bound", () => {
 test("the Sharing pill shows while any share is live", () => {
     assert.equal(sharingPill([]), false);
     assert.equal(sharingPill([{ id: 40, name: "xdph-streaming-0" }]), true);
+});
+
+test("the Sharing pill's popover names what each share is", () => {
+    const s = pair([
+        ["chose", "window", 1000, "Meet - Design review"], ["nodes", [40], 2000],
+        ["chose", "region", 20000, "16:9 in the middle of DP-1"], ["nodes", [40, 41], 21000],
+        ["chose", "screen", 40000, "eDP-1"], ["nodes", [40, 41, 42], 41000],
+        settled(41000),
+    ]);
+    assert.deepEqual(shareRows([share(40), share(41), share(42)], s), [
+        { icon: "focus-windows-symbolic", label: "Window: Meet - Design review" },
+        { icon: "selection-mode-symbolic", label: "Area: 16:9 in the middle of DP-1" },
+        { icon: "video-display-symbolic", label: "Screen: eDP-1" },
+    ]);
+});
+
+test("a share the picker didn't name says so in the popover", () => {
+    assert.deepEqual(shareRows([share(40)], PAIRING), [
+        { icon: "video-display-symbolic", label: "Not chosen in tide's picker" },
+    ]);
+    // Nor has a pairing that hasn't settled, nor a choice with no label.
+    const pending = pair([["chose", "window", 1000, "Meet"], ["nodes", [40], 2000]]);
+    assert.equal(shareRows([share(40)], pending)[0].label, "Not chosen in tide's picker");
+    const bare = pair([["chose", "window", 1000], ["nodes", [40], 2000], settled(2000)]);
+    assert.deepEqual(shareRows([share(40)], bare), [{ icon: "focus-windows-symbolic", label: "A window" }]);
+    assert.deepEqual(shareRows([], PAIRING), []);
 });

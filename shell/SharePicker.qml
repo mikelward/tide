@@ -67,17 +67,18 @@ PanelWindow {
     }
 
     // Writes `line` to the open request's pipe, empty for no, and closes.
-    // `kind` is what it shares, if anything, which ShareData hears only once
-    // the picker has the answer: a choice that never reached xdph has no
-    // stream to pair with (§12). A pipe that's gone means the picker gave
-    // up, and the write fails.
-    function answer(line, kind) {
+    // `kind` is what it shares, if anything, and `label` names it, which
+    // ShareData hears only once the picker has the answer: a choice that
+    // never reached xdph has no stream to pair with (§12). A pipe that's
+    // gone means the picker gave up, and the write fails.
+    function answer(line, kind, label) {
         if (root.reply === "") {
             return;
         }
         writer.createObject(root, {
             command: Picker.answerCommand(line, root.reply),
-            kind: kind ?? ""
+            kind: kind ?? "",
+            label: label ?? ""
         });
         root.close();
     }
@@ -97,7 +98,7 @@ PanelWindow {
             key: root.option.key,
             time: Date.now()
         };
-        root.answer(Picker.selectionLine(root.option, root.reuse), root.option.kind);
+        root.answer(Picker.selectionLine(root.option, root.reuse), root.option.kind, root.option.label);
     }
 
     function reveal() {
@@ -160,6 +161,7 @@ PanelWindow {
 
             // What the answer shares, for ShareData once it's written.
             property string kind: ""
+            property string label: ""
 
             Component.onCompleted: running = true
             stderr: SplitParser {
@@ -168,9 +170,9 @@ PanelWindow {
             onExited: (code, status) => {
                 const outcome = Picker.answerOutcome(code, write.kind);
                 // For the stream that follows, so a window share holds no
-                // popups.
+                // popups and the Sharing pill can say what's shared.
                 if (outcome.chose) {
-                    ShareData.chose(outcome.chose);
+                    ShareData.chose(outcome.chose, write.label);
                 }
                 if (outcome.warning) {
                     console.warn(`share picker: ${outcome.warning}`);

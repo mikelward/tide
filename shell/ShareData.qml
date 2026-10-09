@@ -27,6 +27,8 @@ Singleton {
     property var pairing: Share.PAIRING
     readonly property var shareNodes: Pipewire.nodes.values.filter(n => Share.isShareNode(n)).map(n => n.id)
     readonly property bool holdingPopups: Share.holdsPopups(root.shares, root.pairing)
+    // What each live share is, for the Sharing pill's popover (§7.4).
+    readonly property var rows: Share.shareRows(root.shares, root.pairing)
     // Popups held during the current or last share, for the center's
     // banner. A new share starts the count again, and so does seeing the
     // banner after the share has ended.
@@ -42,9 +44,10 @@ Singleton {
     // Streams already there at startup have no choice to pair with.
     Component.onCompleted: root.apply(Share.nodesSeen(root.pairing, root.shareNodes, Date.now()))
 
-    // The share picker's choice: "screen", "window" or "region".
-    function chose(kind) {
-        root.apply(Share.chose(root.pairing, kind, Date.now()));
+    // The share picker's choice: "screen", "window" or "region", and the
+    // option's label.
+    function chose(kind, label) {
+        root.apply(Share.chose(root.pairing, kind, Date.now(), label));
     }
 
     // A pairing holds popups until PAIR_MS passes without a second node,

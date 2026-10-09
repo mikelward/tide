@@ -3,7 +3,7 @@ import "lib/share.mjs" as Share
 
 // The red Sharing pill (SPEC.md §7.4): shown while a screen share is live
 // (ShareData), so you can see from any monitor that the screen is going
-// out. What's shared and stopping it are the app's business for now.
+// out. A click says what's shared; stopping it is the app's business.
 Rectangle {
     id: root
 
@@ -34,5 +34,15 @@ Rectangle {
             font.pixelSize: 12
             font.weight: Font.DemiBold
         }
+    }
+
+    TapHandler {
+        onTapped: popover.toggle()
+    }
+
+    SharingPopover {
+        id: popover
+
+        icon: root
     }
 }
