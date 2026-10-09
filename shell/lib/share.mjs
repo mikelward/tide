@@ -29,9 +29,10 @@ export function liveShares(nodes, linkGroups, ACTIVE) {
 export const PAIR_MS = 5000;
 
 // What the shell knows of each share's kind: the picker's choices still
-// waiting for a stream, each share node seen and when, the kind paired with
-// a node and when (pending until PAIR_MS passes without a second node), and
-// the kinds that have settled.
+// waiting for a stream, each share node seen and when, the choice paired
+// with a node and when (pending until PAIR_MS passes without a second
+// node), and the choices that have settled, each its kind and the option's
+// label.
 export const PAIRING = Object.freeze({ waiting: [], seen: [], pending: {}, kinds: {} });
 
 function recent(list, now) {
@@ -39,10 +40,10 @@ function recent(list, now) {
 }
 
 // The picker's choice (its option's kind: "screen", "window" or
-// "region"), waiting for its stream.
-export function chose(state, kind, now) {
+// "region", and its label), waiting for its stream.
+export function chose(state, kind, now, label) {
     return {
-        waiting: recent(state.waiting, now).concat([{ kind: kind, time: now }]),
+        waiting: recent(state.waiting, now).concat([{ kind: kind, label: label ?? "", time: now }]),
         seen: state.seen,
         pending: state.pending,
         kinds: state.kinds
@@ -79,7 +80,7 @@ export function nodesSeen(state, ids, now) {
     }
     const others = recent(seen, now);
     if (fresh.length === 1 && waiting.length === 1 && others.length === 0) {
-        pending[fresh[0]] = { kind: waiting[0].kind, time: now };
+        pending[fresh[0]] = { kind: waiting[0].kind, label: waiting[0].label, time: now };
         waiting = [];
     } else {
         waiting = [];
@@ -106,7 +107,7 @@ export function settle(state, now) {
     const pending = Object.assign({}, state.pending);
     const kinds = Object.assign({}, state.kinds);
     for (const id of due) {
-        kinds[id] = pending[id].kind;
+        kinds[id] = { kind: pending[id].kind, label: pending[id].label };
         delete pending[id];
     }
     return { waiting: state.waiting, seen: state.seen, pending: pending, kinds: kinds };
@@ -125,7 +126,27 @@ export function settleIn(state, now) {
 // A share's kind: what a settled pairing gave its node, or "screen", the
 // safe way to be wrong.
 export function kindOf(state, id) {
-    return state.kinds[id] ?? "screen";
+    return state.kinds[id]?.kind ?? "screen";
+}
+
+const SHOWN = {
+    screen: { icon: "video-display-symbolic", name: "Screen", bare: "A screen" },
+    window: { icon: "focus-windows-symbolic", name: "Window", bare: "A window" },
+    region: { icon: "selection-mode-symbolic", name: "Area", bare: "An area" }
+};
+
+// The Sharing pill's popover (§7.4): what each live share is, from its
+// settled pairing. One the shell can't name (not chosen in its picker, or
+// still within PAIR_MS) says so.
+export function shareRows(shares, state) {
+    return shares.map(s => {
+        const known = state.kinds[s.id];
+        const shown = known ? SHOWN[known.kind] : undefined;
+        if (!shown) {
+            return { icon: SHOWN.screen.icon, label: "Not chosen in tide's picker" };
+        }
+        return { icon: shown.icon, label: known.label ? `${shown.name}: ${known.label}` : shown.bare };
+    });
 }
 
 // Whether popups are held for the shares that are live. A screen or region

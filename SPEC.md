@@ -1472,6 +1472,10 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
   - Any other case (overlapping requests, Chrome's extra portal sessions,
     a node with no waiting choice) counts as a screen share, and popups
     are held while any such stream is live.
+  - The Sharing pill's popover (§7.4) names each share from its settled
+    pairing: the option's kind and label, such as "Window: Meet - Design
+    review". One with none says it wasn't chosen in tide's picker. Stopping
+    a share is the app's business, and the popover says so.
   - A stream restored from a token skips the picker, so there is no record.
     The shell then treats the share as a screen share and holds popups,
     which is the safe way to be wrong. A notification never leaks into a
