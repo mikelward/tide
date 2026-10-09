@@ -4,9 +4,10 @@
 # greetd's greeter user: Hyprland with tide's greeter config
 # (share/tide/greeter/hyprland.lua), which shows the greeter
 # (share/tide/shell/greeter.qml) on every monitor and exits when the greeter
-# does, so greetd can start the session it chose. `make install-session`
-# puts all three under the same PREFIX, which is how this finds the other
-# two.
+# does, so greetd can start the session it chose. The greeter talks to
+# greetd through tide-greetd, beside this command. `make install-session`
+# puts all four under the same PREFIX, which is how this finds the other
+# three.
 #
 # The keyboard is the system's X11 keymap as localed has it (`localectl
 # set-x11-keymap`; /etc/default/keyboard on Debian), which `setup` sets to
@@ -21,7 +22,7 @@ prog=tide-greeter
 if test $# -gt 0; then
     case $1 in
         -h | --help)
-            sed -n '3,17p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '3,18p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
     esac
@@ -38,6 +39,11 @@ for file in "$config" "$qml"; do
         exit 1
     fi
 done
+greetd_client=$(dirname -- "$0")/tide-greetd
+if ! test -x "$greetd_client"; then
+    echo "$prog: can't run $greetd_client; install the greeter with \`make install-session\`" >&2
+    exit 1
+fi
 
 # unquote LINE: a string property's value from busctl's `s "VALUE"`, or
 # fails for any other line.
@@ -70,5 +76,5 @@ else
     echo "$prog: couldn't read the system keymap from localed: $keymap; the greeter types in Hyprland's default layout" >&2
 fi
 
-export TIDE_GREETER_QML="$qml"
+export TIDE_GREETER_QML="$qml" TIDE_GREETER_GREETD="$greetd_client"
 exec Hyprland --config "$config"

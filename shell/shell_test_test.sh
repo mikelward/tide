@@ -466,9 +466,14 @@ echo 1
 EOF
     cat >"$1/go" <<EOF
 #!/bin/sh
-# As the load test runs it: go build -buildvcs=false -o OUT ./cmd/tide-tz.
-test "\$1 \$2 \$3 \$5" = "build -buildvcs=false -o ./cmd/tide-tz" || exit 2
-printf '#!/bin/sh\n%s\n' '${8:-:}' >"\$4" && chmod +x "\$4"
+# As the load test runs it: go build -buildvcs=false -o OUT ./cmd/tide-tz,
+# then the same for ./cmd/tide-greetd, which the stand-in greeter never runs.
+case "\$1 \$2 \$3 \$5" in
+"build -buildvcs=false -o ./cmd/tide-tz") printf '#!/bin/sh\n%s\n' '${8:-:}' >"\$4" ;;
+"build -buildvcs=false -o ./cmd/tide-greetd") printf '#!/bin/sh\n' >"\$4" ;;
+*) exit 2 ;;
+esac
+chmod +x "\$4"
 EOF
     chmod +x "$1/sway" "$1/qs" "$1/wtype" "$1/notify-send" "$1/go" || exit 1
 }
@@ -862,7 +867,7 @@ check "and says what it said" contains "$out" "tide-lock: hyprctl devices gave n
 
 run "$tmp/clean" GO=tide-test-no-such-go
 check "without Go, a run that requires Quickshell fails" test "$code" -ne 0
-check "and says so" contains "$out" "no tide-test-no-such-go (to build tide-tz, which the bar's clocks run) on PATH"
+check "and says so" contains "$out" "no tide-test-no-such-go (to build tide-tz, which the bar's clocks run, and tide-greetd, which the greeter talks to greetd through) on PATH"
 
 run "$tmp/clean" GO=tide-test-no-such-go TIDE_REQUIRE_QS=
 check "without Go, any other run is skipped" test "$code" -eq 0

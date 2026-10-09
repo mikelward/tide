@@ -30,6 +30,8 @@ mkdir -p "$prefix/bin" "$prefix/share/tide/greeter" "$prefix/share/tide/shell" "
 cp bin/tide-greeter "$prefix/bin/" || exit 1
 : >"$prefix/share/tide/greeter/hyprland.lua" || exit 1
 : >"$prefix/share/tide/shell/greeter.qml" || exit 1
+printf '#!/bin/sh\n' >"$prefix/bin/tide-greetd" || exit 1
+chmod +x "$prefix/bin/tide-greetd" || exit 1
 
 # busctl prints $BUSCTL_OUT and exits $BUSCTL_EXIT, and records its
 # arguments; Hyprland records its arguments and the greeter's environment.
@@ -79,6 +81,8 @@ check "Hyprland gets the greeter's config" \
     contains "$ran" "args [--config] [$prefix/bin/../share/tide/greeter/hyprland.lua]"
 check "the greeter's QML is passed on" \
     contains "$ran" "TIDE_GREETER_QML=$prefix/bin/../share/tide/shell/greeter.qml"
+check "the greetd client beside it is passed on" \
+    contains "$ran" "TIDE_GREETER_GREETD=$prefix/bin/tide-greetd"
 check "the layout is localed's" contains "$ran" "TIDE_GREETER_KB_LAYOUT=us"
 check "the model is localed's" contains "$ran" "TIDE_GREETER_KB_MODEL=pc105"
 check "the variant is localed's" contains "$ran" "TIDE_GREETER_KB_VARIANT=dvorak"
@@ -124,6 +128,12 @@ greeter 1
 check "a missing greeter is named" contains "$out" "can't read $prefix/bin/../share/tide/shell/greeter.qml"
 check "a missing greeter starts no Hyprland" test -z "$ran"
 : >"$prefix/share/tide/shell/greeter.qml" || exit 1
+
+chmod -x "$prefix/bin/tide-greetd" || exit 1
+greeter 1
+check "a greetd client that can't run is named" contains "$out" "can't run $prefix/bin/tide-greetd"
+check "a greetd client that can't run starts no Hyprland" test -z "$ran"
+chmod +x "$prefix/bin/tide-greetd" || exit 1
 
 greeter 0 --help
 check "--help gives the usage" contains "$out" "Usage: tide-greeter"

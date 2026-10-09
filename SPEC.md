@@ -182,7 +182,8 @@ Quickshell's built-ins cover every job:
 - **UPower**, with power profiles.
 - **Bluetooth**.
 - **Networking** (NetworkManager).
-- **Pam** and **Greetd**.
+- **Pam**, and **Greetd**, which the greeter uses a client of tide's own
+  in place of (§11).
 - **Polkit** agent (0.3).
 - **WlSessionLock**.
 - **IdleMonitor** / **IdleInhibitor**.
@@ -274,7 +275,7 @@ gives the greeter the same layout badge as the lock.
 | R18 | Notifications | `NotificationServer`; the shell owns the name | shell |
 | R19 | Screensaver, idle, lock | §10 | shell + hypridle |
 | R20 | Meet screen sharing | PipeWire + xdph + our picker | portal + shell |
-| R21 | Login = lock screen, short hostname | greetd + `Greetd` + `WlSessionLock` sharing one component | shell |
+| R21 | Login = lock screen, short hostname | greetd (through `tide-greetd`) + `WlSessionLock` sharing one component | shell |
 | R22 | Automatic light/dark (light 07:00–19:00 by default, or sunrise to sunset) | the shell's schedule → gsettings `color-scheme` + adw-gtk3 + palette (§15) | shell |
 | R23 | Nothing started twice | §5 | session |
 | R24 | Dialogs float | Hyprland floats windows with a parent, modal or fixed-size windows; rules cover the rest; centered on the parent (§6.4) | native |
@@ -1303,13 +1304,13 @@ one of them:
   - every monitor at its preferred mode;
   - no key bindings, so only Hyprland's built-in VT switch acts on a key;
   - none of Hyprland's own popups;
-  - one program, the greeter: Quickshell with the `Greetd` service
-    (`shell/greeter.qml`).
+  - one program, the greeter: Quickshell (`shell/greeter.qml`), talking to
+    greetd through `tide-greetd` (below).
 
   Once greetd has the session to start, Quickshell exits, Hyprland exits
   after it, and greetd starts the session. `make install-session` installs
-  the command, the config, a copy of the shell (the greeter user can't read
-  anyone's `~/.config`) and a greetd config template.
+  the command, `tide-greetd`, the config, a copy of the shell (the greeter
+  user can't read anyone's `~/.config`) and a greetd config template.
 - **Same face as the lock.** Login and lock are one QML component with two
   modes ([`lock.png`](docs/mocks/lock.png)): `shell/LockFace.qml`.
 - **Hostname.** It leads with the short hostname: the first label, with a
@@ -1358,20 +1359,23 @@ one of them:
 - **Enter during a check does nothing** (maintainer, 2026-10-05). Keys
   typed meanwhile still land in the field, and the next Enter sends them.
   Unlike the lock (§10), the greeter doesn't hold that Enter for when the
-  check fails. Holding it wouldn't work with Quickshell 0.3.1's `Greetd`
-  anyway:
-  - after a failure it cancels greetd's session without waiting for the
-    answer;
-  - a login started at once takes that answer for its own success;
-  - greetd then refuses to start the session ("session is not ready"), and
-    the password has to be typed again.
-- **Quickshell's `Greetd` is for now** (maintainer, 2026-10-05). Its
-  cancel race is filed upstream as quickshell-mirror/quickshell#1266.
-  tide will talk to greetd through a client of its own, which waits for
-  the reply to every request it sends, so no reply can be taken for
-  another's (TODO.md). Until then, "Other user" stays disabled while a
-  login is under way, and that limit goes with the new client. Enter
-  during a check does nothing either way.
+  check fails.
+- **tide's own greetd client** (maintainer, 2026-10-05), in place of
+  Quickshell 0.3.1's `Greetd`. That one cancels greetd's session without
+  waiting for the answer, so a login started at once takes the cancel's
+  answer for its own success, and greetd then refuses to start the session
+  (quickshell-mirror/quickshell#1266). Instead:
+  - `tide-greetd`, a small Go command, connects to greetd's socket and
+    relays the greeter's requests one at a time. It reads greetd's reply to
+    each before it sends the next, and hands each back with the type of
+    the request it answers.
+  - The greeter (`shell/lib/greetd.mjs`) counts every `create_session` and
+    `cancel_session` as a new login, and drops a reply to a request sent
+    for an earlier one, whatever it says.
+  - A login that fails or errors is cancelled at greetd, which otherwise
+    keeps it half set up and refuses the next.
+  - `tide-greetd` failing ends the connection: the greeter says why, and
+    the next login starts it again.
 
 ## 12. Screen sharing (Google Meet)
 

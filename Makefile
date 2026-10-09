@@ -1,7 +1,7 @@
 # tide
 #
 #   make test             run the tests
-#   make build            build tide-grant and tide-tz (needs Go)
+#   make build            build tide-grant, tide-tz and tide-greetd (needs Go)
 #                         into build/
 #   make install          build, then install the per-user parts: the
 #                         Hyprland layout and focus guard, the Quickshell
@@ -61,7 +61,7 @@ test:
 	sh .github/workflows/ci_test.sh
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
 	$(QMLLINT) $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs))
-	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/settings_test.mjs shell/lib/steps_test.mjs shell/lib/idle_test.mjs shell/lib/writes_test.mjs shell/lib/input_test.mjs shell/lib/keys_test.mjs shell/lib/outputs_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/sysmon_test.mjs shell/lib/keepawake_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs shell/lib/vpn_test.mjs shell/lib/mic_test.mjs shell/lib/fuzzy_test.mjs shell/lib/frecency_test.mjs shell/lib/launcher_test.mjs shell/lib/lock_test.mjs shell/lib/greeter_test.mjs shell/lib/polkit_test.mjs
+	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/settings_test.mjs shell/lib/steps_test.mjs shell/lib/idle_test.mjs shell/lib/writes_test.mjs shell/lib/input_test.mjs shell/lib/keys_test.mjs shell/lib/outputs_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/sysmon_test.mjs shell/lib/keepawake_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs shell/lib/vpn_test.mjs shell/lib/mic_test.mjs shell/lib/fuzzy_test.mjs shell/lib/frecency_test.mjs shell/lib/launcher_test.mjs shell/lib/lock_test.mjs shell/lib/greeter_test.mjs shell/lib/greetd_test.mjs shell/lib/polkit_test.mjs
 # theme/ is build-time Node, not loaded by the shell, so runs unguarded.
 	$(NODE) --test theme/palette_test.mjs
 	$(NODE) theme/generate.mjs --check
@@ -71,13 +71,16 @@ test:
 palette:
 	$(NODE) theme/generate.mjs
 
-build: build/tide-grant build/tide-tz
+build: build/tide-grant build/tide-tz build/tide-greetd
 
 build/tide-grant: go.mod go.sum $(wildcard cmd/tide-grant/*.go)
 	$(GO) build -o $@ ./cmd/tide-grant
 
 build/tide-tz: go.mod $(wildcard cmd/tide-tz/*.go)
 	$(GO) build -o $@ ./cmd/tide-tz
+
+build/tide-greetd: go.mod $(wildcard cmd/tide-greetd/*.go)
+	$(GO) build -o $@ ./cmd/tide-greetd
 
 # Copies only. Enabling tide.service, which hangs it off the tide
 # session's target, is `setup --tide`'s job (scripts repo).
@@ -113,11 +116,11 @@ install-shell:
 # Root has no Go module cache to build with, so install-session only copies
 # the Go commands that `make build` (or `make install`) left in build/.
 install-session:
-	@for cmd in tide-grant tide-tz; do \
+	@for cmd in tide-grant tide-tz tide-greetd; do \
 		test -x build/$$cmd || { echo "make install-session: no build/$$cmd; run make build first, as yourself" >&2; exit 1; }; \
 	done
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
-	install -m 755 bin/tide bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz "$(DESTDIR)$(PREFIX)/bin/"
+	install -m 755 bin/tide bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz build/tide-greetd "$(DESTDIR)$(PREFIX)/bin/"
 	install -m 644 session/tide.desktop "$(DESTDIR)$(PREFIX)/share/wayland-sessions/"
 	@# The greeter runs as greetd's own user, which can't read anyone's
 	@# ~/.config, so it gets a copy of the shell of its own. tide-greeter
