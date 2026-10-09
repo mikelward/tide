@@ -293,6 +293,77 @@ ShellRoot {
         onSaveFailed: error => console.warn(`tide-greeter: ${path}: ${FileViewError.toString(error)}; this login won't be preselected next time`)
     }
 
+    // No one at the greeter (SPEC.md §11): the screensaver face, then the
+    // displays off, as an idle lock goes. Hyprland turns the displays back
+    // on at a key or a move (greeter/hyprland.lua); this does at any other
+    // input too, and the face wakes from the screensaver as the lock's does.
+    IdleMonitor {
+        timeout: Greeter.SAVER_AFTER
+        onIsIdleChanged: {
+            if (isIdle) {
+                root.dispatch({ type: "screensaver" });
+            }
+        }
+    }
+    IdleMonitor {
+        timeout: Greeter.DISPLAYS_OFF_AFTER
+        onIsIdleChanged: displays.next({ type: "idle", idle: isIdle })
+    }
+
+    Process {
+        id: displays
+
+        property var power: Greeter.DISPLAYS_INITIAL
+        // The call to make once none is running: true or false to turn the
+        // displays on or off, or null for none.
+        property var pending: null
+        // Quickshell reports a command that can't start only by stopping
+        // without `started` (shell/lib/launch.mjs).
+        property bool started: false
+        property bool ok: false
+
+        function next(event) {
+            const r = Greeter.displaysNext(displays.power, event);
+            displays.power = r.state;
+            if (r.send !== null) {
+                displays.pending = r.send;
+                displays.launch();
+            }
+        }
+
+        // Starts the pending call, unless the last one still counts as
+        // running: then it starts once that one stops (onRunningChanged),
+        // since starting it again before then would do nothing.
+        function launch() {
+            if (displays.running || displays.pending === null) {
+                return;
+            }
+            displays.command = Greeter.displaysCommand(displays.pending);
+            displays.pending = null;
+            displays.started = false;
+            displays.ok = false;
+            displays.running = true;
+        }
+
+        onStarted: started = true
+        onExited: (code, status) => {
+            if (code !== 0) {
+                console.warn(`tide-greeter: hyprctl dpms exited ${code}`);
+            }
+            ok = code === 0;
+        }
+        // Each call ends here, whether or not it started.
+        onRunningChanged: {
+            if (running) {
+                return;
+            }
+            if (!started) {
+                console.warn("tide-greeter: couldn't start hyprctl to turn the displays on or off");
+            }
+            displays.next({ type: "done", ok: started && ok });
+        }
+    }
+
     // The kernel's hostname, read once; the face shows the short form.
     FileView {
         path: "/proc/sys/kernel/hostname"

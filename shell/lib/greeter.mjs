@@ -3,6 +3,7 @@
 // reads the session files, the users and the remembered choice, and carries
 // out greetd's conversation; everything that decides something is here.
 
+import { DEFAULT_IDLE } from "./idle.mjs";
 import { INITIAL } from "./lock.mjs";
 
 // The entry that runs the user's own shell on the greeter's VT, the way out
@@ -249,9 +250,52 @@ export function greetdError(state, description, session) {
 // Whether the greeter takes `event` in `state`. An Enter while greetd checks
 // the last attempt isn't held for when it fails, as the lock holds it
 // (SPEC.md §11, maintainer's call). The keys typed meanwhile still land in
-// the field; the next Enter sends them.
+// the field; the next Enter sends them. Once the session is starting, the
+// screensaver doesn't cover the line that says so.
 export function takes(state, event) {
+    if (event.type === "screensaver") return !state.unlocked;
     return !(event.type === "submit" && state.checking);
+}
+
+// The greeter's idle (SPEC.md §11): the screensaver face, then the displays
+// off, after the lock's default times (§10), in seconds. It has no one's
+// Idle settings to read, and no dim.
+export const SAVER_AFTER = DEFAULT_IDLE.lock;
+export const DISPLAYS_OFF_AFTER = DEFAULT_IDLE.displaysOff;
+
+// What turns every display off or back on: hyprctl's dispatch, which the
+// greeter's Hyprland, configured in Lua, takes as a Lua call (Hyprland
+// 0.56). The same hyprctl ends that Hyprland (greeter/hyprland.lua).
+export function displaysCommand(on) {
+    return ["hyprctl", "dispatch", `hl.dsp.dpms({ action = "${on ? "on" : "off"}" })`];
+}
+
+// The displays' power, set one hyprctl call at a time:
+//   want     on (true) or off, as the idle says
+//   sent     what the last call that worked set: on at the start, as
+//            Hyprland starts them, and null after a call that failed
+//   sending  what the call under way sets, or null with none under way
+// Events: {type: "idle", idle} when the displays-off idle starts or ends,
+// and {type: "done", ok} when the call ends, ok if hyprctl exited 0. The
+// result's `send` is true or false to make a call now that turns them on or
+// off, or null for none. A call that fails isn't made again until the idle
+// changes, so a hyprctl that keeps failing isn't run in a loop.
+export const DISPLAYS_INITIAL = Object.freeze({ want: true, sent: true, sending: null });
+
+export function displaysNext(state, event) {
+    let s = state;
+    if (event.type === "idle") {
+        s = Object.assign({}, s, { want: !event.idle });
+    } else if (event.type === "done") {
+        s = Object.assign({}, s, { sent: event.ok ? s.sending : null, sending: null });
+        if (!event.ok) {
+            return { state: Object.freeze(s), send: null };
+        }
+    }
+    if (s.sending !== null || s.want === s.sent) {
+        return { state: Object.freeze(s), send: null };
+    }
+    return { state: Object.freeze(Object.assign({}, s, { sending: s.want })), send: s.want };
 }
 
 // Whether another user can be picked: any time until the password is

@@ -1304,6 +1304,7 @@ one of them:
   - every monitor at its preferred mode;
   - no key bindings, so only Hyprland's built-in VT switch acts on a key;
   - none of Hyprland's own popups;
+  - a key or a pointer move turns the displays back on;
   - one program, the greeter: Quickshell (`shell/greeter.qml`), talking to
     greetd through `tide-greetd` (below).
 
@@ -1357,6 +1358,16 @@ one of them:
   (`pam_authenticate: AUTH_ERR`, greetd 0.10.3). So a wrong password and
   too many tries get the lock's own words, and any other code is named.
   A prompt greetd marks visible shows what's typed, as on the lock (§10).
+- **Idle.** With no one there, the greeter idles as an idle lock does
+  (§10), at the lock's default times:
+  - after 5 minutes, the screensaver face;
+  - after 5 minutes 30 seconds, the displays off, through Hyprland's
+    `dpms`;
+  - any input turns them back on, and the face wakes as the lock's does.
+
+  It has no dim, and no one's Idle settings to read. Quickshell's
+  `IdleMonitor` sees the input: nothing at the greeter holds a D-Bus
+  inhibit, which is what needs hypridle in a session (§10).
 - **Enter during a check does nothing** (maintainer, 2026-10-05). Keys
   typed meanwhile still land in the field, and the next Enter sends them.
   Unlike the lock (§10), the greeter doesn't hold that Enter for when the

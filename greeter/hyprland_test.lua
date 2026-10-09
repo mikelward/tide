@@ -118,6 +118,12 @@ test("every monitor gets its preferred mode, and Hyprland shows nothing of its o
     eq(S.config.misc.disable_hyprland_guiutils_check, true, "guiutils warning")
     eq(S.config.ecosystem.no_update_news, true, "update news")
     eq(S.config.ecosystem.no_donation_nag, true, "donation nag")
+end)
+
+test("a key or a move turns the displays back on", function()
+    load({})
+    eq(S.config.misc.key_press_enables_dpms, true, "key_press_enables_dpms")
+    eq(S.config.misc.mouse_move_enables_dpms, true, "mouse_move_enables_dpms")
     eq(S.config.animations.enabled, false, "animations")
 end)
 

@@ -7,8 +7,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { INITIAL, next } from "./lock.mjs";
 import {
-    LISTING_SCRIPT, SHELL_ID, SHELL_SESSION, authFailureEvent, canPickUser, execCommand, fileId, greetdError, parseDesktopEntry,
-    parseListing, parseRemembered, parseUsers, pickSession, pickUser, serializeRemembered,
+    DISPLAYS_INITIAL, DISPLAYS_OFF_AFTER, LISTING_SCRIPT, SAVER_AFTER, SHELL_ID, SHELL_SESSION, authFailureEvent, canPickUser, displaysCommand,
+    displaysNext, execCommand, fileId, greetdError, parseDesktopEntry, parseListing,
+    parseRemembered, parseUsers, pickSession, pickUser, serializeRemembered,
     inConversation, sessionFromEntry, takes, sessionList, statusText, uidRange,
 } from "./greeter.mjs";
 
@@ -284,4 +285,75 @@ test("another user can be picked mid-login, but not once the session is starting
     state = next(next(state, { type: "submit" }).state, { type: "done", result: "success" }).state;
     assert.equal(state.unlocked, true);
     assert.equal(canPickUser(state), false);
+});
+
+test("the screensaver covers the face until the session is starting", () => {
+    assert.equal(takes(INITIAL, { type: "screensaver" }), true);
+    let state = next(INITIAL, { type: "key", text: "x" }).state;
+    state = next(state, { type: "submit" }).state;
+    assert.equal(takes(state, { type: "screensaver" }), true);
+    state = next(state, { type: "done", result: "success" }).state;
+    assert.equal(state.unlocked, true);
+    assert.equal(takes(state, { type: "screensaver" }), false);
+});
+
+test("the greeter idles as the lock does by default: the screensaver, then the displays off", () => {
+    assert.equal(SAVER_AFTER, 300);
+    assert.equal(DISPLAYS_OFF_AFTER, 330);
+    assert.deepEqual(displaysCommand(false), ["hyprctl", "dispatch", 'hl.dsp.dpms({ action = "off" })']);
+    assert.deepEqual(displaysCommand(true), ["hyprctl", "dispatch", 'hl.dsp.dpms({ action = "on" })']);
+});
+
+// Runs events through displaysNext, collecting each call it asks for.
+function displays(events, state = DISPLAYS_INITIAL) {
+    const sends = [];
+    for (const event of events) {
+        const r = displaysNext(state, event);
+        state = r.state;
+        sends.push(r.send);
+    }
+    return { state: state, sends: sends };
+}
+
+test("the displays go off when idle and back on after, one call at a time", () => {
+    const r = displays([
+        { type: "idle", idle: true },
+        { type: "done", ok: true },
+        { type: "idle", idle: false },
+        { type: "done", ok: true },
+    ]);
+    assert.deepEqual(r.sends, [false, null, true, null]);
+    assert.deepEqual(r.state, { want: true, sent: true, sending: null });
+});
+
+test("a change while a call runs is sent when it ends, and only the last one", () => {
+    const r = displays([
+        { type: "idle", idle: true },
+        { type: "idle", idle: false },
+        { type: "idle", idle: true },
+        { type: "done", ok: true },
+        { type: "idle", idle: false },
+        { type: "done", ok: true },
+    ]);
+    assert.deepEqual(r.sends, [false, null, null, null, true, null]);
+    const back = displays([{ type: "idle", idle: true }, { type: "idle", idle: false }, { type: "done", ok: true }]);
+    assert.deepEqual(back.sends, [false, null, true]);
+});
+
+test("a failed call isn't made again until the idle changes", () => {
+    const r = displays([
+        { type: "idle", idle: true },
+        { type: "idle", idle: false },
+        { type: "done", ok: false },
+    ]);
+    assert.deepEqual(r.sends, [false, null, null]);
+    assert.equal(r.state.sent, null);
+    // Whatever the next change asks for is sent, since what the displays
+    // are is unknown.
+    assert.deepEqual(displays([{ type: "idle", idle: false }], r.state).sends, [true]);
+    assert.deepEqual(displays([{ type: "idle", idle: true }], r.state).sends, [false]);
+});
+
+test("nothing is sent for an idle that changes nothing", () => {
+    assert.deepEqual(displays([{ type: "idle", idle: false }]).sends, [null]);
 });
