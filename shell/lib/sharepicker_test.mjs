@@ -1,8 +1,12 @@
 // Tests for sharepicker.mjs.
 import { test } from "node:test";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import assert from "node:assert/strict";
 import {
-    REPEAT_MS, areaFor, decimalToHex, isUltrawide, options, orderWindows,
+    REPEAT_MS, answerCommand, answerOutcome, areaFor, decimalToHex, isUltrawide, options, orderWindows,
     parseWindows, preselect, selectionLine, shareLabel, validReply
 } from "./sharepicker.mjs";
 
@@ -121,4 +125,49 @@ test("the shell answers only on a reply pipe the picker made", () => {
     assert.equal(validReply("/tmp/tide-share-picker.Ab12Cd", "/run/user/1000"), false);
     assert.equal(validReply("/run/user/1000/other", "/run/user/1000"), false);
     assert.equal(validReply("/run/user/1000/tide-share-picker.Ab12Cd", ""), false);
+});
+
+test("a choice counts for the stream only once the picker has the answer", () => {
+    assert.deepEqual(answerOutcome(0, "window"), { chose: "window", warning: null });
+    // A no, written, chooses nothing.
+    assert.deepEqual(answerOutcome(0, ""), { chose: null, warning: null });
+    // The picker had gone, or the write timed out: the portal never got
+    // it, so there's no stream.
+    assert.deepEqual(answerOutcome(1, "window"), {
+        chose: null,
+        warning: "answering tide-share-picker failed (exit 1), so it went nowhere",
+    });
+    assert.equal(answerOutcome(124, "screen").chose, null);
+});
+
+test("the answer reaches a pipe the picker is reading", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "sharepicker-"));
+    try {
+        const reply = join(dir, "tide-share-picker.Test01");
+        assert.equal(spawnSync("mkfifo", [reply]).status, 0);
+        const reader = spawn("cat", [reply]);
+        let got = "";
+        reader.stdout.on("data", d => (got += d));
+        const [cmd, ...args] = answerCommand("[SELECTION]/window:7", reply);
+        const write = spawnSync(cmd, args);
+        await new Promise(resolve => reader.on("close", resolve));
+        assert.equal(write.status, 0, String(write.stderr));
+        assert.equal(got, "[SELECTION]/window:7\n");
+    } finally {
+        rmSync(dir, { recursive: true });
+    }
+});
+
+test("an answer to a pipe that's gone fails, and leaves nothing behind", () => {
+    const dir = mkdtempSync(join(tmpdir(), "sharepicker-"));
+    try {
+        const reply = join(dir, "tide-share-picker.Test01");
+        const [cmd, ...args] = answerCommand("[SELECTION]/window:7", reply);
+        const write = spawnSync(cmd, args);
+        assert.notEqual(write.status, 0);
+        assert.equal(existsSync(reply), false, "a file in the pipe's place would read as delivered");
+        assert.equal(answerOutcome(write.status, "window").chose, null);
+    } finally {
+        rmSync(dir, { recursive: true });
+    }
 });

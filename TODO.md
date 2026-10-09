@@ -815,13 +815,14 @@ Nothing has run in a live session. Still to do:
   are also held while a share is live (`shell/ShareData.qml`,
   `shell/lib/share.mjs`: an `xdph-streaming-*` node with an active link
   out of it), with the center's "held while you were sharing" banner.
-  Do not disturb is a launcher quick action too. Still to do: telling a
-  window share from a screen
-  share, once the picker records its choice (§12), so a window share
-  holds nothing; showing a critical on a monitor that isn't shared; and
-  the Sharing pill's click (§7.4: what is being shared), which waits on
-  the same. The pill itself is `shell/SharingPill.qml`. On a live
-  session, check that Chrome's consumer link reads as active.
+  Do not disturb is a launcher quick action too. A window share holds
+  nothing: the share picker's choice is paired with the stream that
+  follows it (§12, `nodesSeen` in `shell/lib/share.mjs`). Still to do:
+  showing a critical on a monitor that isn't shared; and the Sharing
+  pill's click (§7.4: what is being shared). The pill itself is
+  `shell/SharingPill.qml`. On a live session, check that Chrome's
+  consumer link reads as active, and that a window share from Meet lets
+  popups through.
 - Retire swaync: the shell owns the name, joins the ready check, and
   `tide-shell` stops starting it; drop the opt-in.
 
@@ -974,19 +975,15 @@ The picker (SPEC.md §12) is `bin/tide-share-picker` and
 The load test answers it with a window from Right and Enter; the
 thumbnails and xdph itself are unchecked. Still to do:
 
-- `conf`'s `xdph.conf` names `tide-share-picker` as
-  `screencopy:custom_picker_binary`. It has to land after this, and after
-  `make install-session` has put the picker on PATH: xdph runs the name
-  as given, and a missing one fails the share. `conf` also gives the
-  `tide-share-picker` layer `no_screen_share`, so a repeat request during
-  a share doesn't show the far end every window's thumbnail.
+- `conf`'s `xdph.conf` runs the picker through its own `share-picker.sh`,
+  which falls back to xdph's picker where tide isn't installed, and keeps
+  the `tide-share-picker` layer out of screen shares
+  (mikelward/conf#415). xdph reads it as it starts.
 - On a real session, share from Meet in Chrome: a window, the 16:9 area of
   an ultrawide and a whole screen, then a second request within 10 s,
   which should open on the first choice. Count the prompts one share
   makes, and check whether Chrome asks for a restore token.
 - Drag to choose an area, the mock's "Select a region…".
-- Record each choice for the shell to pair with its stream (§12), so a
-  window share holds no popups (Notifications, above).
 - A long list doesn't scroll the highlighted option into view.
 
 ## The rest of `tide doctor`

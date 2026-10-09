@@ -1457,12 +1457,20 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
   - The `screencast>>` event serves only as a prompt to re-check.
 - **Knowing what is shared.** Popups are held for a screen or region share
   but not a window share (§9), so the shell needs the source type.
-  - When the picker runs, it records its choice. The shell pairs it with a
-    new stream node only when that pairing is unambiguous: exactly one
-    recorded choice waiting and exactly one new node within 5 s. Any other
-    case (overlapping requests, Chrome's extra portal sessions, a node with
-    no waiting choice) counts as a screen share, and popups are held while
-    any such stream is live.
+  - The picker's dialog is the shell's own, so the shell keeps each choice
+    it shares, once `tide-share-picker` has the answer: one that never
+    reached xdph has no stream.
+  - It pairs a choice with a new stream node only when that's unambiguous:
+    exactly one choice waiting and exactly one new node within 5 s. A
+    second new node in those 5 s undoes a pairing, since either could be
+    the choice's. New nodes that don't pair use up the waiting choices,
+    so a later stream can't take one of them.
+  - So a pairing holds popups for its first 5 s, until no second node
+    can undo it: an unrelated stream that came first never shows them.
+    A window share's popups start 5 s in.
+  - Any other case (overlapping requests, Chrome's extra portal sessions,
+    a node with no waiting choice) counts as a screen share, and popups
+    are held while any such stream is live.
   - A stream restored from a token skips the picker, so there is no record.
     The shell then treats the share as a screen share and holds popups,
     which is the safe way to be wrong. A notification never leaks into a

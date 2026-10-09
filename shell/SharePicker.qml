@@ -62,15 +62,23 @@ PanelWindow {
     }
 
     // Writes `line` to the open request's pipe, empty for no, and closes.
-    // The picker may have given up and removed the pipe; then there's no
-    // one to answer, and nothing is written.
-    function answer(line) {
+    // `kind` is what it shares, if anything, which ShareData hears only once
+    // the picker has the answer: a choice that never reached xdph has no
+    // stream to pair with (§12). A pipe that's gone means the picker gave
+    // up, and the write fails.
+    function answer(line, kind) {
         if (root.reply === "") {
             return;
         }
         writer.createObject(root, {
-            command: ["timeout", "5", "sh", "-c", 'test -p "$2" || exit 0; printf "%s\\n" "$1" > "$2"', "sh", line, root.reply]
+            command: Picker.answerCommand(line, root.reply),
+            kind: kind ?? ""
         });
+        root.close();
+    }
+
+    // Closes with no answer, for a picker that has stopped waiting.
+    function close() {
         root.reply = "";
         root.opts = [];
         visible = false;
@@ -84,7 +92,7 @@ PanelWindow {
             key: root.option.key,
             time: Date.now()
         };
-        root.answer(Picker.selectionLine(root.option, root.reuse));
+        root.answer(Picker.selectionLine(root.option, root.reuse), root.option.kind);
     }
 
     function move(step) {
@@ -123,8 +131,9 @@ PanelWindow {
         }
 
         function cancel(reply: string): void {
+            // tide-share-picker has stopped reading, so nothing is written.
             if (reply === root.reply) {
-                root.answer("");
+                root.close();
             }
         }
     }
@@ -136,13 +145,22 @@ PanelWindow {
         Process {
             id: write
 
+            // What the answer shares, for ShareData once it's written.
+            property string kind: ""
+
             Component.onCompleted: running = true
             stderr: SplitParser {
                 onRead: line => console.warn(`share picker: answering tide-share-picker: ${line}`)
             }
             onExited: (code, status) => {
-                if (code !== 0) {
-                    console.warn(`share picker: answering tide-share-picker failed (exit ${code})`);
+                const outcome = Picker.answerOutcome(code, write.kind);
+                // For the stream that follows, so a window share holds no
+                // popups.
+                if (outcome.chose) {
+                    ShareData.chose(outcome.chose);
+                }
+                if (outcome.warning) {
+                    console.warn(`share picker: ${outcome.warning}`);
                 }
                 write.destroy();
             }
