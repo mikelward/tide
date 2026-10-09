@@ -26,6 +26,11 @@ PanelWindow {
     // Picker.REPEAT_MS opens on it.
     property var last: null
     readonly property var option: selected >= 0 && selected < opts.length ? opts[selected] : null
+    // The highlighted option's tile, kept in view as it moves and as the
+    // list lays out.
+    property Item chosenTile: null
+
+    onChosenTileChanged: Qt.callLater(root.reveal)
 
     function screenInfo(s) {
         return {
@@ -93,6 +98,14 @@ PanelWindow {
             time: Date.now()
         };
         root.answer(Picker.selectionLine(root.option, root.reuse), root.option.kind);
+    }
+
+    function reveal() {
+        if (!root.chosenTile) {
+            return;
+        }
+        const top = root.chosenTile.mapToItem(column, 0, 0).y;
+        scroller.contentY = Picker.revealY(scroller.contentY, scroller.height, scroller.contentHeight, top, root.chosenTile.height, 16);
     }
 
     function move(step) {
@@ -207,10 +220,15 @@ PanelWindow {
         clip: true
 
         Flickable {
+            id: scroller
+
             anchors.fill: parent
             anchors.margins: 20
             contentHeight: column.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
+
+            onHeightChanged: root.reveal()
+            onContentHeightChanged: root.reveal()
 
             Column {
                 id: column
@@ -318,6 +336,17 @@ PanelWindow {
                                     color: chosen ? Qt.tint(Theme.surface2, Qt.rgba(Theme.accentBg.r, Theme.accentBg.g, Theme.accentBg.b, 0.18)) : Theme.surface2
                                     border.width: chosen ? 2 : 0
                                     border.color: Theme.accentBg
+
+                                    onChosenChanged: {
+                                        if (tile.chosen) {
+                                            root.chosenTile = tile;
+                                        }
+                                    }
+                                    Component.onCompleted: {
+                                        if (tile.chosen) {
+                                            root.chosenTile = tile;
+                                        }
+                                    }
 
                                     Rectangle {
                                         id: thumb

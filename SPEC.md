@@ -1430,7 +1430,8 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
     Elsewhere it's the focused monitor.
 
   The arrow keys move through the options, Enter or a double-click shares
-  the highlighted one, and Escape or Cancel says no.
+  the highlighted one, and Escape or Cancel says no. A list longer than the
+  dialog scrolls to keep the highlighted one in view.
 - **Chrome asks more than once.** Chromium opens 2–4 portal sessions for one
   share.
   - The picker still **shows the dialog for every request**, because it isn't

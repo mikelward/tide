@@ -995,7 +995,6 @@ thumbnails and xdph itself are unchecked. Still to do:
   which should open on the first choice. Count the prompts one share
   makes, and check whether Chrome asks for a restore token.
 - Drag to choose an area, the mock's "Select a region…".
-- A long list doesn't scroll the highlighted option into view.
 
 ## The rest of `tide doctor`
 

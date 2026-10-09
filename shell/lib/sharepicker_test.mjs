@@ -7,7 +7,7 @@ import { join } from "node:path";
 import assert from "node:assert/strict";
 import {
     REPEAT_MS, answerCommand, answerOutcome, areaFor, decimalToHex, isUltrawide, options, orderWindows,
-    parseWindows, preselect, selectionLine, shareLabel, validReply
+    parseWindows, preselect, revealY, selectionLine, shareLabel, validReply
 } from "./sharepicker.mjs";
 
 const wide = { name: "DP-1", width: 3440, height: 1440 };
@@ -170,4 +170,22 @@ test("an answer to a pipe that's gone fails, and leaves nothing behind", () => {
     } finally {
         rmSync(dir, { recursive: true });
     }
+});
+
+test("the highlighted option scrolls into view, and no further", () => {
+    // A 400 px view over 1000 px of options, with a 16 px margin.
+    const at = (y, top, height) => revealY(y, 400, 1000, top, height, 16);
+    // Already in view: stays put.
+    assert.equal(at(0, 100, 150), 0);
+    assert.equal(at(300, 400, 150), 300);
+    // Below the view: just enough to show its bottom, margin and all.
+    assert.equal(at(0, 500, 150), 266);
+    // Above it: its top, less the margin.
+    assert.equal(at(500, 300, 150), 284);
+    // Taller than the view: its top.
+    assert.equal(at(0, 200, 600), 184);
+    // Never past either end.
+    assert.equal(at(500, 5, 100), 0);
+    assert.equal(at(0, 900, 100), 600);
+    assert.equal(revealY(0, 400, 300, 200, 50, 16), 0);
 });
