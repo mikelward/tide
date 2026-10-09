@@ -45,6 +45,9 @@ ShellRoot {
     // The polkit prompt (opt-in; see PolkitData.qml), which does the same.
     PolkitPrompt {}
 
+    // The screen-share picker, for tide-share-picker, which does the same.
+    SharePicker {}
+
     // Suspends on unplugging after the idle suspend step skipped it on AC.
     UnplugSuspend {}
 

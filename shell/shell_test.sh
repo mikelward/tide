@@ -969,7 +969,7 @@ focused() {
 # query leaves out its accent ("Café"), so the match also checks the
 # accent folding runs in Qt's engine. Then it opens the settings panel and
 # expects Down twice, past Idle and Sound, and Enter to open the Network
-# page's app. A stand-in tide on
+# page's app, and checks the share picker (share). A stand-in tide on
 # the shell's PATH keeps each command rather than running it. Its log is
 # $tmp/launch.qs.log.
 launch() {
@@ -1042,17 +1042,64 @@ launch() {
         sleep 0.1
         i=$((i + 1))
     done
-    kill "$qs_pid"
-    wait "$qs_pid"
-    qs_pid=
     _launched=$(sed -n 2p "$tmp/launched")
     if test "$_launched" != "launch -- nm-connection-editor"; then
         echo "FAIL: the settings panel's Network page should run \`tide launch -- nm-connection-editor\`; it ran \`tide $_launched\`" >&2
         exit 1
     fi
-    reports "the launcher ran an app and the settings panel opened one"
+    share
+    kill "$qs_pid"
+    wait "$qs_pid"
+    qs_pid=
+    reports "the launcher ran an app, the settings panel opened one and the share picker answered"
     echo "ok: the launcher finds an app by a query without its accent, and runs it"
     echo "ok: the settings panel changes page with the arrows and opens the page's app"
+}
+
+# share: on the shell launch() started, asks the share picker for a share
+# as tide-share-picker does, with one of the stand-in's windows in xdph's
+# list, and fails the test unless Right and Enter answer that window, with
+# reuse, on the reply pipe. A reply path outside the runtime directory is
+# refused first.
+share() {
+    _what="the share picker"
+    _refused=$(ipc call sharepicker pick "$tmp/elsewhere" false '') || exit 1
+    case $_refused in
+        refused:*) ;;
+        *)
+            echo "FAIL: the share picker should refuse a reply pipe outside the runtime directory; it answered: $_refused" >&2
+            exit 1
+            ;;
+    esac
+    _reply=$tmp/run/tide-share-picker.Probe01
+    mkfifo "$_reply" || exit 1
+    timeout "$wait" cat "$_reply" >"$tmp/share-answer" &
+    _reader=$!
+    _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
+    # kitty's ~/src on workspace 1 is 0x55aa02, 5614082 in decimal as xdph
+    # writes it.
+    _shown=$(ipc call sharepicker pick "$_reply" true '7[HC>]kitty[HT>]~/src[HE>]5614082[HA>]') || exit 1
+    if test "$_shown" != shown; then
+        echo "FAIL: the share picker should show for tide-share-picker's pipe; it answered: $_shown" >&2
+        exit 1
+    fi
+    focused "$_focus"
+    # It opens on the screen, which isn't an ultrawide; Right is the window.
+    timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 "$wtype_path" -k Right -k Return >"$tmp/wtype.log" 2>&1
+    typed $? "the share picker"
+    if ! wait "$_reader"; then
+        echo "FAIL: the share picker didn't answer on its pipe in $wait s" >&2
+        grep -v '^\[' "$log" >&2
+        exit 1
+    fi
+    rm -f "$_reply"
+    _answer=$(cat "$tmp/share-answer")
+    if test "$_answer" != '[SELECTION]r/window:7'; then
+        echo "FAIL: the share picker should answer the window with reuse, [SELECTION]r/window:7; it answered: $_answer" >&2
+        exit 1
+    fi
+    echo "ok: the share picker answers tide-share-picker's pipe with the window chosen"
 }
 
 # ipc ARG...: runs `qs ipc --pid` on the running shell, within the limit.

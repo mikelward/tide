@@ -366,6 +366,19 @@ once you have agreed with it or reversed it.
       cost is one line in `conf`'s `hypridle.conf`
       (mikelward/conf#414), which has to land first; going back is
       reverting both.
+- [ ] **The share picker opens on the focused monitor, away from an
+      ultrawide.** SPEC.md §12 named a default only for an ultrawide (the
+      focused window). The alternatives were the focused window everywhere,
+      or the first option. It's one branch of `preselect` in
+      `shell/lib/sharepicker.mjs`.
+- [ ] **The share picker gives up after 5 minutes.** `tide-share-picker`
+      then closes the dialog and cancels, so a dialog no one answers
+      doesn't hold xdph's request forever. The alternative was no limit.
+      It's `TIDE_SHARE_PICKER_TIMEOUT`'s default.
+- [ ] **With no tide shell, the share picker runs xdph's own.** So a plain
+      Hyprland login sharing `conf`'s `xdph.conf` can still share, when
+      `hyprland-share-picker` is installed. The alternative was to cancel.
+      It's one branch in `bin/tide-share-picker`.
 - [ ] **The greeter idles at the lock's default times, with no dim.**
       SPEC.md §11 said nothing about it; the screensaver at 5 minutes and
       the displays off at 5:30 are `idle.json`'s defaults. A dim would
@@ -953,6 +966,28 @@ back. The checks it doesn't make yet are in `scripts`' TODO.md, under
   and a key, a move and a click each turn them back on.
 - SPEC.md §15 has the greeter follow the default light/dark schedule. Its
   face is the lock's, which is dark only, like the lock.
+
+## Screen sharing (M6)
+
+The picker (SPEC.md §12) is `bin/tide-share-picker` and
+`shell/SharePicker.qml`, with its logic in `shell/lib/sharepicker.mjs`.
+The load test answers it with a window from Right and Enter; the
+thumbnails and xdph itself are unchecked. Still to do:
+
+- `conf`'s `xdph.conf` names `tide-share-picker` as
+  `screencopy:custom_picker_binary`. It has to land after this, and after
+  `make install-session` has put the picker on PATH: xdph runs the name
+  as given, and a missing one fails the share. `conf` also gives the
+  `tide-share-picker` layer `no_screen_share`, so a repeat request during
+  a share doesn't show the far end every window's thumbnail.
+- On a real session, share from Meet in Chrome: a window, the 16:9 area of
+  an ultrawide and a whole screen, then a second request within 10 s,
+  which should open on the first choice. Count the prompts one share
+  makes, and check whether Chrome asks for a restore token.
+- Drag to choose an area, the mock's "Select a region…".
+- Record each choice for the shell to pair with its stream (§12), so a
+  window share holds no popups (Notifications, above).
+- A long list doesn't scroll the highlighted option into view.
 
 ## The rest of `tide doctor`
 
