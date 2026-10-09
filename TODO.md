@@ -877,14 +877,24 @@ Hyprland yet. Still to do:
   system bus, which the load test doesn't fake, so the switch to battery
   is only driven in node. On a real session, check that unplugging after
   the 30 minutes suspends, and that unplugging after coming back to the
-  machine doesn't. Two edges are left:
-  - Input in the moment between `--unplugged` taking the flag and logind
-    suspending still suspends. Logind takes no "unless there's input"
-    condition, so no design removes it.
+  machine doesn't. Three edges are left:
+  - Input, or plugging back in, in the moment between `--unplugged`
+    reading the power and logind suspending still suspends. Logind takes
+    no "unless there's input" condition, so no design removes it. For a
+    replug, the shell could stop the check when the power returns to AC,
+    which narrows the moment but can't stop a suspend logind has begun.
+    (Codex on mikelward/tide#182.)
   - A hypridle restarted after the flag was left, by the shell applying
     new Idle timings or by a crash, has no step to resume, so input
     doesn't clear the flag and a later unplug suspends. Open question:
     have the shell clear the flag when it restarts hypridle, or leave it.
+  - Input in the moment the step runs can leave the flag behind.
+    hypridle starts `on-timeout` and `on-resume` without waiting for
+    either (`spawn` in hypridle 0.1.8's `Hypridle.cpp`), so `--cancel`
+    can finish before the step has written the flag, and a later unplug
+    suspends. hypridle always starts the step first, so a lock that both
+    take as their first act would order them, in practice if not by
+    guarantee. (Codex on mikelward/tide#182.)
 - Keep Hyprland's own notifications off the lock. One showed on the lock
   screen (maintainer, 2026-10-08). tide's popups can't show there: once the
   lock client has locked, Hyprland 0.56.2 draws no layer except one with
