@@ -28,6 +28,17 @@ once you have agreed with it or reversed it.
   tries with a backoff, then giving up until the next change; it's the `retry`
   timer in `shell/IdleData.qml` and `shell/InputData.qml`.
 
+- [ ] **A share's stream that arrives before the picker's choice counts as a
+  screen.** The choice reaches `ShareData` when the write to
+  `tide-share-picker` exits, and xdph makes its stream only after Chrome's
+  Start call, several D-Bus round trips later, so the choice comes first in
+  practice. If the stream ever came first, `nodesSeen` would count it as a
+  screen and hold popups for the whole window share: safe, but quiet. Review
+  found this as the third gap in the same pairing (PR 184), so it's a design
+  call rather than a patch. The alternative is pairing either way round: a
+  choice that arrives after exactly one unpaired node, within `PAIR_MS`,
+  takes it. That's `chose` and `nodesSeen` in `shell/lib/share.mjs`.
+
 - [ ] **A keyboard layout is typed as XKB's name, not picked from a list.**
   The Keyboard page has two text fields, Layout (`us`, or `us,de`) and Variant
   (`dvorak`, or empty), which take any XKB-shaped name and leave it to XKB to
