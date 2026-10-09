@@ -857,6 +857,25 @@ Hyprland yet. Still to do:
   on battery only. It doesn't leave the flag for unplugging while idle
   yet, and the shell doesn't watch for the switch to battery, so
   unplugging after the 30 minutes doesn't suspend (§10).
+- Keep Hyprland's own notifications off the lock. One showed on the lock
+  screen (maintainer, 2026-10-08). tide's popups can't show there: once the
+  lock client has locked, Hyprland 0.56.2 draws no layer except one with
+  the `above_lock` rule, and tide sets none. But it draws its own
+  notifications after the lock surface, on the focused monitor
+  (`renderMonitor` in `src/render/Renderer.cpp`), with no setting to keep
+  them off it. They come from:
+  - tide's Lua: the focus guard's "… is waiting", shown only when no shell
+    has given it an order (`hypr/tide/focus.lua`), and a bad layout setting
+    (`hypr/tide/layout.lua`);
+  - Hyprland itself: a runtime error in tide's Lua, and monitor warnings
+    when a screen comes back, such as a mode or scale it couldn't set, or
+    overlapping monitors. `misc:disable_scale_notification` turns off only
+    the scale one.
+
+  Open question: which one it was. Its text decides the fix. Keeping the
+  guard's off the lock needs the guard to know the session is locked, which
+  Lua can't see today. Hyprland's own need an upstream change: drawing them
+  under the lock, or a setting to.
 
 ## Login (M5)
 
