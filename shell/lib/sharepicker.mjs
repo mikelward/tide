@@ -213,3 +213,18 @@ export function validReply(path, runtimeDir) {
     const p = String(path ?? "");
     return p.startsWith(prefix) && /^[A-Za-z0-9]+$/.test(p.slice(prefix.length));
 }
+
+// Where a list of options, `viewHeight` tall over `contentHeight` of them
+// and scrolled to `y`, scrolls to show one from `top` down `height`, with
+// `margin` around it: as little as it can, its top first if it's taller
+// than the view, and never past either end.
+export function revealY(y, viewHeight, contentHeight, top, height, margin) {
+    let to = y;
+    if (top + height + margin > to + viewHeight) {
+        to = top + height + margin - viewHeight;
+    }
+    if (top - margin < to) {
+        to = top - margin;
+    }
+    return Math.max(0, Math.min(to, contentHeight - viewHeight));
+}
