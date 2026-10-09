@@ -254,16 +254,12 @@ export function takes(state, event) {
     return !(event.type === "submit" && state.checking);
 }
 
-// Whether another user can be picked: not while a login is under way.
-// Picking cancels greetd's session, and Quickshell's Greetd (0.3.1) doesn't
-// wait for the answer; a login for the new user started before it arrives
-// would take that answer for its own success. greetd answers the requests
-// it has in order, so a cancel sent while it checks is answered only once
-// the check ends. One sent while a second prompt waits for its answer is
-// answered at once, but that's still the same login, and the picker waits
-// for it to end rather than depend on how soon the answer comes.
+// Whether another user can be picked: any time until the password is
+// taken and the session is starting. Picking mid-login cancels greetd's
+// login for the last user, and the greeter drops whatever that login still
+// gets back (greetd.mjs), so its answers can't land on the new user's.
 export function canPickUser(state) {
-    return !inConversation(state);
+    return !state.unlocked;
 }
 
 // Whether greetd is in the middle of a login: between Enter and its

@@ -1325,11 +1325,12 @@ one of them:
     in its own state directory, written as the session starts.
   - An "Other user" chip lists the people who can log in: `getent passwd`'s
     accounts in `login.defs`' UID range, less those whose shell refuses
-    logins. It shows only when there's more than one. It's disabled while
-    a login is under way, from Enter until it fails, a second prompt
-    included. Picking cancels greetd's session, and Quickshell's `Greetd`
-    doesn't wait for the cancel's answer (below). greetd answers a cancel
-    sent during a password check only once the check ends.
+    logins. It shows only when there's more than one. Picking one during a
+    login cancels the last user's at greetd and starts the field over, and
+    the greeter drops whatever that login still gets back (below). greetd
+    answers a cancel sent during a password check only once the check
+    ends, so the next login waits behind it. It's disabled only once the
+    password is taken and the session is starting.
   - A list longer than the room under its chip scrolls.
   - A session chip lists the `wayland-sessions` entries, read from
     `$XDG_DATA_DIRS`:
