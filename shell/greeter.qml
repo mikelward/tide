@@ -5,7 +5,6 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Services.Greetd
 import Quickshell.Wayland
 import "lib/greeter.mjs" as Greeter
 import "lib/lock.mjs" as Lock
@@ -86,7 +85,7 @@ ShellRoot {
                 // dispatch, which mustn't run inside this one.
                 Qt.callLater(root.start);
             } else if (action.type === "respond") {
-                Greetd.respond(action.text);
+                greetd.respond(action.text);
             }
         }
     }
@@ -94,12 +93,12 @@ ShellRoot {
     function start() {
         if (root.pending > 0) {
             root.startWhenRead = true;
-        } else if (!Greetd.available) {
+        } else if (!greetd.available) {
             root.dispatch({ type: "failed", detail: "greetd isn't running" });
         } else if (root.user === "") {
             root.dispatch({ type: "failed", detail: "no user to log in as" });
         } else {
-            Greetd.createSession(root.user);
+            greetd.createSession(root.user);
         }
     }
 
@@ -108,12 +107,12 @@ ShellRoot {
     function launch() {
         const session = root.chosen;
         if (session === null) {
-            Greetd.cancelSession();
+            greetd.cancelSession();
             root.face = Greeter.greetdError(root.face, "no session to start", "");
             return;
         }
         remember.setText(Greeter.serializeRemembered(root.user, session.id));
-        Greetd.launch([session.command], session.env);
+        greetd.launch([session.command], session.env);
     }
 
     // Another user: whatever greetd was doing for the last one stops, and
@@ -127,9 +126,7 @@ ShellRoot {
         if (name === root.user) {
             return;
         }
-        if (Greetd.state !== GreetdState.Inactive) {
-            Greetd.cancelSession();
-        }
+        greetd.cancelSession();
         root.user = name;
         root.face = Lock.INITIAL;
     }
@@ -139,11 +136,14 @@ ShellRoot {
         root.session = id;
     }
 
-    Connections {
-        target: Greetd
+    // greetd, through tide-greetd (GreetdClient.qml).
+    GreetdClient {
+        id: greetd
+    }
 
-        // Quickshell sets echoResponse on any message but a secret prompt,
-        // so it counts only for a prompt.
+    Connections {
+        target: greetd
+
         function onAuthMessage(message, error, responseRequired, echoResponse) {
             if (Greeter.inConversation(root.face)) {
                 root.dispatch({
@@ -163,7 +163,7 @@ ShellRoot {
         function onReadyToLaunch() {
             if (!Greeter.inConversation(root.face)) {
                 // A login for a user since replaced: drop it.
-                Greetd.cancelSession();
+                greetd.cancelSession();
                 return;
             }
             root.dispatch({ type: "done", result: "success" });

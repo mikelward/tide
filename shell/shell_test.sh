@@ -56,7 +56,8 @@
 # time, and exit.
 #
 #   $QS                  the Quickshell command (default: qs)
-#   $GO                  the Go command, to build tide-tz (default: go)
+#   $GO                  the Go command, to build tide-tz and tide-greetd
+#                        (default: go)
 #   $TIDE_REQUIRE_QS     set (CI sets it) to fail, not skip, without qs,
 #                        sway, python3, Go, wtype or notify-send
 #   $TIDE_LOAD_WAIT      seconds to wait for each step (default: 60)
@@ -128,7 +129,7 @@ qs=${QS:-qs}
 qs_path=$(command -v "$qs") || missing "$qs (Quickshell)"
 sway_path=$(command -v sway) || missing "sway (to run headless)"
 python_path=$(command -v python3) || missing "python3 (for the stand-in Hyprland)"
-go_path=$(command -v "${GO:-go}") || missing "${GO:-go} (to build tide-tz, which the bar's clocks run)"
+go_path=$(command -v "${GO:-go}") || missing "${GO:-go} (to build tide-tz, which the bar's clocks run, and tide-greetd, which the greeter talks to greetd through)"
 # Without wtype, nothing is typed, so the launcher, the lock's password and
 # the greeter go untested.
 if ! wtype_path=$(command -v wtype); then
@@ -229,6 +230,11 @@ done
 # container): a binary for this run needs no stamp.
 if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/helpers/real/tide-tz" ./cmd/tide-tz >"$tmp/go.log" 2>&1; then
     echo "FAIL: couldn't build tide-tz: $(cat "$tmp/go.log")" >&2
+    exit 1
+fi
+# The greeter's connection to greetd, which tide-greeter passes it.
+if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/tide-greetd" ./cmd/tide-greetd >"$tmp/go.log" 2>&1; then
+    echo "FAIL: couldn't build tide-greetd: $(cat "$tmp/go.log")" >&2
     exit 1
 fi
 helpers="tide-sysmon tide-tz hyprctl gsettings nmcli systemctl timedatectl"
@@ -1113,7 +1119,7 @@ $TIDE_LOCK_PASSWORD
 }
 
 # login: starts the greeter on a stand-in greetd, as tide-greeter does
-# (`qs -p .../greeter.qml`), with a getent that lists root and one person,
+# (`qs -p .../greeter.qml`, talking to greetd through tide-greetd), with a getent that lists root and one person,
 # and two session files, tide's own and one whose name sorts first. It types
 # a wrong password and then, once greetd has turned it down and Quickshell
 # has taken in the answer, the right one: an Enter while greetd checks isn't
@@ -1154,7 +1160,8 @@ login() {
     done
     keyboard
     env -i PATH="$_bin:$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" XDG_DATA_DIRS="$_data" \
-        GREETD_SOCK="$_socket" ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
+        GREETD_SOCK="$_socket" TIDE_GREETER_GREETD="$tmp/tide-greetd" \
+        ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
         LANG=C.UTF-8 QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
         QS_DISABLE_FILE_WATCHER=1 WAYLAND_DEBUG=client \
         "$qs_path" -p "$tmp/home/.config/quickshell/tide/greeter.qml" >"$log" 2>&1 &
@@ -1164,7 +1171,7 @@ login() {
         LANG=C.UTF-8 "$wtype_path" "not-$_password
 " >"$tmp/wtype.log" 2>&1
     typed $? "the greeter"
-    # Quickshell cancels greetd's session after a failure; once greetd has
+    # The greeter cancels greetd's session after a failure; once greetd has
     # answered that, a barrier makes sure Quickshell has taken the answer in.
     i=0
     until grep -qx cancel_session "$tmp/greetd.log"; do

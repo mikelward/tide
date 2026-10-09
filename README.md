@@ -19,8 +19,8 @@ The mocks are in [`docs/mocks/`](docs/mocks/).
 packages, runs both installs below, enables `tide.service`, and switches the
 display manager to the greeter. By hand, it's:
 
-    make install                       # builds tide-grant and tide-tz (needs Go 1.22+); layout, user units, portal config under ~/.config
-    sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant, tide-tz and tide-sysmon under /usr/local
+    make install                       # builds tide-grant, tide-tz and tide-greetd (needs Go 1.22+); layout, user units, portal config under ~/.config
+    sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant, tide-tz, tide-greetd and tide-sysmon under /usr/local
     systemctl --user daemon-reload
     systemctl --user enable tide.service
 

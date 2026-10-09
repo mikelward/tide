@@ -247,12 +247,9 @@ export function greetdError(state, description, session) {
 }
 
 // Whether the greeter takes `event` in `state`. An Enter while greetd checks
-// the last attempt isn't held for when it fails, as the lock holds it:
-// after a failure Quickshell's Greetd (0.3.1) cancels greetd's session and
-// doesn't wait for the answer, so a login started at once would take that
-// answer for its own success. greetd then refuses to start the session,
-// and the password has to be typed again. The keys typed meanwhile still
-// land in the field; the next Enter sends them.
+// the last attempt isn't held for when it fails, as the lock holds it
+// (SPEC.md §11, maintainer's call). The keys typed meanwhile still land in
+// the field; the next Enter sends them.
 export function takes(state, event) {
     return !(event.type === "submit" && state.checking);
 }
