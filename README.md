@@ -15,8 +15,9 @@ The mocks are in [`docs/mocks/`](docs/mocks/).
 
 ## Installing
 
-`setup --tide` in the scripts repo will do all of this; until it lands,
-this is the way to install by hand:
+`setup --tide` in the scripts repo does all of this: it installs the
+packages, runs both installs below, enables `tide.service`, and switches the
+display manager to the greeter. By hand, it's:
 
     make install                       # builds tide-grant and tide-tz (needs Go 1.22+); layout, user units, portal config under ~/.config
     sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant, tide-tz and tide-sysmon under /usr/local
@@ -43,13 +44,21 @@ install it with `sudo make install-session PREFIX=/usr`.
 `make install-session` also installs tide's greeter, for greetd (SPEC.md
 §11): `tide-greeter`, which runs Hyprland with its own config and the
 greeter on the lock's face, plus a copy of the shell for it and a greetd
-config template in `$(PREFIX)/share/tide/greeter/greetd.toml`. Nothing
-switches your display manager to it: `setup --tide` will, and until then
-it's by hand, as root. Install greetd, copy the template to
-`/etc/greetd/config.toml` with `user` set to the greeter account your
-greetd package created, and enable greetd in place of the current display
-manager. The greeter user has to be able to run `Hyprland` and `qs`, so a
-build under someone's home directory won't do (see `TODO.md`).
+config template in `$(PREFIX)/share/tide/greeter/greetd.toml`.
+`setup --tide` in the scripts repo switches your display manager to it,
+and `setup --tide --no-greeter` switches back. By hand, as root:
+
+- install greetd, and copy the template to `/etc/greetd/config.toml` with
+  `user` set to the greeter account your greetd package created;
+- give that account a home it can write, where the greeter remembers the
+  last login;
+- add `auth optional pam_gnome_keyring.so` and `session optional
+  pam_gnome_keyring.so auto_start` to `/etc/pam.d/greetd`, so the login
+  unlocks the keyring;
+- enable greetd in place of the current display manager.
+
+The greeter user has to be able to run `Hyprland` and `qs`, so a build
+under someone's home directory won't do.
 
 Key bindings and the launcher start apps with `tide launch [--app ID]...
 COMMAND...`: it waits (at most 15 s) for the shell, gives the app a one-shot

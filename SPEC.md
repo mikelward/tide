@@ -1348,8 +1348,8 @@ one of them:
   It shows the same layout badge by the password field as the lock.
 - **Keyring.** PAM unlocks gnome-keyring with the login password, so Chrome
   and other secret users don't prompt again. This needs
-  `pam_gnome_keyring` in greetd's PAM stack, which `setup --tide` owns
-  (TODO.md).
+  `pam_gnome_keyring` in greetd's PAM stack, which `setup --tide` adds
+  (mikelward/scripts#288).
 - **PAM messages** (faillock countdowns, fingerprint prompts) show verbatim
   under the field. greetd reports a failure only as PAM's return code
   (`pam_authenticate: AUTH_ERR`, greetd 0.10.3). So a wrong password and
