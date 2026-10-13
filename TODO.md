@@ -456,6 +456,9 @@ packaged). It also runs
   `notify` once waybar goes.
 - The theme daemon restarts swaync at each light/dark boundary (and waybar,
   when it's the bar); the Quickshell bar changes theme in place.
+- A Chrome that starts while nothing owns `org.freedesktop.Notifications`
+  (that restart, or swaync down) draws its own popups until it restarts.
+  They float now (SPEC.md §6.4). Retiring swaync (M4) narrows the gap.
 
 ## Bar (M3)
 

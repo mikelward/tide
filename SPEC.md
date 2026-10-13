@@ -636,11 +636,18 @@ in how long they last and what stays visible:
     `WM_TRANSIENT_FOR`;
   - it is modal;
   - it is an X11 dialog, utility or splash window;
-  - it asks for a fixed size (minimum = maximum).
+  - it asks for a fixed size (minimum = maximum);
+  - it opens with neither an app ID nor a title.
 
   Hyprland floats most of these on its own. Window rules catch the rest by
   class or title: `pavucontrol`, `nm-connection-editor`, `blueman-manager`,
-  portal file choosers, "Open File" / "Save File" / "Save As" titles.
+  portal file choosers, "Open File" / "Save File" / "Save As" titles, and an
+  empty class with an empty title.
+- **Chrome's own notification popups.** Chrome checks for a notification
+  server once, as it starts. If none answers, it draws its own popups until
+  it restarts. On Wayland each popup is a toplevel with no parent, app ID or
+  title, and no maximum size, so only the empty-name rule floats it
+  (Chromium 158's `WaylandWindow::Create` and `MessagePopupView`).
 - **Placement.** A dialog is centered on its parent, or on the focused
   monitor if it has no parent.
   - Its size is whatever it asks for, capped at 80% of the monitor.
@@ -662,7 +669,9 @@ in how long they last and what stays visible:
   - `zenity --question` from kitty;
   - blueman's pairing dialog;
   - an Electron dialog;
-  - an XWayland dialog.
+  - an XWayland dialog;
+  - Chrome's own notification popup, from a Chrome started with no
+    notification server.
 
 ### 6.5 Monitors
 
