@@ -151,6 +151,36 @@ test("a new window from the app you're in takes focus", function()
     eq(is_focus(d[1], dialog), true, "focused")
 end)
 
+test("a status popup from the app you're in stays unfocused and unmarked", function()
+    -- Chrome's own notification: no class and no title, from Chrome's
+    -- process, shown inactive (SPEC.md §6.4).
+    load()
+    focused(window("google-chrome", 70), FFM)
+    local popup = window("", 70)
+    popup.title = ""
+    eq(#fire("window.open", popup), 0, "no dispatch")
+end)
+
+test("a status popup takes no grant", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("*")
+    local popup = window("", 71)
+    popup.title = ""
+    eq(#fire("window.open", popup), 0, "no dispatch")
+    eq(m.grants()[1], "*", "the grant still holds")
+    local app = window("org.example.app")
+    eq(is_focus(fire("window.open", app)[1], app), true, "the next window uses it")
+end)
+
+test("a window with a title but no class is no status popup", function()
+    load()
+    focused(window("google-chrome", 72), FFM)
+    local w = window("", 72)
+    w.title = "Untitled"
+    eq(is_focus(fire("window.open", w)[1], w), true, "focused")
+end)
+
 test("the same app by class counts even from another process", function()
     load()
     focused(window("org.gnome.Nautilus", 60), CLICK)

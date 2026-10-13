@@ -648,6 +648,8 @@ in how long they last and what stays visible:
   it restarts. On Wayland each popup is a toplevel with no parent, app ID or
   title, and no maximum size, so only the empty-name rule floats it
   (Chromium 158's `WaylandWindow::Create` and `MessagePopupView`).
+  Chrome shows it inactive, and tide honors that: it opens unfocused, even
+  from the app you're in, and isn't marked urgent (§14.1).
 - **Placement.** A dialog is centered on its parent, or on the focused
   monitor if it has no parent.
   - Its size is whatever it asks for, capped at 80% of the monitor.
@@ -1586,6 +1588,7 @@ this spec.
 |---|---|
 | A shell surface holds the keyboard: the launcher, share picker, screenshot selection or lock | It keeps it. A window that opens meanwhile doesn't take it; Hyprland already does this for any layer surface with keyboard focus (checked in 0.56's source). |
 | A new window from the app you're in: a dialog, a file chooser, a second window | **Yes.** You asked, and KWin's Medium allows the active app too. |
+| A status popup: a window with no app ID and no title, like Chrome's own notification (§6.4) | **No**, even from the app you're in, and it isn't marked urgent. The app shows it inactive, and it opens on screen. |
 | The first window of an app you launched from tide (launcher, key binding, quick action), or that app bringing forward a window it already had | **Yes**, if you haven't typed or moved focus since launching it. Otherwise a slow app would snatch focus from whatever you moved on to. |
 | A window started from the focused terminal (`nautilus .` in kitty) | **Yes**, on the same terms as the launcher. The terminal's shell tells the guard which app the command started (§14.3). |
 | Any other new window: a background app, an update prompt, a slow app you've moved on from | **No.** It opens in place, dimmed like any inactive window, and is marked urgent. |

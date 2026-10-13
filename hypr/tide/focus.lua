@@ -8,7 +8,9 @@
 --     a window it already had, while its one-shot launch grant holds.
 --
 -- Anything else stays where it opened, dimmed, and is announced on the event
--- socket as `custom>>tide-attention>>ADDRESS` for the shell to mark.
+-- socket as `custom>>tide-attention>>ADDRESS` for the shell to mark, except
+-- a window with no class and no title (Chrome's own notification popup),
+-- which opens unfocused and unmarked, as it asks.
 -- Lua can't set Hyprland's urgent flag, so the guard also keeps these
 -- windows itself. Until a shell has marked them (it calls `set_order`, as
 -- tide's Quickshell bar does at startup; waybar never does), each
@@ -440,8 +442,20 @@ local function portal_dialog_for_active(w)
     return state.active ~= nil and class_in(w, state.opts.portal_classes)
 end
 
+-- A window with neither a class nor a title is a status popup, not one you
+-- asked for: Chrome's own notification opens so, and asks to be shown
+-- inactive (SPEC.md §6.4).
+local function unnamed(w)
+    return (field(w, "class") or "") == "" and (field(w, "title") or "") == ""
+end
+
 -- A new window: focus it if it's yours, else leave it and mark it.
 function M.on_open(w)
+    -- A status popup opens on screen, so it's left as it is: unfocused even
+    -- from the app you're in, unmarked, and taking no grant.
+    if unnamed(w) then
+        return
+    end
     -- Grants first, so one is used up even when the window is from the app
     -- you are in (a second terminal from a terminal, or a script's window).
     local g = take_grant(w) or take_grant_by_ancestry(w)
