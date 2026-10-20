@@ -44,5 +44,18 @@ for setting in 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' 'A
     check "the shell job's apt config says $setting" 'printf "%s\n" "$conf_line" | grep -q -F -- "$setting"'
 done
 
+# One workflow-level concurrency group: a pull request's runs share one, keyed
+# by number, and a newer push cancels the stale run; a push to main is keyed by
+# commit so no main run is canceled; an `edited` run queues rather than
+# cancels, since GitHub doesn't promise to start runs in event order and it
+# could cancel the only run on a newer head.
+main_event="(github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))"
+check "ci.yml declares one workflow-level concurrency block" 'test "$(grep -c "^concurrency:$" "$ci")" -eq 1'
+check "the group keys a pull request by number and main by commit" \
+    'grep -qxF "  group: ci-\${{ $main_event && format('"'"'main-{0}'"'"', github.sha) || github.event.pull_request.number || github.ref }}" "$ci"'
+check "a push cancels the stale run, never main or an edit" \
+    'grep -qxF "  cancel-in-progress: \${{ !$main_event && github.event.action != '"'"'edited'"'"' }}" "$ci"'
+check "an edit still starts a run" 'grep -qF "types: [opened, synchronize, reopened, edited]" "$ci"'
+
 echo "ci_test.sh: $passed passed, $failures failed"
 test "$failures" -eq 0
