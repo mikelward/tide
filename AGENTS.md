@@ -1,7 +1,7 @@
 ---
 trigger: always_on
 alwaysApply: true
-last_modified: 2026-10-06
+last_modified: 2026-10-25
 ---
 
 # AGENTS.md
@@ -192,7 +192,10 @@ reply, no offer to correct it. It is not a finding.
   you're working — the "sent while you were working" interjection — is
   addressed in your very next output, before any further tool call, even if
   it's one sentence. A merge cue is the exception — its hygiene runs first,
-  and announcing the switch is that answer.
+  and announcing the switch is that answer. **Claude Code only**
+  (maintainer, 2026-10-25): its app reliably shows just a turn's last
+  message, so reply only there, answering a mid-turn message at a stopping
+  point soon.
 - **Don't narrate routine machinery.** A check run flipping, a re-run, a scheduled check
   re-arming, a webhook echo, a resolved thread — act on those silently; the noise buries
   the one line that matters. Reports another rule requires stand (each review and its
