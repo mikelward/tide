@@ -711,7 +711,7 @@ with new keys in **bold**:
 | `Super+\` / `Super+/` | grow / shrink master (`mfact` ±0.025) |
 | `Super+=` / `Super+-` | add / remove a master |
 | `Super+.` / `Super+,` | next / previous layout |
-| ``Super+` ``, **`Super+O`** | toggle monocle (`O` as in one window, and the key tico uses on ChromeOS, where Chrome can't bind a backtick) |
+| ``Super+` ``, **`Super+O`** | toggle monocle (`O` as in one window, and the key tileco uses on ChromeOS, where Chrome can't bind a backtick) |
 | **`Super+Up`** / **`Super+Shift+Up`** / **`Super+Down`** | maximize / fullscreen / restore the current window |
 | `Super+Shift+F`, `Super+Insert` | toggle floating |
 | **`Super`+middle-click** | toggle maximize on the window under the pointer |
