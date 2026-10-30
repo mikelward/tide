@@ -102,8 +102,10 @@ otherwise a notification offers **Authenticate**.
 problem, with its fix: units that aren't running, D-Bus names owned by the
 wrong process or that D-Bus could start a rival for, daemons running twice
 or rivals to an owner, the portal
-config, Hyprland's config errors, and autostart entries that run in
-tide without being on its allowlist. It exits 1 if it found a problem.
+config, Hyprland's config errors, autostart entries that run in
+tide without being on its allowlist, and a lock that couldn't work: its
+unit, `lock.qml` or PAM file missing, or the last lock failed. It exits 1
+if it found a problem.
 
 XDG autostart is an allowlist in tide. `make install` adds one systemd
 drop-in, `app-.service.d/tide-autostart.conf`, that reaches every
