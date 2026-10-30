@@ -863,7 +863,9 @@ Hyprland yet. Still to do:
 - Try it on a real session: `make install`, `sudo make install-session`
   (for `/etc/pam.d/tide-lock`), then `systemctl --user start
   tide-lock.service`. A right password unlocks; a wrong one clears the
-  field and says so; every key shows at once.
+  field and says so; every key shows at once. `tide doctor` first: it
+  names a missing unit, `lock.qml` or PAM file, and a last lock that
+  failed.
 - `conf` locks the tide session with tide-lock (mikelward/conf#384,
   #385): hypridle's `lock_cmd` starts `tide-lock.service`, its 5-minute
   listener runs `tide idle-lock`, `Super+L` runs `loginctl lock-session`,

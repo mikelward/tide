@@ -226,6 +226,10 @@ healthy() {
     echo "0::/user.slice/user-1000.slice/user@1000.service/session.slice/hypridle.service" > "$tmp/proc/101/cgroup"
     printf 'HOME=/home/user\0' > "$tmp/proc/100/environ"
     cp xdg-desktop-portal/tide-portals.conf "$tmp/config/xdg-desktop-portal/"
+    # The lock's QML, where its unit runs it from, and its PAM file.
+    mkdir -p "$tmp/home/.config/quickshell/tide" "$tmp/sysconf/pam.d"
+    cp shell/lock.qml "$tmp/home/.config/quickshell/tide/"
+    cp pam/tide-lock "$tmp/sysconf/pam.d/"
     # The session bus's config, laid out as dbus ships it: the standard
     # directories, then the local files under (here) $tmp/sysconf.
     mkdir -p "$tmp/datadir/dbus-1"
@@ -252,7 +256,7 @@ bus_conf() {
 # otherwise, with the given fakes' answers.
 run() {
     env PATH="$fake:$tmp/qs-bin:$PATH" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" \
-        XDG_CURRENT_DESKTOP=tide:Hyprland XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" \
+        XDG_CURRENT_DESKTOP=tide:Hyprland XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" HOME="$tmp/home" \
         XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_HOME="$tmp/no-data-home" XDG_DATA_DIRS="$tmp/share" \
         XDG_RUNTIME_DIR="$tmp/runtime" TIDE_DATADIR="$tmp/datadir" TIDE_SYSCONFDIR="$tmp/sysconf" \
         FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_PID_hypridle=101 \
@@ -274,6 +278,48 @@ run FAKE_INACTIVE="hypridle.service=failed"
 check "a failed unit is a problem" test "$status" -eq 1
 check "a failed unit is named, with where to look" \
     contains "$out" "hypridle.service is failed: see \`systemctl --user status hypridle.service\`"
+
+# The lock (§10): its unit, its QML and its PAM file, each a lock that
+# never comes or never unlocks if it's missing.
+run FAKE_LOADSTATE="tide-lock.service=not-found"
+check "an uninstalled lock unit is a problem" test "$status" -eq 1
+check "an uninstalled lock unit is named, with the fix" \
+    contains "$out" "tide-lock.service isn't installed, so nothing locks the session: run \`make install\` in the tide checkout, then \`systemctl --user daemon-reload\`"
+run FAKE_LOADSTATE="tide-lock.service=masked"
+check "a masked lock unit is named, with the fix" \
+    contains "$out" "tide-lock.service is masked, so nothing locks the session: \`systemctl --user unmask tide-lock.service\`"
+run FAKE_LOADSTATE="tide-lock.service=bad-setting"
+check "a lock unit that won't load says where to look" \
+    contains "$out" "tide-lock.service is bad-setting, so the session can't lock: \`systemctl --user status tide-lock.service\` says why"
+run FAKE_LOADSTATE_FAILS="Failed to connect to bus"
+check "a lock unit systemd can't be asked about is reported" \
+    contains "$out" "couldn't check that tide-lock.service is installed (Failed to connect to bus), so whether the session can lock isn't known"
+run FAKE_INACTIVE="tide-lock.service=failed"
+check "a failed last lock is a problem" test "$status" -eq 1
+check "a failed last lock says where to look" \
+    contains "$out" "the last lock failed (tide-lock.service is failed): \`journalctl --user -u tide-lock.service\` says why"
+run FAKE_INACTIVE="tide-lock.service=inactive"
+check "an unlocked session is no problem" test "$out" = "No problems found."
+rm "$tmp/home/.config/quickshell/tide/lock.qml"
+run
+check "a missing lock.qml is a problem" test "$status" -eq 1
+check "a missing lock.qml is named, with the fix" \
+    contains "$out" "$tmp/home/.config/quickshell/tide/lock.qml isn't installed, so tide-lock.service has nothing to run and the session can't lock: run \`make install\` in the tide checkout"
+healthy
+rm "$tmp/sysconf/pam.d/tide-lock"
+run
+check "a missing lock PAM file is a problem" test "$status" -eq 1
+check "a missing lock PAM file is named, with the fix" \
+    contains "$out" "$tmp/sysconf/pam.d/tide-lock isn't installed, so the lock checks the password with PAM's \`other\` service, which may refuse every password: run \`make build\`, then \`sudo make install-session PREFIX=/usr\`, in the tide checkout"
+healthy
+chmod 000 "$tmp/sysconf/pam.d/tide-lock"
+if ! cat "$tmp/sysconf/pam.d/tide-lock" >/dev/null 2>&1; then
+    run
+    check "an unreadable lock PAM file is named, with the fix" \
+        contains "$out" "couldn't read $tmp/sysconf/pam.d/tide-lock, which the lock reads as you to check the password, so it may never unlock: \`sudo chmod 644 $tmp/sysconf/pam.d/tide-lock\`"
+fi # root reads it anyway
+chmod 644 "$tmp/sysconf/pam.d/tide-lock"
+healthy
 
 # A Quickshell older than 0.3 can't load tide's shell (Debian's 0.2.1),
 # so tide-shell runs waybar, and says so only in its log.
@@ -767,7 +813,7 @@ for cmd in sh cat sed awk grep tr tail head mktemp rm id dirname; do
 done
 healthy
 out=$(env PATH="$fake:$tmp/no-jq" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" XDG_CURRENT_DESKTOP=tide:Hyprland \
-    XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_DIRS="$tmp/share" \
+    XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_DIRS="$tmp/share" HOME="$tmp/home" \
     XDG_DATA_HOME="$tmp/no-data-home" XDG_RUNTIME_DIR="$tmp/runtime" TIDE_DATADIR="$tmp/datadir" TIDE_SYSCONFDIR="$tmp/sysconf" \
     FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_PID_hypridle=101 \
     "$tmp/no-jq/sh" "$doctor" 2>&1)

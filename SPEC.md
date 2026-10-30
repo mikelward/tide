@@ -499,13 +499,19 @@ flowchart TD
     is named `tide-bar`), which a narrow bar or a dock holds;
   - portal backend selection;
   - `hyprctl configerrors`;
-  - unscoped autostart entries.
+  - unscoped autostart entries;
+  - the lock's pieces (§10): `tide-lock.service` installed and loaded, its
+    `lock.qml`, and the `tide-lock` PAM file, readable by the user, without
+    which PAM falls back to its `other` service; and whether the last lock
+    failed. A broken lock otherwise shows only when the session should
+    lock.
 
   It prints one line per problem, with the fix.
   - M2's `tide doctor` checks the transitional shell's owners
     (swaync, waybar) and the units, activatable services, rival daemons,
-    portal config, config errors, autostart entries and bars per monitor,
-    and that `qs`, where it's installed, is new enough to load the shell.
+    portal config, config errors, autostart entries, bars per monitor and
+    the lock's pieces, and that `qs`, where it's installed, is new enough
+    to load the shell.
   - Every activation file in the session bus's service directories (the
     standard ones and any its config adds) that names an owner's D-Bus
     name is judged, since which one the bus would use can't be told from
