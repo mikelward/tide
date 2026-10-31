@@ -1131,6 +1131,14 @@ made by clicking it on the bar; a rename of home is undone.
   `Super+PgUp`/`PgDn` keep previous/next workspace. Check first whether the
   edge behavior can be built in the Lua layout, and decide what a second
   display shows before anything is on it.
+- **Minimize a window** (SPEC.md §21), not started: a key minimizes the
+  focused window. While any window on the current workspace is
+  minimized, every display shows a bottom bar listing their titles, and
+  clicking one there, or choosing it on the switcher's Windows tab,
+  restores it. Open: which key (`Super+Delete` or `Super+Z`); whether
+  each display's bottom bar lists only its own minimized windows or all of
+  the workspace's; and how, since Hyprland has no real minimize (likely a
+  special workspace per workspace).
 - **Decide what the bar does when named workspaces outgrow its left side**
   (SPEC.md §7.3, §21).
 - **Home in `conf`.** A `persistent`, `default` workspace rule for home,
