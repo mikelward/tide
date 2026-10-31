@@ -6,9 +6,10 @@ import Quickshell.Io
 import "lib/launch.mjs" as Run
 import "lib/report.mjs" as Report
 import "lib/startup.mjs" as Startup
+import "lib/workspacenames.mjs" as Names
 
-// Start at login (SPEC.md §16): the commands in startup.json and
-// startup.local.json (§16.1), run once a session through `tide launch
+// Start at login (SPEC.md §16): home's apps (§6.5), and beside them the
+// commands in startup.json and startup.local.json (§16.1), run once a session through `tide launch
 // --background --unless-running`, so nothing they open takes focus and
 // nothing running is started twice. It records the graphical session it
 // ran them in, by graphical-session.target's invocation ID, in
@@ -28,8 +29,9 @@ Singleton {
     property bool ran: false
     // Whether the session's ID is being read.
     property bool asking: false
-    // The commands being started, in order (Startup.startQueue).
-    property var queue: null
+    // What's being started, in order (Startup.startQueue): home's apps
+    // and the list's commands, each a queue of its own.
+    property var queues: ({ home: null, list: null })
     property var reports: Report.NOTHING
     property var fileErrors: []
     // The commands that failed, each "COMMAND: why", reported once.
@@ -160,15 +162,21 @@ Singleton {
                 console.warn(`tide: ${error}; Start at login's commands run again if the shell restarts`);
             }
         }
-        root.queued(Startup.startQueue(root.commands));
+        // Both start now, side by side: home's apps don't wait for their
+        // rules, and the list doesn't wait for home's apps.
+        const home = Names.homeAppLaunches(WorkspacesData.settings.inApps ?? []);
+        root.queued("list", Startup.startQueue(Startup.listRuns(home, root.commands)));
+        root.queued("home", Startup.startQueue(Startup.homeRuns(home)));
     }
 
     // Starts what the queue says to: each command once the one before it
     // has started (Startup.STARTED) or ended, so they start in order.
-    function queued(r) {
-        root.queue = r.state;
+    function queued(which, r) {
+        const next = Object.assign({}, root.queues);
+        next[which] = r.state;
+        root.queues = next;
         if (r.start !== null) {
-            starter.createObject(root, { name: r.start.command, index: r.start.index, command: Startup.launchCommand(r.start.command) }).running = true;
+            starter.createObject(root, { which: which, name: r.start.command.name, index: r.start.index, command: r.start.command.argv }).running = true;
         }
     }
 
@@ -188,13 +196,14 @@ Singleton {
         Process {
             id: start
 
+            property string which
             property string name
             property int index
             property var tracker: null
 
             function handle(event) {
                 if (tracker.on(event)) {
-                    root.queued(Startup.queueEnded(root.queue, start.index));
+                    root.queued(start.which, Startup.queueEnded(root.queues[start.which], start.index));
                     destroy();
                 }
             }
@@ -204,7 +213,7 @@ Singleton {
                 log: m => console.log(m)
             })
             stdout: SplitParser {
-                onRead: line => root.queued(Startup.queuePrinted(root.queue, start.index, line))
+                onRead: line => root.queued(start.which, Startup.queuePrinted(root.queues[start.which], start.index, line))
             }
             stderr: StdioCollector {
                 onStreamFinished: start.handle({ type: "stderr", text: text })

@@ -53,6 +53,20 @@ Singleton {
     property string saveFailure: ""
     readonly property var muted: root.settings.muted ?? []
     property var target: Writes.TARGET
+    // The classes each program in inApps may have, as `tide app-classes`
+    // finds them, its launch's grant's: google-calendar's are its Chrome
+    // `--app` window's (Names.inAppPatterns). Looked up once a shell.
+    property var resolved: ({})
+    // The programs being looked up now.
+    property var resolving: []
+    // The rules last asked for, as text, and what they were made from,
+    // and what the rules Hyprland last took were made from: which windows
+    // they cover (Names.uncoveredOpened).
+    property var wantedRules: ({ text: null, rules: { inApps: [], resolved: {} } })
+    property var appliedRules: ({ inApps: [], resolved: {} })
+    // The windows that opened while the applied rules didn't cover them,
+    // to send home once rules that do are applied (Names.homeSweep).
+    property var uncovered: Names.NO_UNCOVERED
 
     readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`
     readonly property string dir: `${root.configHome}/tide`
@@ -92,9 +106,44 @@ Singleton {
         }
     }
 
-    // Reads both settings files and the file hyprland.lua reads, and
-    // writes and applies the settings when they've changed.
+    // Reads both settings files and the file hyprland.lua reads, writes
+    // and applies the settings when they've changed, and looks up home's
+    // programs' classes.
     function load() {
+        root.read();
+        // However read() ends, home's programs are looked up.
+        root.resolve();
+    }
+
+    // Asks for the rules the settings and lookups make now.
+    function wantRules() {
+        const text = Names.workspacesLua(root.settings, root.resolved);
+        root.wantedRules = { text: text, rules: { inApps: root.settings.inApps ?? [], resolved: root.resolved } };
+        root.stepped(Writes.wantTarget(root.target, text));
+    }
+
+    // Hyprland took `text`: if it's the rules last asked for, they say
+    // which windows are covered now, and the noted windows they cover go
+    // home (Names.homeSweep).
+    function rulesApplied(text) {
+        if (text !== root.wantedRules.text) {
+            return;
+        }
+        root.appliedRules = root.wantedRules.rules;
+        const windows = Hyprland.toplevels.values.map(t => ({
+            address: Ws.normalizeAddress(t.address),
+            app: t.lastIpcObject?.class || t.wayland?.appId || "",
+            workspace: t.workspace?.name ?? ""
+        }));
+        const r = Names.homeSweep(root.uncovered, windows, root.home, root.appliedRules);
+        root.uncovered = r.list;
+        for (const address of r.move) {
+            console.log(`tide: sending window ${address}, one of home's apps that opened before its rule, to ${root.home}`);
+            Hyprland.dispatch(Dispatch.sendWindowTo(address, root.home, Hyprland.usingLua));
+        }
+    }
+
+    function read() {
         const sharedText = shared.readNow();
         const localText = local.readNow();
         const broken = [shared.broken, local.broken].filter(b => b !== "");
@@ -126,7 +175,33 @@ Singleton {
         // read applies what's wanted, as InputData does: reloading the same
         // rules again changes nothing.
         root.target = Writes.readTarget(root.target, writtenText, null).state;
-        root.stepped(Writes.wantTarget(root.target, Names.workspacesLua(root.settings)));
+        root.wantRules();
+    }
+
+    // Looks up the classes of each program in inApps not looked up yet;
+    // each answer rewrites the rules (Names.workspacesLua).
+    function resolve() {
+        for (const p of Names.homeAppPrograms(root.settings.inApps ?? [])) {
+            if (root.resolved[p.app] !== undefined || root.resolving.includes(p.app)) {
+                continue;
+            }
+            root.resolving = root.resolving.concat([p.app]);
+            resolver.createObject(root, { app: p.app, word: p.word }).running = true;
+        }
+    }
+
+    // `app`'s lookup ended with `classes` (one per line on stdout). A
+    // failed one is logged, and the program matches by its name alone.
+    function resolvedApp(app, ok, classes, errors) {
+        root.resolving = root.resolving.filter(a => a !== app);
+        // The tracker has logged why; this says what it costs.
+        if (!ok) {
+            console.warn(`tide: couldn't find the window classes of ${app}, one of home's apps, so only a window named ${app} goes home`);
+        }
+        const next = Object.assign({}, root.resolved);
+        next[app] = ok ? classes.split("\n").map(c => c.trim()).filter(c => c !== "") : [];
+        root.resolved = next;
+        root.wantRules();
     }
 
     // Mutes or unmutes one app or site (SPEC.md §9, Muted apps): if
@@ -226,6 +301,18 @@ Singleton {
         target: Hyprland
 
         function onRawEvent(event) {
+            // openwindow is ADDRESS,WORKSPACE,CLASS,TITLE; a title may
+            // hold commas, a class none.
+            if (event.name === "openwindow" || event.name === "closewindow") {
+                const fields = String(event.data).split(",");
+                const address = Ws.normalizeAddress(fields[0]);
+                if (address !== null) {
+                    root.uncovered = event.name === "openwindow"
+                        ? Names.uncoveredOpened(root.uncovered, address, fields[2] ?? "", root.appliedRules)
+                        : Names.uncoveredClosed(root.uncovered, address);
+                }
+                return;
+            }
             const ws = Ws.workspaceEvent(event.name, event.data);
             if (ws === null) {
                 return;
@@ -260,6 +347,48 @@ Singleton {
         id: written
 
         path: `${root.configHome}/hypr/tide-workspaces.lua`
+    }
+
+    // `tide app-classes -- APP`, for one of home's programs, tracked as
+    // every command the shell runs is (shell/lib/launch.mjs), waiting for
+    // its stdout too.
+    Component {
+        id: resolver
+
+        Process {
+            id: look
+
+            // The key the classes are kept under, and the program as
+            // written, which is what's looked up.
+            property string app
+            property string word
+            property var tracker: null
+
+            function handle(event) {
+                if (tracker.on(event)) {
+                    destroy();
+                }
+            }
+
+            Component.onCompleted: tracker = Run.track(command, (ok, errors, output) => root.resolvedApp(look.app, ok, output, errors), {
+                warn: m => console.warn(m),
+                log: m => console.log(m)
+            }, true)
+            command: ["tide", "app-classes", "--", look.word]
+            stdout: StdioCollector {
+                onStreamFinished: look.handle({ type: "stdout", text: text })
+            }
+            stderr: StdioCollector {
+                onStreamFinished: look.handle({ type: "stderr", text: text })
+            }
+            onStarted: handle({ type: "started" })
+            onRunningChanged: {
+                if (!running) {
+                    handle({ type: "stopped" });
+                }
+            }
+            onExited: (exitCode, status) => handle({ type: "exited", code: exitCode })
+        }
     }
 
     // Has hyprland.lua take what was written: `hyprctl eval` answers "ok",
@@ -302,7 +431,11 @@ Singleton {
                 } else if (state.report?.level === "log") {
                     console.log(state.report.message);
                 }
+                const text = root.target.onDisk;
                 root.stepped(Writes.targetApplied(root.target, error));
+                if (error === "") {
+                    root.rulesApplied(text);
+                }
                 destroy();
             }
 

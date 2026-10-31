@@ -9,8 +9,10 @@
 // stderr. So a run is done either then, or once both the exit code and the
 // whole of stderr are in, and it reports exactly once.
 
-export function initial() {
-    return Object.freeze({ started: false, stopped: false, code: null, errors: null, done: false, report: null });
+// `withOutput` makes a run wait for the end of stdout too ({type:
+// "stdout"}), for a command whose output is its answer.
+export function initial(withOutput = false) {
+    return Object.freeze({ started: false, stopped: false, code: null, errors: null, output: withOutput ? null : "", done: false, report: null });
 }
 
 // What a finished run has to say: a warning for a failed start or a nonzero
@@ -22,7 +24,7 @@ function outcome(run, command) {
     if (run.stopped && !run.started) {
         return { level: "warn", message: `tide: couldn't start ${shown}` };
     }
-    if (run.code === null || run.errors === null) {
+    if (run.code === null || run.errors === null || run.output === null) {
         return undefined;
     }
     const errors = run.errors.trim();
@@ -59,6 +61,9 @@ export function step(run, event, command) {
     case "stderr":
         next.errors = event.text;
         break;
+    case "stdout":
+        next.output = event.text;
+        break;
     default:
         throw new Error(`unknown process event: ${event.type}`);
     }
@@ -76,9 +81,10 @@ export function step(run, event, command) {
 // proof it started, whatever order the `started` signal arrives in;
 // `errors`: its stderr, empty if it never started),
 // and returns whether it's done, so the QML can let the Process go.
-// Signals after that change nothing.
-export function track(command, then, log) {
-    let run = initial();
+// Signals after that change nothing. With `withOutput`, it waits for stdout
+// as well, and passes it third (empty if it never started).
+export function track(command, then, log, withOutput = false) {
+    let run = initial(withOutput);
     return {
         on(event) {
             if (run.done) {
@@ -93,7 +99,7 @@ export function track(command, then, log) {
             } else if (run.report?.level === "log") {
                 log.log(run.report.message);
             }
-            then?.(run.code === 0, run.errors ?? "");
+            then?.(run.code === 0, run.errors ?? "", run.output ?? "");
             return true;
         },
     };

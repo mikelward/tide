@@ -811,13 +811,53 @@ in how long they last and what stays visible:
 - It can't be renamed. tide offers no way to, and a rename from elsewhere
   (`hyprctl`) is undone by the shell when it hears `renameworkspace`.
 - A list of apps lives there, set in `workspaces.json` (`inApps`, §16).
-  `conf`'s shared list is mail, chat, calendar and music.
-  - Each entry is a window class, or a site, which matches that site's
-    Chrome `--app` windows the way a notification's site does (§14.4).
-    A class matches as the focus guard matches one: ignoring case, and a
-    bare name as the last part of a qualified one. An entry shaped like a
-    host is tried as a site too, so `org.gnome.Calendar` is also a site
-    no `--app` window has.
+  `conf`'s shared list is `scripts`' launchers for mail, chat, calendar
+  and music: `gmail`, `google-chat`, `google-calendar`, `youtube-music`.
+  - **A program** is a bare word, such as `google-calendar` or
+    `thunderbird`. Home starts it at login (below). Its windows are those
+    of the classes its launch's grant finds (§14.3), through
+    `tide app-classes`: its own name, its desktop entries' classes, and,
+    for a launcher script that runs `chrome --app=URL`, that site's
+    `--app` windows. The shell looks each one up once, as it loads the
+    settings, and a lookup that fails is logged, leaving the name alone.
+  - **A web address**, such as `https://mail.google.com`, starts at login
+    as a Chrome `--app` window (`tide web-app`, below). Its windows are
+    its site's `--app` windows, matched the way a notification's site is
+    (§14.4), in any profile and in Chromium too.
+  - Anything else is a window class, which starts nothing. A class
+    matches as the focus guard matches one: ignoring case, and a bare
+    name as the last part of a qualified one. An entry shaped like a
+    host, such as `calendar.google.com`, is tried as a site too, as it
+    always was, so `org.gnome.Calendar` is also a site no `--app` window
+    has. It starts nothing, since which it is can't be told.
+  - **At login** the shell starts home's programs and web addresses, in
+    order, at once and alongside Start at login's own list (§16): neither
+    waits for the other, nor for the shell to look up home's classes.
+    It starts them as that list starts its commands: in the background,
+    so none takes focus, and a program only if it isn't running already.
+    A web address starts whatever runs, since Chrome is usually running,
+    so a Chrome that reopened the window itself shows two. A command in
+    Start at login's list that is one of home's programs starts once,
+    with home's.
+  - A window can open before a rule covers it: a launcher script's class
+    is only known once its lookup ends. So the shell notes each window
+    that opens while the rules Hyprland has don't cover its class. After
+    every apply that succeeds, it sends home, without following, each
+    noted window that the new rules cover and that's on another
+    workspace (not a special one, such as a minimized window's).
+    - A window is sent at most once, and one that opened under a rule
+      is never sent, so a window you move out of home stays out.
+    - What counts is the rules Hyprland took, not the lookups, so no
+      order of lookup and apply can leave a window behind.
+    - A grant on home (`tide launch --workspace`) would place each window
+      as it opens, but a grant gives the window focus, which nothing
+      Start at login opens may take, and a launcher script's or web
+      address's window has no class to grant until it's looked up.
+  - `tide web-app URL` opens the window as `scripts`' launchers do,
+    `chrome --app=URL`, with no profile flags. It runs `scripts`'
+    `chrome` when that's on `PATH`, else `google-chrome`, else
+    `google-chrome-beta`, so it works without `scripts`. With no Chrome
+    it fails, and Start at login's notification names it.
   - Their windows always open on home, by a window rule that sends them
     there without switching. One you launched takes focus there and the
     view follows; any other opens unfocused and marked (§14.1).
@@ -890,6 +930,12 @@ in how long they last and what stays visible:
     (`qs -c tide ipc call prompt launch`), naming the classes the app's
     window may have, found as its grant finds them (§14.3), and a FIFO in
     `$XDG_RUNTIME_DIR` to answer on. Then it waits.
+  - A key bound to a launcher script grants `--app '*'`, which names no
+    app, so for the prompt that launch is looked up too: `conf`'s
+    `Super+Shift+C`, `runenv google-chat`, names `google-chat` and its
+    `--app` window's class. Before, it named only `*`, so a home app
+    launched from home asked for a workspace, and went there, or nowhere
+    on Esc.
   - The shell answers `workspace NAME` after Enter, or at once for one of
     home's apps, or `cancel` on Esc. `tide launch` then starts the app
     itself, as `--workspace NAME` would, so it keeps its caller's
@@ -2705,7 +2751,16 @@ this spec.
     a key press during the lookup still cancels the grant. `tide-grant`
     reads `Exec`, and a key binding's command, as it reads a terminal
     line, past wrappers, so `tide launch env VAR=x editor` grants
-    `editor`. Entries that
+    `editor`. `scripts`' `runenv`, wherever it lives, is a wrapper too:
+    it sets the login environment, which the session already has, so the
+    program past it is looked up as it is.
+  - A launcher script, a file on `PATH` starting `#!` whose text passes
+    `--app=URL`, as `scripts`' `google-calendar` does, adds the class
+    Chrome gives that `--app` window on Wayland in its default profile:
+    `chrome-` and the host, then the path with each `/` a `_`, then
+    `-Default` (`chrome-calendar.google.com__-Default`). So does a
+    Chrome or Chromium command's own `--app=URL`. The first 64 KiB are
+    read. Entries that
     run one program with different arguments (`libreoffice --writer`,
     `--calc`) are different apps, which a command's arguments can't
     reliably tell apart, so none of them is granted. Only application
@@ -3189,8 +3244,11 @@ stays hand-written.
   - `standing` is the list of standing workspaces, the first being home.
     It's `in`, `re`, `oc` and `me` by default. An empty one, or one that
     names a workspace twice, is an error at load naming it.
-  - `inApps` is the list of apps that live on home: window classes, or
-    sites. `conf`'s shared file lists mail, chat, calendar and music.
+  - `inApps` is the list of apps that live on home: programs and web
+    addresses, which start there at login, and window classes (§6.5).
+    `conf`'s shared file lists `scripts`' launchers for mail, chat,
+    calendar and music. The page's field asks for a program or web
+    address, such as `gmail`.
   - `namePatterns` is the list of title patterns, tried in order.
   - `muted` is the list of muted apps and sites (§9, *Muted apps*): app
     IDs, or `site:HOST`, empty by default. A bad entry is an error at load
@@ -3245,10 +3303,9 @@ stays hand-written.
     from home (§6.5). So nothing it opens takes focus: its windows open
     where Hyprland's rules put them, unfocused and marked, as any window
     you didn't ask for (§14.1).
-  - A home app's window goes to home by `inApps`' window rule, which needs
-    nothing from here. `scripts`' `google-calendar` and `google-chat` open
-    `--app` windows of `calendar.google.com` and `chat.google.com`, which
-    `conf`'s shared `inApps` lists.
+  - Home's apps start first, from `inApps` (§6.5), so they need no entry
+    here; one listed here as well starts once. A home app's window goes
+    to home by `inApps`' window rule.
   - `--unless-running` skips a command whose program, past wrappers
     (`env`, `nohup`), a process of yours is already running, as `pgrep -x`
     matches it on its first 15 characters. That catches a daemon or an app

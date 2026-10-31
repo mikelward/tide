@@ -244,28 +244,182 @@ function quoted(s) {
     return s.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 }
 
+// What an `inApps` entry is (SPEC.md §6.5), or null for a blank one:
+// - {kind: "url", url, host}: a web address, which home starts as a Chrome
+//   `--app` window (`tide web-app`), and whose site's `--app` windows go
+//   home;
+// - {kind: "program", app, word}: a bare word, `word` as written (a
+//   program's name has case, where a class's doesn't), such as scripts' google-calendar
+//   or thunderbird, which home starts as a command, and which is a window
+//   class too, as are the classes its launch's grant finds (tide
+//   app-classes), so google-calendar takes its chrome-calendar.google.com
+//   window;
+// - {kind: "site", app, host}: a name shaped like a host, which is a
+//   class (org.gnome.Calendar) or a site (calendar.google.com), tried as
+//   both, and starts nothing, since which it is can't be told;
+// - {kind: "class", app}: any other window class, which starts nothing.
+export function homeAppEntry(raw) {
+    const text = String(raw ?? "").trim();
+    const web = /^https?:\/\/([^/?#\s:@]+)(:[0-9]+)?([/?#]\S*)?$/i.exec(text);
+    if (web) {
+        return { kind: "url", url: text, host: web[1].toLowerCase() };
+    }
+    const app = normalizeAppId(text);
+    if (app === "") {
+        return null;
+    }
+    if (/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(app)) {
+        return { kind: "site", app, host: app };
+    }
+    if (/^[a-z0-9][a-z0-9_+-]*$/.test(app)) {
+        return { kind: "program", app, word: text };
+    }
+    return { kind: "class", app };
+}
+
+// A class as a Hyprland rule matches it: without case, and a bare name as
+// the last part of a qualified one. A class may itself end in .desktop
+// (org.telegram.desktop); a rule can't normalize the class, so the
+// pattern allows the suffix, matching as normalizeAppId does.
+function classPattern(app) {
+    return app.includes(".") ? `(?i)${quoted(app)}(\\.desktop)?` : `(?i)(.*\\.)?${quoted(app)}(\\.desktop)?`;
+}
+
+// A site's Chrome and Chromium `--app` windows and its subdomains', as a
+// notification's site matches them (notifications.mjs's
+// siteWindowClasses): `chrome-mail.google.com__-Default`.
+function sitePattern(host) {
+    return `(?i)(chrome|chromium)-([^_]*\\.)?${quoted(host)}_.*-[^-]+`;
+}
+
+// The site a Chrome `--app` window's class is of, or null.
+function classSite(cls) {
+    const m = /^(chrome|chromium)-([^_]+)_.*-[^-]+$/i.exec(String(cls ?? ""));
+    return m ? m[2].toLowerCase() : null;
+}
+
 // The window classes an "in" app's entry matches, as RE2 patterns for a
 // Hyprland window rule (which matches the whole class, ignoring nothing).
 // Each is matched as a class the way the focus guard matches one
-// (focus.lua's same_id): without case, and a bare name as the last part of
-// a qualified one, so `thunderbird` takes `org.mozilla.Thunderbird`. One
-// that looks like a host is a site too, which takes that site's Chrome and
-// Chromium `--app` windows and its subdomains', as a notification's site
-// does (notifications.mjs's siteWindowClasses):
-// `chrome-mail.google.com__-Default`.
-export function inAppPatterns(inApps) {
+// (focus.lua's same_id). `resolved` maps a program entry's app to the
+// classes `tide app-classes` found for it; a Chrome `--app` class among
+// them stands for its site, in any profile.
+export function inAppPatterns(inApps, resolved = {}) {
     const out = [];
+    const add = (p) => {
+        if (!out.includes(p)) {
+            out.push(p);
+        }
+    };
     for (const raw of inApps) {
-        const app = normalizeAppId(raw);
-        if (app === "") {
+        const e = homeAppEntry(raw);
+        if (e === null) {
             continue;
         }
-        // A class may itself end in .desktop (org.telegram.desktop); a
-        // Hyprland rule can't normalize the class, so the pattern allows
-        // the suffix, matching as normalizeAppId does.
-        out.push(app.includes(".") ? `(?i)${quoted(app)}(\\.desktop)?` : `(?i)(.*\\.)?${quoted(app)}(\\.desktop)?`);
-        if (/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(app)) {
-            out.push(`(?i)(chrome|chromium)-([^_]*\\.)?${quoted(app)}_.*-[^-]+`);
+        if (e.kind === "url") {
+            add(sitePattern(e.host));
+            continue;
+        }
+        add(classPattern(e.app));
+        if (e.kind === "site") {
+            add(sitePattern(e.host));
+        }
+        if (e.kind === "program") {
+            for (const cls of resolved[e.app] ?? []) {
+                const site = classSite(cls);
+                const app = normalizeAppId(cls);
+                if (site !== null) {
+                    add(sitePattern(site));
+                } else if (app !== "") {
+                    add(classPattern(app));
+                }
+            }
+        }
+    }
+    return out;
+}
+
+// The program entries whose classes are looked up (tide app-classes),
+// once each: {app, word}, `app` the key `resolved` keeps them under and
+// `word` the program to look up, as written, since a file's name has case.
+export function homeAppPrograms(inApps) {
+    const out = [];
+    for (const raw of inApps) {
+        const e = homeAppEntry(raw);
+        if (e !== null && e.kind === "program" && !out.some((p) => p.app === e.app)) {
+            out.push({ app: e.app, word: e.word });
+        }
+    }
+    return out;
+}
+
+// Home's apps' windows that open before a rule covers them (SPEC.md
+// §6.5): at login a launcher script's class is known only once its lookup
+// ends, and home's apps don't wait for that. The shell notes each window
+// that opens while the rules Hyprland has don't cover its class, and after
+// every apply that succeeds sends home, without following, those the new
+// rules do cover that are elsewhere. A window is sent at most once, and
+// one that opened under a rule is never sent, so a window you move out of
+// home stays out. `rules` is {inApps, resolved}, what the applied rules
+// were made from. The list is the noted addresses, newest first, at most
+// 200.
+export const NO_UNCOVERED = Object.freeze([]);
+
+// A window opened: noted if the applied rules don't cover its class.
+export function uncoveredOpened(list, address, app, rules) {
+    if (!address || isHomeApp(app, rules.inApps, rules.resolved)) {
+        return list;
+    }
+    return [address].concat(list.filter((a) => a !== address)).slice(0, 200);
+}
+
+// A window closed: nothing to send.
+export function uncoveredClosed(list, address) {
+    return list.filter((a) => a !== address);
+}
+
+// After an apply of `rules`: {list, move}, `move` the addresses to send
+// home. `windows` is [{address, app, workspace}], as Hyprland's toplevels
+// give them. A noted window the rules now cover leaves the list, sent home
+// if it's on another workspace that isn't special (a minimized window's or
+// a scratchpad's); one that's gone leaves too; the rest stay noted.
+export function homeSweep(list, windows, home, rules) {
+    const move = [];
+    const kept = [];
+    for (const address of list) {
+        const w = windows.find((x) => x && x.address === address);
+        if (!w) {
+            continue;
+        }
+        if (!isHomeApp(w.app, rules.inApps, rules.resolved)) {
+            kept.push(address);
+            continue;
+        }
+        if (w.workspace && w.workspace !== home && !String(w.workspace).startsWith("special:")) {
+            move.push(address);
+        }
+    }
+    return { list: kept, move };
+}
+
+// What home starts at login, beside Start at login's own list (SPEC.md
+// §6.5, §16): {name, argv, program} for each URL and program entry, in
+// order. A program starts as Start at login starts a command, unless it's
+// running already; a URL as a Chrome `--app` window, which Chrome running
+// already doesn't stop, so it's started whatever runs. `program` is the
+// command it is, for Start at login to skip the same one in its own list.
+export function homeAppLaunches(inApps) {
+    const out = [];
+    for (const raw of inApps) {
+        const e = homeAppEntry(raw);
+        if (e === null || out.some((l) => l.name === (e.kind === "url" ? e.url : e.app))) {
+            continue;
+        }
+        if (e.kind === "url") {
+            out.push({ name: e.url, argv: ["tide", "launch", "--background", "--", "tide", "web-app", e.url], program: null });
+        } else if (e.kind === "program") {
+            const word = String(raw).trim();
+            out.push({ name: e.app, argv: ["tide", "launch", "--background", "--unless-running", "--", word], program: word });
         }
     }
     return out;
@@ -291,14 +445,14 @@ export function luaString(s) {
 // data: the home workspace it makes at login and keeps, the standing
 // workspaces in order, which its workspace keys step through as the bar
 // does, and the classes its window rules send home.
-export function workspacesLua(settings) {
+export function workspacesLua(settings, resolved = {}) {
     const list = (items) => items.length === 0 ? "{}" : `{\n${items.map((i) => `        ${luaString(i)},\n`).join("")}    }`;
     return "-- Written by tide's shell from workspaces.json and workspaces.local.json\n"
         + "-- (tide SPEC.md §6.5, §16); edit those, not this.\n"
         + "return {\n"
         + `    home = ${luaString(homeName(settings))},\n`
         + `    standing = ${list(settings.standing ?? DEFAULT_STANDING)},\n`
-        + `    in_apps = ${list(inAppPatterns(settings.inApps ?? []))},\n`
+        + `    in_apps = ${list(inAppPatterns(settings.inApps ?? [], resolved))},\n`
         + "}\n";
 }
 
@@ -406,13 +560,13 @@ export function shortName(title, appName, patterns) {
 }
 
 // Whether a window of class `cls` is one of home's apps (`inApps`), as
-// conf's window rules match it (inAppPatterns).
-export function isHomeApp(cls, inApps) {
+// conf's window rules match it (inAppPatterns, with `resolved` as there).
+export function isHomeApp(cls, inApps, resolved = {}) {
     const c = normalizeAppId(cls);
     if (c === "") {
         return false;
     }
-    return inAppPatterns(inApps).some((p) => new RegExp(`^(?:${p.replace(/^\(\?i\)/, "")})$`, "i").test(c));
+    return inAppPatterns(inApps, resolved).some((p) => new RegExp(`^(?:${p.replace(/^\(\?i\)/, "")})$`, "i").test(c));
 }
 
 // The client at `address` in `hyprctl clients -j`'s list, or null.
@@ -431,14 +585,14 @@ function normalizeAddress(address) {
 // `hyprctl clients -j`) takes the name prompt as it's first focused: it's
 // on home, tiled, has a class or a title (a status popup has neither), and
 // isn't one of home's apps (SPEC.md §6.5).
-export function promptWanted(client, home, inApps) {
+export function promptWanted(client, home, inApps, resolved = {}) {
     if (!client || typeof client !== "object") {
         return false;
     }
     const cls = String(client.class ?? "");
     const title = String(client.title ?? "");
     return client.workspace?.name === home && client.floating !== true
-        && !(cls === "" && title === "") && !isHomeApp(cls, inApps);
+        && !(cls === "" && title === "") && !isHomeApp(cls, inApps, resolved);
 }
 
 // The name prompt's rows for what's typed: first the typed name itself,

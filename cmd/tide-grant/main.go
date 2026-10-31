@@ -154,6 +154,8 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 			return 0
 		}
 		found, err := desktopClasses(runs, settings, env)
+		// A launcher script's window is the `--app` window it opens.
+		found = appendNew(found, webAppClasses(flags.Args(), runs, env)...)
 		for _, c := range found {
 			fmt.Fprintln(stdout, c)
 		}
@@ -224,6 +226,7 @@ func extendFromEntries(app, runs string, settings []string, pid int, env []strin
 		fmt.Fprintf(stderr, "tide: couldn't read every desktop entry for %s's focus grant: %v\n", app, err)
 		status = 1
 	}
+	more = appendNew(more, webAppClasses(nil, runs, env)...)
 	if len(more) == 0 {
 		return status
 	}
@@ -471,7 +474,7 @@ func init() {
 
 // Wrappers after which the program is a separate executable, never a
 // builtin: `env echo` runs /usr/bin/echo.
-var externalWrappers = map[string]bool{"env": true, "exec": true, "nice": true, "nohup": true, "setsid": true}
+var externalWrappers = map[string]bool{"env": true, "exec": true, "nice": true, "nohup": true, "runenv": true, "setsid": true}
 
 // wrapperName is the wrapper field names, or "": a path counts when it
 // names a wrapper that is a program of its own in a system directory
@@ -480,6 +483,13 @@ var externalWrappers = map[string]bool{"env": true, "exec": true, "nice": true, 
 func wrapperName(field string) string {
 	if wrappers[field] {
 		return field
+	}
+	// scripts' runenv, which the key bindings start apps through, sources
+	// the login environment and runs its arguments; it lives in the
+	// user's own directory, wherever that is. The environment is the one
+	// a session already has, so the program is looked up here as it is.
+	if filepath.Base(field) == "runenv" {
+		return "runenv"
 	}
 	if base := filepath.Base(field); strings.Contains(field, "/") && externalWrappers[base] && systemDirs[filepath.Dir(field)] {
 		return base

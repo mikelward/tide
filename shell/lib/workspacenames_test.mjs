@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
     MAX_NAME, DEFAULT_STANDING, DEFAULT_SETTINGS, checkName, sameName, matchName, homeName,
     parseWorkspaceSettings, loadWorkspaceSettings, inAppPatterns, workspacesLua, luaString,
-    checkPatterns, cleanTitle, firstWord, shortName, isHomeApp, promptWanted, clientAt, normalizeAppId, checkMuteEntry,
+    checkPatterns, cleanTitle, firstWord, shortName, isHomeApp, homeAppEntry, homeAppPrograms, homeAppLaunches, NO_UNCOVERED, uncoveredOpened, uncoveredClosed, homeSweep, promptWanted, clientAt, normalizeAppId, checkMuteEntry,
     promptRows, promptChoice, NO_PROMPTS, promptQueued, promptDone, promptWindowGone,
     promptHeading, promptAnswer, promptCancel,
     NO_WINDOWS, windowOpened, windowFocused, windowClosed, windowAnswered, checkMuted, withMuted,
@@ -184,6 +184,104 @@ test("home's apps are told apart by class, as conf's rules send them", () => {
     assert.equal(isHomeApp("chrome-chat.google.com__-Default", apps), true);
     assert.equal(isHomeApp("kitty", apps), false);
     assert.equal(isHomeApp("", apps), false);
+});
+
+// Regression: a web address in inApps was taken for a window class, so
+// its --app window went nowhere near home (SPEC.md §6.5).
+test("a web address in inApps takes its site's --app windows home", () => {
+    const apps = ["https://mail.google.com/mail/u/0/", "http://calendar.google.com"];
+    assert.equal(isHomeApp("chrome-mail.google.com__mail_u_0_-Default", apps), true);
+    assert.equal(isHomeApp("chrome-calendar.google.com__-Profile 1", apps), true);
+    assert.equal(isHomeApp("chromium-calendar.google.com__-Default", apps), true);
+    assert.equal(isHomeApp("chrome-chat.google.com__-Default", apps), false);
+    assert.equal(isHomeApp("https://mail.google.com/mail/u/0/", apps), false, "not a class of its own");
+    assert.deepEqual(inAppPatterns(["https://mail.google.com"]), ["(?i)(chrome|chromium)-([^_]*\\.)?mail\\.google\\.com_.*-[^-]+"]);
+});
+
+// Regression: a launcher script in inApps matched only a window of its
+// own name, never the Chrome --app window it opens.
+test("a launcher script in inApps takes the windows its grant finds home", () => {
+    const apps = ["google-calendar", "gmail"];
+    const resolved = { "google-calendar": ["google-calendar", "chrome-calendar.google.com__-Default"], gmail: ["org.example.Mail"] };
+    assert.equal(isHomeApp("chrome-calendar.google.com__-Default", apps, resolved), true);
+    assert.equal(isHomeApp("chrome-calendar.google.com__-Profile 2", apps, resolved), true, "in any profile");
+    assert.equal(isHomeApp("org.example.Mail", apps, resolved), true, "a desktop entry's class");
+    assert.equal(isHomeApp("google-calendar", apps, resolved), true, "its own name, as a key's launch names it");
+    assert.equal(isHomeApp("chrome-calendar.google.com__-Default", apps), false, "not before it's looked up");
+    assert.equal(isHomeApp("chrome-chat.google.com__-Default", apps, resolved), false);
+    assert.equal(promptWanted({ class: "chrome-calendar.google.com__-Default", title: "Calendar", workspace: { name: "in" } }, "in", apps, resolved), false);
+    assert.match(workspacesLua({ standing: ["in"], inApps: apps }, resolved), /calendar\\\\.google\\\\.com_/);
+});
+
+test("an inApps entry is a web address, a program, a class or a site", () => {
+    assert.deepEqual(homeAppEntry(" https://Mail.google.com/x "), { kind: "url", url: "https://Mail.google.com/x", host: "mail.google.com" });
+    assert.deepEqual(homeAppEntry("google-calendar"), { kind: "program", app: "google-calendar", word: "google-calendar" });
+    assert.deepEqual(homeAppEntry(" Thunderbird "), { kind: "program", app: "thunderbird", word: "Thunderbird" });
+    assert.deepEqual(homeAppEntry("calendar.google.com"), { kind: "site", app: "calendar.google.com", host: "calendar.google.com" });
+    assert.deepEqual(homeAppEntry("Steam Big Picture"), { kind: "class", app: "steam big picture" });
+    assert.equal(homeAppEntry("https://").kind, "class", "no host, so no site");
+    assert.equal(homeAppEntry("  "), null);
+    assert.deepEqual(homeAppPrograms(["gmail", "https://x.example", "Gmail", "a.b"]), [{ app: "gmail", word: "gmail" }]);
+    // Regression: the lookup was given the lowercased name, which on a
+    // case-sensitive filesystem is another file, or none.
+    assert.deepEqual(homeAppPrograms(["MyCalendar"]), [{ app: "mycalendar", word: "MyCalendar" }]);
+});
+
+test("home starts its web addresses and programs at login, and nothing for a class or site", () => {
+    assert.deepEqual(homeAppLaunches(["gmail", "https://music.youtube.com", "calendar.google.com", "org.gnome.Calendar", "gmail"]), [
+        { name: "gmail", argv: ["tide", "launch", "--background", "--unless-running", "--", "gmail"], program: "gmail" },
+        { name: "https://music.youtube.com", argv: ["tide", "launch", "--background", "--", "tide", "web-app", "https://music.youtube.com"], program: null },
+    ]);
+    assert.deepEqual(homeAppLaunches([]), []);
+});
+
+// Regression: home's apps start at login without waiting for their
+// classes, so a launcher's window can open before a rule covers it, and
+// stay on the wrong workspace. It's noted, and sent home by the first
+// apply whose rules cover it, whatever order the lookup and apply ran in.
+test("a home app's window that opened before its rule is sent home once, by the apply that covers it", () => {
+    const apps = ["google-calendar", "https://mail.google.com"];
+    const before = { inApps: apps, resolved: {} };
+    const looked = { inApps: apps, resolved: { "google-calendar": ["chrome-calendar.google.com__-Default"] } };
+    const cal = "chrome-calendar.google.com__-Default";
+    let list = NO_UNCOVERED;
+    // Calendar opens on re while only the web address's rule is in; Gmail
+    // opens under its rule, and a terminal under none.
+    list = uncoveredOpened(list, "a1", cal, before);
+    list = uncoveredOpened(list, "a2", "chrome-mail.google.com__-Default", before);
+    list = uncoveredOpened(list, "a3", "kitty", before);
+    assert.deepEqual(list, ["a3", "a1"], "a window under a rule isn't noted");
+    let windows = [
+        { address: "a1", app: cal, workspace: "re" },
+        { address: "a2", app: "chrome-mail.google.com__-Default", workspace: "docs" },
+        { address: "a3", app: "kitty", workspace: "re" },
+    ];
+    // Codex's gap: the lookup is in, but an apply of the old rules
+    // finishes first. It covers nothing new, so nothing moves or is lost.
+    let r = homeSweep(list, windows, "in", before);
+    assert.deepEqual(r, { list: ["a3", "a1"], move: [] });
+    // The apply with the new classes sends Calendar home, once.
+    r = homeSweep(r.list, windows, "in", looked);
+    assert.deepEqual(r, { list: ["a3"], move: ["a1"] });
+    // Moved out of home later, it isn't pulled back by another apply, and
+    // Gmail, which its rule placed and you moved, never is.
+    windows = windows.map((w) => w.address === "a1" ? Object.assign({}, w, { workspace: "work" }) : w);
+    assert.deepEqual(homeSweep(r.list, windows, "in", looked).move, []);
+});
+
+test("a noted window that closed, is minimized, or is already home moves nowhere", () => {
+    const rules = { inApps: ["https://mail.google.com"], resolved: {} };
+    const mail = "chrome-mail.google.com__-Default";
+    const none = { inApps: [], resolved: {} };
+    let list = ["b1", "b2", "b3"].reduce((l, a) => uncoveredOpened(l, a, mail, none), NO_UNCOVERED);
+    list = uncoveredClosed(list, "b3");
+    const windows = [
+        { address: "b1", app: mail, workspace: "special:minimized:re" },
+        { address: "b2", app: mail, workspace: "in" },
+        { address: "b3", app: mail, workspace: "re" },
+    ];
+    assert.deepEqual(homeSweep(list, windows, "in", rules), { list: [], move: [] });
+    assert.deepEqual(homeSweep(["gone"], [], "in", rules), { list: [], move: [] });
 });
 
 test("the window judged is the one at its address, wherever focus is now", () => {

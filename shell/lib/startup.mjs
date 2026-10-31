@@ -280,6 +280,21 @@ export function launchCommand(command) {
     return ["tide", "launch", "--background", "--unless-running", "--"].concat(commandWords(command));
 }
 
+// What the shell starts at login (SPEC.md §6.5, §16), as two lists that
+// run independently, each in its own order, each entry {name, argv}:
+// home's apps (workspacenames.mjs's homeAppLaunches, {name, argv,
+// program}), which wait for the rules that send them home, and the list's
+// commands, which wait for nothing. A command that is one of home's
+// programs starts with home's, so it isn't started twice.
+export function homeRuns(homeApps) {
+    return homeApps.map(a => ({ name: a.name, argv: a.argv }));
+}
+
+export function listRuns(homeApps, commands) {
+    const programs = homeApps.map(a => a.program).filter(p => p !== null);
+    return commands.filter(c => !programs.includes(c)).map(c => ({ name: c, argv: launchCommand(c) }));
+}
+
 // What to report for a run that's done: why it failed, naming the command,
 // or "" for one that worked. `errors` is what it printed on stderr, of
 // which the last line is the one most likely to say why.

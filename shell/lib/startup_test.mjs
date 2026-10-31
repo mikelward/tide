@@ -15,6 +15,8 @@ import {
     SESSION_COMMAND,
     STARTED,
     queueEnded,
+    homeRuns,
+    listRuns,
     queuePrinted,
     startQueue,
     sessionId,
@@ -159,4 +161,20 @@ test("an empty list starts nothing", () => {
 test("the line the shell waits for before the next command is the one tide launch prints", () => {
     const tide = readFileSync(new URL("../../bin/tide", import.meta.url), "utf8");
     assert.ok(tide.includes(`echo "${STARTED}"\n    exec uwsm app -- "$@"`), "printed just before it starts the command");
+});
+
+// Regression: home's apps were only a window rule, so nothing opened on
+// home at login unless Start at login listed it too (SPEC.md §6.5).
+test("home's apps start as a list of their own, and the list skips them", () => {
+    const home = [
+        { name: "gmail", argv: ["tide", "launch", "--background", "--unless-running", "--", "gmail"], program: "gmail" },
+        { name: "https://music.youtube.com", argv: ["tide", "launch", "--background", "--", "tide", "web-app", "https://music.youtube.com"], program: null },
+    ];
+    assert.deepEqual(homeRuns(home), [
+        { name: "gmail", argv: home[0].argv },
+        { name: "https://music.youtube.com", argv: home[1].argv },
+    ]);
+    assert.deepEqual(listRuns(home, ["gmail", "slack --x"]), [{ name: "slack --x", argv: launchCommand("slack --x") }]);
+    assert.deepEqual(listRuns([], ["a"]), [{ name: "a", argv: launchCommand("a") }]);
+    assert.deepEqual(homeRuns([]), []);
 });
