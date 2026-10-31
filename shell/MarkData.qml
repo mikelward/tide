@@ -20,9 +20,8 @@ import "lib/workspaces.mjs" as Ws
 //     server.
 //   - The focus guard hears every marked window in the order they were
 //     marked (tide_focus.set_order), since only the shell sees both
-//     kinds together, so Super+Tab goes to them newest first.
-//   - While Super+Tab steps through the marks, focusing one clears nothing;
-//     releasing Super clears the one it landed on (updateMarks' cycle).
+//     kinds together, and the switcher's Attention tab lists them newest
+//     first.
 Singleton {
     id: root
 

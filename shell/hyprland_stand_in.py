@@ -117,8 +117,6 @@ EVENTS = [
     "activewindowv2>>55aa0a",
     "activespecialv2>>,," + MONITOR,
     "fullscreen>>1",
-    "custom>>tide-cycle>>start",
-    "custom>>tide-cycle>>end>>0x55aa04",
     "activelayout>>keyboard,English (UK)",
     "createworkspacev2>>-1340,docs, draft",
     "renameworkspace>>-1338,mail",

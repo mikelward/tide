@@ -677,15 +677,6 @@ test("focusing a window no grant asked for cancels the grants", function()
     end
 end)
 
-test("Super+Tab cancels the grants", function()
-    local m = load()
-    focused(window("kitty"), FFM)
-    fire("window.open", window("updater"))
-    m.grant("firefox")
-    eq(m.focus_attention(), true, "focused")
-    eq(#m.grants(), 0, "canceled")
-end)
-
 test("focus on nothing forgets the app you were in", function()
     load()
     focused(window("kitty", 80), FFM)
@@ -765,191 +756,39 @@ test("the window focused at load counts as the app you're in", function()
     eq(is_focus(fire("window.open", dialog)[1], dialog), true, "focused")
 end)
 
--- The window the last batch of dispatches focused, and the cycle events.
-local function focus_of(dispatched)
-    for _, d in ipairs(dispatched) do
-        if d.dsp == "focus" then
-            return d.args.window:gsub("^address:", "")
-        end
-    end
-end
-
-local function events(dispatched)
+-- The windows the guard holds as waiting, oldest first, as it announces
+-- them again for a shell that restarted.
+local function waiting(m)
+    S.dispatched = {}
+    m.announce_waiting()
     local out = {}
-    for _, d in ipairs(dispatched) do
-        if d.dsp == "event" and d.args:find("^tide%-cycle>>") then
-            table.insert(out, (d.args:gsub("^tide%-cycle>>", "")))
+    for _, d in ipairs(S.dispatched) do
+        if d.dsp == "event" and d.args:find("^tide%-attention>>") then
+            table.insert(out, (d.args:gsub("^tide%-attention>>", "")))
         end
     end
     return table.concat(out, " ")
 end
 
-local function tab(m)
-    S.dispatched = {}
-    local went = m.focus_attention()
-    return went, focus_of(S.dispatched), events(S.dispatched)
-end
-
-local function release(m)
-    S.dispatched = {}
-    local was = m.end_cycle()
-    return was, events(S.dispatched)
-end
-
-test("Super+Tab goes to the latest waiting window, then falls back", function()
+test("the attention cycle is gone: the shell's Attention tab lists the marks", function()
     local m = load()
+    eq(m.focus_attention, nil, "no focus_attention")
+    eq(m.end_cycle, nil, "no end_cycle")
     focused(window("kitty"), FFM)
     local a, b = window("updater"), window("chat")
     fire("window.open", a)
     fire("window.open", b)
-    local went, to, ev = tab(m)
-    eq(went, true, "went")
-    eq(to, b.address, "latest first")
-    eq(ev, "start", "the cycle starts")
-    eq(release(m), true, "a cycle ended")
-    went, to = tab(m)
-    eq(to, a.address, "then the older one")
-    release(m)
-    eq(m.focus_attention(), false, "none left")
+    eq(waiting(m), a.address .. " " .. b.address, "both wait, oldest first")
+    for _, d in ipairs(S.dispatched) do
+        eq(tostring(d.args):find("tide%-cycle") == nil, true, "and no cycle events")
+    end
 end)
 
-test("Tab again while Super is held steps through the marks, and wraps", function()
+test("set_order takes the shell's list of addresses, and only that", function()
     local m = load()
-    focused(window("kitty"), FFM)
-    local a, b, c = window("one"), window("two"), window("three")
-    fire("window.open", a)
-    fire("window.open", b)
-    fire("window.open", c)
-    local _, to, ev = tab(m)
-    eq(to, c.address, "newest")
-    _, to, ev = tab(m)
-    eq(to, b.address, "next")
-    eq(ev, "", "stepping isn't a new cycle")
-    _, to = tab(m)
-    eq(to, a.address, "oldest")
-    _, to = tab(m)
-    eq(to, c.address, "wraps")
-    _, to = tab(m)
-    eq(to, b.address, "and on")
-    local was, ended = release(m)
-    eq(was, true, "ended")
-    eq(ended, "end>>" .. b.address, "names the window it landed on")
-    -- Only that one stopped waiting.
-    _, to = tab(m)
-    eq(to, c.address, "the others are still marked")
-    _, to = tab(m)
-    eq(to, a.address, "both of them")
-    _, to = tab(m)
-    eq(to, c.address, "and only them")
-end)
-
-test("releasing Super outside a cycle does nothing", function()
-    local m = load()
-    local was, ev = release(m)
-    eq(was, false, "no cycle")
-    eq(ev, "", "no event")
-end)
-
-test("the guard's own focus mid-cycle clears nothing; another focus ends the cycle there", function()
-    local m = load()
-    focused(window("kitty"), FFM)
-    local a, b = window("one"), window("two")
-    fire("window.open", a)
-    fire("window.open", b)
-    tab(m)
-    -- A click on a while the cycle is on b.
-    S.dispatched = {}
-    focused(a, CLICK)
-    eq(events(S.dispatched), "end>>" .. a.address, "ends on the clicked window")
-    eq(release(m), false, "nothing left to end")
-    local _, to = tab(m)
-    eq(to, b.address, "b is still marked")
-    release(m)
-    eq(m.focus_attention(), false, "a was cleared")
-end)
-
-test("a window closing mid-cycle drops out, and Tab goes to the one in its place", function()
-    local m = load()
-    focused(window("kitty"), FFM)
-    local a, b, c = window("one"), window("two"), window("three")
-    fire("window.open", a)
-    fire("window.open", b)
-    fire("window.open", c)
-    tab(m) -- c
-    tab(m) -- b
-    fire("window.close", b)
-    local _, to = tab(m)
-    eq(to, a.address, "a took b's place")
-    fire("window.close", c)
-    _, to = tab(m)
-    eq(to, a.address, "a is all that's left")
-    release(m)
-end)
-
-test("a window closing mid-cycle drops out of it", function()
-    local m = load()
-    focused(window("kitty"), FFM)
-    local a, b = window("one"), window("two")
-    fire("window.open", a)
-    fire("window.open", b)
-    tab(m) -- on b
-    fire("window.close", b)
-    local _, to = tab(m)
-    eq(to, a.address, "steps to what's left")
-    fire("window.close", a)
-    eq(release(m), false, "the cycle ended when its last window went")
-end)
-
-test("once the shell gives its order, Super+Tab follows it", function()
-    local m = load()
-    focused(window("kitty"), FFM)
-    local waiting, chat = window("updater"), window("chat")
-    fire("window.open", waiting)
-    -- The shell sees the guard's window and a notification's, oldest first;
-    -- it may write an address without the 0x.
-    m.set_order({ waiting.address, (chat.address:gsub("^0x", "")) })
-    local _, to = tab(m)
-    eq(to, chat.address, "the shell's newest")
-    _, to = tab(m)
-    eq(to, waiting.address, "then the older one")
-    release(m) -- on waiting
-    -- A notification marks waiting again, and the shell reorders; landing
-    -- on waiting cleared it here, and the shell's list does the same next.
-    m.set_order({ chat.address })
-    _, to = tab(m)
-    eq(to, chat.address, "chat is all that's left")
-    release(m)
+    m.set_order({ "0x1", "2" })
     eq(pcall(m.set_order, "0x1"), false, "rejects a string")
     eq(pcall(m.set_order, { 1 }), false, "rejects a number")
-end)
-
-test("the shell's order can move an older mark back", function()
-    local m = load()
-    focused(window("kitty"), FFM)
-    local a, b, c = window("one"), window("two"), window("three")
-    m.set_order({ b.address, c.address, a.address })
-    -- Dismissing a's newer notification puts it back before b.
-    m.set_order({ a.address, b.address, c.address })
-    local _, to = tab(m)
-    eq(to, c.address, "c")
-    _, to = tab(m)
-    eq(to, b.address, "then b")
-    _, to = tab(m)
-    eq(to, a.address, "then a, oldest again")
-    release(m)
-end)
-
-test("a window announced since the shell's last list is the newest stop", function()
-    local m = load()
-    focused(window("kitty"), FFM)
-    local chat, fresh = window("chat"), window("updater")
-    m.set_order({ chat.address })
-    fire("window.open", fresh)
-    local _, to = tab(m)
-    eq(to, fresh.address, "the shell hasn't caught up with it yet")
-    _, to = tab(m)
-    eq(to, chat.address, "then the shell's")
-    release(m)
 end)
 
 test("an activation without a grant waits with the rest, and the shell hears it", function()
@@ -960,42 +799,7 @@ test("an activation without a grant waits with the rest, and the shell hears it"
     local d = fire("window.urgent", chat)
     eq(is_attention(d[1], chat), true, "announced, so the bar keeps it past Hyprland's flag")
     eq(#S.notified, 1, "without a notification of its own")
-    local _, to = tab(m)
-    eq(to, chat.address, "the activation is the latest")
-end)
-
-test("the guard focusing a dialog mid-cycle ends the cycle on the dialog", function()
-    local m = load()
-    -- Hyprland reports focus as the dispatch happens, as it does live.
-    local function live_focus()
-        local dispatch = hl.dispatch
-        hl.dispatch = function(d)
-            dispatch(d)
-            if d.dsp == "focus" then
-                local address = d.args.window:gsub("^address:", "")
-                S.handlers["window.active"]({ class = S.classes[address], address = address, pid = 1 })
-            end
-        end
-    end
-    S.classes = {}
-    local kitty = window("kitty", 1)
-    focused(kitty, FFM)
-    local a, b = window("one"), window("two")
-    S.classes[a.address], S.classes[b.address] = "one", "two"
-    fire("window.open", a)
-    fire("window.open", b)
-    live_focus()
-    local _, to, ev = tab(m)
-    eq(to, b.address, "the cycle is on b")
-    eq(ev, "start", "and nothing ended it")
-    -- A dialog from b, the app now focused, takes focus mid-cycle.
-    local dialog = window("two", 1)
-    S.classes[dialog.address] = "two"
-    local d = fire("window.open", dialog)
-    eq(events(d), "end>>" .. dialog.address, "the cycle ends on the dialog")
-    eq(release(m), false, "nothing left to end")
-    _, to = tab(m)
-    eq(to, b.address, "b is still marked")
+    eq(waiting(m), popup.address .. " " .. chat.address, "the activation is the latest")
 end)
 
 test("a waiting window you reach another way, or that closes, stops waiting", function()
@@ -1006,7 +810,7 @@ test("a waiting window you reach another way, or that closes, stops waiting", fu
     fire("window.open", b)
     focused(b, CLICK)
     fire("window.close", a)
-    eq(m.focus_attention(), false, "nothing waiting")
+    eq(waiting(m), "", "nothing waiting")
 end)
 
 test("a waiting window shows a notification unless notify is off", function()
@@ -1015,7 +819,7 @@ test("a waiting window shows a notification unless notify is off", function()
     fire("window.open", window("updater"))
     eq(#S.notified, 1, "notified")
     eq(S.notified[1].text:find("updater", 1, true) ~= nil, true, "names the app")
-    eq(S.notified[1].text:find("Super+Tab", 1, true) ~= nil, true, "names the key")
+    eq(S.notified[1].text:find("Super+A", 1, true) ~= nil, true, "names the key")
     load({ notify = false })
     focused(window("kitty"), FFM)
     fire("window.open", window("updater"))
