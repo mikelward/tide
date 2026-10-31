@@ -568,6 +568,25 @@ packaged). It also runs
 The Quickshell bar replaces waybar piece by piece (SPEC.md §7), each piece
 tested where it can be without a live session.
 
+- **Recompute attention marks instead of storing them** (SPEC.md §9,
+  §14.4). Today `updateMarks` records each mark as an event arrives, and
+  every change (a mute, an update to a notification, a window closing) has
+  to reconcile what's stored. Muting in mikelward/tide#207 drew five Codex
+  findings in that one mechanism, each a stored mark that a change didn't
+  reach. Derive the marks instead, whenever an input changes, from:
+  - the live notifications, each with its sender, its target windows, and
+    which of those were off screen when it arrived or was last updated;
+  - the focus guard's waiting windows;
+  - the muted list;
+  - which marks were attended to (focused, dismissed).
+  Two facts still have to be kept as they happen: whether a window was off
+  screen when the notification arrived, and that a mark was attended to.
+  Size: a pure function replacing `updateMarks`'s storage (about 150
+  lines), with `MarkData` and `NotificationData` rewired to feed it
+  (about 100), and the mark tests in `workspaces_test.mjs` ported (about
+  300 lines touched). A PR of its own, about the size of #207's mark
+  changes.
+
 - The load test (`shell/shell_test.sh`) stops the shell once it has taken
   in the stand-in Hyprland's answers and events and the output of its own
   commands (`tide-tz`, stand-ins for `tide-sysmon`, `hyprctl`, `gsettings`
