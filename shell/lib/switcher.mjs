@@ -80,11 +80,11 @@ function filtered(rows, query, fields) {
 }
 
 // The Workspaces tab: every workspace in the bar's order (`list`, from
-// workspaces.mjs's barWorkspaces), each with its app icons' first as its
+// workspaces.mjs's barWorkspaces), each with its first window's app as its
 // icon, the current one said so. Typing filters by name.
 export function workspaceRows(list, query) {
     const rows = list.map((w) => {
-        const count = w.icons.length + w.more;
+        const count = w.count;
         const what = w.state === "current" ? "current"
             : w.id === null ? "not made yet"
             : count === 0 ? "empty"
@@ -95,7 +95,7 @@ export function workspaceRows(list, query) {
                 id: w.name,
                 name: w.name,
                 sub: w.home ? `home · ${what}` : what,
-                icon: w.icons.length > 0 ? w.icons[0].app : "",
+                icon: w.app,
                 current: w.state === "current",
                 urgent: w.urgent,
             },

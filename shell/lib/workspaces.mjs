@@ -283,24 +283,14 @@ export function markedWindows({ windows, marks = NO_MARKS }) {
     return new Set([...marked].filter((a) => open.has(a)));
 }
 
-// The icons one workspace shows, in window order: at most MAX_ICONS, with
-// marked windows kept in view ahead of unmarked ones, so a ringed icon is
-// never folded into "+n".
+// The icons one workspace shows (§7.2): only its windows wanting
+// attention, those markedWindows gives, in window order, at most MAX_ICONS
+// and then "+n". An ordinary window has no icon on the bar.
 function icons(windows, marked) {
-    const keep = new Set();
-    for (const w of windows) {
-        if (keep.size < MAX_ICONS && marked.has(w.address)) {
-            keep.add(w.address);
-        }
-    }
-    for (const w of windows) {
-        if (keep.size < MAX_ICONS) {
-            keep.add(w.address);
-        }
-    }
-    const shown = windows.filter((w) => keep.has(w.address))
-        .map((w) => ({ address: w.address, app: w.app, marked: marked.has(w.address) }));
-    return { icons: shown, more: windows.length - shown.length };
+    const wanting = windows.filter((w) => marked.has(w.address));
+    const shown = wanting.slice(0, MAX_ICONS)
+        .map((w) => ({ address: w.address, app: w.app, marked: true }));
+    return { icons: shown, more: wanting.length - shown.length };
 }
 
 // The bar's workspaces in its order (§6.5, §7.1): the standing ones as
@@ -343,14 +333,16 @@ export function barName(name) {
 // What one monitor's bar shows: every workspace in workspaceOrder's order,
 // each as
 //
-//   {id, name, label, standing, home, state, urgent, big,
+//   {id, name, label, standing, home, state, urgent, big, count, app,
 //    icons: [{address, app, marked}], more}
 //
 // where label is the name as the bar shows it (barName); state is
 // "current" (this monitor's workspace), "elsewhere" (shown on another
 // monitor), "occupied" or "empty", which a standing workspace not made yet
-// always is; urgent is any marked window on it; and big is a maximized or
-// fullscreen window on it (§6.3).
+// always is; urgent is any marked window on it; big is a maximized or
+// fullscreen window on it (§6.3); count is how many windows it has, and
+// app the first one's app, for the switcher's Workspaces tab; and icons
+// are its marked windows' alone, which is all the bar shows (icons).
 //
 // `monitors` is [{name, workspace}], each monitor's active workspace ID.
 // `workspaces` is Hyprland's, [{id, name}], and `standing` the standing
@@ -380,6 +372,8 @@ export function barWorkspaces({ monitor, monitors, workspaces, windows, marks = 
             state,
             urgent: here.some((w) => marked.has(w.address)),
             big: here.some((w) => w.fullscreen > 0),
+            count: here.length,
+            app: here.length > 0 ? here[0].app : "",
         }, icons(here, marked));
     });
 }

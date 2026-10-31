@@ -42,6 +42,7 @@ test("the Workspaces tab lists the bar's workspaces, current one said so", () =>
     assert.deepEqual(rows.map((r) => r.item.name), ["in", "re", "PR-12"]);
     assert.deepEqual(rows.map((r) => r.item.sub), ["home · 1 window", "not made yet", "current"]);
     assert.equal(rows[0].item.icon, "thunderbird");
+    assert.equal(rows[2].item.icon, "kitty", "its first window's, though the bar shows no icon for it");
     assert.equal(rows[2].item.current, true);
     assert.equal(rows[0].item.kind, "workspace");
     // Typing filters by name.
