@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: settings panel</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .panels { display: flex; flex-direction: column; gap: 22px; }
+  .stage {
+    position: relative;
+    padding: 28px 0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px #2a2a30;
+    background:
+      radial-gradient(500px 300px at 20% 25%, #123338, transparent 70%),
+      radial-gradient(700px 420px at 85% 80%, #2b1c3f, transparent 70%),
+      #16213a;
+  }
+  .backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .35); }
+  .panel {
+    position: relative; margin: 0 auto; width: 640px; display: flex;
+    background: var(--surface); color: var(--fg); border-radius: 12px; box-shadow: var(--shadow);
+    font-family: var(--font-ui); font-size: 13px;
+  }
+  .side { width: 180px; padding: 6px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--line); }
+  .side .p { height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 7px; }
+  .side .p .ms { font-size: 16px; color: var(--fg-dim); }
+  .side .p.on { background: var(--surface-2); }
+  .page { flex: 1; padding: 6px; display: flex; flex-direction: column; }
+  .page h3 { margin: 0; padding: 6px 10px; font-size: 20px; font-weight: 700; }
+  .about { padding: 0 10px 6px; color: var(--fg-dim); line-height: 1.35; }
+  .item { height: 32px; display: flex; align-items: center; padding: 0 6px 0 10px; gap: 4px; }
+  .item .cmd { flex: 1; font-family: var(--font-mono); font-size: 13px; }
+  .item .btn { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; }
+  .item .btn .ms { font-size: 16px; }
+  .item .btn.dim { opacity: .4; }
+  .field { margin: 3px 6px; height: 26px; border-radius: 6px; background: var(--surface-2); display: flex; align-items: center; padding: 0 8px; color: var(--fg-faint); }
+  .field.typing { color: var(--fg); font-family: var(--font-mono); box-shadow: inset 0 0 0 1px var(--accent); }
+  .refused { padding: 4px 10px; color: var(--danger); font-size: 12px; }
+</style>
+</head>
+<body class="sheet" data-width="1100" data-scale="2">
+
+<h1>Settings</h1>
+<p class="lede">The settings panel's newer pages, over the dimmed desktop as it opens. The sidebar lists every page in the panel's order; the card grows to fit them.</p>
+
+<div class="panels" id="panels"></div>
+<p class="note"><b>Start at login</b>: the commands the shell runs once a session, through <code>tide launch --background --unless-running</code>, so none takes focus and one running already isn't started again. The arrows move a command and the bin takes it out; one typed at the foot is added with Enter, and one with a quote, backslash or <code>$</code> is refused, saying why. A change takes effect at the next login.</p>
+
+<script>
+const PAGES = [
+  ['Idle', 'bedtime'], ['Sound', 'volume_up'], ['Network', 'wifi'], ['Bluetooth', 'bluetooth'],
+  ['Mouse', 'mouse'], ['Touchpad', 'touchpad_mouse'], ['Keyboard', 'keyboard'], ['Clocks', 'schedule'],
+  ['Keys', 'keyboard_command_key'], ['Layouts', 'view_column'], ['Appearance', 'contrast'],
+  ['Displays', 'desktop_windows'], ['Start at login', 'play_arrow'],
+];
+const btn = (icon, dim) => `<span class="btn${dim ? ' dim' : ''}"><i class="ms">${icon}</i></span>`;
+const list = (cmds) => cmds.map((c, i) => `<div class="item"><span class="cmd">${c}</span>${btn('arrow_upward', i === 0)}${btn('arrow_downward', i === cmds.length - 1)}${btn('delete')}</div>`).join('');
+const panels = [
+  ['Start at login',
+   'Commands started once as you log in, one after another in this order, without taking focus: each is a program and its arguments, such as google-calendar, and one already running isn’t started again. A home app’s window goes to home. A change takes effect at the next login. The list is this machine’s own once changed.',
+   list(['google-calendar', 'google-chat']) +
+   '<div class="field typing">sh -c &quot;sleep 5; nm-applet&quot;</div>' +
+   '<div class="refused">sh -c &quot;sleep 5; nm-applet&quot; has a quote, backslash or $, which runs as typed, with no shell; put shell syntax in a script; not changing Start at login</div>'],
+];
+const root = document.getElementById('panels');
+for (const [page, about, body] of panels) {
+  const side = PAGES.map(([label, icon]) => `<div class="p${label === page ? ' on' : ''}"><i class="ms">${icon}</i>${label}</div>`).join('');
+  root.insertAdjacentHTML('beforeend', `<div class="stage theme-dark"><div class="backdrop"></div>
+    <div class="panel"><div class="side">${side}</div>
+    <div class="page"><h3>${page}</h3><div class="about">${about}</div>${body}</div></div></div>`);
+}
+</script>
+</body>
+</html>
