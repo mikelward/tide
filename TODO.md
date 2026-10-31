@@ -522,7 +522,7 @@ once you have agreed with it or reversed it.
       D-Bus API). Quickshell 0.3's `PowerProfiles` has no "available" flag,
       so without the daemon the rows still show and choosing one only logs
       a warning. The alternatives are hiding the rows when the D-Bus name
-      has no owner, or having `setup --tide` install the daemon. It's
+      has no owner, or having `setup` install the daemon. It's
       `shell/BatteryPopover.qml`.
 - [ ] **The DST sentence names clocks by their bar labels.** SPEC.md §7.3's
       example says "London moves to GMT"; `dst.mjs` says "LON moves to GMT",
@@ -1247,7 +1247,7 @@ SPEC.md §11's greeter is `tide-greeter`: Hyprland with
 installs it under `$(PREFIX)`, with a greetd config template. CI loads it in
 Quickshell under headless sway and logs in on a stand-in greetd
 (`shell/integration_test.sh`); nothing has run it under greetd or Hyprland yet.
-`setup --tide` makes greetd the display manager (mikelward/scripts#288):
+`setup --greeter` makes greetd the display manager (mikelward/scripts#288):
 it installs greetd and the template, gives the greeter user a home, builds
 Hyprland and Quickshell under `/opt` where the greeter user can run them,
 and adds the keyring to greetd's PAM stack. It switches only when everything
@@ -1326,7 +1326,7 @@ duplicate and rival daemons, the portal config, Hyprland's config errors,
 autostart entries, and a second bar on any monitor. Still to do:
 
 - **Activatable services on a live session.** Check that doctor says
-  nothing about them after `setup --tide`, and that unmasking
+  nothing about them after `setup`, and that unmasking
   `swaync.service` gets it named, with the package and the mask to restore.
 
 - **Bars by a better signal than geometry.** Where tide's bar (layer

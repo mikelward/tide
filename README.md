@@ -15,9 +15,9 @@ The mocks are in [`docs/mocks/`](docs/mocks/).
 
 ## Installing
 
-`setup --tide` in the scripts repo does all of this: it installs the
-packages, runs both installs below, enables `tide.service`, and switches the
-display manager to the greeter. By hand, it's:
+`setup` in the scripts repo does all of this: it installs the packages,
+runs both installs below, and enables `tide.service`. It leaves the display
+manager as it is, with tide as one more session. By hand, it's:
 
     make install                       # builds tide-grant, tide-tz and tide-greetd (needs Go 1.22+); layout, user units, portal config under ~/.config
     sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant, tide-tz, tide-greetd and tide-sysmon under /usr/local
@@ -47,8 +47,8 @@ install it with `sudo make install-session PREFIX=/usr`.
 §11): `tide-greeter`, which runs Hyprland with its own config and the
 greeter on the lock's face, plus a copy of the shell for it and a greetd
 config template in `$(PREFIX)/share/tide/greeter/greetd.toml`.
-`setup --tide` in the scripts repo switches your display manager to it,
-and `setup --tide --no-greeter` switches back. By hand, as root:
+`setup --greeter` in the scripts repo switches your display manager to it,
+and `setup --no-greeter` switches back. By hand, as root:
 
 - install greetd, and copy the template to `/etc/greetd/config.toml` with
   `user` set to the greeter account your greetd package created;

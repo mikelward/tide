@@ -374,7 +374,7 @@ healthy
 run FAKE_QS_VERSION="quickshell 0.2.1, revision 0000000, distributed by: Debian"
 check "an old Quickshell is a problem" test "$status" -eq 1
 check "an old Quickshell is named, with the fix" \
-    contains "$out" "qs ($tmp/qs-bin/qs) is Quickshell 0.2.1, and tide's shell needs 0.3 or newer, so the bar is waybar: install a newer Quickshell (on Debian and Ubuntu, \`setup --tide\` builds one), then \`systemctl --user restart tide.service\`"
+    contains "$out" "qs ($tmp/qs-bin/qs) is Quickshell 0.2.1, and tide's shell needs 0.3 or newer, so the bar is waybar: install a newer Quickshell (on Debian and Ubuntu, \`setup\` builds one), then \`systemctl --user restart tide.service\`"
 run FAKE_QS_VERSION="Quickshell 0.3.0 (revision 0000000, distributed by Ubuntu)"
 check "Quickshell 0.3.0 is no problem" test "$out" = "No problems found."
 run FAKE_QS_VERSION="Quickshell nightly"

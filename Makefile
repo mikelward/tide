@@ -108,7 +108,7 @@ build/tide-greetd: go.mod $(wildcard cmd/tide-greetd/*.go)
 	$(GO) build -o $@ ./cmd/tide-greetd
 
 # Copies only. Enabling tide.service, which hangs it off the tide
-# session's target, is `setup --tide`'s job (scripts repo).
+# session's target, is `setup`'s job (scripts repo).
 install: build install-shell
 	install -d "$(HYPR_DIR)"
 	install -m 644 hypr/tide/geometry.lua hypr/tide/layout.lua hypr/tide/focus.lua "$(HYPR_DIR)/"
