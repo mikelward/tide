@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import Quickshell.Bluetooth
 import Quickshell.Networking
 import Quickshell.Services.Pipewire
@@ -8,7 +9,7 @@ import "lib/network.mjs" as Net
 import "lib/status.mjs" as Status
 
 // The status icons before the clocks (SPEC.md §7.4). So far: keep awake;
-// Bluetooth; network; volume and its %, which scrolls by 5%; battery, red
+// Bluetooth, then one for each connected audio device; network; volume and its %, which scrolls by 5%; battery, red
 // below 15%; and the system monitor's CPU %, each with its popover; the
 // notification center's bell; and the session menu.
 // The tray is shell/Tray.qml, to their left. The other icons come later;
@@ -49,14 +50,19 @@ Row {
         }
     }
 
+    // Bluetooth: one glyph, faint while off, as keep awake is, and in the
+    // text color while on.
     SymbolicIcon {
         id: bluetooth
 
-        readonly property var view: Bt.bluetoothIcon(Bluetooth.defaultAdapter, Bluetooth.defaultAdapter?.devices.values ?? [])
+        readonly property var adapter: Bluetooth.defaultAdapter
+        readonly property var devices: adapter?.devices.values ?? []
+        readonly property var view: Bt.bluetoothIcon(adapter)
 
         anchors.verticalCenter: parent.verticalCenter
         visible: view.visible
-        name: view.icon || "bluetooth-disabled-symbolic"
+        name: view.icon || "bluetooth-active-symbolic"
+        color: view.on ? Theme.fg : Theme.fgFaint
 
         TapHandler {
             onTapped: bluetoothPopover.toggle()
@@ -66,6 +72,61 @@ Row {
             id: bluetoothPopover
 
             icon: bluetooth
+        }
+    }
+
+    // An icon beside it for each connected audio device, headphones,
+    // headset or speakers, with its name and battery on hover. A click opens
+    // the Bluetooth popover.
+    Repeater {
+        model: Bt.audioIcons(bluetooth.adapter, bluetooth.devices)
+
+        SymbolicIcon {
+            id: audioDevice
+
+            required property var modelData
+
+            anchors.verticalCenter: parent.verticalCenter
+            name: modelData.icon
+
+            TapHandler {
+                onTapped: bluetoothPopover.toggle()
+            }
+
+            // A HoverHandler takes no clicks, so the tap still lands.
+            HoverHandler {
+                id: audioHover
+            }
+
+            PopupWindow {
+                visible: audioHover.hovered
+                anchor.item: audioDevice
+                anchor.edges: Edges.Bottom
+                anchor.gravity: Edges.Bottom
+                anchor.margins.bottom: -8
+                color: "transparent"
+                implicitWidth: audioTip.implicitWidth + 18
+                implicitHeight: audioTip.implicitHeight + 10
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 7
+                    color: Theme.surface2
+                    border.color: Theme.edge
+
+                    Text {
+                        id: audioTip
+
+                        anchors.centerIn: parent
+                        // A device's name is whatever it or you set: plain text.
+                        textFormat: Text.PlainText
+                        text: audioDevice.modelData.tooltip
+                        color: Theme.fg
+                        font.family: Theme.font
+                        font.pixelSize: 12
+                    }
+                }
+            }
         }
     }
 

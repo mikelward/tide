@@ -1,17 +1,59 @@
 // Tests for bluetooth.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bluetoothIcon, deviceName, deviceStatus, pairedDevices, shouldConnect } from "./bluetooth.mjs";
+import { audioIcons, bluetoothIcon, deviceName, deviceStatus, pairedDevices, shouldConnect } from "./bluetooth.mjs";
 
-const dev = (fields) => ({ name: "", deviceName: "", address: "00:11:22:33:44:55", state: 0, paired: true, bonded: false, batteryAvailable: false, battery: 0, ...fields });
+const dev = (fields) => ({ name: "", deviceName: "", address: "00:11:22:33:44:55", icon: "", state: 0, paired: true, bonded: false, batteryAvailable: false, battery: 0, ...fields });
 
-test("the icon is hidden with no adapter, then off, on or connected", () => {
-    assert.equal(bluetoothIcon(null, []).visible, false);
-    assert.equal(bluetoothIcon({ state: 0 }, []).icon, "bluetooth-disabled-symbolic");
-    assert.equal(bluetoothIcon({ state: 4 }, []).icon, "bluetooth-disabled-symbolic");
-    assert.equal(bluetoothIcon({ state: 1 }, [dev({ state: 0 })]).icon, "bluetooth-disconnected-symbolic");
-    assert.equal(bluetoothIcon({ state: 1 }, [dev({ state: 1 })]).icon, "bluetooth-active-symbolic");
-    assert.equal(bluetoothIcon({ state: 2 }, []).icon, "bluetooth-disconnected-symbolic");
+test("the icon is hidden with no adapter, else one glyph, faint while off", () => {
+    assert.equal(bluetoothIcon(null).visible, false);
+    for (const state of [0, 1, 2, 3, 4]) {
+        assert.equal(bluetoothIcon({ state }).visible, true);
+        assert.equal(bluetoothIcon({ state }).icon, "bluetooth-active-symbolic");
+    }
+    // Disabled, disabling and blocked read as off; enabling as on.
+    assert.deepEqual([0, 1, 2, 3, 4].map((state) => bluetoothIcon({ state }).on), [false, true, true, false, false]);
+});
+
+test("connecting a device doesn't change the Bluetooth icon", () => {
+    // Regression: it used to swap to a connected glyph, and to one with an
+    // x while on with nothing connected.
+    assert.deepEqual(bluetoothIcon({ state: 1 }, [dev({ state: 1 })]), bluetoothIcon({ state: 1 }, []));
+});
+
+test("each connected audio device gets an icon for its kind", () => {
+    const icons = audioIcons({ state: 1 }, [
+        dev({ name: "Speaker", icon: "audio-card", state: 1, address: "a" }),
+        dev({ name: "Buds", icon: "audio-headphones", state: 1, address: "b" }),
+        dev({ name: "Headset", icon: "audio-headset", state: 1, address: "c" }),
+    ]);
+    assert.deepEqual(icons.map((i) => i.icon), ["audio-headphones-symbolic", "audio-headset-symbolic", "audio-speakers-symbolic"]);
+    assert.deepEqual(icons.map((i) => i.address), ["b", "c", "a"]);
+});
+
+test("audio devices not connected, and other kinds, get no icon", () => {
+    assert.deepEqual(audioIcons({ state: 1 }, [
+        dev({ icon: "audio-headphones", state: 0 }),
+        dev({ icon: "audio-headphones", state: 3 }),
+        dev({ icon: "audio-headphones", state: 2 }),
+        dev({ icon: "input-mouse", state: 1 }),
+        dev({ icon: "input-keyboard", state: 1 }),
+        dev({ icon: "", state: 1 }),
+    ]), []);
+});
+
+test("audio icons need an adapter that's on", () => {
+    const buds = [dev({ icon: "audio-headphones", state: 1 })];
+    assert.deepEqual(audioIcons(null, buds), []);
+    assert.deepEqual(audioIcons({ state: 0 }, buds), []);
+    assert.equal(audioIcons({ state: 1 }, buds).length, 1);
+});
+
+test("an audio icon's tooltip is its name, with battery when it reports one", () => {
+    const tip = (fields) => audioIcons({ state: 1 }, [dev({ icon: "audio-headphones", state: 1, ...fields })])[0].tooltip;
+    assert.equal(tip({ name: "Buds" }), "Buds");
+    assert.equal(tip({ name: "Buds", batteryAvailable: true, battery: 0.55 }), "Buds · 55%");
+    assert.equal(tip({ name: "Buds", batteryAvailable: true, battery: NaN }), "Buds");
 });
 
 test("devices are named by alias, then their own name, then address", () => {
