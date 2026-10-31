@@ -64,6 +64,7 @@ PopupWindow {
     anchor.edges: Edges.Bottom | Edges.Right
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.bottom: -10
+    grabFocus: true
     color: "transparent"
     implicitWidth: 240
     implicitHeight: card.implicitHeight

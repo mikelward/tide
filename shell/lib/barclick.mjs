@@ -1,10 +1,11 @@
 // What a click on the bar hits and what it does to an open popover
 // (SPEC.md §7.1), as pure functions the QML binds to.
 //
-// A popover's focus grab takes in every bar (PopoverGrab.qml), so a press
-// on the bar reaches the bar rather than only ending the grab. The press
-// then closes the open popover unless it's on the target that opened it,
-// whose tap closes it instead; a tap elsewhere opens its own.
+// A press on the bar closes the open popover unless it's on the target
+// that opened it, whose tap closes it instead; a tap elsewhere opens its
+// own. While a popover holds its xdg_popup grab, Hyprland gives that press
+// to the popup, so the bar sees it only once the grab has ended (SPEC.md
+// §7.1).
 
 // How far a target reaches past its ends where it has no clickable
 // neighbor to share the gap with.

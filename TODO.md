@@ -750,6 +750,24 @@ packaged). It also runs
 The Quickshell bar replaces waybar piece by piece (SPEC.md §7), each piece
 tested where it can be without a live session.
 
+- **Let the first click on another bar icon open it** (SPEC.md §7.1).
+  With a popover open, that click only ends its `xdg_popup` grab, since
+  Hyprland never adds the layer-shell bar to the grab. A `HyprlandFocusGrab`
+  around the popover and every bar was tried, but a popover needs
+  `grabFocus` to take input at all, and the two grabs can't both hold the
+  seat. Options: a Quickshell change so a popup without `grabFocus` is
+  `Qt::Popup` rather than `Qt::ToolTip`; a Hyprland change adding a layer
+  parent to the popup grab; or a full-screen transparent layer catching
+  the press.
+- **Test the popovers' input with the pointer** (mikelward/tide#254).
+  `shell/integration_test.sh` types with wtype but has no pointer, so
+  nothing checks that a popover's rows take hover and clicks; a static
+  check in `barhit_test.mjs` only guards `grabFocus`. Headless sway can
+  move and press its cursor (`swaymsg seat - cursor set X Y`, `cursor
+  press button1`): click a bar icon, then a row whose action is a stand-in
+  command (the network popover's "Network settings…" runs `tide launch`),
+  and expect it to run.
+
 - **Recompute attention marks instead of storing them** (SPEC.md §9,
   §14.4). Today `updateMarks` records each mark as an event arrives, and
   every change (a mute, an update to a notification, a window closing) has

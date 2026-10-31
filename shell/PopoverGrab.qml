@@ -1,25 +1,16 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 
-// A bar popover's focus grab, in place of PopupWindow's grabFocus. That one
-// is an xdg_popup grab, which Hyprland gives only the popup and its xdg
-// parent, never a layer-shell parent like the bar; so a press on the bar
-// went to the popup and only ended the grab, and the first click on another
-// icon did nothing (Hyprland 0.56.2, InputManager.cpp mouseMoveUnified and
-// processMouseDownNormal; protocols/XDGShell.cpp addOrStartGrab). This grab
-// takes in every bar, so a press there reaches the bar, which closes the
-// popover itself (PopoverData.pressed); a press anywhere else clears it.
+// A bar popover's bookkeeping: it tells PopoverData when it opens, closes
+// and goes away, so at most one is open (SPEC.md §7.1). The popover itself
+// sets PopupWindow's grabFocus. Without it, Quickshell makes the popup a
+// Qt::ToolTip window (0.3, src/window/popupwindow.cpp completeWindow),
+// which takes no hover or clicks. A HyprlandFocusGrab in its place, tried
+// so a press on the bar would reach the bar, left every popover dead.
 Scope {
     id: root
 
     required property var popover
-
-    HyprlandFocusGrab {
-        windows: [root.popover].concat(PopoverData.bars)
-        active: root.popover.visible
-        onCleared: root.popover.visible = false
-    }
 
     Connections {
         target: root.popover
