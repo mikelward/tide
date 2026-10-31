@@ -2488,7 +2488,8 @@ talk, a demo, or a meeting room's screen.
 - **Editing the field:** Backspace drops a character; Escape and Ctrl+U
   erase it all. No other Control chord types into it.
 - **Notification count:** how many arrived since the notification center
-  was last open, by the battery, from the history the bar saves (§9). A
+  was last open, from the history the bar saves (§9). It sits top right
+  after the battery, in the bar's order, where the bar keeps its status. A
   count, never what they say; none when there are none, and none while
   the shell isn't the notification server (`TIDE_NOTIFICATIONS` until
   swaync retires), since nothing could then mark a leftover history seen.
@@ -2502,7 +2503,7 @@ talk, a demo, or a meeting room's screen.
 - **Power from the lock:** Suspend at the bottom left, Restart and Shut down
   at the bottom right, through logind like the session menu, but never past
   an inhibitor: what blocks one is named under the buttons. The battery sits
-  at the top left.
+  at the top right, before the notification count.
 - **Triggers:** `Super+L`, idle, suspend, and lid-close without an external
   display.
 - **All of them go through logind.** `loginctl lock-session` raises logind's
