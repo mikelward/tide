@@ -291,6 +291,7 @@ test("each settings page is found by its name and what it covers, and opens the 
         appearance: ["appearance", "wallpaper"],
         displays: ["displays", "monitors", "scale"],
         startup: ["start at login", "startup", "autostart"],
+        notifications: ["notifications", "quiet hours", "muted apps"],
     };
     assert.deepEqual(Object.keys(pages), PAGES.map(p => p.id));
     for (const [id, queries] of Object.entries(pages)) {

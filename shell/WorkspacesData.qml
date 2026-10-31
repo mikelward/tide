@@ -153,6 +153,40 @@ Singleton {
         return root.saveFailure;
     }
 
+    // The Notifications page's muted list (SPEC.md §16): adds an entry as
+    // typed, or takes one out, by its place and text (Mute.withMuteAdded,
+    // Mute.withMuteRemoved). Each returns why it didn't, or "".
+    function addMuted(entry) {
+        return root.editMuted(list => Mute.withMuteAdded(list, entry));
+    }
+
+    function removeMuted(index, entry) {
+        return root.editMuted(list => Mute.withMuteRemoved(list, index, entry));
+    }
+
+    // Writes the muted list `change` makes of the one in effect to
+    // workspaces.local.json, as toggleMuted does.
+    function editMuted(change) {
+        root.load();
+        if (root.fileErrors.length > 0) {
+            return `${root.fileErrors[0]}; not changing muted`;
+        }
+        const next = change(root.muted);
+        if (next.error) {
+            return `${next.error}; not changing muted`;
+        }
+        const result = Names.withMuted(local.readNow(), next.list);
+        if (result.error) {
+            root.saveFailure = `${result.error}; not changing muted`;
+        } else {
+            const error = local.writeNow(result.text);
+            root.saveFailure = error === "" ? "" : `${error}; muted not saved`;
+        }
+        root.load();
+        root.report();
+        return root.saveFailure;
+    }
+
     Connections {
         target: Hyprland
 

@@ -104,3 +104,29 @@ export function groupNote(group) {
     const newest = group?.items?.[0] ?? {};
     return noteOf(newest.entry, newest.app, newest.origin);
 }
+
+// The Notifications page's list (SPEC.md §16): {list} with `raw` added as
+// typed, checked as loading checks it, or {error} saying why not, one
+// listed already (ignoring case) among them.
+export function withMuteAdded(list, raw) {
+    const checked = checkMuteEntry(raw);
+    if (checked.error) {
+        return { error: `${JSON.stringify(typeof raw === "string" ? raw.trim() : raw)} ${checked.error}` };
+    }
+    if (list.some((e) => e.toLowerCase() === checked.entry.toLowerCase())) {
+        return { error: `${checked.entry} is muted already` };
+    }
+    return { list: list.concat([checked.entry]) };
+}
+
+// {list} without entry `index` (from 0), if it's still `entry`, so a hand
+// edit that has moved them since is refused; with no index, the first that
+// is. Or {error}.
+export function withMuteRemoved(list, index, entry) {
+    const named = index === undefined || index === null;
+    const at = named ? list.indexOf(entry) : (list[index] === entry ? index : -1);
+    if (at < 0) {
+        return { error: named ? `${entry} isn't muted` : `entry ${index + 1} isn't ${entry}` };
+    }
+    return { list: list.filter((e, i) => i !== at) };
+}

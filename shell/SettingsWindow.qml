@@ -6,6 +6,7 @@ import Quickshell.Services.Pipewire
 import Quickshell.Wayland
 import "lib/appearance.mjs" as Appearance
 import "lib/audio.mjs" as Audio
+import "lib/dnd.mjs" as Dnd
 import "lib/idle.mjs" as Idle
 import "lib/input.mjs" as Input
 import "lib/layouts.mjs" as Layouts
@@ -217,6 +218,25 @@ PanelWindow {
         }
         function removeStartup(command: string): string {
             return StartupData.remove(undefined, command);
+        }
+
+        // Sets one of the Notifications page's settings, as it does: `qs
+        // -c tide ipc call settings setNotifications dndFrom 21:30`, a
+        // switch as true or false, and dndDays as `mon,tue` ("" for none).
+        // Answers why not, or "".
+        function setNotifications(key: string, value: string): string {
+            if (key === "dndDays") {
+                return NotificationSettingsData.set(key, value === "" ? [] : value.split(","));
+            }
+            return NotificationSettingsData.set(key, value === "true" ? true : value === "false" ? false : value);
+        }
+        // Mutes or unmutes an app ID or site:HOST, as the Notifications
+        // page's list does. Each answers why not, or "".
+        function addMuted(entry: string): string {
+            return WorkspacesData.addMuted(entry);
+        }
+        function removeMuted(entry: string): string {
+            return WorkspacesData.removeMuted(undefined, entry);
         }
     }
 
@@ -2093,6 +2113,318 @@ PanelWindow {
                             wrapMode: Text.Wrap
                             textFormat: Text.PlainText
                             text: startup.refused
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Notifications: Do not disturb now and on a schedule,
+                    // whether critical alerts break through, and the muted
+                    // apps and sites (SPEC.md §9, §16).
+                    Column {
+                        id: notifications
+
+                        readonly property var settings: NotificationSettingsData.settings
+                        // Why the last change made here was refused, until
+                        // the next one or another page.
+                        property string refused: ""
+
+                        function changed(error) {
+                            refused = error;
+                            root.report(error);
+                        }
+
+                        function set(key, value) {
+                            changed(NotificationSettingsData.set(key, value));
+                        }
+
+                        onVisibleChanged: refused = ""
+                        visible: root.current.id === "notifications"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        // Each a switch a click turns on or off, as Idle's.
+                        Repeater {
+                            model: [
+                                { key: "now", label: "Do not disturb" },
+                                { key: "dndScheduled", label: "On a schedule" },
+                                { key: "criticalsBreakThrough", label: "Critical alerts break through" },
+                            ]
+
+                            Item {
+                                id: notifySwitch
+
+                                required property var modelData
+                                readonly property bool on: modelData.key === "now" ? NotificationData.dnd : notifications.settings[modelData.key] === true
+
+                                width: notifications.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: notifySwitch.modelData.key === "dndScheduled" ? `${notifySwitch.modelData.label}: ${Dnd.scheduleSummary(notifications.settings)}` : notifySwitch.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Rectangle {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 56
+                                    height: 26
+                                    radius: 13
+                                    color: notifySwitch.on ? Theme.accentBg : Theme.surface2
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: notifySwitch.on ? "On" : "Off"
+                                        color: notifySwitch.on ? Theme.accentFg : Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 12
+                                        font.weight: Font.DemiBold
+                                    }
+
+                                    TapHandler {
+                                        onTapped: {
+                                            if (notifySwitch.modelData.key === "now") {
+                                                NotificationData.setDnd(!notifySwitch.on);
+                                            } else {
+                                                notifications.set(notifySwitch.modelData.key, !notifySwitch.on);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // From and to, a quarter hour a step, past each
+                        // other, as Appearance's times.
+                        Repeater {
+                            model: notifications.settings.dndScheduled ? [{ key: "dndFrom", label: "From", other: "dndTo" }, { key: "dndTo", label: "To", other: "dndFrom" }] : []
+
+                            Item {
+                                id: dndTime
+
+                                required property var modelData
+                                readonly property string value: notifications.settings[modelData.key]
+
+                                function stepped(steps) {
+                                    return Dnd.steppedDndTime(value, steps, notifications.settings[modelData.other]);
+                                }
+
+                                width: notifications.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: dndTime.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    StepButton {
+                                        name: "list-remove-symbolic"
+                                        value: 0
+                                        next: dndTime.stepped(-1) === dndTime.value ? 0 : 1
+                                        onActivated: notifications.set(dndTime.modelData.key, dndTime.stepped(-1))
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 92
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: dndTime.value
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                        font.features: ({ "tnum": 1 })
+                                    }
+
+                                    StepButton {
+                                        name: "list-add-symbolic"
+                                        value: 0
+                                        next: dndTime.stepped(1) === dndTime.value ? 0 : 1
+                                        onActivated: notifications.set(dndTime.modelData.key, dndTime.stepped(1))
+                                    }
+                                }
+                            }
+                        }
+
+                        // The days a window starts on, each turned on or off
+                        // with a click.
+                        Item {
+                            visible: notifications.settings.dndScheduled
+                            width: notifications.width
+                            implicitHeight: visible ? 32 : 0
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Days"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+
+                                Repeater {
+                                    model: Dnd.DAYS
+
+                                    Rectangle {
+                                        id: day
+
+                                        required property string modelData
+                                        required property int index
+                                        readonly property bool on: notifications.settings.dndDays.includes(modelData)
+
+                                        width: 26
+                                        height: 26
+                                        radius: 13
+                                        color: day.on ? Theme.accentBg : Theme.surface2
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: Dnd.DAY_LABELS[day.index]
+                                            color: day.on ? Theme.accentFg : Theme.fg
+                                            font.family: Theme.font
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        TapHandler {
+                                            onTapped: notifications.changed(NotificationSettingsData.toggleDay(day.modelData))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Heading {
+                            text: "MUTED"
+                        }
+
+                        Repeater {
+                            model: WorkspacesData.muted
+
+                            Item {
+                                id: mutedEntry
+
+                                required property var modelData
+                                required property int index
+
+                                width: notifications.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.right: unmute.left
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    textFormat: Text.PlainText
+                                    text: mutedEntry.modelData
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                StepButton {
+                                    id: unmute
+
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    name: "edit-delete-symbolic"
+                                    value: 0
+                                    next: 1
+                                    onActivated: notifications.changed(WorkspacesData.removeMuted(mutedEntry.index, mutedEntry.modelData))
+                                }
+                            }
+                        }
+
+                        // An entry to mute: Enter adds it, and one refused
+                        // stays to be fixed.
+                        Item {
+                            width: notifications.width
+                            implicitHeight: 32
+
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 6
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: 26
+                                radius: 6
+                                color: Theme.surface2
+                                border.width: newMuted.activeFocus ? 1 : 0
+                                border.color: Theme.accent
+
+                                TextInput {
+                                    id: newMuted
+
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    anchors.rightMargin: 8
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    clip: true
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                    onAccepted: {
+                                        const error = WorkspacesData.addMuted(text);
+                                        notifications.changed(error);
+                                        if (error === "") {
+                                            text = "";
+                                            keys.forceActiveFocus();
+                                        }
+                                    }
+                                    Keys.onEscapePressed: {
+                                        text = "";
+                                        keys.forceActiveFocus();
+                                    }
+
+                                    Text {
+                                        visible: newMuted.text === "" && !newMuted.activeFocus
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Mute an app ID or site:HOST"
+                                        color: Theme.fgFaint
+                                        font: newMuted.font
+                                    }
+                                }
+                            }
+                        }
+
+                        // A change refused, say.
+                        Text {
+                            visible: notifications.refused !== ""
+                            x: 10
+                            width: notifications.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: notifications.refused
                             color: Theme.danger
                             font.family: Theme.font
                             font.pixelSize: 12

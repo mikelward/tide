@@ -328,9 +328,10 @@ export function nextDeadline(countdowns) {
 // the shell and the tide tools, which send as "tide" (the
 // battery warning among them), and polkit agents. Chrome marks every
 // requireInteraction web notification critical, so a critical one from
-// anyone else is held like the rest.
-export function passesDnd(notification, URGENCY) {
-    return notification.urgency === URGENCY.Critical && isSystemSender(notification);
+// anyone else is held like the rest. With `breakThrough` false (the
+// Notifications page's "Critical alerts break through", §16), none does.
+export function passesDnd(notification, URGENCY, breakThrough = true) {
+    return breakThrough && notification.urgency === URGENCY.Critical && isSystemSender(notification);
 }
 
 // Whether a notification comes from a system sender: the shell or a tide
@@ -344,11 +345,12 @@ export function isSystemSender(notification) {
 }
 
 // The notifications in the popup queue that Do not disturb holds: none
-// while it's off, else every one that doesn't pass (passesDnd). The shell
+// while it's off, else every one that doesn't pass (passesDnd, with
+// `breakThrough` as there). The shell
 // takes these down whenever anything could change the answer (an arrival,
 // an update, turning it on), so one rule covers them all.
-export function heldByDnd(queue, dnd, URGENCY) {
-    return dnd ? queue.filter(n => !passesDnd(n, URGENCY)) : [];
+export function heldByDnd(queue, dnd, URGENCY, breakThrough = true) {
+    return dnd ? queue.filter(n => !passesDnd(n, URGENCY, breakThrough)) : [];
 }
 
 // Persistence (§9). A popup that runs out of time, or that Do not disturb

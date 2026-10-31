@@ -110,6 +110,14 @@ export const PAGES = Object.freeze([
         about: "Commands started once as you log in, one after another in this order, without taking focus: each is a program and its arguments, such as google-calendar, and one already running isn't started again. A home app's window goes to home. A change takes effect at the next login. The list is this machine's own once changed.",
         advanced: null,
     },
+    {
+        id: "notifications",
+        label: "Notifications",
+        icon: "preferences-system-notifications-symbolic",
+        keywords: ["dnd", "quiet hours", "schedule", "muted apps"],
+        about: "Do not disturb holds popups; they still go to the notification center. On a schedule, it turns on as the time comes, and off as it ends unless you changed it meanwhile; a window ending earlier than it starts runs into the next day. A muted app or site never pops up and never asks for attention: an app ID, such as org.gnome.Nautilus, or site:chat.google.com.",
+        advanced: null,
+    },
 ]);
 
 // The index of the page `id` names, or -1.

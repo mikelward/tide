@@ -642,7 +642,9 @@ presenter() {
 # edit, written to outputs.local.json and the file conf reads, and applied
 # again; then the hand-edited monitor reset. Then Start at login: its empty
 # list recorded as run in the stand-in's graphical session, and a command
-# added over a hand edit and one refused. Before all that, it checks the
+# added over a hand edit and one refused. Then the Notifications page:
+# the schedule turned on over a hand edit, a bad day refused, and an entry
+# muted and another unmuted over a hand-edited list. Before all that, it checks the
 # shell recorded no wallpaper for the lock, having none to draw (§15).
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
@@ -984,6 +986,40 @@ written_settings() {
     # Not run: the list ran as the shell started.
     if grep -q -- '--background' "$tmp/helpers.log"; then
         echo "FAIL: a change to Start at login shouldn't run anything until the next login" >&2
+        exit 1
+    fi
+    # The Notifications page: Do not disturb's schedule turned on over a
+    # hand edit, a day that isn't one refused, and an app muted and
+    # another unmuted over a hand-edited list.
+    mkdir -p "${notifications_local%/*}" || exit 1
+    printf '{\n  "criticalsBreakThrough": false\n}\n' >"$notifications_local" || exit 1
+    ipc call settings setNotifications dndScheduled true >/dev/null || exit 1
+    _want='{
+  "criticalsBreakThrough": false,
+  "dndScheduled": true
+}'
+    if test "$(cat "$notifications_local")" != "$_want"; then
+        echo "FAIL: the Notifications page should turn the schedule on, keeping the hand-edited criticalsBreakThrough, in $notifications_local; it has: $(cat "$notifications_local" 2>&1)" >&2
+        exit 1
+    fi
+    _refused=$(ipc call settings setNotifications dndDays mon,funday) || exit 1
+    case "$_refused" in
+        *"\"funday\" isn't a day"*) ;;
+        *)
+            echo "FAIL: the Notifications page should refuse a day that isn't one, saying why; it answered: $_refused" >&2
+            exit 1
+            ;;
+    esac
+    printf '{\n  "muted": [\n    "org.example.Noisy"\n  ]\n}\n' >"$workspaces_local" || exit 1
+    ipc call settings addMuted site:chat.example.com >/dev/null || exit 1
+    ipc call settings removeMuted org.example.Noisy >/dev/null || exit 1
+    _want='{
+  "muted": [
+    "site:chat.example.com"
+  ]
+}'
+    if test "$(cat "$workspaces_local")" != "$_want"; then
+        echo "FAIL: the Notifications page should mute site:chat.example.com and unmute the hand-edited org.example.Noisy in $workspaces_local; it has: $(cat "$workspaces_local" 2>&1)" >&2
         exit 1
     fi
     settle
@@ -1466,6 +1502,8 @@ outputs_conf=$tmp/home/.config/hypr/tide-outputs.lua
 outputs_local=$tmp/home/.config/tide/outputs.local.json
 startup_local=$tmp/home/.config/tide/startup.local.json
 startup_record=$tmp/run/tide-startup-ran
+notifications_local=$tmp/home/.config/tide/notifications.local.json
+workspaces_local=$tmp/home/.config/tide/workspaces.local.json
 workspaces_conf=$tmp/home/.config/hypr/tide-workspaces.lua
 after_load=written_settings
 load shell "the shell" -c tide
