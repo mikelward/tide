@@ -1052,6 +1052,17 @@ from the keyboard (`shell/integration_test.sh`).
   - On a live session, check that moving a workspace first makes it home
     at once, on the bar and in `conf`'s rules.
 
+- [ ] **Hide every other desktop's settings apps from the launcher.**
+  GNOME Settings, KDE's System Settings, Xfce's Settings Manager and its
+  panels (`xfce4-settings-manager`, `xfce4-display-settings` and the rest),
+  and the like still show up, and they don't work under tide. That's
+  expected, so they shouldn't be offered: tide's own Settings and its page
+  rows cover them. Prefer a rule that catches any desktop's over a list
+  that names a few. One option is honoring desktop entries' `OnlyShowIn` /
+  `NotShowIn` for `tide` (as an `XDG_CURRENT_DESKTOP` that's none of GNOME,
+  KDE or XFCE), plus dropping `Settings`-category entries that aren't
+  tide's. Check which of them set `OnlyShowIn`, since some don't.
+
 ## Notifications (M4)
 
 SPEC.md §9. So far the shell has the server and the popups. They're
