@@ -817,15 +817,17 @@ PanelWindow {
                 color: Theme.edge
             }
 
-            Row {
+            // The tab's key hints (SPEC.md §8.1), wrapping onto a second
+            // line rather than past the card when they don't fit.
+            Flow {
+                width: parent.width
                 topPadding: 10
                 leftPadding: 10
+                rightPadding: 10
                 spacing: 16
 
                 Repeater {
-                    model: [["↑↓", "select"], ["↵", "run"], ["Ctrl+↵", "new workspace"]]
-                        .concat(root.tab === "windows" || root.tab === "attention" ? [["Ctrl+M", "mute"]] : [])
-                        .concat([["Tab", "next section"], ["Esc", "close"]])
+                    model: Switcher.footerKeys(root.tab)
 
                     Text {
                         required property var modelData

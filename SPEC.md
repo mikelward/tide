@@ -1461,6 +1461,10 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
   selected row's app (§9, *Muted apps*): M for mute, decided by the
   maintainer. The footer shows it there. tilemo's is `Cmd+M`, the same
   physical key on a Mac.
+- **The footer** names only the keys that work on the tab you're on:
+  `Ctrl+↵` and `PgDn` on Apps, `Ctrl+M` on Windows and Attention, and
+  `Tab` for the next tab on all four. Hints that don't fit on one line
+  wrap onto a second.
 - It's drawn like the launcher was, and takes the keyboard the same way
   (below, and §14.2).
 - **The name prompt** (§6.5) is not one of its tabs. It names a

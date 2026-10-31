@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    TABS, TAB_NAMES, PLACEHOLDERS, movedTab, toggled, tabChanged, workspaceRows, windowRows, attentionRows, emptyText,
+    TABS, TAB_NAMES, PLACEHOLDERS, footerKeys, movedTab, toggled, tabChanged, workspaceRows, windowRows, attentionRows, emptyText,
 } from "./switcher.mjs";
 import { NO_MARKS, updateMarks, barWorkspaces } from "./workspaces.mjs";
 
@@ -18,6 +18,21 @@ test("Tab and Shift+Tab move between tabs, and wrap", () => {
     assert.equal(movedTab("attention", 1), "apps");
     assert.equal(movedTab("apps", -1), "attention");
     assert.equal(movedTab("windows", -1), "workspaces");
+});
+
+test("the footer names only the keys that work on the tab, Tab as next tab", () => {
+    const keys = (tab) => footerKeys(tab).map(([k]) => k);
+    const said = (tab, key) => (footerKeys(tab).find(([k]) => k === key) ?? [])[1];
+    for (const t of TABS) {
+        assert.equal(said(t, "Tab"), "next tab", t);
+        assert.equal(said(t, "Esc"), "close", t);
+    }
+    assert.deepEqual(keys("apps"), ["↑↓", "↵", "Ctrl+↵", "PgDn", "Tab", "Esc"]);
+    assert.equal(said("apps", "↵"), "run");
+    assert.deepEqual(keys("workspaces"), ["↑↓", "↵", "Tab", "Esc"], "Ctrl+Enter and sections are the Apps tab's");
+    assert.equal(said("workspaces", "↵"), "go");
+    assert.deepEqual(keys("windows"), ["↑↓", "↵", "Ctrl+M", "Tab", "Esc"]);
+    assert.deepEqual(keys("attention"), ["↑↓", "↵", "Ctrl+M", "Tab", "Esc"]);
 });
 
 test("each key opens its own tab, and the same key again closes it", () => {
