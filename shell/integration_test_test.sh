@@ -42,7 +42,7 @@ tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
 # The calls the stub qs makes, as the shell and as the lock or the greeter.
-all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
+all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup clipboard keyboards"
 
 # stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN [IDLE [HANDED [LABEL [LATITUDE]]]]]]]]]]]:
 # a sway that listens on wayland-1 until it's killed; a qs whose `ipc`
@@ -138,6 +138,8 @@ if test "\$1" = ipc; then
         *"call settings setSystemZone Asia/Tokyo"*) : >"\$XDG_RUNTIME_DIR/zone-set" ;;
         *"call settings setNotifications dndScheduled true"*) printf '{\n  "criticalsBreakThrough": false,\n  "dndScheduled": true\n}\n' >"\$HOME/.config/tide/notifications.local.json" ;;
         *"call settings setNotifications dndDays mon,funday"*) echo 'dndDays: "funday" isn'"'"'t a day; use mon, tue, wed, thu, fri, sat, sun; not changing dndDays' ;;
+        *"call settings setClipboard maxItems 500"*) printf '%s\n' "# Written by tide's settings panel (SPEC.md §16); edit clipboard.local.json instead." history=off max_items=500 >"\$HOME/.config/hypr/tide-clipboard.conf" ;;
+        *"call settings setClipboard maxItems 0"*) echo 'maxItems must be a whole number from 1 to 10000; not changing maxItems' ;;
         *"call settings removeMuted org.example.Noisy"*) printf '{\n  "muted": [\n    "site:chat.example.com"\n  ]\n}\n' >"\$HOME/.config/tide/workspaces.local.json" ;;
         # Presenter mode as the shell keeps it (shell/lib/presenter.mjs):
         # it holds keep awake over your own toggle, and turning Do not
@@ -315,6 +317,10 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                         hyprctl eval 'conf_workspaces.reload()' >/dev/null 2>&1
                 } &
                 ;;
+        esac
+        case " ${7-$all_runs} " in
+            # The clipboard history's settings, for tide clipboard store.
+            *" clipboard "*) mkdir -p "\$HOME/.config/hypr" && printf '%s\n' "# Written by tide's settings panel (SPEC.md §16); edit clipboard.local.json instead." history=on max_items=200 >"\$HOME/.config/hypr/tide-clipboard.conf" ;;
         esac
         case " ${7-$all_runs} " in
             # Start at login's empty list, run and recorded.
@@ -774,7 +780,7 @@ check "having waited for it" contains "$out" "ok: Quickshell loads the shell"
 }
 
 case_23() {
-stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-clocks"
 check "a shell that never runs tide-tz fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "tide-tz..." in 2 s'
@@ -808,28 +814,28 @@ check "and says what it said" contains "$out" "tide: tide-sysmon probe exited 2"
 }
 
 case_27() {
-stubs "$tmp/no-title" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-title" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-title"
 check "a shell that never asks hyprctl for the focused window fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl activewindow -j..." in 2 s'
 }
 
 case_28() {
-stubs "$tmp/no-replay" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-replay" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-replay"
 check "a shell that never has the focus guard replay its windows fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.announce_waiting()..." in 2 s'
 }
 
 case_29() {
-stubs "$tmp/no-order" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-order" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-order"
 check "a shell that never tells the focus guard its marks fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.set_order(..." in 2 s'
 }
 
 case_30() {
-stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup"
+stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup clipboard"
 run "$tmp/no-keyboards"
 check "a lock that never asks hyprctl for the keyboards fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the lock never ran "hyprctl devices -j..." in 2 s'
@@ -868,35 +874,35 @@ check "and says so" contains "$out" "the shell didn't set the time zone to Asia/
 }
 
 case_35() {
-stubs "$tmp/no-scheme" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-scheme" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-scheme"
 check "a shell that never tells apps the color scheme fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "gsettings set org.gnome.desktop.interface color-scheme..." in 2 s'
 }
 
 case_36() {
-stubs "$tmp/no-scheme-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-scheme-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-scheme-monitor"
 check "a shell that never follows the color scheme fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "gsettings monitor org.gnome.desktop.interface color-scheme..." in 2 s'
 }
 
 case_37() {
-stubs "$tmp/no-vpns" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-vpns" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpn-monitor idle input devices binds layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-vpns"
 check "a shell that never lists the VPNs fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show..." in 2 s'
 }
 
 case_38() {
-stubs "$tmp/no-vpn-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns idle input devices binds layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-vpn-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns idle input devices binds layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-vpn-monitor"
 check "a shell that never follows the VPNs fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "nmcli monitor..." in 2 s'
 }
 
 case_39() {
-stubs "$tmp/no-idle" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor input devices binds layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-idle" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor input devices binds layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-idle"
 check "a shell that never restarts hypridle on its timings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "systemctl --user try-restart hypridle.service..." in 2 s'
@@ -910,56 +916,56 @@ check "and says so" contains "$out" "the shell didn't write a lock time of 600, 
 }
 
 case_41() {
-stubs "$tmp/no-input" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle devices binds layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-input" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle devices binds layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-input"
 check "a shell that never applies the mouse, touchpad and keyboard settings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval conf_input.reload()..." in 2 s'
 }
 
 case_42() {
-stubs "$tmp/no-devices" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input binds layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-devices" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input binds layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-devices"
 check "a shell that never lists the mice and touchpads fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl devices -j..." in 2 s'
 }
 
 case_43() {
-stubs "$tmp/no-binds" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices layouts outputs dim workspaces startup keyboards"
+stubs "$tmp/no-binds" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices layouts outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-binds"
 check "a shell that never lists the key bindings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl binds -j..." in 2 s'
 }
 
 case_44() {
-stubs "$tmp/no-layouts" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds outputs dim workspaces startup keyboards"
+stubs "$tmp/no-layouts" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds outputs dim workspaces startup clipboard keyboards"
 run "$tmp/no-layouts"
 check "a shell that never applies the layout settings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_layout.reload()..." in 2 s'
 }
 
 case_45() {
-stubs "$tmp/no-outputs" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts dim workspaces startup keyboards"
+stubs "$tmp/no-outputs" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts dim workspaces startup clipboard keyboards"
 run "$tmp/no-outputs"
 check "a shell that never lists the monitors fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl monitors all -j..." in 2 s'
 }
 
 case_46() {
-stubs "$tmp/no-dim" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs workspaces startup keyboards"
+stubs "$tmp/no-dim" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs workspaces startup clipboard keyboards"
 run "$tmp/no-dim"
 check "a shell that never applies the dim strength fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval conf_appearance.reload()..." in 2 s'
 }
 
 case_47() {
-stubs "$tmp/no-workspaces" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim startup keyboards"
+stubs "$tmp/no-workspaces" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim startup clipboard keyboards"
 run "$tmp/no-workspaces"
 check "a shell that never applies home and its apps' rules fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval conf_workspaces.reload()..." in 2 s'
 }
 
 case_48() {
-stubs "$tmp/no-startup" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces keyboards"
+stubs "$tmp/no-startup" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces clipboard keyboards"
 run "$tmp/no-startup"
 check "a shell that doesn't run Start at login fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell should record running Start at login's (empty) list for the graphical session in"
@@ -1269,6 +1275,13 @@ stubs "$tmp/greeter-unfocused" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" 
 run "$tmp/greeter-unfocused"
 check "a greeter that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the greeter didn't take the keyboard in 2 s"
+}
+
+case_90() {
+stubs "$tmp/no-clipboard" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
+run "$tmp/no-clipboard"
+check "a shell that doesn't write the clipboard settings fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell should write the clipboard history's defaults to"
 }
 
 # --case N RESULT: run case_N alone, and write its passes and failures to

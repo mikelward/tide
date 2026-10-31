@@ -118,6 +118,14 @@ export const PAGES = Object.freeze([
         about: "Do not disturb holds popups; they still go to the notification center. On a schedule, it turns on as the time comes, and off as it ends unless you changed it meanwhile; a window ending earlier than it starts runs into the next day. A muted app or site never pops up and never asks for attention: an app ID, such as org.gnome.Nautilus, or site:chat.google.com.",
         advanced: null,
     },
+    {
+        id: "clipboard",
+        label: "Clipboard",
+        icon: "edit-paste-symbolic",
+        keywords: ["copy history", "paste history"],
+        about: "What you copy is kept for the picker on Super+C, the newest first, apart from passwords a password manager marks. Off, new copies aren't kept; what's kept stays until it's cleared. A smaller number trims the history at the next copy.",
+        advanced: null,
+    },
 ]);
 
 // The index of the page `id` names, or -1.

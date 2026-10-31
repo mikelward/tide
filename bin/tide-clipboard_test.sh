@@ -116,6 +116,28 @@ check "a bad --max-items exits 2" test $? -eq 2
 check "a bad --max-items names it: $out" contains "$out" "--max-items"
 check "a bad --max-items stores nothing" test ! -e "$tmp/stored"
 
+# The Clipboard page's settings, in the file the shell writes (SPEC.md §16).
+PATH=$SAVED_PATH mkdir -p "$tmp/config/hypr"
+conf=$tmp/config/hypr/tide-clipboard.conf
+reset
+printf 'history=off\nmax_items=50\n' > "$conf"
+printf 'hello' | XDG_CONFIG_HOME="$tmp/config" CLIPBOARD_STATE=data "$cmd" store
+check "history off exits 0" test $? -eq 0
+check "history off stores nothing" test ! -e "$tmp/stored"
+check "and never reaches cliphist" test -z "$(grep cliphist "$log")"
+reset
+printf 'history=on\nmax_items=50' > "$conf"
+printf 'hello' | XDG_CONFIG_HOME="$tmp/config" CLIPBOARD_STATE=data "$cmd" store --max-items 200
+check "the page's max_items replaces --max-items, even on a last line with no newline" contains "$(cat "$log")" "cliphist -max-items 50 store"
+reset
+printf 'history=maybe\nmax_items=none\ncolour=red\n' > "$conf"
+out=$(printf 'hello' | XDG_CONFIG_HOME="$tmp/config" CLIPBOARD_STATE=data "$cmd" store 2>&1)
+check "a bad file still stores, with the default cap" contains "$(cat "$log")" "cliphist -max-items 200 store"
+check "and says what's wrong with history" contains "$out" "history is on or off, not 'maybe'"
+check "and with max_items" contains "$out" "max_items is a whole number above 0, not 'none'"
+check "and names a setting it doesn't know" contains "$out" "colour isn't a setting (history, max_items)"
+rm "$conf"
+
 reset
 printf 'hunter2' | CLIPBOARD_STATE=sensitive "$cmd" store
 check "a sensitive copy exits 0" test $? -eq 0

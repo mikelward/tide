@@ -644,7 +644,9 @@ presenter() {
 # list recorded as run in the stand-in's graphical session, and a command
 # added over a hand edit and one refused. Then the Notifications page:
 # the schedule turned on over a hand edit, a bad day refused, and an entry
-# muted and another unmuted over a hand-edited list. Before all that, it checks the
+# muted and another unmuted over a hand-edited list. Then the Clipboard
+# page: its defaults written for tide clipboard store, a cap set over a
+# hand edit, and a cap of 0 refused. Before all that, it checks the
 # shell recorded no wallpaper for the lock, having none to draw (§15).
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
@@ -1022,6 +1024,29 @@ written_settings() {
         echo "FAIL: the Notifications page should mute site:chat.example.com and unmute the hand-edited org.example.Noisy in $workspaces_local; it has: $(cat "$workspaces_local" 2>&1)" >&2
         exit 1
     fi
+    # The Clipboard page: the defaults written for tide clipboard store at
+    # startup, then a cap set over a hand edit turning history off, and a
+    # cap of none refused.
+    if test "$(cat "$clipboard_conf" 2>/dev/null)" != "$(printf '%s\n' "# Written by tide's settings panel (SPEC.md §16); edit clipboard.local.json instead." history=on max_items=200)"; then
+        echo "FAIL: the shell should write the clipboard history's defaults to $clipboard_conf; it has: $(cat "$clipboard_conf" 2>&1)" >&2
+        exit 1
+    fi
+    printf '{\n  "history": false\n}\n' >"$clipboard_local" || exit 1
+    # The change writes both files before the call answers
+    # (ClipboardSettingsData.set loads and writes synchronously).
+    ipc call settings setClipboard maxItems 500 >/dev/null || exit 1
+    if ! grep -qx 'history=off' "$clipboard_conf" || ! grep -qx 'max_items=500' "$clipboard_conf"; then
+        echo "FAIL: the shell should write history off and a cap of 500 to $clipboard_conf as setClipboard answers; it has: $(cat "$clipboard_conf" 2>&1)" >&2
+        exit 1
+    fi
+    _refused=$(ipc call settings setClipboard maxItems 0) || exit 1
+    case "$_refused" in
+        *"maxItems must be a whole number from 1 to 10000"*) ;;
+        *)
+            echo "FAIL: the Clipboard page should refuse a cap of 0, saying why; it answered: $_refused" >&2
+            exit 1
+            ;;
+    esac
     settle
 }
 
@@ -1504,6 +1529,8 @@ startup_local=$tmp/home/.config/tide/startup.local.json
 startup_record=$tmp/run/tide-startup-ran
 notifications_local=$tmp/home/.config/tide/notifications.local.json
 workspaces_local=$tmp/home/.config/tide/workspaces.local.json
+clipboard_local=$tmp/home/.config/tide/clipboard.local.json
+clipboard_conf=$tmp/home/.config/hypr/tide-clipboard.conf
 workspaces_conf=$tmp/home/.config/hypr/tide-workspaces.lua
 after_load=written_settings
 load shell "the shell" -c tide

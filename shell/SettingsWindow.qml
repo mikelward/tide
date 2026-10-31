@@ -6,6 +6,7 @@ import Quickshell.Services.Pipewire
 import Quickshell.Wayland
 import "lib/appearance.mjs" as Appearance
 import "lib/audio.mjs" as Audio
+import "lib/clipboard.mjs" as Clip
 import "lib/dnd.mjs" as Dnd
 import "lib/idle.mjs" as Idle
 import "lib/input.mjs" as Input
@@ -237,6 +238,17 @@ PanelWindow {
         }
         function removeMuted(entry: string): string {
             return WorkspacesData.removeMuted(undefined, entry);
+        }
+
+        // Sets one of the Clipboard page's settings, as it does: `qs -c
+        // tide ipc call settings setClipboard maxItems 500`, or history
+        // true or false. Answers why not, or "".
+        function setClipboard(key: string, value: string): string {
+            return ClipboardSettingsData.set(key, key === "maxItems" ? Number(value) : value === "true" ? true : value === "false" ? false : value);
+        }
+        // Clears the clipboard history, as the page's Clear history does.
+        function clearClipboard(): void {
+            ClipboardSettingsData.clear();
         }
     }
 
@@ -2426,6 +2438,142 @@ PanelWindow {
                             textFormat: Text.PlainText
                             text: notifications.refused
                             color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Clipboard: whether the history keeps new copies, how
+                    // many, and Clear history (SPEC.md §8.4, §16).
+                    Column {
+                        id: clipboard
+
+                        readonly property var settings: ClipboardSettingsData.settings
+                        property string refused: ""
+
+                        function changed(error) {
+                            refused = error;
+                            root.report(error);
+                        }
+
+                        onVisibleChanged: {
+                            refused = "";
+                            if (ClipboardSettingsData.clearing !== "clearing") {
+                                ClipboardSettingsData.clearing = "";
+                            }
+                        }
+                        visible: root.current.id === "clipboard"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        Item {
+                            width: clipboard.width
+                            implicitHeight: 32
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: `History: ${Clip.historySummary(clipboard.settings)}`
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Rectangle {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 56
+                                height: 26
+                                radius: 13
+                                color: clipboard.settings.history ? Theme.accentBg : Theme.surface2
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: clipboard.settings.history ? "On" : "Off"
+                                    color: clipboard.settings.history ? Theme.accentFg : Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                }
+
+                                TapHandler {
+                                    onTapped: clipboard.changed(ClipboardSettingsData.set("history", !clipboard.settings.history))
+                                }
+                            }
+                        }
+
+                        // How many to keep, a mark a step.
+                        Item {
+                            visible: clipboard.settings.history
+                            width: clipboard.width
+                            implicitHeight: visible ? 32 : 0
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Copies to keep"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+
+                                StepButton {
+                                    name: "list-remove-symbolic"
+                                    value: clipboard.settings.maxItems
+                                    next: Clip.steppedMax(clipboard.settings.maxItems, -1)
+                                    onActivated: clipboard.changed(ClipboardSettingsData.set("maxItems", next))
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 92
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: String(clipboard.settings.maxItems)
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                    font.features: ({ "tnum": 1 })
+                                }
+
+                                StepButton {
+                                    name: "list-add-symbolic"
+                                    value: clipboard.settings.maxItems
+                                    next: Clip.steppedMax(clipboard.settings.maxItems, 1)
+                                    onActivated: clipboard.changed(ClipboardSettingsData.set("maxItems", next))
+                                }
+                            }
+                        }
+
+                        MenuRow {
+                            width: clipboard.width
+                            icon: "edit-clear-all-symbolic"
+                            label: "Clear history"
+                            enabled: ClipboardSettingsData.clearing !== "clearing"
+                            onClicked: ClipboardSettingsData.clear()
+                        }
+
+                        // How Clear history went, or a change refused.
+                        Text {
+                            readonly property string said: ClipboardSettingsData.clearing === "clearing" ? "Clearing…" : ClipboardSettingsData.clearing === "cleared" ? "The history is empty." : ClipboardSettingsData.clearing
+
+                            visible: text !== ""
+                            x: 10
+                            width: clipboard.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: clipboard.refused !== "" ? clipboard.refused : said
+                            color: clipboard.refused !== "" || !["", "clearing", "cleared"].includes(ClipboardSettingsData.clearing) ? Theme.danger : Theme.fgDim
                             font.family: Theme.font
                             font.pixelSize: 12
                         }

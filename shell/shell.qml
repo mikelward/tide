@@ -84,6 +84,8 @@ ShellRoot {
         StartupData.load();
         // Do not disturb's schedule, checked from the start.
         NotificationSettingsData.load();
+        // The clipboard history's settings, for tide clipboard store.
+        ClipboardSettingsData.load();
     }
 
     // A toplevel's class and fullscreen state come from Hyprland's client
