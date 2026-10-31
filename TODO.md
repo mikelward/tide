@@ -1417,3 +1417,21 @@ entry before it's copied, so a paste needs no tidying afterward. Ideas so far:
 
 Each would be an action on the highlighted row, with a single-modifier key.
 The same actions would suit tilemo's picker on the Mac.
+
+## Bring back Super+1…9
+
+`Super+1…9` and `Super+Shift+1…9` were dropped with numbered workspaces
+(SPEC.md §6.6): named workspaces are reached by the switcher, `Super+Tab`,
+`Super+Home` and `Super+End`. The user wants them back, as muscle memory
+from dwm. Work out what a number means with named workspaces before
+binding it:
+
+- [ ] The Nth workspace in the bar's order (home first, then in the order
+  made), so `Super+1` is home. A number past the last workspace does
+  nothing, or makes nothing; `Super+Shift+N` sends the focused window to
+  the Nth.
+- [ ] Or the Nth standing workspace from `workspaces.json`, which keeps a
+  number stable as other workspaces come and go.
+- [ ] Bind them in `mikelward/conf`'s `hyprland.lua` through the shell's
+  IPC (it knows the bar's order), and in tilemo and tileco where their key
+  maps allow. Show the number on the bar's chips if it helps.
