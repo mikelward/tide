@@ -1085,7 +1085,8 @@ See [`bar.png`](docs/mocks/bar.png).
   the rest in the order they were made (§6.5), then the layout symbol.
 - **Right:** the Presenting pill while presenter mode is on (§10), privacy
   pills (screen shared, mic live), third-party tray icons,
-  then the built-in status icons: keep-awake, Bluetooth, network,
+  then the built-in status icons: keep-awake, Bluetooth and its audio
+  devices, network,
   volume %, battery %, CPU %, notifications, session. The four clocks come
   last.
 - **Middle:** the title of the window your typing goes to. Only the
@@ -1238,7 +1239,8 @@ See [`bar.png`](docs/mocks/bar.png).
 | Privacy: mic (orange) | any app is capturing the microphone | per-app list with mute | — |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
 | Keep awake | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off | — |
-| Bluetooth | off / on / connected | device list, connect/disconnect; *pair* opens `blueman-manager` | — |
+| Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | — |
+| Bluetooth audio | one icon per connected headphones, headset or speakers, beside Bluetooth | the Bluetooth popover | hover: its name and battery |
 | Network | Wi-Fi strength / wired / VPN lock / offline | network list, VPNs; *settings* opens `nm-connection-editor` | — |
 | Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5% |
 | Battery | % and charging, red below 15% | power profile (performance / balanced / saver), time left | — |
@@ -1295,6 +1297,22 @@ See [`bar.png`](docs/mocks/bar.png).
   each minute until it, or one as good, is back.
 - `tide-sysmon` reads `/proc` and `/sys` for it, so the parsing is tested
   against a fake tree and needs no privileges.
+
+**Bluetooth** ([`bar.png`](docs/mocks/bar.png)).
+
+- The icon is one glyph with two states, off and on. Off draws it faint,
+  as keep awake is while off; blocked (rfkill) and turning off count as
+  off.
+- Connecting a device doesn't change it. A line through it, or an *x*,
+  read as three states where people expect two.
+- With no adapter it's hidden: there's nothing to turn on.
+- Each connected audio device gets its own icon beside it, by the kind
+  BlueZ gives it (`class_to_icon`, BlueZ 5.x): headset, headphones, or any
+  other audio device, drawn as speakers. Mice, keyboards and the rest get
+  none.
+- Hovering one shows the device's name, and its battery where it reports
+  one (Quickshell 0.3's `batteryAvailable` and `battery`). The bar shows
+  no battery text.
 
 Critical battery (7%) is a critical notification. At 3% the machine
 hibernates if hibernation is set up, and otherwise suspends.

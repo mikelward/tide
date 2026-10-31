@@ -51,6 +51,13 @@ once you have agreed with it or reversed it.
 - [ ] **The mocks keep their hairline before the clocks**, which the live
   bar has never drawn; only the clocks' padding was tightened to match.
   Reversible: drop `<span class="sep">` before `.clocks` in the mocks.
+- [ ] **Each connected Bluetooth audio device gets its own bar icon**
+  (SPEC.md §7.4), so a headset and a speaker show two, each with its own
+  battery on hover. The alternative is one icon while any is connected,
+  its tooltip listing them all. BlueZ's catch-all `audio-card` is drawn as
+  speakers (`audio-speakers-symbolic`), though earbuds that don't call
+  themselves headphones land there too. Both live in `audioIcons` in
+  `shell/lib/bluetooth.mjs`, so either is a small change.
 - [ ] **The picker on `Super+C` is its own overlay, not two more switcher
   tabs** (SPEC.md §8.4). The switcher goes somewhere; the picker copies
   something, and the switcher's `Tab` cycle stays at four. The
@@ -835,8 +842,10 @@ tested where it can be without a live session.
     the power profile. The volume popover (`shell/VolumePopover.qml`, from
     `shell/lib/audio.mjs`) picks the output and input and sets each app's
     level. Bluetooth (`shell/BluetoothPopover.qml`, from
-    `shell/lib/bluetooth.mjs`) shows off, on or connected, and connects
-    paired devices; pairing opens blueman-manager.
+    `shell/lib/bluetooth.mjs`) shows on or off and the devices, and connects
+    paired devices; pairing opens blueman-manager. Its bar icon is one glyph,
+    faint while off, with an icon beside it for each connected audio
+    device; on a live session, check those icons and their battery tooltip.
     The network icon and popover (`shell/NetworkPopover.qml`, from
     `shell/lib/network.mjs`) use Quickshell 0.3's `Quickshell.Networking`
     (NetworkManager): wired, Wi-Fi strength, no route or offline; Wi-Fi on
