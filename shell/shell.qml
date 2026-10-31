@@ -80,6 +80,8 @@ ShellRoot {
         WorkspacesData.load();
         OutputsData.load();
         OutputsData.listMonitors();
+        // Start at login's commands, once a session.
+        StartupData.load();
     }
 
     // A toplevel's class and fullscreen state come from Hyprland's client
