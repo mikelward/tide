@@ -129,8 +129,28 @@ check "the autostart condition is a sh -c script" test -n "$condition"
 check "another desktop's agent is skipped in the tide session" skips_in "tide:Hyprland" "$agent"
 check "another desktop's daemon is skipped in the tide session" \
     skips_in "tide:Hyprland" 'app-xfce4\x2dnotifyd@autostart.service'
-check "the network applet runs in the tide session, as its secret agent" \
+# With no Quickshell shell answering (waybar's bar), nm-applet is the
+# secret agent; with the shell's tide-agent, it's skipped (SPEC.md §5.6).
+# A fake qs answers `ipc call agent status` with $FAKE_AGENT, or fails as
+# qs does with no shell running.
+mkdir -p "$tmp/shell-bin"
+cat > "$tmp/shell-bin/qs" <<'FAKE'
+#!/bin/sh
+test -n "$FAKE_AGENT" || { echo "No running instances" >&2; exit 255; }
+echo "$FAKE_AGENT"
+FAKE
+chmod +x "$tmp/shell-bin/qs"
+path_saved=$PATH
+PATH="$tmp/shell-bin:$PATH"
+FAKE_AGENT=
+export FAKE_AGENT
+check "the network applet runs in the tide session when no shell's agent does" \
     runs_in "tide:Hyprland" 'app-nm\x2dapplet@autostart.service'
+FAKE_AGENT=registered
+check "the network applet is skipped in the tide session whose shell's tide-agent asks for passwords" \
+    skips_in "tide:Hyprland" 'app-nm\x2dapplet@autostart.service'
+unset FAKE_AGENT
+PATH=$path_saved
 check "the Bluetooth applet is skipped in the tide session, whose bar draws its icon" \
     skips_in "tide:Hyprland" 'app-blueman@autostart.service'
 mkdir -p "$tmp/allow/tide"

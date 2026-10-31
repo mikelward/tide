@@ -208,6 +208,11 @@ mkdir "$tmp/qs-bin"
 cat > "$tmp/qs-bin/qs" <<'FAKE'
 #!/bin/sh
 if test "$*" = "-c tide ipc call agent status"; then
+    # Only a running shell answers: no qs process is waybar's bar.
+    case " $FAKE_PROCS " in
+        *" qs "*) ;;
+        *) echo "No running instances for /home/user/.config/quickshell/tide/shell.qml" >&2; exit 255 ;;
+    esac
     if test -n "$FAKE_QS_IPC_FAILS"; then
         echo "$FAKE_QS_IPC_FAILS" >&2
         exit 1
@@ -282,7 +287,7 @@ run() {
         XDG_CURRENT_DESKTOP=tide:Hyprland XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" HOME="$tmp/home" \
         XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_HOME="$tmp/no-data-home" XDG_DATA_DIRS="$tmp/share" \
         XDG_RUNTIME_DIR="$tmp/runtime" TIDE_DATADIR="$tmp/datadir" TIDE_SYSCONFDIR="$tmp/sysconf" \
-        FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_PID_hypridle=101 TIDE_CLIPHIST=sh \
+        FAKE_PROCS="hypridle swaync waybar hyprpolkitagent nm-applet" FAKE_PID_hypridle=101 TIDE_CLIPHIST=sh \
         "$@" sh "$doctor" > "$tmp/out" 2> "$tmp/err"
     status=$?
     out=$(cat "$tmp/out")
@@ -741,36 +746,53 @@ check "one held off by another agent is named once, by that agent" \
 run FAKE_PROCS="hypridle swaync waybar qs" FAKE_QS_IPC_FAILS="ipc: no running instance"
 check "failing to ask the shell is reported" \
     contains "$out" "couldn't ask the shell whether its polkit agent works (qs ipc: ipc: no running instance)"
-# Under waybar tide-shell starts an agent of its own in the unit.
-run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent"
+# Under waybar tide-shell starts an agent of its own in the unit, and
+# nm-applet is the network one.
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent nm-applet"
 check "with the shell as polkit agent, tide-shell's stand-in under waybar is fine" test "$out" = "No problems found."
 healthy
 
-# The shell's network agent (SPEC.md §5.6), with TIDE_AGENT=1.
+# The shell's network agent (SPEC.md §5.6), on by default.
 healthy
-printf 'TIDE_AGENT=1\0' > "$tmp/proc/100/environ"
 run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs"
 check "a registered network agent is fine" test "$out" = "No problems found."
 run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT="standing-aside 300"
 check "nm-applet holding the job is a problem, naming it" \
-    contains "$out" "nm-applet (pid 300) is running, so its dialogs ask for network passwords instead of the shell's (TIDE_AGENT=1)"
+    contains "$out" "nm-applet (pid 300) is running, so its dialogs ask for network passwords instead of the shell's"
 mkdir -p "$tmp/config/tide"
 printf '# kept\nnm-applet\n' > "$tmp/config/tide/autostart"
 run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT="standing-aside 300"
 check "nm-applet you listed may hold the job" test "$out" = "No problems found."
 rm "$tmp/config/tide/autostart"
 run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT=missing
-check "a missing tide-agent is a problem, with the fix" contains "$out" "tide-agent isn't running, so nothing asks for network passwords"
+check "a missing tide-agent with no nm-applet means nothing asks" \
+    contains "$out" "tide-agent isn't running, and nm-applet isn't running, so nothing asks for a VPN's or Wi-Fi network's password"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs nm-applet" FAKE_QS_AGENT=missing
+check "a missing tide-agent with nm-applet standing in says so, not that nothing asks" \
+    contains "$out" "tide-agent isn't running, so nm-applet asks for network passwords instead of the shell"
+check "and doesn't say nothing asks" test -z "$(grep 'nothing asks' "$tmp/out")"
 run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT=waiting
 check "no NetworkManager is a problem" contains "$out" "NetworkManager isn't running"
 run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT="unregistered permission denied"
 check "a refused agent is a problem, with NetworkManager's reason" \
     contains "$out" "NetworkManager didn't take the shell's network agent (permission denied)"
 run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_IPC_FAILS="ipc: no running instance"
-check "failing to ask about the network agent is reported" \
-    contains "$out" "couldn't ask the shell whether its network agent works (qs ipc: ipc: no running instance)"
-run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_QS_AGENT=missing
-check "with no shell running, the agent isn't asked about" test -z "$(grep 'network' "$tmp/out")"
+check "a shell that doesn't answer, with no nm-applet, is reported" \
+    contains "$out" "the shell didn't answer whether its network agent runs (is it starting?), and nm-applet isn't running"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent nm-applet" FAKE_QS_AGENT=missing
+check "under waybar the shell's agent isn't asked about, and nm-applet is the agent" test "$out" = "No problems found."
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent"
+check "under waybar with no nm-applet, nothing asks for passwords" \
+    contains "$out" "the Quickshell shell isn't running (the bar is waybar), so neither is its network agent, and nm-applet isn't running"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT=starting
+check "a tide-agent still starting is fine" test "$out" = "No problems found."
+printf 'TIDE_AGENT=0\0' > "$tmp/proc/100/environ"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT=off
+check "with TIDE_AGENT=0 and no nm-applet, nothing asks for passwords" \
+    contains "$out" "TIDE_AGENT=0 turns off the shell's network agent, and nm-applet isn't running"
+check "with TIDE_AGENT=0, the shell's agent isn't asked about" test -z "$(grep "tide-agent isn't running" "$tmp/out")"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs nm-applet"
+check "with TIDE_AGENT=0, nm-applet doing the job is fine" test "$out" = "No problems found."
 healthy
 
 healthy
@@ -899,7 +921,7 @@ healthy
 out=$(env PATH="$fake:$tmp/no-jq" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" XDG_CURRENT_DESKTOP=tide:Hyprland \
     XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_DIRS="$tmp/share" HOME="$tmp/home" \
     XDG_DATA_HOME="$tmp/no-data-home" XDG_RUNTIME_DIR="$tmp/runtime" TIDE_DATADIR="$tmp/datadir" TIDE_SYSCONFDIR="$tmp/sysconf" \
-    FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_PID_hypridle=101 \
+    FAKE_PROCS="hypridle swaync waybar hyprpolkitagent nm-applet" FAKE_PID_hypridle=101 \
     "$tmp/no-jq/sh" "$doctor" 2>&1)
 check "no jq is reported" contains "$out" "jq isn't installed, so the one-bar-per-monitor check is skipped"
 check "no python3 is reported" \
@@ -915,7 +937,7 @@ check "each autostart unit off the allowlist whose command started is a problem"
     test "$(grep -c '^autostart unit' "$tmp/out")" -eq 3
 check "blueman is off the allowlist, since the bar draws Bluetooth" \
     contains "$out" "autostart unit app-blueman@autostart.service ran in tide but isn't on the autostart allowlist"
-check "nm-applet, allowed by default, isn't a problem" test -z "$(grep 'nm\\x2dapplet' "$tmp/out")"
+check "nm-applet, allowed while no shell's agent runs (waybar), isn't a problem" test -z "$(grep 'nm\\x2dapplet' "$tmp/out")"
 check "an autostart unit that ran and exited counts" contains "$out" "autostart unit app-oneshot@autostart.service ran in tide"
 check "an autostart unit is named, with the fix" \
     contains "$out" "autostart unit app-hplip\\x2dsystray@autostart.service ran in tide but isn't on the autostart allowlist: run tide's make install, whose app-.service.d drop-in skips it, then systemctl --user daemon-reload, then systemctl --user stop 'app-hplip\\x2dsystray@autostart.service'"
@@ -924,6 +946,11 @@ check "a unit whose condition stopped its command isn't a problem" test -z "$(gr
 check "a unit that ran before this session began isn't a problem" test -z "$(grep 'app-earlier' "$tmp/out")"
 check "systemctl is asked for every loaded autostart unit, dead ones too" \
     contains "$(cat "$tmp/systemctl-args")" "list-units --all --plain --no-legend app-*@autostart.service"
+echo xiccd > "$tmp/config/tide/autostart"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_AUTOSTART_UNITS="app-nm\\x2dapplet@autostart.service=654"
+rm "$tmp/config/tide/autostart"
+check "an autostarted nm-applet beside the shell's agent is off the allowlist" \
+    contains "$out" "autostart unit app-nm\\x2dapplet@autostart.service ran in tide but isn't on the autostart allowlist"
 run FAKE_AUTOSTART_UNITS="app-hplip\\x2dsystray@autostart.service=789" TIDE_CMD="$tmp/no-such-tide"
 check "a failed allowlist check is reported as one, not as a unit off the list" \
     contains "$out" "couldn't check autostart unit app-hplip\\x2dsystray@autostart.service against the allowlist ("

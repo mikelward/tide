@@ -211,15 +211,19 @@ export function connectCommand(uuid) {
 // opens from tide-agent rather than a launch.
 export const GRANT_ANY = ["hyprctl", "eval", "tide_focus.grant(\"*\")"];
 
-// `ipc call agent status`, for `tide doctor`: "off" (TIDE_AGENT isn't 1),
-// "missing" (tide-agent isn't running), or tide-agent's own status:
+// `ipc call agent status`, for `tide doctor` and `tide autostart-allowed`:
+// "off" (TIDE_AGENT=0), "missing" (tide-agent isn't running), "starting"
+// (it is, but hasn't said where it stands), or tide-agent's own status:
 // "registered", "standing-aside PID", "waiting", "unregistered MESSAGE".
 export function statusText(enabled, running, status) {
     if (!enabled) {
         return "off";
     }
-    if (!running || !status) {
+    if (!running) {
         return "missing";
+    }
+    if (!status) {
+        return "starting";
     }
     switch (status.state) {
     case "standing-aside":

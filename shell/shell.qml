@@ -10,8 +10,8 @@ import Quickshell.Io
 
 // tide's shell (SPEC.md §3.2): for now, the wallpaper, the bar, the OSD and
 // the notification popups (opt-in; see NotificationData.qml) on every monitor,
-// the launcher, the settings panel, and the polkit and network prompts
-// (opt-in; see PolkitData.qml and AgentData.qml).
+// the launcher, the settings panel, the polkit prompt (opt-in; see
+// PolkitData.qml) and the network prompt (see AgentData.qml).
 ShellRoot {
     Variants {
         model: Quickshell.screens
@@ -58,7 +58,7 @@ ShellRoot {
     // The polkit prompt (opt-in; see PolkitData.qml), which does the same.
     PolkitPrompt {}
 
-    // The network prompt (opt-in; see AgentData.qml), which does the same.
+    // The network prompt (see AgentData.qml), which does the same.
     AgentPrompt {}
 
     // The clipboard and characters picker on Super+C, which does the same.

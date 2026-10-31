@@ -106,11 +106,19 @@
 #     which skips the unit, if it isn't, and 3 if it can't tell (an
 #     unreadable list), which the drop-in turns into a failed unit. The
 #     allowlist is nm-applet, plus the desktop IDs in
-#     ${XDG_CONFIG_HOME:-~/.config}/tide/autostart. With TIDE_AGENT=1 the
-#     shell's tide-agent asks for network passwords (SPEC.md §5.6), so
-#     nm-applet is on it only if that file lists it. That file holds one
+#     ${XDG_CONFIG_HOME:-~/.config}/tide/autostart. nm-applet is on it
+#     only while the Quickshell shell's network agent isn't (SPEC.md §5.6):
+#     under waybar, TIDE_AGENT=0, or a tide-agent that couldn't start.
+#     List it in that file to keep it anyway, and tide-agent stands aside. That file holds one
 #     desktop ID per line; lines starting with # are comments, so an ID
 #     that itself starts with # is written escaped, as \x23ID.
+#
+#   tide network-agent
+#
+#     Prints where the Quickshell shell's network agent stands (`ipc call
+#     agent status`, SPEC.md §5.6), or "none" when no shell answers, and
+#     exits 0 when it holds the job and 1 when nm-applet should. Both
+#     `tide autostart-allowed` and `tide doctor` decide with it.
 #
 #   tide brightness STEP
 #
@@ -196,6 +204,7 @@ usage() {
     echo "       $prog grant ID..." >&2
     echo "       $prog focus ID..." >&2
     echo "       $prog autostart-allowed UNIT" >&2
+    echo "       $prog network-agent" >&2
     echo "       $prog brightness STEP" >&2
     echo "       $prog idle-lock" >&2
     echo "       $prog idle-suspend [--unplugged | --cancel]" >&2
@@ -819,12 +828,47 @@ running() {
     return 1
 }
 
-# nm-applet is NetworkManager's secret agent, which asks for a VPN's
-# password, until tide has its own (TODO.md). The bar draws the network
-# icon, and nm-applet's autostart entry draws none in tide, since it uses
-# the X11 tray icon. blueman isn't here: the bar draws Bluetooth, and
+# nm-applet is NetworkManager's secret agent wherever the shell's own,
+# tide-agent, isn't running (shell_agent_on); the bar draws the network
+# icon either way. blueman isn't here: the bar draws Bluetooth, and
 # blueman-manager starts its applet, the pairing agent, over D-Bus.
 autostart_default="nm-applet"
+
+# Whether the Quickshell shell's network agent holds the job, as the shell
+# itself says (`ipc call agent status`, which `tide doctor` reads too).
+# That's how tide-shell's choice of bar shows: with waybar, whether by
+# TIDE_BAR=waybar or its fallback from a missing or old Quickshell, no
+# Quickshell shell answers. Autostart runs after tide.service is ready, so
+# a shell that runs has answered by then.
+# Sets $state to the status, or "none" when no shell answers. `tide
+# network-agent` prints it, for `tide doctor`, so both decide the same way.
+shell_agent_on() {
+    state=none
+    if ! command -v qs >/dev/null 2>&1; then
+        return 1
+    fi
+    # A failure is no shell answering, the usual case under waybar.
+    if ! answer=$(qs -c tide ipc call agent status 2>&1); then
+        return 1
+    fi
+    state=$answer
+    case "$state" in
+        registered | starting | waiting | standing-aside*) return 0 ;;
+        off | missing | unregistered*) return 1 ;;
+    esac
+    echo "$prog: the shell's network agent says '$state', which isn't a status; nm-applet stands in" >&2
+    return 1
+}
+
+network_agent() {
+    test $# -eq 0 || usage
+    if shell_agent_on; then
+        printf '%s\n' "$state"
+        exit 0
+    fi
+    printf '%s\n' "$state"
+    exit 1
+}
 
 autostart_allowed() {
     test $# -eq 1 || usage
@@ -862,9 +906,9 @@ autostart_allowed() {
         fi
     fi
     for a in $autostart_default; do
-        # One agent answers NetworkManager: tide-agent, with TIDE_AGENT=1.
-        if test "$a" = nm-applet && test "${TIDE_AGENT:-}" = 1; then
-            continue
+        if test "$a" = nm-applet && test "$id" = nm-applet && shell_agent_on; then
+            echo "$prog: not starting nm-applet in tide: the shell's tide-agent asks for network passwords; add nm-applet to $file to start it anyway" >&2
+            exit 1
         fi
         if test "$a" = "$id"; then
             exit 0
@@ -1109,6 +1153,7 @@ case "${1:-}" in
     grant) shift; grant_only "$@" ;;
     focus) shift; focus_app "$@" ;;
     autostart-allowed) shift; autostart_allowed "$@" ;;
+    network-agent) shift; network_agent "$@" ;;
     brightness) shift; brightness "$@" ;;
     idle-lock) shift; idle_lock "$@" ;;
     idle-suspend) shift; idle_suspend "$@" ;;
