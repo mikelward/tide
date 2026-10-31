@@ -127,6 +127,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
 | **Screen-share picker**: screens, windows, 16:9 area. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
 | **Screenshots**: region and window modes. [`screenshot.png`](docs/mocks/screenshot.png) | ![screenshot](docs/mocks/screenshot.png) |
+| **Minimized windows**: the five ways to show them that were weighed; C, the corner tray, was chosen (§6.7). Its bars still show the chips' old app icons. [`minimized.png`](docs/mocks/minimized.png) | ![minimized windows](docs/mocks/minimized.png) |
 | **Fonts**: the same pieces in Ubuntu + Ubuntu Mono, Ubuntu Sans + Ubuntu Sans Mono, and Inter + JetBrains Mono. [`fonts.png`](docs/mocks/fonts.png) | ![fonts](docs/mocks/fonts.png) |
 
 ## 3. Decisions
@@ -915,6 +916,7 @@ with new keys in **bold**:
 | **`Super+Alt+Space`** | next keyboard layout, once there are two, on every keyboard (§16) |
 | `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `C` / `Shift+C` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
 | `Super+Backspace` | close window |
+| **`Super+Z`** | minimize the focused window; its icon goes to the corner tray, and a click there restores it (§6.7) |
 | `Super+L` | lock |
 | **`Super+Home`** | go to home (§6.5) |
 | **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
@@ -954,6 +956,83 @@ monocle now. So do `Super+1…9` and `Super+Shift+1…9`, which went to and
 sent a window to a numbered workspace: named workspaces are reached by
 the switcher, `Super+Tab`, `Super+Home` and `Super+End` instead.
 
+### 6.7 Minimized windows
+
+See [`minimized.png`](docs/mocks/minimized.png): option C, floating icons
+in the bottom-right corner. The other four options there were weighed and
+not taken.
+
+- **`Super+Z` minimizes the focused window.** It leaves the layout, which
+  re-tiles without it, and focus goes to the window that was under it.
+  - `Super+Delete` was the other candidate. It's ambiguous with
+    `Super+Backspace`, which closes the window: a Mac keyboard labels
+    Backspace "delete".
+  - `conf`'s key asks the shell to do it (`qs -c tide ipc call windows
+    minimize`), since only the shell can bring a window back. With no
+    shell, a notification says so and the window stays.
+- **Which windows are minimized:** only the ones `Super+Z` minimized.
+  - An app's own minimize button does nothing, as before. Hyprland
+    doesn't act on an app's minimize request, and turns another client's
+    (a taskbar's) into a `minimized` event, which tide ignores.
+- **The tray.** While the workspace a monitor shows has minimized windows,
+  a small tray floats in that monitor's bottom-right corner, with one app
+  icon per minimized window.
+  - It's drawn like a popover, 12 px in from both edges. It reserves no
+    space, so nothing re-tiles when it comes or goes; it covers the
+    corner of the tile under it.
+  - The icons are in the order the windows were last used, the latest
+    nearest the corner. Since `Super+Z` minimizes the focused window,
+    that's the order they were minimized in.
+  - It grows to the left, one icon per window.
+  - A workspace with no minimized windows shows no tray.
+- **Hovering an icon** shows its window's title above it.
+- **Clicking an icon restores its window:** the window goes back to its
+  workspace and takes focus. The layout places it as it places any window
+  that arrives.
+- **The switcher** (§8.1). The Windows tab lists minimized windows with the
+  rest, each under the workspace it came from, marked minimized, and Enter
+  restores one. So does Enter on the Attention tab, for a minimized window
+  that wants attention.
+- **Attention** (§14.4). A minimized window can still want attention. Its
+  icon shows on its workspace's chip on the bar, as any marked window's
+  does, and a click on it there restores it.
+- **Several monitors.** Each monitor's tray shows only the minimized
+  windows of the workspace on that monitor (decided by the maintainer),
+  under today's model of one workspace per monitor (§6.5). A restored window goes back to its workspace on
+  whichever monitor shows it. This is to be revisited with that model
+  (§21).
+- **A workspace whose windows are all minimized** has none left to
+  Hyprland, so it's destroyed once you leave it, as an empty one is
+  (§6.5). Its minimized windows wait under its name. A standing one stays
+  on the bar, and going there shows the tray. Any other is gone from the
+  bar until one of its windows is restored from the Windows tab, which
+  makes it again.
+- **Hyprland pieces** (checked in 0.56.2's source):
+  - Hyprland has no minimize. A minimized window moves to a special
+    workspace named after the one it came from,
+    `special:minimized:NAME`. Nothing shows that workspace, so the window
+    is hidden. Only tide puts windows there, so being on one is what
+    minimized means, and a restarted shell reads it all back from the
+    workspace names, with no state of its own.
+  - Minimizing is `hl.dsp.window.move({ workspace =
+    "special:minimized:NAME", follow = false, window = "address:0x…" })`.
+    With `follow` false the move is silent, and focus goes to the window
+    under the moved one's middle, else wherever Hyprland refocuses
+    (`Actions::moveToWorkspace`, `ConfigActions.cpp`).
+  - Restoring is the same dispatch to `name:NAME` with `follow` true,
+    which shows that workspace and focuses the window.
+  - An app's minimize request only sets `requestsMinimize` on its
+    surface, which nothing reads (`XDGShell.cpp`, and `XWM.cpp` for
+    XWayland apps). A
+    `wlr-foreign-toplevel` request posts `minimized>>ADDRESS,1` and does
+    nothing more (`ForeignToplevelWlr.cpp`).
+  - A special workspace can't be renamed (`CWorkspace::rename` returns
+    early for one). tide offers no rename (§6.5), so only one made with
+    `hyprctl` leaves its minimized windows under the old name, where the
+    Windows tab still finds them.
+  - Special workspaces aren't on the bar (§7.2), and nothing in tide or
+    `conf` toggles one into view.
+
 ## 7. Bar
 
 See [`bar.png`](docs/mocks/bar.png).
@@ -990,17 +1069,28 @@ See [`bar.png`](docs/mocks/bar.png).
 | State | Look |
 |---|---|
 | current | accent fill |
-| occupied | surface fill, one app icon per window (up to 5, then `+n`) |
+| occupied | surface fill |
 | shown on another monitor | accent outline |
 | empty (only a standing one stays on the bar empty, made or not) | no fill, its name faint |
-| urgent | amber fill and ring, a dot, and the urgent window's icon ringed |
+| urgent | amber fill and ring, a dot, and the icon of each window that wants attention, ringed |
 
-- **Each shows its name**, cut with an ellipsis past 16 characters, with
-  its app icons after it.
+- **Each shows its name**, cut with an ellipsis past 16 characters.
+- **App icons only for attention.** A chip shows no icon for an ordinary
+  window. It shows one for each of its windows that wants attention
+  (§14.4): urgent, kept from focus by the focus guard, or marked by a
+  notification, the same windows the switcher's Attention tab lists. Up to
+  5, then `+n`.
+  - So a chip with an icon is always an urgent one.
+  - A minimized window that wants attention shows on the chip of the
+    workspace it came from (§6.7).
 - **Click** a workspace to go there.
+- **Click** one of its app icons to focus that window, going to its
+  workspace, which clears its mark. A minimized one is restored (§6.7).
 - **Scroll** over the workspaces to move through them, in the bar's order.
-- **Middle-click** an app icon to focus that window.
 - **Right-click** a workspace to change its layout.
+- The chips showed every window's icon before. They're quieter now, and
+  the switcher's Workspaces and Windows tabs still show what's where
+  (§8.1).
 
 ### 7.3 Clocks
 
@@ -1172,8 +1262,10 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
     standing ones are always listed, made or not, and Enter on one that
     isn't made yet makes it (§6.5).
   - **Windows:** every window on any workspace, each with its icon,
-    title and workspace. Enter goes to it, switching workspace. Browser
-    tabs join it later (§8.3).
+    title and workspace. Enter goes to it, switching workspace. A
+    minimized window is listed under the workspace it came from, marked
+    minimized, and Enter restores it (§6.7). Browser tabs join it later
+    (§8.3).
   - **Attention:** every window wanting attention (§14.4), on any
     workspace, most recent first. Enter goes there, which clears its
     mark. With none, the tab says so.
@@ -2199,8 +2291,9 @@ to be focused.
   - If the app then activates one window (`urgent>>ADDRESS`), that window's
     own mark replaces the app-wide one.
 - **What you see.**
-  - The workspace turns amber with a dot, and the marked window's icon is
-    ringed.
+  - The workspace turns amber with a dot, and shows the marked window's
+    icon, ringed (§7.2). Only marked windows have icons on the bar; a
+    click on one focuses that window.
   - The state clears when a marked window is focused, or when its
     notification is dismissed. Invoking one of its actions or replying
     counts, even when a resident notification stays, and so does its app
@@ -2903,10 +2996,6 @@ in `TODO.md`.
   - Still to check: whether the edge behavior is doable in Hyprland's
     Lua layout, and what a second display shows before anything is on it
     (today Hyprland gives it a numbered workspace).
-- **Minimizing a window.** A key to minimize the focused window, with a
-  bottom bar of the workspace's minimized windows to restore them from
-  (as the Windows tab would): which key, what each display's bar lists,
-  and how without a real minimize in Hyprland (TODO.md).
 - **More workspaces than the bar's left side holds.** The bar cuts names at
   16 characters, but has no rule yet for when they still don't fit.
 

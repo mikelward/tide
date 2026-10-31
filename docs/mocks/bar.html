@@ -25,11 +25,11 @@
 <div class="frame theme-dark">
   <div class="bar">
     <div class="bar-left">
-      <div class="ws occupied"><span class="n">1</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span></span></div>
-      <div class="ws active"><span class="n">2</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span><span class="appicon app-meet"><i class="ms">videocam</i></span><span class="appicon app-chat"><i class="ms">chat</i></span></span></div>
-      <div class="ws occupied"><span class="n">3</span><span class="apps"><span class="appicon app-code"><i class="ms">code</i></span></span></div>
+      <div class="ws occupied"><span class="n">1</span></div>
+      <div class="ws active"><span class="n">2</span></div>
+      <div class="ws occupied"><span class="n">3</span></div>
       <div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div>
-      <div class="ws occupied"><span class="n">5</span><span class="apps"><span class="appicon app-music"><i class="ms">music_note</i></span></span></div>
+      <div class="ws occupied"><span class="n">5</span></div>
       <div class="ws empty"><span class="n">6</span></div>
       <div class="ws empty"><span class="n">7</span></div>
       <div class="ws empty"><span class="n">8</span></div>
@@ -59,17 +59,17 @@
   </div>
   <div class="under"></div>
 </div>
-<p class="note">Left to right: workspaces 1–9, each showing the icons of its windows, and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (keep awake, faint while off; Bluetooth; network; volume, battery and CPU, each with its percentage; notifications; session), then the clocks: local alone here, all four where there&rsquo;s room. The zone clocks carry short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT). The local clock swaps its label for the date.</p>
+<p class="note">Left to right: workspaces 1–9, each by name, with an app icon only for a window that wants attention (on 4 here), and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (keep awake, faint while off; Bluetooth; network; volume, battery and CPU, each with its percentage; notifications; session), then the clocks: local alone here, all four where there&rsquo;s room. The zone clocks carry short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT). The local clock swaps its label for the date.</p>
 
 <h2>Light (07:00–19:00 by default)</h2>
 <div class="frame light theme-light">
   <div class="bar">
     <div class="bar-left">
-      <div class="ws occupied"><span class="n">1</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span></span></div>
-      <div class="ws active"><span class="n">2</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span><span class="appicon app-meet"><i class="ms">videocam</i></span><span class="appicon app-chat"><i class="ms">chat</i></span></span></div>
-      <div class="ws occupied"><span class="n">3</span><span class="apps"><span class="appicon app-code"><i class="ms">code</i></span></span></div>
+      <div class="ws occupied"><span class="n">1</span></div>
+      <div class="ws active"><span class="n">2</span></div>
+      <div class="ws occupied"><span class="n">3</span></div>
       <div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div>
-      <div class="ws occupied"><span class="n">5</span><span class="apps"><span class="appicon app-music"><i class="ms">music_note</i></span></span></div>
+      <div class="ws occupied"><span class="n">5</span></div>
       <div class="ws empty"><span class="n">6</span></div>
       <div class="ws empty"><span class="n">7</span></div>
       <div class="ws empty"><span class="n">8</span></div>
@@ -102,11 +102,11 @@
 
 <h2>Workspace states</h2>
 <div class="chips theme-dark">
-  <div class="chip"><div class="bar"><div class="ws active"><span class="n">2</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span></span></div></div><div class="cap"><b>Current</b>: accent fill.</div></div>
-  <div class="chip"><div class="bar"><div class="ws occupied"><span class="n">1</span><span class="apps"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span></span></div></div><div class="cap"><b>Occupied</b>: one icon per window, up to 5, then “+N”.</div></div>
-  <div class="chip"><div class="bar"><div class="ws visible"><span class="n">6</span><span class="apps"><span class="appicon app-mail"><i class="ms">mail</i></span></span></div></div><div class="cap"><b>Shown on another monitor</b>: accent outline.</div></div>
+  <div class="chip"><div class="bar"><div class="ws active"><span class="n">2</span></div></div><div class="cap"><b>Current</b>: accent fill.</div></div>
+  <div class="chip"><div class="bar"><div class="ws occupied"><span class="n">1</span></div></div><div class="cap"><b>Occupied</b>: surface fill and the name, no app icons.</div></div>
+  <div class="chip"><div class="bar"><div class="ws visible"><span class="n">6</span></div></div><div class="cap"><b>Shown on another monitor</b>: accent outline.</div></div>
   <div class="chip"><div class="bar"><div class="ws empty"><span class="n">7</span></div></div><div class="cap"><b>Empty</b>: faint number. All nine are always shown.</div></div>
-  <div class="chip"><div class="bar"><div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div></div><div class="cap"><b>Urgent</b>: amber, with the window that asked (or sent a notification) ringed. Clears when that window is focused. <kbd>Super+Tab</kbd> jumps to it.</div></div>
+  <div class="chip"><div class="bar"><div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div></div><div class="cap"><b>Urgent</b>: amber, with the icon of each window that wants attention, ringed. A click on one focuses that window, which clears it. <kbd>Super+A</kbd> lists them all.</div></div>
 </div>
 
 <h2>Status states</h2>
