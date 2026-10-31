@@ -118,15 +118,15 @@ jobs:
       # setup-tide's QUICKSHELL_BUILD_DEPS, plus what this job runs: git
       # for the checkout, the bus and the compositor the test runs on, wtype
       # to type into the lock, python3 for the stand-in Hyprland, notify-send
-      # to send the shell notifications, the icon theme the shell names, and
-      # tzdata for the clocks.
+      # to send the shell notifications, the icon theme the shell names,
+      # tzdata for the clocks, and grim for the screenshots.
       - name: Install Quickshell's build dependencies
         run: |
           # A stalled mirror is given up on and tried again, as in `test`.
           printf '%s\n' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' 'Acquire::Retries "3";' >/etc/apt/apt.conf.d/80-ci-timeouts
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build pkg-config git ca-certificates dbus-daemon sway wtype python3 \
+            build-essential cmake ninja-build pkg-config git ca-certificates dbus-daemon sway wtype grim python3 \
             libnotify-bin adwaita-icon-theme tzdata \
             qt6-base-dev qt6-base-private-dev qt6-declarative-dev qt6-declarative-private-dev \
             qt6-wayland-dev qt6-wayland-private-dev qt6-shadertools-dev spirv-tools \
@@ -169,8 +169,19 @@ jobs:
         run: |
           printf 'root:%s\n' "$TIDE_LOCK_PASSWORD" | chpasswd
           install -m 644 pam/tide-lock /etc/pam.d/tide-lock
+      # Each face it loads (the bar, the lock, the greeter) is also
+      # photographed, for a person to look at on a UI change; nothing
+      # compares the pictures.
       - name: Load the shell, notify it, and unlock the lock
-        run: PATH="$QUICKSHELL_PREFIX/bin:$PATH" TIDE_REQUIRE_QS=1 sh shell/integration_test.sh
+        run: PATH="$QUICKSHELL_PREFIX/bin:$PATH" TIDE_REQUIRE_QS=1 TIDE_SCREENSHOTS="$PWD/screenshots" sh shell/integration_test.sh
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+          retention-days: 14
 
   lanes:
     name: lanes

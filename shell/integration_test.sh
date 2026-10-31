@@ -163,6 +163,19 @@ if ! wtype_path=$(command -v wtype); then
     fi
     wtype_path=
 fi
+# With $TIDE_SCREENSHOTS, a picture of each loaded face goes there (CI
+# uploads them), which needs grim.
+grim_path=
+if test -n "${TIDE_SCREENSHOTS:-}"; then
+    if ! grim_path=$(command -v grim); then
+        echo "FAIL: $prog: TIDE_SCREENSHOTS is set, but there's no grim on PATH to take them" >&2
+        exit 1
+    fi
+    if ! mkdir -p "$TIDE_SCREENSHOTS"; then
+        echo "FAIL: $prog: couldn't make $TIDE_SCREENSHOTS for the screenshots" >&2
+        exit 1
+    fi
+fi
 if ! notify_path=$(command -v notify-send); then
     if test -n "${TIDE_REQUIRE_QS:-}"; then
         echo "FAIL: $prog: no notify-send on PATH to send the shell notifications" >&2
@@ -473,7 +486,19 @@ EOF
 # and with $after_load, it runs that function once all of that has
 # settled. Its log is $tmp/NAME.qs.log. Nothing edits the files during
 # the test, so the file watcher is off, as tide-lock.service has it.
+# shot NAME: with $TIDE_SCREENSHOTS, the headless screen as NAME.png there,
+# to look at; nothing compares it. A screenshot that fails fails the test.
+shot() {
+    test -n "$grim_path" || return 0
+    if ! env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        "$grim_path" "$TIDE_SCREENSHOTS/$1.png" 2>"$tmp/grim.err"; then
+        echo "FAIL: couldn't take a screenshot of $_what: $(cat "$tmp/grim.err")" >&2
+        exit 1
+    fi
+}
+
 load() {
+    _name=$1
     _what=$2
     log=$tmp/$1.qs.log
     shift 2
@@ -539,6 +564,7 @@ load() {
         settle
         _listeners=$(hyprland play) || exit 1
         settle
+        shot "$_name"
         if test -n "${after_load:-}"; then
             "$after_load"
         fi

@@ -3920,6 +3920,10 @@ are what "done" means.
   can't load either, or when any of the shell's files reports an error as
   it starts. That covers every file's types and properties, the bindings of
   whatever exists at startup, and what they queue.
+  - With `TIDE_SCREENSHOTS`, it also photographs each face once loaded
+    (`grim`, on the headless screen). CI keeps those as a `screenshots`
+    artifact, so a layout change can be looked at without a session.
+    Nothing compares them: a picture that differs isn't a failure.
 - **The bar takes in Hyprland's data.** In that test, Hyprland's IPC is a
   stand-in (`shell/hyprland_stand_in.py`) with three workspaces of windows,
   a special workspace and a fullscreen window. It also has a script of
