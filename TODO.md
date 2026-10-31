@@ -1538,7 +1538,11 @@ or workspace goes there.
   - [ ] **Share the extension with tileco**, which already reads tabs with
     `chrome.tabs` for its Tabs scope: one extension, with the native
     messaging part only where a host is installed, rather than two to
-    keep in step.
+    keep in step. Later, if ever: start unpacked from this repository
+    (SPEC.md §8.3). In tileco both permissions would be optional, asked
+    for only on Linux, since ChromeOS needs no host, and tileco's
+    single purpose for the store would have to cover feeding tide's
+    switcher. Check first that `nativeMessaging` may be optional.
   - [ ] Ways in, cheapest first, to decide before building: the extension
     above (the plan); Chrome's DevTools port, ruled out in §8.3 since any
     local process could drive the browser; window titles alone, which
