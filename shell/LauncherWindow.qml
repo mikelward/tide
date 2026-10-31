@@ -279,7 +279,7 @@ PanelWindow {
     function runQuick(id) {
         const what = Search.quickCommand(id);
         if (what.shell === "settings") {
-            SettingsData.open();
+            SettingsData.open(what.page);
         } else if (what.shell === "dnd") {
             NotificationData.setDnd(!NotificationData.dnd);
         } else if (what.shell === "dark-style") {

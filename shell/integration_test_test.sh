@@ -114,8 +114,13 @@ EOF
 #!/bin/sh
 if test "\$1" = ipc; then
     case "\$*" in
-        *"call launcher open"*) : >"\$XDG_RUNTIME_DIR/launcher-open" ;;
+        # The first opening, then the second, each marked.
+        *"call launcher open"*) if test -e "\$XDG_RUNTIME_DIR/launcher-open"; then : >"\$XDG_RUNTIME_DIR/launcher-reopen"; else : >"\$XDG_RUNTIME_DIR/launcher-open"; fi ;;
         *"call settings open"*) : >"\$XDG_RUNTIME_DIR/settings-open" ;;
+        # The page the settings panel shows, once the launcher has opened it
+        # on one, until it closes.
+        *"call settings shownPage"*) if test -e "\$XDG_RUNTIME_DIR/settings-page"; then cat "\$XDG_RUNTIME_DIR/settings-page"; fi ;;
+        *"call settings close"*) rm -f "\$XDG_RUNTIME_DIR/settings-page" ;;
         *"call picker open characters"*) : >"\$XDG_RUNTIME_DIR/picker-open" ;;
         *"call sharepicker pick \$XDG_RUNTIME_DIR/"*) printf '%s' "\$7" >"\$XDG_RUNTIME_DIR/sharepicker-open" && echo shown ;;
         *"call sharepicker pick "*) echo "refused: \$7 isn't a tide-share-picker pipe" ;;
@@ -535,13 +540,22 @@ focused="echo '[1.0] {Default Queue} wl_keyboard#3.enter(1, wl_surface#2, array[
 typed='until test -s "$XDG_RUNTIME_DIR/typed"; do sleep 0.1; done; rm "$XDG_RUNTIME_DIR/typed"'
 ran="$opened; $focused; $typed; tide launch --app tide-test-probe -- tide-test-probe --flag"
 settings_opened='until test -e "$XDG_RUNTIME_DIR/settings-open"; do sleep 0.1; done'
+# shown PAGE: the launcher, opened again, takes the keyboard, and once its
+# query is typed, the settings panel opens on PAGE and takes the keyboard.
+# As settings_opened waits for the panel's opening, this waits for the
+# launcher's second, which the test asks for over IPC.
+reopened='until test -e "$XDG_RUNTIME_DIR/launcher-reopen"; do sleep 0.1; done'
+shown() {
+    printf '%s; %s; %s; echo %s >"$XDG_RUNTIME_DIR/settings-page"; %s' "$reopened" "$focused" "$typed" "$1" "$focused"
+}
+mouse_shown=$(shown mouse)
 picker_opened='until test -e "$XDG_RUNTIME_DIR/picker-open"; do sleep 0.1; done'
 # picked CHAR: the picker opens, takes the keyboard, and copies CHAR once
 # its query is typed.
 picked() {
     printf '%s; %s; %s; wl-copy -- %s' "$picker_opened" "$focused" "$typed" "$1"
 }
-settings_ran="$ran; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor; $(picked é)"
+settings_ran="$ran; $mouse_shown; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor; $(picked é)"
 # Then the share picker opens on tide-share-picker's pipe, takes the
 # keyboard, and once its keys are typed, writes ANSWER there.
 share_opened='until test -s "$XDG_RUNTIME_DIR/sharepicker-open"; do sleep 0.1; done'
@@ -621,16 +635,18 @@ stubs "$tmp/clean" "exit 0" "$loaded"
 run "$tmp/clean"
 check "a launcher that runs the app typed passes" contains "$out" "ok: the launcher finds an app by a query without its accent, and runs it"
 check "having typed the query and Enter" test "$(head -n 1 "$tmp/clean/typed")" = cafepro
+check "and the launcher's Mouse settings opens the Mouse page" contains "$out" "ok: the launcher's Mouse settings opens the settings panel on its Mouse page"
+check "having typed mouse and Enter" test "$(sed -n 2p "$tmp/clean/typed")" = mouse
 check "and a settings panel that opens the Network page's app passes" contains "$out" "ok: the settings panel changes page with the arrows and opens the page's app"
-check "having pressed Down twice and Enter" test "$(sed -n 2p "$tmp/clean/typed")" = "-k Down -k Down -k Return"
+check "having pressed Down twice and Enter" test "$(sed -n 3p "$tmp/clean/typed")" = "-k Down -k Down -k Return"
 check "and a picker that copies the character named passes" contains "$out" "ok: the picker finds a character by name and copies it"
-check "having typed its name and Enter" test "$(sed -n 3p "$tmp/clean/typed")" = "e acute"
+check "having typed its name and Enter" test "$(sed -n 4p "$tmp/clean/typed")" = "e acute"
 check "and a share picker that answers the window chosen passes" contains "$out" "ok: the share picker answers tide-share-picker's pipe with the window chosen"
-check "having pressed Right and Enter" test "$(sed -n 4p "$tmp/clean/typed")" = "-k Right -k Return"
+check "having pressed Right and Enter" test "$(sed -n 5p "$tmp/clean/typed")" = "-k Right -k Return"
 }
 
 case_8() {
-stubs "$tmp/picker-wrong" "exit 0" "  INFO: Configuration Loaded" ":" "$ran; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor; $(picked á); $(shared '[SELECTION]r/window:7')"
+stubs "$tmp/picker-wrong" "exit 0" "  INFO: Configuration Loaded" ":" "$ran; $mouse_shown; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor; $(picked á); $(shared '[SELECTION]r/window:7')"
 run "$tmp/picker-wrong"
 check "a picker that copies the wrong character fails" test "$code" -ne 0
 check "and says what it copied" contains "$out" "the picker should copy é with \`wl-copy -- é\`; it ran \`wl-copy -- á\`"
@@ -658,22 +674,36 @@ check "a launcher that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the launcher didn't take the keyboard in 2 s"
 }
 
+case_80() {
+stubs "$tmp/mouse-nothing" "exit 0" "$loaded" ":" "$ran; $reopened; $focused; $typed"
+run "$tmp/mouse-nothing"
+check "a launcher whose Mouse settings opens nothing fails" test "$code" -ne 0
+check "and says so" contains "$out" "the settings panel the launcher's Mouse settings opens didn't take the keyboard in 2 s"
+}
+
+case_81() {
+stubs "$tmp/mouse-wrong" "exit 0" "$loaded" ":" "$ran; $(shown idle)"
+run "$tmp/mouse-wrong"
+check "a launcher whose Mouse settings opens another page fails" test "$code" -ne 0
+check "and says which" contains "$out" "the launcher's Mouse settings should open the settings panel on its Mouse page; it shows \"idle\""
+}
+
 case_12() {
-stubs "$tmp/settings-nothing" "exit 0" "$loaded" ":" "$ran; $settings_opened; $focused; $typed"
+stubs "$tmp/settings-nothing" "exit 0" "$loaded" ":" "$ran; $mouse_shown; $settings_opened; $focused; $typed"
 run "$tmp/settings-nothing"
 check "a settings panel that runs nothing fails" test "$code" -ne 0
 check "and says so" contains "$out" "the settings panel didn't open the Network page's app in 2 s"
 }
 
 case_13() {
-stubs "$tmp/settings-wrong" "exit 0" "$loaded" ":" "$ran; $settings_opened; $focused; $typed; tide launch -- other"
+stubs "$tmp/settings-wrong" "exit 0" "$loaded" ":" "$ran; $mouse_shown; $settings_opened; $focused; $typed; tide launch -- other"
 run "$tmp/settings-wrong"
 check "a settings panel that runs the wrong app fails" test "$code" -ne 0
 check "and says what it ran" contains "$out" "it ran \`tide launch -- other\`"
 }
 
 case_14() {
-stubs "$tmp/settings-unfocused" "exit 0" "$loaded" ":" "$ran; $settings_opened"
+stubs "$tmp/settings-unfocused" "exit 0" "$loaded" ":" "$ran; $mouse_shown; $settings_opened"
 run "$tmp/settings-unfocused"
 check "a settings panel that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the settings panel didn't take the keyboard in 2 s"
@@ -1120,7 +1150,7 @@ echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
 check "a lock that unlocks on the right password passes" test "$code" -eq 0
 check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
-check "having typed a wrong password, then the right one" test "$(sed -n 5,6p "$tmp/unlocks/typed")" = "not-pw
+check "having typed a wrong password, then the right one" test "$(sed -n 6,7p "$tmp/unlocks/typed")" = "not-pw
 pw"
 check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
 }
@@ -1197,7 +1227,7 @@ run "$tmp/clean"
 check "a greeter that logs in to tide on the right password passes" \
     contains "$out" "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
 check "having typed a wrong password, then the right one, then the code" \
-    test "$(sed -n 5,7p "$tmp/clean/typed")" = "not-tide-greeter-test
+    test "$(sed -n 6,8p "$tmp/clean/typed")" = "not-tide-greeter-test
 tide-greeter-test
 246810"
 }

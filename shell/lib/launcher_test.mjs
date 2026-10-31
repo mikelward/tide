@@ -6,6 +6,7 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initial, record } from "./frecency.mjs";
+import { PAGES } from "./settings.mjs";
 import { blockedHeading, confirmRows, highlighted, grantIds, launchCommand, launcherItems, moved, nextSection, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
 
 // Array.prototype.at and Object.fromEntries, which the shell's engine lacks
@@ -208,6 +209,7 @@ test("the quick actions are the screenshots, the session, settings, the toggles,
         "screenshot-window", "screenshot-screen", "screenshot-region",
         "lock", "logout", "suspend", "reboot", "poweroff",
         "settings",
+        ...PAGES.map(p => `settings-${p.id}`),
         "dnd", "dark-style", "keep-awake", "presenter", "clear-clipboard", "reload",
     ]);
     // Every one has something to run.
@@ -265,11 +267,47 @@ test("the toggles say whether they're on", () => {
     assert.equal(sub({ dark: true, darkUntil: "" })["dark-style"], "On");
 });
 
-test("settings is found by what its pages cover, and opens the panel", () => {
-    for (const query of ["settings", "preferences", "sound", "network", "wifi", "bluetooth"]) {
+test("settings is found by its name, and opens the panel on its first page", () => {
+    for (const query of ["settings", "preferences", "control panel"]) {
         assert.equal(search(quickActions(), query)[0].item.id, "settings", query);
     }
-    assert.deepEqual(quickCommand("settings"), { shell: "settings" });
+    assert.deepEqual(quickCommand("settings"), { shell: "settings", page: "" });
+});
+
+// "mouse" and Enter found nothing to run, so did nothing: only Sound,
+// Network and Bluetooth were among Settings' words, and it opened on Idle.
+test("each settings page is found by its name and what it covers, and opens the panel on it", () => {
+    const pages = {
+        idle: ["idle", "idle settings"],
+        sound: ["sound", "audio", "volume"],
+        network: ["network", "wifi", "vpn"],
+        bluetooth: ["bluetooth"],
+        mouse: ["mouse", "mouse settings", "left-handed", "pointer"],
+        touchpad: ["touchpad", "trackpad", "pointing stick", "tap to click"],
+        keyboard: ["keyboard", "xkb", "repeat"],
+        clocks: ["clocks", "time zone", "timezone"],
+        keys: ["keys", "shortcuts", "bindings"],
+        layouts: ["layouts", "tiling"],
+        appearance: ["appearance", "wallpaper"],
+        displays: ["displays", "monitors", "scale"],
+        startup: ["start at login", "startup", "autostart"],
+    };
+    assert.deepEqual(Object.keys(pages), PAGES.map(p => p.id));
+    for (const [id, queries] of Object.entries(pages)) {
+        for (const query of queries) {
+            const top = search(quickActions({ notifications: true }), query)[0]?.item;
+            assert.equal(top?.id, `settings-${id}`, query);
+            assert.deepEqual(quickCommand(top.id), { shell: "settings", page: id }, query);
+        }
+    }
+    assert.equal(byId(quickActions(), "name")["settings-mouse"], "Mouse settings");
+    assert.throws(() => quickCommand("settings-nope"));
+});
+
+test("the settings pages' rows wait for a query, so the empty one lists only Settings", () => {
+    const ids = search(quickActions({ notifications: true }), "").map(r => r.item.id);
+    assert.ok(ids.includes("settings"));
+    assert.equal(ids.some(id => id.startsWith("settings-")), false);
 });
 
 test("dark style is found by theme, light and night", () => {
