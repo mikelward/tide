@@ -1475,8 +1475,15 @@ See [`bar.png`](docs/mocks/bar.png).
 - **It is a plain rectangle flush with the top edge and both sides:** no
   margin, no corner radius, no shadow, no floating pill. Rounded corners
   belong only to things that pop up (popovers, notifications, the launcher).
-- **Left:** every workspace by name: the standing ones, home first, then
-  the rest in the order they were made (§6.5), then the layout symbol.
+- **Left:** tide's logo, two waves in the accent blue
+  (`shell/icons/tide-symbolic.svg`), then every workspace by name: the
+  standing ones, home first, then the rest in the order they were made
+  (§6.5), then the layout symbol. A tap on the logo opens the launcher
+  (§8.2) on that bar's monitor. With the switcher open there, on any
+  tab, the tap closes it: its backdrop covers the bar, and a click on the
+  backdrop closes it. Open on another monitor, it moves to this one, on
+  Apps. Its click
+  target runs out to the bar's left edge, so the corner opens it.
 - **Right:** the Presenting pill while presenter mode is on (§10), privacy
   pills (screen shared, mic live), third-party tray icons,
   then the built-in status icons: keep-awake, Bluetooth and its audio
@@ -1502,7 +1509,7 @@ See [`bar.png`](docs/mocks/bar.png).
 - **Every click on the bar counts, the first one too.** Each target is
   clicked anywhere in its span (icon, text and the room between them), the
   bar's full height, and out to halfway to its neighbor, so no gap is
-  dead. That's each workspace, the window title, each pill, tray icon and
+  dead. That's the logo, each workspace, the window title, each pill, tray icon and
   status icon, and the clocks, which are one target together. A window's
   icon in its workspace is its own small target. Reach is apart from the
   visual spacing (`shell/lib/barclick.mjs`, `shell/BarHit.qml`).

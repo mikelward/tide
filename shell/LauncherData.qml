@@ -9,9 +9,17 @@ import "lib/launcher.mjs" as Search
 
 // What the launcher has run, and how recently (SPEC.md §8), kept in
 // $XDG_STATE_HOME/tide/launcher.json so the order survives a restart; and
-// which desktop entries are for other desktops.
+// which desktop entries are for other desktops; and the wave logo's taps.
 Singleton {
     id: root
+
+    // The bar's wave logo opens or closes the launcher (SPEC.md §7.1) on
+    // `onScreen`, its bar's screen; LauncherWindow answers.
+    signal toggleRequested(var onScreen)
+
+    function toggle(onScreen) {
+        root.toggleRequested(onScreen);
+    }
 
     // What launcher.mjs's launcherItems takes as `desktop`: this session's
     // desktop names, and each entry's OnlyShowIn and NotShowIn, read with

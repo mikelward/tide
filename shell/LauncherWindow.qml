@@ -113,13 +113,14 @@ PanelWindow {
     property string pending: ""
     property var windowAtOpen: null
     property string outputAtOpen: ""
-    // Opens on `tab`, or moves to it if open on another.
-    function open(tab) {
+    // Opens on `tab`, or moves to it if open on another: on `onScreen`
+    // (the screen of a bar that was clicked), or else the focused monitor.
+    function open(tab, onScreen) {
         root.showTab(tab ?? "apps");
         if (visible) {
             return;
         }
-        const focused = Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor);
+        const focused = onScreen ?? Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor);
         if (focused) {
             screen = focused;
         }
@@ -149,10 +150,10 @@ PanelWindow {
         visible = false;
     }
 
-    function toggle(tab) {
+    function toggle(tab, onScreen) {
         const next = Switcher.toggled(visible, root.tab, tab ?? "apps");
         if (next.visible) {
-            open(next.tab);
+            open(next.tab, onScreen);
         } else {
             close();
         }
@@ -370,6 +371,25 @@ PanelWindow {
         function onApplicationsChanged() {
             if (root.visible && root.apps.length === 0) {
                 root.apps = Search.launcherItems(DesktopEntries.applications.values, LauncherData.desktop);
+            }
+        }
+    }
+
+    // The bar's wave logo (SPEC.md §7.1), on the screen it was clicked on.
+    // Open on another monitor, on any tab, it moves there on Apps; open on
+    // the logo's own, the backdrop takes the tap and closes it.
+    Connections {
+        target: LauncherData
+
+        function onToggleRequested(onScreen) {
+            const next = Switcher.logoTapped(root.visible, root.tab, !!onScreen && root.screen !== onScreen);
+            if (next.move) {
+                root.close();
+            }
+            if (next.visible) {
+                root.open(next.tab, onScreen);
+            } else {
+                root.close();
             }
         }
     }

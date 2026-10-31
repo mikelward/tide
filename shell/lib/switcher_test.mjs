@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    TABS, TAB_NAMES, PLACEHOLDERS, footerKeys, movedTab, toggled, tabChanged, workspaceRows, windowRows, attentionRows, emptyText,
+    TABS, TAB_NAMES, PLACEHOLDERS, footerKeys, movedTab, toggled, logoTapped, tabChanged, workspaceRows, windowRows, attentionRows, emptyText,
 } from "./switcher.mjs";
 import { NO_MARKS, updateMarks, barWorkspaces } from "./workspaces.mjs";
 
@@ -145,4 +145,14 @@ test("the Attention tab leaves out a muted app's windows", () => {
     const rows = [{ address: "a", title: "Slack", app: "Slack", appName: "Slack", workspace: "in", focus: 0 }];
     assert.equal(attentionRows(rows, marks, "").length, 1);
     assert.deepEqual(attentionRows(rows, marks, "", ["slack"]), []);
+});
+
+test("the logo opens Apps, closes it on its own monitor, and moves it from another", () => {
+    assert.deepEqual(logoTapped(false, "workspaces", false), { visible: true, tab: "apps", move: false });
+    // On the logo's monitor the backdrop takes the tap and closes it, on any tab.
+    assert.deepEqual(logoTapped(true, "apps", false), { visible: false, tab: "apps", move: false });
+    assert.deepEqual(logoTapped(true, "windows", false), { visible: false, tab: "windows", move: false });
+    // Open on another monitor, on any tab: Apps, on the logo's monitor.
+    assert.deepEqual(logoTapped(true, "attention", true), { visible: true, tab: "apps", move: true });
+    assert.deepEqual(logoTapped(true, "apps", true), { visible: true, tab: "apps", move: true });
 });
