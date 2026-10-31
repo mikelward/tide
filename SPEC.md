@@ -994,6 +994,10 @@ not taken.
   rest, each under the workspace it came from, marked minimized, and Enter
   restores one. So does Enter on the Attention tab, for a minimized window
   that wants attention.
+- **Anything else that brings one up restores it first:** a
+  notification's click, its grant running out, or the app's activation
+  with a grant (§9, §14.3). The focus guard moves it back to its workspace
+  and focuses it there, rather than showing the minimize workspace.
 - **Attention** (§14.4). A minimized window can still want attention. Its
   icon shows on its workspace's chip on the bar, as any marked window's
   does, and a click on it there restores it.

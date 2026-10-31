@@ -275,13 +275,6 @@ local function focus_address(address)
     end
 end
 
-local function focus(w)
-    local address = field(w, "address")
-    if not address then
-        return -- a window that is going away has no address, and needs no focus
-    end
-    focus_address(address)
-end
 
 -- Focuses a new window and takes it to another workspace, following it
 -- there: a launch asked for on a named workspace (the name prompt, which
@@ -306,6 +299,37 @@ local function focus_on_workspace(w, workspace)
     if not ok then
         error(err, 0)
     end
+end
+
+-- The workspace a minimized window came from (SPEC.md §6.7): the shell
+-- minimizes a window to `special:minimized:NAME`, so NAME, or nil for a
+-- window that isn't minimized.
+local MINIMIZED = "special:minimized:"
+
+local function minimized_from(w)
+    local name = field(field(w, "workspace"), "name")
+    if type(name) ~= "string" or name:sub(1, #MINIMIZED) ~= MINIMIZED or #name == #MINIMIZED then
+        return nil
+    end
+    return name:sub(#MINIMIZED + 1)
+end
+
+-- Focuses w. A minimized window is restored first, back to the workspace it
+-- came from, as the tray and the switcher restore one: focusing it where
+-- it is would show the minimize workspace and leave it minimized. So a
+-- notification's click, its grant running out, and an app's activation
+-- with a grant all bring it back.
+local function focus(w)
+    local address = field(w, "address")
+    if not address then
+        return -- a window that is going away has no address, and needs no focus
+    end
+    local from = minimized_from(w)
+    if from then
+        focus_on_workspace(w, "name:" .. from)
+        return
+    end
+    focus_address(address)
 end
 
 -- An address as a table key: Hyprland writes 0x and lowercase hex, and the
