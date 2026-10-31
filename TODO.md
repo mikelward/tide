@@ -7,6 +7,30 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **Start at login has a file of its own, `startup.json`
+  (`commands`)**, not a `startup` key in `workspaces.json` beside `muted`.
+  A bad workspaces file stops home's rules from applying, and a startup
+  list has nothing to do with them; tilemo reads one more file either way.
+  Reversible by moving the key before many machines have a local file.
+- [ ] **A command at login is words, with no shell.** Quotes, backslashes
+  and `$` are refused rather than read as `sh -c` would, so what the page
+  shows is exactly what runs, and a script carries anything fancier. The
+  alternative is running each through `sh -c`. Reversible: entries that
+  pass today mean the same under `sh -c`.
+- [ ] **What starts at login opens marked**, as any window you didn't ask
+  for does (SPEC.md §14.1), so home's chip shows Calendar's and Chat's
+  icons until you look at them. The alternative is a quiet grant in the
+  focus guard that leaves a startup window unfocused and unmarked. It's
+  one more grant option in `focus.lua`.
+- [ ] **Start at login runs once a session, and never from the page.** A
+  change waits for the next login; there's no Run now. The alternative is
+  a Run now button, or running a command as it's added. Either is an
+  addition.
+- [ ] **New pages go at the end of the sidebar**, after Displays, so the
+  card grows to fit them rather than scrolling. The alternative is
+  grouping them (Start at login beside Idle, say). Reversible by
+  reordering `PAGES`.
+
 - [ ] **The picker on `Super+C` is its own overlay, not two more switcher
   tabs** (SPEC.md §8.4). The switcher goes somewhere; the picker copies
   something, and the switcher's `Tab` cycle stays at four. The
@@ -914,6 +938,16 @@ from the keyboard (`shell/shell_test.sh`).
   - On a live session, check a scale and a place take at once, that a
     closed lid's panel stays off, and what Hyprland does with a scale that
     doesn't divide the screen.
+
+- Start at login (`shell/lib/startup.mjs`, `shell/StartupData.qml`) lists
+  the commands the shell runs once a session through `tide launch
+  --background --unless-running`, writing `startup.local.json`. Still to
+  do:
+  - On a live session, check `google-calendar` and `google-chat` at login
+    open on home, unfocused, and that a shell restart runs neither again.
+  - Tell a Chrome `--app` window that's already open from a command that
+    would open another (`--unless-running` sees only processes), say by
+    the site's window being on Hyprland's client list.
 
 ## Notifications (M4)
 

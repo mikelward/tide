@@ -123,6 +123,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Launcher**: empty query and a fuzzy query. Predates the switcher's tabs (§8) and named workspaces, and is to be redrawn (TODO.md). [`launcher.png`](docs/mocks/launcher.png) | ![launcher](docs/mocks/launcher.png) |
 | **Notifications**: popups, OSD, the notification center while sharing. [`notifications.png`](docs/mocks/notifications.png) | ![notifications](docs/mocks/notifications.png) |
 | **Clocks popover**: zones, working-hours strips, DST warning, calendar. [`clocks.png`](docs/mocks/clocks.png) | ![clocks](docs/mocks/clocks.png) |
+| **Settings**: the panel's newer pages: Start at login. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
 | **System monitor popover**: the CPU and Memory tabs, and throttling. [`sysmon.png`](docs/mocks/sysmon.png) | ![system monitor](docs/mocks/sysmon.png) |
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
 | **Screen-share picker**: screens, windows, 16:9 area. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
@@ -2703,6 +2704,7 @@ tide's own, and links out for the rest:
 | Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
 | Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
 | Workspaces | the standing workspaces, home first; the apps that live on home; and the patterns that name a workspace from a window's title (§6.5) |
+| Start at login | the commands the session runs once as it starts |
 
 Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
@@ -2910,6 +2912,72 @@ stays hand-written.
     same way, and says why.
   - Until the page exists, the files are edited by hand (TODO.md).
 
+- **Start at login** lists the commands the shell runs once as the session
+  starts, in `startup.json` and `startup.local.json` (`commands`).
+  - It's empty by default, and `conf` installs no `startup.json`, so a
+    machine's list is its own, in `startup.local.json`. A list replaces
+    the shared one whole (§16.1).
+  - A command is a program and its arguments, separated by spaces, such as
+    `google-calendar` or `chrome --app=https://chat.google.com`. It runs as
+    those words, with no shell, so a quote, a backslash or a `$` would
+    mean nothing there. One with any of them, a control character, a
+    program ending in `/`, or nothing at all is refused, and the page says why: put shell syntax in
+    a script. So is one listed already.
+  - In the files, a bad entry is an error at load naming `commands` and
+    the entry, as a bad `muted` entry is, and the others still run.
+  - Each runs as `tide launch --background --unless-running -- COMMAND`,
+    so it waits for the shell's ready signal and lands in
+    `app-graphical.slice`, as any launch does (§5.4).
+  - They start in the list's order: the shell starts each once the one
+    before it has started, as `tide launch` prints `tide launch: starting`
+    just before it does, or has ended, skipped or failed. It doesn't wait
+    for a window, so a slow app's window can still open after a later
+    one's.
+  - `--background` records no focus grant and asks no name prompt, even
+    from home (§6.5). So nothing it opens takes focus: its windows open
+    where Hyprland's rules put them, unfocused and marked, as any window
+    you didn't ask for (§14.1).
+  - A home app's window goes to home by `inApps`' window rule, which needs
+    nothing from here. `scripts`' `google-calendar` and `google-chat` open
+    `--app` windows of `calendar.google.com` and `chat.google.com`, which
+    `conf`'s shared `inApps` lists.
+  - `--unless-running` skips a command whose program, past wrappers
+    (`env`, `nohup`), a process of yours is already running, as `pgrep -x`
+    matches it on its first 15 characters. That catches a daemon or an app
+    something else started. It can't catch a wrapper that hands off and
+    exits: `google-calendar` runs `chrome --app=…`, which gives the window
+    to a Chrome already running and exits, so a Chrome that reopened
+    Calendar's window itself gets a second one (TODO.md).
+  - The shell runs the list once a graphical session. It records the
+    session it ran it in, as `graphical-session.target`'s `InvocationID`,
+    in `$XDG_RUNTIME_DIR/tide-startup-ran`, so a shell restarted later runs
+    nothing.
+  - The ID is new each time uwsm starts the target, at each login. The
+    runtime directory alone outlives a logout while an SSH login or
+    lingering keeps the user's manager running, and the next login would
+    find the record and run nothing.
+  - An ID that can't be read is logged. The list then runs only if there's
+    no record at all. A record that can't be written is logged, and only
+    costs a second run, which `--unless-running` mostly catches, if the
+    shell restarts.
+  - A command that can't start, or exits with a failure, is a notification
+    naming it and what it printed on its standard error, once for each
+    command. The shell runs each as the launcher runs an app, so a command
+    that keeps running, as Chrome does, is reported only if it fails later.
+  - The page shows the list the shell takes: `startup.local.json`'s, else
+    `startup.json`'s. The first change copies it into `startup.local.json`,
+    as the Clocks page's does.
+  - A command is typed and added with Enter, at the end. The arrows move
+    one, and the bin takes it out. A change names the command by its place
+    and its text, so a hand edit that has moved them since is refused, not
+    built on.
+  - While either file can't be read or doesn't parse, the page refuses
+    changes, naming the file, and nothing runs, since which list is meant
+    can't be told. Once it loads, the list runs, if it hasn't this session.
+  - A change takes effect at the next login. Nothing runs from the page.
+  - Over IPC, `addStartup COMMAND`, `moveStartup COMMAND STEP` and
+    `removeStartup COMMAND` do what the page does.
+
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or
   `qs -c tide ipc call settings toggle`.
@@ -2927,7 +2995,7 @@ sway's `config.local`:
 
 - **Shared defaults.** Every tide config file
   `~/.config/tide/<name>.json` (`clocks`, `idle`, `layouts`,
-  `appearance`, `outputs`, `workspaces`) holds the shared defaults and is installed from
+  `appearance`, `outputs`, `workspaces`, `startup`) holds the shared defaults and is installed from
   `conf`.
 - **Per-machine overrides.** An optional **`<name>.local.json`** beside it
   is read last. It is machine-specific and never committed.
