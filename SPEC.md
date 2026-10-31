@@ -861,9 +861,20 @@ in how long they last and what stays visible:
 
 **`TIDE_WORKSPACE`.**
 
-- It holds the workspace's name with only ASCII letters and digits kept,
-  so shpool and tmux sessions can be named after it. `PR-12 login` is
-  `PR12login`. A name with none of them gives the empty string.
+- It holds the workspace's name with only its letters and digits kept,
+  in any script, NFC-normalized, so shpool and tmux sessions can be named
+  after it. `PR-12 login` is `PR12login`, and `Café` stays `Café`. A name
+  with none of them gives the empty string.
+  - Letters and digits are Unicode's categories L and N, so `日本語` and
+    `١٢` stay. Punctuation, spaces, symbols, emoji, marks and control
+    characters go.
+  - The name is normalized before the rest go, so a decomposed `é` (`e`
+    and a combining accent, as macOS can send it) is one letter, and kept.
+  - `tide-grant --workspace-name` does it, with Go's `unicode` tables and
+    `golang.org/x/text` v0.21.0's NFC (both Unicode 15.0.0 from Go 1.21
+    on), whatever the locale: `tr` works on bytes, and `[[:alnum:]]` means
+    what the locale says. Without `tide-grant`, a launch starts the app
+    with an empty value, and says why.
 - Two names that sanitize alike (`PR-12`, `PR 12`) give the same value,
   so they'd share a session. That's accepted.
 - `tide launch` sets it for the process it starts: the workspace the
@@ -2904,8 +2915,8 @@ are what "done" means.
   the system monitor's CPU, memory and process readings, the
   single-window width rule, layout geometry, workspace order and names
   (the short name from a title, checking the name patterns and the
-  standing list; `TIDE_WORKSPACE`'s sanitizing is `bin/tide`'s, tested in
-  `bin/tide_test.sh`), the light/dark boundaries
+  standing list; `TIDE_WORKSPACE`'s sanitizing is `tide-grant`'s, tested in
+  `cmd/tide-grant` and `bin/tide_test.sh`), the light/dark boundaries
   (schedule, sunrise and sunset, manual flip expiry), and config loading (`.local`
   merge rules; a bad file keeps the last good settings). The QML only binds
   to them.
