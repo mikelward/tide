@@ -348,6 +348,7 @@ work". The old setup shows how it fought itself:
 | Theme schedule | tide | `tide.service` | `theme-daemon.sh` retired |
 | Audio | PipeWire + WirePlumber | their own socket units | PulseAudio |
 | Network, Bluetooth | NetworkManager, BlueZ (system) | system units | tray applets |
+| Network passwords (NetworkManager's secret agent), and later Bluetooth pairing (BlueZ's agent) | `tide-agent`, asking through the shell (§5.6) | the shell, with `TIDE_AGENT=1` until it's the default | nm-applet skipped by autostart, and stood aside for when it runs anyway |
 | Secrets | gnome-keyring, unlocked by PAM at login | greetd PAM + `gnome-keyring-daemon.socket` | KWallet in this session |
 | Lid, power button | logind's defaults (`HandleLidSwitch=suspend`, `HandleLidSwitchDocked=ignore`), plus a Hyprland `bindl` pair on the lid switch: closing it with an external monitor attached disables the internal panel, and opening it re-enables the panel with its configured mode and returns the panel's workspaces to it | logind / Hyprland | `lid.sh`'s own suspend logic, and the `HandleLidSwitch=ignore` drop-in the old `setup-hypr` installed |
 | "Show in folder" (`org.freedesktop.FileManager1`) | Nautilus (§16.2) | D-Bus activation via tide's user-level service file → `tide-filemanager.service`, whose launcher picks Dolphin under Plasma and which stops with the session | the arbitrary pick between Dolphin's and Nautilus's system activation files |
@@ -551,7 +552,9 @@ flowchart TD
     failed. A broken lock otherwise shows only when the session should
     lock;
   - the home workspace (§6.5): there, and kept by `conf`'s `persistent`
-    rule, with the shell's `tide-workspaces.lua` naming it.
+    rule, with the shell's `tide-workspaces.lua` naming it;
+  - the network agent (§5.6): `tide-agent` registered, or what holds
+    the job instead.
 
   It prints one line per problem, with the fix. Each feature that leans on
   something outside tide adds its check here, by principle 6 (§1).
@@ -591,6 +594,239 @@ skips none, so its applet would start beside Plasma's Bluetooth. `setup`
 puts a copy of blueman's entry in `~/.config/autostart`, which hides the
 package's, adding those four to its `NotShowIn`. tide skips it too,
 unless the user adds it to the allowlist (§5.4).
+
+### 5.6 Network passwords and Bluetooth pairing: `tide-agent`
+
+NetworkManager asks a **secret agent** for any password it doesn't have:
+a Wi-Fi key, an 802.1X login, a VPN password or one-time code. Today that
+agent is nm-applet. Without one, the network popover's own password field
+(§7.4) still covers a Wi-Fi network NetworkManager has no key for, since it
+shows when the connection fails for want of one. Nothing covers the rest:
+the VPN rows run `nmcli connection up` without `--ask`, so a VPN with an
+unsaved password fails. And while nm-applet runs, it answers the popover's
+Wi-Fi request too, with a dialog of its own beside the popover's field.
+
+`tide-agent` is tide's own agent, so the shell asks for every network
+password and nm-applet can come off the autostart list. BlueZ's pairing
+agent follows in the same helper (below).
+
+**Cost and reliability.**
+
+- **A new Go dependency:** `github.com/godbus/dbus/v5` at v5.1.0, pure
+  Go, BSD-2-Clause, with no dependencies of its own (v5.2 adds
+  `golang.org/x/sys`). It makes the one binary that uses it about 2 MB
+  bigger, 4.5 MB in all, and costs nothing to run.
+- **A new process:** one Go helper per session, started by the shell. It
+  sleeps on D-Bus between requests, with no timers and no polling, at a
+  few MB of memory. $0.
+- **New failure modes,** each with what you see:
+  - *`tide-agent` missing or exiting.* The shell restarts it with the
+    polkit agent's backoff (5 s, doubling to a minute) and says so once in
+    a notification; `tide doctor` names it. Meanwhile NetworkManager has no
+    agent: a Wi-Fi password falls back to the popover's field, a VPN row
+    says "Couldn't connect", and a background reconnect that needs a new
+    password fails, as it would with no nm-applet.
+  - *NetworkManager not running, or restarted.* The helper waits for
+    `org.freedesktop.NetworkManager` on the system bus and registers again
+    whenever it reappears. Nothing shows meanwhile, since there's nothing
+    to connect.
+  - *A shell reload or restart* ends the helper with it (its stdin
+    closes). A prompt that was up goes, and NetworkManager, seeing the agent
+    go, fails that connection; you try again.
+  - *The keyring locked or missing.* A saved VPN password isn't found, so
+    you're asked for it. The keyring is unlocked at login (§5.2), so this
+    means something else is wrong, and the log says what.
+  - *A VPN plugin without an auth dialog.* The request is declined and
+    the log names the plugin; `nmcli --ask` still works.
+- **Latency:** none on any hot path. The helper starts after the shell,
+  isn't in its ready check, and a prompt costs one pipe write each way.
+
+**Shape.** NetworkManager calls its agents over D-Bus
+(`org.freedesktop.NetworkManager.SecretAgent`, registered with
+`AgentManager`), and Quickshell has no D-Bus server module (§3.2). So a
+small Go command does the D-Bus side, and the shell does the asking:
+
+- The shell starts `tide-agent` as a child process, as the greeter starts
+  `tide-greetd` (§11). They speak JSON, one object per line, on its stdin
+  and stdout. It's shell-started rather than a systemd unit because a
+  request is only worth taking while a shell can show it: the helper lives
+  exactly as long as the shell, and when the shell goes, its pipe closes,
+  the helper exits, and NetworkManager drops the agent at once rather than
+  waiting out a request nobody can answer.
+- That pipe is the only channel that carries a password. `qs ipc call`
+  passes its arguments in argv, which any process of yours can read in
+  `/proc`, so it's used only for status (`ipc call agent status`, below).
+  Neither side logs a line from the pipe, since either direction can hold
+  a secret: the helper can hand the shell a saved value to fill in.
+- The helper holds the policy NetworkManager defines (which secrets a
+  request needs, which are saved where, which to ask for), turned into
+  fields: `{type: "request", id, kind, title, message, fields: [{key,
+  label, secret, value}], connection: {id, uuid, type}, ssid,
+  userRequested}`. It also sends `{type: "cancel", id}`, `{type: "lock",
+  locked}`, `{type: "missed", connection}` and `{type: "status", ...}`.
+  The shell holds the policy tide defines: where and when to ask. It
+  answers `{type: "reply", id, values}`, `{type: "go", id}` (run a VPN's
+  own dialog), `{type: "cancel", id}` or `{type: "decline", id}`.
+- It answers only NetworkManager: a call from any other sender on the
+  system bus is refused, so nothing else can raise a password prompt
+  that looks like tide's.
+- Its identifier is `io.github.mikelward.tide`, and it registers with the
+  `VPN_HINTS` capability, so a VPN asking for one more secret mid-connect
+  (a one-time code) says which.
+- **Opt-in, then default.** With `TIDE_AGENT=1` in the session's
+  environment (uwsm's env, like `TIDE_POLKIT`), the shell starts the
+  helper and `tide autostart-allowed` skips nm-applet, so exactly one
+  agent answers. Without it nothing changes, until the last step below
+  makes it the default.
+
+**Standing aside for nm-applet.** NetworkManager asks its agents one at a
+time: the requesting process's own agent first (`nmcli --ask`), then
+agents in an active session, then the one started *later*. Any error but
+"user canceled", or an empty answer, passes the request to the next
+(`nm-agent-manager.c`, NetworkManager 1.54.3). So with two agents, which
+one prompts depends on which started last, and a shell restart flips it.
+The helper makes it fixed instead: while `org.freedesktop.network-manager-applet`
+(nm-applet's `GApplication` name) has an owner on the session bus, it
+unregisters, and it registers again when the name goes. nm-applet listed
+in `~/.config/tide/autostart`, or started by hand, therefore takes over
+whole, and `tide doctor` says so.
+
+**What it answers** (`GetSecrets`, by the setting NetworkManager names):
+
+| Setting | Asked for |
+|---|---|
+| `802-11-wireless-security` | the network's key: `psk` (WPA and WPA3 personal), `wep-key0`–`3`, or `leap-password` |
+| `802-1x`, on Wi-Fi or wired | the password for password methods (PEAP, TTLS, FAST, LEAP, MD5, PWD), with the username shown; for TLS, the private key's password; the request's hints first, when it names them. A connection with no username is declined, since the username isn't a secret NetworkManager takes back: it's set in nm-connection-editor |
+| `vpn` | through the plugin's auth dialog (below) |
+| anything else: `pppoe`, `gsm`/`cdma` PINs and passwords, `wireguard` keys, a hidden network's name | declined with `NoSecrets`, which hands it to the next agent, if any. The log names the setting, and `nmcli --ask connection up` or nm-connection-editor gets it in |
+
+- **Saved secrets first.** Unless the request says `REQUEST_NEW`, or a
+  secret is marked "always ask" (`NOT_SAVED`), the helper looks for a
+  secret marked agent-owned in the keyring, under the schema nm-applet and
+  GNOME Shell use (`org.freedesktop.NetworkManager.Connection`, keyed by
+  `connection-uuid`, `setting-name` and `setting-key`;
+  `shell-network-agent.c`, GNOME Shell 51.1). So a VPN password nm-applet
+  saved keeps working. It talks to the Secret Service over the session
+  bus, through godbus; there's no libsecret.
+- **Saving.** `SaveSecrets` stores agent-owned secrets there, and
+  `DeleteSecrets` removes them. A secret owned by the system is
+  NetworkManager's to store, in the connection's own file.
+- **No interaction.** A request without `ALLOW_INTERACTION` gets only what's
+  saved, or `NoSecrets`.
+- **`CancelGetSecrets`** closes whatever the request had open.
+- **NetworkManager's 120 s.** It waits that long for an agent's answer
+  (`nm-secret-agent.c`), so the helper gives up on a request at 115 s,
+  answering `NoSecrets` and telling the shell, which turns it into a missed
+  request (below).
+
+**VPNs**, as GNOME Shell does it (`networkAgent.js`, GNOME Shell 51.1). Each
+plugin's `.name` file (in `/etc/NetworkManager/VPN`,
+`/usr/lib/NetworkManager/VPN`, and `$NM_VPN_PLUGIN_DIR`) names its
+`auth-dialog` and says whether it `supports-external-ui-mode` and
+`supports-hints`. The helper runs the dialog with `-u UUID -n NAME -s
+SERVICE`, `-i` when it may ask, `-r` for new secrets, and each hint as
+`-t HINT` where supported, and writes it the connection's data and secrets
+(`DATA_KEY=`/`DATA_VAL=`, `SECRET_KEY=`/`SECRET_VAL=`, then `DONE`).
+
+- **External UI mode** (OpenVPN, among others): the dialog prints a
+  description of the fields instead of drawing them, a keyfile at
+  `Version=2` with a title, a message, and per field a label, a value,
+  whether it's secret and whether to ask. The helper sends the ones to
+  ask for to the shell as fields, the rest straight to NetworkManager. So
+  a password and a one-time code are typed in the shell's own prompt.
+  A dialog that prints nothing has everything saved.
+- **A dialog of its own** (openconnect, whose SSO login is a web view):
+  the helper runs it only once the shell says the request may come up
+  (where and when, below). When it may take the keyboard, the shell
+  first records a focus grant for its window, as `tide launch` does
+  (§14.3); otherwise it opens unfocused and marked, like any window. Its answer is
+  `key` and `value` lines; it's told `QUIT` once it's done, and a non-zero
+  exit is a cancel.
+- **WireGuard** is a connection type of its own, not a plugin, and its
+  keys are declined, above.
+
+**Where and when the shell asks** (§14.1's rule, applied):
+
+- **In the popover.** A Wi-Fi key for the network a popover just asked to
+  connect is asked for in that popover's own password row (§7.4), which
+  already holds the keyboard. Enter answers the agent, rather than
+  reconnecting with the key as the row does without one. That's the
+  duplicate dialog gone.
+- **The prompt.** Every other request opens the shell's network prompt:
+  a centered card over a dimmed backdrop, like the polkit prompt, with the
+  connection's name, what's needed, and a field per field. It takes the
+  keyboard when the request follows your action: a connection the shell
+  itself brought up in the last 10 s (a VPN row), or one NetworkManager
+  marks as user-requested when the focus guard says you pressed a key in
+  the last 2 s (`tide prompt-focus`; `nmcli connection up` in a terminal).
+- **A notification** otherwise: "Wi-Fi “Home” needs a password", with
+  **Enter password**, which opens the prompt with the keyboard. That's
+  every request NetworkManager makes on its own (a reconnect, a changed
+  password) and a user-requested one the guard can't vouch for. Dismissing
+  it cancels.
+- **Esc**, or the prompt's **Cancel**, answers "user canceled", which
+  stops NetworkManager asking anyone else. A click on the backdrop does
+  nothing, as with polkit, so a stray click can't cancel. Closing the
+  popover with its row up cancels too.
+- **While locked**, the shell shows nothing: the lock is a process of its
+  own (principle 2, §1), and a prompt under it can't be seen. The helper
+  watches `tide-lock.service` and tells the shell when it starts and stops.
+  A request that needs typing while it runs is declined at once, and the
+  shell is told it was missed; saved secrets are still answered, since the
+  keyring stays unlocked.
+- **A missed request** (declined while locked, or timed out) leaves one
+  notification per connection once you're back: "Couldn't connect to
+  “Home”: it needs a password", with **Connect**, which brings it up again
+  through the shell, so the prompt then takes the keyboard.
+
+**`tide doctor`** asks the shell (`qs -c tide ipc call agent status`):
+`registered`, `standing-aside` (with nm-applet's pid), `waiting` (for
+NetworkManager) or `missing` (the helper isn't installed, or keeps
+exiting). It reports:
+
+- with the agent on: a missing or failing helper, and nm-applet running,
+  which means its dialogs ask instead (fine if you listed it);
+- with the agent off: no nm-applet either, since then nothing asks for a
+  VPN's password.
+
+**Bluetooth pairing** (the next step, in the same helper). tide has no
+pairing agent of its own, and blueman's applet is off the autostart list
+(§5.4). blueman-manager still starts its applet while it's open, so
+pairing from it keeps working. The helper's second job is BlueZ's `org.bluez.Agent1`,
+registered with `AgentManager1` as the default agent, capability
+`KeyboardDisplay`. It stands aside while `org.blueman.Applet` has an
+owner, as it does for nm-applet. BlueZ uses the agent of the process that
+asked to pair, else the most recent default (`agent_get`, BlueZ 5.87), so
+standing aside hands blueman-manager's pairings to blueman. Its requests
+use the same prompt, routed the same way, under the device's name:
+
+| BlueZ asks | The prompt |
+|---|---|
+| `RequestConfirmation` | "Does Device show 123456?", **Pair** or **Cancel** |
+| `DisplayPasskey`, `DisplayPinCode` | the code to type on the device, **Cancel**; it goes when pairing ends or BlueZ calls `Cancel` |
+| `RequestPinCode`, `RequestPasskey` | a field |
+| `RequestAuthorization` | "Pair with Device?", **Pair** or **Cancel** |
+| `AuthorizeService` | for a device that isn't trusted: "Allow Device to use SERVICE?", **Allow** or **Deny** |
+
+`Cancel` closes it, and Esc answers `org.bluez.Error.Canceled`. The popover
+gains no pairing of its own: *pair* still opens blueman-manager.
+
+**Steps.**
+
+1. This design.
+2. `cmd/tide-agent`: the NetworkManager agent, with the keyring and the
+   VPN dialogs, tested against a private D-Bus with stand-ins for
+   NetworkManager, the Secret Service and systemd.
+3. The shell's side: the prompt, the popover's row, the notifications,
+   `ipc call agent status`, `TIDE_AGENT=1`, and `tide doctor`.
+4. The BlueZ agent.
+5. **nm-applet comes off `autostart_default`**, and the agent is on unless
+   `TIDE_AGENT=0`. That waits for a live session with `TIDE_AGENT=1` that
+   has checked: a Wi-Fi key typed in the popover with no second dialog, a
+   VPN password and a one-time code, Esc on each, a request while locked
+   turning into a notification after, and a clean `tide doctor`. Neither
+   NetworkManager nor BlueZ runs in CI, so until then every step is
+   tested against stand-ins only.
 
 ## 6. Windows and layouts
 
@@ -1426,7 +1662,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | Keep awake: a cup of coffee | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off; the OSD says which | hover: what it's doing, in the OSD's words |
 | Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | — |
 | Bluetooth audio | one icon per connected headphones, headset or speakers, beside Bluetooth | the Bluetooth popover | hover: its name and battery |
-| Network | Wi-Fi strength / wired / VPN lock / offline | network list, VPNs; *settings* opens `nm-connection-editor` | — |
+| Network | Wi-Fi strength / wired / VPN lock / offline | network list, with a network's password asked for in place; VPNs; *settings* opens `nm-connection-editor` | — |
 | Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5% |
 | Battery | % and charging, red below 15% | power profile (performance / balanced / saver), time left | — |
 | System monitor | CPU %; amber when the CPU is hot or memory is 90% full, red while it throttles or is critically hot | a readout of CPU, memory and temperature, then tabs: **CPU** (the default: temperature, clock, thermal throttling, the five processes using the most CPU) and **Memory** (memory, swap, the five using the most) | — |
@@ -2563,6 +2799,7 @@ this spec.
 | Any other new window: a background app, an update prompt, a slow app you've moved on from | **No.** It opens in place, dimmed like any inactive window, and is marked urgent. |
 | An existing window asks to be activated (xdg-activation, or `_NET_ACTIVE_WINDOW` from XWayland) | **No.** It's marked urgent, unless a launch you just made asked for it (above). |
 | You click a notification | The shell focuses that window itself, because the click was yours (§9). |
+| A network password or pairing prompt (§5.6) | Only when it follows your action: a Wi-Fi network you clicked in the popover (asked in place), a connection the shell brought up in the last 10 s (a VPN row), or one NetworkManager marks as user-requested within 2 s of your key press (`nmcli connection up`). Otherwise a notification offers **Enter password**, and every request NetworkManager makes on its own takes that path. |
 | A polkit prompt | Only when it follows your action in the app that asks: the requesting process descends from the focused window's, and your last input went to that window within the last 2 s (a click on its "Unlock" button, or Enter on a `pkexec` line). A `sleep 30; pkexec …` left running while you're idle doesn't qualify. Otherwise a notification offers **Authenticate** and the prompt opens from it, so a password field never appears under typing meant for something else. Until Lua sees pointer buttons (§14.3), a click reads as no input, so a prompt after a click takes the notification path. |
 
 ### 14.2 Edge cases
@@ -3602,7 +3839,7 @@ light/dark switch.
 
 | Repo | Gets |
 |---|---|
-| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. The Lua tiling layout. `make install`. |
+| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). The Lua tiling layout. `make install`. |
 | **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces and home's apps), the `persistent` workspace rule for home, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **scripts** | `setup`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, cliphist, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |
@@ -3764,6 +4001,15 @@ are what "done" means.
 - **Scripts.** `screenshot_test` covers the Wayland argument parsing with
   stubbed `grim`/`slurp`/`wl-copy`, in the repo's existing `*_test` style,
   plus two captures in the same second getting distinct names.
+- **The network agent** (§5.6). `go test` runs `tide-agent` on a private
+  bus from `dbus-daemon`, against stand-ins for NetworkManager's
+  `AgentManager`, the Secret Service, systemd's unit and a VPN plugin's
+  auth dialog: a request in, the right fields out, the shell's answer back
+  as NetworkManager's secrets, a cancel each way, standing aside while
+  nm-applet's name is owned, and nothing logged that held a secret. The
+  shell's routing (popover, prompt, notification, locked, missed) is
+  plain JavaScript under `node --test`. Neither NetworkManager nor BlueZ
+  runs in CI, so the live check is step 5's.
 - **Mocks.** `make mocks` fails on any resource that doesn't load, so CI
   can run it to catch broken pages. The PNGs aren't compared pixel for
   pixel.
@@ -4374,3 +4620,34 @@ Checked 2026-10-31, for §10's field focus:
   [`device-private.c`](https://github.com/systemd/systemd/blob/5f53c52fa2e735169593574a2e809718c92e0ccd/src/libsystemd/sd-device/device-private.c)
   (a character device's data in `/run/udev/data/c<major>:<minor>`, its
   properties as `E:` lines).
+
+Checked 2026-10-31, for §5.6's network agent:
+
+- NetworkManager 1.54.3:
+  [`nm-agent-manager.c`](https://github.com/NetworkManager/NetworkManager/blob/1.54.3/src/core/settings/nm-agent-manager.c)
+  (agents asked in turn: the requester's own, then active sessions, then
+  the one started later; only "user canceled" stops the turn),
+  [`nm-secret-agent.c`](https://github.com/NetworkManager/NetworkManager/blob/1.54.3/src/core/settings/nm-secret-agent.c)
+  (120 s for an agent's answer),
+  [`nm-vpn-plugin-info.c`](https://github.com/NetworkManager/NetworkManager/blob/1.54.3/src/libnm-core-impl/nm-vpn-plugin-info.c)
+  (the plugin directories and `$NM_VPN_PLUGIN_DIR`), and
+  `nm-dbus-interface.h` (the request flags and `VPN_HINTS`).
+- GNOME Shell 51.1:
+  [`js/ui/components/networkAgent.js`](https://github.com/GNOME/gnome-shell/blob/main/js/ui/components/networkAgent.js)
+  (auth dialogs, external UI mode, a notification for a request not
+  user-requested) and
+  [`src/shell-network-agent.c`](https://github.com/GNOME/gnome-shell/blob/main/src/shell-network-agent.c)
+  (the keyring schema, agent-owned secrets only).
+- network-manager-applet 1.37.0: `src/main.c` (the `GApplication` name
+  `org.freedesktop.network-manager-applet`).
+- Plugins' `.name` files:
+  [NetworkManager-openvpn](https://github.com/NetworkManager/NetworkManager-openvpn/blob/main/nm-openvpn-service.name.in)
+  (external UI mode and hints) and
+  [NetworkManager-openconnect](https://github.com/GNOME/NetworkManager-openconnect/blob/main/nm-openconnect-service.name.in)
+  (neither).
+- BlueZ 5.87: [`src/agent.c`](https://github.com/bluez/bluez/blob/master/src/agent.c)
+  (`agent_get`: the asker's agent, else the latest default). blueman:
+  `blueman/main/Applet.py` (`org.blueman.Applet`).
+- godbus: v5.1.0's `go.mod` (`go 1.12`, no requirements); v5.2.4's
+  requires `golang.org/x/sys`.
+- Quickshell master: `src/network` has no secret agent.
