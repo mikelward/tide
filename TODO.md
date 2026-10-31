@@ -13,6 +13,11 @@ once you have agreed with it or reversed it.
   is a user unit talking to the shell over `qs ipc`, which would need a
   second channel for passwords. Reversible: the protocol stays the same
   over any pipe.
+- [ ] **`tide-agent` reads the keyring over a "plain" Secret Service
+  session,** so secrets cross the session bus unencrypted between your own
+  processes, as many Go clients do. The alternative is the `dh-ietf1024`
+  transport libsecret prefers, which needs Diffie-Hellman and AES code
+  here. Reversible inside `cmd/tide-agent/keyring.go`.
 - [ ] **godbus v5.1.0, not v5.2.4,** for having no dependencies of its own
   (v5.2 needs `golang.org/x/sys`). Moving up is a `go get`.
 - [ ] **`TIDE_AGENT=1` opts in until a live session has run it,** as
@@ -1425,8 +1430,8 @@ autostart entries, and a second bar on any monitor. Still to do:
 asks for a VPN's unsaved password or one-time code, since the VPN rows
 run `nmcli connection up` without `--ask`. `tide-agent` replaces it:
 
-- [ ] `cmd/tide-agent`: NetworkManager's secret agent, the keyring, VPN
-  auth dialogs.
+- [x] `cmd/tide-agent`: NetworkManager's secret agent, the keyring, VPN
+  auth dialogs, tested against stand-ins only.
 - [ ] The shell's prompt, the popover's row, notifications, `TIDE_AGENT=1`,
   `ipc call agent status`, and `tide doctor`.
 - [ ] The BlueZ pairing agent.
