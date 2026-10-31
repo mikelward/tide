@@ -239,33 +239,15 @@ Item {
                 brightness: -0.25
             }
 
-            // The notification count and the battery, top left, as the mock
-            // shows. A count, never what the notifications say.
+            // The battery and the notification count, top right, in the
+            // bar's order, as the mock shows. A count, never what the
+            // notifications say.
             Row {
-                anchors.left: parent.left
+                anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.margins: 16
                 spacing: 12
                 visible: !face.login
-
-                Row {
-                    visible: face.unread > 0
-                    spacing: 4
-
-                    SymbolicIcon {
-                        anchors.verticalCenter: parent.verticalCenter
-                        name: "preferences-system-notifications-symbolic"
-                        color: Qt.rgba(1, 1, 1, 0.55)
-                    }
-
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: face.unread
-                        color: Qt.rgba(1, 1, 1, 0.55)
-                        font.family: "Inter"
-                        font.pixelSize: 12
-                    }
-                }
 
                 Row {
                     readonly property var view: Status.batteryView({
@@ -287,6 +269,25 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         text: parent.view.text
                         color: parent.view.low ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.55)
+                        font.family: "Inter"
+                        font.pixelSize: 12
+                    }
+                }
+
+                Row {
+                    visible: face.unread > 0
+                    spacing: 4
+
+                    SymbolicIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "preferences-system-notifications-symbolic"
+                        color: Qt.rgba(1, 1, 1, 0.55)
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: face.unread
+                        color: Qt.rgba(1, 1, 1, 0.55)
                         font.family: "Inter"
                         font.pixelSize: 12
                     }
