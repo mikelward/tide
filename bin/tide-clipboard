@@ -5,6 +5,11 @@
 #
 #   tide clipboard store [--max-items N]
 #
+#     The Settings panel's Clipboard page writes
+#     ~/.config/hypr/tide-clipboard.conf (history=on or off, and
+#     max_items=N), which store reads at each copy: off, it stores nothing,
+#     and its max_items replaces --max-items.
+#
 #     Run by tide-clipboard.service as `wl-paste --watch tide clipboard
 #     store`, with each new copy on stdin, and stores it with `cliphist
 #     store`, keeping the newest N (default 200). A copy a password manager
@@ -64,6 +69,38 @@ entry_id() {
     esac
 }
 
+# The Clipboard page's settings, from the file the shell writes (SPEC.md
+# §16): sets history (on or off) and max, if the file sets them. A line it
+# can't read is said on stderr and passed over, so a bad file never stops
+# the history.
+settings() {
+    history=on
+    conf=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/tide-clipboard.conf
+    test -e "$conf" || return 0
+    if ! test -r "$conf"; then
+        echo "$prog store: can't read $conf, so keeping history with the newest $max" >&2
+        return 0
+    fi
+    while IFS='=' read -r key value || test -n "$key"; do
+        case "$key" in
+            '' | '#'*) ;;
+            history)
+                case "$value" in
+                    on | off) history=$value ;;
+                    *) echo "$prog store: $conf: history is on or off, not '$value'" >&2 ;;
+                esac
+                ;;
+            max_items)
+                case "$value" in
+                    '' | *[!0-9]* | 0) echo "$prog store: $conf: max_items is a whole number above 0, not '$value'" >&2 ;;
+                    *) max=$value ;;
+                esac
+                ;;
+            *) echo "$prog store: $conf: $key isn't a setting (history, max_items)" >&2 ;;
+        esac
+    done <"$conf"
+}
+
 store() {
     max=200
     while test $# -gt 0; do
@@ -79,6 +116,10 @@ store() {
             exit 2
             ;;
     esac
+    # The Settings panel's Clipboard page (SPEC.md §16), as the shell writes
+    # it: history off stores nothing, and its cap is the one kept.
+    settings
+    test "$history" = off && exit 0
     # wl-clipboard sets CLIPBOARD_STATE for a --watch command: nil when the
     # clipboard empties, which leaves nothing to store, and, on versions
     # newer than 2.2.1, sensitive for a password manager's copy.

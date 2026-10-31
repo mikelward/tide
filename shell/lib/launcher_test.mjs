@@ -292,6 +292,7 @@ test("each settings page is found by its name and what it covers, and opens the 
         displays: ["displays", "monitors", "scale"],
         startup: ["start at login", "startup", "autostart"],
         notifications: ["notifications", "quiet hours", "muted apps"],
+        clipboard: ["clipboard settings", "copy history", "paste history"],
     };
     assert.deepEqual(Object.keys(pages), PAGES.map(p => p.id));
     for (const [id, queries] of Object.entries(pages)) {
