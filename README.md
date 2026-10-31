@@ -67,7 +67,8 @@ Repeat `--app` when the app's window class could be any of several IDs.
 `--workspace NAME` takes the app's first window to the workspace named
 NAME, made if it's new. Without it, a launch from the home workspace asks the
 shell's name prompt for one first, and waits for the answer. The app gets `TIDE_WORKSPACE`, that workspace's
-name (or else the focused one's) with only its ASCII letters and digits,
+name (or else the focused one's) with only its letters and digits, in any
+script, NFC-normalized,
 and `tide workspace` prints the focused workspace's the same way
 (SPEC.md §6.5).
 Terminal commands get their grants from `tide-grant`, which each shell

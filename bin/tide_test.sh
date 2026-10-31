@@ -80,9 +80,23 @@ chmod +x "$fake"/*
 # word, exiting $FAKE_PROGRAM_STATUS; and --classes with $FAKE_CLASSES
 # (words), exiting $FAKE_CLASSES_STATUS; and --opener with $FAKE_OPENER,
 # exiting $FAKE_OPENER_STATUS. It logs --classes and --opener calls only, so
-# the log shows the lookup where it happens.
-cat > "$fake/tide-grant" <<'FAKE'
+# the log shows the lookup where it happens. --workspace-name is the real
+# tide-grant's, built here, so TIDE_WORKSPACE's letters and digits are
+# Go's; it exits $FAKE_WSNAME_STATUS instead when that's set.
+real=$tmp/real
+mkdir "$real"
+if ! "${GO:-go}" build -buildvcs=false -o "$real/tide-grant" ./cmd/tide-grant; then
+    echo "FAIL: couldn't build tide-grant" >&2
+    exit 1
+fi
+cat > "$fake/tide-grant" <<FAKE
 #!/bin/sh
+if test "\$1" = --workspace-name; then
+    test -z "\${FAKE_WSNAME_STATUS:-}" || exit "\$FAKE_WSNAME_STATUS"
+    exec "$real/tide-grant" "\$@"
+fi
+FAKE
+cat >> "$fake/tide-grant" <<'FAKE'
 if test "$1" = --program; then
     shift 2
     printf '%s\n' "${FAKE_PROGRAM-$1}"
@@ -151,8 +165,25 @@ check "a focused workspace's JSON escapes are undone" test "$(cat "$tmp/out")" =
 run "$qs" launch --workspace=docs --app kitty -- app
 check "--workspace=NAME works too, with --app" \
     contains "$(cat "$log")" 'tide_focus.grant("kitty", nil, nil, { workspace = "docs" })'
-run "$qs" launch --workspace '¿—?' app
-check "a name with no ASCII letters or digits gives an empty TIDE_WORKSPACE" test "$(cat "$log.env")" = ""
+run "$qs" launch --workspace '¿—? 🚀' app
+check "a name with no letters or digits gives an empty TIDE_WORKSPACE" test "$(cat "$log.env")" = ""
+# Letters and digits in any script stay, whatever the locale, and come out
+# NFC: a decomposed é (as macOS can send it) is one letter.
+run LC_ALL=C "$qs" launch --workspace 'Café-1' app
+check "accented Latin stays, in the C locale too" test "$(cat "$log.env")" = 'Café1'
+run "$qs" launch --workspace "$(printf 'Cafe\314\201 2')" app
+check "a decomposed é comes out composed" test "$(cat "$log.env")" = "$(printf 'Caf\303\2512')"
+run LC_ALL=C "$qs" launch --workspace 'Привет, мир' app
+check "Cyrillic stays" test "$(cat "$log.env")" = 'Приветмир'
+run "$qs" launch --workspace '日本語 メモ' app
+check "CJK stays" test "$(cat "$log.env")" = '日本語メモ'
+run "$qs" launch --workspace 'build-١٢ ✨' app
+check "digits from another script stay, and emoji go" test "$(cat "$log.env")" = 'build١٢'
+run FAKE_WSNAME_STATUS=1 "$qs" launch --workspace docs app
+check "a name tide-grant can't clean still launches" contains "$(cat "$log")" "uwsm app -- app"
+check "with an empty TIDE_WORKSPACE" test "$(cat "$log.env")" = ""
+check "and says why" contains "$(cat "$tmp/err")" "tide-grant couldn't keep the workspace's name to its letters and digits"
+check "and says so in a notification too" contains "$(cat "$log")" "notify-send -a tide TIDE_WORKSPACE not set Couldn't keep the workspace's name"
 run "$qs" launch --workspace '  ' app
 check "a blank --workspace is refused" test $? -eq 2
 check "and starts nothing" test ! -s "$log"
@@ -180,6 +211,15 @@ check "and home's" test "$(cat "$tmp/out")" = in
 run FAKE_WORKSPACE_STATUS=1 FAKE_WORKSPACE='oops' "$qs" workspace
 check "tide workspace fails when it can't ask" test $? -eq 1
 check "and says why" contains "$(cat "$tmp/err")" "tide workspace: couldn't read the focused workspace: oops"
+run FAKE_WSNAME_STATUS=1 "$qs" workspace
+check "tide workspace fails when tide-grant can't clean the name" test $? -eq 1
+check "and says why" contains "$(cat "$tmp/err")" "tide workspace: tide-grant couldn't keep the workspace's name"
+run FAKE_WORKSPACE='{
+    "id": -1341,
+    "name": "Заметки 2",
+    "monitor": "eDP-1"
+}' LC_ALL=C "$qs" workspace
+check "tide workspace keeps letters in any script" test "$(cat "$tmp/out")" = 'Заметки2'
 run "$qs" workspace extra
 check "tide workspace takes no arguments" test $? -eq 2
 
@@ -363,6 +403,10 @@ check "without tide-grant, gio trash still grants gio" contains "$(cat "$log")" 
 run "$qs" launch "$fake/xdg-open" https://example.com/
 check "without tide-grant, an opener grants any app's window" contains "$(cat "$log")" 'tide_focus.grant("*")'
 check "without tide-grant, an opener says why" contains "$(cat "$tmp/err")" "no tide-grant, so the app"
+run "$qs" launch --workspace docs app
+check "without tide-grant, the app still starts" contains "$(cat "$log")" "uwsm app -- app"
+check "with an empty TIDE_WORKSPACE, rather than one tr cut bytes out of" test "$(cat "$log.env")" = ""
+check "and says why" contains "$(cat "$tmp/err")" "no tide-grant, so the workspace's name couldn't be kept to its letters and digits"
 
 run XDG_CURRENT_DESKTOP=KDE "$qs" launch app x
 out=$(cat "$log")

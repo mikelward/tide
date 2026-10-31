@@ -57,10 +57,12 @@ once you have agreed with it or reversed it.
   workspace 3`, has to go somewhere until the multi-display redesign; the
   end of the bar keeps it from pushing the named ones along. It's
   `workspaceOrder` too.
-- [ ] **`TIDE_WORKSPACE` is sanitized only in `bin/tide`.** SPEC.md §20 put
-  it in JS, but nothing in the shell needs it, so it's `tr -cd
-  'A-Za-z0-9'` in the C locale, tested in `bin/tide_test.sh`. A JS twin is
-  easy to add if the shell ever needs one.
+- [ ] **`TIDE_WORKSPACE` is sanitized only in `tide-grant`.** SPEC.md §20
+  put it in JS, but nothing in the shell needs it, so `bin/tide` asks
+  `tide-grant --workspace-name`, which keeps Unicode letters and digits
+  and NFC-normalizes with Go, tested in `cmd/tide-grant` and
+  `bin/tide_test.sh`. A JS twin (`\p{L}\p{N}` with the `u` flag, and
+  `normalize("NFC")`) is easy to add if the shell ever needs one.
 - [ ] **A launch that can't read the focused workspace still starts the
   app**, with an empty `TIDE_WORKSPACE`, a stderr line and a notification.
   The alternative, refusing to launch, would turn a Hyprland hiccup into

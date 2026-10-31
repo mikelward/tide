@@ -39,9 +39,10 @@
 #     home at once; Esc launches nothing. With no shell to ask, it launches
 #     where you are, and says why.
 #     The app gets TIDE_WORKSPACE (§6.5): NAME, or else the focused
-#     workspace's name, with only its ASCII letters and digits kept, so a
-#     shpool or tmux session can be named after it. If the focused
-#     workspace can't be read, it's empty, and the launch says why.
+#     workspace's name, with only its letters and digits (any script,
+#     NFC-normalized) kept, so a shpool or tmux session can be named after
+#     it. If the focused workspace can't be read, or tide-grant can't keep
+#     its letters and digits, it's empty, and the launch says why.
 #     Outside a tide session it just runs COMMAND.
 #
 #   tide workspace
@@ -304,10 +305,19 @@ opener_classes() {
 }
 
 # A workspace's name as TIDE_WORKSPACE holds it (SPEC.md §6.5): only its
-# ASCII letters and digits, so `PR-12 login` is PR12login. In the C locale,
-# so every byte of any other character goes.
+# letters and digits, in any script, NFC-normalized, so `PR-12 login` is
+# PR12login and `Café` stays Café. tide-grant does it with Go's Unicode
+# tables: tr works on bytes, and [[:alnum:]] means what the locale says.
+# Fails, having said why, without it; $2 names the subcommand.
 sanitized() {
-    printf '%s' "$1" | LC_ALL=C tr -cd 'A-Za-z0-9'
+    if ! command -v tide-grant >/dev/null 2>&1; then
+        echo "$prog $2: no tide-grant, so the workspace's name couldn't be kept to its letters and digits (make install builds it)" >&2
+        return 1
+    fi
+    if ! tide-grant --workspace-name -- "$1"; then
+        echo "$prog $2: tide-grant couldn't keep the workspace's name to its letters and digits" >&2
+        return 1
+    fi
 }
 
 # The focused workspace's name, from `hyprctl -j activeworkspace`, or 1,
@@ -436,8 +446,7 @@ tell() {
 workspace() {
     test $# -eq 0 || usage
     name=$(focused_workspace workspace) || exit 1
-    sanitized "$name"
-    echo
+    sanitized "$name" workspace || exit 1
 }
 
 # Adds ID to the grant's list, unless it's empty or already there in any
@@ -627,15 +636,17 @@ EOF2
     fi
     # uwsm app keeps the caller's environment: it starts a scope with
     # systemd-run --scope, which runs the command here (SPEC.md §6.5).
-    if test -n "$ws"; then
-        TIDE_WORKSPACE=$(sanitized "$ws")
-    elif test "$focused_ok" = yes; then
-        TIDE_WORKSPACE=$(sanitized "$focused")
-    else
+    why=
+    if test -z "$ws" && test "$focused_ok" != yes; then
+        why="Couldn't read the focused workspace"
+    elif ! TIDE_WORKSPACE=$(sanitized "${ws:-$focused}" launch); then
+        why="Couldn't keep the workspace's name to its letters and digits"
+    fi
+    if test -n "$why"; then
         echo "$prog launch: starting ${app:-$1} with an empty TIDE_WORKSPACE" >&2
         TIDE_WORKSPACE=
         tell "TIDE_WORKSPACE not set" \
-            "Couldn't read the focused workspace, so ${app:-$1}'s shell sessions won't be named after it. tide doctor may say why."
+            "$why, so ${app:-$1}'s shell sessions won't be named after it. tide doctor may say why."
     fi
     export TIDE_WORKSPACE
     wait_for_shell "$app"

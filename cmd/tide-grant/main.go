@@ -36,6 +36,13 @@
 //	tide-grant --entry DESKTOP-ID
 //
 // prints the classes one desktop entry names.
+//
+//	tide-grant --workspace-name NAME
+//
+// prints NAME as TIDE_WORKSPACE holds it (SPEC.md §6.5), for `tide launch`
+// and `tide workspace`: its letters and digits in any script, NFC-normalized.
+// It's here, not in the shell script, because tr works on bytes and
+// [[:alnum:]] means what the locale says.
 package main
 
 import (
@@ -64,9 +71,18 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	classes := flags.Bool("classes", false, "print the window classes the desktop entries for the command `WORD...` name, one per line, and exit")
 	program := flags.Bool("program", false, "print the program the command `WORD...` runs, past wrappers, and exit")
 	entryID := flags.String("entry", "", "print the window classes the desktop entry `DESKTOP-ID` names, one per line, and exit")
+	wsName := flags.Bool("workspace-name", false, "print the workspace name `NAME` as TIDE_WORKSPACE holds it, its letters and digits in any script, NFC-normalized, and exit")
 	opener := flags.Bool("opener", false, "print the window classes of the app the opener command `WORD...` (xdg-open or gio open) hands its target to, one per line, and exit; exit 3 if it runs no opener")
 	if err := flags.Parse(args); err != nil {
 		return 2
+	}
+	if *wsName {
+		if *classes || *program || *opener || *entryID != "" || flags.NArg() != 1 {
+			fmt.Fprintln(stderr, "usage: tide-grant --workspace-name NAME")
+			return 2
+		}
+		fmt.Fprintln(stdout, workspaceValue(flags.Arg(0)))
+		return 0
 	}
 	// For `tide launch xdg-open URL`: the classes of the app the opener
 	// hands the URL to, found by the caller from the URL's type.
@@ -153,6 +169,7 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "       tide-grant --classes WORD...")
 		fmt.Fprintln(stderr, "       tide-grant --opener WORD...")
 		fmt.Fprintln(stderr, "       tide-grant --entry DESKTOP-ID")
+		fmt.Fprintln(stderr, "       tide-grant --workspace-name NAME")
 		return 2
 	}
 	if !inTide(lookup(env, "XDG_CURRENT_DESKTOP")) {
