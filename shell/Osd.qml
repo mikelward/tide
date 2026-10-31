@@ -1,18 +1,25 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Wayland
+import "lib/osd.mjs" as Osd
 
-// The OSD (SPEC.md §9): a pill at the bottom center of the focused monitor
-// for a volume or mic-mute change, from OsdData. There's one per monitor,
-// and only the focused monitor's shows. It takes no input.
+// The OSD (SPEC.md §9): a pill at the bottom center of the monitor focused
+// when it was shown, for a volume or mic-mute change, or a keep awake or
+// presenter mode key, from OsdData. There's one per monitor, and only that
+// monitor's shows. It takes no input.
 PanelWindow {
     id: root
 
     required property var modelData
 
     screen: modelData
-    visible: OsdData.showing && OsdData.pill !== null && Hyprland.focusedMonitor !== null && Hyprland.focusedMonitor === Hyprland.monitorFor(screen)
+    // From OsdData's state and this window's monitor alone, never the
+    // window's own screen, which mapping it would change under the binding.
+    visible: Osd.shownOn({
+        showing: OsdData.showing,
+        pill: OsdData.pill,
+        monitor: OsdData.monitor
+    }, root.modelData?.name ?? "")
     anchors.bottom: true
     margins.bottom: 60
     exclusionMode: ExclusionMode.Ignore

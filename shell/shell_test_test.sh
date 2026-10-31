@@ -131,6 +131,24 @@ if test "\$1" = ipc; then
         *"call settings addClock US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the clocks" ;;
         *"call settings setSystemZone US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the time zone" ;;
         *"call settings setSystemZone Asia/Tokyo"*) : >"\$XDG_RUNTIME_DIR/zone-set" ;;
+        # Presenter mode as the shell keeps it (shell/lib/presenter.mjs):
+        # it holds keep awake over your own toggle, and turning Do not
+        # disturb or keep awake off ends it. DIR/presenter-sticks keeps it
+        # on, as a shell that doesn't end it would.
+        *"call presenter toggle"*)
+            if test -e "\$XDG_RUNTIME_DIR/presenting"; then rm "\$XDG_RUNTIME_DIR/presenting"; else : >"\$XDG_RUNTIME_DIR/presenting"; fi ;;
+        *"call notifications setDnd false"*)
+            if test -e "\$XDG_RUNTIME_DIR/presenting" && ! test -e "\$(dirname "\$0")/presenter-sticks"; then
+                rm "\$XDG_RUNTIME_DIR/presenting" && : >"\$XDG_RUNTIME_DIR/awake"
+            fi ;;
+        *"call keepawake toggle"*)
+            if test -e "\$XDG_RUNTIME_DIR/presenting"; then rm "\$XDG_RUNTIME_DIR/presenting"
+            elif test -e "\$XDG_RUNTIME_DIR/awake"; then rm "\$XDG_RUNTIME_DIR/awake"
+            else : >"\$XDG_RUNTIME_DIR/awake"; fi ;;
+        *"call presenter status"*)
+            if test -e "\$XDG_RUNTIME_DIR/presenting"; then echo on; else echo off; fi ;;
+        *"call keepawake status"*)
+            if test -e "\$XDG_RUNTIME_DIR/presenting" || test -e "\$XDG_RUNTIME_DIR/awake"; then echo on; else echo off; fi ;;
     esac
     $2
 fi
@@ -632,6 +650,14 @@ check "and says so" contains "$out" "the share picker didn't take the keyboard i
 
 run "$tmp/clean"
 check "a server that records what it's sent passes" contains "$out" "ok: the notification server takes notifications and records them"
+
+check "and presenter mode that holds keep awake, and ends with Do not disturb, passes" contains "$out" "ok: presenter mode holds keep awake, and Do not disturb turned off ends it"
+
+stubs "$tmp/presenter-sticks" "exit 0" "  INFO: Configuration Loaded"
+: >"$tmp/presenter-sticks/presenter-sticks"
+run "$tmp/presenter-sticks"
+check "presenter mode that Do not disturb doesn't end fails" test "$code" -ne 0
+check "and says so" contains "$out" "presenter should be off after Do not disturb was turned off while presenting; it's on"
 
 stubs "$tmp/forgets" "exit 0" "  INFO: Configuration Loaded"
 printf '#!/bin/sh\necho 1\n' >"$tmp/forgets/notify-send"

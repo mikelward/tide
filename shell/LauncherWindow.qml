@@ -22,7 +22,7 @@ import "lib/workspaces.mjs" as Workspaces
 // Workspaces. Tab and Shift+Tab move between the tabs; Escape or a click
 // on the backdrop closes it. Its quick actions take
 // screenshots, run the session actions, open the settings panel, flip Do
-// not disturb and keep awake, and reload the shell, and Ctrl+Enter opens an
+// not disturb, keep awake and presenter mode, and reload the shell, and Ctrl+Enter opens an
 // app on a workspace the name prompt names.
 PanelWindow {
     id: root
@@ -56,7 +56,8 @@ PanelWindow {
         dark: AppearanceData.dark,
         darkUntil: AppearanceData.until,
         keepAwake: KeepAwakeData.on,
-        micHolds: MicData.live && !KeepAwakeData.asked
+        micHolds: MicData.live && !KeepAwakeData.asked && !PresenterData.on,
+        presenting: PresenterData.on
     }))
     readonly property var appRows: root.asking !== "" ? Search.confirmRows(root.asking) : Search.search(root.items, root.query, LauncherData.frecency, root.openedAt)
     // Every window, as the Windows and Attention tabs list them.
@@ -285,6 +286,8 @@ PanelWindow {
             AppearanceData.flip();
         } else if (what.shell === "keep-awake") {
             KeepAwakeData.toggle();
+        } else if (what.shell === "presenter") {
+            PresenterData.toggle();
         } else if (what.shell === "reload") {
             Quickshell.reload(false);
         } else if (what.afterClose) {

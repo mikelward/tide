@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Pipewire
 import "lib/osd.mjs" as Osd
@@ -10,13 +11,17 @@ import "lib/osd.mjs" as Osd
 // and the default input's mute, each as it changes, from whatever changed
 // it (keys, the bar, another app). One for every monitor's OSD. The
 // backlight's level shows only when `tide brightness` reports it,
-// so hypridle dimming the screen doesn't flash it.
+// so hypridle dimming the screen doesn't flash it. Keep awake and
+// presenter mode show theirs when their keys call (KeepAwakeData,
+// PresenterData).
 Singleton {
     id: root
 
-    // The pill to draw (shell/lib/osd.mjs), and whether it's up.
+    // The pill to draw (shell/lib/osd.mjs), whether it's up, and the
+    // monitor it's up on: the focused one when it was shown.
     property var pill: null
     property bool showing: false
+    property string monitor: ""
 
     readonly property var sink: Pipewire.defaultAudioSink
     readonly property var source: Pipewire.defaultAudioSource
@@ -38,6 +43,7 @@ Singleton {
     }
 
     function show(pill) {
+        root.monitor = Hyprland.focusedMonitor?.name ?? "";
         root.pill = pill;
         root.showing = true;
         hide.restart();

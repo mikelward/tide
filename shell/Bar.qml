@@ -52,13 +52,22 @@ PanelWindow {
             max: maxWidth,
             barWidth: bar.width,
             left: layoutSymbol.x + layoutSymbol.width,
-            right: sharing.x,
+            right: presenter.x,
             gap: 32
         })
         monitor: bar.monitor
     }
 
-    // Privacy pills come first on the right (§7.1).
+    // Presenter mode's pill, then the privacy pills, come first on the
+    // right (§7.1).
+    PresenterPill {
+        id: presenter
+
+        anchors.right: sharing.left
+        anchors.rightMargin: visible ? 4 : 0
+        anchors.verticalCenter: parent.verticalCenter
+    }
+
     SharingPill {
         id: sharing
 
@@ -100,7 +109,7 @@ PanelWindow {
         compact: Title.collapseClocks({
             barWidth: bar.width,
             left: layoutSymbol.x + layoutSymbol.width,
-            right: sharing.x,
+            right: presenter.x,
             gap: 32,
             clocksWidth: clocks.width,
             fullClocksWidth: clocks.fullWidth

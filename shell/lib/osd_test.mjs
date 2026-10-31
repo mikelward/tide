@@ -1,7 +1,7 @@
 // Tests for osd.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SHOWN_MS, snapshot, changed, muteChanged, volumePill, micPill, brightnessPill } from "./osd.mjs";
+import { SHOWN_MS, snapshot, changed, muteChanged, volumePill, micPill, brightnessPill, keepAwakePill, presenterPill, shownOn } from "./osd.mjs";
 
 const speakers = { name: "speakers", ready: true };
 const headset = { name: "headset", ready: true };
@@ -56,4 +56,31 @@ test("the brightness pill shows the backlight's level", () => {
     assert.equal(brightnessPill(140).label, "100%", "clamped");
     assert.equal(brightnessPill(-3).level, 0, "clamped");
     assert.equal(brightnessPill(NaN).label, "0%", "a bad level reads as 0");
+});
+
+test("Super+S's pill says whether keep awake is on now", () => {
+    assert.deepEqual(keepAwakePill({ on: true, asked: true, presenting: false }), { icon: "display-brightness-symbolic", level: null, label: "Keep awake on" });
+    assert.equal(keepAwakePill({ on: false, asked: false, presenting: false }).label, "Keep awake off");
+    assert.equal(keepAwakePill({ on: true, asked: false, presenting: true }).label, "Keep awake on");
+});
+
+test("Super+S's pill says why keep awake stays on when only the mic holds it", () => {
+    assert.equal(keepAwakePill({ on: true, asked: false, presenting: false }).label, "Awake while the mic is live");
+});
+
+test("Super+P's pill says whether presenter mode is on, and when it can't turn on Do not disturb", () => {
+    assert.deepEqual(presenterPill({ presenting: true, dndAvailable: true }), { icon: "x-office-presentation-symbolic", level: null, label: "Presenting" });
+    assert.equal(presenterPill({ presenting: true, dndAvailable: false }).label, "Presenting, keep awake only");
+    assert.equal(presenterPill({ presenting: false, dndAvailable: true }).label, "Presenter mode off");
+    assert.equal(presenterPill({ presenting: false, dndAvailable: false }).label, "Presenter mode off");
+});
+
+test("the OSD shows only on the monitor that had focus when it was shown, while it's up", () => {
+    const pill = micPill({ muted: true });
+    assert.equal(shownOn({ showing: true, pill, monitor: "DP-1" }, "DP-1"), true);
+    assert.equal(shownOn({ showing: true, pill, monitor: "DP-1" }, "eDP-1"), false);
+    // Down, with nothing to draw, or with no monitor focused when shown.
+    assert.equal(shownOn({ showing: false, pill, monitor: "DP-1" }, "DP-1"), false);
+    assert.equal(shownOn({ showing: true, pill: null, monitor: "DP-1" }, "DP-1"), false);
+    assert.equal(shownOn({ showing: true, pill, monitor: "" }, ""), false);
 });

@@ -208,7 +208,7 @@ test("the quick actions are the screenshots, the session, settings, the toggles,
         "screenshot-window", "screenshot-screen", "screenshot-region",
         "lock", "logout", "suspend", "reboot", "poweroff",
         "settings",
-        "dnd", "dark-style", "keep-awake", "clear-clipboard", "reload",
+        "dnd", "dark-style", "keep-awake", "presenter", "clear-clipboard", "reload",
     ]);
     // Every one has something to run.
     for (const q of quickActions({ notifications: true })) {
@@ -227,6 +227,8 @@ test("a quick action shows the key that does the same", () => {
     const hints = byId(quickActions(), "hint");
     assert.equal(hints["screenshot-window"], "Alt+Print");
     assert.equal(hints.lock, "Super+L");
+    assert.equal(hints["keep-awake"], "Super+S");
+    assert.equal(hints.presenter, "Super+P");
     assert.equal(hints.reload, "");
 });
 
@@ -255,6 +257,8 @@ test("the toggles say whether they're on", () => {
     assert.equal(sub({ notifications: true }).dnd, "Off");
     assert.equal(sub({ keepAwake: true })["keep-awake"], "On");
     assert.equal(sub({ keepAwake: true, micHolds: true })["keep-awake"], "On while the mic is live");
+    assert.equal(sub({ presenting: true }).presenter, "On");
+    assert.equal(sub({}).presenter, "Off");
     // Dark style also says until when, unless it's fixed.
     assert.equal(sub({ dark: true, darkUntil: "07:00" })["dark-style"], "On until 07:00");
     assert.equal(sub({ dark: false, darkUntil: "19:00" })["dark-style"], "Off until 19:00");
@@ -288,6 +292,15 @@ test("screenshots wait for the launcher to go, the session runs through logind o
     assert.equal(quickCommand("logout").power, false);
     assert.deepEqual(quickCommand("dnd"), { shell: "dnd" });
     assert.deepEqual(quickCommand("dark-style"), { shell: "dark-style" });
+    assert.deepEqual(quickCommand("presenter"), { shell: "presenter" });
+});
+
+test("presenter mode is found by what it's for, and keep awake and Do not disturb by their own names", () => {
+    for (const query of ["presenter", "presentation", "slides", "projector"]) {
+        assert.equal(search(quickActions({ notifications: true }), query)[0].item.id, "presenter", query);
+    }
+    assert.equal(search(quickActions({ notifications: true }), "keep awake")[0].item.id, "keep-awake");
+    assert.equal(search(quickActions({ notifications: true }), "disturb")[0].item.id, "dnd");
 });
 
 test("a blocked power action asks: anyway, or cancel", () => {
