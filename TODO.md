@@ -456,6 +456,27 @@ once you have agreed with it or reversed it.
       need the backlight, which the greeter user may not be allowed to
       set. The times are two constants in `shell/lib/greeter.mjs`, and a
       dim could be added beside them.
+- [ ] **`Super+Z` minimizes, not `Super+Delete`.** `Super+Delete` is
+  ambiguous with `Super+Backspace`, which closes the window: a Mac
+  keyboard labels Backspace "delete". A mix-up would close what you meant
+  to keep. It's one binding in `conf` and a line in SPEC.md §6.6, §6.7.
+- [ ] **A minimized window lives on `special:minimized:NAME`**, NAME
+  being the workspace it came from (SPEC.md §6.7). Hyprland then holds the
+  state, so a restarted shell needs none. The alternative, one shared
+  special workspace with the shell remembering where each came from, loses
+  that on a restart. A rename with `hyprctl` strands them under the old
+  name, since a special workspace can't be renamed. It's the name the
+  minimize dispatch uses.
+- [ ] **The tray grows with no limit**, one icon per minimized window, and
+  orders them by last use, the latest nearest the corner. A cap with `+n`
+  is the alternative if it ever runs long.
+- [ ] **Icons on the bar stay ringed**, though every icon left is a marked
+  window's, as part of the urgent styling that stays. Dropping the ring
+  is one border in `Workspaces.qml`.
+- [ ] **`minimized.png` and `narrow.png` keep their recorded options.**
+  `minimized.png`'s bars still show every window's icon, since option E
+  needs them; `narrow.png`'s chips lost their icons like the rest, and
+  its title widths didn't change.
 
 ## Transitional shell (M2)
 
@@ -1205,14 +1226,14 @@ or workspace goes there.
   `Super+PgUp`/`PgDn` keep previous/next workspace. Check first whether the
   edge behavior can be built in the Lua layout, and decide what a second
   display shows before anything is on it.
-- **Minimize a window** (SPEC.md §21), not started: a key minimizes the
-  focused window. While any window on the current workspace is
-  minimized, every display shows a bottom bar listing their titles, and
-  clicking one there, or choosing it on the switcher's Windows tab,
-  restores it. Open: which key (`Super+Delete` or `Super+Z`); whether
-  each display's bottom bar lists only its own minimized windows or all of
-  the workspace's; and how, since Hyprland has no real minimize (likely a
-  special workspace per workspace).
+- **Minimize a window** (SPEC.md §6.7), ready to build: option C of
+  `minimized.png`. `Super+Z` moves the focused window to
+  `special:minimized:NAME`; a floating tray in each monitor's
+  bottom-right corner shows an icon per minimized window of the workspace
+  that monitor shows, its title on hover, and a click restores it. The
+  switcher's Windows tab lists them under the workspace they came from,
+  and Enter restores one. Needs the shell's tray and IPC, and `conf`'s
+  `Super+Z`.
 - **Decide what the bar does when named workspaces outgrow its left side**
   (SPEC.md §7.3, §21).
 - **Check home in `conf` on 0.56.2** (mikelward/conf#434): home exists

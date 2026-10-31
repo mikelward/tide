@@ -201,6 +201,7 @@ body.sheet {
   border-radius: 7px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   color: var(--fg);
   position: relative;
