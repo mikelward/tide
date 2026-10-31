@@ -75,6 +75,7 @@ test-fast:
 	sh bin/tide-sysmon_test.sh
 	sh bin/tide-greeter_test.sh
 	sh bin/tide-share-picker_test.sh
+	sh shell/install_test.sh
 	sh shell/integration_test.sh
 	sh .github/workflows/ci_test.sh
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
@@ -127,15 +128,14 @@ install: build install-shell
 	install -d "$(PORTAL_DIR)"
 	install -m 644 xdg-desktop-portal/tide-portals.conf "$(PORTAL_DIR)/"
 
-# The Quickshell config alone, which shell/integration_test.sh loads.
+# The Quickshell config alone, which shell/integration_test.sh loads. Each
+# file goes in by rename, so the running shell's reload never finds one
+# missing (shell/install.sh).
+SHELL_FILES = $(patsubst shell/%,%,$(wildcard shell/*.qml) $(wildcard shell/icons/*.svg) \
+	$(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs)) shell/chars/chars.tsv shell/chars/LICENSE-UNICODE)
 install-shell:
-	install -d "$(SHELL_DIR)/lib"
-	install -m 644 shell/*.qml "$(SHELL_DIR)/"
-	install -d "$(SHELL_DIR)/icons"
-	install -m 644 shell/icons/*.svg "$(SHELL_DIR)/icons/"
-	install -m 644 $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs)) "$(SHELL_DIR)/lib/"
-	install -d "$(SHELL_DIR)/chars"
-	install -m 644 shell/chars/chars.tsv shell/chars/LICENSE-UNICODE "$(SHELL_DIR)/chars/"
+	install -d "$(SHELL_DIR)/lib" "$(SHELL_DIR)/icons" "$(SHELL_DIR)/chars"
+	sh shell/install.sh shell "$(SHELL_DIR)" $(SHELL_FILES)
 
 # Display managers list sessions from wayland-sessions under the system data
 # dirs. Not every one searches /usr/local/share; if the session doesn't show
