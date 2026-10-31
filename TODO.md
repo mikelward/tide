@@ -7,6 +7,38 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **An `inApps` entry shaped like a host is a class and a site both.**
+  SPEC.md §6.5 says an entry is a window class or a site, but
+  `calendar.google.com` and `org.gnome.Calendar` look alike, so every
+  host-shaped entry matches both ways (`workspacenames.mjs`'s
+  `inAppPatterns`): a class pattern no window has costs nothing. The
+  alternative is a way to mark sites (`site:calendar.google.com`, or a URL).
+  Undoing it is that one function and its tests.
+- [ ] **A standing name matches a workspace's ignoring case, preferring an
+  exact match.** The bar puts the standing `re`'s place to a workspace made
+  as `RE`. When both `re` and `Re` exist, `re` takes the place and `Re` is
+  listed with the rest. The alternative is exact matching only. It's
+  `workspaceOrder` in `workspaces.mjs`.
+- [ ] **Numbered workspaces are listed after the named ones, by number.**
+  A second monitor's workspace, or one made with `hyprctl dispatch
+  workspace 3`, has to go somewhere until the multi-display redesign; the
+  end of the bar keeps it from pushing the named ones along. It's
+  `workspaceOrder` too.
+- [ ] **`TIDE_WORKSPACE` is sanitized only in `bin/tide`.** SPEC.md §20 put
+  it in JS, but nothing in the shell needs it, so it's `tr -cd
+  'A-Za-z0-9'` in the C locale, tested in `bin/tide_test.sh`. A JS twin is
+  easy to add if the shell ever needs one.
+- [ ] **A launch that can't read the focused workspace still starts the
+  app**, with an empty `TIDE_WORKSPACE`, a stderr line and a notification.
+  The alternative, refusing to launch, would turn a Hyprland hiccup into
+  a key that does nothing. It's the `focused_workspace` branch of
+  `bin/tide`'s `launch`.
+- [ ] **Home's rename is undone by its ID.** The shell keeps home's ID from
+  Hyprland's list and the create/destroy events, and a rename of that ID
+  to anything else is renamed back. The alternative was the
+  `renameworkspace` event's old name, which Hyprland doesn't send. It's
+  `WorkspacesData.qml`.
+
 - [ ] **The settings files are read and written synchronously.** The Idle,
   Mouse, Touchpad and Keyboard settings' `FileView`s use `blockAllReads` and
   `blockWrites`, so each change re-reads the file and writes it before
