@@ -14,6 +14,7 @@
   .chip { display: flex; flex-direction: column; align-items: flex-start; }
   .chip .bar { border-radius: 9px; padding: 0 6px; }
   .chip .cap { max-width: 190px; }
+  .pill.present { background: var(--accent-bg); color: var(--accent-fg); }
 </style>
 </head>
 <body class="sheet" data-width="1600" data-scale="2">
@@ -114,7 +115,8 @@
   <div class="chip"><div class="bar"><span class="pill share"><i class="ms fill">screen_share</i>Sharing</span><span style="width:4px"></span><span class="pill mic"><i class="ms fill">mic</i></span></div><div class="cap"><b>Screen shared / mic live</b>. The red pill shows while a PipeWire screencast stream has a consumer; during a screen or region share, popups are held until it ends.</div></div>
   <div class="chip"><div class="bar"><span class="sicon" style="color:var(--fg-dim)"><i class="ms fill">volume_off</i>64%</span></div><div class="cap"><b>Muted</b>: the icon changes and the level dims, showing what unmuting brings back.</div></div>
   <div class="chip"><div class="bar"><span class="sicon"><i class="ms">notifications_paused</i></span></div><div class="cap"><b>Do not disturb</b>. The icon changes; held popups go to the history.</div></div>
-  <div class="chip"><div class="bar"><span class="sicon" style="color:var(--accent)"><i class="ms fill">light_mode</i></span></div><div class="cap"><b>Keeping awake</b>: always in the bar, faint while off and lit while on. A click turns it on for 2&nbsp;h, or off.</div></div>
+  <div class="chip"><div class="bar"><span class="sicon" style="color:var(--accent)"><i class="ms fill">light_mode</i></span></div><div class="cap"><b>Keeping awake</b>: always in the bar, faint while off and lit while on. A click or <kbd>Super+S</kbd> turns it on until turned off; a live mic or presenter mode holds it on too.</div></div>
+  <div class="chip"><div class="bar"><span class="pill present"><i class="ms fill">slideshow</i>Presenting</span><span style="width:8px"></span><span class="sicon" style="color:var(--accent)"><i class="ms fill">light_mode</i></span><span class="sicon"><i class="ms">notifications_paused</i></span></div><div class="cap"><b>Presenter mode</b> (<kbd>Super+P</kbd>): Do not disturb and keep awake together, with an accent pill first on the right. A click on the pill, or <kbd>Super+P</kbd>, turns it off and puts each back as it was.</div></div>
   <div class="chip"><div class="bar"><span class="sicon low"><i class="ms fill">battery_1_bar</i>9%</span></div><div class="cap"><b>Battery low</b>: red below 15%, with a critical notification at 7%.</div></div>
   <div class="chip"><div class="bar"><span class="sicon" style="color:var(--warn)"><i class="ms">memory</i>87%</span></div><div class="cap"><b>CPU hot</b>: amber when the CPU is hot or memory is 90% full, red while it throttles. A click shows the top processes, memory and temperature.</div></div>
   <div class="chip"><div class="bar"><span class="sicon dim"><i class="ms">wifi_off</i></span></div><div class="cap"><b>Offline</b>. A VPN adds a small lock to the network icon.</div></div>
