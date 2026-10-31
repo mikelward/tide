@@ -933,6 +933,8 @@ with new keys in **bold**:
 | `Super+Backspace` | close window |
 | **`Super+Z`** | minimize the focused window; its icon goes to the corner tray, and a click there restores it (§6.7) |
 | `Super+L` | lock |
+| **`Super+S`** | toggle keep awake (§10), as the bar's icon does; the OSD says which |
+| **`Super+P`** | toggle presenter mode: Do not disturb and keep awake together (§10) |
 | **`Super+Home`** | go to home (§6.5) |
 | **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
 | `Super+Left` / `Right`, **`Super+PgUp`** / **`PgDn`** | previous / next workspace in the bar's order, stopping at either end (as in KDE and on the Mac; PgUp/PgDn as in GNOME) |
@@ -963,9 +965,15 @@ with new keys in **bold**:
   gone.
   - Hyprland takes a bound key from every app, so `Alt+Tab` no longer
     reaches one, such as a remote desktop or a VM viewer.
+- **`Super+S`** was left unbound for a per-machine `secureshell` launcher.
+  It's keep awake now; `Super+D` stays free for one.
+- **`Super+S`** and **`Super+P`** call the shell
+  (`qs -c tide ipc call keepawake toggle`, `... presenter toggle`).
+  Without the shell, a notification says the key needs it.
 
 Two keys are dropped: `Super+Shift+\` (toggle to BSP) and `Super+P`
-(pseudo-tile). Both exist only for dwindle, which tide doesn't use.
+(pseudo-tile). Both exist only for dwindle, which tide doesn't use, and
+`Super+P` is presenter mode now.
 Rotate master goes too, since the layouts replace it; its `Super+O` is
 monocle now. So do `Super+1…9` and `Super+Shift+1…9`, which went to and
 sent a window to a numbered workspace: named workspaces are reached by
@@ -1065,7 +1073,8 @@ See [`bar.png`](docs/mocks/bar.png).
   belong only to things that pop up (popovers, notifications, the launcher).
 - **Left:** every workspace by name: the standing ones, home first, then
   the rest in the order they were made (§6.5), then the layout symbol.
-- **Right:** privacy pills (screen shared, mic live), third-party tray icons,
+- **Right:** the Presenting pill while presenter mode is on (§10), privacy
+  pills (screen shared, mic live), third-party tray icons,
   then the built-in status icons: keep-awake, Bluetooth, network,
   volume %, battery %, CPU %, notifications, session. The four clocks come
   last.
@@ -1211,10 +1220,11 @@ See [`bar.png`](docs/mocks/bar.png).
 
 | Icon | Shows | Click | Scroll / other |
 |---|---|---|---|
+| **Presenting** (accent) | presenter mode is on (§10) | turns presenter mode off | — |
 | Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen, window or area); stop it from the app | — |
 | Privacy: mic (orange) | any app is capturing the microphone | per-app list with mute | — |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
-| Keep awake | always there: faint while off, in the accent color while on (you asked for it, or the mic is live) | turn on, or off | — |
+| Keep awake | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off | — |
 | Bluetooth | off / on / connected | device list, connect/disconnect; *pair* opens `blueman-manager` | — |
 | Network | Wi-Fi strength / wired / VPN lock / offline | network list, VPNs; *settings* opens `nm-connection-editor` | — |
 | Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5% |
@@ -1372,7 +1382,7 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
   - Screenshot window / screen / region.
   - Lock, log out, suspend, restart, shut down.
   - Settings.
-  - Do not disturb, keep awake, and dark style. Dark style shows whether
+  - Do not disturb, keep awake, presenter mode, and dark style. Dark style shows whether
     it's on and until when, and flips light and dark until the schedule's
     next change (§15).
   - Clear clipboard history (§8.4).
@@ -1621,6 +1631,7 @@ See [`notifications.png`](docs/mocks/notifications.png).
 ### Do not disturb
 
 - **Manual:** from the center, the bell (middle-click), or the launcher.
+- **Presenter mode** (`Super+P`, §10) holds it on along with keep awake.
 - **Automatic while sharing a screen or region:** popups are held and counted
   in the "held while you were sharing" banner.
   - A **window** share holds nothing, since popups aren't in that stream.
@@ -1696,7 +1707,8 @@ those can't quiet it.
 ### Not a notification
 
 - Volume, brightness and mic-mute changes show as an **OSD** drawn by the
-  shell, not as notifications, so they never reach the history.
+  shell, not as notifications, so they never reach the history. So do
+  `Super+S` and `Super+P`, keep awake's and presenter mode's keys (§10).
 - The OSD is a pill at the bottom center of the focused monitor, visible for
   1.2 s.
 - Volume and mute show whatever changed them. Brightness shows only when
@@ -1827,6 +1839,42 @@ one of them:
   never left on by accident across a login.
 - It also switches on automatically **while the microphone is live**, so an
   audio-only call with no video on screen doesn't blank.
+- **`Super+S`** toggles it as a click on the bar's icon does. The OSD (§9)
+  then says "Keep awake on" or "Keep awake off". When only a live mic
+  still holds it, it says "Awake while the mic is live", since the key
+  can't turn that off.
+
+**Presenter mode** is Do not disturb (§9) and keep awake together, for a
+talk, a demo, or a meeting room's screen.
+
+- **Turning it on:** `Super+P`, or the launcher's quick action. Do not
+  disturb and keep awake both go on, whatever they were.
+- **Showing it:** the bar's accent **Presenting** pill, on every monitor
+  (§7.4). The bell and the keep-awake icon show on, as usual. `Super+P`
+  shows the OSD: "Presenting", or "Presenter mode off".
+- **Turning it off:** `Super+P` again, the launcher, or a click on the
+  pill. Each of the two goes back to its own state from just before
+  presenter mode came on. Do not disturb you'd already turned on stays
+  on; keep awake you hadn't asked for goes off.
+- **How it keeps them.** It doesn't change the two toggles. It holds both
+  on over them, as a live mic holds keep awake, and what's in effect is
+  either. So turning it off is putting nothing back.
+- **Either toggle while presenting.** Both read on, so any toggle of one
+  turns it off: the bell's middle-click, the center's tile, the
+  keep-awake icon, `Super+S`, the launcher. That ends presenter mode. The
+  one you turned off goes off, and the other stays on, as if you'd turned
+  it on yourself.
+- **A live mic** still holds keep awake, during presenter mode and after
+  it, as above.
+- **A screen share** holds popups on its own, whatever presenter mode
+  says (§9). A window share holds nothing, so presenting with one wants
+  presenter mode.
+- **Without the shell as the notification server** (`TIDE_NOTIFICATIONS`
+  until swaync retires, §9) there's no Do not disturb to hold. Presenter
+  mode holds keep awake alone, and the OSD says "Presenting, keep awake
+  only".
+- **Lifetime:** like keep awake. It survives a config reload, and a new
+  shell starts with it off, so it's never left on across a login.
 
 **Lock.**
 
