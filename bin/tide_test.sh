@@ -18,6 +18,7 @@ check() {
     if "$@"; then pass; else fail "$_name"; fi
 }
 contains() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
+not_contains() { ! contains "$@"; }
 
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
@@ -35,14 +36,32 @@ sleep "${FAKE_SYSTEMCTL_SLEEP:-0}"
 test "${FAKE_SYSTEMCTL_STATUS:-0}" -eq 0 || echo "Job failed" >&2
 exit "${FAKE_SYSTEMCTL_STATUS:-0}"
 FAKE
+# `hyprctl -j activeworkspace` answers $FAKE_WORKSPACE, as Hyprland prints
+# a workspace, exiting $FAKE_WORKSPACE_STATUS.
 cat > "$fake/hyprctl" <<'FAKE'
 #!/bin/sh
 printf "hyprctl %s\n" "$*" >> "$FAKE_LOG"
+if test "$*" = "-j activeworkspace"; then
+    printf '%s\n' "${FAKE_WORKSPACE-{
+    \"id\": -1339,
+    \"name\": \"PR-12 login\",
+    \"monitor\": \"eDP-1\",
+    \"monitorID\": 0,
+    \"windows\": 1,
+    \"hasfullscreen\": false,
+    \"lastwindow\": \"0x55aa01\",
+    \"lastwindowtitle\": \"name: \\\"x\\\"\",
+    \"ispersistent\": false
+}}"
+    exit "${FAKE_WORKSPACE_STATUS:-0}"
+fi
 echo "${FAKE_HYPRCTL_REPLY:-ok}"
 FAKE
+# uwsm also records the TIDE_WORKSPACE it's given, in $FAKE_LOG.env.
 cat > "$fake/uwsm" <<'FAKE'
 #!/bin/sh
 printf "uwsm %s\n" "$*" >> "$FAKE_LOG"
+printf '%s\n' "${TIDE_WORKSPACE-unset}" > "$FAKE_LOG.env"
 while test "$1" != --; do shift; done
 shift
 exec "$@"
@@ -50,6 +69,10 @@ FAKE
 cat > "$fake/app" <<'FAKE'
 #!/bin/sh
 printf "app %s\n" "$*" >> "$FAKE_LOG"
+FAKE
+cat > "$fake/notify-send" <<'FAKE'
+#!/bin/sh
+printf "notify-send %s\n" "$*" >> "$FAKE_LOG"
 FAKE
 chmod +x "$fake"/*
 # tide-grant answers --program with $FAKE_PROGRAM, else the command's first
@@ -81,7 +104,7 @@ run() {
     env PATH="$fake:$PATH" FAKE_LOG="$log" XDG_CURRENT_DESKTOP=tide:Hyprland \
         XDG_DATA_HOME="$tmp/home-data" XDG_DATA_DIRS="$tmp/sys-data" \
         XDG_CONFIG_HOME="$tmp/run-config" \
-        "$@" 2> "$tmp/err"
+        "$@" > "$tmp/out" 2> "$tmp/err"
 }
 
 run "$qs" launch app one two
@@ -93,7 +116,9 @@ check "launch grants focus to the command's basename" \
 check "launch runs the app through uwsm app" contains "$out" "uwsm app -- app one two"
 check "the app gets its arguments" contains "$out" "app one two"
 check "the grant, then its desktop-entry lookup, then the wait, then the app" \
-    test "$(sed -n 's/ .*//p' "$log" | tr '\n' ' ')" = "hyprctl tide-grant systemctl uwsm app "
+    test "$(sed -n 's/ .*//p' "$log" | tr '\n' ' ')" = "hyprctl tide-grant hyprctl systemctl uwsm app "
+check "the app gets the focused workspace's name, sanitized, as TIDE_WORKSPACE" \
+    test "$(cat "$log.env")" = PR12login
 check "a clean launch says nothing" test ! -s "$tmp/err"
 
 run "$qs" launch --app org.gnome.Nautilus -- "$fake/app" .
@@ -104,6 +129,48 @@ check "--app=ID works too" contains "$(cat "$log")" 'tide_focus.grant("kitty")'
 run "$qs" launch --app org.example.Editor --app=example-editor -- "$fake/app"
 check "repeated --app grants a list any of them can use" \
     contains "$(cat "$log")" 'tide_focus.grant({ "org.example.Editor", "example-editor" })'
+run "$qs" launch --workspace 'PR-12 "x" \y' app one
+check "--workspace asks the guard to take the window to that workspace, quoted for Lua" \
+    contains "$(cat "$log")" ', { workspace = "PR-12 \"x\" \\y" })'
+check "and sets TIDE_WORKSPACE from it, not the focused workspace" test "$(cat "$log.env")" = PR12xy
+check "and doesn't read the focused workspace" not_contains "$(cat "$log")" "activeworkspace"
+run "$qs" launch --workspace=docs --app kitty -- app
+check "--workspace=NAME works too, with --app" \
+    contains "$(cat "$log")" 'tide_focus.grant("kitty", nil, nil, { workspace = "docs" })'
+run "$qs" launch --workspace '¿—?' app
+check "a name with no ASCII letters or digits gives an empty TIDE_WORKSPACE" test "$(cat "$log.env")" = ""
+run "$qs" launch --workspace '  ' app
+check "a blank --workspace is refused" test $? -eq 2
+check "and starts nothing" test ! -s "$log"
+run "$qs" launch --workspace "$(printf 'a\nb')" app
+check "a --workspace of two lines is refused" test $? -eq 2
+check "and says why" contains "$(cat "$tmp/err")" "--workspace takes a workspace's name, one line of text"
+run "$qs" launch --workspace a --new-workspace app
+check "--workspace with --new-workspace is refused" test $? -eq 2
+run "$qs" launch --workspace
+check "--workspace with no name is refused" test $? -eq 2
+run FAKE_WORKSPACE_STATUS=1 FAKE_WORKSPACE='no instance' "$qs" launch app
+check "a focused workspace that can't be read still launches" contains "$(cat "$log")" "uwsm app -- app"
+check "with an empty TIDE_WORKSPACE" test "$(cat "$log.env")" = ""
+check "and says why" contains "$(cat "$tmp/err")" "couldn't read the focused workspace: no instance"
+check "and says so in a notification too" contains "$(cat "$log")" "notify-send -a tide TIDE_WORKSPACE not set"
+run FAKE_WORKSPACE='{}' "$qs" launch app
+check "a reply naming no workspace is reported" contains "$(cat "$tmp/err")" "couldn't read the focused workspace's name from: {}"
+
+run "$qs" workspace
+check "tide workspace prints the focused workspace's name, sanitized" test "$(cat "$tmp/out")" = PR12login
+run FAKE_WORKSPACE='{
+    "id": -1338,
+    "name": "in",
+    "monitor": "eDP-1"
+}' "$qs" workspace
+check "and home's" test "$(cat "$tmp/out")" = in
+run FAKE_WORKSPACE_STATUS=1 FAKE_WORKSPACE='oops' "$qs" workspace
+check "tide workspace fails when it can't ask" test $? -eq 1
+check "and says why" contains "$(cat "$tmp/err")" "tide workspace: couldn't read the focused workspace: oops"
+run "$qs" workspace extra
+check "tide workspace takes no arguments" test $? -eq 2
+
 run "$qs" launch --new-workspace app one
 check "--new-workspace asks the guard for an empty workspace" \
     contains "$(cat "$log")" ', { new_workspace = true })'

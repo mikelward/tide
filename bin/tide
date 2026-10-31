@@ -2,7 +2,7 @@
 #
 # tide: the session's command-line helpers.
 #
-#   tide launch [--new-workspace] [--app ID]... [--] COMMAND [ARG...]
+#   tide launch [--workspace NAME | --new-workspace] [--app ID]... [--] COMMAND [ARG...]
 #
 #     Starts an app the way the key bindings and the launcher do
 #     (SPEC.md §5.4, §14.3):
@@ -25,11 +25,24 @@
 #          because a terminal is how you'd fix a stuck start;
 #       3. runs it with `uwsm app`, in app-graphical.slice, so the app
 #          outlives a shell restart.
-#     --new-workspace asks for the app's first window on an empty workspace:
-#     the guard takes it there as it opens, and focus follows (the
-#     launcher's Ctrl+Enter). If you move on first, the grant is canceled
-#     and the window opens where you are, unfocused, like any other.
+#     --workspace NAME asks for the app's first window on the workspace
+#     named NAME, made if it's new (SPEC.md §6.5): the guard takes it there
+#     as it opens, and focus follows (the name prompt). If you move on
+#     first, the grant is canceled and the window opens where you are,
+#     unfocused, like any other. --new-workspace asks for an empty
+#     numbered workspace the same way, until the launcher's Ctrl+Enter
+#     names one instead.
+#     The app gets TIDE_WORKSPACE (§6.5): NAME, or else the focused
+#     workspace's name, with only its ASCII letters and digits kept, so a
+#     shpool or tmux session can be named after it. If the focused
+#     workspace can't be read, it's empty, and the launch says why.
 #     Outside a tide session it just runs COMMAND.
+#
+#   tide workspace
+#
+#     Prints the focused workspace's name as TIDE_WORKSPACE holds it, for
+#     a script that wants the workspace it's on now rather than the one it
+#     started on (SPEC.md §6.5). Exits 1, saying why, if it can't be read.
 #
 #   tide grant ID...
 #
@@ -113,9 +126,12 @@
 #     its fix (SPEC.md §5.4); see tide-doctor.
 
 prog=${0##*/}
+nl='
+'
 
 usage() {
-    echo "usage: $prog launch [--new-workspace] [--app ID]... [--] COMMAND [ARG...]" >&2
+    echo "usage: $prog launch [--workspace NAME | --new-workspace] [--app ID]... [--] COMMAND [ARG...]" >&2
+    echo "       $prog workspace" >&2
     echo "       $prog grant ID..." >&2
     echo "       $prog focus ID..." >&2
     echo "       $prog autostart-allowed UNIT" >&2
@@ -281,6 +297,42 @@ opener_classes() {
     esac
 }
 
+# A workspace's name as TIDE_WORKSPACE holds it (SPEC.md §6.5): only its
+# ASCII letters and digits, so `PR-12 login` is PR12login. In the C locale,
+# so every byte of any other character goes.
+sanitized() {
+    printf '%s' "$1" | LC_ALL=C tr -cd 'A-Za-z0-9'
+}
+
+# The focused workspace's name, from `hyprctl -j activeworkspace`, or 1,
+# having said why, when it can't be read; $1 names the subcommand for the
+# message. Hyprland prints each field on a line of its own, escaping only
+# `"`, `\` and control characters, which a name (one line) has none of
+# and sanitized drops anyway.
+focused_workspace() {
+    if ! command -v hyprctl >/dev/null 2>&1; then
+        echo "$prog $1: no hyprctl, so couldn't read the focused workspace" >&2
+        return 1
+    fi
+    if ! out=$(hyprctl -j activeworkspace 2>&1); then
+        echo "$prog $1: couldn't read the focused workspace: $out" >&2
+        return 1
+    fi
+    name=$(printf '%s\n' "$out" | sed -n 's/^[[:space:]]*"name":[[:space:]]*"\(.*\)",\{0,1\}[[:space:]]*$/\1/p' | head -n 1)
+    if test -z "$name"; then
+        echo "$prog $1: couldn't read the focused workspace's name from: $out" >&2
+        return 1
+    fi
+    printf '%s\n' "$name"
+}
+
+workspace() {
+    test $# -eq 0 || usage
+    name=$(focused_workspace workspace) || exit 1
+    sanitized "$name"
+    echo
+}
+
 # Adds ID to the grant's list, unless it's empty or already there in any
 # case (the guard compares IDs without case).
 add_app() {
@@ -313,9 +365,39 @@ launch() {
     seen_ids='|'
     # The grant's options, as Lua, after its pid and key.
     opts=
+    # The workspace --workspace names, or empty.
+    ws=
     while test $# -gt 0; do
         case "$1" in
-            --new-workspace) opts=', { new_workspace = true }'; shift ;;
+            --new-workspace)
+                test -z "$ws" || usage
+                opts=', { new_workspace = true }'
+                shift
+                ;;
+            --workspace | --workspace=*)
+                if test "$1" = --workspace; then
+                    test $# -ge 2 || usage
+                    ws=$2
+                    shift 2
+                else
+                    ws=${1#--workspace=}
+                    shift
+                fi
+                test -z "$opts" || usage
+                # One line, with something on it: the name prompt's names
+                # are, and Hyprland's dispatches can't carry another.
+                case "$ws" in
+                    *"$nl"* | '')
+                        echo "$prog launch: --workspace takes a workspace's name, one line of text" >&2
+                        exit 2
+                        ;;
+                esac
+                if test -z "$(printf '%s' "$ws" | tr -d '[:space:]')"; then
+                    echo "$prog launch: --workspace takes a workspace's name, one line of text" >&2
+                    exit 2
+                fi
+                opts=", { workspace = $(lua_string "$ws") }"
+                ;;
             --app | --app=*)
                 if test "$1" = --app; then
                     test $# -ge 2 || usage
@@ -406,6 +488,24 @@ EOF2
             grant "$app (adding $names)" launch extend "add classes to the focus grant" "$(lua_string "$app"), { $apps }, nil, $$"
         fi
     fi
+    # uwsm app keeps the caller's environment: it starts a scope with
+    # systemd-run --scope, which runs the command here (SPEC.md §6.5).
+    if test -n "$ws"; then
+        TIDE_WORKSPACE=$(sanitized "$ws")
+    elif name=$(focused_workspace launch); then
+        TIDE_WORKSPACE=$(sanitized "$name")
+    else
+        echo "$prog launch: starting ${app:-$1} with an empty TIDE_WORKSPACE" >&2
+        TIDE_WORKSPACE=
+        # A key binding's stderr goes only to the journal, so say it where
+        # it's seen too. The launch goes on either way.
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send -a tide "TIDE_WORKSPACE not set" \
+                "Couldn't read the focused workspace, so ${app:-$1}'s shell sessions won't be named after it. tide doctor may say why." ||
+                echo "$prog launch: couldn't send the notification about TIDE_WORKSPACE either" >&2
+        fi
+    fi
+    export TIDE_WORKSPACE
     wait_for_shell "$app"
     exec uwsm app -- "$@"
 }
@@ -662,6 +762,7 @@ prompt_focus() {
 
 case "${1:-}" in
     launch) shift; launch "$@" ;;
+    workspace) shift; workspace "$@" ;;
     grant) shift; grant_only "$@" ;;
     focus) shift; focus_app "$@" ;;
     autostart-allowed) shift; autostart_allowed "$@" ;;

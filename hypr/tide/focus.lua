@@ -38,8 +38,9 @@
 -- `tide launch` can record a grant with
 -- `hyprctl eval 'tide_focus.grant("APP")'` (or a list of the classes the
 -- app's window may have, `tide_focus.grant({ "APP", "OTHER" })`; options
--- after the pid and key, `{ new_workspace = true }` for a launch on an
--- empty workspace), and a
+-- after the pid and key, `{ workspace = "NAME" }` for a launch on the
+-- workspace of that name, or `{ new_workspace = true }` for one on an empty
+-- numbered workspace), and a
 -- notification click `tide_focus.grant_or_recent("APP")`.
 --
 -- Known gaps, from SPEC.md §14.3: Lua sees key presses but not pointer
@@ -293,13 +294,17 @@ local function focus(w)
     focus_address(address)
 end
 
--- Focuses a new window and takes it to an empty workspace on its monitor,
--- following it there: a launch asked for on a new workspace (Ctrl+Enter in
--- the launcher). It happens as the window opens, not before the app
+-- Focuses a new window and takes it to another workspace, following it
+-- there: a launch asked for on a named workspace (the name prompt) or a new
+-- one (Ctrl+Enter in the launcher). It happens as the window opens, not before the app
 -- starts, so nothing you do in between is overridden: a key press or focus
 -- change cancels the grant, and the window then opens where you are,
 -- unfocused, like any other. Both dispatches are the guard's own focusing.
-local function focus_on_new_workspace(w)
+-- `workspace` is Hyprland's selector for where it goes: "emptym" for an
+-- empty numbered one, or "name:NAME" for the workspace named NAME, which
+-- Hyprland makes if none has that name (`tide launch --workspace`, from
+-- the name prompt, SPEC.md §6.5).
+local function focus_on_workspace(w, workspace)
     local address = field(w, "address")
     if not address then
         return
@@ -307,7 +312,7 @@ local function focus_on_new_workspace(w)
     focusing = true
     local ok, err = pcall(function()
         hl.dispatch(hl.dsp.focus({ window = "address:" .. address }))
-        hl.dispatch(hl.dsp.window.move({ workspace = "emptym", follow = true }))
+        hl.dispatch(hl.dsp.window.move({ workspace = workspace, follow = true }))
     end)
     focusing = false
     if not ok then
@@ -459,8 +464,10 @@ function M.on_open(w)
     -- Grants first, so one is used up even when the window is from the app
     -- you are in (a second terminal from a terminal, or a script's window).
     local g = take_grant(w) or take_grant_by_ancestry(w)
-    if g and g.new_workspace then
-        focus_on_new_workspace(w)
+    if g and g.workspace then
+        focus_on_workspace(w, "name:" .. g.workspace)
+    elseif g and g.new_workspace then
+        focus_on_workspace(w, "emptym")
     elseif g then
         focus(w)
     elseif same_app_as_active(w) or portal_dialog_for_active(w) or prompt_you_asked_for(w) then
@@ -650,9 +657,11 @@ end
 -- window of any of them uses the one grant. "*" stands alone, since a
 -- wildcard beside names would make the names meaningless.
 --
--- opts, if given, is { new_workspace = true } for a launch on a new
--- workspace: the window that uses the grant goes to an empty workspace on
--- its monitor, and focus follows it (`tide launch --new-workspace`).
+-- opts, if given, is { workspace = "NAME" } for a launch on a named
+-- workspace: the window that uses the grant goes to the workspace named
+-- NAME, made if it's new, and focus follows it (`tide launch --workspace`).
+-- { new_workspace = true } does the same with an empty numbered workspace
+-- on its monitor (`tide launch --new-workspace`).
 function M.grant(app, pid, key, opts)
     if pid ~= nil and (math.type(pid) ~= "integer" or pid <= 1) then
         error("tide_focus.grant: expected a process id, got " .. tostring(pid), 2)
@@ -660,17 +669,31 @@ function M.grant(app, pid, key, opts)
     if key ~= nil and (math.type(key) ~= "integer" or key <= 0) then
         error("tide_focus.grant: expected a positive integer key, got " .. tostring(key), 2)
     end
-    local new_workspace = false
+    local new_workspace, workspace = false, nil
     if opts ~= nil then
         if type(opts) ~= "table" then
             error("tide_focus.grant: expected an options table, got " .. tostring(opts), 2)
         end
         for k, v in pairs(opts) do
-            if k ~= "new_workspace" or type(v) ~= "boolean" then
-                error("tide_focus.grant: " .. tostring(k) .. " is not an option (new_workspace takes true or false)", 2)
+            if k == "new_workspace" then
+                if type(v) ~= "boolean" then
+                    error("tide_focus.grant: new_workspace takes true or false", 2)
+                end
+            elseif k == "workspace" then
+                -- One line with something on it: a name Hyprland's selector
+                -- can carry.
+                if type(v) ~= "string" or not v:find("%S") or v:find("[\r\n]") then
+                    error("tide_focus.grant: workspace takes a workspace's name, got " .. tostring(v), 2)
+                end
+            else
+                error("tide_focus.grant: " .. tostring(k) .. " is not an option (workspace or new_workspace)", 2)
             end
         end
+        if opts.workspace and opts.new_workspace then
+            error("tide_focus.grant: workspace and new_workspace can't both be given", 2)
+        end
         new_workspace = opts.new_workspace == true
+        workspace = opts.workspace
     end
     local apps = {}
     if type(app) == "table" then
@@ -703,6 +726,7 @@ function M.grant(app, pid, key, opts)
         pid = pid,
         key = key,
         new_workspace = new_workspace,
+        workspace = workspace,
         live = true,
     })
 end
