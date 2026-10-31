@@ -61,6 +61,19 @@ test("neighbors split the gap between them, leaving none dead", () => {
     }
 });
 
+test("the first span on the left reaches back to the bar's edge", () => {
+    // The wave logo, then the workspaces: the logo's target starts at the
+    // bar's left edge, so a click in the corner opens the launcher.
+    const r = chainReaches([
+        { left: 10, right: 26, shown: true },
+        { left: 34, right: 200, shown: true },
+    ], { start: 0 });
+    assert.deepEqual(r, [
+        { left: 10, right: 4 },
+        { left: 4, right: PAD },
+    ]);
+});
+
 test("a hidden span is skipped, so its neighbors share the gap across it", () => {
     const r = chainReaches([
         { left: 100, right: 130, shown: true },

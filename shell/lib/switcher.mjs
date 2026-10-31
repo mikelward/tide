@@ -67,6 +67,22 @@ export function toggled(visible, tab, wanted) {
     return visible && tab === wanted ? { visible: false, tab } : { visible: true, tab: wanted };
 }
 
+// After a tap on the bar's wave logo (SPEC.md §7.1), with the switcher
+// `visible` on `tab`, and open on another monitor than the logo's if
+// `elsewhere`. Shut, it opens on Apps. Open on the logo's monitor, it
+// closes, on any tab: its backdrop covers that monitor's bar, so the tap is
+// the backdrop's, which closes it. Open elsewhere, it's `move`d to the
+// logo's monitor, on Apps.
+export function logoTapped(visible, tab, elsewhere) {
+    if (!visible) {
+        return { visible: true, tab: "apps", move: false };
+    }
+    if (elsewhere) {
+        return { visible: true, tab: "apps", move: true };
+    }
+    return { visible: false, tab, move: false };
+}
+
 // Rows in the order `query` matches them best, ties keeping `rows`' order;
 // all of them, as they are, for an empty query. `fields(row)` gives the
 // texts to match, the first being the one whose letters are underlined.

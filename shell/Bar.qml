@@ -36,15 +36,43 @@ PanelWindow {
     implicitHeight: Theme.barHeight
     color: Theme.barBg
 
+    // How far the wave logo and the workspaces reach past their ends: the
+    // logo out to the bar's left edge, and the gap between them split.
+    readonly property var leftReaches: Click.chainReaches([logo, workspaces].map(item => ({
+        left: item.x,
+        right: item.x + item.width,
+        shown: item.visible
+    })), { start: 0 })
+
+    // tide's logo, two waves, first on the left (§7.1): a tap opens the
+    // launcher on this monitor, or closes it.
+    SymbolicIcon {
+        id: logo
+
+        anchors.left: parent.left
+        anchors.leftMargin: 12
+        anchors.verticalCenter: parent.verticalCenter
+        file: "tide-symbolic.svg"
+        color: Theme.accent
+
+        BarHit {
+            reach: bar.leftReaches[0]
+
+            TapHandler {
+                onTapped: LauncherData.toggle(bar.screen)
+            }
+        }
+    }
+
     Workspaces {
         id: workspaces
 
-        anchors.left: parent.left
-        anchors.leftMargin: 5
+        anchors.left: logo.right
+        anchors.leftMargin: 8
         anchors.verticalCenter: parent.verticalCenter
         monitorName: bar.monitor?.name ?? ""
-        // Out to the bar's left edge; the layout symbol isn't a target.
-        reach: ({ left: workspaces.x, right: Click.PAD })
+        // The layout symbol after it isn't a target.
+        reach: bar.leftReaches[1]
     }
 
     LayoutSymbol {

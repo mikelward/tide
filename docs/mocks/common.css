@@ -192,6 +192,10 @@ body.sheet {
   text-overflow: ellipsis;
 }
 .bar-left { gap: 3px; }
+/* tide's wave logo, first on the left: 12px from the edge, 8px to the
+   workspaces (shell/Bar.qml), in the accent blue. */
+.bar .logo { display: inline-flex; width: 16px; height: 16px; margin: 0 5px 0 7px; color: var(--accent); }
+.bar .logo svg { width: 16px; height: 16px; }
 .bar-right { gap: 2px; }
 
 .ws {

@@ -40,9 +40,10 @@ export function closesOnPress(open, onOpener) {
 // The bar's top-level clickable spans, left to right, as {left, right,
 // shown} in bar coordinates, to how far each reaches past its ends:
 // [{left, right}]. Neighbors split the gap between them, so no gap is
-// dead; an end with no neighbor reaches `pad`, the last one to `end`
-// (the bar's right edge) if that's given.
-export function chainReaches(spans, { pad = PAD, end = null } = {}) {
+// dead; an end with no neighbor reaches `pad`, the first one back to
+// `start` (the bar's left edge) and the last one to `end` (its right edge)
+// if they're given.
+export function chainReaches(spans, { pad = PAD, start = null, end = null } = {}) {
     const shown = spans.map((s) => s.shown && s.right > s.left);
     return spans.map((s, i) => {
         if (!shown[i]) {
@@ -62,7 +63,8 @@ export function chainReaches(spans, { pad = PAD, end = null } = {}) {
                 break;
             }
         }
-        const left = prev >= 0 ? Math.max(0, s.left - spans[prev].right) / 2 : pad;
+        const left = prev >= 0 ? Math.max(0, s.left - spans[prev].right) / 2
+            : start !== null ? Math.max(0, s.left - start) : pad;
         const right = next >= 0 ? Math.max(0, spans[next].left - s.right) / 2
             : end !== null ? Math.max(0, end - s.right) : pad;
         return { left, right };
