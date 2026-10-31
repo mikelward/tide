@@ -16,9 +16,19 @@
 # new to the directory go first, so one that a changed file uses is there
 # before that file changes.
 #
+# Each reload still loads whatever is in by then, and Quickshell reloads
+# at each file's change, so a reload between two files that change
+# together, such as Bar.qml setting a property Workspaces.qml has just
+# gained, failed to load. And when another file went in during that failed
+# reload, Quickshell missed its change, so the shell stayed broken. So a
+# shell running from TO is first told to stop watching its files (`qs ipc
+# call install hold`), and once every file is in, to reload them once
+# (`install reload`, shell.qml). A shell too old to answer reloads as before.
+#
 # Usage: install.sh FROM TO FILE...
 # Each FILE, a path under FROM, goes to the same path under TO, whose
 # directories must exist. Stops at the first file it can't install.
+# $TIDE_QS is the qs to ask (default: qs).
 
 if test "$#" -lt 2; then
     echo "usage: install.sh FROM TO FILE..." >&2
@@ -27,6 +37,28 @@ fi
 from=$1
 to=$2
 shift 2
+qs=${TIDE_QS:-qs}
+
+# Holds a shell running from TO, if there is one that answers, and releases
+# it on exit, whether every file went in or not, so it never stays deaf to
+# its files. Any display's, so an install over SSH holds it too.
+held=0
+release() {
+    if test "$held" -eq 1; then
+        held=0
+        if ! "$qs" ipc -p "$to" --any-display call install reload >/dev/null; then
+            echo "install.sh: couldn't tell the shell running from $to to reload; restart it to load what's installed" >&2
+        fi
+    fi
+}
+if test -e "$to/shell.qml" && command -v "$qs" >/dev/null 2>&1 &&
+    "$qs" ipc -p "$to" --any-display call install hold >/dev/null 2>&1; then
+    held=1
+    trap release EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    trap 'exit 129' HUP
+fi
 
 # Copies FILE to its hidden name beside its place, then renames it in.
 put() {

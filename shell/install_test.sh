@@ -103,6 +103,51 @@ check "and names the file" contains "$(cat "$tmp/err")" "$src/Missing.qml"
 check "and installs nothing after it" test ! -e "$dest/ShareData.qml"
 check "and leaves no hidden copy" test -z "$(find "$dest" -name '.*.tide-new')"
 
+# A shell running from the directory is held before the first file goes
+# in and told to reload once, after the last. A stand-in qs records each
+# call, with which files were in then.
+qslog=$tmp/qs.log
+cat > "$tmp/qs" <<EOF
+#!/bin/sh
+echo "\$* bar=\$(cat "\$3/Bar.qml" 2>/dev/null) share=\$(cat "\$3/ShareData.qml" 2>/dev/null)" >> "$qslog"
+test -z "\$QS_FAIL"
+EOF
+chmod +x "$tmp/qs"
+dest=$tmp/running
+mkdir -p "$dest/lib"
+echo 'shell' > "$dest/shell.qml"
+echo 'bar v1' > "$dest/Bar.qml"
+echo 'share v1' > "$dest/ShareData.qml"
+: > "$qslog"
+TIDE_QS=$tmp/qs sh "$script" "$src" "$dest" Bar.qml ShareData.qml; code=$?
+check "an install over a running shell exits 0" test "$code" -eq 0
+want="ipc -p $dest --any-display call install hold bar=bar v1 share=share v1
+ipc -p $dest --any-display call install reload bar=bar v2 share=share v2"
+check "holds the shell before any file and reloads it after all" test "$(cat "$qslog")" = "$want"
+test "$(cat "$qslog")" = "$want" || cat "$qslog" >&2
+
+# A failed install still tells it to reload, so it isn't left deaf to its
+# files.
+: > "$qslog"
+TIDE_QS=$tmp/qs sh "$script" "$src" "$dest" Missing.qml 2>/dev/null; code=$?
+check "a failed install over a running shell fails" test "$code" -eq 1
+check "and still reloads it" contains "$(cat "$qslog")" "call install reload"
+
+# A shell that doesn't answer (none running, or one too old to know
+# install) isn't told to reload.
+: > "$qslog"
+QS_FAIL=1 TIDE_QS=$tmp/qs sh "$script" "$src" "$dest" Bar.qml; code=$?
+check "an install with no shell to hold exits 0" test "$code" -eq 0
+check "and asks it only to hold" test "$(grep -c 'call install' "$qslog")" -eq 1
+
+# A directory with no shell.qml has no shell to hold.
+dest=$tmp/fresh
+mkdir -p "$dest/lib"
+: > "$qslog"
+TIDE_QS=$tmp/qs sh "$script" "$src" "$dest" Bar.qml; code=$?
+check "an install into a new directory exits 0" test "$code" -eq 0
+check "and asks no shell anything" test ! -s "$qslog"
+
 sh "$script" "$src" 2>/dev/null; code=$?
 check "too few arguments is a usage error" test "$code" -eq 2
 
