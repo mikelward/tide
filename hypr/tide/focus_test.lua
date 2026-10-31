@@ -1032,6 +1032,59 @@ test("focus_recent takes several apps", function()
     eq(is_focus(S.dispatched[1], work), true, "the one focused last")
 end)
 
+-- A minimized window (SPEC.md §6.7) sits on special:minimized:NAME.
+local function minimized(w, from)
+    w.workspace = { id = -97, name = "special:minimized:" .. from }
+    return w
+end
+
+-- The restore: focus the window, then move it back to `from`, following it.
+local function restored(d, w, from)
+    eq(#d, 2, "dispatches")
+    eq(is_focus(d[1], w), true, "focused first")
+    eq(d[2].dsp, "move", "then moved")
+    eq(d[2].args.workspace, "name:" .. from, "back to the workspace it came from")
+    eq(d[2].args.follow, true, "and focus follows")
+end
+
+test("a past notification's click restores a minimized window rather than showing the minimize workspace", function()
+    local m = load()
+    local chat = minimized(history(window("org.example.Chat"), 1), "re")
+    S.windows = { chat, history(window("kitty"), 0) }
+    S.dispatched = {}
+    m.focus_recent("chat")
+    restored(S.dispatched, chat, "re")
+end)
+
+test("a notification's grant running out restores a minimized window", function()
+    local m = load()
+    local chat = minimized(history(window("org.example.Chat"), 1), "PR-12, login")
+    S.windows = { chat }
+    m.grant_or_recent("org.example.Chat")
+    S.dispatched = {}
+    S.timers[1].fn()
+    restored(S.dispatched, chat, "PR-12, login")
+end)
+
+test("an app's activation with a grant restores its minimized window", function()
+    local m = load()
+    local chat = minimized(history(window("org.example.Chat"), 1), "re")
+    S.windows = { chat }
+    m.grant_or_recent("org.example.Chat")
+    restored(fire("window.urgent", chat), chat, "re")
+end)
+
+test("a window on another special workspace is only focused", function()
+    local m = load()
+    local w = history(window("org.example.Chat"), 1)
+    w.workspace = { id = -98, name = "special:scratch" }
+    S.windows = { w }
+    S.dispatched = {}
+    m.focus_recent("chat")
+    eq(#S.dispatched, 1, "one dispatch")
+    eq(is_focus(S.dispatched[1], w), true, "focused where it is")
+end)
+
 test("grant_seconds sets how long a notification's grant waits", function()
     local m = load({ grant_seconds = 4 })
     m.grant_or_recent("kitty")
