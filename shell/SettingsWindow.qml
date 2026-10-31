@@ -16,6 +16,7 @@ import "lib/outputs.mjs" as Outputs
 import "lib/power.mjs" as Power
 import "lib/settings.mjs" as Settings
 import "lib/status.mjs" as Status
+import "lib/workspacepage.mjs" as WsPage
 
 // The settings panel (SPEC.md §16), centered on the focused monitor over a
 // dimmed backdrop, as the launcher is: the pages down the side, the one
@@ -258,6 +259,19 @@ PanelWindow {
         // or "".
         function setPower(key: string, value: string): string {
             return PowerData.set(key, value);
+        }
+        // Adds, moves (a step later) or takes out an entry of one of the
+        // Workspaces page's lists, standing, inApps or namePatterns, as it
+        // does: `qs -c tide ipc call settings addWorkspaceItem standing
+        // docs`. Each answers why not, or "".
+        function addWorkspaceItem(key: string, item: string): string {
+            return WorkspacesData.addItem(key, item);
+        }
+        function moveWorkspaceItem(key: string, item: string, step: int): string {
+            return WorkspacesData.moveItem(key, undefined, item, step);
+        }
+        function removeWorkspaceItem(key: string, item: string): string {
+            return WorkspacesData.removeItem(key, undefined, item);
         }
     }
 
@@ -2719,6 +2733,171 @@ PanelWindow {
                             wrapMode: Text.Wrap
                             textFormat: Text.PlainText
                             text: power.refused !== "" ? power.refused : PowerData.applyFailure
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Workspaces: the standing workspaces, home's apps and
+                    // the name patterns, each a list whose entries the bin
+                    // takes out and, where order counts, the arrows move;
+                    // one typed at the foot is added (SPEC.md §6.5, §16).
+                    Column {
+                        id: workspacesPage
+
+                        property string refused: ""
+
+                        function changed(error) {
+                            refused = error;
+                            root.report(error);
+                        }
+
+                        onVisibleChanged: refused = ""
+                        visible: root.current.id === "workspaces"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        Repeater {
+                            model: WsPage.LISTS
+
+                            Column {
+                                id: wsList
+
+                                required property var modelData
+                                readonly property var items: WorkspacesData.settings[modelData.key] ?? []
+
+                                width: workspacesPage.width
+                                spacing: 2
+
+                                Heading {
+                                    text: wsList.modelData.heading
+                                }
+
+                                Repeater {
+                                    model: wsList.items
+
+                                    Item {
+                                        id: wsItem
+
+                                        required property var modelData
+                                        required property int index
+
+                                        width: wsList.width
+                                        implicitHeight: 32
+
+                                        Text {
+                                            anchors.left: parent.left
+                                            anchors.leftMargin: 10
+                                            anchors.right: wsButtons.left
+                                            anchors.rightMargin: 6
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            elide: Text.ElideRight
+                                            textFormat: Text.PlainText
+                                            readonly property string note: WsPage.itemNote(wsList.modelData.key, wsItem.index)
+                                            text: note === "" ? wsItem.modelData : `${wsItem.modelData} · ${note}`
+                                            color: Theme.fg
+                                            font.family: wsList.modelData.key === "namePatterns" ? Theme.monoFont : Theme.font
+                                            font.pixelSize: 13
+                                        }
+
+                                        Row {
+                                            id: wsButtons
+
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: 6
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: 4
+
+                                            StepButton {
+                                                visible: wsList.modelData.ordered
+                                                name: "go-up-symbolic"
+                                                value: wsItem.index
+                                                next: Math.max(0, wsItem.index - 1)
+                                                onActivated: workspacesPage.changed(WorkspacesData.moveItem(wsList.modelData.key, wsItem.index, wsItem.modelData, -1))
+                                            }
+
+                                            StepButton {
+                                                visible: wsList.modelData.ordered
+                                                name: "go-down-symbolic"
+                                                value: wsItem.index
+                                                next: Math.min(wsList.items.length - 1, wsItem.index + 1)
+                                                onActivated: workspacesPage.changed(WorkspacesData.moveItem(wsList.modelData.key, wsItem.index, wsItem.modelData, 1))
+                                            }
+
+                                            StepButton {
+                                                name: "edit-delete-symbolic"
+                                                value: 0
+                                                next: 1
+                                                onActivated: workspacesPage.changed(WorkspacesData.removeItem(wsList.modelData.key, wsItem.index, wsItem.modelData))
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Item {
+                                    width: wsList.width
+                                    implicitHeight: 32
+
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 6
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 6
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        height: 26
+                                        radius: 6
+                                        color: Theme.surface2
+                                        border.width: newItem.activeFocus ? 1 : 0
+                                        border.color: Theme.accent
+
+                                        TextInput {
+                                            id: newItem
+
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 8
+                                            anchors.rightMargin: 8
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            clip: true
+                                            color: Theme.fg
+                                            font.family: wsList.modelData.key === "namePatterns" ? Theme.monoFont : Theme.font
+                                            font.pixelSize: 13
+                                            onAccepted: {
+                                                const error = WorkspacesData.addItem(wsList.modelData.key, text);
+                                                workspacesPage.changed(error);
+                                                if (error === "") {
+                                                    text = "";
+                                                    keys.forceActiveFocus();
+                                                }
+                                            }
+                                            Keys.onEscapePressed: {
+                                                text = "";
+                                                keys.forceActiveFocus();
+                                            }
+
+                                            Text {
+                                                visible: newItem.text === "" && !newItem.activeFocus
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: wsList.modelData.hint
+                                                color: Theme.fgFaint
+                                                font.family: Theme.font
+                                                font.pixelSize: 13
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            visible: workspacesPage.refused !== ""
+                            x: 10
+                            width: workspacesPage.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: workspacesPage.refused
                             color: Theme.danger
                             font.family: Theme.font
                             font.pixelSize: 12
