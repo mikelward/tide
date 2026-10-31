@@ -514,6 +514,13 @@ flowchart TD
     a JS object to another engine ("JSValue can't be reassigned to another
     engine"), so one read undefined after a reload. `persist_test.mjs`
     checks.
+  - `make install` puts each shell file in by renaming a full copy over
+    it (`shell/install.sh`). Quickshell's reload can scan the directory
+    mid-install, and `install` unlinks a file before writing it. A file
+    found missing then stayed out of that reload, and nothing reloaded
+    it, since a file that wasn't loaded isn't watched.
+  - New files go in before changed ones, so a changed file never loads
+    without one it has just started to use.
 - **`tide doctor`** checks the running session for:
   - who owns each D-Bus name in §5.2;
   - activatable services that could steal those names;
