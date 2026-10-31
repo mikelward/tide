@@ -1147,6 +1147,16 @@ back. The checks it doesn't make yet are in `scripts`' TODO.md, under
 - SPEC.md §15 has the greeter follow the default light/dark schedule. Its
   face is the lock's, which is dark only, like the lock.
 
+- [ ] **Show that the password field has focus, on the lock and the
+  greeter** (both draw `shell/LockFace.qml`). Today nothing says typing
+  will land there. Give the field a blinking caret and a border in the
+  accent color while it has focus, and a quieter border when it doesn't.
+  The field should also always have focus: check that it takes it when the
+  face appears, on every monitor's face, and gets it back after a click
+  elsewhere, a failed password, a monitor plugged in, or the session menu
+  closing. A test in `shell_test.sh` can type without clicking first and
+  expect the login to go through.
+
 ## Screen sharing (M6)
 
 The picker (SPEC.md §12) is `bin/tide-share-picker` and
