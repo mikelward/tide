@@ -164,3 +164,22 @@ test("a step goes past the other time even when it's written without a leading z
     const s = Object.assign({}, DEFAULTS, { dndScheduled: true, dndFrom: "06:45", dndTo: "7:00" });
     assert.ok(withSetting(JSON.stringify(s), null, "dndFrom", steppedDndTime(s.dndFrom, 1, s.dndTo)).text, "the + is taken");
 });
+
+// The shell keeps the schedule's state across a config reload as JSON text
+// (NotificationSettingsData.qml), so each state must read back as it was.
+test("the schedule's state reads back from JSON as it was", () => {
+    const kept = state => JSON.parse(JSON.stringify(state));
+    // Before the first check (window undefined), outside one (null), in one.
+    const states = [
+        SCHEDULE_IDLE,
+        scheduleStep(SCHEDULE_IDLE, null, false).state,
+        scheduleStep(SCHEDULE_IDLE, FRI, false).state,
+        ownChanged(scheduleStep(SCHEDULE_IDLE, FRI, false).state, true, false),
+    ];
+    for (const state of states) {
+        for (const [window, own] of [[null, false], [null, true], [FRI, false], [FRI, true], [SAT, false]]) {
+            assert.deepEqual(scheduleStep(kept(state), window, own), scheduleStep(state, window, own),
+                `${JSON.stringify(state)} then ${window} with yours ${own}`);
+        }
+    }
+});

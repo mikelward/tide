@@ -586,3 +586,18 @@ test("the shell records the wallpaper it draws for the lock, which reads it back
     assert.equal(recordedWallpaper("Pictures/day.jpg\n").path, "");
     assert.match(recordedWallpaper("/a.jpg\n/b.jpg\n").error, /on a line of its own/);
 });
+
+// The shell keeps a flip across a config reload as JSON text
+// (AppearanceData.qml), so a flip must read back as it was.
+test("a flip reads back from JSON as it was", () => {
+    const kept = o => JSON.parse(JSON.stringify(o));
+    const noon = at(2026, 10, 5, 12);
+    for (const s of [DEFAULTS, { mode: "light" }, { mode: "sun", latitude: 78.2, longitude: 15.6 }]) {
+        const o = flip(s, noon, null);
+        for (const t of [noon, noon + MIN, at(2026, 10, 5, 19), at(2026, 10, 6, 8), at(2027, 1, 1, 12)]) {
+            assert.deepEqual(themeAt(s, t, kept(o)), themeAt(s, t, o));
+        }
+        assert.deepEqual(flip(s, noon + MIN, kept(o)), flip(s, noon + MIN, o));
+    }
+    assert.equal(kept(null), null);
+});

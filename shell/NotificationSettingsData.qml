@@ -82,8 +82,8 @@ Singleton {
     // Whether the schedule's window has started or ended since the last
     // check, and if so, what it does to your own Do not disturb.
     function check() {
-        const r = Dnd.scheduleStep(scheduleState.state, Dnd.windowStart(root.settings, new Date()), NotificationData.ownDnd);
-        scheduleState.state = r.state;
+        const r = Dnd.scheduleStep(JSON.parse(scheduleState.stateJson), Dnd.windowStart(root.settings, new Date()), NotificationData.ownDnd);
+        scheduleState.stateJson = JSON.stringify(r.state);
         if (r.set !== null) {
             NotificationData.setScheduledDnd(r.set);
         }
@@ -92,7 +92,7 @@ Singleton {
     // Your own Do not disturb was set, from `was` to `now`: if that turned
     // it on or off, the schedule leaves it.
     function ownChanged(was, now) {
-        scheduleState.state = Dnd.ownChanged(scheduleState.state, was, now);
+        scheduleState.stateJson = JSON.stringify(Dnd.ownChanged(JSON.parse(scheduleState.stateJson), was, now));
     }
 
     function report() {
@@ -114,13 +114,18 @@ Singleton {
     }
 
     // Kept across config reloads, as Do not disturb itself is, so a reload
-    // in a window doesn't turn back on one you turned off.
+    // in a window doesn't turn back on one you turned off. Kept as JSON
+    // text: PersistentProperties copies each property from the old engine's
+    // object to the new one's, and a JS object can't cross engines (Qt:
+    // "JSValue can't be reassigned to another engine"), so it read undefined
+    // after a reload. JSON leaves out a window not yet checked (undefined),
+    // which reads back the same, and keeps one of null.
     PersistentProperties {
         id: scheduleState
 
         reloadableId: "tide-dnd-schedule"
 
-        property var state: Dnd.SCHEDULE_IDLE
+        property string stateJson: JSON.stringify(Dnd.SCHEDULE_IDLE)
     }
 
     SettingsFile {

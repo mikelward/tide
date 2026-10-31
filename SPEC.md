@@ -507,6 +507,13 @@ flowchart TD
     the grant.
 - **No restarts for theme or config.** Theme is a property change, and
   Quickshell hot-reloads its config.
+  - State kept across a reload (a theme flip, Do not disturb's schedule,
+    the resting notifications) is a string, number or bool, with anything
+    richer as JSON text. Quickshell's `PersistentProperties` copies each
+    property from the old engine's object to the new one's. Qt won't move
+    a JS object to another engine ("JSValue can't be reassigned to another
+    engine"), so one read undefined after a reload. `persist_test.mjs`
+    checks.
 - **`tide doctor`** checks the running session for:
   - who owns each D-Bus name in §5.2;
   - activatable services that could steal those names;
