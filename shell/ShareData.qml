@@ -13,12 +13,13 @@ import "lib/share.mjs" as Share
 Singleton {
     id: root
 
-    // A link group's state is only valid while it's bound, so the links out
-    // of share nodes are.
+    // A link group's state is only valid while it's bound, and a node's
+    // properties too, so the links out of share nodes are, and so are the
+    // apps' streams reading them, whose properties name the app.
     readonly property var links: Share.shareLinks(Pipewire.linkGroups.values)
 
     PwObjectTracker {
-        objects: root.links
+        objects: root.links.concat(Share.shareReaders(root.links))
     }
 
     readonly property var shares: Share.liveShares(Pipewire.nodes.values, root.links, PwLinkState.Active)
@@ -27,7 +28,8 @@ Singleton {
     property var pairing: Share.PAIRING
     readonly property var shareNodes: Pipewire.nodes.values.filter(n => Share.isShareNode(n)).map(n => n.id)
     readonly property bool holdingPopups: Share.holdsPopups(root.shares, root.pairing)
-    // What each live share is, for the Sharing pill's popover (§7.4).
+    // What each live share is, and the app reading it, for the Sharing
+    // pill's popover (§7.4).
     readonly property var rows: Share.shareRows(root.shares, root.pairing)
     // Popups held during the current or last share, for the center's
     // banner. A new share starts the count again, and so does seeing the

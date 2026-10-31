@@ -2,6 +2,8 @@
 // QML binds to. The QML passes Quickshell's PipeWire objects and its
 // PwLinkState.Active in, so this file names no Quickshell type.
 
+import { streamLabel } from "./audio.mjs";
+
 // xdph names each screencast's PipeWire node xdph-streaming-<id>.
 export function isShareNode(node) {
     return typeof node?.name === "string" && node.name.startsWith("xdph-streaming");
@@ -14,14 +16,38 @@ export function shareLinks(linkGroups) {
     return linkGroups.filter(g => isShareNode(g.source));
 }
 
-// The share nodes something is consuming: an xdph stream with an active
-// link out of it. A stream nobody reads yet (the picker is still open, or
-// Chrome hasn't started) isn't a share.
+// The nodes reading from share nodes: the app's end of each link out of
+// one, once each. The shell binds them too, since a node's properties,
+// which name its app, are only valid while it's bound.
+export function shareReaders(links) {
+    const readers = new Map();
+    for (const g of links) {
+        if (g.target) {
+            readers.set(g.target.id, g.target);
+        }
+    }
+    return [...readers.values()];
+}
+
+// The share nodes something is consuming, each as its node's id and the
+// nodes reading it: an xdph stream with an active link out of it. A stream
+// nobody reads yet (the picker is still open, or Chrome hasn't started)
+// isn't a share.
 export function liveShares(nodes, linkGroups, ACTIVE) {
-    const consumed = new Set(linkGroups
-        .filter(g => g.state === ACTIVE && g.source)
-        .map(g => g.source.id));
-    return nodes.filter(n => isShareNode(n) && consumed.has(n.id));
+    const readers = new Map();
+    for (const g of linkGroups) {
+        if (g.state !== ACTIVE || !g.source) {
+            continue;
+        }
+        const list = readers.get(g.source.id) ?? [];
+        if (g.target && !list.some(t => t.id === g.target.id)) {
+            list.push(g.target);
+        }
+        readers.set(g.source.id, list);
+    }
+    return nodes
+        .filter(n => isShareNode(n) && readers.has(n.id))
+        .map(n => ({ id: n.id, readers: readers.get(n.id) }));
 }
 
 // How long after the picker's choice its stream may appear and still be
@@ -135,17 +161,29 @@ const SHOWN = {
     region: { icon: "selection-mode-symbolic", name: "Area", bare: "An area" }
 };
 
+// The apps reading a share, by the volume popover's streamLabel: the app's
+// name once its stream is bound. Two streams from one app name it once.
+function readerNames(share) {
+    const names = (share.readers ?? []).map(streamLabel).filter(name => name !== "");
+    return [...new Set(names)].join(", ");
+}
+
 // The Sharing pill's popover (§7.4): what each live share is, from its
-// settled pairing. One the shell can't name (not chosen in its picker, or
-// still within PAIR_MS) says so.
+// settled pairing, after the app reading it, as "Chromium · Window: Meet".
+// One the shell can't name (not chosen in its picker, or still within
+// PAIR_MS) says so.
 export function shareRows(shares, state) {
     return shares.map(s => {
         const known = state.kinds[s.id];
         const shown = known ? SHOWN[known.kind] : undefined;
-        if (!shown) {
-            return { icon: SHOWN.screen.icon, label: "Not chosen in tide's picker" };
-        }
-        return { icon: shown.icon, label: known.label ? `${shown.name}: ${known.label}` : shown.bare };
+        const what = !shown
+            ? "Not chosen in tide's picker"
+            : known.label ? `${shown.name}: ${known.label}` : shown.bare;
+        const apps = readerNames(s);
+        return {
+            icon: shown ? shown.icon : SHOWN.screen.icon,
+            label: apps === "" ? what : `${apps} · ${what}`
+        };
     });
 }
 

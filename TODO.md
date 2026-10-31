@@ -1148,11 +1148,11 @@ Nothing has run in a live session. Still to do:
   Do not disturb is a launcher quick action too. A window share holds
   nothing: the share picker's choice is paired with the stream that
   follows it (§12, `nodesSeen` in `shell/lib/share.mjs`). The Sharing
-  pill (`shell/SharingPill.qml`) opens a popover naming each share
-  (`shareRows`). Still to do: showing a critical on a monitor that isn't
-  shared. On a live session, check that Chrome's consumer link reads as
-  active, that a window share from Meet lets popups through, and that the
-  pill's popover names it.
+  pill (`shell/SharingPill.qml`) opens a popover naming each share and
+  the app reading it (`shareRows`). Still to do: showing a critical on a
+  monitor that isn't shared. On a live session, check that Chrome's
+  consumer link reads as active, that a window share from Meet lets popups
+  through, and that the pill's popover names it and Chrome.
 - Retire swaync: the shell owns the name, joins the ready check, and
   `tide-shell` stops starting it; drop the opt-in.
 
