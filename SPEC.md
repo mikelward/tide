@@ -998,6 +998,8 @@ with new keys in **bold**:
 | **`Super+S`** | toggle keep awake (§10), as the bar's icon does; the OSD says which |
 | **`Super+P`** | toggle presenter mode: Do not disturb and keep awake together (§10) |
 | **`Super+Home`** | go to home (§6.5) |
+| **`Super+1…9`** | go to the Nth workspace in the bar's order, so `Super+1` is home, as `Super+Home` is; past the last workspace, nothing |
+| **`Super+Shift+1…9`** | send the focused window to the Nth workspace in the bar's order, staying where you are |
 | **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
 | `Super+Left` / `Right`, **`Super+PgUp`** / **`PgDn`** | previous / next workspace in the bar's order, stopping at either end (as in KDE and on the Mac; PgUp/PgDn as in GNOME) |
 | `Super+Shift+Left` / `Right` | move window to the previous / next workspace in the bar's order |
@@ -1089,9 +1091,9 @@ Two keys are dropped: `Super+Shift+\` (toggle to BSP) and `Super+P`
 (pseudo-tile). Both exist only for dwindle, which tide doesn't use, and
 `Super+P` is presenter mode now.
 Rotate master goes too, since the layouts replace it; its `Super+O` is
-monocle now. So do `Super+1…9` and `Super+Shift+1…9`, which went to and
-sent a window to a numbered workspace: named workspaces are reached by
-the switcher, `Super+Tab`, `Super+Home` and `Super+End` instead.
+monocle now. `Super+1…9` and `Super+Shift+1…9`, which went to and sent a
+window to a numbered workspace, count along the bar now: a number is a
+position in the bar's order (§6.5), home first, not a workspace's name.
 
 ### 6.7 Minimized windows
 
