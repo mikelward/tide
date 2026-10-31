@@ -36,6 +36,15 @@ ShellRoot {
         NotificationPopups {}
     }
 
+    // The minimized windows' corner tray (§6.7), and Super+Z's IPC.
+    Variants {
+        model: Quickshell.screens
+
+        MinimizedTray {}
+    }
+
+    Minimize {}
+
     // One launcher, which moves to the focused monitor as it opens.
     LauncherWindow {}
 

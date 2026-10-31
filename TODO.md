@@ -1241,14 +1241,13 @@ or workspace goes there.
   `Super+PgUp`/`PgDn` keep previous/next workspace. Check first whether the
   edge behavior can be built in the Lua layout, and decide what a second
   display shows before anything is on it.
-- **Minimize a window** (SPEC.md §6.7), ready to build: option C of
-  `minimized.png`. `Super+Z` moves the focused window to
-  `special:minimized:NAME`; a floating tray in each monitor's
-  bottom-right corner shows an icon per minimized window of the workspace
-  that monitor shows, its title on hover, and a click restores it. The
-  switcher's Windows tab lists them under the workspace they came from,
-  and Enter restores one. Needs the shell's tray and IPC, and `conf`'s
-  `Super+Z`.
+- **Check minimizing live on Hyprland 0.56.2** (SPEC.md §6.7; conf's
+  `Super+Z` is mikelward/conf#440). Tested only against stubs: `Super+Z`
+  hides the window and focus goes to the one under it; the corner tray
+  appears on that monitor with the app's icon, shows the title on hover,
+  and a click brings the window back focused; the Windows tab lists it as
+  minimized and Enter restores it; a minimized window wanting attention
+  shows on its chip and a click there restores it.
 - **Decide what the bar does when named workspaces outgrow its left side**
   (SPEC.md §7.3, §21).
 - **Check home in `conf` on 0.56.2** (mikelward/conf#434): home exists

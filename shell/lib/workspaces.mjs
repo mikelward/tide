@@ -3,6 +3,7 @@
 // into the plain objects these take, and maps app IDs to icons.
 
 import { sameName } from "./workspacenames.mjs";
+import { isMinimizedFrom, minimizedFrom } from "./minimized.mjs";
 
 // Icons shown per workspace before the rest collapse into "+n".
 export const MAX_ICONS = 5;
@@ -285,11 +286,13 @@ export function markedWindows({ windows, marks = NO_MARKS }) {
 
 // The icons one workspace shows (§7.2): only its windows wanting
 // attention, those markedWindows gives, in window order, at most MAX_ICONS
-// and then "+n". An ordinary window has no icon on the bar.
+// and then "+n". An ordinary window has no icon on the bar. A minimized
+// one's `restoreTo` names the workspace a click puts it back on (§6.7);
+// any other's is null.
 function icons(windows, marked) {
     const wanting = windows.filter((w) => marked.has(w.address));
     const shown = wanting.slice(0, MAX_ICONS)
-        .map((w) => ({ address: w.address, app: w.app, marked: true }));
+        .map((w) => ({ address: w.address, app: w.app, marked: true, restoreTo: minimizedFrom(w.workspaceName) }));
     return { icons: shown, more: wanting.length - shown.length };
 }
 
@@ -334,7 +337,7 @@ export function barName(name) {
 // each as
 //
 //   {id, name, label, standing, home, state, urgent, big, count, app,
-//    icons: [{address, app, marked}], more}
+//    icons: [{address, app, marked, restoreTo}], more}
 //
 // where label is the name as the bar shows it (barName); state is
 // "current" (this monitor's workspace), "elsewhere" (shown on another
@@ -346,8 +349,10 @@ export function barName(name) {
 //
 // `monitors` is [{name, workspace}], each monitor's active workspace ID.
 // `workspaces` is Hyprland's, [{id, name}], and `standing` the standing
-// names. `windows` is [{address, workspace, app, urgent, fullscreen}] in
-// the order their icons should appear, workspace being its ID, fullscreen
+// names. `windows` is [{address, workspace, workspaceName, app, urgent,
+// fullscreen}] in the order their icons should appear, workspace being its
+// ID and workspaceName its name, which says whether it's minimized and from
+// where (minimized.mjs), fullscreen
 // being the client's `fullscreen` state from `hyprctl clients` (0 none, 1
 // maximized, 2 fullscreen, 3 both), not the 0/1 argument the `fullscreen`
 // dispatcher takes (SPEC.md §6.3). `marks` comes from updateMarks.
@@ -357,6 +362,9 @@ export function barWorkspaces({ monitor, monitors, workspaces, windows, marks = 
     const marked = markedWindows({ windows, marks });
     return workspaceOrder(workspaces, standing).map((ws) => {
         const here = ws.id === null ? [] : windows.filter((w) => w.workspace === ws.id);
+        // Its minimized windows are on a special workspace, but one wanting
+        // attention still shows here (§6.7), made or not.
+        const minimized = windows.filter((w) => isMinimizedFrom(w.workspaceName, ws.name));
         let state = here.length > 0 ? "occupied" : "empty";
         if (ws.id !== null && ws.id === current) {
             state = "current";
@@ -370,11 +378,11 @@ export function barWorkspaces({ monitor, monitors, workspaces, windows, marks = 
             standing: ws.standing,
             home: ws.home,
             state,
-            urgent: here.some((w) => marked.has(w.address)),
+            urgent: here.concat(minimized).some((w) => marked.has(w.address)),
             big: here.some((w) => w.fullscreen > 0),
             count: here.length,
             app: here.length > 0 ? here[0].app : "",
-        }, icons(here, marked));
+        }, icons(here.concat(minimized), marked));
     });
 }
 

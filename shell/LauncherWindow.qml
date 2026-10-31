@@ -85,6 +85,7 @@ PanelWindow {
         windows: Hyprland.toplevels.values.map(t => ({
             address: Workspaces.normalizeAddress(t.address),
             workspace: t.workspace ? t.workspace.id : null,
+            workspaceName: t.workspace?.name ?? "",
             app: t.lastIpcObject?.class || t.wayland?.appId || "",
             urgent: t.urgent,
             fullscreen: t.lastIpcObject?.fullscreen ?? 0
@@ -189,7 +190,8 @@ PanelWindow {
             return;
         }
         // A workspace, or a window, which focusing brings up on its own
-        // workspace, clearing its mark (SPEC.md §8.1, §14.3).
+        // workspace, clearing its mark (SPEC.md §8.1, §14.3). A minimized
+        // window goes back to the workspace it came from (§6.7).
         if (row.item.kind === "workspace") {
             close();
             Hyprland.dispatch(Dispatch.focusWorkspaceName(row.item.name, Hyprland.usingLua));
@@ -197,7 +199,9 @@ PanelWindow {
         }
         if (row.item.kind === "window") {
             close();
-            Hyprland.dispatch(Dispatch.focusWindow(row.item.address, Hyprland.usingLua));
+            Hyprland.dispatch(row.item.restoreTo
+                ? Dispatch.moveWindowToWorkspace(row.item.address, row.item.restoreTo, Hyprland.usingLua)
+                : Dispatch.focusWindow(row.item.address, Hyprland.usingLua));
             return;
         }
         if (row.item.kind === "confirm") {
