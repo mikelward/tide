@@ -2,12 +2,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initial, record } from "./frecency.mjs";
 import { PAGES } from "./settings.mjs";
-import { blockedHeading, confirmRows, highlighted, grantIds, launchCommand, launcherItems, moved, nextSection, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
+import { SHOW_IN_SCRIPT, blockedHeading, confirmRows, desktopNames, highlighted, grantIds, launchCommand, launcherItems, moved, otherDesktopSettings, parseShowIn, shownIn, nextSection, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
 
 // Array.prototype.at and Object.fromEntries, which the shell's engine lacks
 // (qtjs_env_test.mjs).
@@ -62,6 +62,140 @@ test("an entry gives a row, and one per desktop action", () => {
 
 test("an entry hidden from menus, or with nothing to run, has no row", () => {
     assert.equal(items.some(i => i.id === "hidden" || i.id === "broken"), false);
+});
+
+// Other desktops' settings apps, as their upstream desktop files have them
+// (SPEC.md §8.2), and the apps tide's own Settings pages open.
+const entry = (id, command, categories) => ({ id, name: id, command, categories, actions: [] });
+const gnomeSettings = entry("org.gnome.Settings", ["gnome-control-center"], ["GNOME", "GTK", "Settings"]);
+const kdeSettings = entry("systemsettings", ["systemsettings"], ["Qt", "KDE", "Settings"]);
+const kdeElsewhere = entry("kdesystemsettings", ["systemsettings"], ["Qt", "KDE", "Settings"]);
+const plasma5Elsewhere = entry("kdesystemsettings5", ["systemsettings5"], ["Qt", "KDE", "Settings"]);
+const xfceManager = entry("xfce4-settings-manager", ["xfce4-settings-manager"], ["X-XFCE", "Settings", "DesktopSettings"]);
+const xfceDisplay = entry("xfce4-display-settings", ["xfce4-display-settings"], ["XFCE", "GTK", "Settings", "DesktopSettings", "X-XFCE-SettingsDialog", "X-XFCE-HardwareSettings"]);
+const cinnamon = entry("cinnamon-settings", ["env", "WEBKIT_DISABLE_COMPOSITING_MODE=1", "cinnamon-settings"], ["Settings"]);
+const pavucontrol = entry("org.pulseaudio.pavucontrol", ["pavucontrol"], ["AudioVideo", "Audio", "Mixer", "GTK", "Settings", "X-XFCE-SettingsDialog", "X-XFCE-HardwareSettings"]);
+const nmEditor = entry("nm-connection-editor", ["nm-connection-editor"], ["GNOME", "GTK", "Settings", "X-GNOME-NetworkSettings", "X-GNOME-Utilities"]);
+const blueman = entry("blueman-manager", ["blueman-manager"], ["GTK", "GNOME", "Settings", "HardwareSettings"]);
+const nwgDisplays = entry("nwg-displays", ["nwg-displays"], ["Settings", "DesktopSettings"]);
+const browser1 = entry("browser1", ["browser1"], ["Network", "WebBrowser"]);
+const tideOnly = entry("tide-only", ["tide-only"], []);
+const hyprOnly = entry("hypr-only", ["hypr-only"], []);
+const desktopEntries = [gnomeSettings, kdeSettings, kdeElsewhere, plasma5Elsewhere, xfceManager, xfceDisplay, cinnamon,
+    pavucontrol, nmEditor, blueman, nwgDisplays, browser1, tideOnly, hyprOnly];
+const upstreamShowIn = parseShowIn([
+    "@org.gnome.Settings.desktop", "|OnlyShowIn=GNOME;",
+    "@systemsettings.desktop", "|OnlyShowIn=KDE;",
+    "@kdesystemsettings.desktop", "|NotShowIn=KDE;",
+    "@kdesystemsettings5.desktop", "|NotShowIn=KDE;",
+    "@xfce4-settings-manager.desktop", "|OnlyShowIn=XFCE;",
+    "@xfce4-display-settings.desktop", "|OnlyShowIn=XFCE;",
+    "@cinnamon-settings.desktop", "|OnlyShowIn=X-Cinnamon;",
+    "@org.pulseaudio.pavucontrol.desktop",
+    "@nm-connection-editor.desktop",
+    "@blueman-manager.desktop",
+    "@nwg-displays.desktop",
+    "@browser1.desktop",
+    "@tide-only.desktop", "|OnlyShowIn=tide;",
+    "@hypr-only.desktop", "|OnlyShowIn=Hyprland",
+].join("\n"));
+const appIds = (entries, desktop) => launcherItems(entries, desktop).map(i => i.id);
+
+test("other desktops' settings apps have no row, and tide's own apps and Settings' tools do", () => {
+    assert.deepEqual(appIds(desktopEntries, { names: desktopNames("tide:Hyprland"), showIn: upstreamShowIn }), [
+        "org.pulseaudio.pavucontrol", "nm-connection-editor", "blueman-manager", "nwg-displays", "browser1", "tide-only", "hypr-only",
+    ]);
+});
+
+test("a settings app that runs another desktop's settings has no row, whatever its OnlyShowIn", () => {
+    // Before the first read, and for KDE's entries for other desktops.
+    assert.deepEqual(appIds(desktopEntries), [
+        "xfce4-display-settings", "org.pulseaudio.pavucontrol", "nm-connection-editor", "blueman-manager", "nwg-displays", "browser1", "tide-only", "hypr-only",
+    ]);
+    assert.equal(otherDesktopSettings(cinnamon), true);
+    assert.equal(otherDesktopSettings(entry("kcm_mouse", ["/usr/bin/kcmshell6", "kcm_mouse"], ["Settings"])), true);
+    assert.equal(otherDesktopSettings(entry("gnome-sound-panel", ["gnome-control-center", "sound"], ["Settings"])), true);
+    // A launcher of one's own for it, outside Settings, stays.
+    assert.equal(otherDesktopSettings(entry("my-kde", ["systemsettings"], ["Utility"])), false);
+    assert.equal(otherDesktopSettings(entry("my-kde", ["systemsettings"], undefined)), false);
+});
+
+test("OnlyShowIn and NotShowIn go by the session's desktop names", () => {
+    // In Xfce, its display settings would show.
+    assert.equal(appIds(desktopEntries, { names: desktopNames("XFCE"), showIn: upstreamShowIn }).indexOf("xfce4-display-settings") >= 0, true);
+    assert.deepEqual(desktopNames("tide:Hyprland"), ["tide", "Hyprland"]);
+    assert.deepEqual(desktopNames(""), ["tide", "Hyprland"]);
+    assert.deepEqual(desktopNames(undefined), ["tide", "Hyprland"]);
+    assert.deepEqual(desktopNames(":"), ["tide", "Hyprland"]);
+});
+
+test("OnlyShowIn and NotShowIn follow the Desktop Entry spec", () => {
+    const names = ["tide", "Hyprland"];
+    const keys = (only, not = []) => ({ only, not });
+    assert.equal(shownIn(null, names), true);
+    assert.equal(shownIn(keys(null), names), true);
+    assert.equal(shownIn(keys(["GNOME", "Unity"]), names), false);
+    assert.equal(shownIn(keys(["Hyprland"]), names), true);
+    assert.equal(shownIn(keys(null, ["tide"]), names), false);
+    assert.equal(shownIn(keys(null, ["KDE", "GNOME"]), names), true);
+    // The first of the session's names that either list holds decides.
+    assert.equal(shownIn(keys(["Hyprland"], ["tide"]), names), false);
+    assert.equal(shownIn(keys(["tide"], ["Hyprland"]), names), true);
+    // An empty OnlyShowIn shows nowhere; names match case and all.
+    assert.equal(shownIn(keys([]), names), false);
+    assert.equal(shownIn(keys(["TIDE"]), names), false);
+    // A hidden entry's desktop actions go with it.
+    const chromeElsewhere = Object.assign({}, chrome, { id: "chrome-gnome" });
+    assert.deepEqual(appIds([chromeElsewhere], { names, showIn: parseShowIn("@chrome-gnome.desktop\n|OnlyShowIn=GNOME;\n") }), []);
+});
+
+test("the OnlyShowIn and NotShowIn listing is read by desktop file ID, the first of each counting", () => {
+    const showIn = parseShowIn([
+        "@kde4/dolphin.desktop", "|OnlyShowIn = KDE ; GNOME ;", "|OnlyShowIn=XFCE;", "|NotShowIn=tide;",
+        "@plain.desktop",
+        "@plain.desktop", "|OnlyShowIn=GNOME;",
+        "@kde4-dolphin.desktop", "|NotShowIn=KDE;",
+        "stray line", "|NotShowIn=lost;",
+    ].join("\n"));
+    assert.deepEqual(Object.keys(showIn).sort(), ["kde4-dolphin", "plain"]);
+    assert.deepEqual(showIn["kde4-dolphin"], { only: ["KDE", "GNOME"], not: ["tide"] });
+    // A user's copy with neither key outranks the system's.
+    assert.deepEqual(showIn.plain, { only: null, not: [] });
+    assert.deepEqual(parseShowIn(""), {});
+});
+
+test("the OnlyShowIn and NotShowIn script reads the directories Quickshell scans, in its order", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tide-showin-"));
+    const write = (path, text) => {
+        mkdirSync(join(dir, path, ".."), { recursive: true });
+        writeFileSync(join(dir, path), text);
+    };
+    write("home/applications/plain.desktop", "[Desktop Entry]\nType=Application\nName=Plain\nExec=plain\n");
+    write("sys/applications/plain.desktop", "[Desktop Entry]\nName=Plain\nOnlyShowIn=GNOME;\n");
+    write("sys/applications/kde4/dolphin.desktop", "[Desktop Entry]\nName=Dolphin\n  NotShowIn = GNOME;\r\n[Desktop Action x]\nOnlyShowIn=KDE;\n");
+    write("sys/applications/actions.desktop", "[Desktop Action x]\nOnlyShowIn=KDE;\n[Desktop Entry]\nOnlyShowIn=XFCE;\n");
+    write("sys/applications/notes.txt", "OnlyShowIn=KDE;\n");
+    const run = spawnSync("sh", ["-c", SHOW_IN_SCRIPT], {
+        env: { PATH: process.env.PATH, HOME: join(dir, "nohome"), XDG_DATA_HOME: join(dir, "home-data"), XDG_DATA_DIRS: `${join(dir, "missing")}:${join(dir, "sys")}/` },
+        encoding: "utf8",
+    });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stderr, "");
+    // XDG_DATA_HOME here has no applications directory, so only sys counts.
+    let showIn = parseShowIn(run.stdout);
+    assert.deepEqual(showIn.plain, { only: ["GNOME"], not: [] });
+    assert.deepEqual(showIn["kde4-dolphin"], { only: null, not: ["GNOME"] });
+    assert.deepEqual(showIn.actions, { only: ["XFCE"], not: [] });
+    assert.equal("notes" in showIn, false);
+    // XDG_DATA_HOME comes first, and its copy has neither key.
+    const home = spawnSync("sh", ["-c", SHOW_IN_SCRIPT], {
+        env: { PATH: process.env.PATH, HOME: join(dir, "nohome"), XDG_DATA_HOME: join(dir, "home"), XDG_DATA_DIRS: join(dir, "sys") },
+        encoding: "utf8",
+    });
+    assert.equal(home.status, 0, home.stderr);
+    showIn = parseShowIn(home.stdout);
+    assert.deepEqual(showIn.plain, { only: null, not: [] });
+    assert.deepEqual(showIn["kde4-dolphin"], { only: null, not: ["GNOME"] });
 });
 
 test("the empty query lists the apps by name, without their actions", () => {

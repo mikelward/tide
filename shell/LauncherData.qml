@@ -4,11 +4,38 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "lib/frecency.mjs" as Frecency
+import "lib/launch.mjs" as Run
+import "lib/launcher.mjs" as Search
 
 // What the launcher has run, and how recently (SPEC.md §8), kept in
-// $XDG_STATE_HOME/tide/launcher.json so the order survives a restart.
+// $XDG_STATE_HOME/tide/launcher.json so the order survives a restart; and
+// which desktop entries are for other desktops.
 Singleton {
     id: root
+
+    // What launcher.mjs's launcherItems takes as `desktop`: this session's
+    // desktop names, and each entry's OnlyShowIn and NotShowIn, read with
+    // SHOW_IN_SCRIPT as the shell starts and whenever Quickshell's entries
+    // change. Until the first read is in, only the settings apps are left
+    // out.
+    readonly property var desktopNames: Search.desktopNames(Quickshell.env("XDG_CURRENT_DESKTOP"))
+    property var showIn: ({})
+    readonly property var desktop: ({ names: root.desktopNames, showIn: root.showIn })
+    // Each read's number, so an older one that ends last changes nothing.
+    property int reads: 0
+
+    function readShowIn() {
+        root.reads += 1;
+        reader.createObject(root, { generation: root.reads }).running = true;
+    }
+
+    Connections {
+        target: DesktopEntries
+
+        function onApplicationsChanged() {
+            root.readShowIn();
+        }
+    }
 
     // shell/lib/frecency.mjs's state, keyed by "kind:id".
     property var frecency: Frecency.initial()
@@ -26,7 +53,10 @@ Singleton {
         }
     }
 
-    Component.onCompleted: root.load()
+    Component.onCompleted: {
+        root.load();
+        root.readShowIn();
+    }
 
     // The row `key` (launcher.mjs's rowKey) was run now.
     function record(key) {
@@ -71,5 +101,70 @@ Singleton {
             root.store = "saved";
         }
         onSaveFailed: error => console.warn(`tide: ${path}: ${FileViewError.toString(error)}; launcher history not saved`)
+    }
+
+    // SHOW_IN_SCRIPT, read once both its streams end, as KeysData's
+    // listing is. A file it couldn't read is warned about and counts as
+    // having neither key.
+    Component {
+        id: reader
+
+        Process {
+            id: reading
+
+            property int generation: 0
+            property var state: Run.initial()
+            property string out: ""
+            property bool outRead: false
+            property string errors: ""
+            property bool errorsRead: false
+
+            function streamed() {
+                if (outRead && errorsRead) {
+                    handle({ type: "stderr", text: errors });
+                }
+            }
+
+            function handle(event) {
+                if (state.done) {
+                    return;
+                }
+                state = Run.step(state, event, ["sh", "-c", "(the launcher's OnlyShowIn and NotShowIn reader)"]);
+                if (!state.done) {
+                    return;
+                }
+                if (state.report) {
+                    console.warn(state.report.message);
+                }
+                if (generation === root.reads && state.started) {
+                    root.showIn = Search.parseShowIn(out);
+                    console.log(`tide: launcher: read OnlyShowIn and NotShowIn for ${Object.keys(root.showIn).length} desktop entries`);
+                }
+                destroy();
+            }
+
+            command: ["sh", "-c", Search.SHOW_IN_SCRIPT]
+            stdout: StdioCollector {
+                onStreamFinished: {
+                    reading.out = text;
+                    reading.outRead = true;
+                    reading.streamed();
+                }
+            }
+            stderr: StdioCollector {
+                onStreamFinished: {
+                    reading.errors = text;
+                    reading.errorsRead = true;
+                    reading.streamed();
+                }
+            }
+            onStarted: handle({ type: "started" })
+            onRunningChanged: {
+                if (!running) {
+                    handle({ type: "stopped" });
+                }
+            }
+            onExited: (code, status) => handle({ type: "exited", code: code })
+        }
     }
 }

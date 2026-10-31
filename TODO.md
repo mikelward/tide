@@ -7,6 +7,18 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **The launcher leaves out a `Settings` entry that runs another
+  desktop's settings app, by program name** (`launcher.mjs`'s
+  `SETTINGS_APPS`), on top of honoring `OnlyShowIn` / `NotShowIn`. Every
+  GNOME, Xfce, MATE, Cinnamon, LXQt, Budgie and COSMIC settings entry says
+  `OnlyShowIn`; KDE's `kdesystemsettings.desktop` says `NotShowIn=KDE`,
+  so it needs the list. The alternative is dropping `Settings` entries
+  that name a desktop in `Categories` (`KDE`, `GNOME`, `X-XFCE-…`),
+  minus the tools tide's pages open; that also drops tools like
+  `dconf-editor` and needs an exception list, since `pavucontrol`,
+  `nm-connection-editor` and `blueman-manager` carry those categories.
+  Reversible by editing the list.
+
 - [ ] **The Workspaces page edits lists as typed text, with no picker for
   home's apps**: an app is typed as its class or site. The alternative is a
   picker from the open windows or the desktop entries. It's an addition.
@@ -1055,17 +1067,6 @@ from the keyboard (`shell/integration_test.sh`).
   page's. Still to do:
   - On a live session, check that moving a workspace first makes it home
     at once, on the bar and in `conf`'s rules.
-
-- [ ] **Hide every other desktop's settings apps from the launcher.**
-  GNOME Settings, KDE's System Settings, Xfce's Settings Manager and its
-  panels (`xfce4-settings-manager`, `xfce4-display-settings` and the rest),
-  and the like still show up, and they don't work under tide. That's
-  expected, so they shouldn't be offered: tide's own Settings and its page
-  rows cover them. Prefer a rule that catches any desktop's over a list
-  that names a few. One option is honoring desktop entries' `OnlyShowIn` /
-  `NotShowIn` for `tide` (as an `XDG_CURRENT_DESKTOP` that's none of GNOME,
-  KDE or XFCE), plus dropping `Settings`-category entries that aren't
-  tide's. Check which of them set `OnlyShowIn`, since some don't.
 
 ## Notifications (M4)
 

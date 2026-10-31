@@ -130,7 +130,7 @@ PanelWindow {
         outputAtOpen = Hyprland.focusedMonitor?.name ?? "";
         session += 1;
         openedAt = Date.now();
-        apps = Search.launcherItems(DesktopEntries.applications.values);
+        apps = Search.launcherItems(DesktopEntries.applications.values, LauncherData.desktop);
         checking = false;
         asking = "";
         blocked = [];
@@ -369,7 +369,7 @@ PanelWindow {
 
         function onApplicationsChanged() {
             if (root.visible && root.apps.length === 0) {
-                root.apps = Search.launcherItems(DesktopEntries.applications.values);
+                root.apps = Search.launcherItems(DesktopEntries.applications.values, LauncherData.desktop);
             }
         }
     }

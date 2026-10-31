@@ -97,7 +97,8 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # Its lock names a clocks.local.json with a bad hour24, unless
 # DIR/lock-takes-any-clocks is there, and a wallpaper record naming a
 # relative path, unless DIR/lock-takes-any-wallpaper is. Its shell records
-# no wallpaper for the lock, unless DIR/no-wallpaper-record is there.
+# no wallpaper for the lock, unless DIR/no-wallpaper-record is there, and
+# says it read the desktop entries' OnlyShowIn, unless DIR/no-show-in is.
 # DIR/load-CONFIG.txt, if it's there, is printed
 # before LOAD by that config alone: shell (-c), lock or greeter.
 stubs() {
@@ -420,6 +421,11 @@ if test -f "\$(dirname "\$0")/load-\$config.txt"; then
     cat "\$(dirname "\$0")/load-\$config.txt"
 fi
 cat "\$(dirname "\$0")/load.txt"
+# As the shell, it says it read the desktop entries' OnlyShowIn, unless
+# DIR/no-show-in is there.
+if test "\$config" = shell && ! test -e "\$(dirname "\$0")/no-show-in"; then
+    echo '  INFO qml: tide: launcher: read OnlyShowIn and NotShowIn for 1 desktop entries'
+fi
 # As the lock, it names a clocks.local.json whose hour24 isn't true or
 # false, as the lock does once it has read it.
 if test "\$config" = lock && test -z "\$WAYLAND_DEBUG" && ! test -e "\$(dirname "\$0")/lock-takes-any-clocks" &&
@@ -1372,6 +1378,14 @@ stubs "$tmp/prompt-stays" "exit 0" "$loaded" ":" "$shared_ran; $(went notes ':;'
 run "$tmp/prompt-stays"
 check "a name prompt still shown after Enter fails" test "$code" -ne 0
 check "and says so" contains "$out" "the name prompt should be gone once Enter went to notes; it shows \"go\""
+}
+
+case_96() {
+stubs "$tmp/no-show-in" "exit 0" "$loaded"
+: >"$tmp/no-show-in/no-show-in" || exit 1
+run "$tmp/no-show-in"
+check "a shell that never reads the desktop entries' OnlyShowIn fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell didn't read the desktop entries' OnlyShowIn in"
 }
 
 # --case N RESULT: run case_N alone, and write its passes and failures to
