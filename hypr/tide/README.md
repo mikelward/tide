@@ -43,7 +43,16 @@ hl.bind("SUPER + J", function() qs.focus(1) end)
 hl.bind("SUPER + K", function() qs.focus(-1) end)
 hl.bind("SUPER + SHIFT + J", function() qs.move(1) end)
 hl.bind("SUPER + SHIFT + K", function() qs.move(-1) end)
+-- Drag the master/stack edge with no key held (SPEC.md §6.6).
+hl.bind("mouse:272", qs.drag_press)
+hl.bind("mouse:272", qs.drag_release, { release = true, non_consuming = true, ignore_mods = true, locked = true })
 ```
+
+`drag_press` takes a press within `resize_grab` pixels (4 by default) of a
+split edge and passes any other on to the window, returning
+`{ pass_event = true }`. The release bind ignores modifiers and the lock, so
+the drag ends however the button comes up; with no drag on, it does
+nothing.
 
 `setup()` checks the merged options against a schema: every key, type and
 range, with no unknown keys and no holes in lists. It raises an error

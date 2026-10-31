@@ -16,6 +16,20 @@ export function toggled(open, target) {
     return open === target ? null : target;
 }
 
+// The open popover and its opener once `popover` shows or hides, and the
+// one to hide, if any. A popover showing hides any other, and `open` moves
+// straight to it, never through none, so the layout, which hears whether
+// any is open (PopupsData.qml), never hears a moment with none.
+export function shownState({ open, opener }, popover, visible) {
+    if (visible) {
+        return { open: popover, opener, hide: open !== null && open !== popover ? open : null };
+    }
+    if (open === popover) {
+        return { open: null, opener: null, hide: null };
+    }
+    return { open, opener, hide: null };
+}
+
 // Whether a press on the bar closes the open popover there and then: yes,
 // unless it's on the target that opened it.
 export function closesOnPress(open, onOpener) {

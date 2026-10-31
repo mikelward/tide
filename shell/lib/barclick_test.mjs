@@ -1,7 +1,7 @@
 // Tests for barclick.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PAD, toggled, closesOnPress, chainReaches, groupReach, hitRect } from "./barclick.mjs";
+import { PAD, toggled, shownState, closesOnPress, chainReaches, groupReach, hitRect } from "./barclick.mjs";
 
 const a = { name: "a" };
 const b = { name: "b" };
@@ -11,6 +11,21 @@ test("a tap opens its popover, and closes it when it's the one open", () => {
     assert.equal(toggled(a, a), null);
     // Another's tap opens its own; the press before it closed the first.
     assert.equal(toggled(a, b), b);
+});
+
+test("a popover showing hides the open one, and open moves straight to it", () => {
+    const opener = { name: "b's icon" };
+    // The layout hears whether any is open, so open never passes through none.
+    assert.deepEqual(shownState({ open: a, opener }, b, true), { open: b, opener, hide: a });
+    assert.deepEqual(shownState({ open: null, opener }, b, true), { open: b, opener, hide: null });
+    // The one hidden then reports itself hidden, and that changes nothing,
+    // the new one's opener included.
+    assert.deepEqual(shownState({ open: b, opener }, a, false), { open: b, opener, hide: null });
+});
+
+test("the open popover hiding, or going away, leaves none open", () => {
+    assert.deepEqual(shownState({ open: a, opener: {} }, a, false), { open: null, opener: null, hide: null });
+    assert.deepEqual(shownState({ open: null, opener: null }, a, false), { open: null, opener: null, hide: null });
 });
 
 test("a press on another target closes the open popover, so its tap opens the next", () => {

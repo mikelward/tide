@@ -175,6 +175,95 @@ end
 
 M.modes = { "tile", "threecol", "twocol", "monocle" }
 
+-- mfact's range, which the layout's mfact layoutmsg clamps to as well.
+M.mfact_min, M.mfact_max = 0.1, 0.9
+
+-- The split edges a pointer can drag in `mode` with `n` windows: vertical
+-- lines down the whole area, each `{ x = ..., kind = ... }` with x the
+-- first pixel right of the edge. Dragging one changes mfact:
+--   "left"   the master side spans from the area's left edge to x (tile,
+--            twocol, threecol with one stack window);
+--   "center" the master is centered, x is one of its sides (`side`,
+--            "left" or "right"), and it grows both ways (threecol with
+--            stacks either side).
+-- Rows within a column are always equal, with no per-window weight to
+-- drag, and twocol's masters split their side equally, so neither has an
+-- edge here. A lone window and monocle have none either.
+function M.split_edges(mode, area, n, o)
+    if n < 2 or o == nil or o.mfact == nil then
+        return {}
+    end
+    if mode == "tile" then
+        local m = clamp(o.nmaster or 1, 0, n)
+        if m == 0 or m == n then
+            return {}
+        end
+        return { { x = M.columns(area, { o.mfact, 1 - o.mfact })[2].x, kind = "left" } }
+    elseif mode == "threecol" then
+        local s = n - clamp(o.nmaster or 1, 1, n)
+        if s == 0 then
+            return {}
+        elseif s == 1 then
+            return { { x = M.columns(area, { o.mfact, 1 - o.mfact })[2].x, kind = "left" } }
+        end
+        local side = (1 - o.mfact) / 2
+        local cols = M.columns(area, { side, o.mfact, side })
+        return { { x = cols[2].x, kind = "center", side = "left" }, { x = cols[3].x, kind = "center", side = "right" } }
+    elseif mode == "twocol" then
+        local m = clamp(o.nmaster or 2, 1, n)
+        if m == n then
+            return {}
+        end
+        -- twocol's own weights, so the edge rounds as its boxes do.
+        local weights = {}
+        for i = 1, m do
+            weights[i] = o.mfact / m
+        end
+        weights[m + 1] = 1 - o.mfact
+        return { { x = M.columns(area, weights)[m + 1].x, kind = "left" } }
+    end
+    return {}
+end
+
+-- The edge of `edges` whose grab zone holds the point (x, y): `grab`
+-- pixels either side of it, down the area's height. nil if none does.
+function M.edge_at(edges, area, x, y, grab)
+    if grab <= 0 or y < area.y or y >= area.y + area.h then
+        return nil
+    end
+    for _, e in ipairs(edges) do
+        if x >= e.x - grab and x < e.x + grab then
+            return e
+        end
+    end
+end
+
+-- The mfact that puts `edge` at x, clamped to mfact's range. A centered
+-- master's side keeps its own direction: dragged past the center, it
+-- holds the master at its narrowest rather than growing it again.
+function M.drag_mfact(edge, area, x)
+    if area.w <= 0 then
+        return nil
+    end
+    local f
+    if edge.kind == "center" then
+        local from_center = x - (area.x + area.w / 2)
+        if edge.side == "left" then
+            from_center = -from_center
+        end
+        f = 2 * from_center / area.w
+    else
+        f = (x - area.x) / area.w
+    end
+    return clamp(f, M.mfact_min, M.mfact_max)
+end
+
+-- Whether the point (x, y) is inside `box`, or within `pad` pixels of it.
+function M.contains(box, x, y, pad)
+    pad = pad or 0
+    return x >= box.x - pad and x < box.x + box.w + pad and y >= box.y - pad and y < box.y + box.h + pad
+end
+
 -- Boxes for `n` windows in `mode`. A lone window follows the single-window
 -- rule in every mode.
 function M.arrange(mode, area, n, o, single_rules)

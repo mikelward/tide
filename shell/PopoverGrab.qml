@@ -28,4 +28,7 @@ Scope {
             PopoverData.shown(root.popover);
         }
     }
+
+    // Goes with its popover, which mustn't count as open after it.
+    Component.onDestruction: PopoverData.gone(root.popover)
 }
