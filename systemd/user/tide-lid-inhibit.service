@@ -1,0 +1,20 @@
+# Keeps logind from acting on the lid while the Settings panel's Power page
+# says to lock or do nothing when it closes (SPEC.md §16): conf's
+# hyprland.lua locks instead. The shell starts it for those, and stops it
+# for Suspend, logind's own default.
+[Unit]
+Description=tide lid-close action (logind's lid switch held)
+Documentation=https://github.com/mikelward/tide
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+# Started only once the inhibitor is held: systemd-inhibit runs its command
+# after logind grants the lock, and systemd-notify says so, then becomes
+# the sleep that keeps it (--exec, systemd 254). A refusal (polkit, say)
+# exits before that, so `systemctl start` fails rather than reporting a
+# lid that isn't held.
+Type=notify
+NotifyAccess=all
+ExecStart=systemd-inhibit --what=handle-lid-switch --who=tide --why="Settings: the lid locks or does nothing" --mode=block systemd-notify --ready --exec \; sleep infinity
+Slice=background-graphical.slice
