@@ -105,6 +105,9 @@ ANSWERS = {
 EVENTS = [
     "workspacev2>>2,2",
     "focusedmonv2>>" + MONITOR + ",2",
+    # A window opening, then focused: the name prompt asks Hyprland for
+    # it in the client list, and lets it be, since it isn't on home.
+    "openwindow>>55aa03,2,org.gnome.Nautilus,Home",
     "activewindowv2>>55aa03",
     "custom>>tide-layout>>1,columns",
     "custom>>tide-layout>>3,monocle",
@@ -204,11 +207,13 @@ BINDS = [
 
 
 # What the shell runs hyprctl for: the focused window at startup, the
+# windows, for the name prompt to judge a window first focused, the
 # keyboards for the lock's layout badge, the key bindings and the monitors
 # for the settings panel's Keys and Displays pages, and the focus guard's
 # calls.
 CTL = {
     ("activewindow", "-j"): lambda: json.dumps(ANSWERS["j/activewindow"]),
+    ("clients", "-j"): lambda: json.dumps(ANSWERS["j/clients"]),
     ("devices", "-j"): lambda: json.dumps(ANSWERS["j/devices"]),
     ("binds", "-j"): lambda: json.dumps(BINDS),
     ("monitors", "all", "-j"): lambda: json.dumps(ANSWERS["j/monitors"]),

@@ -42,6 +42,9 @@ ShellRoot {
     // One settings panel, which does the same.
     SettingsWindow {}
 
+    // The name prompt (§6.5), which does the same.
+    NamePrompt {}
+
     // The polkit prompt (opt-in; see PolkitData.qml), which does the same.
     PolkitPrompt {}
 

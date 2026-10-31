@@ -1,7 +1,7 @@
 // Tests for dispatch.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize } from "./dispatch.mjs";
+import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, closeWindow } from "./dispatch.mjs";
 
 test("a Lua config gets hl.dsp calls", () => {
     assert.equal(focusWorkspace(3, true), "hl.dsp.focus({ workspace = 3 })");
@@ -42,4 +42,17 @@ test("a name that isn't one line, or isn't text, goes into no dispatch", () => {
     assert.throws(() => focusWorkspaceName("  ", false), /not a workspace name/);
     assert.throws(() => focusWorkspaceName(3, true), /not a workspace name/);
     assert.throws(() => renameWorkspace("x", "in", true), /not a workspace ID/);
+});
+
+test("the name prompt moves its window by address, following it", () => {
+    assert.equal(moveWindowToWorkspace("55AA01", "PR-12, login", true),
+        'hl.dsp.window.move({ workspace = "name:PR-12, login", follow = true, window = "address:0x55aa01" })');
+    assert.equal(moveWindowToWorkspace("0x55aa01", "docs", false), "movetoworkspace name:docs,address:0x55aa01");
+    assert.throws(() => moveWindowToWorkspace("x) os.exit(", "docs", true), /not a window address/);
+    assert.throws(() => moveWindowToWorkspace("55aa01", "a\nb", true), /not a workspace name/);
+});
+
+test("its Esc closes a window politely, by address", () => {
+    assert.equal(closeWindow("55aa01", true), 'hl.dsp.window.close({ window = "address:0x55aa01" })');
+    assert.equal(closeWindow("55aa01", false), "closewindow address:0x55aa01");
 });

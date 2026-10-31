@@ -2,7 +2,7 @@
 #
 # tide: the session's command-line helpers.
 #
-#   tide launch [--workspace NAME | --new-workspace] [--app ID]... [--] COMMAND [ARG...]
+#   tide launch [--workspace NAME] [--app ID]... [--] COMMAND [ARG...]
 #
 #     Starts an app the way the key bindings and the launcher do
 #     (SPEC.md §5.4, §14.3):
@@ -16,7 +16,8 @@
 #          wrapper script whose app isn't known in advance. xdg-open
 #          and gio open grant the default app for the target's type
 #          (xdg-mime), or '*' when it can't be found. It comes
-#          first, so a key press or focus change while the shell is still
+#          first but for reading the focused workspace (one hyprctl call,
+#          below), so a key press or focus change while the shell is still
 #          starting cancels it, and its 10 s run from the key press that
 #          launched it;
 #       2. waits for the shell, so no app starts before the notification,
@@ -29,9 +30,14 @@
 #     named NAME, made if it's new (SPEC.md §6.5): the guard takes it there
 #     as it opens, and focus follows (the name prompt). If you move on
 #     first, the grant is canceled and the window opens where you are,
-#     unfocused, like any other. --new-workspace asks for an empty
-#     numbered workspace the same way, until the launcher's Ctrl+Enter
-#     names one instead.
+#     unfocused, like any other.
+#     Without --workspace, a launch from the home workspace (the one
+#     ~/.config/hypr/tide-workspaces.lua names) asks the shell's name prompt
+#     for a workspace first, and waits for its answer on a FIFO in
+#     $XDG_RUNTIME_DIR, then launches there as --workspace does, still from
+#     here, in its caller's environment. One of home's apps is answered
+#     home at once; Esc launches nothing. With no shell to ask, it launches
+#     where you are, and says why.
 #     The app gets TIDE_WORKSPACE (§6.5): NAME, or else the focused
 #     workspace's name, with only its ASCII letters and digits kept, so a
 #     shpool or tmux session can be named after it. If the focused
@@ -130,7 +136,7 @@ nl='
 '
 
 usage() {
-    echo "usage: $prog launch [--workspace NAME | --new-workspace] [--app ID]... [--] COMMAND [ARG...]" >&2
+    echo "usage: $prog launch [--workspace NAME] [--app ID]... [--] COMMAND [ARG...]" >&2
     echo "       $prog workspace" >&2
     echo "       $prog grant ID..." >&2
     echo "       $prog focus ID..." >&2
@@ -307,8 +313,8 @@ sanitized() {
 # The focused workspace's name, from `hyprctl -j activeworkspace`, or 1,
 # having said why, when it can't be read; $1 names the subcommand for the
 # message. Hyprland prints each field on a line of its own, escaping only
-# `"`, `\` and control characters, which a name (one line) has none of
-# and sanitized drops anyway.
+# `"`, `\` and control characters; those escapes are undone, so a name made
+# outside tide (`hyprctl`) with a quote in it compares as it is.
 focused_workspace() {
     if ! command -v hyprctl >/dev/null 2>&1; then
         echo "$prog $1: no hyprctl, so couldn't read the focused workspace" >&2
@@ -318,12 +324,113 @@ focused_workspace() {
         echo "$prog $1: couldn't read the focused workspace: $out" >&2
         return 1
     fi
-    name=$(printf '%s\n' "$out" | sed -n 's/^[[:space:]]*"name":[[:space:]]*"\(.*\)",\{0,1\}[[:space:]]*$/\1/p' | head -n 1)
+    name=$(printf '%s\n' "$out" | sed -n 's/^[[:space:]]*"name":[[:space:]]*"\(.*\)",\{0,1\}[[:space:]]*$/\1/p' | head -n 1 |
+        sed 's/\\\(.\)/\1/g')
     if test -z "$name"; then
         echo "$prog $1: couldn't read the focused workspace's name from: $out" >&2
         return 1
     fi
     printf '%s\n' "$name"
+}
+
+# The window classes the command's app may have, as JSON strings, for the
+# name prompt to tell whether it's one of home's apps (SPEC.md §6.5): its
+# --app IDs, or else what the grant below would find, the program past
+# wrappers and its desktop entries' classes, or the opener's app's.
+launch_apps_json() {
+    test "$count" -eq 0 || {
+        printf '%s' "$app_json"
+        return 0
+    }
+    runs=$(command_program "$@")
+    case "${runs##*/}" in
+        xdg-open | gio) classes=$(opener_classes "$@") ;;
+        *)
+            classes=${runs##*/}
+            classes="$classes
+$(desktop_classes "${runs##*/}" "$@")"
+            ;;
+    esac
+    out=
+    while IFS= read -r class; do
+        test -n "$class" && out="${out:+$out, }$(json_string "$class")"
+    done <<EOF2
+$classes
+EOF2
+    printf '%s' "$out"
+}
+
+# A launch from home (SPEC.md §6.5): asks the shell's name prompt for a
+# workspace, and waits for its answer on a FIFO, so the app still starts
+# from here, with this caller's environment. Sets ws to the workspace
+# chosen, or exits on Esc. With no shell to ask, or no answer, it says
+# why and returns with ws empty, and the app starts where you are.
+ask_workspace() {
+    dir=${XDG_RUNTIME_DIR:-}
+    if test -z "$dir" || ! test -d "$dir"; then
+        echo "$prog launch: no XDG_RUNTIME_DIR to hear the name prompt's answer in, so launching on $focused" >&2
+        tell "No name prompt" "tide launch had nowhere to hear the name prompt's answer, so $1 opens on $focused."
+        return 0
+    fi
+    if ! answer_fifo=$(mktemp -u "$dir/tide-prompt.XXXXXX") || ! mkfifo -m 600 "$answer_fifo"; then
+        echo "$prog launch: couldn't make a FIFO in $dir for the name prompt's answer, so launching on $focused" >&2
+        tell "No name prompt" "tide launch couldn't wait for the name prompt, so $1 opens on $focused."
+        return 0
+    fi
+    apps=$(launch_apps_json "$@")
+    if ! reply=$(qs -c tide ipc call prompt launch "{\"apps\": [$apps], \"answer\": $(json_string "$answer_fifo")}" 2>&1) ||
+        test "$reply" != asked; then
+        rm -f "$answer_fifo"
+        echo "$prog launch: the shell's name prompt couldn't be asked for a workspace (${reply:-no answer}), so launching on $focused" >&2
+        tell "No name prompt" "tide launch couldn't ask the shell for a workspace, so $1 opens on $focused. Is the shell running?"
+        return 0
+    fi
+    # The prompt waits for you, so the wait is long; an hour bounds it
+    # should the shell die with the prompt open.
+    answer=$(timeout 3600 head -n 1 "$answer_fifo")
+    rm -f "$answer_fifo"
+    case "$answer" in
+        "workspace "?*)
+            ws=${answer#workspace }
+            opts=", { workspace = $(lua_string "$ws") }"
+            ;;
+        cancel) exit 0 ;;
+        *)
+            echo "$prog launch: no answer from the name prompt${answer:+ ($answer)}, so not launching $1" >&2
+            tell "No name prompt" "The name prompt never answered, so $1 didn't open."
+            exit 1
+            ;;
+    esac
+}
+
+# Home's name, as the shell wrote it to tide-workspaces.lua (SPEC.md
+# §6.5), or nothing when there's no file, which `tide doctor` reports.
+home_workspace() {
+    file=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/tide-workspaces.lua
+    test -r "$file" || return 0
+    line=$(grep -m 1 '^    home = ".*",$' "$file") || return 0
+    line=${line#    home = \"}
+    printf '%s' "${line%\",}" | sed 's/\\\(.\)/\1/g'
+}
+
+# $1 as a JSON string, for the shell's IPC: backslashes, quotes, tabs,
+# carriage returns and newlines escaped. Any other control character is
+# left as it is, which the shell refuses, so the launch goes ahead where
+# you are and says why.
+json_string() {
+    tab=$(printf '\t')
+    cr=$(printf '\r')
+    printf '%s\n' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e "s/$tab/\\\\t/g" -e "s/$cr/\\\\r/g" |
+        awk 'BEGIN { printf "\"" } NR > 1 { printf "\\n" } { printf "%s", $0 } END { printf "\"" }'
+}
+
+# Says what failed on stderr and, since a key binding's stderr goes only to
+# the journal, in a notification too. $1 is the notification's summary.
+tell() {
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -a tide "$1" "$2" ||
+            echo "$prog: couldn't send the notification \"$1\" either" >&2
+    fi
 }
 
 workspace() {
@@ -343,6 +450,7 @@ add_app() {
     esac
     seen_ids="$seen_ids$key|"
     count=$((count + 1))
+    app_json="${app_json:+$app_json, }$(json_string "$1")"
     if test "$count" -eq 1; then
         names=$1
         apps=$(lua_string "$1")
@@ -367,13 +475,11 @@ launch() {
     opts=
     # The workspace --workspace names, or empty.
     ws=
+    # The IDs it grants, as JSON (add_app), which tell the name prompt
+    # whether this is one of home's apps.
+    app_json=
     while test $# -gt 0; do
         case "$1" in
-            --new-workspace)
-                test -z "$ws" || usage
-                opts=', { new_workspace = true }'
-                shift
-                ;;
             --workspace | --workspace=*)
                 if test "$1" = --workspace; then
                     test $# -ge 2 || usage
@@ -383,7 +489,6 @@ launch() {
                     ws=${1#--workspace=}
                     shift
                 fi
-                test -z "$opts" || usage
                 # One line, with something on it: the name prompt's names
                 # are, and Hyprland's dispatches can't carry another.
                 case "$ws" in
@@ -394,6 +499,28 @@ launch() {
                 esac
                 if test -z "$(printf '%s' "$ws" | tr -d '[:space:]')"; then
                     echo "$prog launch: --workspace takes a workspace's name, one line of text" >&2
+                    exit 2
+                fi
+                # As the shell's names are (workspacenames.mjs's UNSAFE):
+                # with no quotes, backslashes or control characters, a name
+                # needs no quoting anywhere it goes.
+                case "$ws" in
+                    *[\"\'\`\\]*) unsafe=yes ;;
+                    *) unsafe=no ;;
+                esac
+                if test "$unsafe" = yes || test "$(printf '%s' "$ws" | LC_ALL=C tr -d '\001-\037\177')" != "$ws"; then
+                    echo "$prog launch: --workspace's name can't have quotes, backslashes or control characters: $ws" >&2
+                    exit 2
+                fi
+                # As the shell's names are (workspacenames.mjs's UNSAFE):
+                # with no quotes, backslashes or control characters, a name
+                # needs no quoting anywhere it goes.
+                case "$ws" in
+                    *[\"\'\`\\]*) unsafe=yes ;;
+                    *) unsafe=no ;;
+                esac
+                if test "$unsafe" = yes || test "$(printf '%s' "$ws" | LC_ALL=C tr -d '\001-\037\177')" != "$ws"; then
+                    echo "$prog launch: --workspace's name can't have quotes, backslashes or control characters: $ws" >&2
                     exit 2
                 fi
                 opts=", { workspace = $(lua_string "$ws") }"
@@ -425,6 +552,16 @@ launch() {
     fi
     if ! in_tide; then
         exec "$@"
+    fi
+    # The focused workspace, read once: home asks for a name, and the app
+    # gets it as TIDE_WORKSPACE otherwise.
+    focused=
+    focused_ok=no
+    if test -z "$ws" && focused=$(focused_workspace launch); then
+        focused_ok=yes
+    fi
+    if test "$focused_ok" = yes && test "$focused" = "$(home_workspace)"; then
+        ask_workspace "$@"
     fi
     if test -z "$app"; then
         runs=$(command_program "$@")
@@ -492,18 +629,13 @@ EOF2
     # systemd-run --scope, which runs the command here (SPEC.md §6.5).
     if test -n "$ws"; then
         TIDE_WORKSPACE=$(sanitized "$ws")
-    elif name=$(focused_workspace launch); then
-        TIDE_WORKSPACE=$(sanitized "$name")
+    elif test "$focused_ok" = yes; then
+        TIDE_WORKSPACE=$(sanitized "$focused")
     else
         echo "$prog launch: starting ${app:-$1} with an empty TIDE_WORKSPACE" >&2
         TIDE_WORKSPACE=
-        # A key binding's stderr goes only to the journal, so say it where
-        # it's seen too. The launch goes on either way.
-        if command -v notify-send >/dev/null 2>&1; then
-            notify-send -a tide "TIDE_WORKSPACE not set" \
-                "Couldn't read the focused workspace, so ${app:-$1}'s shell sessions won't be named after it. tide doctor may say why." ||
-                echo "$prog launch: couldn't send the notification about TIDE_WORKSPACE either" >&2
-        fi
+        tell "TIDE_WORKSPACE not set" \
+            "Couldn't read the focused workspace, so ${app:-$1}'s shell sessions won't be named after it. tide doctor may say why."
     fi
     export TIDE_WORKSPACE
     wait_for_shell "$app"

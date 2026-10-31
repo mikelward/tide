@@ -722,7 +722,12 @@ in how long they last and what stays visible:
   leave it.
 - Names come from you: the name prompt (below), which a new window on
   home, a launch from home and `Super+Return` all open.
-- A name is one line of text, trimmed, at most 32 characters. Matching a
+- A name is one line of text, trimmed, at most 32 characters, with no
+  quotes (`"`, `'`, `` ` ``), backslashes or control characters. A name
+  goes into Hyprland's selectors, Lua, JSON and the shell's command lines,
+  and without those it needs quoting in none of them. A standing name
+  that has one is an error at load naming it, and the prompt won't take
+  one as you type; a short name drops them. Matching a
   name you type against the existing ones and the standing ones ignores
   case; the name keeps the case it was made with. So a name typed as
   `RE` uses the standing `re`.
@@ -793,17 +798,48 @@ in how long they last and what stays visible:
     The prompt opens when it's first focused.
   - A dialog or other floating window (§6.4) never asks. It stays with
     its parent, and so does a status popup.
+  - How: the shell notes each window that opens (`openwindow`), and when
+    one is first focused (`activewindowv2`) looks it up by its address in
+    Hyprland's client list (`hyprctl clients -j`), since focus may have
+    moved on by then. It asks for a name if the window is on
+    home, tiled, has a class or a title, and isn't one of home's apps.
+    So a window that takes focus as it opens asks at once, and one the
+    focus guard left waiting asks when you go to it.
 - The prompt's text starts as the window's short name (below), selected,
   so typing replaces it. Until you type, it follows the window's title,
   since a browser often sets the title after the window maps.
+- **The rows** below the text are the typed name, first, when no
+  workspace has it yet, then the workspaces (standing ones included) that
+  match it, scored as the launcher scores. The top row is selected, so
+  Enter on a new name makes it, and `↓` picks an existing one.
+  A name that's an existing one, in any case, puts that one first instead.
 - **Enter** makes the workspace, or uses the one already of that name,
   moves the window there, and focus follows.
 - **Esc** closes the window, politely, as `Super+Backspace` does.
+  - A click on the backdrop does nothing, so a stray click can't close a
+    window.
+- **One prompt at a time.** A prompt asked for while another is open waits
+  its turn. One following another is never taken as the first one's Esc.
+  A prompt whose window closes goes, unanswered.
+- **`Super+Return`** opens the prompt for the focused window, on any
+  workspace. Enter moves it; Esc leaves it where it is.
 - **tide's own launches** from home (the launcher, app keys, `tide launch`)
   prompt *before* launching, so the process starts with the right
   `TIDE_WORKSPACE` (below), and its first window goes to that workspace
   through the launch's grant (§14.3). Esc there cancels the launch, and
   nothing opens. A home app launches straight away.
+  - `tide launch` reads the focused workspace. On home, it asks the shell
+    (`qs -c tide ipc call prompt launch`), naming the classes the app's
+    window may have, found as its grant finds them (§14.3), and a FIFO in
+    `$XDG_RUNTIME_DIR` to answer on. Then it waits.
+  - The shell answers `workspace NAME` after Enter, or at once for one of
+    home's apps, or `cancel` on Esc. `tide launch` then starts the app
+    itself, as `--workspace NAME` would, so it keeps its caller's
+    environment.
+  - The prompt's text starts empty, since there's no window to name it
+    from.
+  - With no shell to ask, the app launches on home, and a notification
+    says the prompt couldn't be asked.
 
 **The short name.**
 
@@ -1191,7 +1227,7 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
   - `Enter` runs the selection.
   - `Ctrl+Enter` runs it on a new workspace: it opens the name prompt
     (§6.5) first, and the app's first window goes to the workspace named
-    there. A quick action opens no window, so there `Ctrl+Enter` does what
+    there. It asks for one of home's apps too, which may then name home. A quick action opens no window, so there `Ctrl+Enter` does what
     `Enter` does.
   - From home, `Enter` prompts the same way, unless the app is one of
     home's (§6.5).

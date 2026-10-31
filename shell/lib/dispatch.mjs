@@ -68,3 +68,29 @@ export function focusWindow(address, lua) {
 export function toggleMaximize(lua) {
     return lua ? 'hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" })' : "fullscreen 1";
 }
+
+// A window address as a dispatch names it, checked to be hex.
+function windowAddress(address) {
+    const hex = String(address ?? "").toLowerCase().replace(/^0x/, "");
+    if (!/^[0-9a-f]+$/.test(hex)) {
+        throw new Error(`not a window address: ${address}`);
+    }
+    return `address:0x${hex}`;
+}
+
+// Move the window at `address` to the workspace named `name`, made if it's
+// new, and follow it there: the name prompt's Enter (SPEC.md §6.5).
+export function moveWindowToWorkspace(address, name, lua) {
+    const w = windowAddress(address);
+    const n = workspaceName(name);
+    return lua
+        ? `hl.dsp.window.move({ workspace = ${luaString("name:" + n)}, follow = true, window = ${luaString(w)} })`
+        : `movetoworkspace name:${n},${w}`;
+}
+
+// Ask the window at `address` to close, as Super+Backspace does: the name
+// prompt's Esc for a new window on home.
+export function closeWindow(address, lua) {
+    const w = windowAddress(address);
+    return lua ? `hl.dsp.window.close({ window = ${luaString(w)} })` : `closewindow ${w}`;
+}

@@ -62,6 +62,7 @@ cat > "$fake/uwsm" <<'FAKE'
 #!/bin/sh
 printf "uwsm %s\n" "$*" >> "$FAKE_LOG"
 printf '%s\n' "${TIDE_WORKSPACE-unset}" > "$FAKE_LOG.env"
+printf '%s\n' "${CALLER_SETTING-unset}" > "$FAKE_LOG.caller"
 while test "$1" != --; do shift; done
 shift
 exec "$@"
@@ -115,8 +116,10 @@ check "launch grants focus to the command's basename" \
     contains "$out" 'hyprctl eval tide_focus.grant("app", nil, '
 check "launch runs the app through uwsm app" contains "$out" "uwsm app -- app one two"
 check "the app gets its arguments" contains "$out" "app one two"
-check "the grant, then its desktop-entry lookup, then the wait, then the app" \
-    test "$(sed -n 's/ .*//p' "$log" | tr '\n' ' ')" = "hyprctl tide-grant hyprctl systemctl uwsm app "
+check "the focused workspace, the grant, then its desktop-entry lookup, then the wait, then the app" \
+    test "$(sed -n 's/ .*//p' "$log" | tr '\n' ' ')" = "hyprctl hyprctl tide-grant systemctl uwsm app "
+check "the focused workspace is read first, to tell whether to ask for a name" \
+    test "$(sed -n 1p "$log")" = "hyprctl -j activeworkspace"
 check "the app gets the focused workspace's name, sanitized, as TIDE_WORKSPACE" \
     test "$(cat "$log.env")" = PR12login
 check "a clean launch says nothing" test ! -s "$tmp/err"
@@ -129,11 +132,22 @@ check "--app=ID works too" contains "$(cat "$log")" 'tide_focus.grant("kitty")'
 run "$qs" launch --app org.example.Editor --app=example-editor -- "$fake/app"
 check "repeated --app grants a list any of them can use" \
     contains "$(cat "$log")" 'tide_focus.grant({ "org.example.Editor", "example-editor" })'
-run "$qs" launch --workspace 'PR-12 "x" \y' app one
-check "--workspace asks the guard to take the window to that workspace, quoted for Lua" \
-    contains "$(cat "$log")" ', { workspace = "PR-12 \"x\" \\y" })'
-check "and sets TIDE_WORKSPACE from it, not the focused workspace" test "$(cat "$log.env")" = PR12xy
+run "$qs" launch --workspace 'PR-12, login (2)' app one
+check "--workspace asks the guard to take the window to that workspace" \
+    contains "$(cat "$log")" ', { workspace = "PR-12, login (2)" })'
+check "and sets TIDE_WORKSPACE from it, not the focused workspace" test "$(cat "$log.env")" = PR12login2
 check "and doesn't read the focused workspace" not_contains "$(cat "$log")" "activeworkspace"
+for bad in 'team "x"' "it's" 'a`b' 'a\b' "$(printf 'a\tb')"; do
+    run "$qs" launch --workspace "$bad" app
+    check "--workspace refuses a name with a quote, backslash or control character: $bad" test $? -eq 2
+    check "and says why: $bad" contains "$(cat "$tmp/err")" "can't have quotes, backslashes or control characters"
+done
+run FAKE_WORKSPACE='{
+    "id": -1340,
+    "name": "made \"outside\" tide \\ here",
+    "monitor": "eDP-1"
+}' "$qs" workspace
+check "a focused workspace's JSON escapes are undone" test "$(cat "$tmp/out")" = madeoutsidetidehere
 run "$qs" launch --workspace=docs --app kitty -- app
 check "--workspace=NAME works too, with --app" \
     contains "$(cat "$log")" 'tide_focus.grant("kitty", nil, nil, { workspace = "docs" })'
@@ -145,8 +159,6 @@ check "and starts nothing" test ! -s "$log"
 run "$qs" launch --workspace "$(printf 'a\nb')" app
 check "a --workspace of two lines is refused" test $? -eq 2
 check "and says why" contains "$(cat "$tmp/err")" "--workspace takes a workspace's name, one line of text"
-run "$qs" launch --workspace a --new-workspace app
-check "--workspace with --new-workspace is refused" test $? -eq 2
 run "$qs" launch --workspace
 check "--workspace with no name is refused" test $? -eq 2
 run FAKE_WORKSPACE_STATUS=1 FAKE_WORKSPACE='no instance' "$qs" launch app
@@ -172,17 +184,66 @@ run "$qs" workspace extra
 check "tide workspace takes no arguments" test $? -eq 2
 
 run "$qs" launch --new-workspace app one
-check "--new-workspace asks the guard for an empty workspace" \
-    contains "$(cat "$log")" ', { new_workspace = true })'
-check "--new-workspace still runs the app" contains "$(cat "$log")" "uwsm app -- app one"
-run "$qs" launch --new-workspace --app org.example.Editor --app=example-editor -- "$fake/app"
-check "--new-workspace goes with a list grant" \
-    contains "$(cat "$log")" 'tide_focus.grant({ "org.example.Editor", "example-editor" }, nil, nil, { new_workspace = true })'
-run "$qs" launch --app=kitty --new-workspace app
-check "--new-workspace goes with one --app" \
-    contains "$(cat "$log")" 'tide_focus.grant("kitty", nil, nil, { new_workspace = true })'
+check "--new-workspace is gone: the name prompt names a workspace" test $? -eq 2
+
+# A launch from home asks the shell's name prompt first (SPEC.md §6.5),
+# and waits on a FIFO for its answer, so the app starts from here, in the
+# caller's environment, with TIDE_WORKSPACE and the grant for the
+# workspace chosen. The fake qs answers $FAKE_ANSWER ("workspace docs" by
+# default; "none" answers nothing) once it's asked.
+mkdir -p "$tmp/run-config/hypr" "$tmp/prompt-runtime"
+printf '%s\n' 'return {' '    home = "PR-12 login",' '    in_apps = {},' '}' > "$tmp/run-config/hypr/tide-workspaces.lua"
+cat > "$fake/qs" <<'FAKE'
+#!/bin/sh
+printf 'qs %s\n' "$*" >> "$FAKE_LOG"
+printf '%s\n' "$7" > "$FAKE_LOG.request"
+fifo=$(printf '%s' "$7" | sed -n 's/.*"answer": "\([^"]*\)".*/\1/p')
+if test "${FAKE_QS_STATUS:-0}" -eq 0 && test "${FAKE_ANSWER-}" != none; then
+    # Answered later, as the shell does: not on the reply's pipe, which
+    # tide launch reads to its end before it waits on the FIFO.
+    (exec >/dev/null 2>&1; printf '%s\n' "${FAKE_ANSWER-workspace docs}" > "$fifo") &
+fi
+echo "${FAKE_QS_REPLY-asked}"
+exit "${FAKE_QS_STATUS:-0}"
+FAKE
+chmod +x "$fake/qs"
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" CALLER_SETTING=kept "$qs" launch --app org.example.Editor -- "$fake/app" one
+check "a launch from home asks the name prompt" contains "$(cat "$log")" "qs -c tide ipc call prompt launch"
+check "it says which apps, and where to answer" \
+    python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); assert r["apps"] == ["org.example.Editor"], r; assert r["answer"].startswith(sys.argv[2] + "/tide-prompt."), r' "$log.request" "$tmp/prompt-runtime"
+check "then grants the window a move to the workspace chosen" \
+    contains "$(cat "$log")" 'tide_focus.grant("org.example.Editor", nil, nil, { workspace = "docs" })'
+check "and starts the app itself" contains "$(cat "$log")" "uwsm app -- $fake/app one"
+check "with that workspace as TIDE_WORKSPACE" test "$(cat "$log.env")" = docs
+check "in the caller's environment" test "$(cat "$log.caller")" = kept
+check "and leaves no FIFO behind" test -z "$(ls "$tmp/prompt-runtime")"
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_ANSWER=cancel "$qs" launch app
+check "Esc at the prompt exits 0" test $? -eq 0
+check "and launches nothing" not_contains "$(cat "$log")" "uwsm app"
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_PROGRAM=thunderbird FAKE_CLASSES="org.mozilla.Thunderbird" "$qs" launch env thunderbird
+check "without --app, it names the program past wrappers and its desktop entries' classes" \
+    python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); assert r["apps"] == ["thunderbird", "org.mozilla.Thunderbird"], r' "$log.request"
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_ANSWER=gibberish "$qs" launch app
+check "an answer it can't read launches nothing" not_contains "$(cat "$log")" "uwsm app"
+check "and says so" contains "$(cat "$tmp/err")" "no answer from the name prompt (gibberish)"
+run "$qs" launch --workspace docs app
+check "a launch naming its workspace doesn't ask" not_contains "$(cat "$log")" "qs -c tide"
+check "and starts" contains "$(cat "$log")" "uwsm app -- app"
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_QS_STATUS=1 FAKE_QS_REPLY='No running instances for "tide"' "$qs" launch app
+check "with no shell to ask, it launches where you are" contains "$(cat "$log")" "uwsm app -- app"
+check "and says why" contains "$(cat "$tmp/err")" "the shell's name prompt couldn't be asked for a workspace (No running instances"
+check "in a notification too" contains "$(cat "$log")" "notify-send -a tide No name prompt"
+check "and leaves no FIFO behind either" test -z "$(ls "$tmp/prompt-runtime")"
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_ANSWER=none FAKE_QS_REPLY='refused: not JSON' "$qs" launch app
+check "a prompt that refuses the request launches here too" contains "$(cat "$log")" "uwsm app -- app"
+run XDG_RUNTIME_DIR= "$qs" launch app
+check "with no XDG_RUNTIME_DIR to hear an answer in, it launches here" contains "$(cat "$log")" "uwsm app -- app"
+check "and says why" contains "$(cat "$tmp/err")" "no XDG_RUNTIME_DIR"
+rm "$tmp/run-config/hypr/tide-workspaces.lua" "$fake/qs"
+run "$qs" launch app
+check "with no home named, a launch doesn't ask" not_contains "$(cat "$log")" "qs -c tide"
 run "$qs" launch --app=kitty app
-check "without --new-workspace the grant has no options" \
+check "a plain launch's grant has no options" \
     contains "$(cat "$log")" 'tide_focus.grant("kitty")'
 run "$qs" launch --app '*' --app firefox -- app
 check "--app '*' beside another ID is refused" test $? -eq 2
@@ -214,7 +275,7 @@ for opener in xdg-open "gio open"; do
     check "$opener grants the app it opens with" \
         contains "$(cat "$log")" 'tide_focus.grant({ "org.mozilla.firefox", "firefox" })'
     check "$opener's lookup comes before the grant" \
-        test "$(sed -n 's/ .*//p' "$log" | head -n 2 | tr '\n' ' ')" = "tide-grant hyprctl "
+        test "$(sed -n 's/ .*//p' "$log" | sed 1d | head -n 2 | tr '\n' ' ')" = "tide-grant hyprctl "
     check "$opener's lookup says nothing" test ! -s "$tmp/err"
 done
 run FAKE_OPENER=org.example.Editor "$qs" launch "$fake/xdg-open" notes.txt
@@ -225,9 +286,6 @@ check "a failed opener lookup is reported" \
     contains "$(cat "$tmp/err")" "tide-grant couldn't find the app $fake/xdg-open opens with"
 check "a failed opener lookup grants any app's window" \
     contains "$(cat "$log")" 'tide_focus.grant("*")'
-run FAKE_OPENER=x "$qs" launch --new-workspace "$fake/xdg-open" https://example.com/
-check "an opener's grant takes --new-workspace" \
-    contains "$(cat "$log")" 'tide_focus.grant("x", nil, nil, { new_workspace = true })'
 run FAKE_PROGRAM=gio FAKE_OPENER=org.mozilla.firefox "$qs" launch nice -n 5 gio open https://example.com/
 check "a wrapped gio open goes to the opener lookup" \
     test "$(grep tide-grant "$log")" = "tide-grant --opener -- nice -n 5 gio open https://example.com/"
@@ -254,11 +312,11 @@ printf '#!/bin/sh\n' > "$fake/editor"
 chmod +x "$fake/editor"
 run FAKE_CLASSES="org.example.Editor example-editor-x11 EDITOR" "$qs" launch editor
 # The grant is keyed by tide's pid, so the extend finds that grant only.
-key=$(sed -n '1s/^hyprctl eval tide_focus.grant("editor", nil, \([0-9][0-9]*\))$/\1/p' "$log")
+key=$(sed -n '2s/^hyprctl eval tide_focus.grant("editor", nil, \([0-9][0-9]*\))$/\1/p' "$log")
 check "the program's own grant goes in first, keyed by tide's pid" test -n "$key"
-check "its classes are read after the grant" test "$(sed -n 2p "$log")" = 'tide-grant --classes -- editor'
+check "its classes are read after the grant" test "$(sed -n 3p "$log")" = 'tide-grant --classes -- editor'
 check "its desktop entries' classes are added to that grant, by its key, without repeats" \
-    test "$(sed -n 3p "$log")" = "hyprctl eval tide_focus.extend(\"editor\", { \"org.example.Editor\", \"example-editor-x11\" }, nil, $key)"
+    test "$(sed -n 4p "$log")" = "hyprctl eval tide_focus.extend(\"editor\", { \"org.example.Editor\", \"example-editor-x11\" }, nil, $key)"
 check "reading desktop entries says nothing" test ! -s "$tmp/err"
 run "$qs" launch "$fake/editor" --writer letter.odt
 check "the command goes to the lookup as written" \
