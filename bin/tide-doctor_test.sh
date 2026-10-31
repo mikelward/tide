@@ -133,8 +133,9 @@ done
 exit $found
 FAKE
 # hyprctl configerrors prints $FAKE_CONFIGERRORS; -j monitors and -j layers
-# print $FAKE_MONITORS and $FAKE_LAYERS (none of either by default). Any of
-# them fails with $FAKE_HYPRCTL_FAILS.
+# print $FAKE_MONITORS and $FAKE_LAYERS (none of either by default), and -j
+# workspaces $FAKE_WORKSPACES (home, persistent, by default). Any of them
+# fails with $FAKE_HYPRCTL_FAILS.
 cat > "$fake/hyprctl" <<'FAKE'
 #!/bin/sh
 if test -n "$FAKE_HYPRCTL_FAILS"; then
@@ -144,6 +145,15 @@ fi
 case "$*" in
     "-j monitors") printf '%s' "${FAKE_MONITORS:-[]}" ;;
     "-j layers") printf '%s' "${FAKE_LAYERS:-{\}}" ;;
+    "-j workspaces")
+        if test -n "${FAKE_WORKSPACES:-}"; then
+            printf '%s\n' "$FAKE_WORKSPACES"
+        else
+            printf '%s\n' '[{' '    "id": -1338,' '    "name": "in",' '    "monitor": "eDP-1",' \
+                '    "lastwindowtitle": "\"name\": \"x\"",' '    "ispersistent": true' '},{' \
+                '    "id": -1339,' '    "name": "PR-12",' '    "ispersistent": false' '}]'
+        fi
+        ;;
     *) printf '%s' "$FAKE_CONFIGERRORS" ;;
 esac
 FAKE
@@ -226,6 +236,9 @@ healthy() {
     echo "0::/user.slice/user-1000.slice/user@1000.service/session.slice/hypridle.service" > "$tmp/proc/101/cgroup"
     printf 'HOME=/home/user\0' > "$tmp/proc/100/environ"
     cp xdg-desktop-portal/tide-portals.conf "$tmp/config/xdg-desktop-portal/"
+    # Home's name, as the shell writes it.
+    mkdir -p "$tmp/config/hypr"
+    printf '%s\n' 'return {' '    home = "in",' '    in_apps = {},' '}' > "$tmp/config/hypr/tide-workspaces.lua"
     # The lock's QML, where its unit runs it from, and its PAM file.
     mkdir -p "$tmp/home/.config/quickshell/tide" "$tmp/sysconf/pam.d"
     cp shell/lock.qml "$tmp/home/.config/quickshell/tide/"
@@ -273,6 +286,30 @@ check "a healthy session says so" test "$out" = "No problems found."
 run XDG_CURRENT_DESKTOP=KDE
 check "outside tide it exits 2" test "$status" -eq 2
 check "outside tide it says why" contains "$(cat "$tmp/err")" "not in a tide session"
+
+# The home workspace (SPEC.md §6.5).
+rm "$tmp/config/hypr/tide-workspaces.lua"
+run
+check "no tide-workspaces.lua is a problem" test "$status" -eq 1
+check "and says the shell writes it" contains "$out" "tide-workspaces.lua, so conf doesn't know which workspace is home: is tide's shell running?"
+printf 'return {}\n' > "$tmp/config/hypr/tide-workspaces.lua"
+run
+check "a tide-workspaces.lua naming no home is a problem" contains "$out" "couldn't read home's name from $tmp/config/hypr/tide-workspaces.lua"
+printf '%s\n' 'return {' '    home = "PR-12",' '}' > "$tmp/config/hypr/tide-workspaces.lua"
+run
+check "a home that isn't persistent is a problem, naming conf" \
+    contains "$out" "home (PR-12) isn't persistent, so it goes when it's left empty and its apps' rules may be missing: update conf"
+printf '%s\n' 'return {' '    home = "ho\"me",' '}' > "$tmp/config/hypr/tide-workspaces.lua"
+run
+check "a missing home is a problem, naming it and conf" \
+    contains "$out" "there's no home workspace (ho\"me), so its apps open where you are: update conf"
+run FAKE_WORKSPACES='[{
+    "id": -1338,
+    "name": "ho\"me",
+    "ispersistent": true
+}]'
+check "a home whose name has a quote is found" test "$status" -eq 0
+healthy
 
 run FAKE_INACTIVE="hypridle.service=failed"
 check "a failed unit is a problem" test "$status" -eq 1

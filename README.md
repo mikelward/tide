@@ -64,6 +64,11 @@ Key bindings and the launcher start apps with `tide launch [--app ID]...
 COMMAND...`: it waits (at most 15 s) for the shell, gives the app a one-shot
 focus grant, and runs it with `uwsm app` so it outlives a shell restart.
 Repeat `--app` when the app's window class could be any of several IDs.
+`--workspace NAME` takes the app's first window to the workspace named
+NAME, made if it's new. The app gets `TIDE_WORKSPACE`, that workspace's
+name (or else the focused one's) with only its ASCII letters and digits,
+and `tide workspace` prints the focused workspace's the same way
+(SPEC.md §6.5).
 Terminal commands get their grants from `tide-grant`, which each shell
 runs before a command (SPEC.md §14.3).
 
@@ -77,7 +82,8 @@ It also runs conf's input setup once. It reports ready once
 swaync owns the notification name and the bar's tray owns the watcher (see
 `TODO.md`). `TIDE_BAR=waybar` in `~/.config/uwsm/env` keeps waybar.
 
-The Quickshell bar has the workspaces, the layout symbol, the tray, the
+The Quickshell bar has the workspaces by name (the standing ones from
+`~/.config/tide/workspaces.json`, home first; SPEC.md §6.5), the layout symbol, the tray, the
 clocks and their popover, a keep-awake toggle, network, Bluetooth, volume
 and battery with their percentages, the system monitor (CPU %, with top
 processes, memory and temperature) and the session menu, plus the volume and mic-mute OSD. To use it, install

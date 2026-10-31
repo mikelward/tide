@@ -62,10 +62,10 @@ CLIENTS = [
 ]
 
 
-def workspace(id, last):
+def workspace(id, last, name=None):
     windows = [c for c in CLIENTS if c["workspace"]["id"] == id]
     return {
-        "id": id, "name": special(id), "monitor": MONITOR, "monitorID": 0,
+        "id": id, "name": name or special(id), "monitor": MONITOR, "monitorID": 0,
         "windows": len(windows), "hasfullscreen": any(c["fullscreen"] for c in windows),
         "lastwindow": last, "lastwindowtitle": "", "ispersistent": False,
     }
@@ -87,6 +87,9 @@ ANSWERS = {
     "j/workspaces": [
         workspace(1, "0x55aa01"), workspace(2, "0x55aa03"),
         workspace(3, "0x55aa04"), workspace(-98, "0x55aa0a"),
+        # Home, by its default name, empty, and a workspace named as the
+        # name prompt names one, with a comma in it.
+        workspace(-1338, "0x0", "in"), workspace(-1339, "0x0", "PR-12, login"),
     ],
     "j/clients": CLIENTS,
     "j/activewindow": CLIENTS[0],
@@ -114,6 +117,8 @@ EVENTS = [
     "custom>>tide-cycle>>start",
     "custom>>tide-cycle>>end>>0x55aa04",
     "activelayout>>keyboard,English (UK)",
+    "createworkspacev2>>-1340,docs, draft",
+    "renameworkspace>>-1338,mail",
     "configreloaded>>",
 ]
 
@@ -219,11 +224,12 @@ GUARD_CALLS = [
 FOCUS_LUA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hypr", "tide", "focus.lua")
 
 
-# conf's hyprland.lua's calls InputData.qml, OutputsData.qml and
-# AppearanceData.qml make, applying tide's mouse, touchpad, display and dim
-# settings, and layout.lua's LayoutsData.qml makes, applying the Layouts
+# conf's hyprland.lua's calls InputData.qml, OutputsData.qml,
+# AppearanceData.qml and WorkspacesData.qml make, applying tide's mouse,
+# touchpad, display, dim and workspace settings, and layout.lua's LayoutsData.qml makes, applying the Layouts
 # page's: neither config is loaded here, so they're taken as defined.
-CONF_CALLS = ["conf_input.reload()", "conf_outputs.reload()", "conf_appearance.reload()", "tide_layout.reload()"]
+CONF_CALLS = ["conf_input.reload()", "conf_outputs.reload()", "conf_appearance.reload()", "conf_workspaces.reload()",
+              "tide_layout.reload()"]
 
 
 def guard_call(code):

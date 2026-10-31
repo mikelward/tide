@@ -2,7 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    FIRST, LAST, MAX_ICONS, NO_MARKS, updateMarks, markedWindows, barWorkspaces, scrollTarget,
+    MAX_ICONS, BAR_NAME, NO_MARKS, updateMarks, markedWindows, barWorkspaces, scrollTarget,
+    workspaceOrder, barName, workspaceEvent, homeIdAfter, homeRenamed,
     normalizeAddress, markEvent, sameApp, visibleWorkspaces, activatedEvent, attentionOrder,
     withFocus, withoutWindow, focusRank,
 } from "./workspaces.mjs";
@@ -10,19 +11,110 @@ import {
 const win = (address, workspace, app, extra = {}) =>
     ({ address, workspace, app, urgent: false, fullscreen: 0, ...extra });
 
-const one = { monitor: "DP-1", monitors: [{ name: "DP-1", workspace: 2 }] };
+// Nine numbered workspaces, as the tests of marks and icons had before
+// workspaces had names: with no standing ones, they're listed by number.
+const nine = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((id) => ({ id, name: String(id) }));
+const one = { monitor: "DP-1", monitors: [{ name: "DP-1", workspace: 2 }], workspaces: nine };
 
-test("the bar always lists workspaces 1 to 9", () => {
-    const bar = barWorkspaces({ ...one, windows: [] });
-    assert.deepEqual(bar.map((w) => w.id), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    assert.equal(FIRST, 1);
-    assert.equal(LAST, 9);
+// Named workspaces as Hyprland numbers them: each new one below the last,
+// from -1338 down.
+const named = (...names) => names.map((name, i) => ({ id: -1338 - i, name }));
+const standing = ["in", "re", "oc", "me"];
+
+test("the bar lists the standing workspaces first, home first, made or not", () => {
+    const bar = barWorkspaces({ monitor: "DP-1", monitors: [{ name: "DP-1", workspace: -1338 }],
+        workspaces: named("in"), windows: [], standing });
+    assert.deepEqual(bar.map((w) => w.name), ["in", "re", "oc", "me"]);
+    assert.deepEqual(bar.map((w) => w.id), [-1338, null, null, null]);
+    assert.deepEqual(bar.map((w) => w.home), [true, false, false, false]);
+    assert.ok(bar.every((w) => w.standing));
+    assert.deepEqual(bar.map((w) => w.state), ["current", "empty", "empty", "empty"]);
+});
+
+test("home is whichever standing workspace comes first, by any name", () => {
+    const order = workspaceOrder(named("work", "x"), ["work", "home"]);
+    assert.deepEqual(order.map((w) => [w.name, w.home]), [["work", true], ["home", false], ["x", false]]);
+});
+
+test("the other workspaces follow in the order they were made, then numbered ones", () => {
+    const workspaces = [{ id: 2, name: "2" }].concat(named("in", "PR-12", "re", "docs"), [{ id: 1, name: "1" }]);
+    assert.deepEqual(workspaceOrder(workspaces, standing).map((w) => w.name),
+        ["in", "re", "oc", "me", "PR-12", "docs", "1", "2"]);
+});
+
+test("a standing name matches a workspace's without case, keeping the workspace's", () => {
+    const order = workspaceOrder(named("RE"), standing);
+    assert.deepEqual(order.map((w) => w.name), ["in", "RE", "oc", "me"]);
+    assert.equal(order[1].id, -1338);
+    // An exact match wins over one that differs in case.
+    const both = workspaceOrder(named("Re", "re"), standing);
+    assert.deepEqual(both.map((w) => [w.name, w.id]).slice(1, 2), [["re", -1339]]);
+    assert.equal(both[4].name, "Re");
+});
+
+test("special workspaces aren't on the bar", () => {
+    const order = workspaceOrder([{ id: -98, name: "special:scratch" }].concat(named("in")), ["in"]);
+    assert.deepEqual(order.map((w) => w.name), ["in"]);
+});
+
+test("the bar cuts a name past 16 characters with an ellipsis", () => {
+    assert.equal(BAR_NAME, 16);
+    assert.equal(barName("ABC-123 Fix login"), "ABC-123 Fix log…");
+    assert.equal(barName("ABC-123 Fix logi"), "ABC-123 Fix logi");
+    assert.equal(barName("🙂".repeat(17)), "🙂".repeat(15) + "…");
+    const bar = barWorkspaces({ monitor: "DP-1", monitors: [], workspaces: named("in", "a fairly long name"), windows: [], standing: ["in"] });
+    assert.equal(bar[1].label, "a fairly long n…");
+    assert.equal(bar[1].name, "a fairly long name");
+});
+
+test("scrolling steps through the bar's order and stops at either end", () => {
+    const list = workspaceOrder(named("in", "re", "PR-12"), standing);
+    // in, re, oc, me, PR-12
+    assert.equal(scrollTarget(list, -1338, 1), "re");
+    assert.equal(scrollTarget(list, -1338, 2), "oc");
+    assert.equal(scrollTarget(list, -1340, -1), "me");
+    assert.equal(scrollTarget(list, -1340, 1), null);
+    assert.equal(scrollTarget(list, -1338, -1), null);
+    assert.equal(scrollTarget(list, -1338, 9), "PR-12");
+    assert.equal(scrollTarget(list, -1338, 0), null);
+    assert.equal(scrollTarget(list, -1338, 0.5), null);
+    assert.equal(scrollTarget(list, -98, 1), null);
+    assert.equal(scrollTarget(list, null, 1), null);
+    assert.equal(scrollTarget(list, undefined, 1), null);
+});
+
+test("workspace events give the ID up to the first comma and the name after it", () => {
+    assert.deepEqual(workspaceEvent("createworkspacev2", "-1339,PR-12, login"), { type: "created", id: -1339, name: "PR-12, login" });
+    assert.deepEqual(workspaceEvent("destroyworkspacev2", "-1339,a,b"), { type: "destroyed", id: -1339, name: "a,b" });
+    assert.deepEqual(workspaceEvent("renameworkspace", "3,x"), { type: "renamed", id: 3, name: "x" });
+    assert.equal(workspaceEvent("renameworkspace", "x,y"), null);
+    assert.equal(workspaceEvent("renameworkspace", "3"), null);
+    assert.equal(workspaceEvent("workspacev2", "3,3"), null);
+});
+
+test("home is followed by ID, and a rename of it is undone", () => {
+    let id = null;
+    id = homeIdAfter(id, workspaceEvent("createworkspacev2", "-1339,other"), "in");
+    assert.equal(id, null);
+    id = homeIdAfter(id, workspaceEvent("createworkspacev2", "-1338,in"), "in");
+    assert.equal(id, -1338);
+    const rename = workspaceEvent("renameworkspace", "-1338,mail");
+    assert.equal(homeRenamed(id, rename, "in"), true);
+    assert.equal(homeIdAfter(id, rename, "in"), -1338);
+    // Its own name back, or another workspace's rename, is left alone.
+    assert.equal(homeRenamed(id, workspaceEvent("renameworkspace", "-1338,in"), "in"), false);
+    assert.equal(homeRenamed(id, workspaceEvent("renameworkspace", "-1339,in2"), "in"), false);
+    assert.equal(homeRenamed(null, rename, "in"), false);
+    id = homeIdAfter(id, workspaceEvent("destroyworkspacev2", "-1338,in"), "in");
+    assert.equal(id, null);
+    assert.equal(homeIdAfter(5, null, "in"), 5);
 });
 
 test("each workspace is current, elsewhere, occupied or empty", () => {
     const bar = barWorkspaces({
         monitor: "DP-1",
         monitors: [{ name: "DP-1", workspace: 2 }, { name: "eDP-1", workspace: 5 }],
+        workspaces: nine,
         windows: [win("a", 3, "kitty"), win("b", 5, "firefox")],
     });
     assert.deepEqual(bar.slice(0, 5).map((w) => w.state),
@@ -31,16 +123,18 @@ test("each workspace is current, elsewhere, occupied or empty", () => {
     const other = barWorkspaces({
         monitor: "eDP-1",
         monitors: [{ name: "DP-1", workspace: 2 }, { name: "eDP-1", workspace: 5 }],
+        workspaces: nine,
         windows: [],
     });
     assert.equal(other[1].state, "elsewhere");
     assert.equal(other[4].state, "current");
 });
 
-test("special workspaces and windows on them aren't on the bar", () => {
+test("windows on special workspaces aren't on the bar", () => {
     const bar = barWorkspaces({
         monitor: "DP-1",
         monitors: [{ name: "DP-1", workspace: -98 }],
+        workspaces: nine.concat([{ id: -98, name: "special:scratch" }]),
         windows: [win("a", -98, "kitty"), win("b", 12, "kitty")],
     });
     assert.equal(bar.length, 9);
@@ -98,7 +192,7 @@ test("an app mark covers the app's windows that weren't visible", () => {
 test("an app mark keeps the windows it marked when their workspace comes on screen", () => {
     const marks = notified();
     // The user goes to workspace 4 but focuses nothing marked yet.
-    const bar = barWorkspaces({ monitor: "DP-1", monitors: [{ name: "DP-1", workspace: 4 }], windows: nautilus, marks });
+    const bar = barWorkspaces({ monitor: "DP-1", monitors: [{ name: "DP-1", workspace: 4 }], workspaces: nine, windows: nautilus, marks });
     assert.equal(bar[3].urgent, true);
     // And a window that was on screen at the time stays unmarked when it's hidden.
     assert.equal(bar[1].urgent, false);
@@ -186,20 +280,6 @@ test("updateMarks leaves its input alone and rejects unknown events", () => {
     updateMarks(marks, { type: "closed", address: "n2" });
     assert.deepEqual(marks.notes[1].wide, ["n2", "n3"]);
     assert.throws(() => updateMarks(marks, { type: "bogus" }), /unknown mark event bogus/);
-});
-
-test("scrolling steps one workspace per notch and stops at 1 and 9", () => {
-    assert.equal(scrollTarget(4, 1), 5);
-    assert.equal(scrollTarget(4, -1), 3);
-    assert.equal(scrollTarget(4, 3), 7);
-    assert.equal(scrollTarget(7, 5), 9);
-    assert.equal(scrollTarget(2, -4), 1);
-    assert.equal(scrollTarget(9, 1), null);
-    assert.equal(scrollTarget(1, -1), null);
-    assert.equal(scrollTarget(4, 0), null);
-    assert.equal(scrollTarget(4, 0.5), null);
-    assert.equal(scrollTarget(-98, 1), null);
-    assert.equal(scrollTarget(undefined, 1), null);
 });
 
 test("addresses are compared the way Quickshell spells them", () => {

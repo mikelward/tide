@@ -62,6 +62,7 @@ ShellRoot {
         InputData.listDevices();
         KeysData.list();
         LayoutsData.load();
+        WorkspacesData.load();
         OutputsData.load();
         OutputsData.listMonitors();
     }

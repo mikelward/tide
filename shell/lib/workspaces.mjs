@@ -2,10 +2,12 @@
 // QML binds to. The QML turns Quickshell.Hyprland's monitors and toplevels
 // into the plain objects these take, and maps app IDs to icons.
 
-export const FIRST = 1;
-export const LAST = 9;
+import { sameName } from "./workspacenames.mjs";
+
 // Icons shown per workspace before the rest collapse into "+n".
 export const MAX_ICONS = 5;
+// The most of a name the bar shows before an ellipsis (§7.2).
+export const BAR_NAME = 16;
 
 // Attention marks (§14.4), kept as events arrive. A snapshot can't say
 // which came first or what was on screen when a notification arrived, so
@@ -324,54 +326,141 @@ function icons(windows, marked) {
     return { icons: shown, more: windows.length - shown.length };
 }
 
-// What one monitor's bar shows: workspaces FIRST to LAST, always all nine
-// (§7.1), each as
+// The bar's workspaces in its order (§6.5, §7.1): the standing ones as
+// `standing` lists them, the first being home, whether Hyprland has them
+// yet or not; then the rest, named ones in the order they were made, which
+// is their falling IDs, and any numbered one (a second monitor's, before
+// anything names it) after them by number. `workspaces` is Hyprland's,
+// [{id, name}]; special workspaces aren't on the bar. Each is
+// {id, name, standing, home}, id being null for a standing one that isn't
+// made yet. A standing name matches a workspace's without case, as one
+// typed at the prompt does, so `In` made by hand is still home's place.
+export function workspaceOrder(workspaces, standing) {
+    const real = workspaces.filter((w) => Number.isInteger(w.id) && !String(w.name ?? "").startsWith("special:"));
+    const taken = new Set();
+    const out = [];
+    standing.forEach((name, i) => {
+        const exact = real.find((w) => w.name === name && !taken.has(w.id));
+        const found = exact ?? real.find((w) => sameName(w.name, name) && !taken.has(w.id));
+        if (found) {
+            taken.add(found.id);
+        }
+        out.push({ id: found ? found.id : null, name: found ? found.name : name, standing: true, home: i === 0 });
+    });
+    const rest = real.filter((w) => !taken.has(w.id));
+    const named = rest.filter((w) => w.id < 0).sort((a, b) => b.id - a.id);
+    const numbered = rest.filter((w) => w.id > 0).sort((a, b) => a.id - b.id);
+    for (const w of named.concat(numbered)) {
+        out.push({ id: w.id, name: String(w.name ?? w.id), standing: false, home: false });
+    }
+    return out;
+}
+
+// A name as the bar shows it: cut with an ellipsis past BAR_NAME
+// characters, never inside one.
+export function barName(name) {
+    const chars = [...String(name ?? "")];
+    return chars.length > BAR_NAME ? chars.slice(0, BAR_NAME - 1).join("") + "…" : chars.join("");
+}
+
+// What one monitor's bar shows: every workspace in workspaceOrder's order,
+// each as
 //
-//   {id, state, urgent, big, icons: [{address, app, marked}], more}
+//   {id, name, label, standing, home, state, urgent, big,
+//    icons: [{address, app, marked}], more}
 //
-// where state is "current" (this monitor's workspace), "elsewhere" (shown
-// on another monitor), "occupied" or "empty"; urgent is any marked window
-// on it; and big is a maximized or fullscreen window on it (§6.3).
+// where label is the name as the bar shows it (barName); state is
+// "current" (this monitor's workspace), "elsewhere" (shown on another
+// monitor), "occupied" or "empty", which a standing workspace not made yet
+// always is; urgent is any marked window on it; and big is a maximized or
+// fullscreen window on it (§6.3).
 //
 // `monitors` is [{name, workspace}], each monitor's active workspace ID.
-// `windows` is [{address, workspace, app, urgent, fullscreen}] in the order
-// their icons should appear, fullscreen being the client's `fullscreen`
-// state from `hyprctl clients` (0 none, 1 maximized, 2 fullscreen, 3 both),
-// not the 0/1 argument the `fullscreen` dispatcher takes (SPEC.md §6.3). Special workspaces (negative IDs) and
-// any outside FIRST..LAST aren't on the bar. `marks` comes from updateMarks.
-export function barWorkspaces({ monitor, monitors, windows, marks = NO_MARKS }) {
+// `workspaces` is Hyprland's, [{id, name}], and `standing` the standing
+// names. `windows` is [{address, workspace, app, urgent, fullscreen}] in
+// the order their icons should appear, workspace being its ID, fullscreen
+// being the client's `fullscreen` state from `hyprctl clients` (0 none, 1
+// maximized, 2 fullscreen, 3 both), not the 0/1 argument the `fullscreen`
+// dispatcher takes (SPEC.md §6.3). `marks` comes from updateMarks.
+export function barWorkspaces({ monitor, monitors, workspaces, windows, marks = NO_MARKS, standing = [] }) {
     const current = monitors.find((m) => m.name === monitor)?.workspace;
     const elsewhere = new Set(monitors.filter((m) => m.name !== monitor).map((m) => m.workspace));
     const marked = markedWindows({ windows, marks });
-    const list = [];
-    for (let id = FIRST; id <= LAST; id++) {
-        const here = windows.filter((w) => w.workspace === id);
+    return workspaceOrder(workspaces, standing).map((ws) => {
+        const here = ws.id === null ? [] : windows.filter((w) => w.workspace === ws.id);
         let state = here.length > 0 ? "occupied" : "empty";
-        if (id === current) {
+        if (ws.id !== null && ws.id === current) {
             state = "current";
-        } else if (elsewhere.has(id)) {
+        } else if (ws.id !== null && elsewhere.has(ws.id)) {
             state = "elsewhere";
         }
-        list.push(Object.assign({
-            id,
+        return Object.assign({
+            id: ws.id,
+            name: ws.name,
+            label: barName(ws.name),
+            standing: ws.standing,
+            home: ws.home,
             state,
             urgent: here.some((w) => marked.has(w.address)),
             big: here.some((w) => w.fullscreen > 0),
-        }, icons(here, marked)));
-    }
-    return list;
+        }, icons(here, marked));
+    });
 }
 
-// The workspace `notches` of scrolling over the bar go to from `current`:
-// one step per notch, toward the next workspace for a positive count and
-// the previous for a negative one, stopping at FIRST and LAST as
-// Super+Left/Right do. null means stay: no whole notch, already at the end,
-// or on a special workspace, which has no neighbors.
-export function scrollTarget(current, notches) {
+// The name of the workspace `notches` of scrolling over the bar go to from
+// the one with ID `current`, in the bar's order (`list`, from
+// barWorkspaces or workspaceOrder): one step per notch, toward the next
+// for a positive count and the previous for a negative one, stopping at
+// either end as Super+Left/Right do. null means stay: no whole notch,
+// already at the end, or on a workspace the bar doesn't list (a special
+// one), which has no neighbors.
+export function scrollTarget(list, current, notches) {
     const steps = Math.trunc(notches);
-    if (!Number.isInteger(current) || current < FIRST || current > LAST || !steps) {
+    const i = list.findIndex((w) => w.id !== null && w.id === current);
+    if (i < 0 || !steps) {
         return null;
     }
-    const target = Math.min(LAST, Math.max(FIRST, current + steps));
-    return target === current ? null : target;
+    const target = Math.min(list.length - 1, Math.max(0, i + steps));
+    return target === i ? null : list[target].name;
+}
+
+// What a workspace event on Hyprland's socket says, or null for any other
+// event: {type: "created" | "destroyed" | "renamed", id, name}. A name
+// may hold a comma, so the ID runs to the first one and the name is the
+// rest (§6.5).
+export function workspaceEvent(name, data) {
+    const types = { createworkspacev2: "created", destroyworkspacev2: "destroyed", renameworkspace: "renamed" };
+    const type = types[name];
+    if (type === undefined) {
+        return null;
+    }
+    const text = String(data ?? "");
+    const comma = text.indexOf(",");
+    if (comma < 0 || !/^-?\d+$/.test(text.slice(0, comma))) {
+        return null;
+    }
+    return { type, id: Number(text.slice(0, comma)), name: text.slice(comma + 1) };
+}
+
+// The home workspace's ID after `event` (workspaceEvent), from `id`, the
+// one before (null while it isn't made): a workspace made under home's
+// name is home, and home destroyed is gone. A rename doesn't move it: the
+// shell renames it back (homeRenamed).
+export function homeIdAfter(id, event, home) {
+    if (event === null) {
+        return id;
+    }
+    if (event.type === "created" && event.name === home) {
+        return event.id;
+    }
+    if (event.type === "destroyed" && event.id === id) {
+        return null;
+    }
+    return id;
+}
+
+// Whether `event` renamed the home workspace (ID `id`) away from `home`,
+// which the shell undoes: home can't be renamed (§6.5).
+export function homeRenamed(id, event, home) {
+    return event !== null && event.type === "renamed" && id !== null && event.id === id && event.name !== home;
 }
