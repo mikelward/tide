@@ -5,6 +5,7 @@
 
 import { match } from "./fuzzy.mjs";
 import { attentionOrder, markedWindows } from "./workspaces.mjs";
+import { minimizedFrom } from "./minimized.mjs";
 
 // The tabs, in order.
 export const TABS = Object.freeze(["apps", "workspaces", "windows", "attention"]);
@@ -106,16 +107,20 @@ export function workspaceRows(list, query) {
     return filtered(rows, query, (r) => [r.item.name]);
 }
 
-// One window's row: its title, and its app and workspace below.
+// One window's row: its title, and its app and workspace below. A
+// minimized window (SPEC.md §6.7) is under the workspace it came from,
+// said so, and `restoreTo` names that workspace, where Enter puts it back.
 function windowRow(w) {
+    const from = minimizedFrom(w.workspace);
     return {
         item: {
             kind: "window",
             id: w.address,
             address: w.address,
             name: w.title || w.appName || w.app || "Untitled",
-            sub: [w.appName || w.app, w.workspace].filter((s) => s).join(" · "),
+            sub: [w.appName || w.app, from ?? w.workspace, from !== null ? "minimized" : ""].filter((s) => s).join(" · "),
             icon: w.app,
+            restoreTo: from,
         },
         positions: [],
         section: "",

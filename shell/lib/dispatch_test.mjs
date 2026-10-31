@@ -1,7 +1,7 @@
 // Tests for dispatch.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, closeWindow } from "./dispatch.mjs";
+import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, closeWindow, minimizeWindow } from "./dispatch.mjs";
 
 test("a Lua config gets hl.dsp calls", () => {
     assert.equal(focusWorkspace(3, true), "hl.dsp.focus({ workspace = 3 })");
@@ -55,4 +55,13 @@ test("the name prompt moves its window by address, following it", () => {
 test("its Esc closes a window politely, by address", () => {
     assert.equal(closeWindow("55aa01", true), 'hl.dsp.window.close({ window = "address:0x55aa01" })');
     assert.equal(closeWindow("55aa01", false), "closewindow address:0x55aa01");
+});
+
+test("minimizing moves a window silently to its workspace's minimize workspace", () => {
+    assert.equal(minimizeWindow("55AA01", "re", true),
+        'hl.dsp.window.move({ workspace = "special:minimized:re", follow = false, window = "address:0x55aa01" })');
+    assert.equal(minimizeWindow("0x55aa01", "PR-12, login", false), "movetoworkspacesilent special:minimized:PR-12, login,address:0x55aa01");
+    assert.throws(() => minimizeWindow("x) os.exit(", "re", true), /not a window address/);
+    assert.throws(() => minimizeWindow("55aa01", "a\nb", true), /not a workspace name/);
+    assert.throws(() => minimizeWindow("55aa01", "", true), /not a workspace name/);
 });
