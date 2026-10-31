@@ -22,7 +22,7 @@ display manager to the greeter. By hand, it's:
     make install                       # builds tide-grant, tide-tz and tide-greetd (needs Go 1.22+); layout, user units, portal config under ~/.config
     sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant, tide-tz, tide-greetd and tide-sysmon under /usr/local
     systemctl --user daemon-reload
-    systemctl --user enable tide.service
+    systemctl --user enable tide.service tide-clipboard.service
 
 By hand, also install what the session runs: Hyprland 0.56 or later,
 Quickshell 0.3 (`qs`, which draws the bar; without it `tide-shell`
@@ -31,7 +31,9 @@ or swaybg (for waybar's bar; the Quickshell shell draws its own wallpaper),
 notify-send (libnotify), which the shell reports a bad settings
 file with, jq, which `tide doctor` reads Hyprland's JSON with, python3,
 which it reads the session bus's config with, and NetworkManager's nmcli,
-which the network menu lists VPNs with. `setup-tide` installs them all.
+which the network menu lists VPNs with, and wl-clipboard and cliphist,
+which keep the clipboard history the picker on `Super+C` lists (SPEC.md
+§8.4). `setup-tide` installs them all.
 jq and python3 are free distro packages that run locally, with no network
 calls; without one, the doctor reports the check it skipped.
 
@@ -112,7 +114,8 @@ wrong process or that D-Bus could start a rival for, daemons running twice
 or rivals to an owner, the portal
 config, Hyprland's config errors, autostart entries that run in
 tide without being on its allowlist, and a lock that couldn't work: its
-unit, `lock.qml` or PAM file missing, or the last lock failed. It exits 1
+unit, `lock.qml` or PAM file missing, or the last lock failed, and
+cliphist missing or `tide-clipboard.service` stopped. It exits 1
 if it found a problem.
 
 XDG autostart is an allowlist in tide. `make install` adds one systemd

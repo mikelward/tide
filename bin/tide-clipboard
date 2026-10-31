@@ -1,0 +1,181 @@
+#!/bin/sh
+#
+# tide clipboard: the clipboard history behind the picker on Super+C
+# (SPEC.md §8.4), kept by cliphist.
+#
+#   tide clipboard store [--max-items N]
+#
+#     Run by tide-clipboard.service as `wl-paste --watch tide clipboard
+#     store`, with each new copy on stdin, and stores it with `cliphist
+#     store`, keeping the newest N (default 200). A copy a password manager
+#     marks is never stored: one whose CLIPBOARD_STATE is `sensitive` (a
+#     wl-clipboard newer than 2.2.1 says so), or whose types, as
+#     `wl-paste --list-types` lists them, include x-kde-passwordManagerHint.
+#     If the types can't be read, the copy isn't stored, and it says why.
+#
+#   tide clipboard list
+#
+#     Prints the history, newest first, one `ID<TAB>preview` per line, as
+#     `cliphist list` does, each preview up to 1,000 characters where
+#     cliphist can (0.6.0 and later; 100 before). The picker reads it.
+#
+#   tide clipboard copy ID
+#
+#     Puts entry ID back on the clipboard (`cliphist decode | wl-copy`).
+#
+#   tide clipboard delete ID
+#
+#     Removes entry ID from the history.
+#
+#   tide clipboard wipe [--notify]
+#
+#     Removes the whole history (`cliphist wipe`). With --notify, as the
+#     launcher's Clear clipboard history runs it, a failure is a
+#     notification too.
+#
+# Exits 1, saying why, when cliphist or wl-clipboard fails or is missing,
+# and 2 for a bad argument.
+
+prog="tide clipboard"
+HINT=x-kde-passwordManagerHint
+
+usage() {
+    echo "usage: $prog store [--max-items N]" >&2
+    echo "       $prog list" >&2
+    echo "       $prog copy ID" >&2
+    echo "       $prog delete ID" >&2
+    echo "       $prog wipe [--notify]" >&2
+    exit 2
+}
+
+need() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "$prog: $1 isn't installed, so there's no clipboard history; install the $2 package" >&2
+        exit 1
+    fi
+}
+
+entry_id() {
+    case "$1" in
+        '' | *[!0-9]*)
+            echo "$prog: not an entry ID: $1" >&2
+            exit 2
+            ;;
+    esac
+}
+
+store() {
+    max=200
+    while test $# -gt 0; do
+        case "$1" in
+            --max-items) test $# -ge 2 || usage; max=$2; shift 2 ;;
+            --max-items=*) max=${1#*=}; shift ;;
+            *) usage ;;
+        esac
+    done
+    case "$max" in
+        '' | *[!0-9]* | 0)
+            echo "$prog store: --max-items must be a whole number above 0, not '$max'" >&2
+            exit 2
+            ;;
+    esac
+    # wl-clipboard sets CLIPBOARD_STATE for a --watch command: nil when the
+    # clipboard empties, which leaves nothing to store, and, on versions
+    # newer than 2.2.1, sensitive for a password manager's copy.
+    case "${CLIPBOARD_STATE:-data}" in
+        sensitive | nil | clear) exit 0 ;;
+    esac
+    need wl-paste wl-clipboard
+    need cliphist cliphist
+    # Read just after the copy arrived, so a copy replaced within that
+    # moment is judged by its replacement's types (SPEC.md §8.4).
+    if ! types=$(wl-paste --list-types 2>&1); then
+        echo "$prog store: couldn't list the copy's types, so it isn't stored, in case it's a password: $types" >&2
+        exit 1
+    fi
+    if printf '%s\n' "$types" | grep -qx "$HINT"; then
+        exit 0
+    fi
+    exec cliphist -max-items "$max" store
+}
+
+list() {
+    test $# -eq 0 || usage
+    need cliphist cliphist
+    # Each preview is what the picker searches, and cliphist cuts it at 100
+    # characters. 0.6.0 added -preview-width, which `version` lists among
+    # its flags; older ones refuse the flag (0.4.0 has no `version` either),
+    # and list at 100.
+    if cliphist version 2>&1 | grep -q '^preview-width'; then
+        exec cliphist -preview-width 1000 list
+    fi
+    exec cliphist list
+}
+
+copy() {
+    test $# -eq 1 || usage
+    entry_id "$1"
+    need cliphist cliphist
+    need wl-copy wl-clipboard
+    # Through a file on the runtime directory's tmpfs, so both halves'
+    # failures are seen: plain sh has no pipefail.
+    if ! tmp=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/tide-clipboard.XXXXXX"); then
+        echo "$prog copy: couldn't make a temporary file" >&2
+        exit 1
+    fi
+    trap 'rm -f "$tmp"' EXIT
+    # The ID on stdin, as `list` printed it: cliphist 0.4.0's decode takes
+    # no argument, and later ones read stdin when given none.
+    if ! err=$(printf '%s\t\n' "$1" | cliphist decode 2>&1 >"$tmp"); then
+        echo "$prog copy: cliphist couldn't find entry $1: $err" >&2
+        exit 1
+    fi
+    if ! err=$(wl-copy <"$tmp" 2>&1); then
+        echo "$prog copy: wl-copy failed: $err" >&2
+        exit 1
+    fi
+}
+
+delete() {
+    test $# -eq 1 || usage
+    entry_id "$1"
+    need cliphist cliphist
+    # cliphist delete reads the lines `list` printed; the ID is all it uses.
+    if ! err=$(printf '%s\t\n' "$1" | cliphist delete 2>&1); then
+        echo "$prog delete: cliphist couldn't delete entry $1: $err" >&2
+        exit 1
+    fi
+}
+
+wipe() {
+    notify=no
+    case "${1:-}" in
+        '') ;;
+        --notify) notify=yes; test $# -eq 1 || usage ;;
+        *) usage ;;
+    esac
+    if ! command -v cliphist >/dev/null 2>&1; then
+        err="cliphist isn't installed, so there's no clipboard history to clear"
+    elif err=$(cliphist wipe 2>&1); then
+        exit 0
+    else
+        err="cliphist wipe failed: $err"
+    fi
+    echo "$prog wipe: $err" >&2
+    if test "$notify" = yes; then
+        # Best effort: the message is on stderr, which the shell logs, either way.
+        if ! notify-send -a tide "Clipboard history not cleared" "$err"; then
+            echo "$prog wipe: notify-send failed too" >&2
+        fi
+    fi
+    exit 1
+}
+
+case "${1:-}" in
+    store) shift; store "$@" ;;
+    list) shift; list "$@" ;;
+    copy) shift; copy "$@" ;;
+    delete) shift; delete "$@" ;;
+    wipe) shift; wipe "$@" ;;
+    *) usage ;;
+esac

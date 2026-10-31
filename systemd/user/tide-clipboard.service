@@ -1,0 +1,22 @@
+# The clipboard history behind the picker on Super+C (SPEC.md §8.4): each
+# new copy goes to cliphist through `tide clipboard store`, which skips one
+# a password manager marks.
+[Unit]
+Description=tide clipboard history
+Documentation=https://github.com/mikelward/tide
+# Scoped to the tide session. Plasma reaches graphical-session.target
+# too, so this is never WantedBy= that.
+PartOf=graphical-session.target
+After=wayland-session@tide-hyprland.target graphical-session.target
+
+[Service]
+# The clipboard only, not the primary selection (middle-click).
+ExecStart=wl-paste --watch tide clipboard store --max-items 200
+# cliphist creates its database with mode 0644; this makes it 0600.
+UMask=0077
+Restart=on-failure
+RestartSec=1
+Slice=background-graphical.slice
+
+[Install]
+WantedBy=wayland-session@tide-hyprland.target
