@@ -426,6 +426,16 @@ case "\$1" in
     -c) config=shell ;;
     *) config=\$(basename "\$2" .qml) ;;
 esac
+# As the lock, it locks the screen: loaded, it records its pid, and once
+# it's gone without unlocking, the screen stays locked, as sway keeps it,
+# so the stand-in grim sees only that. The unlock step's lock unlocks it.
+if test "\$config" = lock; then
+    if test -n "\$WAYLAND_DEBUG"; then
+        rm -f "\$XDG_RUNTIME_DIR/locked"
+    else
+        echo \$\$ >"\$XDG_RUNTIME_DIR/locked"
+    fi
+fi
 # As the shell, with no wallpaper to draw, it records none for the lock.
 if test "\$config" = shell && ! test -e "\$(dirname "\$0")/no-wallpaper-record"; then
     printf '\n' >"\$XDG_RUNTIME_DIR/tide-wallpaper"
@@ -917,8 +927,10 @@ check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focu
 case_30() {
 stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup clipboard lid popups"
 run "$tmp/no-keyboards"
-check "a lock that never asks hyprctl for the keyboards fails" test "$code" -ne 0
-check "and says so" contains "$out" 'the lock never ran "hyprctl devices -j..." in 2 s'
+# The greeter, which loads before the lock, asks the same of hyprctl, so
+# whichever face runs first is the one named.
+check "a lock and greeter that never ask hyprctl for the keyboards fail" test "$code" -ne 0
+check "and say so" contains "$out" 'never ran "hyprctl devices -j..." in 2 s'
 }
 
 case_31() {
@@ -1419,8 +1431,8 @@ case_97() {
 stubs "$tmp/no-keyboard-watch" "exit 0" "$loaded"
 : >"$tmp/no-keyboard-watch/no-keyboard-watch" || exit 1
 run "$tmp/no-keyboard-watch"
-check "a lock that never counts the keyboards for the field's focus fails" test "$code" -ne 0
-check "and says so" contains "$out" 'the lock never ran "tide keyboards..." in 2 s'
+check "a lock and greeter that never count the keyboards for the field's focus fail" test "$code" -ne 0
+check "and say so" contains "$out" 'never ran "tide keyboards..." in 2 s'
 }
 
 case_98() {
@@ -1462,11 +1474,21 @@ check "and says so" contains "$out" "the shell didn't reload after make install-
 
 case_103() {
 stubs "$tmp/shots" "exit 0" "$loaded"
-# A grim that writes what it's asked for, as CI's does.
-printf '#!/bin/sh\nfor f in "$@"; do :; done\necho png >"$f"\n' >"$tmp/shots/grim" || exit 1
+# A grim that writes what it's asked for, as CI's does, unless a lock that
+# has gone without unlocking still holds the screen, as sway keeps it then.
+cat >"$tmp/shots/grim" <<'EOF2'
+#!/bin/sh
+if test -s "$XDG_RUNTIME_DIR/locked" && ! kill -0 "$(cat "$XDG_RUNTIME_DIR/locked")" 2>/dev/null; then
+    echo "the screen is still locked by a lock that's gone" >&2
+    exit 1
+fi
+for f in "$@"; do :; done
+echo png >"$f"
+EOF2
 chmod +x "$tmp/shots/grim" || exit 1
 run "$tmp/shots" TIDE_SCREENSHOTS="$tmp/shots/out"
 check "a run asked for screenshots passes" test "$code" -eq 0
+# Each face shows: none is photographed behind a lock left behind.
 for _face in shell lock greeter; do
     check "and takes one of the $_face" test -s "$tmp/shots/out/$_face.png"
 done
