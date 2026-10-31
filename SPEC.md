@@ -1375,8 +1375,9 @@ See [`bar.png`](docs/mocks/bar.png).
   from the first clock.
 - The clocks sit 12 px apart: 5 px inside each, either side of its text,
   and 2 px between them.
-- The volume's % is held as wide as two digits, so the icons after it
-  don't move as the level changes, except at 100%.
+- The volume's % and the CPU's are held as wide as two digits, so the
+  icons around them don't move as the level changes, except at 100%. Room
+  for three would leave a blank after every reading below 100%.
 
 **Tray menus.**
 

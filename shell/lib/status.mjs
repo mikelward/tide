@@ -6,6 +6,10 @@
 export const LOW_BATTERY = 0.15;
 // One scroll notch over the volume icon changes it by this much.
 export const VOLUME_STEP = 0.05;
+// The room the bar holds for a % beside an icon (the volume's, the CPU's):
+// two digits, as almost every reading is, so the icons around it don't
+// shift as it changes. Room for "100%" left a digit's blank after the rest.
+export const PERCENT_ROOM = "00%";
 
 const CHARGING = 1;
 const FULLY_CHARGED = 4;
