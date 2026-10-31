@@ -6,14 +6,17 @@ import "lib/launcher.mjs" as Search
 import "lib/workspacenames.mjs" as Names
 import "lib/workspaces.mjs" as Ws
 
-// The name prompt (SPEC.md §6.5): names the workspace a window goes to, or
-// a launch opens on. It's drawn like the launcher, centered near the top of
-// the focused monitor, and holds the keyboard the same way. PromptData
-// says what it's for; this shows the first request waiting.
+// The name prompt (SPEC.md §6.5): names the workspace a window goes to, a
+// launch opens on, or Super+Return goes to. It's drawn like the launcher,
+// centered near the top of the focused monitor, and holds the keyboard the
+// same way. PromptData says what it's for; this shows the first request
+// waiting.
 //   - The text starts as the window's short name, selected, so typing
 //     replaces it, and follows the window's title until you type.
+//     With no window, as for Super+Return or a launch, it starts empty.
 //   - The rows are the typed name, when it's new, then the workspaces that
-//     match it. Home is offered only to one of home's apps.
+//     match it. Home is offered only to one of home's apps, and to
+//     Super+Return, which moves nothing.
 //   - Enter goes to the selected row's workspace, made if it's new; Esc is
 //     PromptData.cancel's.
 PanelWindow {
@@ -137,9 +140,7 @@ PanelWindow {
                 leftPadding: 4
                 elide: Text.ElideRight
                 textFormat: Text.PlainText
-                text: root.request?.kind === "launch" ? "Open on the workspace named"
-                    : root.request?.kind === "move" ? "Move this window to the workspace named"
-                    : "This window goes to the workspace named"
+                text: Names.promptHeading(root.request?.kind)
                 color: Theme.fgDim
                 font.family: Theme.font
                 font.pixelSize: 12

@@ -6,6 +6,7 @@ import {
     parseWorkspaceSettings, loadWorkspaceSettings, inAppPatterns, workspacesLua, luaString,
     checkPatterns, cleanTitle, firstWord, shortName, isHomeApp, promptWanted, clientAt, normalizeAppId, checkMuteEntry,
     promptRows, promptChoice, NO_PROMPTS, promptQueued, promptDone, promptWindowGone,
+    promptHeading, promptAnswer, promptCancel,
     NO_WINDOWS, windowOpened, windowFocused, windowClosed, windowAnswered, checkMuted, withMuted,
 } from "./workspacenames.mjs";
 
@@ -246,6 +247,53 @@ test("prompts wait their turn, and one coming doesn't answer the one shown", () 
     assert.deepEqual(s.queue.map((r) => r.id), [2]);
     // Answering one already gone changes nothing.
     assert.deepEqual(promptDone(s, 9), s);
+});
+
+test("Super+Return asks with no window at all, and Enter goes there, moving nothing", () => {
+    // No address: nothing about it depends on a focused window.
+    const s = promptQueued(NO_PROMPTS, { kind: "go", allowHome: true });
+    const go = s.queue[0];
+    assert.equal(go.address, undefined);
+    assert.equal(promptHeading(go.kind), "Go to the workspace named");
+    // An existing name, and a new one, which Hyprland makes on going there.
+    const rows = promptRows({ names, typed: "notes", home: "in", allowHome: go.allowHome });
+    assert.deepEqual(rows[0], { name: "notes", isNew: true, positions: [] });
+    assert.deepEqual(promptAnswer(go, promptChoice({ rows, selected: 0, typed: "notes", home: "in" }).name), { go: "notes" });
+    assert.deepEqual(promptAnswer(go, "docs"), { go: "docs" });
+    // Home is a place to go, so it's offered.
+    assert.equal(promptRows({ names, typed: "in", home: "in", allowHome: go.allowHome })[0].name, "in");
+    // Esc stays where you are.
+    assert.deepEqual(promptCancel(go), {});
+    // A second press while it's up is the same question.
+    assert.deepEqual(promptQueued(s, { kind: "go", allowHome: true }), s);
+    // A window closing doesn't take it away.
+    assert.deepEqual(promptWindowGone(s, "0x1"), s);
+});
+
+test("Super+Shift+Return moves its window, and Esc leaves it be", () => {
+    const move = { kind: "move", address: "0x5", id: 1 };
+    assert.equal(promptHeading("move"), "Move this window to the workspace named");
+    assert.deepEqual(promptAnswer(move, "docs"), { move: "0x5", name: "docs" });
+    assert.deepEqual(promptCancel(move), {});
+    // A move waiting doesn't stop a go, nor a go a move.
+    let s = promptQueued(NO_PROMPTS, move);
+    s = promptQueued(s, { kind: "go" });
+    s = promptQueued(s, { kind: "move", address: "0x6" });
+    assert.deepEqual(s.queue.map((r) => r.kind), ["move", "go", "move"]);
+});
+
+test("a new window's and a launch's Enter and Esc", () => {
+    const win = { kind: "window", address: "0x7" };
+    assert.equal(promptHeading("window"), "This window goes to the workspace named");
+    assert.deepEqual(promptAnswer(win, "docs"), { move: "0x7", name: "docs" });
+    assert.deepEqual(promptCancel(win), { close: "0x7" });
+    const waiting = { kind: "launch", answer: "/run/fifo" };
+    assert.equal(promptHeading("launch"), "Open on the workspace named");
+    assert.deepEqual(promptAnswer(waiting, "docs"), { reply: "workspace docs", answer: "/run/fifo" });
+    assert.deepEqual(promptCancel(waiting), { reply: "cancel", answer: "/run/fifo" });
+    const ctrlEnter = { kind: "launch", argv: ["--", "kitty"], cwd: "/home/user" };
+    assert.deepEqual(promptAnswer(ctrlEnter, "docs"), { launch: ["--", "kitty"], cwd: "/home/user", name: "docs" });
+    assert.deepEqual(promptCancel(ctrlEnter), {});
 });
 
 test("a window's first focus asks about it once", () => {

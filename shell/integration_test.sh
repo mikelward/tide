@@ -43,7 +43,9 @@
 # installed.
 #
 # With wtype, it also types into them. It opens the launcher, types the
-# name of an app only it installs, and expects Enter to run that app. Given
+# name of an app only it installs, and expects Enter to run that app. It
+# opens Super+Return's name prompt, with no window focused, and expects a
+# name and Enter to go to that workspace. Given
 # the password of the user running it, it also unlocks the lock: it types a
 # wrong password and then the right one, and expects PAM to turn down the
 # first and the lock to unlock and exit on the second. That needs
@@ -1174,7 +1176,7 @@ focused() {
 # settings panel on its Mouse page. Then it opens the settings panel and
 # expects Down twice, past Idle and Sound, and Enter to open the Network
 # page's app, then the picker's Characters tab to copy é, and checks the
-# share picker (share). A stand-in tide on
+# share picker (share) and Super+Return's name prompt (prompt). A stand-in tide on
 # the shell's PATH keeps each command rather than running it. Its log is
 # $tmp/launch.qs.log.
 launch() {
@@ -1302,10 +1304,11 @@ launch() {
         exit 1
     fi
     share
+    prompt
     kill "$qs_pid"
     wait "$qs_pid"
     qs_pid=
-    reports "the launcher ran an app, the settings panel opened one, the picker copied é and the share picker answered"
+    reports "the launcher ran an app, the settings panel opened one, the picker copied é, the share picker answered and the name prompt went to a workspace"
     echo "ok: the launcher finds an app by a query without its accent, and runs it"
     echo "ok: the launcher's Mouse settings opens the settings panel on its Mouse page"
     echo "ok: the settings panel changes page with the arrows and opens the page's app"
@@ -1356,6 +1359,44 @@ share() {
         exit 1
     fi
     echo "ok: the share picker answers tide-share-picker's pipe with the window chosen"
+}
+
+# prompt: on the shell launch() started, which has no Hyprland and so no
+# window focused, asks for Super+Return's name prompt (SPEC.md §6.5), and
+# fails the test unless it shows in its go mode and takes the keyboard,
+# and "notes" and Enter go to that new workspace, then nothing is shown.
+# With no Hyprland to take it, Quickshell logs the dispatch as one it
+# couldn't make, which is how it's seen here.
+prompt() {
+    _what="the name prompt"
+    _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
+    ipc call prompt go >/dev/null || exit 1
+    focused "$_focus"
+    _shown=$(ipc call prompt shown) || exit 1
+    if test "$_shown" != go; then
+        echo "FAIL: Super+Return's name prompt should show to go to a workspace, with no window focused; it shows \"$_shown\"" >&2
+        grep -v '^\[' "$log" >&2
+        exit 1
+    fi
+    timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 "$wtype_path" "notes
+" >"$tmp/wtype.log" 2>&1
+    typed $? "the name prompt"
+    i=0
+    until grep 'dispatch' "$log" | grep -qF 'name:notes'; do
+        if waited "the name prompt didn't go to the workspace named notes" "$i"; then
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    _shown=$(ipc call prompt shown) || exit 1
+    if test -n "$_shown"; then
+        echo "FAIL: the name prompt should be gone once Enter went to notes; it shows \"$_shown\"" >&2
+        exit 1
+    fi
+    echo "ok: Super+Return's name prompt opens with no window focused, and Enter goes to a new workspace"
 }
 
 # ipc ARG...: runs `qs ipc --pid` on the running shell, within the limit.

@@ -9,7 +9,8 @@
 # tide-tz never ends, one whose clocks, system monitor, title, focus guard
 # calls, color scheme or VPNs warn, one whose icon won't load, a
 # notification server that records what it's sent or doesn't, a launcher
-# that runs the app typed or doesn't, a settings panel that opens the
+# that runs the app typed or doesn't, a name prompt that goes to the
+# workspace typed or doesn't, a settings panel that opens the
 # Network page's app or doesn't, a lock that can't read its
 # keyboards, or unlocks or doesn't, and a greeter that logs in or doesn't.
 # The stand-in Hyprland, hyprctl, tide-sysmon, gsettings, nmcli and greetd
@@ -121,6 +122,10 @@ if test "\$1" = ipc; then
         # on one, until it closes.
         *"call settings shownPage"*) if test -e "\$XDG_RUNTIME_DIR/settings-page"; then cat "\$XDG_RUNTIME_DIR/settings-page"; fi ;;
         *"call settings close"*) rm -f "\$XDG_RUNTIME_DIR/settings-page" ;;
+        # Super+Return's name prompt, in its go mode, or as a move with
+        # DIR/prompt-moves, until it's answered.
+        *"call prompt go"*) if test -e "\$(dirname "\$0")/prompt-moves"; then echo move; else echo go; fi >"\$XDG_RUNTIME_DIR/prompt-open" ;;
+        *"call prompt shown"*) if test -e "\$XDG_RUNTIME_DIR/prompt-open"; then cat "\$XDG_RUNTIME_DIR/prompt-open"; fi ;;
         *"call picker open characters"*) : >"\$XDG_RUNTIME_DIR/picker-open" ;;
         *"call sharepicker pick \$XDG_RUNTIME_DIR/"*) printf '%s' "\$7" >"\$XDG_RUNTIME_DIR/sharepicker-open" && echo shown ;;
         *"call sharepicker pick "*) echo "refused: \$7 isn't a tide-share-picker pipe" ;;
@@ -595,7 +600,16 @@ shared() {
     printf '%s; %s; %s; printf "%%s\\n" "%s" >"$(cat "$XDG_RUNTIME_DIR/sharepicker-open")"' \
         "$share_opened" "$focused" "$typed" "$1"
 }
-launcher="$settings_ran; $(shared '[SELECTION]r/window:7')"
+shared_ran="$settings_ran; $(shared '[SELECTION]r/window:7')"
+# Then Super+Return's name prompt opens, takes the keyboard, and once its
+# name is typed, goes to NAME, as Quickshell logs a dispatch it couldn't
+# make with no Hyprland, and is gone, unless STAYS.
+prompt_opened='until test -s "$XDG_RUNTIME_DIR/prompt-open"; do sleep 0.1; done'
+went() {
+    printf '%s; %s; %s; %s echo '"'"'  WARN quickshell.hyprland.ipc: Failed to request dispatch of "workspace name:%s"'"'"'' \
+        "$prompt_opened" "$focused" "$typed" "${2:-rm \"\$XDG_RUNTIME_DIR/prompt-open\";}" "$1"
+}
+launcher="$shared_ran; $(went notes)"
 # What a greeter does once the login step starts it: it takes the keyboard,
 # then logs in on the passwords typed, as greeter_client.py's MODE says.
 login_as() {
@@ -675,6 +689,8 @@ check "and a picker that copies the character named passes" contains "$out" "ok:
 check "having typed its name and Enter" test "$(sed -n 4p "$tmp/clean/typed")" = "e acute"
 check "and a share picker that answers the window chosen passes" contains "$out" "ok: the share picker answers tide-share-picker's pipe with the window chosen"
 check "having pressed Right and Enter" test "$(sed -n 5p "$tmp/clean/typed")" = "-k Right -k Return"
+check "and a name prompt that goes to the workspace named passes" contains "$out" "ok: Super+Return's name prompt opens with no window focused, and Enter goes to a new workspace"
+check "having typed its name and Enter" test "$(sed -n 6p "$tmp/clean/typed")" = notes
 }
 
 case_8() {
@@ -1197,7 +1213,7 @@ echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
 check "a lock that unlocks on the right password passes" test "$code" -eq 0
 check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
-check "having typed a wrong password, then the right one" test "$(sed -n 6,7p "$tmp/unlocks/typed")" = "not-pw
+check "having typed a wrong password, then the right one" test "$(sed -n 7,8p "$tmp/unlocks/typed")" = "not-pw
 pw"
 check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
 }
@@ -1274,7 +1290,7 @@ run "$tmp/clean"
 check "a greeter that logs in to tide on the right password passes" \
     contains "$out" "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
 check "having typed a wrong password, then the right one, then the code" \
-    test "$(sed -n 6,8p "$tmp/clean/typed")" = "not-tide-greeter-test
+    test "$(sed -n 7,9p "$tmp/clean/typed")" = "not-tide-greeter-test
 tide-greeter-test
 246810"
 }
@@ -1327,6 +1343,35 @@ stubs "$tmp/no-lid" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title re
 run "$tmp/no-lid"
 check "a shell that doesn't put the lid's action right fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "systemctl --user stop tide-lid-inhibit.service..." in 2 s'
+}
+
+case_92() {
+stubs "$tmp/prompt-unfocused" "exit 0" "$loaded" ":" "$shared_ran"
+run "$tmp/prompt-unfocused"
+check "a name prompt that never takes the keyboard fails" test "$code" -ne 0
+check "and says so" contains "$out" "the name prompt didn't take the keyboard in 2 s"
+}
+
+case_93() {
+stubs "$tmp/prompt-wrong" "exit 0" "$loaded" ":" "$shared_ran; $(went other)"
+run "$tmp/prompt-wrong"
+check "a name prompt that goes to the wrong workspace fails" test "$code" -ne 0
+check "and says so" contains "$out" "the name prompt didn't go to the workspace named notes in 2 s"
+}
+
+case_94() {
+stubs "$tmp/prompt-moves" "exit 0" "$loaded"
+: >"$tmp/prompt-moves/prompt-moves"
+run "$tmp/prompt-moves"
+check "a Super+Return that asks to move a window fails" test "$code" -ne 0
+check "and says what it shows" contains "$out" "Super+Return's name prompt should show to go to a workspace, with no window focused; it shows \"move\""
+}
+
+case_95() {
+stubs "$tmp/prompt-stays" "exit 0" "$loaded" ":" "$shared_ran; $(went notes ':;')"
+run "$tmp/prompt-stays"
+check "a name prompt still shown after Enter fails" test "$code" -ne 0
+check "and says so" contains "$out" "the name prompt should be gone once Enter went to notes; it shows \"go\""
 }
 
 # --case N RESULT: run case_N alone, and write its passes and failures to

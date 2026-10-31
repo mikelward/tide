@@ -14,8 +14,10 @@ import "lib/workspaces.mjs" as Ws
 //     status popup or one of home's apps (Names.promptWanted). One that
 //     takes focus as it opens asks at once; one the focus guard left
 //     waiting asks when you go to it;
-//   - Super+Return, for the focused window (`qs -c tide ipc call prompt
-//     move`);
+//   - Super+Return, for a workspace to go to, moving no window, so it
+//     asks with no window focused too (`qs -c tide ipc call prompt go`);
+//   - Super+Shift+Return, for the focused window (`qs -c tide ipc call
+//     prompt move`);
 //   - a launch from home, which `tide launch` asks about before starting
 //     anything (`ipc call prompt launch JSON`), waiting for the answer on
 //     a FIFO so it starts the app itself, in its caller's environment; and
@@ -47,11 +49,18 @@ Singleton {
         return t ? (t.lastIpcObject?.class || t.wayland?.appId || "") : "";
     }
 
-    // Super+Return: the focused window, wherever it is.
+    // Super+Return: a workspace to go to, from wherever you are, an empty
+    // one included. Home is offered, since nothing moves there.
+    function askGo() {
+        root.ask({ kind: "go", allowHome: true });
+    }
+
+    // Super+Shift+Return: the focused window, wherever it is. With none
+    // there's nothing to move, so it only says so in the log.
     function askMove() {
         const address = Ws.normalizeAddress(Hyprland.activeToplevel?.address);
         if (address === null) {
-            console.log("tide: Super+Return with no window focused; nothing to move");
+            console.log("tide: Super+Shift+Return with no window focused; nothing to move");
             return;
         }
         root.ask({ kind: "move", address: address, allowHome: Names.isHomeApp(root.classOf(address), root.inApps) });
@@ -91,34 +100,39 @@ Singleton {
         Launcher.start(["tide", "launch", "--workspace", name].concat(argv), cwd);
     }
 
-    // Enter: go to `name`, made if it's new.
+    // Enter: go to `name`, made if it's new, as Names.promptAnswer says.
     function answer(name) {
         const r = root.current;
         if (r === null) {
             return;
         }
         root.state = Names.promptDone(root.state, r.id);
-        if (r.kind === "launch" && r.answer !== undefined) {
-            root.reply(r.answer, `workspace ${name}`);
-        } else if (r.kind === "launch") {
-            root.launch(name, r.argv, r.cwd);
+        const a = Names.promptAnswer(r, name);
+        if (a.reply !== undefined) {
+            root.reply(a.answer, a.reply);
+        } else if (a.launch !== undefined) {
+            root.launch(a.name, a.launch, a.cwd);
+        } else if (a.go !== undefined) {
+            Hyprland.dispatch(Dispatch.focusWorkspaceName(a.go, Hyprland.usingLua));
         } else {
-            Hyprland.dispatch(Dispatch.moveWindowToWorkspace(r.address, name, Hyprland.usingLua));
+            Hyprland.dispatch(Dispatch.moveWindowToWorkspace(a.move, a.name, Hyprland.usingLua));
         }
     }
 
-    // Esc: a new window on home closes, politely, as Super+Backspace does;
-    // a launch doesn't happen; Super+Return leaves the window where it is.
+    // Esc, as Names.promptCancel says: a new window on home closes,
+    // politely, as Super+Backspace does; a launch doesn't happen; anything
+    // else stays as it was.
     function cancel() {
         const r = root.current;
         if (r === null) {
             return;
         }
         root.state = Names.promptDone(root.state, r.id);
-        if (r.kind === "window") {
-            Hyprland.dispatch(Dispatch.closeWindow(r.address, Hyprland.usingLua));
-        } else if (r.kind === "launch" && r.answer !== undefined) {
-            root.reply(r.answer, "cancel");
+        const c = Names.promptCancel(r);
+        if (c.close !== undefined) {
+            Hyprland.dispatch(Dispatch.closeWindow(c.close, Hyprland.usingLua));
+        } else if (c.reply !== undefined) {
+            root.reply(c.answer, c.reply);
         }
     }
 
@@ -143,8 +157,16 @@ Singleton {
             root.askAnswer(r.answer, r.apps);
             return "asked";
         }
+        function go(): void {
+            root.askGo();
+        }
         function move(): void {
             root.askMove();
+        }
+        // The kind of the prompt shown ("go", "move", "window" or
+        // "launch"), or "" with none: for the integration test.
+        function shown(): string {
+            return root.current?.kind ?? "";
         }
     }
 
