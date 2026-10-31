@@ -114,3 +114,20 @@ test("a minimized window wanting attention is restored from the Attention tab to
     const rows = attentionRows([{ address: "a", title: "Chat", app: "chat", appName: "Chat", workspace: "special:minimized:in", focus: 0 }], marks, "");
     assert.equal(rows[0].item.restoreTo, "in");
 });
+
+test("muted rows say so, and say what Ctrl+M adds", () => {
+    const rows = windowRows([
+        { address: "a", title: "Chat", app: "chrome-chat.google.com__-Default", appName: "Chat", workspace: "in", focus: 0 },
+        { address: "b", title: "~/src", app: "kitty", appName: "kitty", workspace: "re", focus: 1 },
+    ], "", ["site:chat.google.com"]);
+    assert.deepEqual(rows.map((r) => [r.item.muted, r.item.muteEntry]), [[true, "site:chat.google.com"], [false, "kitty"]]);
+    assert.equal(rows[0].item.sub, "Chat · in · muted");
+    assert.equal(rows[1].item.sub, "kitty · re");
+});
+
+test("the Attention tab leaves out a muted app's windows", () => {
+    const marks = updateMarks(NO_MARKS, { type: "guarded", address: "a" });
+    const rows = [{ address: "a", title: "Slack", app: "Slack", appName: "Slack", workspace: "in", focus: 0 }];
+    assert.equal(attentionRows(rows, marks, "").length, 1);
+    assert.deepEqual(attentionRows(rows, marks, "", ["slack"]), []);
+});

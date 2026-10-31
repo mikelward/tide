@@ -6,6 +6,7 @@
 import { match } from "./fuzzy.mjs";
 import { attentionOrder, markedWindows } from "./workspaces.mjs";
 import { minimizedFrom } from "./minimized.mjs";
+import { windowEntry, windowMuted } from "./mute.mjs";
 
 // The tabs, in order.
 export const TABS = Object.freeze(["apps", "workspaces", "windows", "attention"]);
@@ -110,7 +111,9 @@ export function workspaceRows(list, query) {
 // One window's row: its title, and its app and workspace below. A
 // minimized window (SPEC.md §6.7) is under the workspace it came from,
 // said so, and `restoreTo` names that workspace, where Enter puts it back.
-function windowRow(w) {
+// `muted` says its app is muted (`muted`, the list), and `muteEntry` is
+// what Ctrl+M adds to the list to mute it (SPEC.md §9, Muted apps).
+function windowRow(w, muted) {
     const from = minimizedFrom(w.workspace);
     return {
         item: {
@@ -118,9 +121,12 @@ function windowRow(w) {
             id: w.address,
             address: w.address,
             name: w.title || w.appName || w.app || "Untitled",
-            sub: [w.appName || w.app, from ?? w.workspace, from !== null ? "minimized" : ""].filter((s) => s).join(" · "),
+            sub: [w.appName || w.app, from ?? w.workspace, from !== null ? "minimized" : "", windowMuted(w.app, muted) ? "muted" : ""]
+                .filter((s) => s).join(" · "),
             icon: w.app,
             restoreTo: from,
+            muted: windowMuted(w.app, muted),
+            muteEntry: windowEntry(w.app),
         },
         positions: [],
         section: "",
@@ -139,16 +145,17 @@ function byFocus(windows) {
 
 // The Windows tab: every window on any workspace, the one used last
 // first. Typing filters by title and app name.
-export function windowRows(windows, query) {
-    return filtered(byFocus(windows).map(windowRow), query, (r) => [r.item.name, r.item.sub]);
+export function windowRows(windows, query, muted = []) {
+    return filtered(byFocus(windows).map((w) => windowRow(w, muted)), query, (r) => [r.item.name, r.item.sub]);
 }
 
 // The Attention tab: every marked window (SPEC.md §14.4), the most
 // recently marked first: the guard's and notifications' marks by when they
 // were made (`marks`, from updateMarks), then any Hyprland marked urgent
-// itself, the one used last first. Each marked window is its own row.
-export function attentionRows(windows, marks, query) {
-    const marked = markedWindows({ windows, marks });
+// itself, the one used last first. Each marked window is its own row. A
+// muted app's windows are never marked (`muted`).
+export function attentionRows(windows, marks, query, muted = []) {
+    const marked = markedWindows({ windows, marks, muted });
     const order = attentionOrder(marks).slice().reverse().filter((a) => marked.has(a));
     const listed = new Set(order);
     const rest = byFocus(windows).filter((w) => marked.has(w.address) && !listed.has(w.address)).map((w) => w.address);
@@ -156,7 +163,7 @@ export function attentionRows(windows, marks, query) {
     for (const w of windows) {
         at[w.address] = w;
     }
-    const rows = order.concat(rest).map((a) => windowRow(at[a]));
+    const rows = order.concat(rest).map((a) => windowRow(at[a], muted));
     return filtered(rows, query, (r) => [r.item.name, r.item.sub]);
 }
 

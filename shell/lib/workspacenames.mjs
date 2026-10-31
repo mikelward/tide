@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     standing: DEFAULT_STANDING,
     inApps: Object.freeze([]),
     namePatterns: Object.freeze([]),
+    muted: Object.freeze([]),
 });
 
 // What a workspace's name can't hold: quotes, backslashes and control
@@ -44,6 +45,17 @@ export function checkName(text) {
         return { error: `a workspace's name is at most ${MAX_NAME} characters` };
     }
     return { name };
+}
+
+// An app ID as every comparison of one sees it: trimmed, lowercase, and
+// without a `.desktop` suffix, so a desktop ID, a window class and an app
+// name meet on equal terms (`org.telegram.desktop` is `org.telegram`). The
+// one normalization for writing, checking and matching app IDs: home's
+// apps (inAppPatterns, isHomeApp), muted entries (checkMuteEntry, and
+// mute.mjs through isHomeApp) and the focus guard's matching (workspaces.mjs's
+// sameApp), so no two of them can disagree about an ID.
+export function normalizeAppId(id) {
+    return String(id ?? "").trim().toLowerCase().replace(/\.desktop$/, "");
 }
 
 // Whether two names are the same workspace's: case doesn't count.
@@ -82,7 +94,14 @@ function settingsError(value) {
     }
     for (const key of Object.keys(value)) {
         if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) {
-            return `${key} isn't a setting (standing, inApps or namePatterns)`;
+            return `${key} isn't a setting (standing, inApps, namePatterns or muted)`;
+        }
+        // A bad muted entry is dropped alone (checkMuted), not the file.
+        if (key === "muted") {
+            if (!Array.isArray(value[key])) {
+                return "muted must be a list";
+            }
+            continue;
         }
         const err = listError(key, value[key]);
         if (err) {
@@ -129,13 +148,57 @@ export function parseWorkspaceSettings(text) {
     return err ? { error: err } : { settings: value };
 }
 
+// A site entry in `muted`: `site:` and a host.
+const MUTED_SITE = /^site:([a-z0-9-]+(\.[a-z0-9-]+)*)$/i;
+
+// One `muted` entry as written (SPEC.md §9, Muted apps): {entry}, trimmed,
+// or {error} saying what's wrong with it. An entry is an app ID, any text
+// without control characters (a notification's app name, the fallback when
+// it gives no desktop entry, may have spaces: `Example App`), or
+// `site:HOST`. The one check for both sides: loading the list, and the
+// mute actions before they write an entry (mute.mjs's toggledMuted), so
+// nothing they write is refused when it's read back.
+export function checkMuteEntry(raw) {
+    if (typeof raw !== "string" || raw.trim() === "") {
+        return { error: "isn't an app or a site" };
+    }
+    const entry = raw.trim();
+    if (/^site:/i.test(entry)) {
+        return MUTED_SITE.test(entry) ? { entry } : { error: "names no host" };
+    }
+    if (/[\u0000-\u001f\u007f]/.test(entry)) {
+        return { error: "isn't an app ID" };
+    }
+    // Valid only if something's left once normalized, as it's compared
+    // (`.desktop` alone would match nothing).
+    return normalizeAppId(entry) === "" ? { error: "isn't an app ID" } : { entry };
+}
+
+// The `muted` list with its bad entries dropped: {entries, errors}, each
+// error naming the setting and the entry (checkMuteEntry).
+export function checkMuted(list) {
+    const entries = [];
+    const errors = [];
+    (Array.isArray(list) ? list : []).forEach((raw, i) => {
+        const checked = checkMuteEntry(raw);
+        if (checked.error) {
+            errors.push(`muted: ${JSON.stringify(raw)} at ${i + 1} ${checked.error}`);
+        } else {
+            entries.push(checked.entry);
+        }
+    });
+    return { entries, errors };
+}
+
 // The settings in effect from workspaces.json and workspaces.local.json,
 // each the file's text or null when it doesn't exist. Every setting is a
 // list, so the local file's replaces the shared one's whole (§16.1). A
-// file that's wrong keeps `lastGood`, and `errors` names each file that is:
-// {settings, errors}.
+// file that's wrong keeps `lastGood`, and `errors` names each file that is.
+// A bad entry in `muted` only drops that entry, and `warnings` names it:
+// {settings, errors, warnings}.
 export function loadWorkspaceSettings(sharedText, localText, lastGood = DEFAULT_SETTINGS) {
     const errors = [];
+    const warnings = [];
     const settings = Object.assign({}, DEFAULT_SETTINGS);
     for (const [name, text] of [["workspaces.json", sharedText], ["workspaces.local.json", localText]]) {
         if (text === null || text === undefined) {
@@ -146,9 +209,34 @@ export function loadWorkspaceSettings(sharedText, localText, lastGood = DEFAULT_
             errors.push(`${name}: ${parsed.error}`);
             continue;
         }
-        Object.assign(settings, parsed.settings);
+        const found = Object.assign({}, parsed.settings);
+        if (found.muted !== undefined) {
+            const checked = checkMuted(found.muted);
+            found.muted = checked.entries;
+            warnings.push(...checked.errors.map((e) => `${name}: ${e}`));
+        }
+        Object.assign(settings, found);
     }
-    return errors.length > 0 ? { settings: lastGood, errors } : { settings, errors };
+    return errors.length > 0 ? { settings: lastGood, errors, warnings } : { settings, errors, warnings };
+}
+
+// workspaces.local.json's text with `muted` set to `list`, keeping the
+// rest of it: {text}, or {error} when the file isn't a settings object, so
+// a hand edit gone wrong isn't overwritten. `localText` is null when the
+// file doesn't exist.
+export function withMuted(localText, list) {
+    let value = {};
+    if (localText !== null && localText !== undefined && localText.trim() !== "") {
+        try {
+            value = JSON.parse(localText);
+        } catch (e) {
+            return { error: `workspaces.local.json: ${jsonError(localText)}` };
+        }
+        if (!isObject(value)) {
+            return { error: "workspaces.local.json: expected an object of settings" };
+        }
+    }
+    return { text: JSON.stringify(Object.assign({}, value, { muted: list }), null, 2) + "\n" };
 }
 
 // `s` as a regular expression that matches only it.
@@ -168,11 +256,14 @@ function quoted(s) {
 export function inAppPatterns(inApps) {
     const out = [];
     for (const raw of inApps) {
-        const app = raw.trim().toLowerCase().replace(/\.desktop$/, "");
+        const app = normalizeAppId(raw);
         if (app === "") {
             continue;
         }
-        out.push(app.includes(".") ? `(?i)${quoted(app)}` : `(?i)(.*\\.)?${quoted(app)}`);
+        // A class may itself end in .desktop (org.telegram.desktop); a
+        // Hyprland rule can't normalize the class, so the pattern allows
+        // the suffix, matching as normalizeAppId does.
+        out.push(app.includes(".") ? `(?i)${quoted(app)}(\\.desktop)?` : `(?i)(.*\\.)?${quoted(app)}(\\.desktop)?`);
         if (/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(app)) {
             out.push(`(?i)(chrome|chromium)-([^_]*\\.)?${quoted(app)}_.*-[^-]+`);
         }
@@ -302,7 +393,7 @@ export function shortName(title, appName, patterns) {
 // Whether a window of class `cls` is one of home's apps (`inApps`), as
 // conf's window rules match it (inAppPatterns).
 export function isHomeApp(cls, inApps) {
-    const c = String(cls ?? "");
+    const c = normalizeAppId(cls);
     if (c === "") {
         return false;
     }

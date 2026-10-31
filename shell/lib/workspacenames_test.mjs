@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import {
     MAX_NAME, DEFAULT_STANDING, DEFAULT_SETTINGS, checkName, sameName, matchName, homeName,
     parseWorkspaceSettings, loadWorkspaceSettings, inAppPatterns, workspacesLua, luaString,
-    checkPatterns, cleanTitle, shortName, isHomeApp, promptWanted, clientAt,
+    checkPatterns, cleanTitle, shortName, isHomeApp, promptWanted, clientAt, normalizeAppId, checkMuteEntry,
     promptRows, promptChoice, NO_PROMPTS, promptQueued, promptDone, promptWindowGone,
-    NO_WINDOWS, windowOpened, windowFocused, windowClosed, windowAnswered,
+    NO_WINDOWS, windowOpened, windowFocused, windowClosed, windowAnswered, checkMuted, withMuted,
 } from "./workspacenames.mjs";
 
 test("a name is one line, trimmed, at most 32 characters", () => {
@@ -117,7 +117,7 @@ test("tide-workspaces.lua names home and the classes sent there", () => {
     const lua = workspacesLua({ standing: ["in", "re"], inApps: ["spotify"], namePatterns: [] });
     assert.match(lua, /home = "in",/);
     assert.match(lua, /standing = \{\n {8}"in",\n {8}"re",\n {4}\},/);
-    assert.match(lua, /in_apps = \{\n {8}"\(\?i\)\(\.\*\\\\\.\)\?spotify",\n {4}\},/);
+    assert.ok(lua.includes('in_apps = {\n        "(?i)(.*\\\\.)?spotify(\\\\.desktop)?",\n    },'), lua);
     assert.match(workspacesLua(DEFAULT_SETTINGS), /in_apps = \{\},/);
     assert.equal(luaString('a"b\\c\n'), '"a\\"b\\\\c\\010"');
 });
@@ -264,4 +264,62 @@ test("a lookup that answers after its window closed asks nothing", () => {
 test("a window closed before it was focused is forgotten", () => {
     const s = windowClosed(windowOpened(NO_WINDOWS, "a"), "a");
     assert.equal(windowFocused(s, "a").lookup, false);
+});
+
+test("muted is empty by default", () => {
+    assert.deepEqual(loadWorkspaceSettings(null, null).settings.muted, []);
+});
+
+test("a bad muted entry is an error naming it, and the rest still apply", () => {
+    const { settings, errors, warnings } = loadWorkspaceSettings(
+        JSON.stringify({ standing: ["in", "re"], muted: ["slack", "", "site:", 7, "site:chat.google.com", "bad\u0007bell"] }), null);
+    assert.deepEqual(errors, [], "the file isn't refused");
+    assert.deepEqual(settings.standing, ["in", "re"]);
+    assert.deepEqual(settings.muted, ["slack", "site:chat.google.com"]);
+    assert.deepEqual(warnings, [
+        'workspaces.json: muted: "" at 2 isn\'t an app or a site',
+        'workspaces.json: muted: "site:" at 3 names no host',
+        "workspaces.json: muted: 7 at 4 isn't an app or a site",
+        'workspaces.json: muted: "bad\\u0007bell" at 6 isn\'t an app ID',
+    ]);
+    assert.deepEqual(checkMuted([" slack "]).entries, ["slack"], "space around an entry is trimmed");
+});
+
+test("muted that isn't a list is the file's error", () => {
+    const { errors } = loadWorkspaceSettings('{"muted": "slack"}', null);
+    assert.match(errors[0], /workspaces.json: muted must be a list/);
+});
+
+test("the local file's muted replaces the shared one's whole", () => {
+    const { settings } = loadWorkspaceSettings('{"muted": ["slack"]}', '{"muted": ["site:chat.google.com"]}');
+    assert.deepEqual(settings.muted, ["site:chat.google.com"]);
+});
+
+test("muting writes workspaces.local.json, keeping its other settings", () => {
+    const r = withMuted('{"standing": ["in"]}', ["slack"]);
+    assert.deepEqual(JSON.parse(r.text), { standing: ["in"], muted: ["slack"] });
+    assert.deepEqual(JSON.parse(withMuted(null, ["slack"]).text), { muted: ["slack"] }, "a file made where there was none");
+    assert.match(withMuted("{oops", ["slack"]).error, /workspaces.local.json/, "a broken hand edit isn't overwritten");
+    assert.match(withMuted("[]", ["slack"]).error, /expected an object/);
+});
+
+test("one normalization for app IDs: trimmed, lowercase, no .desktop", () => {
+    assert.equal(normalizeAppId(" Org.Telegram.desktop "), "org.telegram");
+    assert.equal(normalizeAppId("Example App"), "example app");
+    assert.equal(normalizeAppId(undefined), "");
+});
+
+test("a home app whose own ID ends in .desktop matches its class, in the shell and in Hyprland's rule", () => {
+    assert.equal(isHomeApp("org.telegram.desktop", ["org.telegram.desktop"]), true);
+    assert.equal(isHomeApp("org.telegram.desktop", ["org.telegram"]), true);
+    assert.equal(isHomeApp("org.telegram", ["org.telegram.desktop"]), true);
+    const [rule] = inAppPatterns(["org.telegram.desktop"]);
+    const re = new RegExp(`^(?:${rule.replace("(?i)", "")})$`, "i");
+    assert.ok(re.test("org.telegram.desktop"), "the raw class, which a rule can't normalize");
+    assert.ok(re.test("org.telegram"));
+});
+
+test("a muted entry that's only .desktop is refused, since it would match nothing", () => {
+    assert.match(checkMuteEntry(".desktop").error, /isn't an app ID/);
+    assert.deepEqual(checkMuteEntry(" org.telegram.desktop "), { entry: "org.telegram.desktop" });
 });

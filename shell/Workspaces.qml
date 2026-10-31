@@ -44,6 +44,8 @@ Row {
         windows: root.windows,
         marks: MarkData.marks,
         standing: WorkspacesData.standing,
+        // A muted app's windows are never marked (SPEC.md §9, Muted apps).
+        muted: WorkspacesData.muted,
     })
     readonly property var current: root.monitors.find(m => m.name === root.monitorName)?.workspace ?? null
 

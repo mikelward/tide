@@ -1,6 +1,7 @@
 // Tests for workspaces.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { noteOf } from "./mute.mjs";
 import {
     MAX_ICONS, BAR_NAME, NO_MARKS, updateMarks, markedWindows, barWorkspaces, scrollTarget,
     workspaceOrder, barName, workspaceEvent, homeIdAfter, homeRenamed,
@@ -482,4 +483,84 @@ test("a minimized window's attention icon finds its standing chip ignoring case"
         workspaces: [{ id: -1338, name: "in" }], windows, standing: ["in", "re"] });
     assert.deepEqual(bar[1].icons.map((i) => [i.address, i.restoreTo]), [["b", "Re"]]);
     assert.equal(bar[1].urgent, true);
+});
+
+test("a muted app's windows are never marked, however they were", () => {
+    let marks = updateMarks(NO_MARKS, { type: "guarded", address: "a" });
+    const windows = [win("a", 3, "Slack"), win("b", 3, "chrome-chat.google.com__-Default", { urgent: true }), win("c", 3, "kitty", { urgent: true })];
+    marks = updateMarks(marks, { type: "notified", id: 1, app: "Slack", windows, visible: new Set([2]) });
+    const muted = ["slack", "site:chat.google.com"];
+    assert.deepEqual([...markedWindows({ windows, marks, muted })], ["c"]);
+    const ws = barWorkspaces({ ...one, windows, marks, muted })[2];
+    assert.deepEqual(ws.icons.map((i) => i.address), ["c"], "no chip icon");
+    assert.equal(barWorkspaces({ ...one, windows: windows.slice(0, 2), marks, muted })[2].urgent, false);
+});
+
+test("muting one window's site clears only its marks, not a shared notification's on another window", () => {
+    const windows = [win("chat", 3, "chrome-chat.google.com__-Default"), win("mail", 4, "chrome-mail.google.com__-Default")];
+    let marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: windows.map((w) => w.app), windows, visible: new Set([2]) });
+    assert.deepEqual([...markedWindows({ windows, marks })].sort(), ["chat", "mail"]);
+    marks = updateMarks(marks, { type: "muted", muted: ["site:chat.google.com"], windows });
+    assert.deepEqual([...markedWindows({ windows, marks })], ["mail"], "Mail keeps its mark");
+    assert.deepEqual(Object.keys(marks.notes[1].at), ["mail"]);
+});
+
+test("a muted window never holds a notification's or the guard's mark, so unmuting brings none back", () => {
+    const windows = [win("chat", 3, "chrome-chat.google.com__-Default"), win("mail", 4, "chrome-mail.google.com__-Default")];
+    const muted = ["site:chat.google.com"];
+    // google.com isn't muted, but reaches both windows; Chat's is muted.
+    let marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: windows.map((w) => w.app), windows, visible: new Set([2]), muted });
+    marks = updateMarks(marks, { type: "notified", id: 2, app: "x", address: "chat", windows, visible: new Set([2]), muted });
+    marks = updateMarks(marks, { type: "guarded", address: "chat", app: windows[0].app, muted });
+    assert.deepEqual(marks.notes[1].wide, ["mail"]);
+    assert.equal(marks.notes[2], undefined, "naming the muted window marks nothing");
+    assert.deepEqual(marks.guard, []);
+    // Unmuted, Chat has no mark to come back.
+    assert.deepEqual([...markedWindows({ windows, marks })], ["mail"]);
+    assert.deepEqual(attentionOrder(marks), ["mail"]);
+});
+
+test("muting a site clears its notification's marks on plain browser windows, and keeps others'", () => {
+    // No --app window for chat.google.com, so its notification marked the
+    // plain Chrome window; Slack's marked Slack's.
+    const windows = [win("chrome", 3, "google-chrome"), win("slack", 4, "Slack")];
+    let marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: ["google-chrome"], windows, visible: new Set([2]),
+        sender: noteOf("google-chrome", "Google Chrome", "chat.google.com") });
+    marks = updateMarks(marks, { type: "notified", id: 2, app: "Slack", windows, visible: new Set([2]),
+        sender: noteOf("", "Slack", "") });
+    assert.deepEqual([...markedWindows({ windows, marks })].sort(), ["chrome", "slack"]);
+    marks = updateMarks(marks, { type: "muted", muted: ["site:chat.google.com"], windows });
+    assert.equal(marks.notes[1], undefined, "the site's notification's marks go");
+    assert.deepEqual([...markedWindows({ windows, marks })], ["slack"], "another notification's mark stays");
+});
+
+test("muting an app clears its windows' marks from any notification, and the guard's", () => {
+    const windows = [win("chat", 3, "chrome-chat.google.com__-Default"), win("mail", 4, "chrome-mail.google.com__-Default")];
+    let marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: windows.map((w) => w.app), windows, visible: new Set([2]),
+        sender: noteOf("google-chrome", "", "google.com") });
+    marks = updateMarks(marks, { type: "guarded", address: "chat", app: windows[0].app });
+    marks = updateMarks(marks, { type: "muted", muted: ["site:chat.google.com"], windows });
+    assert.deepEqual(marks.guard, []);
+    assert.deepEqual(marks.notes[1].wide, ["mail"], "google.com isn't muted, so Mail keeps its mark");
+});
+
+test("an update that moves a notification to a muted site drops its marks", () => {
+    const windows = [win("mail", 3, "chrome-mail.google.com__-Default"), win("slack", 4, "Slack")];
+    const muted = ["site:chat.google.com"];
+    let marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: [windows[0].app], windows, visible: new Set([2]), muted,
+        sender: noteOf("google-chrome", "", "mail.google.com") });
+    marks = updateMarks(marks, { type: "notified", id: 2, app: "Slack", windows, visible: new Set([2]), muted,
+        sender: noteOf("", "Slack", "") });
+    assert.deepEqual(marks.notes[1].wide, ["mail"]);
+    // The same notification, updated to come from the muted site.
+    marks = updateMarks(marks, { type: "notified", id: 1, app: [windows[0].app], windows, visible: new Set([2]), muted,
+        sender: noteOf("google-chrome", "", "chat.google.com") });
+    assert.equal(marks.notes[1], undefined, "its marks go");
+    assert.deepEqual([...markedWindows({ windows, marks })], ["slack"], "another notification's stay");
+});
+
+test("muting clears the marks it had", () => {
+    let marks = updateMarks(NO_MARKS, { type: "guarded", address: "a" });
+    marks = updateMarks(marks, { type: "notified", id: 1, app: "Slack", windows: [win("a", 3, "Slack")], visible: new Set([2]) });
+    assert.deepEqual(updateMarks(marks, { type: "muted", muted: ["slack"], windows: [win("a", 3, "Slack")] }), NO_MARKS);
 });
