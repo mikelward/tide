@@ -6,6 +6,7 @@ import { score as used } from "./frecency.mjs";
 import { match } from "./fuzzy.mjs";
 import { ACTIONS as SESSION, actionCommand } from "./session.mjs";
 import { PAGES } from "./settings.mjs";
+import { ICON as KEEP_AWAKE_ICON } from "./keepawake.mjs";
 
 // A match outside the name (generic name, keywords, the command) still
 // finds an app, but below one that matches its name as well.
@@ -231,7 +232,7 @@ export function quickActions(state = {}) {
         ...PAGES.map(p => Object.assign(quick(`settings-${p.id}`, `${p.label} settings`, "Settings", p.icon, p.keywords), { queryOnly: true })),
         state.notifications ? quick("dnd", "Do not disturb", onOff(state.dnd), "notifications-disabled-symbolic", ["dnd", "notifications", "quiet"]) : null,
         quick("dark-style", "Dark style", onOff(state.dark) + (state.darkUntil ? ` until ${state.darkUntil}` : ""), "night-light-symbolic", ["theme", "light", "night", "appearance", "mode"]),
-        quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), "display-brightness-symbolic", ["caffeine", "idle", "inhibit"], "Super+S"),
+        quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), KEEP_AWAKE_ICON, ["caffeine", "coffee", "idle", "inhibit"], "Super+S"),
         quick("presenter", "Presenter mode", onOff(state.presenting), "x-office-presentation-symbolic", ["presentation", "slides", "projector", "meeting"], "Super+P"),
         quick("clear-clipboard", "Clear clipboard history", "Forget everything Super+C lists", "edit-clear-all-symbolic", ["clipboard", "wipe", "history", "cliphist", "forget"]),
         quick("reload", "Reload shell", "tide", "view-refresh-symbolic", ["restart", "quickshell"]),

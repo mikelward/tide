@@ -11,14 +11,21 @@ import { fileURLToPath } from "node:url";
 const shell = join(dirname(fileURLToPath(import.meta.url)), "..");
 const icons = join(shell, "icons");
 
+// They're named in the QML as `file: "..."`, or anywhere in the QML or the
+// shell's modules as a "...-symbolic.svg" string, the form SymbolicIcon
+// also takes as a `name` (keep awake's cup, which the OSD and the switcher
+// name too).
 function named() {
     const names = new Set();
-    for (const f of readdirSync(shell).filter((n) => n.endsWith(".qml"))) {
-        const text = readFileSync(join(shell, f), "utf8");
-        // An exec loop: the tests run without matchAll (qtjs_env_test.mjs).
-        const file = /\bfile:\s*"([^"]+)"/g;
-        for (let m = file.exec(text); m !== null; m = file.exec(text)) {
-            names.add(m[1]);
+    const sources = readdirSync(shell).filter((n) => n.endsWith(".qml")).map((n) => join(shell, n))
+        .concat(readdirSync(join(shell, "lib")).filter((n) => n.endsWith(".mjs") && !n.endsWith("_test.mjs")).map((n) => join(shell, "lib", n)));
+    for (const f of sources) {
+        const text = readFileSync(f, "utf8");
+        // Exec loops: the tests run without matchAll (qtjs_env_test.mjs).
+        for (const pattern of [/\bfile:\s*"([^"]+)"/g, /"([\w-]+-symbolic\.svg)"/g]) {
+            for (let m = pattern.exec(text); m !== null; m = pattern.exec(text)) {
+                names.add(m[1]);
+            }
         }
     }
     return names;
