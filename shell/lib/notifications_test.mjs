@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { timeoutFor, MAX_SHOWN, stackHeight, withDraft, replyDraft, shown, syncKey, arrive, leave, grantId, clearsMarks, defaultAction, buttons, bodyStyled, iconFile, themedImageName, countdown, held, hold, release, restarted, due, nextDeadline, passesDnd, heldByDnd, ORIGIN_HINT, isChrome, originText, siteOf, siteFrom, siteWindowClasses, browserOf, targetApps, originLabel, joinLabel, rest, wake, unkept, isLive, arriveResting } from "./notifications.mjs";
+import { timeoutFor, MAX_SHOWN, stackHeight, withDraft, replyDraft, shown, syncKey, arrive, leave, grantId, clearsMarks, defaultAction, buttons, bodyStyled, iconFile, themedImageName, countdown, held, hold, release, restarted, due, nextDeadline, passesDnd, heldByDnd, ORIGIN_HINT, isChrome, originText, siteOf, siteFrom, siteWindowClasses, browserOf, targetApps, originLabel, joinLabel, rest, wake, unkept, isLive, arriveResting, isSystemSender, mutedInQueue, ingest, restMuted } from "./notifications.mjs";
 
 // Quickshell's NotificationUrgency values.
 const URGENCY = { Low: 0, Normal: 1, Critical: 2 };
@@ -435,4 +435,142 @@ test("every Text that shows the origin hint is plain text", () => {
         }
     }
     assert.ok(found >= 2, `found the origin label ${found} times`);
+});
+
+test("the system senders are tide and polkit agents", () => {
+    assert.equal(isSystemSender({ appName: "tide" }), true);
+    assert.equal(isSystemSender({ desktopEntry: "polkit-gnome-authentication-agent-1" }), true);
+    assert.equal(isSystemSender({ appName: "Slack" }), false);
+});
+
+// A stand-in for NotificationData around ingest: the queue, the resting
+// notifications, a history that keeps an entry for each non-transient one
+// recorded (dropping one it replaced), and rest() releasing, by expiring,
+// each resting one the history doesn't keep, whose close takes it out of
+// both lists, as the shell's close handler does.
+function shell(isMuted) {
+    const sh = { queue: [], resting: [], kept: new Set(), marked: [], expired: [] };
+    const close = (n) => {
+        sh.expired.push(n);
+        sh.queue = leave(sh.queue, n);
+        sh.resting = leave(sh.resting, n);
+    };
+    sh.note = (id, extra = {}) => Object.assign({ id, appName: "Chat", hints: {}, expire() { close(this); } }, extra);
+    sh.d = {
+        queue: () => sh.queue,
+        resting: () => sh.resting,
+        setQueue: (q) => { sh.queue = q; },
+        setResting: (r) => { sh.resting = r; },
+        isMuted,
+        wasResting: () => false,
+        restart: () => {},
+        record: (n, replaced) => {
+            if (replaced) {
+                sh.kept.delete(replaced.id);
+            }
+            if (n.transient) {
+                sh.kept.delete(n.id);
+            } else {
+                sh.kept.add(n.id);
+            }
+        },
+        mark: (n) => { sh.marked.push(n.id); },
+        rest: (n) => {
+            const next = rest(sh.queue, sh.resting, n);
+            sh.queue = next.queue;
+            sh.resting = next.resting;
+            for (const gone of unkept(sh.resting, [...sh.kept], (id) => id)) {
+                gone.expire();
+            }
+        },
+        holdForDnd: () => {},
+    };
+    return sh;
+}
+
+const slackMuted = (n) => n.appName === "Slack";
+
+test("an arrival pops up, is recorded and marked", () => {
+    const sh = shell(() => false);
+    const n = sh.note(1);
+    ingest(n, false, sh.d);
+    assert.deepEqual(sh.queue, [n]);
+    assert.ok(sh.kept.has(1));
+    assert.deepEqual(sh.marked, [1]);
+});
+
+test("a muted arrival has no popup and stays live while its history entry is kept", () => {
+    const sh = shell(slackMuted);
+    const n = sh.note(1, { appName: "Slack" });
+    ingest(n, false, sh.d);
+    assert.deepEqual(sh.queue, [], "no popup");
+    assert.deepEqual(sh.resting, [n], "live, as one that timed out");
+    assert.deepEqual(sh.expired, []);
+});
+
+test("a muted transient arrival is released, and repeats don't pile up", () => {
+    const sh = shell(slackMuted);
+    for (let id = 1; id <= 3; id++) {
+        const n = sh.note(id, { appName: "Slack", transient: true });
+        ingest(n, false, sh.d);
+        assert.deepEqual(sh.queue, []);
+        assert.deepEqual(sh.resting, [], "released: the center keeps no entry for it");
+        assert.ok(sh.expired.includes(n));
+    }
+});
+
+test("a muted transient replacement takes the other's place, and both go", () => {
+    const sh = shell(slackMuted);
+    const sync = { "x-canonical-private-synchronous": "chat" };
+    const old = sh.note(1, { appName: "Slack", hints: sync });
+    sh.queue = [old];
+    sh.kept.add(1);
+    const next = sh.note(2, { appName: "Slack", hints: sync, transient: true });
+    ingest(next, false, sh.d);
+    assert.deepEqual(sh.queue, []);
+    assert.deepEqual(sh.resting, []);
+    assert.ok(sh.expired.includes(old) && sh.expired.includes(next));
+    assert.equal(sh.kept.has(1), false, "the replaced entry goes from the history");
+});
+
+test("an update that makes a cleared, queued notification muted rests it, live, without expiring", () => {
+    let muted = false;
+    const sh = shell((n) => muted && n.hints["x-kde-origin-name"] === "chat.google.com");
+    const n = sh.note(7, { appName: "Google Chrome", hints: { "x-kde-origin-name": "mail.google.com" } });
+    ingest(n, false, sh.d);
+    sh.kept.delete(7);              // cleared from the center
+    muted = true;
+    n.hints = { "x-kde-origin-name": "chat.google.com" };
+    ingest(n, true, sh.d);
+    assert.deepEqual(sh.queue, [], "its popup goes");
+    assert.deepEqual(sh.resting, [n], "live again for its re-recorded entry");
+    assert.deepEqual(sh.expired, [], "not expired");
+    assert.deepEqual(sh.marked, [7, 7], "marked by its new sender");
+});
+
+test("an update wakes a resting notification unless it's muted", () => {
+    const sh = shell(slackMuted);
+    const chat = sh.note(1);
+    const slack = sh.note(2, { appName: "Slack" });
+    sh.resting = [chat, slack];
+    sh.kept.add(1).add(2);
+    ingest(chat, true, sh.d);
+    ingest(slack, true, sh.d);
+    assert.deepEqual(sh.queue, [chat], "shown again, as news");
+    assert.deepEqual(sh.resting, [slack], "a muted one stays resting");
+    assert.deepEqual(sh.expired, []);
+});
+
+test("muting an app takes down its popups, shown or queued, and keeps them live", () => {
+    const sh = shell(slackMuted);
+    const slack1 = sh.note(1, { appName: "Slack", urgency: URGENCY.Critical });
+    const mail = sh.note(2, { appName: "Mail" });
+    const slack2 = sh.note(3, { appName: "Slack" });
+    sh.queue = [slack1, mail, slack2];
+    [1, 2, 3].forEach((id) => sh.kept.add(id));
+    restMuted(sh.d);
+    assert.deepEqual(sh.queue, [mail]);
+    assert.deepEqual(sh.resting, [slack1, slack2]);
+    assert.deepEqual(sh.expired, []);
+    assert.deepEqual(mutedInQueue([mail], slackMuted), []);
 });

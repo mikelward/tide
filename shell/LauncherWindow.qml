@@ -7,6 +7,7 @@ import Quickshell.Widgets
 import "lib/launcher.mjs" as Search
 import "lib/notifications.mjs" as Notes
 import "lib/dispatch.mjs" as Dispatch
+import "lib/mute.mjs" as Mute
 import "lib/session.mjs" as Session
 import "lib/switcher.mjs" as Switcher
 import "lib/workspaces.mjs" as Workspaces
@@ -91,11 +92,12 @@ PanelWindow {
             fullscreen: t.lastIpcObject?.fullscreen ?? 0
         })),
         marks: MarkData.marks,
-        standing: WorkspacesData.standing
+        standing: WorkspacesData.standing,
+        muted: WorkspacesData.muted
     }) : []
     readonly property var rows: root.tab === "workspaces" ? Switcher.workspaceRows(root.workspaceList, root.query)
-        : root.tab === "windows" ? Switcher.windowRows(root.allWindows, root.query)
-        : root.tab === "attention" ? Switcher.attentionRows(root.allWindows, MarkData.marks, root.query)
+        : root.tab === "windows" ? Switcher.windowRows(root.allWindows, root.query, WorkspacesData.muted)
+        : root.tab === "attention" ? Switcher.attentionRows(root.allWindows, MarkData.marks, root.query, WorkspacesData.muted)
         : root.appRows
     // Frecency is read as of the opening, so the order doesn't shift while
     // it's open.
@@ -183,6 +185,22 @@ PanelWindow {
     }
 
     // Runs the row at `index`; `newWorkspace` (Ctrl+Enter) asks for a
+    // Mutes the app of the window at row `index`, or unmutes it if it's
+    // muted (SPEC.md §9, Muted apps): Ctrl+M, or the row's button, on the
+    // Windows and Attention tabs. Muting clears the window's marks
+    // (MarkData), so on the Attention tab the row goes.
+    function toggleMute(index) {
+        const row = rows[index];
+        if (!row || row.item.kind !== "window") {
+            return;
+        }
+        const app = row.item.icon;
+        const error = WorkspacesData.toggleMuted(list => Mute.windowMuted(app, list), row.item.muteEntry);
+        if (error !== "") {
+            console.warn(`tide: ${error}`);
+        }
+    }
+
     // workspace for the app's window first, in the name prompt.
     function runRow(index, newWorkspace) {
         const row = rows[index];
@@ -521,6 +539,11 @@ PanelWindow {
                         } else if (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_P) {
                             root.selected = Search.moved(root.selected, -1, root.rows.length);
                             event.accepted = true;
+                        } else if (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_M
+                            && (root.tab === "windows" || root.tab === "attention")) {
+                            // Mute or unmute the row's app (SPEC.md §8.1, §9).
+                            root.toggleMute(root.selected);
+                            event.accepted = true;
                         }
                     }
 
@@ -660,6 +683,29 @@ PanelWindow {
                             onTapped: root.runRow(row.index)
                         }
 
+                        // Mutes or unmutes the window's app (SPEC.md §9, Muted
+                        // apps), shown on the row under the pointer, as
+                        // Ctrl+M does on the selected one. It takes its own
+                        // click, so the row's tap doesn't run as well.
+                        SymbolicIcon {
+                            id: mute
+
+                            anchors.right: hint.visible ? hint.left : parent.right
+                            anchors.rightMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: row.modelData.item.kind === "window" && (hover.hovered || row.modelData.item.muted === true)
+                            width: 16
+                            height: 16
+                            name: row.modelData.item.muted ? "notifications-disabled-symbolic" : "preferences-system-notifications-symbolic"
+                            color: row.current ? "#ffffff" : Theme.fgDim
+
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.margins: -6
+                                onClicked: root.toggleMute(row.index)
+                            }
+                        }
+
                         // The key that does the same, so the launcher teaches
                         // the bindings.
                         Rectangle {
@@ -718,7 +764,7 @@ PanelWindow {
                         Column {
                             anchors.left: icon.right
                             anchors.leftMargin: 12
-                            anchors.right: hint.visible ? hint.left : parent.right
+                            anchors.right: mute.visible ? mute.left : hint.visible ? hint.left : parent.right
                             anchors.rightMargin: 10
                             anchors.verticalCenter: parent.verticalCenter
 
@@ -774,7 +820,9 @@ PanelWindow {
                 spacing: 16
 
                 Repeater {
-                    model: [["↑↓", "select"], ["↵", "run"], ["Ctrl+↵", "new workspace"], ["Tab", "next section"], ["Esc", "close"]]
+                    model: [["↑↓", "select"], ["↵", "run"], ["Ctrl+↵", "new workspace"]]
+                        .concat(root.tab === "windows" || root.tab === "attention" ? [["Ctrl+M", "mute"]] : [])
+                        .concat([["Tab", "next section"], ["Esc", "close"]])
 
                     Text {
                         required property var modelData

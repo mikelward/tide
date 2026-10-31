@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 import Quickshell.Widgets
 import "lib/history.mjs" as History
+import "lib/mute.mjs" as Mute
 import "lib/notifications.mjs" as Notes
 
 // The notification center (SPEC.md §9): the history, grouped by app, under
@@ -271,7 +272,7 @@ PanelWindow {
                                 Text {
                                     anchors.left: appIcon.right
                                     anchors.leftMargin: 8
-                                    anchors.right: close.left
+                                    anchors.right: muteAction.left
                                     anchors.rightMargin: 8
                                     anchors.verticalCenter: parent.verticalCenter
                                     elide: Text.ElideRight
@@ -282,6 +283,44 @@ PanelWindow {
                                     font.family: Theme.font
                                     font.pixelSize: 12
                                     font.weight: Font.DemiBold
+                                }
+
+                                // Mutes the group's app, or a browser's group's
+                                // newest site, or unmutes it (SPEC.md §9, Muted
+                                // apps): its popups stop, its entries still
+                                // come here.
+                                Text {
+                                    id: muteAction
+
+                                    readonly property var note: Mute.groupNote(group.modelData)
+                                    readonly property bool muted: Mute.noteMuted(muteAction.note, WorkspacesData.muted)
+
+                                    visible: !muteAction.note.system && Mute.noteEntry(muteAction.note) !== ""
+                                    anchors.right: close.left
+                                    anchors.rightMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    // Names come from other programs: never markup.
+                                    textFormat: Text.PlainText
+                                    text: muteAction.muted ? "Unmute" : `Mute ${muteAction.note.site ?? group.modelData.app}`
+                                    color: muteHover.hovered ? Theme.fg : Theme.fgDim
+                                    font.family: Theme.font
+                                    font.pixelSize: 11
+
+                                    HoverHandler {
+                                        id: muteHover
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        anchors.margins: -4
+                                        onClicked: {
+                                            const note = muteAction.note;
+                                            const error = WorkspacesData.toggleMuted(list => Mute.noteMuted(note, list), Mute.noteEntry(note));
+                                            if (error !== "") {
+                                                console.warn(`tide: ${error}`);
+                                            }
+                                        }
+                                    }
                                 }
 
                                 SymbolicIcon {

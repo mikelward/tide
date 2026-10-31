@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Services.Notifications
 import "lib/history.mjs" as History
+import "lib/mute.mjs" as Mute
 import "lib/notifications.mjs" as Notes
 
 // The notification server (SPEC.md §9), its popup queue, and each popup's
@@ -182,6 +183,65 @@ Singleton {
     // time only while the grant is recorded: a resident notification stays
     // after its action, and its time runs again. Here rather than in the
     // popup, which may be gone by the time the grant is.
+    // Whether `notification`'s app or site is muted (SPEC.md §9, Muted
+    // apps): it doesn't pop up, and marks nothing, but is kept in the
+    // history all the same. A system sender's never is.
+    function isMuted(notification) {
+        return Mute.noteMuted(root.senderOf(notification), WorkspacesData.muted);
+    }
+
+    // What a notification is muted by, kept with its marks (MarkData).
+    function senderOf(notification) {
+        return Mute.noteOf(notification.desktopEntry, notification.appName, Notes.originText(notification));
+    }
+
+    // Muting an app takes down its popups, shown or still queued, as if
+    // they'd timed out: they stay live, for the center.
+    // A notification arriving (`update` false) or updated in place (`update`
+    // true): Notes.ingest runs both through one path, in one fixed order,
+    // with this as its hands. Its close cleanup is connected before this,
+    // once, in onNotification.
+    function ingest(notification, update) {
+        Notes.ingest(notification, update, root.ingestDeps());
+    }
+
+    // What Notes.ingest and Notes.restMuted act through: the queue and
+    // resting lists, the history, the marks, and resting by rest(), the
+    // timed-out popup's path, which releases what the center doesn't keep.
+    function ingestDeps() {
+        return {
+            queue: () => root.queue,
+            resting: () => root.resting,
+            setQueue: q => root.queue = q,
+            setResting: r => root.setResting(r),
+            isMuted: n => root.isMuted(n),
+            // One that was resting before a config reload goes on resting,
+            // rather than popping up again.
+            wasResting: n => n.lastGeneration && restingState.ids.includes(n.id),
+            restart: n => root.restart(n),
+            // One carried over a config reload is usually in the history
+            // already.
+            record: (n, replaced) => replaced === undefined
+                ? HistoryData.record(n)
+                : HistoryData.record(n, replaced?.id, n.lastGeneration),
+            mark: (n, replaced) => MarkData.notified(n.id, Notes.targetApps(n, MarkData.windows), replaced?.id, root.senderOf(n)),
+            rest: n => root.rest(n),
+            holdForDnd: () => root.holdForDnd()
+        };
+    }
+
+    function restMuted() {
+        Notes.restMuted(root.ingestDeps());
+    }
+
+    Connections {
+        target: WorkspacesData
+
+        function onMutedChanged() {
+            root.restMuted();
+        }
+    }
+
     function run(notification, action) {
         // Clicking it is attending to it, so its marks go now (§14.4),
         // whether or not a resident notification stays after its action.
@@ -282,25 +342,13 @@ Singleton {
             onNotification: notification => {
                 notification.tracked = true;
                 const id = notification.id;
-                // One that was resting before a config reload goes on
-                // resting, rather than popping up again.
-                const wasResting = notification.lastGeneration && restingState.ids.includes(id);
-                const result = wasResting ? {
-                    queue: root.queue,
-                    resting: [...root.resting, notification],
-                    replaced: null
-                } : Notes.arriveResting(root.queue, root.resting, notification);
-                root.queue = result.queue;
-                root.setResting(result.resting);
-                // It marks its app's windows that are off screen (§14.4),
-                // taking over the marks of any it replaced.
-                MarkData.notified(id, Notes.targetApps(notification, MarkData.windows), result.replaced?.id);
-                // The center's history keeps it, past its popup (§9). One
-                // carried over a config reload is usually there already.
-                HistoryData.record(notification, result.replaced?.id, notification.lastGeneration);
                 // However it goes (dismissed, expired, invoked, closed by
-                // its app, or replaced), its popup goes with it. Its marks
-                // go too, unless it only ran out of time.
+                // its app, or replaced), its popup goes with it. Connected
+                // first, once, before ingest() can close it: a muted
+                // transient one is released as it's ingested, since it has
+                // no history entry (release()), and its close must still
+                // clear it from `resting`. Its marks go too, unless it only
+                // ran out of time.
                 notification.closed.connect(reason => {
                     root.queue = Notes.leave(root.queue, notification);
                     root.setResting(Notes.leave(root.resting, notification));
@@ -309,30 +357,17 @@ Singleton {
                         MarkData.dismissed(id);
                     }
                 });
+                root.ingest(notification, false);
                 // Quickshell has no signal for a replaces_id update as such,
                 // only one per property that changed, so any of them counts.
                 // (A resend identical to the last changes nothing it can see.)
                 // An update is news, so it marks again.
                 for (const changed of [notification.appNameChanged, notification.appIconChanged, notification.summaryChanged, notification.bodyChanged, notification.urgencyChanged, notification.actionsChanged, notification.imageChanged, notification.hintsChanged, notification.desktopEntryChanged, notification.expireTimeoutChanged]) {
-                    changed.connect(() => {
-                        // A resting one shows again, as news.
-                        if (root.resting.includes(notification)) {
-                            const woken = Notes.wake(root.queue, root.resting, notification);
-                            root.queue = woken.queue;
-                            root.setResting(woken.resting);
-                            woken.replaced?.expire();
-                        }
-                        root.restart(notification);
-                        MarkData.notified(id, Notes.targetApps(notification, MarkData.windows));
-                        HistoryData.record(notification);
-                        root.holdForDnd();
-                    });
+                    changed.connect(() => root.ingest(notification, true));
                 }
                 // An update that takes the reply field away drops its draft,
                 // and with it the draft's hold.
                 notification.hasInlineReplyChanged.connect(() => root.setDraft(notification, Notes.replyDraft(root.drafts, notification.id, notification.hasInlineReply)));
-                result.replaced?.expire();
-                root.holdForDnd();
             }
         }
     }

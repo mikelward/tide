@@ -330,9 +330,13 @@ export function nextDeadline(countdowns) {
 // requireInteraction web notification critical, so a critical one from
 // anyone else is held like the rest.
 export function passesDnd(notification, URGENCY) {
-    if (notification.urgency !== URGENCY.Critical) {
-        return false;
-    }
+    return notification.urgency === URGENCY.Critical && isSystemSender(notification);
+}
+
+// Whether a notification comes from a system sender: the shell or a tide
+// tool ("tide"), or a polkit agent. Do not disturb lets their criticals
+// through, and muting never touches them (§9).
+export function isSystemSender(notification) {
     return [notification.appName, notification.desktopEntry].some(name => {
         const id = (name ?? "").trim().toLowerCase();
         return id === "tide" || id.includes("polkit");
@@ -367,6 +371,73 @@ export function arriveResting(queue, resting, notification) {
     const replaced = resting.find(n =>
         n !== notification && n.appName === notification.appName && syncKey(n.hints) === key) ?? null;
     return { queue: result.queue, resting: replaced ? leave(resting, replaced) : resting, replaced };
+}
+
+// The notifications in the popup queue that `isMuted` says are muted
+// (SPEC.md §9, Muted apps), shown or still waiting. The shell rests each
+// as a popup that times out rests (rest), on arrival, when the muted list
+// changes, and when an update makes one muted: one path, so each is
+// released alike when the center doesn't keep it.
+export function mutedInQueue(queue, isMuted) {
+    return queue.filter((n) => isMuted(n));
+}
+
+// Rests every muted notification in the popup queue (mutedInQueue) by
+// `d.rest`, the timed-out popup's path, which releases what the center
+// doesn't keep. On arrival, on an update, and when the muted list changes.
+export function restMuted(d) {
+    for (const n of mutedInQueue(d.queue(), d.isMuted)) {
+        d.rest(n);
+    }
+}
+
+// A notification arriving (`update` false) or updated in place (`update`
+// true), both through one path in one fixed order, so the two can't drift
+// apart (SPEC.md §9). `d` is what it acts through:
+//   queue(), resting(), setQueue(q), setResting(r)   the popup queue and
+//       the resting notifications;
+//   isMuted(n)          its app or site is muted (SPEC.md §9, Muted apps);
+//   wasResting(n)       it was resting before a config reload;
+//   restart(n)          an update gets its full time again;
+//   record(n, replaced) the center's history records it; `replaced` is the
+//       one it replaced on arrival, or null, and undefined for an update;
+//   mark(n, replaced)   its attention marks, by its current sender;
+//   rest(n)             rest it as a timed-out popup does, releasing it if
+//       the center doesn't keep it;
+//   holdForDnd()        Do not disturb takes down what it holds.
+// The order:
+//   1. It arrives, or the update applies: a resting one shows again, as
+//      news, unless it's muted.
+//   2. The history records it, so it has its entry before anything can
+//      release it.
+//   3. Its marks.
+//   4. A muted one rests (restMuted).
+//   5. Whatever it replaced goes (expire), and Do not disturb holds.
+export function ingest(notification, update, d) {
+    let replaced = null;
+    if (update) {
+        if (d.resting().includes(notification) && !d.isMuted(notification)) {
+            const woken = wake(d.queue(), d.resting(), notification);
+            d.setQueue(woken.queue);
+            d.setResting(woken.resting);
+            replaced = woken.replaced;
+        }
+        d.restart(notification);
+    } else {
+        const result = d.wasResting(notification)
+            ? { queue: d.queue(), resting: [...d.resting(), notification], replaced: null }
+            : arriveResting(d.queue(), d.resting(), notification);
+        d.setQueue(result.queue);
+        d.setResting(result.resting);
+        replaced = result.replaced;
+    }
+    d.record(notification, update ? undefined : replaced);
+    d.mark(notification, update ? undefined : replaced);
+    restMuted(d);
+    if (replaced) {
+        replaced.expire();
+    }
+    d.holdForDnd();
 }
 
 // Whether `notification` is still live on the server: shown or waiting

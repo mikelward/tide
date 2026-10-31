@@ -1300,8 +1300,10 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
 - Typing filters the tab you're on with the launcher's fuzzy scorer:
   names on Workspaces, titles and app names on Windows and Attention.
 - `↑`/`↓` or `Ctrl+N`/`Ctrl+P` move the selection, on every tab.
-- `Ctrl+I` on the Windows and Attention tabs mutes or unmutes the
-  selected row's app (§9, *Muted apps*). tilemo's is `Cmd+I`.
+- `Ctrl+M` on the Windows and Attention tabs mutes or unmutes the
+  selected row's app (§9, *Muted apps*): M for mute, decided by the
+  maintainer. The footer shows it there. tilemo's is `Cmd+M`, the same
+  physical key on a Mac.
 - It's drawn like the launcher was, and takes the keyboard the same way
   (below, and §14.2).
 - **The name prompt** (§6.5) is not one of its tabs. It names a
@@ -1664,7 +1666,7 @@ those can't quiet it.
     a polkit agent, never an app's window or a site, so no entry can name
     one. An entry naming `tide` matches nothing.
 - **Muting from where it's noisy.**
-  - **The switcher.** On the Windows and Attention tabs, `Ctrl+I` on the
+  - **The switcher.** On the Windows and Attention tabs, `Ctrl+M` on the
     selected row, or a small button on the row under the pointer, mutes
     that row's app. An `--app` window mutes its site, and once tabs join
     the Windows tab (§8.3), a tab mutes its site. On a muted row, the
@@ -1677,9 +1679,12 @@ those can't quiet it.
   - Either writes `workspaces.local.json`, atomically, as the settings
     panel does (§16.1). It writes the list in effect, with the entry added
     or removed.
-- **A bad entry** isn't text, is blank, or is `site:` with no host. It's
-  an error at load naming `muted` and the entry, and the other entries
-  still apply.
+- **A bad entry** isn't text, is blank, holds a control character, or is
+  `site:` with no host. It's an error at load naming `muted` and the
+  entry, and the other entries still apply. An app ID may have spaces: a
+  notification with no desktop entry is muted by its app name, such as
+  `Example App`. The mute actions check an entry the same way before
+  writing it, so nothing they write is refused on loading.
 
 ### Not a notification
 

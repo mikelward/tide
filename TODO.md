@@ -504,10 +504,6 @@ once you have agreed with it or reversed it.
   `minimized.png`'s bars still show every window's icon, since option E
   needs them; `narrow.png`'s chips lost their icons like the rest, and
   its title widths didn't change.
-- [ ] **`Ctrl+I` mutes in the switcher**, matching tilemo's `Cmd+I`. It
-  was free there: `Ctrl+N`/`Ctrl+P` move the selection, and Ctrl+Enter is
-  the Apps tab's. Another key is one line in `LauncherWindow.qml` and
-  SPEC.md §8.1, §9.
 - [ ] **A browser's notification group mutes its newest entry's site**,
   not the browser, when that entry names one. Muting all of Chrome is
   rarely meant, and is one `muted` entry by hand. It's the header's
@@ -1287,6 +1283,12 @@ or workspace goes there.
   `Super+PgUp`/`PgDn` keep previous/next workspace. Check first whether the
   edge behavior can be built in the Lua layout, and decide what a second
   display shows before anything is on it.
+- **Check muting live** (SPEC.md §9, *Muted apps*). Tested only against
+  stubs: `Ctrl+M` and the row's button on the Windows and Attention tabs
+  write `workspaces.local.json` and the row says "muted"; a muted app's
+  notification doesn't pop up but is in the center; its windows lose
+  their chip icons and Attention rows; the center's **Mute APP** and
+  **Unmute** work; a bad entry is a notification naming it.
 - **Check minimizing live on Hyprland 0.56.2** (SPEC.md §6.7; conf's
   `Super+Z` is mikelward/conf#440). Tested only against stubs: `Super+Z`
   hides the window and focus goes to the one under it; the corner tray
@@ -1307,7 +1309,7 @@ or workspace goes there.
 - **The Workspaces settings page** (SPEC.md §16): `standing`, `inApps`,
   `namePatterns` and `muted`, the last listing each entry with a button
   to remove it. Until then the files are edited by hand, and the
-  switcher's `Ctrl+I` and the notification center's **Mute** add and
+  switcher's `Ctrl+M` and the notification center's **Mute** add and
   remove `muted` entries.
 - **Redo the mocks.** `bar.png` and `desktop.png` show numbered
   workspaces, and `launcher.png` shows no tabs. Redraw the bar's

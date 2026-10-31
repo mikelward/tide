@@ -6,6 +6,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import "lib/dispatch.mjs" as Dispatch
 import "lib/launch.mjs" as Run
+import "lib/mute.mjs" as Mute
 import "lib/report.mjs" as Report
 import "lib/workspacenames.mjs" as Names
 import "lib/workspaces.mjs" as Ws
@@ -45,6 +46,11 @@ Singleton {
 
     property var reports: Report.NOTHING
     property var fileErrors: []
+    // Bad entries in `muted`, each dropped alone (Names.checkMuted), and
+    // why the last mute couldn't be saved, or "".
+    property var warnings: []
+    property string saveFailure: ""
+    readonly property var muted: root.settings.muted ?? []
     property var target: Writes.TARGET
 
     readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`
@@ -65,7 +71,7 @@ Singleton {
 
     function report() {
         const failures = [root.target.failure].filter(f => f !== "");
-        const errors = root.fileErrors.concat(failures);
+        const errors = root.fileErrors.concat(root.warnings, root.saveFailure !== "" ? [root.saveFailure] : [], failures);
         const v = Report.verdict(root.reports, errors);
         root.reports = v.state;
         root.send(v.send);
@@ -92,10 +98,11 @@ Singleton {
         const localText = local.readNow();
         const broken = [shared.broken, local.broken].filter(b => b !== "");
         const result = Names.loadWorkspaceSettings(sharedText, localText, root.settings);
-        for (const error of result.errors) {
+        for (const error of result.errors.concat(result.warnings)) {
             console.warn(`tide: ${error}`);
         }
         root.fileErrors = broken.concat(result.errors);
+        root.warnings = result.warnings;
         if (root.fileErrors.length > 0) {
             root.report();
             return;
@@ -119,6 +126,31 @@ Singleton {
         // rules again changes nothing.
         root.target = Writes.readTarget(root.target, writtenText, null).state;
         root.stepped(Writes.wantTarget(root.target, Names.workspacesLua(root.settings)));
+    }
+
+    // Mutes or unmutes one app or site (SPEC.md §9, Muted apps): if
+    // `isMuted(list)` already, every entry that mutes it goes, else `entry`
+    // is added (Mute.toggledMuted). It reads both files first, so it builds
+    // on a hand edit made a moment ago, and writes workspaces.local.json
+    // atomically (SettingsFile): the shell writes only the .local files
+    // (§16.1). Returns why it didn't, or "".
+    function toggleMuted(isMuted, entry) {
+        root.load();
+        if (root.fileErrors.length > 0) {
+            return `${root.fileErrors[0]}; not changing muted`;
+        }
+        const localText = local.readNow();
+        const next = Mute.toggledMuted(root.muted, isMuted, entry);
+        const result = Names.withMuted(localText, next.list);
+        if (result.error) {
+            root.saveFailure = `${result.error}; not changing muted`;
+        } else {
+            const error = local.writeNow(result.text);
+            root.saveFailure = error === "" ? "" : `${error}; muted not saved`;
+        }
+        root.load();
+        root.report();
+        return root.saveFailure;
     }
 
     Connections {

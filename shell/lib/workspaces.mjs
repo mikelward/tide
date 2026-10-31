@@ -2,8 +2,9 @@
 // QML binds to. The QML turns Quickshell.Hyprland's monitors and toplevels
 // into the plain objects these take, and maps app IDs to icons.
 
-import { sameName } from "./workspacenames.mjs";
+import { normalizeAppId, sameName } from "./workspacenames.mjs";
 import { isMinimizedFrom, minimizedFrom } from "./minimized.mjs";
+import { noteMuted, windowMuted } from "./mute.mjs";
 
 // Icons shown per workspace before the rest collapse into "+n".
 export const MAX_ICONS = 5;
@@ -36,10 +37,15 @@ export const NO_MARKS = Object.freeze({ guard: Object.freeze([]), guardAt: Objec
 //   {type: "notified", id, app, address, windows, visible}  a notification
 //       naming its window: marked only if that window's workspace isn't on
 //       screen, like an app-wide mark.
+//   Either may carry `sender`, what the notification is muted by
+//       (mute.mjs's noteOf), which the note keeps for the "muted" event.
+//   Either may carry `muted`, the muted list: a muted app's window is never
+//       a target, so no mark on it is ever recorded (SPEC.md §9, Muted apps).
 //   Either may name `replaces`, the ID of a notification it took the place
 //       of under another ID (Chrome's per-conversation sync key): it takes
 //       over that one's marks, as a replacement under the same ID would.
-//   {type: "guarded", address}   the focus guard kept a new window from focus.
+//   {type: "guarded", address, app, muted}   the focus guard kept a new
+//       window from focus; a muted app's (`app` its class) isn't marked.
 //   {type: "activated", app}     urgent>>ADDRESS: the app's own activation
 //       replaces its app-wide marks (activatedEvent).
 //
@@ -48,6 +54,9 @@ export const NO_MARKS = Object.freeze({ guard: Object.freeze([]), guardAt: Objec
 // classes by sameApp.
 //   {type: "focused", address}   the window was attended to: the guard's
 //       mark on it clears, and so does every notification's that covered it.
+//   {type: "muted", muted, windows}   the muted list changed: the marks of
+//       every notification whose `sender` is now muted go, and every mark
+//       on a muted app's window, in one pass.
 //   {type: "dismissed", id}      the notification was dismissed.
 //   {type: "closed", address}    the window is gone.
 //   {type: "guardReset"}         the focus guard's state was rebuilt (a
@@ -79,19 +88,28 @@ export function updateMarks(marks, event) {
     switch (event.type) {
     case "notified": {
         Object.assign(notes, marks.notes);
+        // A muted app's window is never a target, so it never holds a
+        // mark to come back when it's unmuted (SPEC.md §9, Muted apps).
+        const windows = event.windows.filter((w) => !windowMuted(w.app, event.muted));
         // It keeps what it marked before, under the app it names now.
-        const note = Object.assign({ wide: [], direct: [], at: {} }, notes[event.id] ?? notes[event.replaces], { app: event.app });
+        const note = Object.assign({ wide: [], direct: [], at: {} }, notes[event.id] ?? notes[event.replaces], { app: event.app },
+            event.sender !== undefined ? { sender: event.sender } : {});
         delete notes[event.id];
         delete notes[event.replaces];
+        // A muted sender marks nothing, and an update that makes one muted
+        // (its site changed to a muted one) drops what it marked before.
+        if (event.sender !== undefined && noteMuted(event.sender, event.muted)) {
+            break;
+        }
         const stamped = (addresses) => Object.assign({}, note.at, fromEntries(addresses.map((a) => [a, now])));
         if (event.address !== undefined) {
-            const named = event.windows.find((w) => w.address === event.address);
+            const named = windows.find((w) => w.address === event.address);
             const hidden = named !== undefined && !event.visible.has(named.workspace);
             put(event.id, hidden
                 ? Object.assign({}, note, { direct: [...new Set([...note.direct, event.address])], at: stamped([event.address]) })
                 : note);
         } else {
-            const hidden = event.windows
+            const hidden = windows
                 .filter((w) => anyApp(event.app, w.app) && !event.visible.has(w.workspace))
                 .map((w) => w.address);
             put(event.id, Object.assign({}, note, { wide: [...new Set([...note.wide, ...hidden])], at: stamped(hidden) }));
@@ -100,6 +118,9 @@ export function updateMarks(marks, event) {
     }
     case "guarded":
         Object.assign(notes, marks.notes);
+        if (windowMuted(event.app, event.muted)) {
+            break;
+        }
         // Announced again, it's the newest.
         guard = [...without(guard, event.address), event.address];
         guardAt = Object.assign({}, guardAt, { [event.address]: now });
@@ -107,6 +128,31 @@ export function updateMarks(marks, event) {
     case "activated":
         for (const [id, note] of Object.entries(marks.notes)) {
             put(id, anyApp(note.app, event.app) ? Object.assign({}, note, { wide: [] }) : note);
+        }
+        break;
+    case "muted":
+        // The muted list changed: in one pass, every mark from a notification
+        // whose sender or site is now muted goes, whichever windows it
+        // marked (a site's notification with no --app window open marks
+        // plain browser windows), and so does every mark on a muted app's
+        // window. Other notifications' marks stay.
+        {
+            const mutedWindow = new Set(event.windows.filter((w) => windowMuted(w.app, event.muted)).map((w) => w.address));
+            guard = guard.filter((a) => !mutedWindow.has(a));
+            for (const [id, note] of Object.entries(marks.notes)) {
+                if (note.sender !== undefined && noteMuted(note.sender, event.muted)) {
+                    continue;
+                }
+                const at = Object.assign({}, note.at ?? {});
+                for (const a of mutedWindow) {
+                    delete at[a];
+                }
+                put(id, Object.assign({}, note, {
+                    wide: note.wide.filter((a) => !mutedWindow.has(a)),
+                    direct: note.direct.filter((a) => !mutedWindow.has(a)),
+                    at,
+                }));
+            }
         }
         break;
     case "focused":
@@ -152,9 +198,8 @@ export function anyApp(apps, app) {
 // `org.gnome.Nautilus`, while `org.example.chat` and `com.example.chat`
 // stay apart.
 export function sameApp(a, b) {
-    const norm = (id) => String(id ?? "").toLowerCase().replace(/\.desktop$/, "");
-    const x = norm(a);
-    const y = norm(b);
+    const x = normalizeAppId(a);
+    const y = normalizeAppId(b);
     if (x === "" || y === "") {
         return false;
     }
@@ -271,8 +316,11 @@ export function attentionOrder(marks) {
     return [...latest.keys()].sort((a, b) => latest.get(a) - latest.get(b));
 }
 
-// Which windows are marked: Hyprland's urgent flag, plus `marks`.
-export function markedWindows({ windows, marks = NO_MARKS }) {
+// Which windows are marked: Hyprland's urgent flag, plus `marks`, but
+// never a muted app's (`muted`, SPEC.md §9, Muted apps). `marks` holds none
+// of those, since updateMarks never records one; the urgent flag is
+// Hyprland's, so it's left out here.
+export function markedWindows({ windows, marks = NO_MARKS, muted = [] }) {
     const marked = new Set([].concat(marks.guard, ...Object.values(marks.notes).map((n) => n.wide.concat(n.direct))));
     for (const w of windows) {
         if (w.urgent === true) {
@@ -280,7 +328,7 @@ export function markedWindows({ windows, marks = NO_MARKS }) {
         }
     }
     // A mark for a window that has since closed isn't on the bar.
-    const open = new Set(windows.map((w) => w.address));
+    const open = new Set(windows.filter((w) => !windowMuted(w.app, muted)).map((w) => w.address));
     return new Set([...marked].filter((a) => open.has(a)));
 }
 
@@ -355,11 +403,12 @@ export function barName(name) {
 // where (minimized.mjs), fullscreen
 // being the client's `fullscreen` state from `hyprctl clients` (0 none, 1
 // maximized, 2 fullscreen, 3 both), not the 0/1 argument the `fullscreen`
-// dispatcher takes (SPEC.md §6.3). `marks` comes from updateMarks.
-export function barWorkspaces({ monitor, monitors, workspaces, windows, marks = NO_MARKS, standing = [] }) {
+// dispatcher takes (SPEC.md §6.3). `marks` comes from updateMarks, and
+// `muted` is the muted list, whose apps' windows are never marked.
+export function barWorkspaces({ monitor, monitors, workspaces, windows, marks = NO_MARKS, standing = [], muted = [] }) {
     const current = monitors.find((m) => m.name === monitor)?.workspace;
     const elsewhere = new Set(monitors.filter((m) => m.name !== monitor).map((m) => m.workspace));
-    const marked = markedWindows({ windows, marks });
+    const marked = markedWindows({ windows, marks, muted });
     return workspaceOrder(workspaces, standing).map((ws) => {
         const here = ws.id === null ? [] : windows.filter((w) => w.workspace === ws.id);
         // Its minimized windows are on a special workspace, but one wanting

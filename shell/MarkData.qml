@@ -37,6 +37,19 @@ Singleton {
         focus: Ws.focusRank(root.focusOrder, Ws.normalizeAddress(t.address), t.lastIpcObject?.focusHistoryID),
     }))
 
+    // Muted apps' windows are never marked (SPEC.md §9, Muted apps): their
+    // marks clear as they're muted, and Ws.updateMarks records no new one,
+    // the guard's or a notification's. Hyprland's own urgent flag isn't a
+    // mark, so Ws.markedWindows leaves it out.
+    readonly property var muted: WorkspacesData.muted
+
+    // By notification, not only by window: a site's notification with no
+    // --app window open marked plain browser windows, which muting the site
+    // must clear too (Ws.updateMarks's "muted").
+    onMutedChanged: {
+        root.marks = Ws.updateMarks(root.marks, { type: "muted", muted: root.muted, windows: root.windows });
+    }
+
     // Windows focused since the shell started, newest first (Ws.withFocus).
     property var focusOrder: []
     readonly property var visible: Ws.visibleWorkspaces(Hyprland.monitors.values.map(m => ({
@@ -47,16 +60,19 @@ Singleton {
     // A notification arrived, or was updated in place: it marks its app's
     // windows that aren't on screen now (`app` an app or a list of them). Each update adds to what it marked.
     // `replaces` is the ID of one it took the place of, whose marks it
-    // takes over, or undefined.
-    function notified(id, app, replaces) {
+    // takes over, or undefined. `sender` is what it's muted by (Mute.noteOf),
+    // kept with its marks so muting it later clears them.
+    function notified(id, app, replaces, sender) {
         if (app) {
             root.marks = Ws.updateMarks(root.marks, {
                 type: "notified",
                 id: id,
                 replaces: replaces,
+                sender: sender,
                 app: app,
                 windows: root.windows,
-                visible: root.visible
+                visible: root.visible,
+                muted: root.muted
             });
         }
     }
@@ -206,6 +222,12 @@ Singleton {
             }
             if (mark?.type === "urgent") {
                 mark = Ws.activatedEvent(mark.address, root.windows);
+            }
+            if (mark?.type === "guarded") {
+                mark = Object.assign({}, mark, {
+                    app: root.windows.find(w => w.address === mark.address)?.app ?? "",
+                    muted: root.muted
+                });
             }
             if (mark !== null) {
                 root.marks = Ws.updateMarks(root.marks, mark);
