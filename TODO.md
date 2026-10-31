@@ -7,6 +7,15 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **The lid's Lock and Do nothing hold logind's lid switch from a user
+  unit, and `conf` locks.** The alternative is a logind drop-in
+  (`HandleLidSwitch=lock`), which needs root for every change. Reversible
+  by dropping `tide-lid-inhibit.service`. One action for battery and AC
+  alike; per-power-source actions would be an addition.
+- [ ] **The Power page sets no idle or battery thresholds.** The Idle page
+  owns the timings, and UPower's critical action stays its own. Both
+  are additions.
+
 - [ ] **Clipboard history off keeps what's already kept,** until Clear
   history, and the picker still lists it. Off only stops new copies. The
   alternative is wiping as it's turned off. Reversible: one call to
@@ -1015,6 +1024,16 @@ from the keyboard (`shell/integration_test.sh`).
   clears it. Still to do:
   - On a live session, check a copy with history off isn't kept, and that
     a smaller cap trims the picker's list at the next copy.
+
+- Power (`shell/lib/power.mjs`, `shell/PowerData.qml`) shows the battery,
+  sets the power profile through power-profiles-daemon, and sets what
+  closing the lid does, writing `power.local.json` and
+  `~/.config/hypr/tide-power.lua` and starting or stopping
+  `tide-lid-inhibit.service`. `conf`'s `hyprland.lua` locks for Lock. Still
+  to do:
+  - On a live session, check polkit lets `tide-lid-inhibit.service`, a
+    user unit outside the session, take `handle-lid-switch`, and that Lock
+    locks without suspending and Do nothing leaves the machine up.
 
 ## Notifications (M4)
 

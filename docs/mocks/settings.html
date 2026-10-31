@@ -60,12 +60,13 @@
 
 <p class="note"><b>Notifications</b>: Do not disturb now, on a schedule (from and to a quarter hour a step, and the days a window starts on), and whether critical alerts break through it. The schedule turns Do not disturb on as a window starts and off as it ends, unless you changed it meanwhile. Below, the muted apps and sites: the bin unmutes one, and one typed at the foot is muted with Enter.</p>
 <p class="note"><b>Clipboard</b>: whether the history behind Super+C keeps new copies, how many (− and + step through 25 to 1,000), and Clear history, which says how it went.</p>
+<p class="note"><b>Power</b>: the battery as the bar's popover shows it, the power profile when power-profiles-daemon is there (the page says so when it isn't), and what closing the lid does with no other monitor: Suspend, logind's own; Lock; or Do nothing, which hold logind's lid switch.</p>
 <script>
 const PAGES = [
   ['Idle', 'bedtime'], ['Sound', 'volume_up'], ['Network', 'wifi'], ['Bluetooth', 'bluetooth'],
   ['Mouse', 'mouse'], ['Touchpad', 'touchpad_mouse'], ['Keyboard', 'keyboard'], ['Clocks', 'schedule'],
   ['Keys', 'keyboard_command_key'], ['Layouts', 'view_column'], ['Appearance', 'contrast'],
-  ['Displays', 'desktop_windows'], ['Start at login', 'play_arrow'], ['Notifications', 'notifications'], ['Clipboard', 'content_paste'],
+  ['Displays', 'desktop_windows'], ['Start at login', 'play_arrow'], ['Notifications', 'notifications'], ['Clipboard', 'content_paste'], ['Power', 'battery_5_bar'],
 ];
 const btn = (icon, dim) => `<span class="btn${dim ? ' dim' : ''}"><i class="ms">${icon}</i></span>`;
 const list = (cmds) => cmds.map((c, i) => `<div class="item"><span class="cmd">${c}</span>${btn('arrow_upward', i === 0)}${btn('arrow_downward', i === cmds.length - 1)}${btn('delete')}</div>`).join('');
@@ -81,6 +82,9 @@ const panels = [
   ['Clipboard',
    'What you copy is kept for the picker on Super+C, the newest first, apart from passwords a password manager marks. Off, new copies aren\u2019t kept; what\u2019s kept stays until it\u2019s cleared. A smaller number trims the history at the next copy.',
    '<div class="srow"><span class="l">History: Keeps the newest 200 copies</span><span class="sw on">On</span></div><div class="srow"><span class="l">Copies to keep</span><span class="step"><span class="btn"><i class="ms">remove</i></span><span class="v">200</span><span class="btn"><i class="ms">add</i></span></span></div><div class="item" style="gap:10px"><i class="ms" style="font-size:16px;color:var(--fg-dim)">clear_all</i><span class="cmd" style="font-family:var(--font-ui)">Clear history</span></div><div class="about" style="padding-top:4px;font-size:12px">The history is empty.</div>'],
+  ['Power',
+   'The battery, and the power profile, which power-profiles-daemon sets for the whole machine. Closing the lid with no other monitor suspends, locks or does nothing; with one, the laptop\u2019s screen just turns off, as it always has.',
+   '<div class="srow"><span class="l" style="font-variant-numeric:tabular-nums">Battery 82% · 4 h 10 min left</span></div><div class="head">POWER PROFILE</div><div class="item" style="gap:10px"><i class="ms" style="font-size:16px;color:var(--fg-dim)">speed</i><span class="cmd" style="font-family:var(--font-ui)">Performance</span></div><div class="item" style="gap:10px;background:var(--surface-2);border-radius:7px"><i class="ms" style="font-size:16px;color:var(--fg-dim)">balance</i><span class="cmd" style="font-family:var(--font-ui)">Balanced</span></div><div class="item" style="gap:10px"><i class="ms" style="font-size:16px;color:var(--fg-dim)">eco</i><span class="cmd" style="font-family:var(--font-ui)">Power saver</span></div><div class="head">LID</div><div class="srow"><span class="l">Closing the lid</span><span class="step"><span class="btn"><i class="ms">chevron_left</i></span><span class="v">Lock</span><span class="btn"><i class="ms">chevron_right</i></span></span></div>'],
 ];
 const root = document.getElementById('panels');
 for (const [page, about, body] of panels) {
