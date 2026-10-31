@@ -1,7 +1,7 @@
 // Tests for title.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_TITLE, barTitle, barWindow, activeAtStart, hasFocus, titleWidth, collapseClocks, MIN_TITLE_ROOM, clockShown } from "./title.mjs";
+import { MAX_TITLE, HOVER_LINE, hoverTitle, barTitle, barWindow, activeAtStart, hasFocus, titleWidth, collapseClocks, MIN_TITLE_ROOM, clockShown } from "./title.mjs";
 
 const editor = { address: "abc", monitor: "DP-1", title: "SPEC.md - tide" };
 
@@ -103,4 +103,21 @@ test("collapsed, only local's clock shows; a zone clock, with no local field, is
     // A boolean, not undefined, which QML can't assign to visible.
     assert.equal(clockShown(true, zone), false);
     assert.equal(clockShown(true, undefined), false);
+});
+
+test("hovering the title shows it in full, past where the bar cuts it", () => {
+    const long = "word ".repeat(40).trim();
+    assert.ok(long.length > MAX_TITLE);
+    const window = barWindow({ monitor: "DP-1", active: { address: "abc", monitor: "DP-1", title: long } });
+    assert.equal(hoverTitle(window, true), long, "uncut");
+    const twoLines = barWindow({ monitor: "DP-1", active: { ...editor, title: "a\n  b" } });
+    assert.equal(hoverTitle(twoLines, true), "a b", "on one line");
+    assert.ok(HOVER_LINE > MAX_TITLE, "wider than the bar's title");
+});
+
+test("the hover shows nothing without a title, or unhovered", () => {
+    assert.equal(hoverTitle(barWindow({ monitor: "DP-1", active: editor }), false), "");
+    assert.equal(hoverTitle(barWindow({ monitor: "DP-1", active: { ...editor, title: "  " } }), true), "", "a blank title");
+    assert.equal(hoverTitle(barWindow({ monitor: "DP-2", active: editor }), true), "", "another monitor's blank bar");
+    assert.equal(hoverTitle(null, true), "", "nothing focused");
 });

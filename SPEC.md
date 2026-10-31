@@ -1098,6 +1098,9 @@ See [`bar.png`](docs/mocks/bar.png).
   character.
   Titles do show up in screenshots and screen shares of the bar; having
   the title where waybar had it is worth that.
+- **Hovering the title** shows it in full, uncut, in a small popup
+  below it, drawn as the minimized tray's titles are (§6.7). A long one
+  wraps at about 100 characters. With no title there's no popup.
 - **Double-clicking the title** toggles maximize on the window it names, as
   a title bar's double-click would (§6.3). That's always the focused
   window; a blank title does nothing.
