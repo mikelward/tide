@@ -1345,6 +1345,20 @@ or workspace goes there.
   (SPEC.md §8.3), installed by `setup`. First check whether an open
   native-messaging port keeps a Manifest V3 service worker running on the
   pinned Chrome.
+  - [ ] **Brave too**, since home uses Brave and work uses Chrome
+    (`browser1` picks per machine). The same unpacked extension loads in
+    Brave; only the native-messaging host manifest's directory differs
+    (`~/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts/` beside
+    Chrome's `~/.config/google-chrome/NativeMessagingHosts/`). `setup`
+    installs the manifest for each browser it finds.
+  - [ ] **Share the extension with tileco**, which already reads tabs with
+    `chrome.tabs` for its Tabs scope: one extension, with the native
+    messaging part only where a host is installed, rather than two to
+    keep in step.
+  - [ ] Ways in, cheapest first, to decide before building: the extension
+    above (the plan); Chrome's DevTools port, ruled out in §8.3 since any
+    local process could drive the browser; window titles alone, which
+    name only each window's active tab, as a fallback with no extension.
 
 ## Later: our own window manager on river (SPEC.md §21.2)
 
