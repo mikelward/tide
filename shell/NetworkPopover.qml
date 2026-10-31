@@ -76,6 +76,7 @@ PopupWindow {
     anchor.edges: Edges.Bottom | Edges.Right
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.bottom: -10
+    grabFocus: true
     color: "transparent"
     implicitWidth: 300
     // No taller than most of the screen; the rows scroll past that.

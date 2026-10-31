@@ -1268,20 +1268,22 @@ See [`bar.png`](docs/mocks/bar.png).
   color at 8% over whatever fill it has, and 15% while pressed
   (`Theme.hover`, `Theme.pressed`). So it reads on both palettes, on the
   bar and over a pill or workspace.
-- **One popover at a time.** A press anywhere on a bar closes the open
-  popover, unless it's on the item that opened it, whose click closes it.
-  The press then acts on what it's on, so the first click on another icon
-  opens that one. A press off the bar closes it too.
-- **Why not PopupWindow's `grabFocus`.** It is an `xdg_popup` grab. Hyprland
-  adds only the popup and an `xdg` parent to it, never a layer-shell
-  parent such as the bar (Hyprland 0.56.2, `protocols/XDGShell.cpp`,
-  `addOrStartGrab`). So a press on the bar went to the popup and only
-  ended the grab (`InputManager.cpp`, `mouseMoveUnified`). Instead each
-  popover holds a `HyprlandFocusGrab` with every bar in it
-  (`shell/PopoverGrab.qml`). While one is open the bars take the keyboard
-  on demand, so a click into it can type (the network password).
-  The notification center's grab takes in every bar too, so a click on
-  another monitor's bar closes it and acts there.
+- **One popover at a time.** Opening one closes any other, and a press off
+  it closes it.
+- **Each popover sets PopupWindow's `grabFocus`.** Without it, Quickshell
+  makes the popup a `Qt::ToolTip` window (0.3.1,
+  `src/window/popupwindow.cpp`, `completeWindow`), which takes no hover
+  or clicks.
+- **So the first click on another bar icon only closes the open popover.**
+  `grabFocus` is an `xdg_popup` grab, and Hyprland adds only the popup and
+  an `xdg` parent to it, never a layer-shell parent such as the bar
+  (Hyprland 0.56.2, `protocols/XDGShell.cpp`, `addOrStartGrab`). A press on
+  the bar goes to the popup and only ends the grab (`InputManager.cpp`,
+  `mouseMoveUnified`). A `HyprlandFocusGrab` with every bar in it was tried
+  instead, and it left every popover dead, as that tooltip.
+- **The notification center's grab takes in every bar.** It's a layer
+  surface, not a popup, so a click on another monitor's bar closes it and
+  acts there.
 
 ### 7.2 Workspaces
 

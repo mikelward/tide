@@ -5,8 +5,8 @@ import Quickshell
 import "lib/barclick.mjs" as Click
 
 // The bar's popovers (SPEC.md §7.1): at most one open, the target on the bar
-// that opened it, and every bar, which each popover's focus grab takes in
-// (PopoverGrab.qml) so a click on a bar reaches it.
+// that opened it, and every bar, which the notification center's focus
+// grab takes in so a click on a bar reaches it.
 Singleton {
     id: root
 

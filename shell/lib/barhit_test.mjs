@@ -55,3 +55,18 @@ test("no BarHit is a positioner's own child", () => {
     }
     assert.deepEqual(bad, []);
 });
+
+// A PopupWindow without grabFocus is made a Qt::ToolTip window
+// (Quickshell 0.3, src/window/popupwindow.cpp completeWindow), which takes
+// no hover or clicks, so every bar popover must ask for the grab.
+test("every bar popover grabs focus, so its rows take hover and clicks", () => {
+    const bad = [];
+    for (const file of readdirSync(SHELL).filter((f) => f.endsWith(".qml"))) {
+        const source = readFileSync(join(SHELL, file), "utf8");
+        if (/^PopupWindow\s*\{/m.test(source) && /^\s*PopoverGrab\s*\{/m.test(source)
+            && !/^\s*grabFocus:\s*true\s*$/m.test(source)) {
+            bad.push(file);
+        }
+    }
+    assert.deepEqual(bad, []);
+});

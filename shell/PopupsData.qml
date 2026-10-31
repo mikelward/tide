@@ -8,8 +8,8 @@ import "lib/launch.mjs" as Run
 import "lib/popups.mjs" as Pop
 
 // Whether any of the bar's popovers and menus is open, on any monitor:
-// PopoverData's one open popover, which every popover reports through its
-// grab (PopoverGrab.qml). The layout hears it (tide_layout.set_popups_open),
+// PopoverData's one open popover, which every popover reports
+// (PopoverGrab.qml). The layout hears it (tide_layout.set_popups_open),
 // so a click on one over a split edge reaches it rather than starting a
 // drag (SPEC.md §6.6). It's told as the shell starts (shell.qml calls
 // resync, since a lazy singleton would otherwise wait for the first
