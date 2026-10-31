@@ -13,8 +13,8 @@ import "lib/status.mjs" as Status
 //
 // The password face: the short hostname, the time and date, the user and the
 // password field, with PAM's messages under it. The lock adds the
-// notification count and the battery, Suspend, and when it locked; the
-// greeter adds the session and user pickers in their place. The
+// notification count, the battery and Suspend; the greeter adds the
+// session and user pickers in their place. The
 // screensaver face, for an idle lock: black, the hostname and a large time
 // in low contrast, moved to a new spot each minute.
 //
@@ -38,7 +38,6 @@ Item {
     property string hostname: ""
     // Who is shown over the field: the user's name.
     property string user: ""
-    property date lockedAt: new Date()
     // 24-hour time, or "4:30 PM", as clocks.json's hour24 says (SPEC.md
     // §7.3); the greeter, with no one's settings to read, keeps 24-hour.
     property bool hour24: true
@@ -376,29 +375,15 @@ Item {
 
                 Item { width: 1; height: 14 }
 
-                Column {
+                Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: 2
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        // A GECOS name is anyone's to set: never markup.
-                        textFormat: Text.PlainText
-                        text: face.user
-                        color: "#f2f2f6"
-                        font.family: "Inter"
-                        font.pixelSize: 14
-                        font.weight: Font.DemiBold
-                    }
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        visible: !face.login
-                        text: `locked at ${Clocks.formatWall(face.lockedAt.getHours(), face.lockedAt.getMinutes(), face.hour24)}`
-                        color: Qt.rgba(1, 1, 1, 0.6)
-                        font.family: "Inter"
-                        font.pixelSize: 12
-                    }
+                    // A GECOS name is anyone's to set: never markup.
+                    textFormat: Text.PlainText
+                    text: face.user
+                    color: "#f2f2f6"
+                    font.family: "Inter"
+                    font.pixelSize: 14
+                    font.weight: Font.DemiBold
                 }
 
                 // The password field. The keys come from `keys` above.

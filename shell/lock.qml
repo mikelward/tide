@@ -24,7 +24,6 @@ ShellRoot {
     // The password face's state (shell/lib/lock.mjs).
     property var face: Lock.INITIAL
     readonly property string user: Quickshell.env("USER") || ""
-    readonly property date lockedAt: new Date()
     property string hostname: ""
 
     // Every key and PAM event goes through here, so the field changes on
@@ -266,7 +265,6 @@ ShellRoot {
             lockState: root.face
             hostname: root.hostname
             user: root.user
-            lockedAt: root.lockedAt
             hour24: root.hour24
             wallpaper: root.wallpaper
             powerMessage: powerActions.message
