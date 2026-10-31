@@ -7,6 +7,10 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **The Workspaces page edits lists as typed text, with no picker for
+  home's apps**: an app is typed as its class or site. The alternative is a
+  picker from the open windows or the desktop entries. It's an addition.
+
 - [ ] **The lid's Lock and Do nothing hold logind's lid switch from a user
   unit, and `conf` locks.** The alternative is a logind drop-in
   (`HandleLidSwitch=lock`), which needs root for every change. Reversible
@@ -1035,6 +1039,13 @@ from the keyboard (`shell/integration_test.sh`).
     user unit outside the session, take `handle-lid-switch`, and that Lock
     locks without suspending and Do nothing leaves the machine up.
 
+- Workspaces (`shell/lib/workspacepage.mjs`, `WorkspacesData.qml`) adds,
+  moves and takes out the standing workspaces, home's apps and the name
+  patterns, writing `workspaces.local.json`; `muted` is the Notifications
+  page's. Still to do:
+  - On a live session, check that moving a workspace first makes it home
+    at once, on the bar and in `conf`'s rules.
+
 ## Notifications (M4)
 
 SPEC.md §9. So far the shell has the server and the popups. They're
@@ -1474,11 +1485,6 @@ or workspace goes there.
 - **The tap of `Super`** opens the switcher on Workspaces (its `tide:launcher`
   global shortcut does), once the pinned Hyprland passes SPEC.md §8.2's
   three tap checks; until then `conf` binds no tap.
-- **The Workspaces settings page** (SPEC.md §16): `standing`, `inApps`,
-  `namePatterns` and `muted`, the last listing each entry with a button
-  to remove it. Until then the files are edited by hand, and the
-  switcher's `Ctrl+M` and the notification center's **Mute** add and
-  remove `muted` entries.
 - **Redo the mocks.** `bar.png` and `desktop.png` show numbered
   workspaces, and `launcher.png` shows no tabs. Redraw the bar's
   workspaces by name with the standing ones, home first, and the switcher with its four tabs

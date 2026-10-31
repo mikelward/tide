@@ -123,7 +123,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Launcher**: empty query and a fuzzy query. Predates the switcher's tabs (§8) and named workspaces, and is to be redrawn (TODO.md). [`launcher.png`](docs/mocks/launcher.png) | ![launcher](docs/mocks/launcher.png) |
 | **Notifications**: popups, OSD, the notification center while sharing. [`notifications.png`](docs/mocks/notifications.png) | ![notifications](docs/mocks/notifications.png) |
 | **Clocks popover**: zones, working-hours strips, DST warning, calendar. [`clocks.png`](docs/mocks/clocks.png) | ![clocks](docs/mocks/clocks.png) |
-| **Settings**: the panel's newer pages: Start at login, Notifications, Clipboard and Power. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
+| **Settings**: the panel's newer pages: Start at login, Notifications, Clipboard, Power and Workspaces. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
 | **System monitor popover**: the CPU and Memory tabs, and throttling. [`sysmon.png`](docs/mocks/sysmon.png) | ![system monitor](docs/mocks/sysmon.png) |
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
 | **Screen-share picker**: screens, windows, 16:9 area. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
@@ -3017,7 +3017,24 @@ stays hand-written.
   - A pattern that doesn't compile or has no capture group is an error at
     load naming it, and the last good list stays. The page refuses one the
     same way, and says why.
-  - Until the page exists, the files are edited by hand (TODO.md).
+  - The page lists `standing`, `inApps` and `namePatterns`, as the files
+    in effect have them; `muted` is on the Notifications page.
+  - Each entry has a bin that takes it out, and the standing workspaces and
+    the patterns, whose order counts, have arrows that move one. The first
+    standing workspace is marked as home, so moving another first makes it
+    home.
+  - An entry typed at a list's foot is added with Enter. One listed already,
+    ignoring case, or one the files wouldn't take is refused, and the page
+    says why: a name with quotes, a pattern that doesn't compile or has no
+    capture group. So is taking out the last standing workspace.
+  - The first change to a list copies it into `workspaces.local.json`,
+    keeping the file's other settings, since a local list replaces the
+    shared one whole. A change names an entry by its place and text, so a
+    hand edit that has moved it since is refused, not built on.
+  - It applies as a hand edit does: the shell writes `tide-workspaces.lua`
+    and has `conf` read it again.
+  - Over IPC, `addWorkspaceItem KEY ITEM`, `moveWorkspaceItem KEY ITEM
+    STEP` and `removeWorkspaceItem KEY ITEM` do what the page does.
 
 - **Start at login** lists the commands the shell runs once as the session
   starts, in `startup.json` and `startup.local.json` (`commands`).
