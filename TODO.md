@@ -1377,3 +1377,16 @@ Hyprland 0.56's Lua form of `sendshortcut` against its source, then send
 `Ctrl+V` to the window the picker opened over, or `Ctrl+Shift+V` when its
 class is a terminal's. If Hyprland can't, use wtype once the picker's
 layer surface is gone, and find a signal for that rather than a delay.
+
+## Edit a clipboard entry before pasting
+
+Later, after *Paste from the picker*: let the picker (SPEC.md §8.4) change an
+entry before it's copied, so a paste needs no tidying afterward. Ideas so far:
+
+- **Last path component.** Turn `/some/dir/file.txt` into `file.txt`, and maybe
+  the directory too.
+- **Build `key=value` pairs.** Join two entries, or an entry and a typed name,
+  into `key=value`, with quoting where the value needs it.
+
+Each would be an action on the highlighted row, with a single-modifier key.
+The same actions would suit tilemo's picker on the Mac.
