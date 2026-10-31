@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Pipewire
+import Quickshell.Services.UPower
 import Quickshell.Wayland
 import "lib/appearance.mjs" as Appearance
 import "lib/audio.mjs" as Audio
@@ -12,7 +13,9 @@ import "lib/idle.mjs" as Idle
 import "lib/input.mjs" as Input
 import "lib/layouts.mjs" as Layouts
 import "lib/outputs.mjs" as Outputs
+import "lib/power.mjs" as Power
 import "lib/settings.mjs" as Settings
+import "lib/status.mjs" as Status
 
 // The settings panel (SPEC.md §16), centered on the focused monitor over a
 // dimmed backdrop, as the launcher is: the pages down the side, the one
@@ -249,6 +252,12 @@ PanelWindow {
         // Clears the clipboard history, as the page's Clear history does.
         function clearClipboard(): void {
             ClipboardSettingsData.clear();
+        }
+        // Sets what closing the lid does, as the Power page does: `qs -c
+        // tide ipc call settings setPower lidClose lock`. Answers why not,
+        // or "".
+        function setPower(key: string, value: string): string {
+            return PowerData.set(key, value);
         }
     }
 
@@ -2574,6 +2583,143 @@ PanelWindow {
                             textFormat: Text.PlainText
                             text: clipboard.refused !== "" ? clipboard.refused : said
                             color: clipboard.refused !== "" || !["", "clearing", "cleared"].includes(ClipboardSettingsData.clearing) ? Theme.danger : Theme.fgDim
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Power: the battery, the power profile when
+                    // power-profiles-daemon is there, and what closing the
+                    // lid does (SPEC.md §16).
+                    Column {
+                        id: power
+
+                        readonly property var battery: UPower.displayDevice
+                        readonly property int lidAt: Power.LID_CHOICES.findIndex(c => c.value === PowerData.settings.lidClose)
+                        property string refused: ""
+
+                        function changed(error) {
+                            refused = error;
+                            root.report(error);
+                        }
+
+                        onVisibleChanged: {
+                            refused = "";
+                            if (visible) {
+                                PowerData.listProfiles();
+                            }
+                        }
+                        visible: root.current.id === "power"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        Text {
+                            readonly property var view: Status.batteryView({
+                                present: power.battery?.isPresent ?? false,
+                                percentage: power.battery?.percentage,
+                                state: power.battery?.state,
+                            })
+
+                            x: 10
+                            width: power.width - 20
+                            text: view.visible ? `Battery ${view.text} · ${Status.batteryStatus({ state: power.battery?.state, timeToEmpty: power.battery?.timeToEmpty, timeToFull: power.battery?.timeToFull })}` : "No battery"
+                            color: Theme.fg
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                            font.features: ({ "tnum": 1 })
+                        }
+
+                        Heading {
+                            text: "POWER PROFILE"
+                        }
+
+                        Repeater {
+                            model: PowerData.profilesDaemon === true ? Status.profileChoices(PowerProfiles.hasPerformanceProfile) : []
+
+                            MenuRow {
+                                required property var modelData
+
+                                width: power.width
+                                icon: modelData.icon
+                                label: modelData.label
+                                selected: PowerProfiles.profile === modelData.profile
+                                onClicked: PowerProfiles.profile = modelData.profile
+                            }
+                        }
+
+                        Text {
+                            visible: PowerData.profilesDaemon !== true
+                            x: 10
+                            width: power.width - 20
+                            wrapMode: Text.Wrap
+                            text: PowerData.profilesDaemon === false ? "power-profiles-daemon isn't installed or running, so there are no power profiles to choose." : "Looking for power-profiles-daemon…"
+                            color: Theme.fgDim
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                        }
+
+                        Heading {
+                            text: "LID"
+                        }
+
+                        // Closing the lid with no other monitor: ‹ and ›
+                        // step through Suspend, Lock and Do nothing.
+                        Item {
+                            width: power.width
+                            implicitHeight: 32
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Closing the lid"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+
+                                StepButton {
+                                    name: "go-previous-symbolic"
+                                    value: power.lidAt
+                                    next: Math.max(0, power.lidAt - 1)
+                                    onActivated: power.changed(PowerData.set("lidClose", Power.steppedLid(PowerData.settings.lidClose, -1)))
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 92
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: Power.lidLabel(PowerData.settings.lidClose)
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                StepButton {
+                                    name: "go-next-symbolic"
+                                    value: power.lidAt
+                                    next: Math.min(Power.LID_CHOICES.length - 1, power.lidAt + 1)
+                                    onActivated: power.changed(PowerData.set("lidClose", Power.steppedLid(PowerData.settings.lidClose, 1)))
+                                }
+                            }
+                        }
+
+                        Text {
+                            visible: power.refused !== "" || PowerData.applyFailure !== ""
+                            x: 10
+                            width: power.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: power.refused !== "" ? power.refused : PowerData.applyFailure
+                            color: Theme.danger
                             font.family: Theme.font
                             font.pixelSize: 12
                         }

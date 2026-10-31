@@ -33,6 +33,7 @@ portals=xdg-desktop-portal/tide-portals.conf
 autostart=systemd/user/app-.service.d/tide-autostart.conf
 lock=systemd/user/tide-lock.service
 clipboard=systemd/user/tide-clipboard.service
+lidinhibit=systemd/user/tide-lid-inhibit.service
 
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
@@ -177,6 +178,19 @@ check "the history runs only in the tide session" \
     has_line "$clipboard" "WantedBy=wayland-session@tide-hyprland.target"
 check "make install installs the history's unit" \
     grep -q 'systemd/user/tide-clipboard.service' Makefile
+
+# --- tide-lid-inhibit.service -------------------------------------------------
+# The Power page's Lock and Do nothing (SPEC.md §16): logind's lid switch
+# held while it runs, stopped with the session, and started only by the
+# shell, never at login on its own.
+check "the lid action holds logind's lid switch" \
+    grep -q '^ExecStart=systemd-inhibit --what=handle-lid-switch .*--mode=block systemd-notify --ready --exec \\; sleep infinity$' "$lidinhibit"
+check "the lid action counts as started only once the inhibitor is held" has_line "$lidinhibit" "Type=notify"
+check "and takes the readiness systemd-inhibit's child sends" has_line "$lidinhibit" "NotifyAccess=all"
+check "the lid action stops with the session" has_line "$lidinhibit" "PartOf=graphical-session.target"
+check "nothing starts the lid action but the shell" lacks_line_matching "$lidinhibit" "^(\[Install\]|WantedBy=)"
+check "make install installs the lid action's unit" \
+    grep -q 'systemd/user/tide-lid-inhibit.service' Makefile
 
 # --- systemd-analyze verify ---------------------------------------------------
 # Resolves the units as systemd would. tide-shell and hypridle aren't

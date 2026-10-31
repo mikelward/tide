@@ -86,6 +86,8 @@ ShellRoot {
         NotificationSettingsData.load();
         // The clipboard history's settings, for tide clipboard store.
         ClipboardSettingsData.load();
+        // The lid's action, put right from the start.
+        PowerData.load();
     }
 
     // A toplevel's class and fullscreen state come from Hyprland's client

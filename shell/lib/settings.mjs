@@ -126,6 +126,14 @@ export const PAGES = Object.freeze([
         about: "What you copy is kept for the picker on Super+C, the newest first, apart from passwords a password manager marks. Off, new copies aren't kept; what's kept stays until it's cleared. A smaller number trims the history at the next copy.",
         advanced: null,
     },
+    {
+        id: "power",
+        label: "Power",
+        icon: "battery-good-symbolic",
+        keywords: ["battery", "power profile", "lid", "laptop"],
+        about: "The battery, and the power profile, which power-profiles-daemon sets for the whole machine. Closing the lid with no other monitor suspends, locks or does nothing; with one, the laptop's screen just turns off, as it always has.",
+        advanced: null,
+    },
 ]);
 
 // The index of the page `id` names, or -1.

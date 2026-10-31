@@ -646,7 +646,9 @@ presenter() {
 # the schedule turned on over a hand edit, a bad day refused, and an entry
 # muted and another unmuted over a hand-edited list. Then the Clipboard
 # page: its defaults written for tide clipboard store, a cap set over a
-# hand edit, and a cap of 0 refused. Before all that, it checks the
+# hand edit, and a cap of 0 refused. Then the Power page: Lock set over a
+# hand edit, written for conf and the lid switch held, and a lid action
+# that isn't one refused. Before all that, it checks the
 # shell recorded no wallpaper for the lock, having none to draw (§15).
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
@@ -1047,6 +1049,28 @@ written_settings() {
             exit 1
             ;;
     esac
+    # The Power page: Lock over a hand edit, written for conf's hyprland.lua
+    # as setPower answers, and logind's lid switch held; a lid action that
+    # isn't one refused.
+    printf '{}\n' >"$power_local" || exit 1
+    _from=$(runs) || exit 1
+    ipc call settings setPower lidClose lock >/dev/null || exit 1
+    if ! grep -qxF '    lid_close = "lock",' "$power_conf"; then
+        echo "FAIL: the Power page should write Lock to $power_conf as setPower answers; it has: $(cat "$power_conf" 2>&1)" >&2
+        exit 1
+    fi
+    started "$_from" "systemctl --user start tide-lid-inhibit.service"
+    _refused=$(ipc call settings setPower lidClose hibernate) || exit 1
+    case "$_refused" in
+        *"lidClose must be suspend, lock, nothing"*) ;;
+        *)
+            echo "FAIL: the Power page should refuse a lid action that isn't one, saying why; it answered: $_refused" >&2
+            exit 1
+            ;;
+    esac
+    # Back to Suspend for the shells after this one, which expect to let go
+    # of the lid switch as they start.
+    rm "$power_local" || exit 1
     settle
 }
 
@@ -1510,7 +1534,8 @@ hyprctl eval tide_layout.reload()
 hyprctl monitors all -j
 hyprctl eval conf_outputs.reload()
 hyprctl eval conf_appearance.reload()
-hyprctl eval conf_workspaces.reload()'
+hyprctl eval conf_workspaces.reload()
+systemctl --user stop tide-lid-inhibit.service'
 load_runs=$shell_runs
 idle_conf=$tmp/home/.config/hypr/tide-idle.conf
 idle_suspend_conf=$tmp/home/.config/hypr/tide-idle-suspend.conf
@@ -1531,6 +1556,8 @@ notifications_local=$tmp/home/.config/tide/notifications.local.json
 workspaces_local=$tmp/home/.config/tide/workspaces.local.json
 clipboard_local=$tmp/home/.config/tide/clipboard.local.json
 clipboard_conf=$tmp/home/.config/hypr/tide-clipboard.conf
+power_local=$tmp/home/.config/tide/power.local.json
+power_conf=$tmp/home/.config/hypr/tide-power.lua
 workspaces_conf=$tmp/home/.config/hypr/tide-workspaces.lua
 after_load=written_settings
 load shell "the shell" -c tide

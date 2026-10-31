@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { PAGES, movedPage } from "./settings.mjs";
 
 test("the pages come in the sidebar's order, each with a label and an icon", () => {
-    assert.deepEqual(PAGES.map(p => p.id), ["idle", "sound", "network", "bluetooth", "mouse", "touchpad", "keyboard", "clocks", "keys", "layouts", "appearance", "displays", "startup", "notifications", "clipboard"]);
+    assert.deepEqual(PAGES.map(p => p.id), ["idle", "sound", "network", "bluetooth", "mouse", "touchpad", "keyboard", "clocks", "keys", "layouts", "appearance", "displays", "startup", "notifications", "clipboard", "power"]);
     for (const page of PAGES) {
         assert.ok(page.label, `${page.id} has a label`);
         assert.ok(page.icon.endsWith("-symbolic"), `${page.id}'s icon is symbolic`);
@@ -16,7 +16,7 @@ test("the pages come in the sidebar's order, each with a label and an icon", () 
     }
 });
 
-test("each page links out to the app SPEC.md §16 names, and Idle, Mouse, Touchpad, Keyboard, Clocks, Keys, Layouts, Appearance, Start at login, Notifications and Clipboard to none", () => {
+test("each page links out to the app SPEC.md §16 names, and Idle, Mouse, Touchpad, Keyboard, Clocks, Keys, Layouts, Appearance, Start at login, Notifications, Clipboard and Power to none", () => {
     const commands = {};
     for (const page of PAGES) {
         commands[page.id] = page.advanced === null ? null : page.advanced.command;
@@ -37,6 +37,7 @@ test("each page links out to the app SPEC.md §16 names, and Idle, Mouse, Touchp
         startup: null,
         notifications: null,
         clipboard: null,
+        power: null,
     });
 });
 
