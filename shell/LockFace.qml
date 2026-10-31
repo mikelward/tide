@@ -360,7 +360,7 @@ Item {
                     text: face.hostname
                     color: "#f2f2f6"
                     font.family: "Inter"
-                    font.pixelSize: 58
+                    font.pixelSize: 32
                     font.weight: Font.Bold
                 }
 
@@ -382,7 +382,7 @@ Item {
                     text: face.user
                     color: "#f2f2f6"
                     font.family: "Inter"
-                    font.pixelSize: 14
+                    font.pixelSize: 20
                     font.weight: Font.DemiBold
                 }
 
