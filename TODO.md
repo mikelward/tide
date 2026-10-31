@@ -138,12 +138,6 @@ once you have agreed with it or reversed it.
   alternative, the best fuzzy match first as in the launcher, would turn
   `docs` into an existing `docs-review` on Enter. It's
   `workspacenames.mjs`'s `promptRows`.
-- [ ] **Enter on a new name in `Super+Return`'s prompt goes to a new,
-  empty workspace of that name.** The prompt makes a workspace as the move
-  does, and an empty one goes again once you leave it (SPEC.md §6.5), so a
-  stray name costs nothing. The alternative is refusing new names there,
-  so it only goes to existing ones: `promptRows` would leave out the new
-  row for a `go` request in `workspacenames.mjs`.
 - [ ] **`Super+Shift+Return` with no window focused does nothing**, and
   says why only in the shell's log. There's nothing to move, and the
   prompt would ask a question with no answer. The alternative is a
