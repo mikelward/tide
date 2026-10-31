@@ -537,9 +537,6 @@ agents_unknown=
 # It counts only while the shell runs in tide.service: under waybar it
 # doesn't, and tide-shell starts the agent it finds instead.
 shell_agent=
-# With TIDE_AGENT=1 the shell runs tide-agent, NetworkManager's secret agent
-# (SPEC.md §5.6).
-net_agent=
 if ! main=$(systemctl --user show -p MainPID --value tide.service 2>&1); then
     problem "couldn't read tide.service's MainPID ($main), so an agent set with TIDE_POLKIT_AGENT may be missed"
     agents_unknown=1
@@ -559,7 +556,6 @@ case "$main" in
             while IFS= read -r line; do
                 case "$line" in
                     TIDE_POLKIT=1) shell_agent=1 ;;
-                    TIDE_AGENT=1) net_agent=1 ;;
                     TIDE_POLKIT_AGENT=?*) add_agent "${line#*=}" ;;
                     TIDE_POLKIT_AGENTS=*)
                         for path in ${line#*=}; do add_agent "$path"; done
@@ -630,41 +626,80 @@ if test -n "$shell_agent"; then
         esac
     fi
 fi
-# The shell's network agent says where it stands: registered, standing
-# aside for an nm-applet, waiting for NetworkManager, or not running.
-if test -n "$net_agent"; then
-    shell_runs=
-    for pid in $(pids_of qs) $(pids_of quickshell); do
-        test "$(unit_of "$pid")" = tide.service && shell_runs=1
-    done
-    if test -z "$shell_runs"; then
-        : # no shell, no agent; the shell's own checks report that
-    elif ! state=$(qs -c tide ipc call agent status 2>&1); then
-        problem "couldn't ask the shell whether its network agent works (qs ipc: $(printf '%s\n' "$state" | tail -n 1)), so whether NetworkManager can ask for passwords isn't known"
-    else
-        autostart_file=${XDG_CONFIG_HOME:-$HOME/.config}/tide/autostart
-        case "$state" in
-            registered | off) ;;
-            standing-aside*)
-                # Fine if you listed nm-applet to keep it.
-                if ! { test -f "$autostart_file" && grep -v '^#' "$autostart_file" | grep -qx '[[:space:]]*nm-applet[[:space:]]*'; }; then
-                    problem "nm-applet (pid ${state#standing-aside }) is running, so its dialogs ask for network passwords instead of the shell's (TIDE_AGENT=1): stop it, or list nm-applet in $autostart_file to keep it"
-                fi
-                ;;
-            waiting)
-                problem "NetworkManager isn't running, so the shell's network agent is waiting for it: \`systemctl status NetworkManager\`"
-                ;;
-            unregistered*)
-                problem "NetworkManager didn't take the shell's network agent (${state#unregistered }), so nothing asks for network passwords: \`journalctl --user -u tide.service\` says more"
-                ;;
-            missing)
-                problem "tide-agent isn't running, so nothing asks for network passwords (TIDE_AGENT=1): is it installed (\`make install-session\`)? \`journalctl --user -u tide.service\` says why"
-                ;;
-            *)
-                problem "couldn't tell whether the shell's network agent works (qs ipc said '$state')"
-                ;;
-        esac
-    fi
+# The network agent (SPEC.md §5.6): the Quickshell shell's, or nm-applet,
+# by the same decision `tide autostart-allowed` makes (`tide
+# network-agent`), so doctor and autostart can't disagree. Nothing asking
+# for a password is reported only when neither runs.
+shell_runs=
+for pid in $(pids_of qs) $(pids_of quickshell); do
+    test "$(unit_of "$pid")" = tide.service && shell_runs=1
+done
+# Installed beside this script; $TIDE_CMD is for tests.
+tide_cmd=${TIDE_CMD:-$(dirname "$0")/tide}
+agent_err=$(mktemp) || {
+    echo "$prog: couldn't create a temporary file" >&2
+    exit 2
+}
+if agent_state=$(sh "$tide_cmd" network-agent 2>"$agent_err"); then
+    agent_on=1
+else
+    agent_on=
+fi
+test -s "$agent_err" && problem "$(cat "$agent_err")"
+rm -f "$agent_err"
+applet_runs=
+test "$(count nm-applet)" -gt 0 && applet_runs=1
+autostart_file=${XDG_CONFIG_HOME:-$HOME/.config}/tide/autostart
+case "$agent_state" in
+    standing-aside*)
+        # Fine if you listed nm-applet to keep it.
+        if ! { test -f "$autostart_file" && grep -v '^#' "$autostart_file" | grep -qx '[[:space:]]*nm-applet[[:space:]]*'; }; then
+            problem "nm-applet (pid ${agent_state#standing-aside }) is running, so its dialogs ask for network passwords instead of the shell's: stop it, or list nm-applet in $autostart_file to keep it"
+        fi
+        ;;
+    waiting)
+        problem "NetworkManager isn't running, so the shell's network agent is waiting for it: \`systemctl status NetworkManager\`"
+        ;;
+esac
+if test -z "$agent_on" && test -z "$applet_runs" && ! test -s "$pgrep_err"; then
+    case "$agent_state" in
+        none)
+            if test -n "$shell_runs"; then
+                why="the shell didn't answer whether its network agent runs (is it starting?)"
+            else
+                why="the Quickshell shell isn't running (the bar is waybar), so neither is its network agent"
+            fi
+            fix="install nm-applet (network-manager-gnome), which autostart then runs, and \`systemctl --user restart tide.service\` once the shell can run"
+            ;;
+        off)
+            why="TIDE_AGENT=0 turns off the shell's network agent"
+            fix="unset TIDE_AGENT, or list nm-applet in $autostart_file"
+            ;;
+        missing)
+            why="tide-agent isn't running"
+            fix="is it installed (\`make install-session\`)? \`journalctl --user -u tide.service\` says why; nm-applet, once installed, stands in"
+            ;;
+        unregistered*)
+            why="NetworkManager didn't take the shell's network agent (${agent_state#unregistered })"
+            fix="\`journalctl --user -u tide.service\` says more; nm-applet, once installed, stands in"
+            ;;
+        *)
+            why="the shell's network agent says '$agent_state'"
+            fix="\`journalctl --user -u tide.service\` says more"
+            ;;
+    esac
+    problem "$why, and nm-applet isn't running, so nothing asks for a VPN's or Wi-Fi network's password: $fix"
+elif test -z "$agent_on"; then
+    # nm-applet holds the job. Under waybar, or with TIDE_AGENT=0, that's
+    # the plan; otherwise the shell's agent should, so say why it doesn't.
+    case "$agent_state" in
+        missing)
+            problem "tide-agent isn't running, so nm-applet asks for network passwords instead of the shell: is it installed (\`make install-session\`)? \`journalctl --user -u tide.service\` says why"
+            ;;
+        unregistered*)
+            problem "NetworkManager didn't take the shell's network agent (${agent_state#unregistered }), so nm-applet asks for network passwords instead: \`journalctl --user -u tide.service\` says more"
+            ;;
+    esac
 fi
 # The shell runs one wallpaper daemon or the other, never both.
 if test "$(count swww-daemon)" -gt 0 && test "$(count swaybg)" -gt 0; then

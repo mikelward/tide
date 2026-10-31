@@ -7,9 +7,8 @@ import "lib/agent.mjs" as Agent
 import "lib/polkit.mjs" as Polkit
 
 // The shell's side of tide-agent, NetworkManager's secret agent (SPEC.md
-// §5.6), opt-in with TIDE_AGENT=1 until it has run in a live session. It
-// starts tide-agent and talks to it over its stdin and stdout, as the
-// greeter does tide-greetd: tide-agent does the D-Bus side, and this
+// §5.6), on unless TIDE_AGENT=0. It starts tide-agent and talks to it
+// over its stdin and stdout, as the greeter does tide-greetd: tide-agent does the D-Bus side, and this
 // decides where and when each request is asked (shell/lib/agent.mjs). The
 // network popover asks for a Wi-Fi key it just tried in place;
 // AgentPrompt.qml asks for the rest. A line either way can hold a
@@ -17,7 +16,7 @@ import "lib/polkit.mjs" as Polkit
 Singleton {
     id: root
 
-    readonly property bool enabled: Quickshell.env("TIDE_AGENT") === "1"
+    readonly property bool enabled: Quickshell.env("TIDE_AGENT") !== "0"
 
     // tide-agent's last status message ({state, pid, message}), null
     // until it sends one.
@@ -379,7 +378,7 @@ Singleton {
         target: "agent"
 
         function status(): string {
-            return Agent.statusText(root.enabled, helper.running && root.started, root.status);
+            return Agent.statusText(root.enabled, helper.running, root.status);
         }
     }
 

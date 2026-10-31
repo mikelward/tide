@@ -20,10 +20,12 @@ once you have agreed with it or reversed it.
   here. Reversible inside `cmd/tide-agent/keyring.go`.
 - [ ] **godbus v5.1.0, not v5.2.4,** for having no dependencies of its own
   (v5.2 needs `golang.org/x/sys`). Moving up is a `go get`.
-- [ ] **`TIDE_AGENT=1` opts in until a live session has run it,** as
-  `TIDE_POLKIT=1` does; the last step makes it the default. The
-  alternative is on at once, standing aside for nm-applet while it's on
-  the autostart list. Reversible by the default in one place.
+- [ ] **`tide-agent` is on by default, and nm-applet autostarted only
+  while it isn't running,** once a live session with `TIDE_AGENT=1` had checked SPEC.md
+  §5.6's list. `TIDE_AGENT=0` turns it off, and listing nm-applet in
+  `~/.config/tide/autostart` brings that back. Reversible: the default is
+  `AgentData.enabled`, `tide-doctor`'s `net_agent` and `bin/tide`'s
+  `shell_agent_on`.
 - [ ] **Nothing is asked on the lock screen.** A request that needs typing
   while locked is declined and turns into a notification after unlock;
   saved secrets still answer. GNOME Shell prompts on its lock screen
@@ -1430,26 +1432,32 @@ autostart entries, and a second bar on any monitor. Still to do:
   session, check that the bar's reservation matches its height at each
   scale, so a lone tide bar reports nothing.
 
-## Take nm-applet off the autostart allowlist (SPEC.md §5.6)
+## Network and Bluetooth agents (SPEC.md §5.6)
 
-`nm-applet` stays on the default allowlist (`autostart_default` in
-`bin/tide`, SPEC.md §5.4) only for its NetworkManager secret agent, which
-asks for a VPN's unsaved password or one-time code, since the VPN rows
-run `nmcli connection up` without `--ask`. `tide-agent` replaces it:
+`tide-agent` is NetworkManager's secret agent, in place of nm-applet,
+which autostart runs only while the shell's agent doesn't (waybar). What's
+left:
 
-- [x] `cmd/tide-agent`: NetworkManager's secret agent, the keyring, VPN
-  auth dialogs, tested against stand-ins only.
-- [x] The shell's prompt, the popover's row, notifications, `TIDE_AGENT=1`,
-  `ipc call agent status`, and `tide doctor`, tested against stand-ins
-  only. Still to come:
-  - `tide doctor`'s line for neither the agent nor nm-applet running goes
-    in with step 5, when the agent is the default: until then nearly every
-    session without `TIDE_AGENT=1` runs nm-applet, and the check would
-    only flag test fixtures.
-- [ ] The BlueZ pairing agent.
-- [ ] On a live session with `TIDE_AGENT=1`, check §5.6's list, then remove
-  `nm-applet` from the list, its tests and SPEC.md §5.4, and make the
-  agent the default.
+- [ ] The BlueZ pairing agent, in the same helper (§5.6's step 4).
+- [ ] **Run §5.6's live check** in a session with the agent on: a Wi-Fi
+  key typed in the popover with no second dialog, a VPN password and a
+  one-time code, Esc on each, a request while locked turning into a
+  notification after, and a clean `tide doctor`. Until then everything
+  here is tested against stand-ins only.
+- [ ] **nm-applet's fallback is decided once, at login.** `tide
+  autostart-allowed` skips nm-applet when the shell's agent says
+  `starting` or `waiting`; if `tide-agent` then fails to register
+  (`agent.go`'s `reconcile`), or gives up after its restart backoff,
+  nm-applet stays skipped all session and nothing asks for passwords.
+  The fix is to make the fallback event-driven: whenever the shell's
+  agent settles at anything but `registered` or `standing-aside`
+  (`missing`, `unregistered`, `off`, or the helper given up), the shell
+  starts nm-applet's autostart unit itself (`systemctl --user start` of
+  its `app-nm\x2dapplet@autostart.service`), and login-time autostart
+  just defers to that. Waybar, with no shell to decide, keeps the
+  plain login-time start. `tide network-agent` stays the one decision
+  doctor and autostart read. Deferred by the maintainer, who rarely
+  uses a VPN.
 
 ## Grants for terminal commands
 

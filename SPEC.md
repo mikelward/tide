@@ -348,7 +348,7 @@ work". The old setup shows how it fought itself:
 | Theme schedule | tide | `tide.service` | `theme-daemon.sh` retired |
 | Audio | PipeWire + WirePlumber | their own socket units | PulseAudio |
 | Network, Bluetooth | NetworkManager, BlueZ (system) | system units | tray applets |
-| Network passwords (NetworkManager's secret agent), and later Bluetooth pairing (BlueZ's agent) | `tide-agent`, asking through the shell (§5.6) | the shell, with `TIDE_AGENT=1` until it's the default | nm-applet skipped by autostart, and stood aside for when it runs anyway |
+| Network passwords (NetworkManager's secret agent), and later Bluetooth pairing (BlueZ's agent) | `tide-agent`, asking through the shell (§5.6) | the shell, unless `TIDE_AGENT=0` | nm-applet skipped by autostart while the shell's agent runs, and stood aside for when it runs anyway |
 | Secrets | gnome-keyring, unlocked by PAM at login | greetd PAM + `gnome-keyring-daemon.socket` | KWallet in this session |
 | Lid, power button | logind's defaults (`HandleLidSwitch=suspend`, `HandleLidSwitchDocked=ignore`), plus a Hyprland `bindl` pair on the lid switch: closing it with an external monitor attached disables the internal panel, and opening it re-enables the panel with its configured mode and returns the panel's workspaces to it | logind / Hyprland | `lid.sh`'s own suspend logic, and the `HandleLidSwitch=ignore` drop-in the old `setup-hypr` installed |
 | "Show in folder" (`org.freedesktop.FileManager1`) | Nautilus (§16.2) | D-Bus activation via tide's user-level service file → `tide-filemanager.service`, whose launcher picks Dolphin under Plasma and which stops with the session | the arbitrary pick between Dolphin's and Nautilus's system activation files |
@@ -465,13 +465,19 @@ flowchart TD
 - **One `exec-once`.** Hyprland's config starts nothing but
   `uwsm finalize`, and a test in `conf` asserts it.
 - **Autostart is an allowlist.** XDG autostart entries run in tide only
-  if they are on its list: `nm-applet`, plus any desktop IDs in
-  `~/.config/tide/autostart`. Everything else is skipped in tide
-  and still runs under KDE. `doctor` reports any that ran anyway.
-  - `nm-applet` stays for NetworkManager's secret agent, which asks for a
-    VPN's password, until tide has its own. Its autostart entry uses the
-    X11 tray icon, which tide doesn't show, so the bar's network icon
-    (§7.4) is the only one.
+  if they are on its list: `nm-applet` while the shell's agent isn't
+  running, plus any desktop IDs in `~/.config/tide/autostart`. Everything
+  else is skipped in tide and still runs under KDE. `doctor` reports any
+  that ran anyway.
+  - `nm-applet` is NetworkManager's secret agent wherever `tide-agent`
+    (§5.6) isn't. `tide autostart-allowed` asks the shell (`ipc call
+    agent status`): no Quickshell shell answering means waybar is the bar
+    (`TIDE_BAR=waybar`, or `tide-shell`'s fallback from a missing or old
+    Quickshell), and nm-applet runs. So it does with `TIDE_AGENT=0`, or a
+    `tide-agent` that couldn't start. Listing it starts it anyway, and
+    `tide-agent` then stands aside. Its autostart entry uses the X11 tray
+    icon, which tide doesn't show, so the bar's network icon is the only
+    one.
   - `blueman` isn't on the list: the bar draws Bluetooth. blueman-manager,
     which pairs a device (§7.4), starts blueman's applet, the pairing
     agent, over D-Bus while it's open.
@@ -673,11 +679,13 @@ small Go command does the D-Bus side, and the shell does the asking:
 - Its identifier is `io.github.mikelward.tide`, and it registers with the
   `VPN_HINTS` capability, so a VPN asking for one more secret mid-connect
   (a one-time code) says which.
-- **Opt-in, then default.** With `TIDE_AGENT=1` in the session's
-  environment (uwsm's env, like `TIDE_POLKIT`), the shell starts the
-  helper and `tide autostart-allowed` skips nm-applet, so exactly one
-  agent answers. Without it nothing changes, until the last step below
-  makes it the default.
+- **On by default.** The shell starts the helper unless `TIDE_AGENT=0` is
+  in the session's environment (uwsm's env, like `TIDE_POLKIT`), and
+  autostart skips nm-applet while it runs, so exactly one agent answers.
+  Under waybar there's no Quickshell shell to run it, so nm-applet is the
+  agent there (§5.4).
+  It was opt-in, with `TIDE_AGENT=1`, until a live session had run it
+  (step 5).
 
 **Standing aside for nm-applet.** NetworkManager asks its agents one at a
 time: the requesting process's own agent first (`nmcli --ask`), then
@@ -790,10 +798,11 @@ SERVICE`, `-i` when it may ask, `-r` for new secrets, and each hint as
 NetworkManager) or `missing` (the helper isn't installed, or keeps
 exiting). It reports:
 
-- with the agent on: a missing or failing helper, and nm-applet running,
-  which means its dialogs ask instead (fine if you listed it);
-- with the agent off: no nm-applet either, since then nothing asks for a
-  VPN's password.
+- with the agent on: a missing or failing helper, NetworkManager not
+  running or refusing it, and nm-applet running, which means its dialogs
+  ask instead (fine if you listed it);
+- with `TIDE_AGENT=0`, or waybar as the bar: no nm-applet either, since
+  then nothing asks for a VPN's password.
 
 **Bluetooth pairing** (the next step, in the same helper). tide has no
 pairing agent of its own, and blueman's applet is off the autostart list

@@ -539,15 +539,55 @@ check "an unknown subcommand is a usage error" test $? -eq 2
 allowed() {
     env XDG_CONFIG_HOME="$tmp/config" sh "$qs" autostart-allowed "$1" 2>"$tmp/err"
 }
-# With the shell's network agent on (SPEC.md §5.6).
-allowed_with_agent() {
-    env TIDE_AGENT=1 XDG_CONFIG_HOME="$tmp/config" sh "$qs" autostart-allowed "$1" 2>"$tmp/err"
+# nm-applet runs only while the Quickshell shell's network agent doesn't
+# (SPEC.md §5.6), as the shell says: the fake qs answers
+# `ipc call agent status` with $FAKE_AGENT, or, unset, fails as qs does
+# with no shell running (waybar's bar). The bar draws Bluetooth, so
+# blueman's applet isn't allowed either way.
+mkdir "$tmp/agent-bin"
+cat > "$tmp/agent-bin/qs" <<'FAKE'
+#!/bin/sh
+if test "$*" != "-c tide ipc call agent status" || test -z "${FAKE_AGENT:-}"; then
+    echo "No running instances for /home/user/.config/quickshell/tide/shell.qml" >&2
+    exit 255
+fi
+echo "$FAKE_AGENT"
+FAKE
+chmod +x "$tmp/agent-bin/qs"
+# Without qs on PATH at all: only what autostart-allowed runs.
+mkdir "$tmp/no-qs-bin"
+for tool in sh sed grep systemd-escape; do
+    ln -s "$(command -v "$tool")" "$tmp/no-qs-bin/$tool"
+done
+nm_applet() {
+    env PATH="${NM_PATH:-$tmp/agent-bin:$PATH}" FAKE_AGENT="${FAKE_AGENT:-}" XDG_CONFIG_HOME="$tmp/config" \
+        sh "$qs" autostart-allowed 'app-nm\x2dapplet@autostart.service' 2>"$tmp/err"
+    echo $?
 }
-# nm-applet stays for its secret agent; the bar draws Bluetooth, so
-# blueman's applet isn't allowed by default.
-check "nm-applet's autostart is allowed" allowed 'app-nm\x2dapplet@autostart.service'
-check "with TIDE_AGENT=1, nm-applet's autostart is skipped" \
-    test "$(allowed_with_agent 'app-nm\x2dapplet@autostart.service'; echo $?)" -eq 1
+for state in registered starting waiting "standing-aside 300"; do
+    check "nm-applet is skipped while the shell's agent is $state" test "$(FAKE_AGENT=$state nm_applet)" -eq 1
+done
+check "the skip says why" contains "$(cat "$tmp/err")" "the shell's tide-agent asks for network passwords"
+check "nm-applet runs when no shell answers (TIDE_BAR=waybar, or tide-shell's fallback)" test "$(nm_applet)" -eq 0
+check "nm-applet runs when qs isn't installed, so tide-shell fell back to waybar" test "$(NM_PATH=$tmp/no-qs-bin nm_applet)" -eq 0
+check "nm-applet runs with TIDE_AGENT=0" test "$(FAKE_AGENT=off nm_applet)" -eq 0
+check "nm-applet runs when tide-agent couldn't start" test "$(FAKE_AGENT=missing nm_applet)" -eq 0
+check "nm-applet runs when NetworkManager refused tide-agent" test "$(FAKE_AGENT='unregistered denied' nm_applet)" -eq 0
+check "an answer that isn't a status allows nm-applet, and says so" test "$(FAKE_AGENT=bogus nm_applet)" -eq 0
+check "and names it" contains "$(cat "$tmp/err")" "says 'bogus', which isn't a status"
+# tide network-agent: the same decision, for tide doctor.
+network_agent() {
+    env PATH="${NM_PATH:-$tmp/agent-bin:$PATH}" FAKE_AGENT="${FAKE_AGENT:-}" sh "$qs" network-agent 2>"$tmp/err"
+    echo "exit $?"
+}
+check "network-agent prints a registered agent's status and exits 0" \
+    test "$(FAKE_AGENT=registered network_agent)" = "registered
+exit 0"
+check "network-agent prints none and exits 1 with no shell answering" test "$(network_agent)" = "none
+exit 1"
+check "network-agent exits 1 for a missing tide-agent" test "$(FAKE_AGENT=missing network_agent)" = "missing
+exit 1"
+check "network-agent takes no arguments" test "$(sh "$qs" network-agent extra 2>/dev/null; echo $?)" -eq 2
 check "blueman's autostart is skipped" test "$(allowed 'app-blueman@autostart.service'; echo $?)" -eq 1
 check "another desktop's autostart is skipped" test "$(allowed 'app-hplip\x2dsystray@autostart.service'; echo $?)" -eq 1
 check "a skip says how to allow it" \
@@ -561,10 +601,11 @@ check "an ID with a # is matched whole" allowed 'app-hash\x23tag@autostart.servi
 check "half of an ID with a space isn't allowed" test "$(allowed 'app-has@autostart.service'; echo $?)" -eq 1
 check "an ID starting with # is allowed by its escaped form" allowed 'app-\x23lead@autostart.service'
 check "a commented-out line allows nothing" test "$(allowed 'app-commented\x2dout@autostart.service'; echo $?)" -eq 1
-check "the default still applies beside the user's list" allowed 'app-nm\x2dapplet@autostart.service'
+check "nm-applet is still skipped beside the user's list while the shell's agent runs" \
+    test "$(FAKE_AGENT=registered nm_applet)" -eq 1
 printf 'nm-applet\n' >> "$tmp/config/tide/autostart"
-check "with TIDE_AGENT=1, nm-applet still starts when the user's list names it" \
-    allowed_with_agent 'app-nm\x2dapplet@autostart.service'
+check "nm-applet starts when the user's list names it, whatever the shell's agent" \
+    test "$(FAKE_AGENT=registered nm_applet)" -eq 0
 check "an applet the user's list lacks is skipped" \
     test "$(allowed 'app-blueman@autostart.service'; echo $?)" -eq 1
 check "an entry the user's list lacks is still skipped" \

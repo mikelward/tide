@@ -158,7 +158,7 @@ test("the dialog's grant is the guard's wildcard", () => {
 test("the status doctor reads", () => {
     assert.equal(statusText(false, true, { state: "registered" }), "off");
     assert.equal(statusText(true, false, { state: "registered" }), "missing");
-    assert.equal(statusText(true, true, null), "missing");
+    assert.equal(statusText(true, true, null), "starting", "running, with no status yet");
     assert.equal(statusText(true, true, { state: "registered" }), "registered");
     assert.equal(statusText(true, true, { state: "waiting" }), "waiting");
     assert.equal(statusText(true, true, { state: "standing-aside", pid: 42 }), "standing-aside 42");
