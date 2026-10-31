@@ -68,9 +68,15 @@ const VARIANT = /^[A-Za-z0-9_-]*(,[A-Za-z0-9_-]*){0,3}$/;
 const DEVICE_NAME = /^[ !#-[\]-~]{1,128}$/;
 
 // Which kind of device a pointer's name is, as conf's apply-input.sh
-// decides: a touchpad says so in its name, and every other is a mouse.
+// (is_touchpad) decides. A touchpad is one that says so (Apple's bcm5974
+// doesn't), and so is the rest of a laptop's built-in pointing: a pointing
+// stick, whose buttons sit above the touchpad, and anything named by an ACPI
+// ID ("elan1200:00-04f3:309f-touchpad", or its "-mouse" node), which is an
+// I2C device in the laptop. Every other is a mouse.
+const TOUCHPAD = /touchpad|trackpad|synaptics|bcm5974|trackpoint|pointing-?stick|dualpoint-stick|^[a-z0-9]{4}[0-9a-f]{4}:[0-9a-f]{2}-[0-9a-f]{4}:[0-9a-f]{4}/;
+
 export function deviceKind(name) {
-    return /touchpad|trackpad|synaptics/.test(name) ? "touchpad" : "mouse";
+    return TOUCHPAD.test(name) ? "touchpad" : "mouse";
 }
 
 // Which section device `name`'s own `key` is one of: the keyboard's for a

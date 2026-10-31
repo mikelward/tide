@@ -221,8 +221,27 @@ test("a pointer is a touchpad when its name says so, else a mouse, as conf's app
     assert.equal(deviceKind("synps/2-synaptics-touchpad"), "touchpad");
     assert.equal(deviceKind("apple-magic-trackpad"), "touchpad");
     assert.equal(deviceKind("elan0670:00-04f3:3150-touchpad"), "touchpad");
+    assert.equal(deviceKind("bcm5974"), "touchpad");
     assert.equal(deviceKind("logitech-usb-receiver"), "mouse");
-    assert.equal(deviceKind("tpps/2-elan-trackpoint"), "mouse");
+    assert.equal(deviceKind("usb-optical-mouse"), "mouse");
+    assert.equal(deviceKind("trackball"), "mouse");
+});
+
+// A ThinkPad's: the buttons above its touchpad are the TrackPoint's, and an
+// I2C touchpad's HID mouse node can carry clicks, so neither is left-handed
+// with the mice.
+test("a laptop's pointing stick and its touchpad's I2C nodes are touchpads, as conf's apply-input.sh decides", () => {
+    assert.equal(deviceKind("tpps/2-elan-trackpoint"), "touchpad");
+    assert.equal(deviceKind("tpps/2-ibm-trackpoint"), "touchpad");
+    assert.equal(deviceKind("alps-dualpoint-stick"), "touchpad");
+    assert.equal(deviceKind("abcd1234:00-0a0b:0c0d-mouse"), "touchpad");
+    assert.equal(deviceKind("elan0001:00-04f3:3000"), "touchpad");
+    assert.deepEqual(connectedDevices('{"mice": [{"name": "abcd1234:00-0a0b:0c0d-mouse"}, {"name": "abcd1234:00-0a0b:0c0d-touchpad"}, {"name": "tpps/2-elan-trackpoint"}, {"name": "usb-optical-mouse"}], "keyboards": []}').devices, [
+        { name: "abcd1234:00-0a0b:0c0d-mouse", kind: "touchpad" },
+        { name: "abcd1234:00-0a0b:0c0d-touchpad", kind: "touchpad" },
+        { name: "tpps/2-elan-trackpoint", kind: "touchpad" },
+        { name: "usb-optical-mouse", kind: "mouse" },
+    ]);
 });
 
 test("a device takes its kind's settings, named for it", () => {
