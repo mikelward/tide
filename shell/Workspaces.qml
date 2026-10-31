@@ -7,7 +7,8 @@ import "lib/workspaces.mjs" as Ws
 
 // Every workspace on one monitor's bar, by name (SPEC.md §6.5, §7.2): the
 // standing ones first, home first, then the rest in the order they were
-// made. shell/lib/workspaces.mjs decides what each shows; this only draws
+// made, each with an app icon only for a window wanting attention.
+// shell/lib/workspaces.mjs decides what each shows; this only draws
 // it and sends clicks to Hyprland, which makes a standing workspace that
 // isn't made yet as it's clicked.
 Row {
@@ -113,10 +114,12 @@ Row {
                                 "application-x-executable")
                         }
 
-                        // Middle-click focuses that window (SPEC.md §7.2).
+                        // A click focuses that window (SPEC.md §7.2), which
+                        // clears its mark; the chip's own click, under it,
+                        // doesn't fire as well.
                         MouseArea {
                             anchors.fill: parent
-                            acceptedButtons: Qt.MiddleButton
+                            acceptedButtons: Qt.LeftButton
                             onClicked: Hyprland.dispatch(Dispatch.focusWindow(icon.modelData.address, Hyprland.usingLua))
                         }
                     }

@@ -141,24 +141,45 @@ test("windows on special workspaces aren't on the bar", () => {
     assert.ok(bar.every((w) => w.state === "empty" && w.icons.length === 0));
 });
 
-test("one icon per window, in window order, up to five then +n", () => {
-    const windows = ["a", "b", "c", "d", "e", "f", "g"].map((a) => win(a, 3, `app-${a}`));
+test("an ordinary window has no icon on the bar, but the workspace counts it", () => {
+    const windows = [win("a", 3, "kitty"), win("b", 3, "firefox")];
+    const ws = barWorkspaces({ ...one, windows })[2];
+    assert.deepEqual(ws.icons, []);
+    assert.equal(ws.more, 0);
+    assert.equal(ws.state, "occupied");
+    assert.equal(ws.count, 2);
+    assert.equal(ws.app, "kitty", "the first window's app, for the Workspaces tab");
+    const empty = barWorkspaces({ ...one, windows })[3];
+    assert.equal(empty.count, 0);
+    assert.equal(empty.app, "");
+});
+
+test("only windows wanting attention get icons, in window order, up to five then +n", () => {
+    const windows = ["a", "b", "c", "d", "e", "f", "g", "h"].map((a) => win(a, 3, `app-${a}`));
+    for (const w of windows.slice(1)) {
+        w.urgent = true;
+    }
     const ws = barWorkspaces({ ...one, windows })[2];
     assert.equal(MAX_ICONS, 5);
-    assert.deepEqual(ws.icons.map((i) => i.address), ["a", "b", "c", "d", "e"]);
-    assert.equal(ws.more, 2);
-    const two = barWorkspaces({ ...one, windows: windows.slice(0, 2) })[2];
-    assert.deepEqual(two.icons.map((i) => i.app), ["app-a", "app-b"]);
+    assert.deepEqual(ws.icons.map((i) => i.address), ["b", "c", "d", "e", "f"]);
+    assert.ok(ws.icons.every((i) => i.marked));
+    assert.equal(ws.more, 2, "the marked windows past five, not the unmarked one");
+    windows[6].urgent = false;
+    windows[7].urgent = false;
+    const two = barWorkspaces({ ...one, windows: windows.slice(0, 3) })[2];
+    assert.deepEqual(two.icons.map((i) => i.app), ["app-b", "app-c"]);
     assert.equal(two.more, 0);
 });
 
-test("a marked window's icon is never folded into +n", () => {
-    const windows = ["a", "b", "c", "d", "e", "f", "g"].map((a) => win(a, 3, "kitty"));
-    windows[6].urgent = true;
-    const ws = barWorkspaces({ ...one, windows })[2];
-    assert.deepEqual(ws.icons.map((i) => i.address), ["a", "b", "c", "d", "g"]);
-    assert.deepEqual(ws.icons.map((i) => i.marked), [false, false, false, false, true]);
-    assert.equal(ws.more, 2);
+test("the focus guard's and notifications' marks give icons as Hyprland's urgent flag does", () => {
+    let marks = updateMarks(NO_MARKS, { type: "guarded", address: "a" });
+    const windows = [win("a", 3, "kitty"), win("b", 3, "chrome"), win("c", 3, "kitty")];
+    marks = updateMarks(marks, { type: "notified", id: 1, app: "chrome", windows, visible: new Set([2]) });
+    const ws = barWorkspaces({ ...one, windows, marks })[2];
+    assert.deepEqual(ws.icons.map((i) => i.address), ["a", "b"]);
+    assert.equal(ws.urgent, true);
+    const cleared = updateMarks(updateMarks(marks, { type: "focused", address: "a" }), { type: "dismissed", id: 1 });
+    assert.deepEqual(barWorkspaces({ ...one, windows, marks: cleared })[2].icons, []);
 });
 
 test("an urgent window makes its workspace urgent", () => {
@@ -263,7 +284,7 @@ test("the guard's mark is by window, and a focus clears it", () => {
     const marks = updateMarks(NO_MARKS, { type: "guarded", address: "b" });
     const windows = [win("a", 5, "kitty"), win("b", 5, "kitty")];
     const bar = barWorkspaces({ ...one, windows, marks });
-    assert.deepEqual(bar[4].icons.map((i) => i.marked), [false, true]);
+    assert.deepEqual(bar[4].icons.map((i) => i.address), ["b"]);
     assert.deepEqual(updateMarks(marks, { type: "focused", address: "b" }), NO_MARKS);
 });
 
