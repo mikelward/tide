@@ -5,8 +5,11 @@ import Quickshell.Widgets
 import "lib/dispatch.mjs" as Dispatch
 import "lib/workspaces.mjs" as Ws
 
-// Workspaces 1-9 on one monitor's bar (SPEC.md §7.2). shell/lib/workspaces.mjs
-// decides what each shows; this only draws it and sends clicks to Hyprland.
+// Every workspace on one monitor's bar, by name (SPEC.md §6.5, §7.2): the
+// standing ones first, home first, then the rest in the order they were
+// made. shell/lib/workspaces.mjs decides what each shows; this only draws
+// it and sends clicks to Hyprland, which makes a standing workspace that
+// isn't made yet as it's clicked.
 Row {
     id: root
 
@@ -18,6 +21,10 @@ Row {
     readonly property var monitors: Hyprland.monitors.values.map(m => ({
         name: m.name,
         workspace: m.activeWorkspace ? m.activeWorkspace.id : null,
+    }))
+    readonly property var workspaces: Hyprland.workspaces.values.map(w => ({
+        id: w.id,
+        name: w.name,
     }))
     readonly property var windows: Hyprland.toplevels.values.map(t => ({
         address: Ws.normalizeAddress(t.address),
@@ -31,8 +38,10 @@ Row {
     readonly property var list: Ws.barWorkspaces({
         monitor: root.monitorName,
         monitors: root.monitors,
+        workspaces: root.workspaces,
         windows: root.windows,
         marks: MarkData.marks,
+        standing: WorkspacesData.standing,
     })
     readonly property var current: root.monitors.find(m => m.name === root.monitorName)?.workspace ?? null
 
@@ -60,7 +69,7 @@ Row {
             MouseArea {
                 anchors.fill: parent
                 acceptedButtons: Qt.LeftButton
-                onClicked: Hyprland.dispatch(Dispatch.focusWorkspace(chip.modelData.id, Hyprland.usingLua))
+                onClicked: Hyprland.dispatch(Dispatch.focusWorkspaceName(chip.modelData.name, Hyprland.usingLua))
             }
 
             Row {
@@ -71,7 +80,9 @@ Row {
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: chip.modelData.id
+                    // A name is whatever was typed: plain text, never markup.
+                    textFormat: Text.PlainText
+                    text: chip.modelData.label
                     color: chip.ink
                     font.family: Theme.font
                     font.pixelSize: 13
@@ -147,8 +158,8 @@ Row {
         }
     }
 
-    // Scrolling steps through the workspaces, one per notch, stopping at
-    // 1 and 9 (SPEC.md §7.2); touchpads' small deltas add up to a notch,
+    // Scrolling steps through the workspaces in the bar's order, one per
+    // notch, stopping at either end (SPEC.md §7.2); touchpads' small deltas add up to a notch,
     // and what's left over counts toward the next.
     property real wheel: 0
 
@@ -160,9 +171,9 @@ Row {
                 return;
             }
             root.wheel -= notches * 120;
-            const target = Ws.scrollTarget(root.current, notches);
+            const target = Ws.scrollTarget(root.list, root.current, notches);
             if (target !== null) {
-                Hyprland.dispatch(Dispatch.focusWorkspace(target, Hyprland.usingLua));
+                Hyprland.dispatch(Dispatch.focusWorkspaceName(target, Hyprland.usingLua));
             }
         }
     }

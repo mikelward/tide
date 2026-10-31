@@ -595,6 +595,7 @@ EOF
 }
 
 # written_settings: fails the test unless the shell started by writing
+# home's default name for conf's hyprland.lua (SPEC.md §6.5), and
 # hypridle's default timings and no suspend on AC (SPEC.md §10), and no
 # mouse or touchpad settings for conf's hyprland.lua (§16); then, for each,
 # given a hand edit to its .local.json and straight after it settings over
@@ -623,6 +624,13 @@ written_settings() {
         sleep 0.1
         i=$((i + 1))
     done
+    # Home by its default name, and no apps of its own, for conf's
+    # hyprland.lua (SPEC.md §6.5).
+    if ! grep -qxF '    home = "in",' "$workspaces_conf" 2>/dev/null ||
+        ! grep -qxF '    in_apps = {},' "$workspaces_conf"; then
+        echo "FAIL: the shell should write home, in, with no apps to $workspaces_conf; it has: $(cat "$workspaces_conf" 2>&1)" >&2
+        exit 1
+    fi
     if ! grep -qxF '$tide_idle_lock = 300' "$idle_conf" 2>/dev/null ||
         ! grep -qxF '$tide_idle_suspend_on_ac = 0' "$idle_suspend_conf" 2>/dev/null; then
         echo "FAIL: the shell should write hypridle's default timings to $idle_conf, and no suspend on AC to $idle_suspend_conf; they have: $(cat "$idle_conf" "$idle_suspend_conf" 2>&1)" >&2
@@ -1299,7 +1307,8 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # replay of the waiting windows, and its order for Super+Tab), light and
 # dark, the VPNs, hypridle's timings, the mouse, touchpad and keyboard
 # settings, the list of mice and touchpads, the key bindings, the layout
-# settings, the monitors and their settings, or the dim strength.
+# settings, the monitors and their settings, the dim strength, or home and
+# its apps' rules.
 # The lock and the greeter only ask for the keyboards, for their layout
 # badges.
 shell_runs='tide-tz
@@ -1319,7 +1328,8 @@ hyprctl binds -j
 hyprctl eval tide_layout.reload()
 hyprctl monitors all -j
 hyprctl eval conf_outputs.reload()
-hyprctl eval conf_appearance.reload()'
+hyprctl eval conf_appearance.reload()
+hyprctl eval conf_workspaces.reload()'
 load_runs=$shell_runs
 idle_conf=$tmp/home/.config/hypr/tide-idle.conf
 idle_suspend_conf=$tmp/home/.config/hypr/tide-idle-suspend.conf
@@ -1334,12 +1344,13 @@ appearance_local=$tmp/home/.config/tide/appearance.local.json
 appearance_conf=$tmp/home/.config/hypr/tide-appearance.lua
 outputs_conf=$tmp/home/.config/hypr/tide-outputs.lua
 outputs_local=$tmp/home/.config/tide/outputs.local.json
+workspaces_conf=$tmp/home/.config/hypr/tide-workspaces.lua
 after_load=written_settings
 load shell "the shell" -c tide
 after_load=
 # Gone again, so the next shell starts from the defaults, writes them, and
 # restarts hypridle and reapplies the devices, too.
-rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" "$layouts_conf" "$layouts_local" "$appearance_local" "$appearance_conf" "$outputs_conf" "$outputs_local" || exit 1
+rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" "$layouts_conf" "$layouts_local" "$appearance_local" "$appearance_conf" "$outputs_conf" "$outputs_local" "$workspaces_conf" || exit 1
 echo "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 echo "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
 echo "ok: the shell changes the clocks as the Clocks page asks, and looks them up"

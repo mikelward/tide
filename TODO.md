@@ -1108,26 +1108,46 @@ Deferred: it needs a Hyprland patch, and the MVP comes first.
 ## Named workspaces and the switcher (M8, M9)
 
 SPEC.md §6.5, §6.6, §7, §8 and §14 replace the nine numbered workspaces
-with named ones and fold the launcher into a tabbed switcher. Specified
-only; none of it is built.
+with named ones and fold the launcher into a tabbed switcher.
 
-- **Decide what a second monitor shows at login** (SPEC.md §21): Hyprland
-  gives it a numbered workspace.
+Built, tested against stubs and fixtures only (no live Hyprland here):
+the bar by name, with the standing workspaces (`standing`, home first)
+always listed; home's rename undone; `workspaces.json` loaded and checked,
+and `tide-workspaces.lua` written for `conf`; `tide launch --workspace` and
+`TIDE_WORKSPACE`; `tide workspace`. To check on a live session: home exists
+from the first frame and survives a config reload; a standing workspace is
+made by clicking it on the bar; a rename of home is undone.
+
+- **Redesign workspaces across several monitors** (SPEC.md §21), a
+  follow-up to M8, which is built for one monitor; extra monitors keep
+  Hyprland's per-monitor model meanwhile. The direction: a workspace spans
+  every display, with a layout of its own on each. Moving between displays
+  is to be designed; the candidate is `Super+Left`/`Right` focusing the
+  window to the left or right, going on at a display's edge to the nearest
+  window on the next display that way (rightmost to the leftmost on the
+  display to the right), and `Super+Shift+Left`/`Right` moving the window
+  the same way. If that edge behavior is doable, those keys replace
+  previous/next workspace and move to previous/next workspace, and
+  `Super+PgUp`/`PgDn` keep previous/next workspace. Check first whether the
+  edge behavior can be built in the Lua layout, and decide what a second
+  display shows before anything is on it.
 - **Decide what the bar does when named workspaces outgrow its left side**
   (SPEC.md §7.3, §21).
-- **"in" in `conf`.** A `persistent`, `default` workspace rule for
-  `name:in` on the first monitor; window rules sending `inApps`' windows
-  there without switching; `workspaces.json` with mail, chat, calendar and
-  music in `inApps`. Check on 0.56.2 that "in" exists from the first frame
+- **Home in `conf`.** A `persistent`, `default` workspace rule for home,
+  named as `tide-workspaces.lua` says (`in` until the shell writes one);
+  window rules sending `inApps`' windows there without switching, from
+  the same file; `conf_workspaces.reload()`, which the shell calls;
+  `workspaces.json` with the standing list and mail, chat, calendar and
+  music in `inApps`. Check on 0.56.2 that home exists from the first frame
   and survives a config reload.
 - **Workspace keys in `conf`.** `Super+Return` opens the name prompt for
   the focused window; `Alt+Tab` takes the old `Super+Return` swap, with
   the layout remembering the previous master per workspace
   (`hypr/tide/layout.lua`); the tap of `Super`, `Super+A` and
   `Super+Space` open the switcher's tabs; `Super+Tab` flips between
-  `name:in` and the last other workspace you used, from a history kept
-  in Lua; `Super+Home` goes to `name:in`; `Super+End` goes to the last
-  workspace other than "in" and the current one, from the same history,
+  home and the last other workspace you used, from a history kept
+  in Lua; `Super+Home` goes to home; `Super+End` goes to the last
+  workspace other than home and the current one, from the same history,
   skipping removed ones;
   `Super+Left`/`Right` and `Super+PgUp`/`PgDn` follow the bar's order and
   stop at the ends; `Super+1…9` and `Super+Shift+1…9` are unbound.
@@ -1135,26 +1155,22 @@ only; none of it is built.
   `end_cycle()`, the Super release binding and the `tide-cycle` events in
   `hypr/tide/focus.lua` and the shell give way to the Attention tab;
   `set_order` stays.
-- **The bar by name** (`shell/lib/workspaces.mjs`): sort by falling ID,
-  show names cut at 16 characters, drop the faint-number empty state, and
-  read `createworkspacev2`, `destroyworkspacev2` and `renameworkspace`
-  with names that hold commas. The shell undoes a rename of "in".
 - **The name prompt** (a shell surface, like the launcher): the existing
-  names filtered as you type, a new name allowed, "in" refused for another
+  names and the standing ones filtered as you type, a new name allowed,
+  home refused for another
   app's window; the default from `namePatterns` or the cleaned title,
   following the title until you type; Enter moves the window (or launches
   there), Esc closes the window politely or cancels the launch. It opens
-  for a window on "in" only when the focus guard would focus it, and
+  for a window on home only when the focus guard would focus it, and
   otherwise when that window is first focused.
 - **`namePatterns`** checked at load, naming a pattern that doesn't
-  compile or has no capture group; pure functions for the short name and
-  `TIDE_WORKSPACE`'s sanitizing, with `node --test` cases.
-- **`tide launch --workspace NAME`**, replacing `--new-workspace`: sets
-  `TIDE_WORKSPACE` in the child's environment, and grants its first
-  window a move to `name:NAME`. The launcher's `Ctrl+Enter`, and `Enter`
-  from "in" for a non-"in" app, open the name prompt first. Check on a live
-  session that the variable survives `uwsm app`'s scope.
-- **`tide workspace`** prints the focused workspace's sanitized name.
+  compile or has no capture group; a pure function for the short name,
+  with `node --test` cases. (`workspacenames.mjs` takes the list already,
+  as text.)
+- **Drop `tide launch --new-workspace`** once the launcher's `Ctrl+Enter`,
+  and `Enter` from home for an app not home's, open the name prompt first
+  and launch with `--workspace`. Check on a live session that
+  `TIDE_WORKSPACE` survives `uwsm app`'s scope.
 - **`conf`'s shpool and tmux startup** names its session from
   `TIDE_WORKSPACE` when it's set and not empty, and otherwise keeps today's
   default. That's `conf`'s session-manager code (`want_shpool`,
@@ -1163,11 +1179,11 @@ only; none of it is built.
   Apps tab of one overlay with Workspaces, Windows and Attention; `Tab` and
   `Shift+Tab` move between tabs, so the launcher's section jump moves to
   `PgDn`/`PgUp`. The tap of `Super` opens it on Workspaces.
-- **The Workspaces settings page** (SPEC.md §16): `inApps` and
-  `namePatterns`. Until then, the files are edited by hand.
+- **The Workspaces settings page** (SPEC.md §16): `standing`, `inApps`
+  and `namePatterns`. Until then, the files are edited by hand.
 - **Redo the mocks.** `bar.png` and `desktop.png` show numbered
   workspaces, and `launcher.png` shows no tabs. Redraw the bar's
-  workspaces by name with "in" first, and the switcher with its four tabs
+  workspaces by name with the standing ones, home first, and the switcher with its four tabs
   and the name prompt, then `make mocks`.
 - **Browser tabs (M9).** A Chrome extension listing tabs with
   `chrome.tabs` and a native-messaging host handing them to the shell

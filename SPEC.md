@@ -52,9 +52,10 @@ Contents:
   **100%** on a 16:9 or 16:10 monitor.
 - Inactive windows are **darkened**. That is the focus cue: no borders, no
   gaps.
-- **Named workspaces**, not numbered ones. The first, **in**, holds mail,
-  chat, calendar and music; every other workspace is named for its work, and
-  a window that opens on "in" asks which (§6.5).
+- **Named workspaces**, not numbered ones. The home workspace, **in** by
+  default, holds mail, chat, calendar and music; a few standing ones are
+  always listed; every other workspace is named for its work, and a window
+  that opens on home asks which (§6.5).
 - One full-width bar: every workspace on the left, by name, with
   **urgency** shown on the workspace that wants attention. The tray, network, volume, Bluetooth,
   power and notifications sit on the right, then four clocks:
@@ -98,6 +99,12 @@ Contents:
 4. **Nothing restarts to change theme or reload config.**
 5. **Every requirement names its mechanism** (§4), and each mechanism is
    verified on the pinned versions before it's relied on.
+6. **Nothing degrades silently.** Fallbacks are tide's to choose, but when
+   something a feature depends on is missing or out of date, tide says so
+   where you'll see it: a notification, and a `tide doctor` line (§5.4),
+   each naming what's missing and what stops working. That covers a rule
+   `conf` should have, a Hyprland feature or version, a helper program, a
+   settings file, and later the browser-tabs extension (§8.3).
 
 ## 2. Mocks
 
@@ -275,7 +282,7 @@ gives the greeter the same layout badge as the lock.
 | R14 | Tap Super for the switcher | a release bind on `SUPER_L` → a Hyprland global shortcut → Quickshell `GlobalShortcut`. Fixed only on Hyprland main (after 0.56.2); `Super+Space` until the pinned version has it (§8) | native + shell |
 | R15 | Fuzzy search of `.desktop` apps | `DesktopEntries` + our scorer | shell |
 | R16 | Quick actions | a built-in action list | shell |
-| R16a | Named workspaces, with "in" first | Hyprland's `name:` workspaces, "in" kept by a `persistent` workspace rule; the shell's name prompt (§6.5) | native + shell |
+| R16a | Named workspaces, with standing ones and home (`in` by default) first | Hyprland's `name:` workspaces, home kept by a `persistent` workspace rule; the shell's name prompt (§6.5) | native + shell |
 | R16b | One switcher: apps, workspaces, windows, attention | one shell overlay with four tabs (§8) | shell |
 | R17 | Screenshots | `screenshot` script (grim, including `grim -T` for a window; slurp; wl-copy); region picked on one frozen `grim` capture, then cropped from it, after the MVP (§13) | scripts + shell |
 | R18 | Notifications | `NotificationServer`; the shell owns the name | shell |
@@ -510,9 +517,12 @@ flowchart TD
     `lock.qml`, and the `tide-lock` PAM file, readable by the user, without
     which PAM falls back to its `other` service; and whether the last lock
     failed. A broken lock otherwise shows only when the session should
-    lock.
+    lock;
+  - the home workspace (§6.5): there, and kept by `conf`'s `persistent`
+    rule, with the shell's `tide-workspaces.lua` naming it.
 
-  It prints one line per problem, with the fix.
+  It prints one line per problem, with the fix. Each feature that leans on
+  something outside tide adds its check here, by principle 6 (§1).
   - M2's `tide doctor` checks the transitional shell's owners
     (swaync, waybar) and the units, activatable services, rival daemons,
     portal config, config errors, autostart entries, bars per monitor and
@@ -693,21 +703,37 @@ in how long they last and what stays visible:
 
 **Named workspaces.**
 
-- A workspace has a name, not a number. It exists once it has a name, and
-  the bar lists them in the order they were made.
-- An empty workspace other than "in" is removed once you leave it.
+- A workspace has a name, not a number. It exists once it has a name.
+- **Standing workspaces** are a list of names in `workspaces.json`
+  (`standing`, §16), `in`, `re`, `oc` and `me` by default.
+  - The first is the **home workspace** (below), whatever its name.
+  - The rest are made on demand: the first time you go to one, or send a
+    window to one. Nothing makes them at login.
+  - They're always listed, on the bar and on the switcher's Workspaces
+    tab, in the list's order, home first, whether they're made yet or
+    not. Choosing one that isn't made yet makes it.
+  - They're never removed from those lists. Hyprland destroys one left
+    empty, as any other (below), and the lists show it as empty until it's
+    made again.
+  - An empty list is an error at load naming the setting, and so is a
+    name listed twice, ignoring case.
+- The other workspaces are made by naming them, and follow the standing
+  ones, in the order they were made. An empty one is removed once you
+  leave it.
 - Names come from you: the name prompt (below), which a new window on
-  "in", a launch from "in" and `Super+Return` all open.
+  home, a launch from home and `Super+Return` all open.
 - A name is one line of text, trimmed, at most 32 characters. Matching a
-  name you type against the existing ones ignores case; the name keeps the
-  case it was made with.
+  name you type against the existing ones and the standing ones ignores
+  case; the name keeps the case it was made with. So a name typed as
+  `RE` uses the standing `re`.
 - **Hyprland pieces** (checked in 0.56.2's source):
   - A `name:` selector names a workspace, and makes it if no workspace has
     that name (`getWorkspaceIDNameFromString`, `MiscFunctions.cpp`).
   - Each new named workspace gets an ID below every one that exists, from
     −1338 down (`nextAvailableNamedWorkspace`, `WorkspaceQueryCore.cpp`).
-    So falling IDs are the order they were made in, and the bar sorts by
-    them; a restarted shell needs no state of its own to keep the order.
+    So falling IDs are the order they were made in, and the bar sorts the
+    workspaces that aren't standing by them; a restarted shell needs no
+    state of its own to keep the order.
   - A workspace with no windows that no monitor shows is destroyed, unless
     a workspace rule makes it `persistent` (the rule keeps a reference to
     it, `CWorkspace::setPersistent`). So removing an empty workspace once
@@ -716,41 +742,54 @@ in how long they last and what stays visible:
     `destroyworkspacev2>>ID,NAME` and `renameworkspace>>ID,NAME`. A name
     may hold a comma, so the shell reads the ID up to the first comma and
     the rest as the name.
+  - A numbered workspace, such as the one a second monitor gets (below),
+    is listed after the named ones, by number.
 
-**The "in" workspace.**
+**The home workspace.** The first standing workspace, `in` by default.
 
-- "in" is the first workspace. It's made at login and is never removed:
-  `conf`'s Hyprland config gives it a `persistent` workspace rule, and
-  makes it the first monitor's `default`.
+- It's made at login and is never removed: `conf`'s Hyprland config gives
+  it a `persistent` workspace rule, and makes it the first monitor's
+  `default`.
+  - `conf` takes its name from `~/.config/hypr/tide-workspaces.lua`,
+    which the shell writes from `workspaces.json` and has Hyprland read
+    again (`hyprctl eval 'conf_workspaces.reload()'`). Until the shell
+    has written one, at a first login, it's `in`.
+  - `tide doctor` names what's wrong when home doesn't exist or isn't
+    persistent (`conf`'s rule is missing), or the shell hasn't written the
+    file. A `conf_workspaces.reload()` that fails is a notification.
 - It can't be renamed. tide offers no way to, and a rename from elsewhere
   (`hyprctl`) is undone by the shell when it hears `renameworkspace`.
-- A list of apps lives there, set in `workspaces.json` (§16). `conf`'s
-  shared list is mail, chat, calendar and music.
+- A list of apps lives there, set in `workspaces.json` (`inApps`, §16).
+  `conf`'s shared list is mail, chat, calendar and music.
   - Each entry is a window class, or a site, which matches that site's
     Chrome `--app` windows the way a notification's site does (§14.4).
-  - Their windows always open on "in", by a window rule that sends them
+    A class matches as the focus guard matches one: ignoring case, and a
+    bare name as the last part of a qualified one. An entry shaped like a
+    host is tried as a site too, so `org.gnome.Calendar` is also a site
+    no `--app` window has.
+  - Their windows always open on home, by a window rule that sends them
     there without switching. One you launched takes focus there and the
     view follows; any other opens unfocused and marked (§14.1).
-- Its windows are only those apps'. The name prompt never offers "in" for
-  another app's window, and a name typed as "in" is refused.
-- A window of an "in" app can still be moved out with `Super+Return`.
-- `Super+Home` goes to "in", and `Super+Tab` flips between "in" and the
+- Its windows are only those apps'. The name prompt never offers home for
+  another app's window, and a name typed as home's is refused.
+- A window of a home app can still be moved out with `Super+Return`.
+- `Super+Home` goes to home, and `Super+Tab` flips between home and the
   last other workspace you used (§6.6).
   - It's a Lua binding in `conf` that keeps the workspaces other than
-    "in" in the order you last used them. `Super+End` reads the same
+    home in the order you last used them. `Super+End` reads the same
     history (§6.6).
-  - If that workspace has been removed since, a press from "in" does
+  - If that workspace has been removed since, a press from home does
     nothing.
 
-**A new window on "in" asks for a workspace.**
+**A new window on home asks for a workspace.**
 
-- When any other app's window opens on "in", including a link a browser
+- When any other app's window opens on home, including a link a browser
   opens as a new window, tide opens the name prompt for it.
   - This holds only for a window that would take focus anyway (§14.1): one
     you launched, or a new window from the app you're in. The prompt holds
     the keyboard, so a background app's window must not open one under
     your typing.
-  - Any other such window opens on "in" unfocused and marked, as today.
+  - Any other such window opens on home unfocused and marked, as today.
     The prompt opens when it's first focused.
   - A dialog or other floating window (§6.4) never asks. It stays with
     its parent, and so does a status popup.
@@ -760,11 +799,11 @@ in how long they last and what stays visible:
 - **Enter** makes the workspace, or uses the one already of that name,
   moves the window there, and focus follows.
 - **Esc** closes the window, politely, as `Super+Backspace` does.
-- **tide's own launches** from "in" (the launcher, app keys, `tide launch`)
+- **tide's own launches** from home (the launcher, app keys, `tide launch`)
   prompt *before* launching, so the process starts with the right
   `TIDE_WORKSPACE` (below), and its first window goes to that workspace
   through the launch's grant (§14.3). Esc there cancels the launch, and
-  nothing opens. An "in" app launches straight away.
+  nothing opens. A home app launches straight away.
 
 **The short name.**
 
@@ -789,7 +828,10 @@ in how long they last and what stays visible:
 - Two names that sanitize alike (`PR-12`, `PR 12`) give the same value,
   so they'd share a session. That's accepted.
 - `tide launch` sets it for the process it starts: the workspace the
-  prompt chose, else the focused workspace.
+  prompt chose (`--workspace NAME`), else the focused workspace.
+  - It reads the focused workspace with `hyprctl -j activeworkspace`. If
+    that fails, the app still starts, with an empty value, and the launch
+    says why, in a notification too.
   - `uwsm app` keeps it: uwsm 0.27.1 starts an app as a scope by default,
     with `systemd-run --scope`, which runs the command in the caller's
     environment. A service unit (`-t service`) would pass only uwsm's
@@ -800,27 +842,26 @@ in how long they last and what stays visible:
   first process.
 - `tide workspace` prints the focused workspace's sanitized name, for
   scripts that need the current one rather than the one they started on.
+  It exits 1, saying why, when it can't read it.
 - `conf`'s shpool and tmux startup would name its session from it. That's
   `conf`'s work, not done yet (TODO.md).
 
-**Monitors.**
+**Monitors.** Named workspaces are built for one monitor. How they work
+across several is to be redesigned (§21).
 
-- There is one bar per monitor. Each monitor shows one workspace at a time,
-  from one shared pool of named workspaces. That is Hyprland's native model
-  and dwm's.
-- A new workspace opens on the focused monitor.
-- The bar on every monitor lists them all. A workspace visible on *another*
-  monitor gets the accent outline.
-- Hyprland gives each monitor a workspace as it connects, and only the
-  first gets "in". What a second monitor shows at login, before anything is
-  named for it, is open (§21).
+- Until then, extra monitors behave as they did with numbered
+  workspaces: Hyprland's native model and dwm's.
+  - There is one bar per monitor. Each monitor shows one workspace at a
+    time, from one shared pool.
+  - A new workspace opens on the focused monitor.
+  - The bar on every monitor lists them all. A workspace visible on
+    *another* monitor gets the accent outline.
+  - Hyprland gives each monitor a workspace as it connects, and only the
+    first gets home. A second monitor gets a numbered workspace, which the
+    bar lists after the named ones until something else is shown there.
 - Closing the laptop lid with an external display attached disables the
   internal panel and moves its workspaces over. With no external display,
   logind suspends.
-- **Decided: per-monitor, not KDE-style desktops that span every monitor.**
-  Multi-monitor use is occasional, and with one monitor the two models are
-  identical, so the native one costs nothing to build. Spanning would
-  touch keys, urgency and the bar.
 
 ### 6.6 Keys
 
@@ -831,14 +872,14 @@ with new keys in **bold**:
 |---|---|
 | **tap `Super`** | the switcher, on its Workspaces tab (§8) |
 | `Super+Space` | the switcher, on its Apps tab: the launcher |
-| **`Super+Tab`** | flip between "in" and the workspace you last used: from any other workspace it goes to "in", and from "in" back to the last other one, so presses toggle |
+| **`Super+Tab`** | flip between home and the workspace you last used: from any other workspace it goes to home, and from home back to the last other one, so presses toggle |
 | **`Super+A`** | the switcher, on its Attention tab: every window wanting attention, on any workspace, most recent first; Enter goes there |
 | **`Super+Alt+Space`** | next keyboard layout, once there are two, on every keyboard (§16) |
 | `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `C` / `Shift+C` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
 | `Super+Backspace` | close window |
 | `Super+L` | lock |
-| **`Super+Home`** | go to "in" (§6.5) |
-| **`Super+End`** | go to the workspace other than "in" you last used: from "in", where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
+| **`Super+Home`** | go to home (§6.5) |
+| **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
 | `Super+Left` / `Right`, **`Super+PgUp`** / **`PgDn`** | previous / next workspace in the bar's order, stopping at either end (as in KDE and on the Mac; PgUp/PgDn as in GNOME) |
 | `Super+Shift+Left` / `Right` | move window to the previous / next workspace in the bar's order |
 | `Super+J` / `K`, `Super+Shift+J` / `K` | focus / move down and up the stack |
@@ -857,7 +898,7 @@ with new keys in **bold**:
 | **`XF86AudioMicMute`**, **`Super+Shift+M`** | toggle microphone mute (system-wide) |
 | media, brightness, volume keys | as today, with OSD |
 
-- **`Super+End`** never goes to "in", so it isn't Hyprland's
+- **`Super+End`** never goes to home, so it isn't Hyprland's
   `workspace previous`. It uses the same Lua history as `Super+Tab`
   (§6.5), skipping any workspace removed since.
 - **`Alt+Tab`** was `Super+Return`. It's dwm's zoom, except on the master:
@@ -886,8 +927,8 @@ See [`bar.png`](docs/mocks/bar.png).
 - **It is a plain rectangle flush with the top edge and both sides:** no
   margin, no corner radius, no shadow, no floating pill. Rounded corners
   belong only to things that pop up (popovers, notifications, the launcher).
-- **Left:** every workspace by name, "in" first and the rest in the order
-  they were made (§6.5), then the layout symbol.
+- **Left:** every workspace by name: the standing ones, home first, then
+  the rest in the order they were made (§6.5), then the layout symbol.
 - **Right:** privacy pills (screen shared, mic live), third-party tray icons,
   then the built-in status icons: keep-awake, Bluetooth, network,
   volume %, battery %, CPU %, notifications, session. The four clocks come
@@ -913,7 +954,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | current | accent fill |
 | occupied | surface fill, one app icon per window (up to 5, then `+n`) |
 | shown on another monitor | accent outline |
-| empty ("in" alone can be) | surface fill, no icons |
+| empty (only a standing one stays on the bar empty, made or not) | no fill, its name faint |
 | urgent | amber fill and ring, a dot, and the urgent window's icon ringed |
 
 - **Each shows its name**, cut with an ellipsis past 16 characters, with
@@ -1089,7 +1130,9 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
 - **One overlay, four tabs**, in this order:
   - **Apps:** the launcher (§8.2).
   - **Workspaces:** every workspace in the bar's order, each with its
-    name and app icons, the current one marked. Enter goes there.
+    name and app icons, the current one marked. Enter goes there. The
+    standing ones are always listed, made or not, and Enter on one that
+    isn't made yet makes it (§6.5).
   - **Windows:** every window on any workspace, each with its icon,
     title and workspace. Enter goes to it, switching workspace. Browser
     tabs join it later (§8.3).
@@ -1150,8 +1193,8 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
     (§6.5) first, and the app's first window goes to the workspace named
     there. A quick action opens no window, so there `Ctrl+Enter` does what
     `Enter` does.
-  - From "in", `Enter` prompts the same way, unless the app is one of
-    "in"'s (§6.5).
+  - From home, `Enter` prompts the same way, unless the app is one of
+    home's (§6.5).
     - The focus guard moves the app's first window there as it opens, and
       focus follows (§14.3). Nothing switches before the app starts, so
       nothing you do in between is overridden.
@@ -1813,7 +1856,7 @@ this spec.
   launching Chrome on `docs` and moving to `review` while it loads would
   pull you back to `docs`. With the rules above, Chrome opens on `docs`
   unfocused, and `docs` turns urgent.
-- **A window opening on "in"** opens the name prompt only if it would take
+- **A window opening on home** opens the name prompt only if it would take
   focus anyway (§6.5). The prompt holds the keyboard, so one from a
   background app would put a text field under your typing.
 - **The launcher must get the keyboard.** Under KWin's FocusUnderMouse,
@@ -1936,7 +1979,7 @@ this spec.
     isn't known until its window appears. A grant naming the app is used
     before it, and the same cancel rules apply.
   - **On a named workspace** (`tide launch --workspace NAME`, from the
-    name prompt: a launch from "in", or the launcher's `Ctrl+Enter`), the
+    name prompt: a launch from home, or the launcher's `Ctrl+Enter`), the
     window that uses the grant goes to that workspace, made if it's new,
     and focus follows. A canceled grant moves nothing, and the window opens
     where you are. `--workspace` also sets `TIDE_WORKSPACE` (§6.5). It
@@ -2269,7 +2312,7 @@ tide's own, and links out for the rest:
 | Layouts | default layout per aspect ratio, `mfact`, master count, the rule for new windows |
 | Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
 | Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
-| Workspaces | the apps that live on "in", and the patterns that name a workspace from a window's title (§6.5) |
+| Workspaces | the standing workspaces, home first; the apps that live on home; and the patterns that name a workspace from a window's title (§6.5) |
 
 Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
@@ -2460,7 +2503,10 @@ stays hand-written.
 
 - **Workspaces** sets §6.5's, in `workspaces.json` and
   `workspaces.local.json`.
-  - `inApps` is the list of apps that live on "in": window classes, or
+  - `standing` is the list of standing workspaces, the first being home.
+    It's `in`, `re`, `oc` and `me` by default. An empty one, or one that
+    names a workspace twice, is an error at load naming it.
+  - `inApps` is the list of apps that live on home: window classes, or
     sites. `conf`'s shared file lists mail, chat, calendar and music.
   - `namePatterns` is the list of title patterns, tried in order.
   - Both are lists, so a `.local` file's replaces the shared one whole
@@ -2626,7 +2672,7 @@ light/dark switch.
 | Repo | Gets |
 |---|---|
 | **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant` and `tide idle-suspend`. The Lua tiling layout. `make install`. |
-| **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: "in"'s apps), the `persistent` workspace rule for "in", shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
+| **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces and home's apps), the `persistent` workspace rule for home, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **scripts** | `setup --tide`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |
 | **dwl** (exploration) | The tide fork of dwl that §21.1 is exploring, on upstream's history, under dwl's GPL-3.0-or-later license: the layouts, dimming and IPC it would add. Nothing else depends on it until §21.1's next steps are done and §3.1 is rewritten around it. |
@@ -2645,7 +2691,7 @@ are what "done" means.
 | **M5** | Idle, lock, login | the idle timeline works, including through a Meet call. Lock via key, idle, suspend and lid. Crash recovery is tested. The greetd greeter shares the lock component. The keyring unlocks at login. The old sway, waybar, swaync, fuzzel and hyprlock configs are deleted from `conf`. |
 | **M6** | Screen sharing | a Meet share of a window, a 16:9 area and a whole screen, from Chrome; restore tokens where Chrome asks for them; the privacy pill and mic mute. |
 | **M7** | Theme + settings | one palette drives the shell, GTK 3/4, Qt and Hyprland; light/dark switches the shell, GTK and kitty live, and Qt live or at next launch as §15 says. A side-by-side screenshot of the shell, Nautilus, an adw-gtk3 app, a Qt app and Chrome, in light and in dark, looks like one desktop. The settings panel exists. |
-| **M8** | Named workspaces + switcher | "in" is made at login, first on the bar, and outlives being empty; its apps open there. A window you open on "in", and a launch from it, ask for a name, with the short name from the title patterns, and Enter, Esc and an existing name each do what §6.5 says. Empty workspaces go once left. The bar lists workspaces by name, in the order made. The switcher opens on the right tab for each key, `Tab` moves between them, and the Windows tab lists every window. `Super+Return`, `Alt+Tab`, `Super+A` and `Super+Home` work as §6.6 says. `TIDE_WORKSPACE` reaches an app through `uwsm app`, and `tide workspace` prints it. |
+| **M8** | Named workspaces + switcher | Home is made at login, first on the bar, and outlives being empty; its apps open there. The standing workspaces are always listed, and made when first used. A window you open on home, and a launch from it, ask for a name, with the short name from the title patterns, and Enter, Esc and an existing name each do what §6.5 says. Empty workspaces go once left. The bar lists workspaces by name, in the order made. The switcher opens on the right tab for each key, `Tab` moves between them, and the Windows tab lists every window. `Super+Return`, `Alt+Tab`, `Super+A` and `Super+Home` work as §6.6 says. `TIDE_WORKSPACE` reaches an app through `uwsm app`, and `tide workspace` prints it. |
 | **M9** | Browser tabs | the Windows tab lists Chrome's tabs through the extension, Enter brings one up, and the tab says so when the extension is missing (§8.3). |
 
 ## 20. Testing
@@ -2655,8 +2701,9 @@ are what "done" means.
   states, icons and attention marks, the DST-change finder, fuzzy scoring,
   the system monitor's CPU, memory and process readings, the
   single-window width rule, layout geometry, workspace order and names
-  (the short name from a title, `TIDE_WORKSPACE`'s sanitizing, checking
-  the name patterns), the light/dark boundaries
+  (the short name from a title, checking the name patterns and the
+  standing list; `TIDE_WORKSPACE`'s sanitizing is `bin/tide`'s, tested in
+  `bin/tide_test.sh`), the light/dark boundaries
   (schedule, sunrise and sunset, manual flip expiry), and config loading (`.local`
   merge rules; a bad file keeps the last good settings). The QML only binds
   to them.
@@ -2792,12 +2839,26 @@ are what "done" means.
 
 ## 21. Open questions
 
-Named workspaces (§6.5) leave two open. Deferred work, with its notes, is
+Named workspaces (§6.5) leave these open. Deferred work, with its notes, is
 in `TODO.md`.
 
-- **A second monitor at login.** Hyprland gives each monitor a workspace as
-  it connects, a numbered one past the first. It needs a name, or a way to
-  show it until something names it.
+- **Workspaces across several monitors.** Today each monitor shows one
+  workspace of its own (§6.5), which is to be rethought. The direction:
+  - A workspace spans every display, and each display has a layout of its
+    own within it.
+  - Moving between displays is to be designed. The candidate:
+    `Super+Left`/`Right` focuses the window to the left or right of the
+    focused one, and at a display's edge goes on to the nearest window on
+    the next display that way: from the rightmost window to the leftmost
+    on the display to the right. `Super+Shift+Left`/`Right` moves the
+    window the same way.
+  - If that edge behavior can be built, those keys replace today's
+    previous and next workspace (`Super+Left`/`Right`) and move to the
+    previous and next workspace (`Super+Shift+Left`/`Right`).
+    `Super+PgUp`/`PgDn` keep previous and next workspace (§6.6).
+  - Still to check: whether the edge behavior is doable in Hyprland's
+    Lua layout, and what a second display shows before anything is on it
+    (today Hyprland gives it a numbered workspace).
 - **More workspaces than the bar's left side holds.** The bar cuts names at
   16 characters, but has no rule yet for when they still don't fit.
 
@@ -3097,13 +3158,14 @@ input activity, capture exclusion),** before any switch:
 Decided in review of this spec:
 
 - **Monitors:** each monitor shows its own workspace (§6.5).
-- **Named workspaces:** "in" first, holding mail, chat, calendar and
-  music; a window opened on "in" asks for a workspace, and Esc closes it;
+- **Named workspaces:** the standing ones first, home (`in`) first of
+  them, holding mail, chat, calendar and music; a window opened on home
+  asks for a workspace, and Esc closes it;
   an empty workspace is removed once you leave it (§6.5).
 - **One switcher:** a tap of `Super` opens it on the workspace list;
   `Super+Space` and `Super+A` open its other tabs. `Super+Tab` flips
-  between "in" and the last other workspace, `Super+Home` goes to "in",
-  and `Super+End` to the last workspace other than "in" (§6.6, §8).
+  between home and the last other workspace, `Super+Home` goes to home,
+  and `Super+End` to the last workspace other than home (§6.6, §8).
 - **Nothing steals focus:** only what you asked for takes the keyboard (the
   app you're in, what you just launched, the launcher). Everything else is
   marked urgent, and `Super+A` lists it (§14).

@@ -12,6 +12,48 @@ export function focusWorkspace(id, lua) {
     return lua ? `hl.dsp.focus({ workspace = ${id} })` : `workspace ${id}`;
 }
 
+// A workspace's name, checked to be one a dispatch can carry: one line
+// (workspacenames.mjs's checkName says what else a name must be).
+function workspaceName(name) {
+    if (typeof name !== "string" || name.trim() === "" || /[\n\r]/.test(name)) {
+        throw new Error(`not a workspace name: ${JSON.stringify(name)}`);
+    }
+    return name;
+}
+
+// A Lua string literal holding `s`.
+function luaString(s) {
+    let out = '"';
+    for (const ch of s) {
+        const code = ch.charCodeAt(0);
+        if (ch === '"' || ch === "\\") {
+            out += "\\" + ch;
+        } else if (code < 0x20 || code === 0x7f) {
+            out += "\\" + String(code).padStart(3, "0");
+        } else {
+            out += ch;
+        }
+    }
+    return out + '"';
+}
+
+// Go to the workspace named `name`, which Hyprland makes if no workspace
+// has that name (SPEC.md §6.5): how the bar reaches every workspace, a
+// numbered one included, since a negative ID would read as a step.
+export function focusWorkspaceName(name, lua) {
+    const n = workspaceName(name);
+    return lua ? `hl.dsp.focus({ workspace = ${luaString("name:" + n)} })` : `workspace name:${n}`;
+}
+
+// Name workspace `id` `name`: the shell undoing a rename of home (§6.5).
+export function renameWorkspace(id, name, lua) {
+    if (!Number.isInteger(id)) {
+        throw new Error(`not a workspace ID: ${id}`);
+    }
+    const n = workspaceName(name);
+    return lua ? `hl.dsp.workspace.rename({ workspace = ${id}, name = ${luaString(n)} })` : `renameworkspace ${id} ${n}`;
+}
+
 // Focus the window at `address` (hex, with or without 0x).
 export function focusWindow(address, lua) {
     const hex = String(address ?? "").toLowerCase().replace(/^0x/, "");

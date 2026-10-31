@@ -16,6 +16,8 @@
 #   - no daemon runs twice, and no rival to an owner runs at all;
 #   - tide-portals.conf is installed and XDG_CURRENT_DESKTOP selects it;
 #   - Hyprland reports no config errors;
+#   - the home workspace (SPEC.md §6.5) exists and is persistent, which
+#     takes the shell's tide-workspaces.lua and conf's rule for it;
 #   - no monitor has more than one bar, by shape or by space reserved
 #     beyond tide's own bar;
 #   - no XDG autostart unit off the allowlist ran in tide.
@@ -742,6 +744,42 @@ else
     done
     n=$(printf '%s\n' "$errors" | grep -c .)
     problems=$((problems + n))
+fi
+
+# The home workspace (SPEC.md §6.5): the shell writes its name to
+# tide-workspaces.lua, and conf's hyprland.lua makes it persistent. Without
+# either, home can vanish when left empty and its apps open where you are.
+# The name is read as the shell writes it (`    home = "NAME",`), and
+# compared with Hyprland's after undoing each one's escapes of " and \.
+workspaces_lua=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/tide-workspaces.lua
+unescape() {
+    printf '%s' "$1" | sed 's/\\\(.\)/\1/g'
+}
+if ! test -e "$workspaces_lua"; then
+    problem "no $workspaces_lua, so conf doesn't know which workspace is home: is tide's shell running? It writes the file as it starts"
+elif ! home_line=$(grep -m 1 '^    home = ".*",$' "$workspaces_lua" 2>&1) || test -z "$home_line"; then
+    problem "couldn't read home's name from $workspaces_lua${home_line:+ ($home_line)}: restart tide's shell, which writes it"
+else
+    home_ws=${home_line#    home = \"}
+    home_ws=$(unescape "${home_ws%\",}")
+    if ! workspaces=$(hyprctl -j workspaces 2>&1); then
+        problem "hyprctl workspaces failed ($workspaces), so whether home ($home_ws) is kept isn't known"
+    else
+        # Each workspace's name, then whether it's persistent, as one line.
+        persistent=$(printf '%s\n' "$workspaces" | awk '
+            /^[[:space:]]*"name": "/ { name = $0; sub(/^[[:space:]]*"name": "/, "", name); sub(/",[[:space:]]*$/, "", name) }
+            /^[[:space:]]*"ispersistent": / { p = $0; sub(/^[[:space:]]*"ispersistent": /, "", p); sub(/,.*/, "", p); print p "\t" name }
+        ' | while IFS="$(printf '\t')" read -r p name; do
+            if test "$(unescape "$name")" = "$home_ws"; then
+                echo "$p"
+            fi
+        done)
+        case "$persistent" in
+            true*) ;;
+            false*) problem "home ($home_ws) isn't persistent, so it goes when it's left empty and its apps' rules may be missing: update conf, whose hyprland.lua keeps it, then hyprctl reload" ;;
+            *) problem "there's no home workspace ($home_ws), so its apps open where you are: update conf, whose hyprland.lua makes it, then hyprctl reload" ;;
+        esac
+    fi
 fi
 
 # XDG autostart. systemd's xdg-autostart generator turns each entry into an
