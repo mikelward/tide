@@ -2731,10 +2731,21 @@ stays hand-written.
     is. It can have a mouse's settings and a keyboard's, since none share a
     name, and Reset on one page leaves the other's.
   - The shell lists the mice, touchpads and keyboards with `hyprctl
-    devices -j` as it starts and as any of the pages shows. A touchpad is
-    one whose name says touchpad, trackpad or synaptics, as
-    `apply-input.sh` decides; every other pointer is a mouse. Every
+    devices -j` as it starts and as any of the pages shows. Every
     keyboard Hyprland lists is one, power buttons included.
+  - A touchpad is one whose name says touchpad, trackpad or synaptics, or
+    Apple's `bcm5974`. Every other pointer is a mouse, except the rest of
+    a laptop's built-in pointing, which counts as a touchpad too:
+    - A pointing stick, such as `tpps/2-elan-trackpoint`. A ThinkPad's
+      buttons above the touchpad are its, so as a mouse they'd be
+      left-handed.
+    - Anything named by an ACPI ID, such as
+      `elan1200:00-04f3:309f-touchpad`. That's an I2C device in the laptop:
+      its touchpad, and the touchpad's extra `-mouse` node.
+  - `apply-input.sh` decides the same way, from the name alone, so a
+    device's settings of its own are a touchpad's whether or not it's
+    plugged in. udev's `ID_INPUT_POINTINGSTICK` would find the stick, but
+    it calls the `-mouse` node a mouse.
   - Hyprland 0.56.2 leaves a keyboard whose options haven't changed alone
     (`applyConfigToKeyboard`). So applying the settings again doesn't put
     a keyboard back on its first layout.

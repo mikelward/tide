@@ -31,6 +31,13 @@ once you have agreed with it or reversed it.
   grouping them (Start at login beside Idle, say). Reversible by
   reordering `PAGES`.
 
+- [ ] **A laptop's pointing stick and its touchpad's I2C nodes are
+  touchpads** (SPEC.md §16): listed on the Touchpad page and given its
+  settings, right-handed, so a ThinkPad's buttons above the touchpad aren't
+  swapped with the mice. The alternatives were a Pointing stick page of its
+  own, or asking udev, which calls the touchpad's `-mouse` node a mouse.
+  It's `deviceKind` in `input.mjs` and `is_touchpad` in `conf`'s
+  `apply-input.sh`, kept in step by hand.
 - [ ] **The picker on `Super+C` is its own overlay, not two more switcher
   tabs** (SPEC.md §8.4). The switcher goes somewhere; the picker copies
   something, and the switcher's `Tab` cycle stays at four. The
