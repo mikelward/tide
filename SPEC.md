@@ -123,7 +123,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Launcher**: empty query and a fuzzy query. Predates the switcher's tabs (§8) and named workspaces, and is to be redrawn (TODO.md). [`launcher.png`](docs/mocks/launcher.png) | ![launcher](docs/mocks/launcher.png) |
 | **Notifications**: popups, OSD, the notification center while sharing. [`notifications.png`](docs/mocks/notifications.png) | ![notifications](docs/mocks/notifications.png) |
 | **Clocks popover**: zones, working-hours strips, DST warning, calendar. [`clocks.png`](docs/mocks/clocks.png) | ![clocks](docs/mocks/clocks.png) |
-| **Settings**: the panel's newer pages: Start at login. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
+| **Settings**: the panel's newer pages: Start at login and Notifications. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
 | **System monitor popover**: the CPU and Memory tabs, and throttling. [`sysmon.png`](docs/mocks/sysmon.png) | ![system monitor](docs/mocks/sysmon.png) |
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
 | **Screen-share picker**: screens, windows, 16:9 area. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
@@ -1699,6 +1699,20 @@ See [`notifications.png`](docs/mocks/notifications.png).
 ### Do not disturb
 
 - **Manual:** from the center, the bell (middle-click), or the launcher.
+- **On a schedule,** set on the Notifications page (§16): from a time to a
+  time, on the days chosen. A window starts on a chosen day and runs into
+  the next when it ends earlier than it starts, so Friday's 22:00 to 07:00
+  ends Saturday morning.
+  - As a window starts, the schedule turns your own Do not disturb on, as
+    the bell would. As it ends, it turns it off, but only if the schedule
+    turned it on: one you turned on yourself stays on, and once you turn it
+    off or on during a window, it's yours until that window ends. The next
+    window turns it on again, even one that starts while the machine is
+    asleep: each window is told by when it started.
+  - So you can end it early, or keep it past the window, from the bell.
+  - The shell checks every 30 s, and as it starts, so a shell started in a
+    window has it on. That state is kept across config reloads, as Do not
+    disturb is.
 - **Presenter mode** (`Super+P`, §10) holds it on along with keep awake.
 - **Automatic while sharing a screen or region:** popups are held and counted
   in the "held while you were sharing" banner.
@@ -1709,7 +1723,10 @@ See [`notifications.png`](docs/mocks/notifications.png).
 - **Critical during a full-screen share:** shown on a monitor that isn't
   being shared if there is one; otherwise held, with the bar's bell flashing.
 - **Which "critical" gets through manual DND.** Only criticals from system
-  senders (battery, the shell, polkit) do. A system sender's app name or
+  senders (battery, the shell, polkit) do, and only while the Notifications
+  page's *Critical alerts break through* is on, as it is by default. Off,
+  Do not disturb holds those too, into the history; a screen share still
+  holds by its own rule, above. A system sender's app name or
   desktop entry is `tide` (the shell, its battery warning, and the
   `tide` tools) or names a polkit agent. Chrome marks every
   `requireInteraction` web notification critical unless the server calls
@@ -2772,6 +2789,7 @@ tide's own, and links out for the rest:
 | Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
 | Workspaces | the standing workspaces, home first; the apps that live on home; and the patterns that name a workspace from a window's title (§6.5) |
 | Start at login | the commands the session runs once as it starts |
+| Notifications | Do not disturb on a schedule, whether critical alerts break through, and the muted apps and sites (§9) |
 
 Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
@@ -3055,6 +3073,35 @@ stays hand-written.
   - A change takes effect at the next login. Nothing runs from the page.
   - Over IPC, `addStartup COMMAND`, `moveStartup COMMAND STEP` and
     `removeStartup COMMAND` do what the page does.
+- **Notifications** sets §9's, in `notifications.json` and
+  `notifications.local.json`, and lists `muted` from `workspaces.json`.
+  - A switch turns Do not disturb on or off now, as the bell does.
+  - *On a schedule* is `dndScheduled`, off by default. `dndFrom` and
+    `dndTo` are its times, `22:00` and `07:00` by default; − and + step
+    each a quarter hour, past the other, as the Appearance page's times do.
+  - `dndDays` is the days a window starts on, every day by default, in the
+    files as `mon` to `sun`. A click on a day turns it on or off.
+  - *Critical alerts break through* is `criticalsBreakThrough`, on by
+    default.
+  - A time that isn't one, a day that isn't one or is named twice, a
+    switch that isn't true or false, or a schedule from and to the same
+    time is refused, and the page says why. In the files, it's an error at
+    load naming the setting, and the last good settings stay.
+  - These are objects, so `.local` keys override the shared ones one by
+    one; `dndDays` is a list, replaced whole (§16.1).
+  - The schedule and the criticals setting reach only the shell's own
+    notification server (§9); under the transitional swaync they do
+    nothing.
+  - *Muted* lists `muted` (§9, *Muted apps*), the list in effect, each
+    entry with a bin that unmutes it. An app ID or `site:HOST` typed at the
+    foot is muted with Enter. One the list wouldn't take back on loading,
+    or one already muted, is refused, and the page says why.
+  - They write `workspaces.local.json` as the mute actions do, keeping its
+    other settings. A change names an entry by its place and text, so a
+    hand edit that has moved it since is refused, not built on.
+  - Over IPC, `setNotifications KEY VALUE` sets one (a day list as
+    `mon,tue`), and `addMuted ENTRY` and `removeMuted ENTRY` change the
+    muted list.
 
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or
@@ -3075,8 +3122,8 @@ sway's `config.local`:
 
 - **Shared defaults.** Every tide config file
   `~/.config/tide/<name>.json` (`clocks`, `idle`, `layouts`,
-  `appearance`, `outputs`, `workspaces`, `startup`) holds the shared defaults and is installed from
-  `conf`.
+  `appearance`, `outputs`, `workspaces`, `startup`, `notifications`)
+  holds the shared defaults and is installed from `conf`.
 - **Per-machine overrides.** An optional **`<name>.local.json`** beside it
   is read last. It is machine-specific and never committed.
   - Objects merge key by key, so a machine can change one setting and
