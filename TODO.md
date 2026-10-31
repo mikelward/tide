@@ -1157,6 +1157,19 @@ back. The checks it doesn't make yet are in `scripts`' TODO.md, under
   closing. A test in `shell_test.sh` can type without clicking first and
   expect the login to go through.
 
+- [ ] **Drop the "locked at" and last-login lines from the lock and the
+  greeter.** Neither helps unlock, and they crowd the face.
+  - "locked at" is `shell/LockFace.qml`'s own line (SPEC.md §11, the lock
+    mock). Take it out of both.
+  - A "Last login: …" line is most likely PAM's (`pam_lastlog` or
+    `pam_lastlog2` in the stack greetd or the lock runs) passed through
+    as an info message. Check which; then either stop showing PAM info
+    messages that only report the last login, or have `setup` leave that
+    module out of greetd's stack (mikelward/scripts). Keep the greeter
+    remembering the last user it picked (`last.json`), which is a
+    different thing.
+  - Update any test or stand-in that expects either line.
+
 ## Screen sharing (M6)
 
 The picker (SPEC.md §12) is `bin/tide-share-picker` and
