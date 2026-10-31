@@ -7,7 +7,7 @@
 
 // tide-agent's messages, parsed: {message} or {error}. The error never
 // quotes the line.
-const MESSAGE_TYPES = ["request", "cancel", "status", "lock", "missed", "fault"];
+const MESSAGE_TYPES = ["request", "cancel", "status", "bt-status", "lock", "missed", "fault"];
 
 export function parseLine(text) {
     let m = null;
@@ -60,9 +60,16 @@ export function noteStarted(startedAt, uuid, now) {
 //     shell brought up in the last 10 s;
 //   "guard": NetworkManager says you asked (nmcli connection up), so the
 //     focus guard decides between the prompt and a notification;
-//   "notify": a notification, for anything NetworkManager asks on its own.
+//   "notify": a notification, for anything NetworkManager asks on its own,
+//     and every Bluetooth pairing, which a device starts (blueman's own
+//     agent answers the ones blueman-manager starts);
+//   "display": a code to type on a Bluetooth device, shown without the
+//     keyboard, since there's nothing to type here.
 // `pending` is the names of the networks the open popovers tried.
 export function route(request, pending, startedAt, now) {
+    if (request.kind === "bt-display") {
+        return "display";
+    }
     if (request.kind === "wifi" && request.ssid && (pending || []).indexOf(request.ssid) >= 0) {
         return "popover";
     }
@@ -119,9 +126,9 @@ export function fate(request, env) {
 }
 
 // Whether a declined request is offered again after unlock: one with a
-// connection to bring up.
+// connection to bring up. A Bluetooth pairing isn't: the device asks again.
 export function missedOnDecline(request) {
-    return !!(request.connection && request.connection.uuid);
+    return !isBluetooth(request) && !!(request.connection && request.connection.uuid);
 }
 
 // The name a request goes by: a Wi-Fi network's SSID, else the
@@ -140,11 +147,25 @@ export function escapeMarkup(text) {
 // the air or a connection file, so they're escaped.
 export const OPEN = "open";
 
+export function isBluetooth(request) {
+    return String(request.kind || "").indexOf("bt-") === 0;
+}
+
 export function notifyCommand(request) {
     const name = connectionName(request);
     const dialog = request.kind === "vpn-dialog";
-    const label = dialog ? "Sign in" : "Enter password";
-    const what = request.kind === "wifi" ? `Wi-Fi “${name}” needs a password` : dialog ? `“${name}” needs you to sign in` : `“${name}” needs a password`;
+    const bt = isBluetooth(request);
+    const label = dialog ? "Sign in" : bt ? "Open" : "Enter password";
+    let what = `“${name}” needs a password`;
+    if (request.kind === "wifi") {
+        what = `Wi-Fi “${name}” needs a password`;
+    } else if (dialog) {
+        what = `“${name}” needs you to sign in`;
+    } else if (request.kind === "bt-service") {
+        what = `“${name}” asks to connect`;
+    } else if (bt) {
+        what = `“${name}” asks to pair`;
+    }
     return [
         "notify-send",
         "--app-name=tide",
@@ -236,6 +257,28 @@ export function statusText(enabled, running, status) {
     default:
         return "missing";
     }
+}
+
+// The prompt's buttons: [secondary, primary], primary null for a code
+// that's only shown. The secondary declines (Rejected, for BlueZ) when the
+// request names a decline, else cancels.
+export function buttons(request) {
+    const secondary = { label: request.decline || "Cancel", answer: request.decline ? "decline" : "cancel" };
+    if (request.kind === "bt-display") {
+        return [secondary, null];
+    }
+    return [secondary, { label: request.accept || "Connect", answer: "reply" }];
+}
+
+// The prompt's icon.
+export function icon(request) {
+    if (isBluetooth(request)) {
+        return "bluetooth-symbolic";
+    }
+    if (request.kind === "wifi") {
+        return "network-wireless-symbolic";
+    }
+    return request.kind === "vpn" || request.kind === "vpn-dialog" ? "network-vpn-symbolic" : "dialog-password-symbolic";
 }
 
 // The values typed into a prompt's fields, by key: what a reply carries.

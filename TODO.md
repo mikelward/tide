@@ -34,6 +34,20 @@ once you have agreed with it or reversed it.
 - [ ] **PPPoE, mobile broadband, WireGuard keys and hidden networks are
   declined** with `NoSecrets`, for `nmcli --ask` or nm-connection-editor.
   Each is an addition to the helper's table, if one comes up.
+- [ ] **A Bluetooth pairing is always a notification first.** The agent
+  can't tell a pairing you started from one a device started, since
+  blueman-manager brings its own agent. The alternative is asking the
+  focus guard, as for `nmcli`. Reversible: `route` in
+  `shell/lib/agent.mjs`.
+- [ ] **A pairing while locked is rejected, and not offered after
+  unlock**, since the device asks again. The alternative is to hold it
+  for after unlock, which bluetoothd's 60 s rarely allows. Reversible:
+  `missedOnDecline`.
+- [ ] **`tide doctor` has no line for the pairing agent yet**: its status
+  (`bt-status`) is only logged. The alternative is an `ipc call` and a
+  doctor check like the network agent's, which would be an addition.
+- [ ] **The BlueZ PR stacks on #262**, since it needs the shell side,
+  and not on #263.
 - [ ] **The BlueZ pairing agent goes in the same helper, as its own step
   after the NetworkManager one,** rather than a second helper or nothing:
   blueman-manager brings its own agent while open, so it's for pairing a
@@ -1435,10 +1449,9 @@ autostart entries, and a second bar on any monitor. Still to do:
 ## Network and Bluetooth agents (SPEC.md §5.6)
 
 `tide-agent` is NetworkManager's secret agent, in place of nm-applet,
-which autostart runs only while the shell's agent doesn't (waybar). What's
-left:
+which autostart runs only while the shell's agent doesn't (waybar), and
+BlueZ's pairing agent. What's left:
 
-- [ ] The BlueZ pairing agent, in the same helper (§5.6's step 4).
 - [ ] **Run §5.6's live check** in a session with the agent on: a Wi-Fi
   key typed in the popover with no second dialog, a VPN password and a
   one-time code, Esc on each, a request while locked turning into a

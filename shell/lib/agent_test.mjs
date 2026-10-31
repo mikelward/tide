@@ -1,7 +1,7 @@
 // Tests for agent.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CONNECT, GRANT_ANY, OPEN, STARTED_MS, addMissed, fate, holds, missedOnDecline, ownerFor, answerLine, connectCommand, connectionName, missedCommand, missedOutcome, noteStarted, notifyCommand, notifyOutcome, parseLine, route, statusText, values } from "./agent.mjs";
+import { CONNECT, GRANT_ANY, OPEN, STARTED_MS, addMissed, buttons, fate, holds, icon, isBluetooth, missedOnDecline, ownerFor, answerLine, connectCommand, connectionName, missedCommand, missedOutcome, noteStarted, notifyCommand, notifyOutcome, parseLine, route, statusText, values } from "./agent.mjs";
 
 const wifi = { kind: "wifi", id: "1", ssid: "Home Net", connection: { id: "Home", uuid: "u-1", type: "802-11-wireless" }, userRequested: true, message: "“Home Net” needs a password." };
 const vpn = { kind: "vpn", id: "2", connection: { id: "Work VPN", uuid: "u-3", type: "vpn" }, userRequested: true, message: "Sign in." };
@@ -90,6 +90,7 @@ test("locking declines every outstanding request, whatever its state", () => {
 test("a declined request with a connection is offered after unlock", () => {
     assert.equal(missedOnDecline(wifi), true);
     assert.equal(missedOnDecline({ kind: "wifi" }), false);
+    assert.equal(missedOnDecline({ kind: "bt-confirm", connection: { id: "Headphones", uuid: "/org/bluez/hci0/dev_AA" } }), false, "a pairing isn't brought up by nmcli");
 });
 
 test("a popover letting go reroutes, unless the lock or tide-agent's exit came first", () => {
@@ -103,6 +104,39 @@ test("tide-agent exiting or restarting drops every outstanding request", () => {
         assert.equal(fate(wifi, { helperRunning: false, locked: false, showing: showing, ownerHolds: true }), "drop", String(showing));
     }
     assert.equal(fate(wifi, { helperRunning: false, locked: true }), "drop", "nobody to decline to");
+});
+
+const pair = { kind: "bt-confirm", id: "3", connection: { id: "Headphones", uuid: "/org/bluez/hci0/dev_AA", type: "bluetooth" }, userRequested: false, message: "Does “Headphones” show 012345?", accept: "Pair" };
+
+test("a pairing is a notification first, and a code to show takes no keyboard", () => {
+    assert.equal(route(pair, ["Headphones"], {}, 0), "notify");
+    assert.equal(route(Object.assign({}, pair, { kind: "bt-display" }), [], {}, 0), "display");
+    assert.ok(isBluetooth(pair) && !isBluetooth(wifi));
+});
+
+test("a pairing's notification says the device asks", () => {
+    const c = notifyCommand(pair);
+    assert.ok(c.includes(`--action=${OPEN}=Open`));
+    assert.equal(c[c.length - 2], "“Headphones” asks to pair");
+    assert.equal(notifyCommand(Object.assign({}, pair, { kind: "bt-service" })).slice(-2)[0], "“Headphones” asks to connect");
+});
+
+test("the prompt's buttons follow the request", () => {
+    assert.deepEqual(buttons(wifi), [{ label: "Cancel", answer: "cancel" }, { label: "Connect", answer: "reply" }]);
+    assert.deepEqual(buttons(pair), [{ label: "Cancel", answer: "cancel" }, { label: "Pair", answer: "reply" }]);
+    assert.deepEqual(buttons({ kind: "bt-service", accept: "Allow", decline: "Deny" }), [{ label: "Deny", answer: "decline" }, { label: "Allow", answer: "reply" }]);
+    assert.deepEqual(buttons({ kind: "bt-display" }), [{ label: "Cancel", answer: "cancel" }, null]);
+});
+
+test("the prompt's icon", () => {
+    assert.equal(icon(pair), "bluetooth-symbolic");
+    assert.equal(icon(wifi), "network-wireless-symbolic");
+    assert.equal(icon(vpn), "network-vpn-symbolic");
+    assert.equal(icon({ kind: "8021x" }), "dialog-password-symbolic");
+});
+
+test("tide-agent's Bluetooth status is a message the shell knows", () => {
+    assert.equal(parseLine('{"type":"bt-status","state":"registered"}').message.state, "registered");
 });
 
 test("noting a start forgets old ones", () => {

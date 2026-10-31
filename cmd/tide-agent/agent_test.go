@@ -101,13 +101,19 @@ type fakeNM struct {
 	mu     sync.Mutex
 	// The agent's unique name, which NetworkManager calls back.
 	agent string
+	// When set, registration waits on it before answering.
+	gate chan struct{}
 }
 
 func (f *fakeNM) RegisterWithCapabilities(id string, caps uint32, sender dbus.Sender) *dbus.Error {
 	f.mu.Lock()
 	f.agent = string(sender)
+	gate := f.gate
 	f.mu.Unlock()
 	f.events <- fmt.Sprintf("register %s %d", id, caps)
+	if gate != nil {
+		<-gate
+	}
 	return nil
 }
 
@@ -247,6 +253,8 @@ type world struct {
 	nmCalls *fakeNM
 	keyring *fakeKeyring
 	systemd *fakeSystemd
+	bluez   *dbus.Conn
+	btCalls *fakeBlueZ
 	plugins string
 	toShell io.WriteCloser
 	msgs    chan map[string]any
@@ -271,7 +279,7 @@ func (s *syncBuffer) String() string {
 	return s.b.String()
 }
 
-func newWorld(t *testing.T, timeout time.Duration) *world {
+func newWorld(t *testing.T, timeout time.Duration, btTimeout ...time.Duration) *world {
 	t.Helper()
 	w := &world{t: t, addr: privateBus(t), plugins: t.TempDir(), msgs: make(chan map[string]any, 64), stderr: &syncBuffer{}, exit: make(chan int, 1)}
 
@@ -300,6 +308,10 @@ func newWorld(t *testing.T, timeout time.Duration) *world {
 	}, lockPath, "org.freedesktop.DBus.Properties")
 	own(t, sc, "org.freedesktop.systemd1")
 
+	w.bluez = connect(t, w.addr)
+	w.btCalls = newFakeBlueZ(t, w.bluez)
+	own(t, w.bluez, bluezName)
+
 	inR, inW := io.Pipe()
 	outR, outW := io.Pipe()
 	w.toShell = inW
@@ -316,7 +328,7 @@ func newWorld(t *testing.T, timeout time.Duration) *world {
 	}()
 	dial := func() (*dbus.Conn, error) { return dbus.Connect(w.addr) }
 	go func() {
-		w.exit <- run(inR, outW, w.stderr, config{system: dial, session: dial, dirs: []string{w.plugins}, timeout: timeout})
+		w.exit <- run(inR, outW, w.stderr, config{system: dial, session: dial, dirs: []string{w.plugins}, timeout: timeout, btTimeout: firstOr(btTimeout, 0)})
 		outW.Close()
 	}()
 	t.Cleanup(func() {
@@ -769,4 +781,84 @@ func TestForgedSignalsAreIgnored(t *testing.T) {
 		t.Errorf("NetworkManager heard %q after forged signals", e)
 	default:
 	}
+}
+
+func firstOr(d []time.Duration, or time.Duration) time.Duration {
+	if len(d) > 0 {
+		return d[0]
+	}
+	return or
+}
+
+func TestNetworkManagerGoingTakesItsRequestsDown(t *testing.T) {
+	w := newWorld(t, defaultTimeout)
+	ch := w.getSecrets(w.nm, psk(0), "802-11-wireless-security", nil, flagAllowInteraction)
+	req := w.expect("request")
+	if _, err := w.nm.ReleaseName(nmName); err != nil {
+		t.Fatal(err)
+	}
+	// The cancel and the new status come in either order.
+	got := w.expectBoth("cancel", "status")
+	if got["cancel"]["id"] != req["id"] || got["status"]["state"] != "waiting" {
+		t.Errorf("got %v", got)
+	}
+	if r := w.result(ch); errName(r.err) != errCanceled {
+		t.Errorf("err = %v", r.err)
+	}
+}
+
+// expectBoth is the next message of each type, in whatever order they come.
+func (w *world) expectBoth(a, b string) map[string]map[string]any {
+	w.t.Helper()
+	got := map[string]map[string]any{}
+	deadline := time.After(patience)
+	for len(got) < 2 {
+		select {
+		case m := <-w.msgs:
+			if typ, _ := m["type"].(string); (typ == a || typ == b) && got[typ] == nil {
+				got[typ] = m
+			}
+		case <-deadline:
+			w.t.Fatalf("no %q and %q from tide-agent; its log:\n%s", a, b, w.stderr)
+		}
+	}
+	return got
+}
+
+func TestNetworkManagerRestartingMidRegistrationRegistersWithTheNewOne(t *testing.T) {
+	w := newWorld(t, defaultTimeout)
+	register := "register io.github.mikelward.tide 1"
+	nm := func() (*dbus.Conn, *fakeNM) {
+		c := connect(t, w.addr)
+		f := &fakeNM{events: make(chan string, 16)}
+		if err := c.Export(f, agentManager, "org.freedesktop.NetworkManager.AgentManager"); err != nil {
+			t.Fatal(err)
+		}
+		return c, f
+	}
+	expect := func(f *fakeNM, event string) {
+		t.Helper()
+		select {
+		case got := <-f.events:
+			if got != event {
+				t.Fatalf("heard %q, want %q", got, event)
+			}
+		case <-time.After(patience):
+			t.Fatalf("never heard %q", event)
+		}
+	}
+	b, fb := nm()
+	fb.gate = make(chan struct{})
+	if _, err := w.nm.ReleaseName(nmName); err != nil {
+		t.Fatal(err)
+	}
+	own(t, b, nmName)
+	expect(fb, register)
+	if _, err := b.ReleaseName(nmName); err != nil {
+		t.Fatal(err)
+	}
+	c, fc := nm()
+	own(t, c, nmName)
+	close(fb.gate)
+	expect(fc, register)
 }
