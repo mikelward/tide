@@ -116,6 +116,7 @@ test("an in app that looks like a site takes that site's --app windows, subdomai
 test("tide-workspaces.lua names home and the classes sent there", () => {
     const lua = workspacesLua({ standing: ["in", "re"], inApps: ["spotify"], namePatterns: [] });
     assert.match(lua, /home = "in",/);
+    assert.match(lua, /standing = \{\n {8}"in",\n {8}"re",\n {4}\},/);
     assert.match(lua, /in_apps = \{\n {8}"\(\?i\)\(\.\*\\\\\.\)\?spotify",\n {4}\},/);
     assert.match(workspacesLua(DEFAULT_SETTINGS), /in_apps = \{\},/);
     assert.equal(luaString('a"b\\c\n'), '"a\\"b\\\\c\\010"');

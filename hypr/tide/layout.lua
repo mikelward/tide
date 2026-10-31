@@ -274,8 +274,15 @@ local function recalculate(ctx)
     end
     -- The first relayout of a workspace, after a config load too, takes
     -- Hyprland's order as it is.
+    local master = st.order[1]
     st.order = st.seen and follow(st, now) or now
     st.seen = now
+    -- Whatever made another window the master (Alt+Tab, a new window
+    -- placed as the master, Super+Shift+K), the one it took over from is
+    -- the one Alt+Tab on the master goes back to, if it's still here.
+    if master and st.order[1] ~= master and index_of(st.order, master) then
+        st.previous_master = master
+    end
     local place = {}
     for i, address in ipairs(st.order) do
         place[address] = i
@@ -408,15 +415,28 @@ function M.set_mode(mode)
     msg("mode " .. mode)()
 end
 
--- Super+Return: make the focused window the master. If it already is, swap
--- it with the first stack window instead, as dwm's zoom does.
+-- Alt+Tab (SPEC.md §6.6): make the focused window the master. On the
+-- master, swap it with the window that was master before it, so presses
+-- go back and forth between two; once that window is gone, with the top of
+-- the stack, as dwm's zoom does. Each workspace remembers its own, from any
+-- change of master its relayouts see (recalculate).
 function M.swap_with_master()
-    local order, me = M.order(), active_address()
+    local id = active_workspace_id()
+    local st = workspaces[id]
+    local order, me = M.order(id), active_address()
     local i = me and index_of(order, me)
-    if not i or #order < 2 then
+    if not st or not i or #order < 2 then
         return
     end
-    local other = i == 1 and order[2] or order[1]
+    local other
+    if i == 1 then
+        local before = st.previous_master
+        other = (before and before ~= me and index_of(order, before)) and before or order[2]
+    else
+        other = order[1]
+    end
+    -- The window leaving the master is the one to come back to.
+    st.previous_master = order[1]
     hl.dispatch(hl.dsp.window.swap({ target = selector(other) }))
 end
 
