@@ -1282,6 +1282,8 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
 - Typing filters the tab you're on with the launcher's fuzzy scorer:
   names on Workspaces, titles and app names on Windows and Attention.
 - `↑`/`↓` or `Ctrl+N`/`Ctrl+P` move the selection, on every tab.
+- `Ctrl+I` on the Windows and Attention tabs mutes or unmutes the
+  selected row's app (§9, *Muted apps*). tilemo's is `Cmd+I`.
 - It's drawn like the launcher was, and takes the keyboard the same way
   (below, and §14.2).
 - **The name prompt** (§6.5) is not one of its tabs. It names a
@@ -1491,6 +1493,57 @@ See [`notifications.png`](docs/mocks/notifications.png).
   normal and persistent. That's `ShouldMarkPersistentNotificationsAsCritical`
   in Chromium's `chrome/browser/notifications/notification_platform_bridge_linux.cc`,
   checked on `main` on 2026-10-02.
+
+### Muted apps
+
+Muting is a backstop for an app that won't stop. The usual fix is the
+app's own notification settings, or the site's in Chrome; mute an app when
+those can't quiet it.
+
+- **The list.** `muted` (§16) lists muted apps and sites. It's empty by
+  default.
+  - **An app ID** is a desktop ID or window class, matched as `inApps`
+    matches one (§6.5): ignoring case and a `.desktop` suffix, and a bare
+    name as the last part of a qualified one. It matches a notification
+    by its desktop entry, else its app name, and a window by its class.
+  - **`site:HOST`** is a site, matched as §14.4 matches one. It covers
+    Chrome's and Chromium's notifications that name that site, or a
+    subdomain, in `x-kde-origin-name`, and that site's `--app` windows.
+    Another app naming the site in that hint isn't covered, since any app
+    can send it.
+  - tilemo reads the same key from the same `workspaces.json` and
+    `workspaces.local.json`, so a list reads the same on both.
+- **What muting does.**
+  - **No popups.** A muted app's notifications don't pop up, critical
+    ones included. Each still goes into the notification center's
+    history, as a popup that timed out does, and stays live there
+    (*Persistence*, above).
+  - **No attention** (§14.4). Its windows get no marks: no icon on their
+    workspace's chip, no row on the Attention tab, and `Super+A` skips
+    them. Marks it already had clear when it's muted.
+  - The focus guard still keeps its new windows from taking focus
+    (§14.3). Muting changes what you're told, not who gets the keyboard.
+  - **System senders aren't affected.** Their criticals still get through
+    (*Do not disturb*, above). A system sender is the shell, its tools or
+    a polkit agent, never an app's window or a site, so no entry can name
+    one. An entry naming `tide` matches nothing.
+- **Muting from where it's noisy.**
+  - **The switcher.** On the Windows and Attention tabs, `Ctrl+I` on the
+    selected row, or a small button on the row under the pointer, mutes
+    that row's app. An `--app` window mutes its site, and once tabs join
+    the Windows tab (§8.3), a tab mutes its site. On a muted row, the
+    same key and button unmute it. Muted rows say "muted".
+  - **The notification center.** Each group's header has a small
+    **Mute APP** action, beside its ✕, naming the group's app. A Chrome
+    or Chromium group whose newest entry names a site offers that site
+    instead (**Mute chat.google.com**), since muting the whole browser is
+    rarely what's meant. A muted group's header offers **Unmute**.
+  - Either writes `workspaces.local.json`, atomically, as the settings
+    panel does (§16.1). It writes the list in effect, with the entry added
+    or removed.
+- **A bad entry** isn't text, is blank, or is `site:` with no host. It's
+  an error at load naming `muted` and the entry, and the other entries
+  still apply.
 
 ### Not a notification
 
@@ -2302,6 +2355,9 @@ to be focused.
   - `Super+A` lists every mark, most recent first, and Enter goes to one,
     switching workspace (§14.3). Each marked window is its own row, so an
     app-wide mark on two windows is two rows.
+- **A muted app wants no attention** (§9, *Muted apps*). Its windows are
+  never marked, by Hyprland's urgent flag, the focus guard or a
+  notification, and muting one clears the marks it had.
 
 ## 15. Theme
 
@@ -2647,7 +2703,11 @@ stays hand-written.
   - `inApps` is the list of apps that live on home: window classes, or
     sites. `conf`'s shared file lists mail, chat, calendar and music.
   - `namePatterns` is the list of title patterns, tried in order.
-  - Both are lists, so a `.local` file's replaces the shared one whole
+  - `muted` is the list of muted apps and sites (§9, *Muted apps*): app
+    IDs, or `site:HOST`, empty by default. A bad entry is an error at load
+    naming it, and the rest of the list still applies, unlike the other
+    settings here. tilemo reads the same key.
+  - They're all lists, so a `.local` file's replaces the shared one whole
     (§16.1).
   - A pattern that doesn't compile or has no capture group is an error at
     load naming it, and the last good list stays. The page refuses one the

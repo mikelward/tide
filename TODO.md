@@ -477,6 +477,21 @@ once you have agreed with it or reversed it.
   `minimized.png`'s bars still show every window's icon, since option E
   needs them; `narrow.png`'s chips lost their icons like the rest, and
   its title widths didn't change.
+- [ ] **`Ctrl+I` mutes in the switcher**, matching tilemo's `Cmd+I`. It
+  was free there: `Ctrl+N`/`Ctrl+P` move the selection, and Ctrl+Enter is
+  the Apps tab's. Another key is one line in `LauncherWindow.qml` and
+  SPEC.md §8.1, §9.
+- [ ] **A browser's notification group mutes its newest entry's site**,
+  not the browser, when that entry names one. Muting all of Chrome is
+  rarely meant, and is one `muted` entry by hand. It's the header's
+  action in `NotificationCenter.qml`.
+- [ ] **Muted criticals don't pop up either.** System senders, whose
+  criticals matter, can't be muted, so an app's critical (Chrome's
+  `requireInteraction`, say) is as mutable as the rest. Letting them
+  through is one condition in the popup filter.
+- [ ] **Muting drops Hyprland's urgent flag too**, not only the guard's
+  and notifications' marks, so a muted app's own activation doesn't flag
+  it. Keeping it is one condition in `markedWindows`.
 
 ## Transitional shell (M2)
 
@@ -1244,8 +1259,11 @@ or workspace goes there.
 - **The tap of `Super`** opens the switcher on Workspaces (its `tide:launcher`
   global shortcut does), once the pinned Hyprland passes SPEC.md §8.2's
   three tap checks; until then `conf` binds no tap.
-- **The Workspaces settings page** (SPEC.md §16): `standing`, `inApps`
-  and `namePatterns`. Until then, the files are edited by hand.
+- **The Workspaces settings page** (SPEC.md §16): `standing`, `inApps`,
+  `namePatterns` and `muted`, the last listing each entry with a button
+  to remove it. Until then the files are edited by hand, and the
+  switcher's `Ctrl+I` and the notification center's **Mute** add and
+  remove `muted` entries.
 - **Redo the mocks.** `bar.png` and `desktop.png` show numbered
   workspaces, and `launcher.png` shows no tabs. Redraw the bar's
   workspaces by name with the standing ones, home first, and the switcher with its four tabs
