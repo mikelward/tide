@@ -6,6 +6,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 
 // tide's shell (SPEC.md §3.2): for now, the wallpaper, the bar, the OSD and
 // the notification popups (opt-in; see NotificationData.qml) on every monitor,
@@ -65,6 +66,25 @@ ShellRoot {
 
     // Suspends on unplugging after the idle suspend step skipped it on AC.
     UnplugSuspend {}
+
+    // `qs ipc -p DIR call install hold`, then `install reload`, from
+    // shell/install.sh (SPEC.md §5.4): stops reloading at each file's
+    // change while `make install` puts in files that change together, then
+    // reloads them all at once. Watching resumes before that reload, so a
+    // reload that fails still hears the fix.
+    IpcHandler {
+        target: "install"
+
+        function hold(): void {
+            Quickshell.watchFiles = false;
+        }
+
+        function reload(): void {
+            Quickshell.watchFiles = true;
+            // After this call has answered, since the reload replaces it.
+            Qt.callLater(() => Quickshell.reload(false));
+        }
+    }
 
     // hypridle's timings and the mice's and touchpads' settings are
     // written from the start (IdleData, InputData), not when the settings

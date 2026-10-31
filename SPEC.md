@@ -521,6 +521,14 @@ flowchart TD
     it, since a file that wasn't loaded isn't watched.
   - New files go in before changed ones, so a changed file never loads
     without one it has just started to use.
+  - Quickshell reloads at each changed file, so a reload between two
+    files that change together (`Bar.qml` setting a property
+    `Workspaces.qml` has just gained) failed. A change made during that
+    failed reload went unheard, so the shell stayed broken. So
+    `install.sh` first asks a shell running from that directory to stop
+    watching (`qs ipc call install hold`), and once every file is in, or
+    the install fails, to reload once (`install reload`). A shell too old
+    to answer reloads per file, as before.
 - **`tide doctor`** checks the running session for:
   - who owns each D-Bus name in §5.2;
   - activatable services that could steal those names;

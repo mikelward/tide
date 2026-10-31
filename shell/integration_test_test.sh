@@ -94,6 +94,8 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # Its monitors take a scale and a place for Headless, keeping the
 # hand-edited Spare, once the place is set over IPC, then lose Spare once
 # it's reset over IPC, applying each and listing the monitors again.
+# Its shell prints LOAD again, after Quickshell's reload line, when told to
+# reload over IPC (make install-shell), unless DIR/no-reload is there.
 # Its lock names a clocks.local.json with a bad hour24, unless
 # DIR/lock-takes-any-clocks is there, and a wallpaper record naming a
 # relative path, unless DIR/lock-takes-any-wallpaper is. Its shell records
@@ -170,6 +172,9 @@ if test "\$1" = ipc; then
         *"call keepawake status"*)
             if test -e "\$XDG_RUNTIME_DIR/presenting" || test -e "\$XDG_RUNTIME_DIR/awake"; then echo on; else echo off; fi ;;
         *"call settings addStartup google-calendar --new"*) printf '{\n  "commands": [\n    "google-chat",\n    "google-calendar --new"\n  ]\n}\n' >"\$HOME/.config/tide/startup.local.json" ;;
+        # make install-shell's reload, once every file is in, unless
+        # DIR/no-reload is there; the shell prints it (below).
+        *"call install reload"*) if ! test -e "\$(dirname "\$0")/no-reload"; then : >"\$XDG_RUNTIME_DIR/reload"; fi ;;
         *"call settings addStartup sh -c"*) echo 'sh -c "x" has a quote, backslash or \$, which runs as typed, with no shell; put shell syntax in a script; not changing Start at login' ;;
     esac
     $2
@@ -448,6 +453,19 @@ fi
 if test -n "\$WAYLAND_DEBUG" && test "\$1" = -c; then
     ${5:-$launcher}
 fi
+# As the shell, it reloads when make install-shell asks, saying so as
+# Quickshell does; gone with qs, as the idle one is.
+if test "\$config" = shell && test -z "\$WAYLAND_DEBUG"; then
+    {
+        until test -e "\$XDG_RUNTIME_DIR/reload"; do
+            kill -0 \$\$ 2>/dev/null || exit 0
+            sleep 0.1
+        done
+        rm "\$XDG_RUNTIME_DIR/reload"
+        echo '  INFO: Reloading configuration...'
+        cat "\$(dirname "\$0")/load.txt"
+    } &
+fi
 # Reaps what it started as each ends, until it's killed.
 wait
 exec sleep 3600
@@ -647,6 +665,7 @@ check "and the clocks" contains "$out" "ok: the shell changes the clocks as the 
 check "and the layouts" contains "$out" "ok: the shell writes the layout settings, and new ones, and applies them"
 check "and the appearance settings" contains "$out" "ok: the shell sets the Appearance page's settings, applies the dim, and refuses one that wouldn't work"
 check "and the displays" contains "$out" "ok: the shell writes the display settings, and new ones, and applies them"
+check "and that make install-shell reloads it once" contains "$out" "ok: make install-shell over the running shell reloads it once, after every file"
 check "and says the lock loaded" contains "$out" "ok: Quickshell loads the lock"
 check "and named a clocks.local.json it can't take" contains "$out" "ok: the lock names a clocks.local.json it can't take, and keeps its clock's settings"
 check "and a wallpaper record it can't take" contains "$out" "ok: the lock names a wallpaper record it can't take"
@@ -1431,6 +1450,14 @@ out=$(sh shell/udevadm_stand_in.sh info --query=property /dev/input/event0 2>&1)
 code=$?
 check "and answers nothing else" test "$code" -eq 2
 check "naming what it got" contains "$out" "not info --query=property /dev/input/event0"
+}
+
+case_101() {
+stubs "$tmp/no-reload" "exit 0" "$loaded"
+: >"$tmp/no-reload/no-reload" || exit 1
+run "$tmp/no-reload"
+check "a shell that doesn't reload after make install-shell fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell didn't reload after make install-shell"
 }
 
 # --case N RESULT: run case_N alone, and write its passes and failures to

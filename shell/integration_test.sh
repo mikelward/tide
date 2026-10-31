@@ -655,6 +655,48 @@ presenter() {
     settle
 }
 
+# reinstall: `make install-shell` over the running shell, as `make
+# install` does, holds its reload until every file is in, then reloads it
+# once, and that reload loads (shell/install.sh, SPEC.md §5.4). The file
+# watcher is off here, so only the reload it asks for happens.
+reinstall() {
+    _reloads=$(grep -c 'Reloading configuration' "$log")
+    _loaded=$(grep -c 'Configuration Loaded' "$log")
+    if ! env -i PATH="$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" LANG=C.UTF-8 \
+        TIDE_QS="$qs_path" make -s install-shell SHELL_DIR="$tmp/home/.config/quickshell/tide" \
+        >"$tmp/install.log" 2>&1; then
+        echo "FAIL: make install-shell over the running shell: $(cat "$tmp/install.log")" >&2
+        exit 1
+    fi
+    if grep -q "couldn't tell the shell" "$tmp/install.log"; then
+        echo "FAIL: make install-shell couldn't tell the running shell to reload: $(cat "$tmp/install.log")" >&2
+        exit 1
+    fi
+    _i=0
+    until test "$(grep -c 'Configuration Loaded' "$log")" -gt "$_loaded"; do
+        if grep -q 'Failed to load configuration' "$log" || waited "the shell didn't reload after make install-shell" "$_i"; then
+            echo "FAIL: the shell didn't reload after make install-shell:" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        _i=$((_i + 1))
+    done
+    if test "$(grep -c 'Reloading configuration' "$log")" -ne $((_reloads + 1)); then
+        echo "FAIL: make install-shell should reload the running shell once:" >&2
+        grep 'Reloading configuration' "$log" >&2
+        exit 1
+    fi
+    settle
+    reports "the shell reloaded after make install-shell"
+}
+
+# shell_loaded: what's checked of the first shell, once it's loaded.
+shell_loaded() {
+    written_settings
+    reinstall
+}
+
 # written_settings: fails the test unless the shell started by writing
 # home's default name for conf's hyprland.lua (SPEC.md §6.5), and
 # hypridle's default timings and no suspend on AC (SPEC.md §10), and no
@@ -1680,7 +1722,7 @@ clipboard_conf=$tmp/home/.config/hypr/tide-clipboard.conf
 power_local=$tmp/home/.config/tide/power.local.json
 power_conf=$tmp/home/.config/hypr/tide-power.lua
 workspaces_conf=$tmp/home/.config/hypr/tide-workspaces.lua
-after_load=written_settings
+after_load=shell_loaded
 load shell "the shell" -c tide
 after_load=
 # Gone again, so the next shell starts from the defaults, writes them, and
@@ -1692,6 +1734,7 @@ echo "ok: the shell changes the clocks as the Clocks page asks, and looks them u
 echo "ok: the shell writes the layout settings, and new ones, and applies them"
 echo "ok: the shell sets the Appearance page's settings, applies the dim, and refuses one that wouldn't work"
 echo "ok: the shell writes the display settings, and new ones, and applies them"
+echo "ok: make install-shell over the running shell reloads it once, after every file"
 load_runs='hyprctl devices -j
 tide keyboards
 udevadm monitor --udev --subsystem-match=input'
