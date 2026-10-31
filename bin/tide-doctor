@@ -85,7 +85,7 @@ fi
 # the tests.
 cliphist=${TIDE_CLIPHIST:-cliphist}
 if ! command -v "$cliphist" >/dev/null 2>&1; then
-    problem "cliphist isn't installed, so Super+C keeps no clipboard history: install the cliphist package (scripts' \`setup --tide\` does), then \`systemctl --user restart tide-clipboard.service\`"
+    problem "cliphist isn't installed, so Super+C keeps no clipboard history: install the cliphist package (scripts' \`setup\` does), then \`systemctl --user restart tide-clipboard.service\`"
 fi
 state=$(systemctl --user is-active tide-clipboard.service 2>&1)
 if test "$state" != active; then
@@ -115,7 +115,7 @@ if qs_path=$(command -v qs); then
         if test -z "$qs_version"; then
             problem "couldn't tell which Quickshell $qs_path is (qs --version printed '$(printf '%s\n' "$qs_out" | head -n 1)'), so the version check is skipped"
         elif ! version_at_least "$qs_version" "$min_quickshell"; then
-            problem "qs ($qs_path) is Quickshell $qs_version, and tide's shell needs $min_quickshell or newer, so the bar is waybar: install a newer Quickshell (on Debian and Ubuntu, \`setup --tide\` builds one), then \`systemctl --user restart tide.service\`"
+            problem "qs ($qs_path) is Quickshell $qs_version, and tide's shell needs $min_quickshell or newer, so the bar is waybar: install a newer Quickshell (on Debian and Ubuntu, \`setup\` builds one), then \`systemctl --user restart tide.service\`"
         fi
     fi
 fi
@@ -147,7 +147,7 @@ done
 # of the session bus's service directories: which one the bus would use
 # can't be told from here (it picks arbitrarily among files in one
 # directory, and caches $XDG_RUNTIME_DIR's), so none is taken to shadow
-# another. That's the rule scripts' `setup --tide` applies too, masking
+# another. That's the rule scripts' `setup` applies too, masking
 # each one's unit. That includes a misnamed file in $XDG_RUNTIME_DIR:
 # dbus-daemon ignores one there ("strict naming", dbus-daemon(1)), but
 # dbus-broker, the session bus on Fedora and Arch, loads it with a warning.
@@ -155,7 +155,7 @@ done
 # starts nothing when:
 #   - it activates through a systemd unit that's masked or not installed:
 #     with a unit, the unit is what starts, whatever the Exec line says.
-#     `setup --tide` masks the packaged swaync's this way; the shell's own
+#     `setup` masks the packaged swaync's this way; the shell's own
 #     swaync is run by the theme daemon, not by its unit;
 #   - with no unit, its command is false itself (an override: `false`,
 #     /bin/false or /usr/bin/false, not a script of that name), or

@@ -90,7 +90,7 @@ jobs:
       - run: make test-selftest
 
   # Loads the shell in Quickshell (shell/integration_test.sh): the release that
-  # `setup --tide` builds on Ubuntu 26.04 (scripts repo), at the same
+  # `setup` builds on Ubuntu 26.04 (scripts repo), at the same
   # commit, against the same distro Qt. Keep the pin in step with
   # setup-tide's QUICKSHELL_TAG and QUICKSHELL_COMMIT. The build is cached
   # per pin and Qt version, so only a pin or Qt update rebuilds it.

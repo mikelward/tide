@@ -536,7 +536,7 @@ flowchart TD
     standard ones and any its config adds) that names an owner's D-Bus
     name is judged, since which one the bus would use can't be told from
     outside. One is harmless when it activates
-    through a masked systemd unit, which is how `setup --tide` keeps out
+    through a masked systemd unit, which is how `setup` keeps out
     the packaged notification daemons, swaync's included (the transitional
     shell runs swaync itself). Otherwise doctor names the file, the package
     that ships it, and the unit to mask or the package to remove.
@@ -2096,7 +2096,7 @@ talk, a demo, or a meeting room's screen.
   It shows the same layout badge by the password field as the lock.
 - **Keyring.** PAM unlocks gnome-keyring with the login password, so Chrome
   and other secret users don't prompt again. This needs
-  `pam_gnome_keyring` in greetd's PAM stack, which `setup --tide` adds
+  `pam_gnome_keyring` in greetd's PAM stack, which `setup --greeter` adds
   (mikelward/scripts#288).
 - **PAM messages** (faillock countdowns, fingerprint prompts) show verbatim
   under the field. greetd reports a failure only as PAM's return code
@@ -3355,7 +3355,7 @@ light/dark switch.
 |---|---|
 | **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. The Lua tiling layout. `make install`. |
 | **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces and home's apps), the `persistent` workspace rule for home, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
-| **scripts** | `setup --tide`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, cliphist, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
+| **scripts** | `setup`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, cliphist, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |
 | **dwl** (exploration) | The tide fork of dwl that §21.1 is exploring, on upstream's history, under dwl's GPL-3.0-or-later license: the layouts, dimming and IPC it would add. Nothing else depends on it until §21.1's next steps are done and §3.1 is rewritten around it. |
 
@@ -3367,7 +3367,7 @@ are what "done" means.
 | # | Milestone | Done when |
 |---|---|---|
 | **M1** | This spec + mocks | agreed; open questions answered |
-| **M2** | Session skeleton + layouts | `setup --tide` installs a session selectable from the current display manager. `doctor` reports no duplicate owners. All four layouts and the single-window rule work per workspace on an ultrawide and on the laptop panel. The focus guard follows §14.1, including each case in §14.2. The Hyprland config is Lua and CI-loaded. Shell memory is measured. |
+| **M2** | Session skeleton + layouts | `setup` installs a session selectable from the current display manager. `doctor` reports no duplicate owners. All four layouts and the single-window rule work per workspace on an ultrawide and on the laptop panel. The focus guard follows §14.1, including each case in §14.2. The Hyprland config is Lua and CI-loaded. Shell memory is measured. |
 | **M3** | Bar + launcher | the bar shows every state in `bar.png` from live data: tray menus, clocks with correct labels and popover abbreviations across a DST fixture, urgency end to end from a kitty bell and from a Chat notification. `Super+Space` opens the launcher (tap-`Super` too, once the pinned Hyprland passes the tap checks), and fuzzy search and quick actions work. |
 | **M4** | Notifications, OSD, screenshots | notifications and history survive a shell restart. DND is automatic while sharing a screen or region, and off for a window share. The OSD works. The screen and window screenshots work, including "the window before the launcher"; the frozen region mode follows after the MVP. |
 | **M5** | Idle, lock, login | the idle timeline works, including through a Meet call. Lock via key, idle, suspend and lid. Crash recovery is tested. The greetd greeter shares the lock component. The keyring unlocks at login. The old sway, waybar, swaync, fuzzel and hyprlock configs are deleted from `conf`. |
@@ -3475,7 +3475,7 @@ are what "done" means.
   notification whose icon no theme has, and one critical one. The server
   must answer each with an id and keep both in its history. Their popups
   must load with no icon missing.
-- **Where it runs.** CI builds the Quickshell release `setup --tide`
+- **Where it runs.** CI builds the Quickshell release `setup`
   installs, and runs it on Ubuntu 26.04's Qt. Elsewhere it's skipped
   without `qs`, `sway`, `python3` or Go. Its checks for a fractional
   `font.pixelSize`, and for the icon theme pragma (§15), run everywhere.
@@ -3798,7 +3798,7 @@ makes every policy decision. It waits until river exposes what tide needs
   - **Idle screen-off** (§10) needs a client of the second, `wlopm` in
     place of Hyprland's `dpms` dispatch.
   - **Cost:** none in money; Ubuntu 26.04 packages `wlopm` 1.0.0 and
-    `kanshi` 1.9.0, so `setup --tide` installs them. `wlopm` runs once per
+    `kanshi` 1.9.0, so `setup` installs them. `wlopm` runs once per
     idle step; kanshi and the lid listener are resident, two more
     processes for `tide doctor` to check.
   - **When one fails:** without `wlopm` the screens never turn off: the
