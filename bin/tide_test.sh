@@ -845,6 +845,59 @@ env PATH="$fake:$nopgrep" FAKE_LOG="$log" XDG_CURRENT_DESKTOP=tide:Hyprland XDG_
 check "without pgrep, the command starts" contains "$(cat "$log")" "uwsm app -- app"
 check "and says why" contains "$(cat "$tmp/err")" "no pgrep, so starting app without checking whether it's running"
 
+# tide keyboards: udev's keyboards among the input devices, as sysfs and
+# /run/udev/data lay them out: a keyboard, a power button (keys, but not a
+# keyboard's), a mouse, and a keyboard with no name to read.
+input=$tmp/input
+udev=$tmp/udev
+mkdir -p "$udev"
+# input_device NAME NUMBERS EVENT [PROPERTY...]: eventN with its dev
+# numbers, its device's name ("" for none), and udev's properties for it.
+input_device() {
+    mkdir -p "$input/$3/device"
+    printf '%s\n' "$2" > "$input/$3/dev"
+    test -z "$1" || printf '%s\n' "$1" > "$input/$3/device/name"
+    _numbers=$2
+    shift 3
+    : > "$udev/c$_numbers"
+    for _property; do
+        printf 'E:%s\n' "$_property" >> "$udev/c$_numbers"
+    done
+}
+input_device "Keychron K2" 13:64 event0 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
+input_device "Power Button" 13:65 event1 ID_INPUT=1 ID_INPUT_KEY=1
+input_device "Logitech MX Master" 13:66 event2 ID_INPUT=1 ID_INPUT_MOUSE=1
+input_device "" 13:67 event3 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
+keyboards() {
+    run TIDE_KEYBOARDS_SYS="$input" TIDE_KEYBOARDS_UDEV="$udev" "$qs" keyboards "$@"
+}
+keyboards
+check "keyboards exits 0" test $? -eq 0
+check "keyboards names udev's keyboards, and the device of one with no name" \
+    test "$(cat "$tmp/out")" = "Keychron K2
+event3"
+check "and says nothing else" test ! -s "$tmp/err"
+# A KVM switching away takes the keyboard behind it: its device and udev's
+# data go.
+rm -r "$input/event0" "$input/event3"
+keyboards
+status=$?
+check "with no keyboard, keyboards prints nothing" test ! -s "$tmp/out"
+check "and exits 0" test "$status" -eq 0
+# A device whose udev data is gone while it's read is skipped.
+input_device "Keychron K2" 13:68 event4 ID_INPUT_KEYBOARD=1
+rm "$udev/c13:68"
+keyboards
+check "a keyboard udev hasn't recorded isn't one yet" test ! -s "$tmp/out"
+run TIDE_KEYBOARDS_SYS="$tmp/no-input" TIDE_KEYBOARDS_UDEV="$udev" "$qs" keyboards
+check "without the input devices, keyboards exits 1" test $? -eq 1
+check "and says where it looked" contains "$(cat "$tmp/err")" "can't read the input devices in $tmp/no-input"
+run TIDE_KEYBOARDS_SYS="$input" TIDE_KEYBOARDS_UDEV="$tmp/no-udev" "$qs" keyboards
+check "without udev's data, keyboards exits 1" test $? -eq 1
+check "and says where it looked" contains "$(cat "$tmp/err")" "can't read udev's data in $tmp/no-udev"
+keyboards extra
+check "keyboards takes no arguments" test $? -eq 2
+
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh "$qs" bin/tide_test.sh
 fi

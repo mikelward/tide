@@ -19,9 +19,14 @@ import "lib/status.mjs" as Status
 // in low contrast, moved to a new spot each minute.
 //
 // The process owns the state; this draws it and sends it each key, pointer
-// motion and pick. Nothing here animates, and every key changes what the
-// field shows (shell/lib/lock.mjs), so each keystroke is visible on the next
-// frame, even while PAM is checking the last attempt.
+// motion and pick. Nothing here animates but the caret's blink, and every
+// key changes what the field shows (shell/lib/lock.mjs), so each keystroke
+// is visible on the next frame, even while PAM is checking the last
+// attempt.
+//
+// The field shows where the keys go (Lock.fieldLook): an accent border and
+// a caret while this face has the keyboard focus and there's a keyboard to
+// type with (LockKeyboards.qml), a quieter border otherwise.
 Item {
     id: face
 
@@ -49,6 +54,44 @@ Item {
     property int unread: 0
     // The keyboard layout badge (Lock.layoutBadge), "" when unknown.
     property string layout: ""
+    // Whether there's a keyboard to type with (LockKeyboards.present).
+    property bool keyboard: true
+
+    readonly property var look: Lock.fieldLook({
+        focused: keys.activeFocus,
+        keyboard: face.keyboard,
+        error: face.lockState.error,
+    })
+    // Half-periods of the caret's blink since the last key or the focus
+    // arriving (Lock.caretShown).
+    property int caretTicks: 0
+
+    // A key, PAM, the focus or the keyboard: the caret shows at once and
+    // blinks afresh, or stops with the focus.
+    function caretAgain() {
+        caretTicks = 0;
+        if (look.caret && !lockState.saver) {
+            blink.restart();
+        } else {
+            blink.stop();
+        }
+    }
+
+    onLockStateChanged: caretAgain()
+    onLookChanged: caretAgain()
+
+    Timer {
+        id: blink
+
+        interval: Lock.CARET_BLINK_MS
+        repeat: true
+        onTriggered: {
+            face.caretTicks++;
+            if (!Lock.caretBlinks(face.caretTicks)) {
+                stop();
+            }
+        }
+    }
 
     // The greeter's pickers: [{name, label}] and [{id, name}], and the
     // chosen ones.
@@ -367,8 +410,8 @@ Item {
                     height: 38
                     radius: 10
                     color: Qt.rgba(1, 1, 1, 0.1)
-                    border.width: face.lockState.error ? 1.5 : 1
-                    border.color: face.lockState.error ? "#ff7b63" : Qt.rgba(1, 1, 1, 0.16)
+                    border.width: face.look.borderWidth
+                    border.color: face.look.border
 
                     readonly property string shown: Lock.fieldText(face.lockState)
 
@@ -388,6 +431,18 @@ Item {
                         font.pixelSize: typed ? 14 : 13
                         // Spaced out for dots, not for a visible answer.
                         font.letterSpacing: typed && !face.lockState.echo ? 3 : 0
+                    }
+
+                    // Where the next key lands: after what's typed, or before
+                    // the placeholder.
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: entry.typed ? entry.x + entry.implicitWidth + 1 : entry.x - 4
+                        width: 2
+                        height: 18
+                        radius: 1
+                        visible: face.look.caret && Lock.caretShown(face.caretTicks)
+                        color: "#f2f2f6"
                     }
 
                     // The keyboard layout, so a failed password isn't a

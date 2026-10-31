@@ -2137,6 +2137,22 @@ talk, a demo, or a meeting room's screen.
   one, and Enter then is held until that check fails. "Checking" and PAM's
   messages show under the field. A wrong password clears the field; it
   doesn't shake.
+- **The field shows where keys go** (maintainer, 2026-10-31), on the lock
+  and the greeter. A face that has the keyboard focus, with a keyboard
+  plugged in, gives its field an accent border and a caret. The caret
+  blinks for 10 s after the last key or the focus arriving, then holds
+  still. Any other face has a quiet border and no caret: another
+  monitor's, or one with no keyboard to type with, as when a monitor's
+  KVM has switched its USB keyboard to another machine. A failed attempt's
+  red border wins over both.
+  - A keyboard is an input device udev tags `ID_INPUT_KEYBOARD`: one with
+    every key from Esc to D. A power button isn't one. A USB receiver's
+    keyboard part is, paired or not.
+  - `tide keyboards` names them. The lock and the greeter run it at start
+    and again on each input event `udevadm monitor` reports, so the
+    border follows a KVM switch within moments.
+  - If either command can't run, the field shows its focus as it did
+    before, and says why in the journal.
 - **A prompt PAM wants answered visibly** (a one-time code it echoes, a
   name) shows what's typed, not dots, and past 24 characters the end of
   it. Keys typed while PAM checked the password were typed blind, as the
@@ -2154,8 +2170,8 @@ talk, a demo, or a meeting room's screen.
 - **Layout badge:** the main keyboard's layout sits in the field ("DVORAK"),
   following a switch, so a failed password isn't a layout mystery. Main is
   Hyprland's word: the keyboard last typed on. It's read again on each
-  switch and after each failed password, so an unplugged keyboard's layout
-  doesn't linger.
+  switch, after each failed password, and when a keyboard comes or goes,
+  so an unplugged keyboard's layout doesn't linger.
 - **Either mouse button clicks** on the lock and the greeter, so a
   left-handed mouse needs no setting there.
 - **Power from the lock:** Suspend at the bottom left, Restart and Shut down
@@ -4266,3 +4282,18 @@ Checked 2026-10-31, for §5.5's blueman applet:
 - network-manager-applet:
   [`nm-applet.desktop.in`](https://github.com/GNOME/network-manager-applet/blob/57f6d32928bd6baed3d856f0f959e02abdcd324b/nm-applet.desktop.in)
   (at 57f6d32, 2026-10-11), with `NotShowIn=KDE;GNOME;Budgie;COSMIC;`.
+
+Checked 2026-10-31, for §10's field focus:
+
+- systemd at 5f53c52 (2026-10-31):
+  [`src/udev/udev-builtin-input_id.c`](https://github.com/systemd/systemd/blob/5f53c52fa2e735169593574a2e809718c92e0ccd/src/udev/udev-builtin-input_id.c)
+  (`ID_INPUT_KEYBOARD` only with every key from Esc to D, the first 32
+  bits; `ID_INPUT_KEY` for any key),
+  [`src/udev/udevadm-monitor.c`](https://github.com/systemd/systemd/blob/5f53c52fa2e735169593574a2e809718c92e0ccd/src/udev/udevadm-monitor.c)
+  (the header printed once each monitor is set up, unflushed; each event
+  flushed),
+  [`src/libsystemd/sd-device/sd-device.c`](https://github.com/systemd/systemd/blob/5f53c52fa2e735169593574a2e809718c92e0ccd/src/libsystemd/sd-device/sd-device.c)
+  and
+  [`device-private.c`](https://github.com/systemd/systemd/blob/5f53c52fa2e735169593574a2e809718c92e0ccd/src/libsystemd/sd-device/device-private.c)
+  (a character device's data in `/run/udev/data/c<major>:<minor>`, its
+  properties as `E:` lines).

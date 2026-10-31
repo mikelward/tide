@@ -29,6 +29,7 @@
 // frame it's pressed, including while PAM checks the last attempt.
 
 import { initial as runInitial, step as runStep } from "./launch.mjs";
+import { PALETTE } from "./palette.mjs";
 import { ACTIONS, actionCommand, blockers } from "./session.mjs";
 
 export const INITIAL = Object.freeze({
@@ -380,20 +381,87 @@ export const LAYOUT_INITIAL = Object.freeze({ keymap: "", querying: false, again
 // keep a layout that may be stale). Returns {state, query}: `query` asks
 // the QML to start a read.
 export function layoutNext(state, event) {
+    return readNext("layout", state, event, (answer) => ({
+        keymap: typeof answer.keymap === "string" ? answer.keymap : "",
+    }));
+}
+
+// The read layoutNext and keyboardsNext share: one at a time, and one more
+// once it ends if a refresh came while it ran, so the last answer is never
+// older than the last refresh. `take` turns an answer into the state's
+// value.
+function readNext(kind, state, event, take) {
     switch (event.type) {
     case "refresh":
         if (state.querying) {
             return { state: Object.freeze(Object.assign({}, state, { again: true })), query: false };
         }
         return { state: Object.freeze(Object.assign({}, state, { querying: true })), query: true };
-    case "answer": {
-        const keymap = typeof event.keymap === "string" ? event.keymap : "";
+    case "answer":
         return {
-            state: Object.freeze({ keymap: keymap, querying: state.again, again: false }),
+            state: Object.freeze(Object.assign({}, state, take(event), { querying: state.again, again: false })),
             query: state.again,
         };
-    }
     default:
-        throw new Error(`unknown layout event: ${event.type}`);
+        throw new Error(`unknown ${kind} event: ${event.type}`);
     }
+}
+
+// Whether there's a keyboard to type with, for the password field's focus
+// (SPEC.md §10): `tide keyboards` names them, and is read at start and
+// again on each input device udev adds or removes, as a monitor's KVM
+// does when it switches its USB keyboard to this machine or away. While
+// that can't be told (no answer yet, a read that failed, or no watch on
+// udev to say when it changes), there counts as one: the field shows its
+// focus as it did before this could be told.
+//   count      how many keyboards, null while unknown
+//   watching   udev's input events are being followed
+//   querying, again   as for the layout
+export const KEYBOARDS_INITIAL = Object.freeze({ count: null, watching: true, querying: false, again: false });
+
+// Events: {type: "refresh"} (start, or an input device came or went),
+// {type: "answer", names} (`tide keyboards`' output, null when it failed)
+// and {type: "lost"} (the watch on udev ended, so a change would go
+// unseen). Returns {state, query}, as layoutNext does.
+export function keyboardsNext(state, event) {
+    if (event.type === "lost") {
+        return { state: Object.freeze(Object.assign({}, state, { watching: false })), query: false };
+    }
+    return readNext("keyboards", state, event, (answer) => ({
+        count: typeof answer.names === "string"
+            ? answer.names.split("\n").filter((line) => line.trim() !== "").length
+            : null,
+    }));
+}
+
+export function hasKeyboard(state) {
+    return !state.watching || state.count === null || state.count > 0;
+}
+
+// The password field's border, and whether its caret shows (SPEC.md §10):
+// in the dark palette's accent while its face takes keys and there's a
+// keyboard to type with; quieter, with no caret, otherwise, so a face
+// whose keys go elsewhere (another monitor's) or nowhere (the KVM switched
+// away) doesn't look ready. A failed attempt's red wins over either.
+export function fieldLook({ focused, keyboard, error }) {
+    const ready = Boolean(focused && keyboard);
+    return {
+        border: error ? "#ff7b63" : ready ? PALETTE.dark.accent : "#29ffffff",
+        borderWidth: error || ready ? 1.5 : 1,
+        caret: ready,
+    };
+}
+
+// The caret blinks, a half-period each tick, and holds still once
+// CARET_BLINK_TICKS have passed since the last key or the focus arriving,
+// so an unattended face draws nothing new. A key shows it at once (tick 0).
+export const CARET_BLINK_MS = 600;
+export const CARET_BLINK_TICKS = Math.ceil(10000 / CARET_BLINK_MS);
+
+export function caretBlinks(ticks) {
+    return ticks < CARET_BLINK_TICKS;
+}
+
+export function caretShown(ticks) {
+    return ticks >= CARET_BLINK_TICKS || ticks % 2 === 0;
 }

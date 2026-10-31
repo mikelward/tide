@@ -17,6 +17,7 @@ WlSessionLockSurface {
     property bool powerBusy: false
     property int unread: 0
     property string layout: ""
+    property bool keyboard: true
 
     signal event(var event)
     signal power(string id)
@@ -36,6 +37,7 @@ WlSessionLockSurface {
         powerBusy: surface.powerBusy
         unread: surface.unread
         layout: surface.layout
+        keyboard: surface.keyboard
         onEvent: event => surface.event(event)
         onPower: id => surface.power(id)
     }
