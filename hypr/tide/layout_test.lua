@@ -247,6 +247,12 @@ test("dragging an edge maps the pointer to mfact, clamped", function()
     eq(geometry.drag_mfact(cright, UW, 3440), 0.9, "clamped at 0.9 on the right")
 end)
 
+test("bounds holds every box, and none have none", function()
+    box_eq(geometry.bounds(geometry.arrange("threecol", UW, 5, { mfact = 0.5, nmaster = 1 }, RULES)), UW, "threecol's tiles")
+    box_eq(geometry.bounds({ { x = 10, y = 20, w = 5, h = 5 }, { x = 0, y = 30, w = 4, h = 10 } }), { x = 0, y = 20, w = 15, h = 20 }, "two apart")
+    eq(geometry.bounds({}), nil, "none")
+end)
+
 -- layout.lua against a stub hl ---------------------------------------------
 
 local function stub_hl()
@@ -351,9 +357,11 @@ local function targets(ws, n)
     local list = {}
     for i = 1, n do
         list[i] = {
-            window = { address = string.format("0x%x", 0x100 + i), workspace = { id = ws } },
+            window = { address = string.format("0x%x", 0x100 + i), workspace = { id = ws }, mapped = true },
+            -- Hyprland puts the window where its target goes.
             place = function(self, box)
                 self.placed = box
+                self.window.at, self.window.size = { x = box.x, y = box.y }, { x = box.w, y = box.h }
             end,
         }
     end
@@ -845,9 +853,11 @@ local function windows(ws, ids)
     local list = {}
     for i, id in ipairs(ids) do
         list[i] = {
-            window = { address = string.format("0x%x", 0x100 + id), workspace = { id = ws } },
+            window = { address = string.format("0x%x", 0x100 + id), workspace = { id = ws }, mapped = true },
+            -- Hyprland puts the window where its target goes.
             place = function(self, box)
                 self.placed = box
+                self.window.at, self.window.size = { x = box.x, y = box.y }, { x = box.w, y = box.h }
             end,
         }
     end
@@ -1149,7 +1159,7 @@ end)
 
 test("an emptied workspace keeps no edge to drag", function()
     -- Its last tiled windows leave together, and Hyprland calls no
-    -- recalculate for none, so the layout still has their tiles cached.
+    -- recalculate for none, so what it last placed is still there to find.
     local qs, layout = drag_setup()
     hl.tiled[1] = {}
     layout.recalculate({ area = HD, targets = {} })
@@ -1171,6 +1181,89 @@ test("a workspace whose tiles moved elsewhere keeps no edge to drag", function()
     hl.cursor = { x = 1056, y = 500 }
     local r = qs.drag_press()
     eq(type(r) == "table" and r.pass_event, true, "passes on")
+    eq(#hl.timers, 0, "no drag")
+end)
+
+-- Moves workspace `ws`'s windows, as Hyprland has them, to where tile
+-- puts `n` of them on `area`, with no recalculate to tell the layout.
+local function move_tiles(ws, area, n)
+    local boxes = geometry.arrange("tile", area, n, { mfact = 0.55, nmaster = 1 }, RULES)
+    for i, w in ipairs(hl.tiled[ws]) do
+        local b = boxes[i]
+        w.at, w.size = { x = b.x, y = b.y }, { x = b.w, y = b.h }
+    end
+end
+
+test("a press finds the edge where the windows are now, not where they were laid out", function()
+    local qs = drag_setup()
+    -- The monitor moved 1920 px right, and the windows with it.
+    local moved = { x = 1920, y = 34, w = 1920, h = 1046 }
+    move_tiles(1, moved, 3)
+    hl.cursor = { x = 1056, y = 500 }
+    local r = qs.drag_press()
+    eq(type(r) == "table" and r.pass_event, true, "the old edge passes on")
+    eq(#hl.timers, 0, "no drag")
+    hl.cursor = { x = 1920 + 1056, y = 500 }
+    eq(qs.drag_press(), nil, "the edge where the windows are now is taken")
+    local from = #hl.dispatched
+    hl.cursor.x = 1920 + 1152
+    qs.drag_release()
+    eq(layout_msgs(from), "mfact 0.6000", "the pointer maps to mfact across where the windows are")
+end)
+
+test("a press finds the edge of windows resized since they were laid out", function()
+    local qs = drag_setup()
+    -- Half the width, under a taller bar.
+    local half = { x = 0, y = 100, w = 960, h = 980 }
+    move_tiles(1, half, 3)
+    hl.cursor = { x = 1056, y = 500 }
+    local r = qs.drag_press()
+    eq(type(r) == "table" and r.pass_event, true, "the old edge, now inside a stack window, passes on")
+    hl.cursor = { x = 528, y = 60 }
+    r = qs.drag_press()
+    eq(type(r) == "table" and r.pass_event, true, "above the windows now passes on")
+    hl.cursor = { x = 528, y = 500 }
+    eq(qs.drag_press(), nil, "the edge at 55% of the narrower windows is taken")
+    local from = #hl.dispatched
+    hl.cursor.x = 576
+    qs.drag_release()
+    eq(layout_msgs(from), "mfact 0.6000", "and maps to mfact across their width")
+end)
+
+test("a press counts only the windows tiled there now", function()
+    -- threecol with two windows has one edge, at the middle; with three it
+    -- has two, either side of the master.
+    local qs, layout = fresh()
+    hl.area = UW
+    relayout(layout, UW, 1, 2)
+    local function gone(w)
+        table.insert(hl.tiled[1], w)
+    end
+    local whole = { x = 1720, y = 34 }
+    gone({ address = "0x201", workspace = { id = 1 }, mapped = false, at = whole, size = { x = 860, y = 1406 } })
+    gone({ address = "0x202", workspace = { id = 1 }, mapped = true, hidden = true, at = whole, size = { x = 860, y = 1406 } })
+    gone({ address = "0x203", workspace = { id = 1 }, mapped = true, floating = true, visible = false, at = whole, size = { x = 860, y = 1406 } })
+    gone({ address = "0x204", workspace = { id = 2 }, mapped = true, at = whole, size = { x = 860, y = 1406 } })
+    hl.cursor = { x = 860, y = 700 }
+    local r = qs.drag_press()
+    eq(type(r) == "table" and r.pass_event, true, "no three-window edge from an unmapped, hidden, floating or elsewhere window")
+    hl.cursor = { x = 1720, y = 700 }
+    eq(qs.drag_press(), nil, "the two windows' edge is taken")
+    qs.drag_release()
+    -- One of the two left without a recalculate: a lone window has no edge.
+    table.remove(hl.tiled[1], 2)
+    r = qs.drag_press()
+    eq(type(r) == "table" and r.pass_event, true, "a lone window's old edge passes on")
+end)
+
+test("a press passes when the layers can't be read", function()
+    local qs = drag_setup()
+    hl.cursor = { x = 1056, y = 500 }
+    hl.get_layers = function()
+        error("no layers")
+    end
+    local r = qs.drag_press()
+    eq(r and r.pass_event, true, "passes")
     eq(#hl.timers, 0, "no drag")
 end)
 
