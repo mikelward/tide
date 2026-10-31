@@ -1460,6 +1460,27 @@ check "a shell that doesn't reload after make install-shell fails" test "$code" 
 check "and says so" contains "$out" "the shell didn't reload after make install-shell"
 }
 
+case_103() {
+stubs "$tmp/shots" "exit 0" "$loaded"
+# A grim that writes what it's asked for, as CI's does.
+printf '#!/bin/sh\nfor f in "$@"; do :; done\necho png >"$f"\n' >"$tmp/shots/grim" || exit 1
+chmod +x "$tmp/shots/grim" || exit 1
+run "$tmp/shots" TIDE_SCREENSHOTS="$tmp/shots/out"
+check "a run asked for screenshots passes" test "$code" -eq 0
+for _face in shell lock greeter; do
+    check "and takes one of the $_face" test -s "$tmp/shots/out/$_face.png"
+done
+}
+
+case_104() {
+stubs "$tmp/no-shot" "exit 0" "$loaded"
+printf '#!/bin/sh\necho "no screencopy" >&2\nexit 1\n' >"$tmp/no-shot/grim" || exit 1
+chmod +x "$tmp/no-shot/grim" || exit 1
+run "$tmp/no-shot" TIDE_SCREENSHOTS="$tmp/no-shot/out"
+check "a screenshot that fails fails the run" test "$code" -ne 0
+check "and says so" contains "$out" "couldn't take a screenshot of the shell: no screencopy"
+}
+
 # --case N RESULT: run case_N alone, and write its passes and failures to
 # RESULT, which a case that exits early leaves unwritten.
 if test "${1-}" = --case; then
