@@ -1587,8 +1587,28 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
   - Chrome's remote debugging port would list tabs with no extension, but
     lets any local process drive the browser, so it isn't used.
   - Firefox has the same extension and native-messaging shape, later.
-- **Cost:** nothing for one person: an unpacked extension needs no store.
-  Publishing to the Chrome Web Store would cost its one-time developer fee.
+- **Permissions: two, and no site access.**
+  - `tabs`, for each tab's title and URL; without it `chrome.tabs`
+    leaves both out. Chrome warns "Read your browsing history".
+  - `nativeMessaging`, for the host. Chrome warns "Communicate with
+    cooperating native applications".
+  - Activating a tab and raising its window need neither. Favicons would
+    need site access, so a tab's row shows its browser's icon.
+- **Each tab goes under its window by the window's title,** which is its
+  active tab's, as tilemo places tabs (tilemo §9). Two windows showing
+  the same title can't be told apart; their tabs go under the first.
+- **It's only for Linux.** tileco reads tabs itself, inside Chrome
+  (tileco §9.4), and tilemo asks Chrome, Brave and Safari through
+  AppleScript (tilemo §9). Neither needs a host.
+- **Unpacked, from this repository,** for Chrome and Brave, which load
+  the same extension; `setup` installs the host's manifest for each
+  browser it finds. Developer mode has to stay on.
+- **Cost:** nothing for one person: an unpacked extension needs no store
+  review. Publishing to the Chrome Web Store would cost its one-time
+  developer fee, a reason for each permission, a privacy policy saying
+  the tabs never leave the machine, and the store's limited-use pledge
+  for browsing history. Tab managers publish with `tabs`, and password
+  managers with `nativeMessaging`.
 - **Reliability:**
   - It's one more piece per browser profile, installed by `setup`, and it
     can break when Chrome changes its extension rules.
