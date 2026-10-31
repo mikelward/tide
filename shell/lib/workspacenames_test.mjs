@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
     MAX_NAME, DEFAULT_STANDING, DEFAULT_SETTINGS, checkName, sameName, matchName, homeName,
     parseWorkspaceSettings, loadWorkspaceSettings, inAppPatterns, workspacesLua, luaString,
-    checkPatterns, cleanTitle, shortName, isHomeApp, promptWanted, clientAt, normalizeAppId, checkMuteEntry,
+    checkPatterns, cleanTitle, firstWord, shortName, isHomeApp, promptWanted, clientAt, normalizeAppId, checkMuteEntry,
     promptRows, promptChoice, NO_PROMPTS, promptQueued, promptDone, promptWindowGone,
     NO_WINDOWS, windowOpened, windowFocused, windowClosed, windowAnswered, checkMuted, withMuted,
 } from "./workspacenames.mjs";
@@ -135,8 +135,22 @@ test("a pattern whose group matched empty is passed over", () => {
     assert.equal(shortName("x then login", "", patterns), "login");
 });
 
-test("with no match the name is the title cleaned up", () => {
-    assert.equal(shortName("Inbox  (3) - Mozilla Firefox", "Mozilla Firefox", []), "Inbox (3)");
+test("with no match the name is the cleaned title's first word", () => {
+    assert.equal(shortName("ABC-123: Fix login - Tracker - Google Chrome", "Google Chrome", []), "ABC-123");
+    assert.equal(shortName("Inbox  (3) - Mozilla Firefox", "Mozilla Firefox", []), "Inbox");
+    assert.equal(shortName("notes, draft | Docs", "", []), "notes");
+    // A word left with no letter or digit is passed over.
+    assert.equal(shortName("— | Docs", "", []), "Docs");
+    assert.equal(firstWord("Café: menu"), "Café");
+    assert.equal(firstWord("v1.2."), "v1.2");
+    // Punctuation inside a word stays.
+    assert.equal(firstWord("PR-12/login"), "PR-12/login");
+    // Nothing to name it from gives an empty name, so the prompt starts empty.
+    assert.equal(shortName("", "kitty", []), "");
+    assert.equal(shortName("  -  ", "", []), "");
+    assert.equal(shortName(undefined, "", []), "");
+    // The name is still at most 32 characters.
+    assert.equal(shortName("x".repeat(40) + " y", "", []), "x".repeat(32));
     assert.equal(cleanTitle("Docs — Google Chrome", "Google Chrome"), "Docs");
     // Only the app's own name goes, and only at the end.
     assert.equal(cleanTitle("Google Chrome - notes", "Google Chrome"), "Google Chrome - notes");

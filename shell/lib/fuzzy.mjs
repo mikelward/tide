@@ -43,7 +43,8 @@ function fold(c) {
     return c.toLowerCase().normalize("NFD").replace(MARKS, "");
 }
 
-function isAlnum(c) {
+// Whether the code point `c` is a letter or digit, by NOT_ALNUM.
+export function isAlnum(c) {
     return !NOT_ALNUM.test(c);
 }
 
