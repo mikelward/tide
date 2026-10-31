@@ -485,17 +485,67 @@ export function promptChoice({ rows, selected, typed, home, allowHome = false })
     return { error: "nothing matches" };
 }
 
+// The line above the prompt's text, saying what Enter will do.
+export function promptHeading(kind) {
+    switch (kind) {
+    case "launch": return "Open on the workspace named";
+    case "go": return "Go to the workspace named";
+    case "move": return "Move this window to the workspace named";
+    default: return "This window goes to the workspace named";
+    }
+}
+
+// What Enter on `name` does for `request` (SPEC.md §6.5), one of:
+//   {reply: "workspace NAME", answer}  tell a waiting tide launch
+//   {launch: argv, cwd, name}           launch it there (Ctrl+Enter)
+//   {go: name}                          go there, moving no window
+//   {move: address, name}               move the window there, following it
+// A new name makes the workspace either way: Hyprland makes one on going
+// to a name no workspace has.
+export function promptAnswer(request, name) {
+    if (request.kind === "launch" && request.answer !== undefined) {
+        return { reply: `workspace ${name}`, answer: request.answer };
+    }
+    if (request.kind === "launch") {
+        return { launch: request.argv, cwd: request.cwd, name };
+    }
+    if (request.kind === "go") {
+        return { go: name };
+    }
+    return { move: request.address, name };
+}
+
+// What Esc does for `request`: {close: address} for a new window on home,
+// {reply: "cancel", answer} for a waiting tide launch, and {} otherwise:
+// a launch from Ctrl+Enter doesn't happen, Super+Return stays where you
+// are, and Super+Shift+Return leaves the window where it is.
+export function promptCancel(request) {
+    if (request.kind === "window") {
+        return { close: request.address };
+    }
+    if (request.kind === "launch" && request.answer !== undefined) {
+        return { reply: "cancel", answer: request.answer };
+    }
+    return {};
+}
+
 // The prompts waiting their turn (SPEC.md §6.5, §8.1), the first being the
 // one shown. A request is {kind, id, ...}:
 //   {kind: "window", address}  a new window on home, first focused
-//   {kind: "move", address}    Super+Return on the focused window
+//   {kind: "go"}               Super+Return: a workspace to go to, with
+//                              or without a window focused
+//   {kind: "move", address}    Super+Shift+Return on the focused window
 //   {kind: "launch", argv, cwd, apps}  a launch from home or Ctrl+Enter
 // One prompt following another isn't the first one's Esc: each waits for
-// its own Enter or Esc, or for its window to close.
+// its own Enter or Esc, or for its window to close. A second go while one
+// waits is the same question, so it isn't asked twice.
 export const NO_PROMPTS = Object.freeze({ queue: Object.freeze([]), next: 1 });
 
 export function promptQueued(state, request) {
     if (request.address !== undefined && state.queue.some((r) => r.address === request.address)) {
+        return state;
+    }
+    if (request.kind === "go" && state.queue.some((r) => r.kind === "go")) {
         return state;
     }
     return { queue: state.queue.concat([Object.assign({}, request, { id: state.next })]), next: state.next + 1 };

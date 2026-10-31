@@ -943,7 +943,7 @@ test("the layout makes Hyprland's swaps in its own order", function()
     local t = lay(layout, HD, 1, { 1, 3, 2 })
     eq(order_of(qs, 1), "0x102 0x103 0x101", "the master moved down one")
     box_eq(t[3].placed, tile_boxes(3)[1], "and its neighbor is the master")
-    -- Super+Return on the last window swaps it with the master.
+    -- Alt+Tab on the last window swaps it with the master.
     hl.active_window = "0x101"
     qs.swap_with_master()
     eq(hl.dispatched[2].arg, "address:0x102", "swaps with the master")

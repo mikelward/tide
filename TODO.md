@@ -138,7 +138,17 @@ once you have agreed with it or reversed it.
   alternative, the best fuzzy match first as in the launcher, would turn
   `docs` into an existing `docs-review` on Enter. It's
   `workspacenames.mjs`'s `promptRows`.
-- [ ] **Esc on `Super+Return`'s prompt leaves the window where it is**,
+- [ ] **Enter on a new name in `Super+Return`'s prompt goes to a new,
+  empty workspace of that name.** The prompt makes a workspace as the move
+  does, and an empty one goes again once you leave it (SPEC.md §6.5), so a
+  stray name costs nothing. The alternative is refusing new names there,
+  so it only goes to existing ones: `promptRows` would leave out the new
+  row for a `go` request in `workspacenames.mjs`.
+- [ ] **`Super+Shift+Return` with no window focused does nothing**, and
+  says why only in the shell's log. There's nothing to move, and the
+  prompt would ask a question with no answer. The alternative is a
+  notification saying so. It's `PromptData.askMove`.
+- [ ] **Esc on `Super+Shift+Return`'s prompt leaves the window where it is**,
   where Esc on a new window's prompt closes the window (SPEC.md §6.5). A
   window you chose to move isn't new, so closing it would lose work.
   It's `PromptData.cancel`.
@@ -982,7 +992,7 @@ from the keyboard (`shell/integration_test.sh`).
     once, and that `tide_layout.reload()` answers `hyprctl eval` with a
     bad file's error.
   - On a live session, check each place a new window goes, and that
-    Super+Return and Super+Shift+J and K still move the window they
+    Alt+Tab and Super+Shift+J and K still move the window they
     should once a new window has gone somewhere other than the end.
 - Appearance (`shell/lib/appearance.mjs`, `shell/AppearanceData.qml`)
   sets the mode, the light and dark times, the location and the inactive
@@ -1463,7 +1473,8 @@ always listed; home's rename undone; `workspaces.json` loaded and checked,
 and `tide-workspaces.lua` written for `conf`; `tide launch --workspace` and
 `TIDE_WORKSPACE`; `tide workspace`; the name prompt, with `namePatterns`,
 for a new window on home, a launch from home, the launcher's Ctrl+Enter
-and Super+Return (`qs -c tide ipc call prompt move`, bound in conf); the
+Super+Return (`qs -c tide ipc call prompt go`) and Super+Shift+Return
+(`... prompt move`), bound in conf; the
 workspace keys in conf; Alt+Tab's previous master; the switcher, its four
 tabs, and Super+A's Attention tab in place of the attention cycle. To check on a live session: home exists
 from the first frame and survives a config reload; a standing workspace is

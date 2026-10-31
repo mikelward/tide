@@ -734,7 +734,8 @@ in how long they last and what stays visible:
   ones, in the order they were made. An empty one is removed once you
   leave it.
 - Names come from you: the name prompt (below), which a new window on
-  home, a launch from home and `Super+Return` all open.
+  home, a launch from home, `Super+Return` and `Super+Shift+Return` all
+  open.
 - A name is one line of text, trimmed, at most 32 characters, with no
   quotes (`"`, `'`, `` ` ``), backslashes or control characters. A name
   goes into Hyprland's selectors, Lua, JSON and the shell's command lines,
@@ -792,7 +793,8 @@ in how long they last and what stays visible:
     view follows; any other opens unfocused and marked (§14.1).
 - Its windows are only those apps'. The name prompt never offers home for
   another app's window, and a name typed as home's is refused.
-- A window of a home app can still be moved out with `Super+Return`.
+- A window of a home app can still be moved out with
+  `Super+Shift+Return`.
 - `Super+Home` goes to home, and `Super+Tab` flips between home and the
   last other workspace you used (§6.6).
   - It's a Lua binding in `conf` that keeps the workspaces other than
@@ -836,8 +838,19 @@ in how long they last and what stays visible:
 - **One prompt at a time.** A prompt asked for while another is open waits
   its turn. One following another is never taken as the first one's Esc.
   A prompt whose window closes goes, unanswered.
-- **`Super+Return`** opens the prompt for the focused window, on any
-  workspace. Enter moves it; Esc leaves it where it is.
+- **`Super+Return`** opens the prompt to go to a workspace, moving no
+  window, from any workspace, an empty one included.
+  - It needs no focused window, so the text starts empty.
+  - Enter on an existing name goes there. Enter on a new name goes to a
+    new, empty workspace of that name, which goes again once you leave it
+    empty.
+  - Home is offered, since nothing moves there.
+  - Esc stays where you are.
+  - A second press while it's open asks nothing more.
+- **`Super+Shift+Return`** opens the prompt for the focused window, on any
+  workspace. Enter moves it, and focus follows; Esc leaves it where it is.
+  - With no window focused there's nothing to move, so it does nothing,
+    and the shell's log says why.
 - **tide's own launches** from home (the launcher, app keys, `tide launch`)
   prompt *before* launching, so the process starts with the right
   `TIDE_WORKSPACE` (below), and its first window goes to that workspace
@@ -959,7 +972,8 @@ with new keys in **bold**:
 | `Super+Left` / `Right`, **`Super+PgUp`** / **`PgDn`** | previous / next workspace in the bar's order, stopping at either end (as in KDE and on the Mac; PgUp/PgDn as in GNOME) |
 | `Super+Shift+Left` / `Right` | move window to the previous / next workspace in the bar's order |
 | `Super+J` / `K`, `Super+Shift+J` / `K` | focus / move down and up the stack |
-| `Super+Return` | move the focused window to a workspace: the name prompt (§6.5), listing the existing names; type to filter them or to name a new one, and Enter moves it there, making the workspace if it's new |
+| `Super+Return` | go to a workspace: the name prompt (§6.5), listing the existing names; type to filter them or to name a new one, and Enter goes there, making the workspace if it's new. It moves no window, so it works with none focused |
+| **`Super+Shift+Return`** | move the focused window to a workspace: the same prompt, and Enter moves it there, making the workspace if it's new; with no window focused, nothing |
 | **`Alt+Tab`** | make the focused window the master; on the master, swap it with the window that was master before it |
 | `Super+\` / `Super+/` | grow / shrink master (`mfact` ±0.025) |
 | `Super+=` / `Super+-` | add / remove a master |
@@ -1024,6 +1038,11 @@ with new keys in **bold**:
   gone.
   - Hyprland takes a bound key from every app, so `Alt+Tab` no longer
     reaches one, such as a remote desktop or a VM viewer.
+- **`Super+Return`** used to move the focused window. It goes to a
+  workspace now, so it works with no window to move. Moving is
+  `Super+Shift+Return`, which nothing else used.
+  - Both call the shell (`qs -c tide ipc call prompt go`, `... prompt
+    move`). Without the shell, a notification says the key needs it.
 - **`Super+S`** was left unbound for a per-machine `secureshell` launcher.
   It's keep awake now; `Super+D` stays free for one.
 - **`Super+S`** and **`Super+P`** call the shell
@@ -3422,7 +3441,7 @@ are what "done" means.
 | **M5** | Idle, lock, login | the idle timeline works, including through a Meet call. Lock via key, idle, suspend and lid. Crash recovery is tested. The greetd greeter shares the lock component. The keyring unlocks at login. The old sway, waybar, swaync, fuzzel and hyprlock configs are deleted from `conf`. |
 | **M6** | Screen sharing | a Meet share of a window, a 16:9 area and a whole screen, from Chrome; restore tokens where Chrome asks for them; the privacy pill and mic mute. |
 | **M7** | Theme + settings | one palette drives the shell, GTK 3/4, Qt and Hyprland; light/dark switches the shell, GTK and kitty live, and Qt live or at next launch as §15 says. A side-by-side screenshot of the shell, Nautilus, an adw-gtk3 app, a Qt app and Chrome, in light and in dark, looks like one desktop. The settings panel exists. |
-| **M8** | Named workspaces + switcher | Home is made at login, first on the bar, and outlives being empty; its apps open there. The standing workspaces are always listed, and made when first used. A window you open on home, and a launch from it, ask for a name, with the short name from the title patterns, and Enter, Esc and an existing name each do what §6.5 says. Empty workspaces go once left. The bar lists workspaces by name, in the order made. The switcher opens on the right tab for each key, `Tab` moves between them, and the Windows tab lists every window. `Super+Return`, `Alt+Tab`, `Super+A` and `Super+Home` work as §6.6 says. `TIDE_WORKSPACE` reaches an app through `uwsm app`, and `tide workspace` prints it. |
+| **M8** | Named workspaces + switcher | Home is made at login, first on the bar, and outlives being empty; its apps open there. The standing workspaces are always listed, and made when first used. A window you open on home, and a launch from it, ask for a name, with the short name from the title patterns, and Enter, Esc and an existing name each do what §6.5 says. Empty workspaces go once left. The bar lists workspaces by name, in the order made. The switcher opens on the right tab for each key, `Tab` moves between them, and the Windows tab lists every window. `Super+Return` (go), `Super+Shift+Return` (move), `Alt+Tab`, `Super+A` and `Super+Home` work as §6.6 says. `TIDE_WORKSPACE` reaches an app through `uwsm app`, and `tide workspace` prints it. |
 | **M9** | Browser tabs | the Windows tab lists Chrome's tabs through the extension, Enter brings one up, and the tab says so when the extension is missing (§8.3). |
 
 ## 20. Testing
