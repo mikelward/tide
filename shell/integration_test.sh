@@ -93,6 +93,16 @@ if escaped=$(grep -n -E 'regularExpression:.*\\u' shell/*.qml); then
     exit 1
 fi
 
+# Qt's JavaScript has no object spread or rest ({ ...x }, SPEC.md §20): a
+# module or binding with one fails the whole config as it loads. qmllint
+# catches it in make test, but only where it's installed; this catches the
+# usual form anywhere.
+if spread=$(grep -n -E '\{[[:space:]]*\.\.\.' shell/*.qml shell/lib/*.mjs | grep -v '_test\.mjs:'); then
+    echo "FAIL: Qt's JavaScript has no object spread; list the properties:" >&2
+    printf '%s\n' "$spread" >&2
+    exit 1
+fi
+
 # Theme.qml takes its sizes from the mocks (SPEC.md §15), so the bar is
 # as tall as the mocks show it.
 theme_bar=$(sed -n 's/^ *readonly property int barHeight: \([0-9]*\)$/\1/p' shell/Theme.qml)
