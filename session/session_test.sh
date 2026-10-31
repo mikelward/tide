@@ -117,7 +117,7 @@ condition=$(sed -n 's/^ExecCondition=\/bin\/sh -c //p' "$autostart" | sed "s/^'/
 # kept in $tmp/condition.err for a failing check to show.
 condition_status() {
     cmd=$(printf '%s\n' "$condition" | sed "s/%n/$(printf '%s' "$2" | sed 's/\\/\\\\/g')/g")
-    env PATH="$PWD/bin:$PATH" XDG_CONFIG_HOME="$tmp/no-config" XDG_CURRENT_DESKTOP="$1" \
+    env PATH="$PWD/bin:$PATH" XDG_CONFIG_HOME="${config_home:-$tmp/no-config}" XDG_CURRENT_DESKTOP="$1" \
         sh -c "$cmd" 2>"$tmp/condition.err"
     echo $?
 }
@@ -129,8 +129,16 @@ check "the autostart condition is a sh -c script" test -n "$condition"
 check "another desktop's agent is skipped in the tide session" skips_in "tide:Hyprland" "$agent"
 check "another desktop's daemon is skipped in the tide session" \
     skips_in "tide:Hyprland" 'app-xfce4\x2dnotifyd@autostart.service'
-check "an allowlisted applet runs in the tide session" \
+check "the network applet runs in the tide session, as its secret agent" \
     runs_in "tide:Hyprland" 'app-nm\x2dapplet@autostart.service'
+check "the Bluetooth applet is skipped in the tide session, whose bar draws its icon" \
+    skips_in "tide:Hyprland" 'app-blueman@autostart.service'
+mkdir -p "$tmp/allow/tide"
+echo blueman > "$tmp/allow/tide/autostart"
+config_home=$tmp/allow
+check "an applet on the user's allowlist runs in the tide session" \
+    runs_in "tide:Hyprland" 'app-blueman@autostart.service'
+config_home=
 check "an app that isn't autostarted runs in the tide session" \
     runs_in "tide:Hyprland" 'app-org.kde.dolphin@1234.service'
 check "another desktop's agent still runs under Plasma" runs_in "KDE" "$agent"

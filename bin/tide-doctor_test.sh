@@ -871,13 +871,19 @@ check "no python3 is reported" \
 check "no qs isn't a problem: waybar is the bar" test -z "$(printf '%s\n' "$out" | grep Quickshell)"
 
 healthy
-run FAKE_AUTOSTART_UNITS="app-nm\\x2dapplet@autostart.service=123 app-hplip\\x2dsystray@autostart.service=789 app-oneshot@autostart.service=456 app-skipped@autostart.service=0 app-earlier@autostart.service=50"
+mkdir -p "$tmp/config/tide"
+echo xiccd > "$tmp/config/tide/autostart"
+run FAKE_AUTOSTART_UNITS="app-xiccd@autostart.service=123 app-hplip\\x2dsystray@autostart.service=789 app-oneshot@autostart.service=456 app-skipped@autostart.service=0 app-earlier@autostart.service=50 app-blueman@autostart.service=321 app-nm\\x2dapplet@autostart.service=654"
+rm "$tmp/config/tide/autostart"
 check "each autostart unit off the allowlist whose command started is a problem" \
-    test "$(grep -c '^autostart unit' "$tmp/out")" -eq 2
+    test "$(grep -c '^autostart unit' "$tmp/out")" -eq 3
+check "blueman is off the allowlist, since the bar draws Bluetooth" \
+    contains "$out" "autostart unit app-blueman@autostart.service ran in tide but isn't on the autostart allowlist"
+check "nm-applet, allowed by default, isn't a problem" test -z "$(grep 'nm\\x2dapplet' "$tmp/out")"
 check "an autostart unit that ran and exited counts" contains "$out" "autostart unit app-oneshot@autostart.service ran in tide"
 check "an autostart unit is named, with the fix" \
     contains "$out" "autostart unit app-hplip\\x2dsystray@autostart.service ran in tide but isn't on the autostart allowlist: run tide's make install, whose app-.service.d drop-in skips it, then systemctl --user daemon-reload, then systemctl --user stop 'app-hplip\\x2dsystray@autostart.service'"
-check "an allowlisted autostart unit isn't a problem" test -z "$(grep 'nm\\x2dapplet' "$tmp/out")"
+check "an allowlisted autostart unit isn't a problem" test -z "$(grep 'app-xiccd' "$tmp/out")"
 check "a unit whose condition stopped its command isn't a problem" test -z "$(grep 'app-skipped' "$tmp/out")"
 check "a unit that ran before this session began isn't a problem" test -z "$(grep 'app-earlier' "$tmp/out")"
 check "systemctl is asked for every loaded autostart unit, dead ones too" \

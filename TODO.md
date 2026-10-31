@@ -489,11 +489,6 @@ once you have agreed with it or reversed it.
   alternative is to bring that matching back; the launcher's own entries
   are unaffected, since it grants the entry it launches. It's the
   `slices.Equal` check in `desktopClasses`, `cmd/tide-grant/desktop.go`.
-- [ ] **The autostart allowlist starts as `nm-applet` and `blueman`.** The
-      spec says it starts empty, but the bar's network and Bluetooth icons
-      come from those applets' autostart entries until the shell draws them
-      (M3). Emptying it is a one-line change to `autostart_default` in
-      `bin/tide`.
 - [ ] **A marked window's icon stays in view past five windows.** SPEC.md
       §7.2 shows five icons then `+n`; when a ringed (urgent) window would
       be past the fifth, it takes a place ahead of unmarked windows, so the
@@ -1396,6 +1391,15 @@ autostart entries, and a second bar on any monitor. Still to do:
   goes unseen; `hyprctl layers` has no anchors to say more. On a live
   session, check that the bar's reservation matches its height at each
   scale, so a lone tide bar reports nothing.
+
+## Take nm-applet off the autostart allowlist
+
+`nm-applet` stays on the default allowlist (`autostart_default` in
+`bin/tide`, SPEC.md §5.4) only for its NetworkManager secret agent, which
+asks for a VPN's unsaved password or one-time code, since the VPN rows
+run `nmcli connection up` without `--ask`. tide's own secret agent is
+being built now; once it registers with NetworkManager, remove
+`nm-applet` from the list, its tests and SPEC.md §5.4.
 
 ## Grants for terminal commands
 
