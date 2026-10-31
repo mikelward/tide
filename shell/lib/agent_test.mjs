@@ -135,6 +135,14 @@ test("the prompt's icon", () => {
     assert.equal(icon({ kind: "8021x" }), "dialog-password-symbolic");
 });
 
+test("the pairing agent's status reads as the network agent's does", () => {
+    assert.equal(statusText(true, true, { type: "bt-status", state: "registered" }), "registered");
+    assert.equal(statusText(true, true, { type: "bt-status", state: "standing-aside", pid: 7 }), "standing-aside 7");
+    assert.equal(statusText(true, true, { type: "bt-status", state: "waiting" }), "waiting");
+    assert.equal(statusText(true, true, null), "starting");
+    assert.equal(statusText(true, false, null), "missing");
+});
+
 test("tide-agent's Bluetooth status is a message the shell knows", () => {
     assert.equal(parseLine('{"type":"bt-status","state":"registered"}').message.state, "registered");
 });
