@@ -186,6 +186,19 @@ PanelWindow {
         function resetDisplay(description: string): string {
             return OutputsData.reset(description);
         }
+
+        // Adds, moves (a step later) or takes out one of Start at login's
+        // commands, by its text, as that page does: `qs -c tide ipc call
+        // settings addStartup google-calendar`. Each answers why not, or "".
+        function addStartup(command: string): string {
+            return StartupData.add(command);
+        }
+        function moveStartup(command: string, step: int): string {
+            return StartupData.move(undefined, command, step);
+        }
+        function removeStartup(command: string): string {
+            return StartupData.remove(undefined, command);
+        }
     }
 
     Connections {
@@ -258,7 +271,8 @@ PanelWindow {
         x: Math.round((parent.width - width) / 2)
         y: Math.round((parent.height - height) / 3)
         width: 640
-        height: 440
+        // Tall enough for every page in the sidebar.
+        height: Math.max(440, sidebar.implicitHeight + 12)
         radius: 12
         color: Theme.surface
         border.color: Theme.edge
@@ -1898,6 +1912,168 @@ PanelWindow {
                             wrapMode: Text.Wrap
                             textFormat: Text.PlainText
                             text: displays.refused
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Start at login: each command, which the arrows move
+                    // and the bin takes out, and one typed at the foot is
+                    // added at the end (SPEC.md §16).
+                    Column {
+                        id: startup
+
+                        // Why the last change made here was refused, until
+                        // the next one or another page.
+                        property string refused: ""
+
+                        function changed(error) {
+                            refused = error;
+                            root.report(error);
+                        }
+
+                        onVisibleChanged: refused = ""
+                        visible: root.current.id === "startup"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        Repeater {
+                            model: StartupData.listed
+
+                            Item {
+                                id: entry
+
+                                required property var modelData
+                                required property int index
+
+                                width: startup.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.right: entryButtons.left
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    textFormat: Text.PlainText
+                                    text: entry.modelData
+                                    color: Theme.fg
+                                    font.family: Theme.monoFont
+                                    font.pixelSize: 13
+                                }
+
+                                Row {
+                                    id: entryButtons
+
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    StepButton {
+                                        name: "go-up-symbolic"
+                                        value: entry.index
+                                        next: Math.max(0, entry.index - 1)
+                                        onActivated: startup.changed(StartupData.move(entry.index, entry.modelData, -1))
+                                    }
+
+                                    StepButton {
+                                        name: "go-down-symbolic"
+                                        value: entry.index
+                                        next: Math.min(StartupData.listed.length - 1, entry.index + 1)
+                                        onActivated: startup.changed(StartupData.move(entry.index, entry.modelData, 1))
+                                    }
+
+                                    StepButton {
+                                        name: "edit-delete-symbolic"
+                                        value: 0
+                                        next: 1
+                                        onActivated: startup.changed(StartupData.remove(entry.index, entry.modelData))
+                                    }
+                                }
+                            }
+                        }
+
+                        // None yet, said, so the page isn't only a field.
+                        Text {
+                            visible: StartupData.listed.length === 0
+                            x: 10
+                            width: startup.width - 20
+                            topPadding: 4
+                            bottomPadding: 4
+                            text: "Nothing starts at login."
+                            color: Theme.fgDim
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                        }
+
+                        // A command to add: Enter adds it, and one refused
+                        // stays to be fixed.
+                        Item {
+                            width: startup.width
+                            implicitHeight: 32
+
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 6
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: 26
+                                radius: 6
+                                color: Theme.surface2
+                                border.width: newCommand.activeFocus ? 1 : 0
+                                border.color: Theme.accent
+
+                                TextInput {
+                                    id: newCommand
+
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    anchors.rightMargin: 8
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    clip: true
+                                    color: Theme.fg
+                                    font.family: Theme.monoFont
+                                    font.pixelSize: 13
+                                    onAccepted: {
+                                        const error = StartupData.add(text);
+                                        startup.changed(error);
+                                        if (error === "") {
+                                            text = "";
+                                            keys.forceActiveFocus();
+                                        }
+                                    }
+                                    Keys.onEscapePressed: {
+                                        text = "";
+                                        keys.forceActiveFocus();
+                                    }
+
+                                    Text {
+                                        visible: newCommand.text === "" && !newCommand.activeFocus
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Add a command, such as google-calendar"
+                                        color: Theme.fgFaint
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                    }
+                                }
+                            }
+                        }
+
+                        // A command refused, or a file that can't be
+                        // changed, say.
+                        Text {
+                            visible: startup.refused !== ""
+                            x: 10
+                            width: startup.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: startup.refused
                             color: Theme.danger
                             font.family: Theme.font
                             font.pixelSize: 12

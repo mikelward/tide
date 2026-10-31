@@ -640,7 +640,9 @@ presenter() {
 # longitude. Then the Displays page: no monitor settings written at
 # startup, then a scale and a place for the stand-in's monitor over a hand
 # edit, written to outputs.local.json and the file conf reads, and applied
-# again; then the hand-edited monitor reset. Before all that, it checks the
+# again; then the hand-edited monitor reset. Then Start at login: its empty
+# list recorded as run in the stand-in's graphical session, and a command
+# added over a hand edit and one refused. Before all that, it checks the
 # shell recorded no wallpaper for the lock, having none to draw (§15).
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
@@ -949,6 +951,41 @@ written_settings() {
         sleep 0.1
         i=$((i + 1))
     done
+    # Start at login: an empty list, run once, recorded for the session;
+    # then a command added over a hand edit, and one with shell syntax
+    # refused, saying why.
+    # Keyed by the stand-in systemctl's graphical session, so a later login
+    # runs it again even with the runtime directory kept.
+    if test "$(cat "$startup_record" 2>/dev/null)" != 0123456789abcdef0123456789abcdef; then
+        echo "FAIL: the shell should record running Start at login's (empty) list for the graphical session in $startup_record; it has: $(cat "$startup_record" 2>&1)" >&2
+        exit 1
+    fi
+    mkdir -p "${startup_local%/*}" || exit 1
+    printf '{\n  "commands": ["google-chat"]\n}\n' >"$startup_local" || exit 1
+    ipc call settings addStartup "google-calendar --new" >/dev/null || exit 1
+    _refused=$(ipc call settings addStartup 'sh -c "x"') || exit 1
+    case "$_refused" in
+        *"put shell syntax in a script"*) ;;
+        *)
+            echo "FAIL: Start at login should refuse a command with quotes, saying why; it answered: $_refused" >&2
+            exit 1
+            ;;
+    esac
+    _want='{
+  "commands": [
+    "google-chat",
+    "google-calendar --new"
+  ]
+}'
+    if test "$(cat "$startup_local")" != "$_want"; then
+        echo "FAIL: Start at login should add google-calendar --new after the hand-edited google-chat in $startup_local; it has: $(cat "$startup_local" 2>&1)" >&2
+        exit 1
+    fi
+    # Not run: the list ran as the shell started.
+    if grep -q -- '--background' "$tmp/helpers.log"; then
+        echo "FAIL: a change to Start at login shouldn't run anything until the next login" >&2
+        exit 1
+    fi
     settle
 }
 
@@ -1403,6 +1440,8 @@ appearance_local=$tmp/home/.config/tide/appearance.local.json
 appearance_conf=$tmp/home/.config/hypr/tide-appearance.lua
 outputs_conf=$tmp/home/.config/hypr/tide-outputs.lua
 outputs_local=$tmp/home/.config/tide/outputs.local.json
+startup_local=$tmp/home/.config/tide/startup.local.json
+startup_record=$tmp/run/tide-startup-ran
 workspaces_conf=$tmp/home/.config/hypr/tide-workspaces.lua
 after_load=written_settings
 load shell "the shell" -c tide

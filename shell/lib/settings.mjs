@@ -89,6 +89,13 @@ export const PAGES = Object.freeze([
         about: "Each monitor's scale and where it goes beside the others, kept with the monitor whichever port it's in. Hyprland may round a scale to one that divides the screen evenly. One set for a monitor in hyprland.local.lua still wins.",
         advanced: { label: "Arrange displays", command: ["nwg-displays"] },
     },
+    {
+        id: "startup",
+        label: "Start at login",
+        icon: "system-run-symbolic",
+        about: "Commands started once as you log in, one after another in this order, without taking focus: each is a program and its arguments, such as google-calendar, and one already running isn't started again. A home app's window goes to home. A change takes effect at the next login. The list is this machine's own once changed.",
+        advanced: null,
+    },
 ]);
 
 // The page after moving `step` pages from `index`, stopping at either end.

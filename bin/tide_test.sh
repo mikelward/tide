@@ -279,6 +279,27 @@ check "a prompt that refuses the request launches here too" contains "$(cat "$lo
 run XDG_RUNTIME_DIR= "$qs" launch app
 check "with no XDG_RUNTIME_DIR to hear an answer in, it launches here" contains "$(cat "$log")" "uwsm app -- app"
 check "and says why" contains "$(cat "$tmp/err")" "no XDG_RUNTIME_DIR"
+# --background, as Start at login runs each command (SPEC.md §16): even
+# from home, no name prompt and no grant, so nothing it opens takes focus;
+# it still waits for the shell and runs through uwsm app.
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" "$qs" launch --background -- app one
+check "a background launch exits 0" test $? -eq 0
+check "a background launch from home doesn't ask the name prompt" not_contains "$(cat "$log")" "qs -c tide"
+check "records no grant" not_contains "$(cat "$log")" "tide_focus"
+check "and reads the workspace, waits for the shell, then starts the app" \
+    test "$(sed -n 's/ .*//p' "$log" | tr '\n' ' ')" = "hyprctl systemctl uwsm app "
+check "with the focused workspace as TIDE_WORKSPACE" test "$(cat "$log.env")" = PR12login
+check "a clean background launch says nothing" test ! -s "$tmp/err"
+check "and says it's starting on stdout, as Start at login waits for" test "$(cat "$tmp/out")" = "tide launch: starting"
+run FAKE_WORKSPACE_STATUS=1 FAKE_WORKSPACE='no' "$qs" launch --background app
+check "a background launch that can't read the workspace still starts" contains "$(cat "$log")" "uwsm app -- app"
+check "with an empty TIDE_WORKSPACE, and says why" \
+    test "$(cat "$log.env"):$(grep -c 'TIDE_WORKSPACE not set' "$log")" = ":1"
+run "$qs" launch --background --app kitty -- app
+check "--background with --app is refused" test "$?:$(cat "$log")" = "2:"
+check "and says why" contains "$(cat "$tmp/err")" "--background records no focus grant, so it takes no --workspace or --app"
+run "$qs" launch --background --workspace docs app
+check "--background with --workspace is refused" test $? -eq 2
 rm "$tmp/run-config/hypr/tide-workspaces.lua" "$fake/qs"
 run "$qs" launch app
 check "with no home named, a launch doesn't ask" not_contains "$(cat "$log")" "qs -c tide"
@@ -781,6 +802,48 @@ check "no config directory at all says nothing" test ! -s "$tmp/err"
 out=$("$qs" clipboard frob 2>&1)
 check "tide clipboard reaches tide-clipboard's usage" test $? -eq 2
 check "and says so: $out" contains "$out" "tide clipboard store"
+
+# --unless-running starts nothing when a process of yours runs the
+# program, past wrappers, matching pgrep -x on its first 15 characters
+# with its punctuation escaped. The fake pgrep logs its arguments and
+# exits $FAKE_PGREP_STATUS (1, none running, by default).
+cat > "$fake/pgrep" <<'FAKE'
+#!/bin/sh
+printf 'pgrep %s\n' "$*" >> "$FAKE_LOG"
+test -z "${FAKE_PGREP_SAYS:-}" || echo "$FAKE_PGREP_SAYS" >&2
+exit "${FAKE_PGREP_STATUS:-1}"
+FAKE
+chmod +x "$fake/pgrep"
+run "$qs" launch --background --unless-running -- app one
+check "a command that isn't running starts" contains "$(cat "$log")" "uwsm app -- app one"
+check "after asking pgrep for this user's processes of that name" contains "$(cat "$log")" "pgrep -u $(id -u) -x -- app"
+run FAKE_PGREP_STATUS=0 "$qs" launch --background --unless-running -- app one
+check "one that's running exits 0" test $? -eq 0
+check "and starts nothing" not_contains "$(cat "$log")" "uwsm"
+check "and says so" contains "$(cat "$tmp/err")" "app is running already, so not starting it again"
+run "$qs" launch --unless-running -- /opt/google-calendar.sh+x
+check "the program is matched by its basename's first 15 characters" \
+    test "$(grep '^pgrep' "$log")" = "pgrep -u $(id -u) -x -- google-calendar"
+run "$qs" launch --unless-running -- /opt/helpers/
+check "a path ending in / asks pgrep nothing" not_contains "$(cat "$log")" "pgrep"
+check "and starts it, saying why" contains "$(cat "$tmp/err")" "/opt/helpers/ names no program to look for"
+run "$qs" launch --unless-running -- a.b+c
+check "regular expressions' punctuation is escaped" contains "$(cat "$log")" 'pgrep -u '"$(id -u)"' -x -- a\.b\+c'
+run FAKE_PGREP_STATUS=3 FAKE_PGREP_SAYS="pgrep: no /proc" "$qs" launch --background --unless-running -- app
+check "a pgrep that fails still starts the command" contains "$(cat "$log")" "uwsm app -- app"
+check "and says why" contains "$(cat "$tmp/err")" "pgrep couldn't say whether app is running (pgrep: no /proc), so starting it"
+rm "$fake/pgrep"
+# A PATH with everything but pgrep.
+nopgrep=$tmp/nopgrep
+mkdir "$nopgrep"
+for f in /usr/bin/* /bin/*; do
+    test "${f##*/}" = pgrep || test -e "$nopgrep/${f##*/}" || ln -s "$f" "$nopgrep/${f##*/}"
+done
+: > "$log"
+env PATH="$fake:$nopgrep" FAKE_LOG="$log" XDG_CURRENT_DESKTOP=tide:Hyprland XDG_CONFIG_HOME="$tmp/run-config" \
+    "$qs" launch --background --unless-running -- app > "$tmp/out" 2> "$tmp/err"
+check "without pgrep, the command starts" contains "$(cat "$log")" "uwsm app -- app"
+check "and says why" contains "$(cat "$tmp/err")" "no pgrep, so starting app without checking whether it's running"
 
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh "$qs" bin/tide_test.sh

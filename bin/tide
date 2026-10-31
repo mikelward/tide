@@ -3,6 +3,7 @@
 # tide: the session's command-line helpers.
 #
 #   tide launch [--workspace NAME] [--app ID]... [--] COMMAND [ARG...]
+#   tide launch --background [--unless-running] [--] COMMAND [ARG...]
 #
 #     Starts an app the way the key bindings and the launcher do
 #     (SPEC.md §5.4, §14.3):
@@ -44,6 +45,17 @@
 #     it. If the focused workspace can't be read, or tide-grant can't keep
 #     its letters and digits, it's empty, and the launch says why.
 #     Outside a tide session it just runs COMMAND.
+#     --background starts it as the session's Start at login does (SPEC.md
+#     §16): with no focus grant and no name prompt, so nothing it opens
+#     takes focus, and its windows go where Hyprland's rules put them. It
+#     still waits for the shell, and still runs in app-graphical.slice.
+#     It takes no --workspace or --app, which only a grant carries. Just
+#     before it starts the command, it prints "tide launch: starting" on
+#     stdout, so a caller starting several can start them in order.
+#     --unless-running exits 0 without starting it when a process of yours
+#     already runs its program, past wrappers, as `pgrep -x` matches it on
+#     its first 15 characters (a process's name is no longer). Without
+#     pgrep, or if it fails, it starts it anyway, and says why.
 #
 #   tide workspace
 #
@@ -143,6 +155,7 @@ nl='
 
 usage() {
     echo "usage: $prog launch [--workspace NAME] [--app ID]... [--] COMMAND [ARG...]" >&2
+    echo "       $prog launch --background [--unless-running] [--] COMMAND [ARG...]" >&2
     echo "       $prog workspace" >&2
     echo "       $prog grant ID..." >&2
     echo "       $prog focus ID..." >&2
@@ -493,6 +506,8 @@ launch() {
     # The IDs it grants, as JSON (add_app), which tell the name prompt
     # whether this is one of home's apps.
     app_json=
+    background=no
+    unless_running=no
     while test $# -gt 0; do
         case "$1" in
             --workspace | --workspace=*)
@@ -553,12 +568,22 @@ launch() {
                 add_app "$id"
                 app=${app:-$id}
                 ;;
+            --background) background=yes; shift ;;
+            --unless-running) unless_running=yes; shift ;;
             --) shift; break ;;
             -*) usage ;;
             *) break ;;
         esac
     done
     test $# -gt 0 || usage
+    if test "$background" = yes && { test -n "$ws" || test "$count" -gt 0; }; then
+        echo "$prog launch: --background records no focus grant, so it takes no --workspace or --app" >&2
+        exit 2
+    fi
+    if test "$unless_running" = yes && running "$@"; then
+        echo "$prog launch: $runs is running already, so not starting it again" >&2
+        exit 0
+    fi
     # '*' stands alone: beside a name it would make the name meaningless,
     # and the guard refuses the pair, which would start the app ungranted.
     if test "$wildcard" = yes && test "$count" -gt 1; then
@@ -567,6 +592,9 @@ launch() {
     fi
     if ! in_tide; then
         exec "$@"
+    fi
+    if test "$background" = yes; then
+        launch_background "$@"
     fi
     # The focused workspace, read once: home asks for a name, and the app
     # gets it as TIDE_WORKSPACE otherwise.
@@ -657,6 +685,60 @@ EOF2
     export TIDE_WORKSPACE
     wait_for_shell "$app"
     exec uwsm app -- "$@"
+}
+
+# `tide launch --background`: no grant and no name prompt, so nothing it
+# opens takes focus (SPEC.md §16). The app still gets the focused
+# workspace's name as TIDE_WORKSPACE, as any launch does.
+launch_background() {
+    why=
+    if ! focused=$(focused_workspace launch); then
+        why="Couldn't read the focused workspace"
+    elif ! TIDE_WORKSPACE=$(sanitized "$focused" launch); then
+        why="Couldn't keep the workspace's name to its letters and digits"
+    fi
+    if test -n "$why"; then
+        echo "$prog launch: starting $1 with an empty TIDE_WORKSPACE" >&2
+        TIDE_WORKSPACE=
+        tell "TIDE_WORKSPACE not set" \
+            "$why, so $1's shell sessions won't be named after it. tide doctor may say why."
+    fi
+    export TIDE_WORKSPACE
+    wait_for_shell "$1"
+    # On stdout, the line Start at login waits for before starting the next
+    # command, so they start in the list's order (SPEC.md §16).
+    echo "tide launch: starting"
+    exec uwsm app -- "$@"
+}
+
+# Whether a process of this user already runs the command's program, past
+# wrappers, for --unless-running; sets runs to the program's name. A
+# process's name (comm) is its first 15 bytes, so that's what's matched,
+# and pgrep -x takes a regular expression, so the name's own punctuation is
+# escaped. Returns 1, having said why, when it can't tell, so the command
+# starts anyway: skipping it is the surprise.
+running() {
+    runs=$(command_program "$@")
+    runs=${runs##*/}
+    # A path ending in / names no program to match.
+    if test -z "$runs"; then
+        runs=$1
+        echo "$prog launch: $1 names no program to look for, so starting it without checking whether it's running" >&2
+        return 1
+    fi
+    if ! command -v pgrep >/dev/null 2>&1; then
+        echo "$prog launch: no pgrep, so starting $runs without checking whether it's running" >&2
+        return 1
+    fi
+    name=$(printf '%s' "$runs" | LC_ALL=C cut -b 1-15 | sed 's/[][\\.*^$+?(){}|]/\\&/g')
+    status=0
+    out=$(pgrep -u "$(id -u)" -x -- "$name" 2>&1) || status=$?
+    case "$status" in
+        0) return 0 ;;
+        1) return 1 ;;
+    esac
+    echo "$prog launch: pgrep couldn't say whether $runs is running (${out:-exit $status}), so starting it" >&2
+    return 1
 }
 
 # Until the shell draws them itself (M3), the network and Bluetooth tray
