@@ -1521,9 +1521,9 @@ or workspace goes there.
   global shortcut does), once the pinned Hyprland passes SPEC.md §8.2's
   three tap checks; until then `conf` binds no tap.
 - **Redo the mocks.** `bar.png` and `desktop.png` show numbered
-  workspaces, and `launcher.png` shows no tabs. Redraw the bar's
-  workspaces by name with the standing ones, home first, and the switcher with its four tabs
-  and the name prompt, then `make mocks`.
+  workspaces. Redraw the bar's workspaces by name with the standing ones,
+  home first, and the name prompt, then `make mocks`. `switcher.png` has
+  the switcher's four tabs.
 - **Browser tabs (M9).** A Chrome extension listing tabs with
   `chrome.tabs` and a native-messaging host handing them to the shell
   (SPEC.md §8.3), installed by `setup`. First check whether an open
