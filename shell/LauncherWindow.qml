@@ -6,14 +6,20 @@ import Quickshell.Wayland
 import Quickshell.Widgets
 import "lib/launcher.mjs" as Search
 import "lib/notifications.mjs" as Notes
+import "lib/dispatch.mjs" as Dispatch
 import "lib/session.mjs" as Session
+import "lib/switcher.mjs" as Switcher
 import "lib/workspaces.mjs" as Workspaces
 
-// The launcher (SPEC.md §8): fuzzy search over the apps' desktop entries
-// and their actions, centered near the top of the focused monitor over a
-// dimmed backdrop. `Super+Space` (Hyprland's `tide:launcher` global
-// shortcut) or `qs -c tide ipc call launcher toggle` opens and closes it;
-// Escape or a click on the backdrop closes it. Its quick actions take
+// The switcher (SPEC.md §8.1), whose first tab is the launcher (§8.2):
+// fuzzy search over the apps' desktop entries and their actions, then the
+// workspaces, every window, and the windows wanting attention, centered
+// near the top of the focused monitor over a dimmed backdrop. Each key
+// opens it on its own tab, and the same key again closes it:
+// `qs -c tide ipc call switcher toggle TAB` (`launcher toggle` for Apps),
+// and the tap of Super, Hyprland's `tide:launcher` global shortcut, on
+// Workspaces. Tab and Shift+Tab move between the tabs; Escape or a click
+// on the backdrop closes it. Its quick actions take
 // screenshots, run the session actions, open the settings panel, flip Do
 // not disturb and keep awake, and reload the shell, and Ctrl+Enter opens an
 // app on a workspace the name prompt names.
@@ -22,6 +28,8 @@ PanelWindow {
 
     property string query: ""
     property int selected: -1
+    // The tab shown (Switcher.TABS).
+    property string tab: "apps"
     // The selected row's key (Search.rowKey: kind and id), so a change of
     // state under an open launcher keeps it selected (Search.reselect), and
     // the opening, query and confirmation the rows were last built for.
@@ -49,7 +57,45 @@ PanelWindow {
         keepAwake: KeepAwakeData.on,
         micHolds: MicData.live && !KeepAwakeData.asked
     }))
-    readonly property var rows: root.asking !== "" ? Search.confirmRows(root.asking) : Search.search(root.items, root.query, LauncherData.frecency, root.openedAt)
+    readonly property var appRows: root.asking !== "" ? Search.confirmRows(root.asking) : Search.search(root.items, root.query, LauncherData.frecency, root.openedAt)
+    // Every window, as the Windows and Attention tabs list them.
+    readonly property var allWindows: Hyprland.toplevels.values.map(t => {
+        const address = Workspaces.normalizeAddress(t.address);
+        const app = t.lastIpcObject?.class || t.wayland?.appId || "";
+        return {
+            address: address,
+            title: t.title ?? "",
+            app: app,
+            appName: DesktopEntries.heuristicLookup(app)?.name ?? app,
+            workspace: t.workspace?.name ?? "",
+            urgent: t.urgent,
+            focus: Workspaces.focusRank(MarkData.focusOrder, address, t.lastIpcObject?.focusHistoryID)
+        };
+    })
+    readonly property var workspaceList: root.tab === "workspaces" ? Workspaces.barWorkspaces({
+        monitor: Hyprland.focusedMonitor?.name ?? "",
+        monitors: Hyprland.monitors.values.map(m => ({
+            name: m.name,
+            workspace: m.activeWorkspace ? m.activeWorkspace.id : null
+        })),
+        workspaces: Hyprland.workspaces.values.map(w => ({
+            id: w.id,
+            name: w.name
+        })),
+        windows: Hyprland.toplevels.values.map(t => ({
+            address: Workspaces.normalizeAddress(t.address),
+            workspace: t.workspace ? t.workspace.id : null,
+            app: t.lastIpcObject?.class || t.wayland?.appId || "",
+            urgent: t.urgent,
+            fullscreen: t.lastIpcObject?.fullscreen ?? 0
+        })),
+        marks: MarkData.marks,
+        standing: WorkspacesData.standing
+    }) : []
+    readonly property var rows: root.tab === "workspaces" ? Switcher.workspaceRows(root.workspaceList, root.query)
+        : root.tab === "windows" ? Switcher.windowRows(root.allWindows, root.query)
+        : root.tab === "attention" ? Switcher.attentionRows(root.allWindows, MarkData.marks, root.query)
+        : root.appRows
     // Frecency is read as of the opening, so the order doesn't shift while
     // it's open.
     property real openedAt: 0
@@ -63,7 +109,9 @@ PanelWindow {
     property string pending: ""
     property var windowAtOpen: null
     property string outputAtOpen: ""
-    function open() {
+    // Opens on `tab`, or moves to it if open on another.
+    function open(tab) {
+        root.showTab(tab ?? "apps");
         if (visible) {
             return;
         }
@@ -97,12 +145,40 @@ PanelWindow {
         visible = false;
     }
 
-    function toggle() {
-        if (visible) {
-            close();
+    function toggle(tab) {
+        const next = Switcher.toggled(visible, root.tab, tab ?? "apps");
+        if (next.visible) {
+            open(next.tab);
         } else {
-            open();
+            close();
         }
+    }
+
+    // Shows `tab`, starting its search afresh on its top row.
+    function showTab(tab) {
+        if (!Switcher.TABS.includes(tab)) {
+            console.warn(`tide: the switcher has no ${tab} tab; showing Apps`);
+            tab = "apps";
+        }
+        if (tab === root.tab) {
+            return;
+        }
+        // A power action waiting on logind or on your confirmation is
+        // canceled, and its check, which compares the session, is stale.
+        const next = Switcher.tabChanged({
+            tab: root.tab,
+            asking: root.asking,
+            checking: root.checking,
+            session: root.session
+        }, tab);
+        root.session = next.session;
+        root.checking = next.checking;
+        root.asking = next.asking;
+        root.blocked = [];
+        root.tab = next.tab;
+        root.query = "";
+        field.text = "";
+        root.selectedKey = null;
     }
 
     // Runs the row at `index`; `newWorkspace` (Ctrl+Enter) asks for a
@@ -110,6 +186,18 @@ PanelWindow {
     function runRow(index, newWorkspace) {
         const row = rows[index];
         if (!row || checking) {
+            return;
+        }
+        // A workspace, or a window, which focusing brings up on its own
+        // workspace, clearing its mark (SPEC.md §8.1, §14.3).
+        if (row.item.kind === "workspace") {
+            close();
+            Hyprland.dispatch(Dispatch.focusWorkspaceName(row.item.name, Hyprland.usingLua));
+            return;
+        }
+        if (row.item.kind === "window") {
+            close();
+            Hyprland.dispatch(Dispatch.focusWindow(row.item.address, Hyprland.usingLua));
             return;
         }
         if (row.item.kind === "confirm") {
@@ -210,7 +298,7 @@ PanelWindow {
     onRowsChanged: {
         // Each opening counts as a new query too, so it starts on the top
         // hit whatever was selected when it last closed.
-        const key = `${session}\n${asking}\n${query}`;
+        const key = `${session}\n${tab}\n${asking}\n${query}`;
         const changed = key !== shownFor;
         shownFor = key;
         selected = Search.reselect(selectedKey, rows, changed);
@@ -237,11 +325,13 @@ PanelWindow {
     // The mock's backdrop: black at 35%.
     color: Qt.rgba(0, 0, 0, 0.35)
 
+    // The tap of Super (SPEC.md §8.2), once the pinned Hyprland passes the
+    // tap checks: the switcher on Workspaces.
     GlobalShortcut {
         appid: "tide"
         name: "launcher"
-        description: "Open or close the launcher"
-        onPressed: root.toggle()
+        description: "Open or close the switcher on its Workspaces tab"
+        onPressed: root.toggle("workspaces")
     }
 
     // Quickshell scans the desktop entries when DesktopEntries is first
@@ -263,10 +353,34 @@ PanelWindow {
         target: "launcher"
 
         function toggle(): void {
-            root.toggle();
+            root.toggle("apps");
         }
         function open(): void {
-            root.open();
+            root.open("apps");
+        }
+        function close(): void {
+            root.close();
+        }
+    }
+
+    // `qs -c tide ipc call switcher toggle attention`, and so on: conf's
+    // Super+A. A tab it doesn't have is refused, and says so.
+    IpcHandler {
+        target: "switcher"
+
+        function toggle(tab: string): string {
+            if (!Switcher.TABS.includes(tab)) {
+                return `no ${tab} tab; the tabs are ${Switcher.TABS.join(", ")}`;
+            }
+            root.toggle(tab);
+            return "ok";
+        }
+        function open(tab: string): string {
+            if (!Switcher.TABS.includes(tab)) {
+                return `no ${tab} tab; the tabs are ${Switcher.TABS.join(", ")}`;
+            }
+            root.open(tab);
+            return "ok";
         }
         function close(): void {
             root.close();
@@ -300,6 +414,48 @@ PanelWindow {
             x: 10
             y: 10
             width: parent.width - 20
+
+            // The tabs (SPEC.md §8.1): Tab and Shift+Tab move between them,
+            // and a click picks one.
+            Row {
+                spacing: 4
+                bottomPadding: 8
+
+                Repeater {
+                    model: Switcher.TABS
+
+                    Rectangle {
+                        id: tabChip
+
+                        required property string modelData
+                        readonly property bool shown: modelData === root.tab
+
+                        width: tabLabel.implicitWidth + 20
+                        height: 26
+                        radius: 8
+                        color: shown ? Theme.accentBg : "transparent"
+
+                        Text {
+                            id: tabLabel
+
+                            anchors.centerIn: parent
+                            textFormat: Text.PlainText
+                            text: Switcher.TAB_NAMES[tabChip.modelData]
+                            color: tabChip.shown ? "#ffffff" : Theme.fgDim
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                        }
+
+                        TapHandler {
+                            onTapped: {
+                                root.showTab(tabChip.modelData);
+                                field.forceActiveFocus();
+                            }
+                        }
+                    }
+                }
+            }
 
             Rectangle {
                 width: parent.width
@@ -343,10 +499,17 @@ PanelWindow {
                     Keys.onUpPressed: root.selected = Search.moved(root.selected, -1, root.rows.length)
                     Keys.onDownPressed: root.selected = Search.moved(root.selected, 1, root.rows.length)
                     Keys.onPressed: event => {
-                        // Tab and Shift+Tab step through the sections; the
-                        // field keeps focus rather than passing it on.
+                        // Tab and Shift+Tab move between the tabs, PgDn and
+                        // PgUp through the Apps tab's sections (SPEC.md
+                        // §8.1); the field keeps focus rather than passing
+                        // it on.
                         if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
-                            root.selected = Search.nextSection(root.rows, root.selected, event.key === Qt.Key_Backtab ? -1 : 1);
+                            if (root.asking === "" && !root.checking) {
+                                root.showTab(Switcher.movedTab(root.tab, event.key === Qt.Key_Backtab ? -1 : 1));
+                            }
+                            event.accepted = true;
+                        } else if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
+                            root.selected = Search.nextSection(root.rows, root.selected, event.key === Qt.Key_PageUp ? -1 : 1);
                             event.accepted = true;
                         } else if (event.modifiers & Qt.ControlModifier && event.key === Qt.Key_N) {
                             root.selected = Search.moved(root.selected, 1, root.rows.length);
@@ -360,7 +523,7 @@ PanelWindow {
                     Text {
                         visible: field.text === ""
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Search apps and actions"
+                        text: Switcher.PLACEHOLDERS[root.tab]
                         color: Theme.fgFaint
                         font: field.font
                     }
@@ -419,6 +582,20 @@ PanelWindow {
                     font.family: Theme.font
                     font.pixelSize: 13
                 }
+            }
+
+            // A tab with no rows says why (SPEC.md §8.1).
+            Text {
+                visible: root.rows.length === 0 && root.asking === "" && text !== ""
+                width: parent.width
+                leftPadding: 10
+                topPadding: 6
+                bottomPadding: 6
+                textFormat: Text.PlainText
+                text: Switcher.emptyText(root.tab, root.query)
+                color: Theme.fgDim
+                font.family: Theme.font
+                font.pixelSize: 13
             }
 
             ListView {
@@ -527,7 +704,11 @@ PanelWindow {
                             // Empty for a quick action, whose box still lays the
                             // row out.
                             // An entry may name its icon by path rather than by theme name.
-                            source: row.modelData.item.kind === "quick" || row.modelData.item.kind === "confirm" ? "" : Notes.iconFile(row.modelData.item.icon) ?? Quickshell.iconPath(row.modelData.item.icon, "application-x-executable")
+                            source: row.modelData.item.kind === "quick" || row.modelData.item.kind === "confirm" ? ""
+                                // A workspace's or window's icon is its app's, by class.
+                                : row.modelData.item.kind === "workspace" || row.modelData.item.kind === "window"
+                                    ? Quickshell.iconPath(DesktopEntries.heuristicLookup(row.modelData.item.icon)?.icon ?? row.modelData.item.icon, "application-x-executable")
+                                : Notes.iconFile(row.modelData.item.icon) ?? Quickshell.iconPath(row.modelData.item.icon, "application-x-executable")
                         }
 
                         Column {

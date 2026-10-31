@@ -1181,12 +1181,16 @@ always listed; home's rename undone; `workspaces.json` loaded and checked,
 and `tide-workspaces.lua` written for `conf`; `tide launch --workspace` and
 `TIDE_WORKSPACE`; `tide workspace`; the name prompt, with `namePatterns`,
 for a new window on home, a launch from home, the launcher's Ctrl+Enter
-and Super+Return (`qs -c tide ipc call prompt move`, bound in conf). To check on a live session: home exists
+and Super+Return (`qs -c tide ipc call prompt move`, bound in conf); the
+workspace keys in conf; Alt+Tab's previous master; the switcher, its four
+tabs, and Super+A's Attention tab in place of the attention cycle. To check on a live session: home exists
 from the first frame and survives a config reload; a standing workspace is
 made by clicking it on the bar; a rename of home is undone; the prompt
 opens for a window you open on home and for one first focused there, not
 for a dialog, and Enter, Esc and an existing name do what SPEC.md §6.5
-says; a launch from home asks first, and Esc launches nothing.
+says; a launch from home asks first, and Esc launches nothing; each
+switcher key opens its tab, Tab moves between them, Enter on a window
+or workspace goes there.
 
 - **Redesign workspaces across several monitors** (SPEC.md §21), a
   follow-up to M8, which is built for one monitor; extra monitors keep
@@ -1216,25 +1220,9 @@ says; a launch from home asks first, and Esc launches nothing.
   config reload; home's apps open there without switching. Shell sessions
   named from `TIDE_WORKSPACE` (conf#435): a terminal launched on a named
   workspace attaches to `NAME:1`.
-- **Workspace keys in `conf`.** `Super+Return` opens the name prompt for
-  the focused window; `Alt+Tab` takes the old `Super+Return` swap (the
-  layout remembers the previous master per workspace, built in
-  `hypr/tide/layout.lua`); the tap of `Super`, `Super+A` and
-  `Super+Space` open the switcher's tabs; `Super+Tab` flips between
-  home and the last other workspace you used, from a history kept
-  in Lua; `Super+Home` goes to home; `Super+End` goes to the last
-  workspace other than home and the current one, from the same history,
-  skipping removed ones;
-  `Super+Left`/`Right` and `Super+PgUp`/`PgDn` follow the bar's order and
-  stop at the ends; `Super+1…9` and `Super+Shift+1…9` are unbound.
-- **Retire the attention cycle.** `tide_focus.focus_attention()`,
-  `end_cycle()`, the Super release binding and the `tide-cycle` events in
-  `hypr/tide/focus.lua` and the shell give way to the Attention tab;
-  `set_order` stays.
-- **The switcher.** The launcher (`shell/LauncherWindow.qml`) becomes the
-  Apps tab of one overlay with Workspaces, Windows and Attention; `Tab` and
-  `Shift+Tab` move between tabs, so the launcher's section jump moves to
-  `PgDn`/`PgUp`. The tap of `Super` opens it on Workspaces.
+- **The tap of `Super`** opens the switcher on Workspaces (its `tide:launcher`
+  global shortcut does), once the pinned Hyprland passes SPEC.md §8.2's
+  three tap checks; until then `conf` binds no tap.
 - **The Workspaces settings page** (SPEC.md §16): `standing`, `inApps`
   and `namePatterns`. Until then, the files are edited by hand.
 - **Redo the mocks.** `bar.png` and `desktop.png` show numbered
