@@ -1105,6 +1105,76 @@ Deferred: it needs a Hyprland patch, and the MVP comes first.
 - Rejected: title bars from the `hyprbars` plugin. A plugin is rebuilt against
   every Hyprland upgrade (SPEC.md §3.1).
 
+## Named workspaces and the switcher (M8, M9)
+
+SPEC.md §6.5, §6.6, §7, §8 and §14 replace the nine numbered workspaces
+with named ones and fold the launcher into a tabbed switcher. Specified
+only; none of it is built.
+
+- **Decide what a second monitor shows at login** (SPEC.md §21): Hyprland
+  gives it a numbered workspace.
+- **Decide what the bar does when named workspaces outgrow its left side**
+  (SPEC.md §7.3, §21).
+- **"in" in `conf`.** A `persistent`, `default` workspace rule for
+  `name:in` on the first monitor; window rules sending `inApps`' windows
+  there without switching; `workspaces.json` with mail, chat, calendar and
+  music in `inApps`. Check on 0.56.2 that "in" exists from the first frame
+  and survives a config reload.
+- **Workspace keys in `conf`.** `Super+Return` opens the name prompt for
+  the focused window; `Alt+Tab` takes the old `Super+Return` swap, with
+  the layout remembering the previous master per workspace
+  (`hypr/tide/layout.lua`); the tap of `Super`, `Super+A` and
+  `Super+Space` open the switcher's tabs; `Super+Tab` flips between
+  `name:in` and the last other workspace you used, from a history kept
+  in Lua; `Super+Home` goes to `name:in`; `Super+End` goes to the last
+  workspace other than "in" and the current one, from the same history,
+  skipping removed ones;
+  `Super+Left`/`Right` and `Super+PgUp`/`PgDn` follow the bar's order and
+  stop at the ends; `Super+1…9` and `Super+Shift+1…9` are unbound.
+- **Retire the attention cycle.** `tide_focus.focus_attention()`,
+  `end_cycle()`, the Super release binding and the `tide-cycle` events in
+  `hypr/tide/focus.lua` and the shell give way to the Attention tab;
+  `set_order` stays.
+- **The bar by name** (`shell/lib/workspaces.mjs`): sort by falling ID,
+  show names cut at 16 characters, drop the faint-number empty state, and
+  read `createworkspacev2`, `destroyworkspacev2` and `renameworkspace`
+  with names that hold commas. The shell undoes a rename of "in".
+- **The name prompt** (a shell surface, like the launcher): the existing
+  names filtered as you type, a new name allowed, "in" refused for another
+  app's window; the default from `namePatterns` or the cleaned title,
+  following the title until you type; Enter moves the window (or launches
+  there), Esc closes the window politely or cancels the launch. It opens
+  for a window on "in" only when the focus guard would focus it, and
+  otherwise when that window is first focused.
+- **`namePatterns`** checked at load, naming a pattern that doesn't
+  compile or has no capture group; pure functions for the short name and
+  `TIDE_WORKSPACE`'s sanitizing, with `node --test` cases.
+- **`tide launch --workspace NAME`**, replacing `--new-workspace`: sets
+  `TIDE_WORKSPACE` in the child's environment, and grants its first
+  window a move to `name:NAME`. The launcher's `Ctrl+Enter`, and `Enter`
+  from "in" for a non-"in" app, open the name prompt first. Check on a live
+  session that the variable survives `uwsm app`'s scope.
+- **`tide workspace`** prints the focused workspace's sanitized name.
+- **`conf`'s shpool and tmux startup** names its session from
+  `TIDE_WORKSPACE` when it's set and not empty, and otherwise keeps today's
+  default. That's `conf`'s session-manager code (`want_shpool`,
+  `session_backend`, `autosession`) across every shell.
+- **The switcher.** The launcher (`shell/LauncherWindow.qml`) becomes the
+  Apps tab of one overlay with Workspaces, Windows and Attention; `Tab` and
+  `Shift+Tab` move between tabs, so the launcher's section jump moves to
+  `PgDn`/`PgUp`. The tap of `Super` opens it on Workspaces.
+- **The Workspaces settings page** (SPEC.md §16): `inApps` and
+  `namePatterns`. Until then, the files are edited by hand.
+- **Redo the mocks.** `bar.png` and `desktop.png` show numbered
+  workspaces, and `launcher.png` shows no tabs. Redraw the bar's
+  workspaces by name with "in" first, and the switcher with its four tabs
+  and the name prompt, then `make mocks`.
+- **Browser tabs (M9).** A Chrome extension listing tabs with
+  `chrome.tabs` and a native-messaging host handing them to the shell
+  (SPEC.md §8.3), installed by `setup`. First check whether an open
+  native-messaging port keeps a Manifest V3 service worker running on the
+  pinned Chrome.
+
 ## Later: our own window manager on river (SPEC.md §21.2)
 
 Not started, and not to start until river exposes xdg-activation to window
