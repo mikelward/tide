@@ -123,7 +123,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Launcher**: empty query and a fuzzy query. Predates the switcher's tabs (§8) and named workspaces, and is to be redrawn (TODO.md). [`launcher.png`](docs/mocks/launcher.png) | ![launcher](docs/mocks/launcher.png) |
 | **Notifications**: popups, OSD, the notification center while sharing. [`notifications.png`](docs/mocks/notifications.png) | ![notifications](docs/mocks/notifications.png) |
 | **Clocks popover**: zones, working-hours strips, DST warning, calendar. [`clocks.png`](docs/mocks/clocks.png) | ![clocks](docs/mocks/clocks.png) |
-| **Settings**: the panel's newer pages: Start at login and Notifications. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
+| **Settings**: the panel's newer pages: Start at login, Notifications and Clipboard. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
 | **System monitor popover**: the CPU and Memory tabs, and throttling. [`sysmon.png`](docs/mocks/sysmon.png) | ![system monitor](docs/mocks/sysmon.png) |
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
 | **Screen-share picker**: screens, windows, 16:9 area. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
@@ -1554,7 +1554,16 @@ See [`picker.png`](docs/mocks/picker.png).
   so a cliphist you already ran keeps its history. It outlives a logout
   and a reboot, like the clipboard history on a phone.
 - **Size cap: the newest 200 entries** (`cliphist -max-items 200`; its
-  own default is 750).
+  own default is 750), or as many as the Settings panel's Clipboard page
+  says (§16).
+- **The Clipboard page** can also turn the history off: then `tide
+  clipboard store` keeps no new copy, and what's kept stays until it's
+  cleared. The shell writes both to `~/.config/hypr/tide-clipboard.conf`
+  (`history=on` or `off`, `max_items=N`), which `store` reads at each copy,
+  so nothing restarts. A line it can't read is said on its stderr, in the
+  unit's journal, and passed over, so a bad file never stops the history.
+  - A smaller cap trims the history at the next copy, as cliphist applies
+    `-max-items` when it stores.
   - cliphist skips a copy over 5 MB, and a copy of an entry among the
     last 100 (0.7.0; 20 in 0.4.0) moves that entry to the top rather than
     storing it twice.
@@ -2790,6 +2799,7 @@ tide's own, and links out for the rest:
 | Workspaces | the standing workspaces, home first; the apps that live on home; and the patterns that name a workspace from a window's title (§6.5) |
 | Start at login | the commands the session runs once as it starts |
 | Notifications | Do not disturb on a schedule, whether critical alerts break through, and the muted apps and sites (§9) |
+| Clipboard | the history on or off, how many copies it keeps, and Clear history (§8.4) |
 
 Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
@@ -3103,6 +3113,21 @@ stays hand-written.
     `mon,tue`), and `addMuted ENTRY` and `removeMuted ENTRY` change the
     muted list.
 
+- **Clipboard** sets §8.4's history, in `clipboard.json` and
+  `clipboard.local.json`.
+  - `history` turns keeping new copies on or off, on by default. A click
+    on its switch turns it.
+  - `maxItems` is how many it keeps, 200 by default, from 1 to 10,000. − and
+    + step through 25, 50, 100, 200, 500, 750 and 1,000; one set between
+    marks by hand goes to the nearest one that way first.
+  - A value that isn't one is refused, and the page says why. In the
+    files, it's an error at load naming the setting, and the last good
+    settings stay.
+  - **Clear history** runs `tide clipboard wipe`, as the launcher's Clear
+    clipboard history does, and the page says how it went.
+  - Over IPC, `setClipboard KEY VALUE` sets one, and `clearClipboard`
+    clears the history.
+
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or
   `qs -c tide ipc call settings toggle`. A page's own action in the
@@ -3122,7 +3147,8 @@ sway's `config.local`:
 
 - **Shared defaults.** Every tide config file
   `~/.config/tide/<name>.json` (`clocks`, `idle`, `layouts`,
-  `appearance`, `outputs`, `workspaces`, `startup`, `notifications`)
+  `appearance`, `outputs`, `workspaces`, `startup`, `notifications`,
+  `clipboard`)
   holds the shared defaults and is installed from `conf`.
 - **Per-machine overrides.** An optional **`<name>.local.json`** beside it
   is read last. It is machine-specific and never committed.

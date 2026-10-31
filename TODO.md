@@ -7,6 +7,16 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **Clipboard history off keeps what's already kept,** until Clear
+  history, and the picker still lists it. Off only stops new copies. The
+  alternative is wiping as it's turned off. Reversible: one call to
+  `tide clipboard wipe` in `ClipboardSettingsData.set`.
+- [ ] **The Clipboard page's settings reach `tide clipboard store` through
+  a generated `~/.config/hypr/tide-clipboard.conf`,** as the idle page's
+  Suspend on AC reaches `tide idle-suspend`, rather than the unit's
+  `--max-items` and a restart. The alternative is a drop-in for
+  `tide-clipboard.service`, restarted on change. Reversible.
+
 - [ ] **Start at login has a file of its own, `startup.json`
   (`commands`)**, not a `startup` key in `workspaces.json` beside `muted`.
   A bad workspaces file stops home's rules from applying, and a startup
@@ -998,6 +1008,13 @@ from the keyboard (`shell/integration_test.sh`).
   - On a live session, check a window's start and end flip the bell, that
     the bell ends one early, and that a shell restarted in a window has it
     on.
+
+- Clipboard (`shell/lib/clipboard.mjs`, `shell/ClipboardSettingsData.qml`)
+  turns the history on or off and sets its cap, writing
+  `clipboard.local.json` and `~/.config/hypr/tide-clipboard.conf`, and
+  clears it. Still to do:
+  - On a live session, check a copy with history off isn't kept, and that
+    a smaller cap trims the picker's list at the next copy.
 
 ## Notifications (M4)
 
