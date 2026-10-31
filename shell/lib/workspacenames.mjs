@@ -197,14 +197,16 @@ export function luaString(s) {
 }
 
 // ~/.config/hypr/tide-workspaces.lua, which conf's hyprland.lua reads as
-// data: the home workspace it makes at login and keeps, and the classes
-// its window rules send there.
+// data: the home workspace it makes at login and keeps, the standing
+// workspaces in order, which its workspace keys step through as the bar
+// does, and the classes its window rules send home.
 export function workspacesLua(settings) {
     const list = (items) => items.length === 0 ? "{}" : `{\n${items.map((i) => `        ${luaString(i)},\n`).join("")}    }`;
     return "-- Written by tide's shell from workspaces.json and workspaces.local.json\n"
         + "-- (tide SPEC.md §6.5, §16); edit those, not this.\n"
         + "return {\n"
         + `    home = ${luaString(homeName(settings))},\n`
+        + `    standing = ${list(settings.standing ?? DEFAULT_STANDING)},\n`
         + `    in_apps = ${list(inAppPatterns(settings.inApps ?? []))},\n`
         + "}\n";
 }

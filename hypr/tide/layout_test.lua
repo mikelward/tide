@@ -812,6 +812,66 @@ test("the layout makes Hyprland's swaps in its own order", function()
     eq(order_of(qs, 1), "0x101 0x103 0x102", "the last window is the master")
 end)
 
+test("swap_with_master on the master goes back to the master before it", function()
+    local qs, layout = fresh()
+    lay(layout, HD, 1, { 1, 2, 3 })
+    hl.active_window = "0x103"
+    qs.swap_with_master()
+    eq(hl.dispatched[1].arg, "address:0x101", "the stack's last window swaps with the master")
+    -- Hyprland swaps them, and lays the workspace out again.
+    lay(layout, HD, 1, { 3, 2, 1 })
+    eq(order_of(qs, 1), "0x103 0x102 0x101", "it's the master")
+    qs.swap_with_master()
+    eq(hl.dispatched[#hl.dispatched].arg, "address:0x101", "back with the master before it, not the top of the stack")
+    lay(layout, HD, 1, { 1, 2, 3 })
+    hl.active_window = "0x101"
+    qs.swap_with_master()
+    eq(hl.dispatched[#hl.dispatched].arg, "address:0x103", "and again: presses go back and forth")
+end)
+
+test("a master that changed another way is the one Alt+Tab goes back to", function()
+    local qs, layout = fresh({ new_window = "master" })
+    lay(layout, HD, 1, { 1 })
+    lay(layout, HD, 1, { 1, 2 })
+    lay(layout, HD, 1, { 1, 2, 3 })
+    eq(order_of(qs, 1), "0x103 0x102 0x101", "each new window came in as the master")
+    hl.active_window = "0x101"
+    qs.swap_with_master()
+    eq(hl.dispatched[#hl.dispatched].arg, "address:0x103", "the stack's last window takes the master")
+    -- Hyprland swaps the two in its own list.
+    lay(layout, HD, 1, { 3, 2, 1 })
+    eq(order_of(qs, 1), "0x101 0x102 0x103")
+    -- A new window comes in as the master: the one it displaced is the
+    -- master before it, not the one Alt+Tab last swapped.
+    lay(layout, HD, 1, { 3, 2, 1, 4 })
+    eq(order_of(qs, 1), "0x104 0x101 0x102 0x103")
+    hl.active_window = "0x104"
+    qs.swap_with_master()
+    eq(hl.dispatched[#hl.dispatched].arg, "address:0x101", "back with the master it displaced")
+end)
+
+test("a master moved up by Super+Shift+K is the new one to come back from", function()
+    local qs, layout = fresh()
+    lay(layout, HD, 1, { 1, 2, 3 })
+    -- Super+Shift+K on the second window: Hyprland swaps it with the master.
+    lay(layout, HD, 1, { 2, 1, 3 })
+    eq(order_of(qs, 1), "0x102 0x101 0x103")
+    hl.active_window = "0x102"
+    qs.swap_with_master()
+    eq(hl.dispatched[#hl.dispatched].arg, "address:0x101", "back with the master before it")
+end)
+
+test("swap_with_master takes the top of the stack once the master before is gone", function()
+    local qs, layout = fresh()
+    lay(layout, HD, 1, { 1, 2, 3 })
+    hl.active_window = "0x103"
+    qs.swap_with_master()
+    lay(layout, HD, 1, { 3, 2, 1 })
+    lay(layout, HD, 1, { 3, 2 })
+    qs.swap_with_master()
+    eq(hl.dispatched[#hl.dispatched].arg, "address:0x102", "the top of the stack")
+end)
+
 test("a window that leaves takes nothing else with it", function()
     local qs, layout = fresh({ new_window = "master" })
     lay(layout, HD, 1, { 1 })

@@ -1217,9 +1217,9 @@ says; a launch from home asks first, and Esc launches nothing.
   named from `TIDE_WORKSPACE` (conf#435): a terminal launched on a named
   workspace attaches to `NAME:1`.
 - **Workspace keys in `conf`.** `Super+Return` opens the name prompt for
-  the focused window; `Alt+Tab` takes the old `Super+Return` swap, with
-  the layout remembering the previous master per workspace
-  (`hypr/tide/layout.lua`); the tap of `Super`, `Super+A` and
+  the focused window; `Alt+Tab` takes the old `Super+Return` swap (the
+  layout remembers the previous master per workspace, built in
+  `hypr/tide/layout.lua`); the tap of `Super`, `Super+A` and
   `Super+Space` open the switcher's tabs; `Super+Tab` flips between
   home and the last other workspace you used, from a history kept
   in Lua; `Super+Home` goes to home; `Super+End` goes to the last

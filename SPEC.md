@@ -758,7 +758,9 @@ in how long they last and what stays visible:
   - `conf` takes its name from `~/.config/hypr/tide-workspaces.lua`,
     which the shell writes from `workspaces.json` and has Hyprland read
     again (`hyprctl eval 'conf_workspaces.reload()'`). Until the shell
-    has written one, at a first login, it's `in`.
+    has written one, at a first login, it's `in`. The file lists the
+    standing workspaces too, so `conf`'s workspace keys step through the
+    bar's order (§6.6).
   - `tide doctor` names what's wrong when home doesn't exist or isn't
     persistent (`conf`'s rule is missing), or the shell hasn't written the
     file. A `conf_workspaces.reload()` that fails is a notification.

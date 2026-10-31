@@ -282,7 +282,7 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
             *" workspaces "*)
                 {
                     mkdir -p "\$HOME/.config/hypr" &&
-                        printf '%s\n' '-- Written by tide' 'return {' '    home = "in",' '    in_apps = {},' '}' >"\$HOME/.config/hypr/tide-workspaces.lua" &&
+                        printf '%s\n' '-- Written by tide' 'return {' '    home = "in",' '    standing = {' '        "in",' '        "re",' '        "oc",' '        "me",' '    },' '    in_apps = {},' '}' >"\$HOME/.config/hypr/tide-workspaces.lua" &&
                         hyprctl eval 'conf_workspaces.reload()' >/dev/null 2>&1
                 } &
                 ;;
