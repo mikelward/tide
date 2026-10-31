@@ -63,14 +63,14 @@ Singleton {
             console.log("tide: Super+Shift+Return with no window focused; nothing to move");
             return;
         }
-        root.ask({ kind: "move", address: address, allowHome: Names.isHomeApp(root.classOf(address), root.inApps) });
+        root.ask({ kind: "move", address: address, allowHome: Names.isHomeApp(root.classOf(address), root.inApps, WorkspacesData.resolved) });
     }
 
     // The launcher's Ctrl+Enter: `argv` is what follows `tide launch`, run
     // in `cwd`, and `apps` the IDs it grants. It always asks, and home is
     // offered to one of home's apps.
     function askLaunch(argv, cwd, apps) {
-        const homeApp = apps.some(id => Names.isHomeApp(id, root.inApps));
+        const homeApp = apps.some(id => Names.isHomeApp(id, root.inApps, WorkspacesData.resolved));
         root.ask({ kind: "launch", argv: argv, cwd: cwd, allowHome: homeApp });
     }
 
@@ -79,7 +79,7 @@ Singleton {
     // wrappers and desktop entries). One of home's apps is answered home at
     // once, as SPEC.md §6.5 says.
     function askAnswer(answer, apps) {
-        if (apps.some(id => Names.isHomeApp(id, root.inApps))) {
+        if (apps.some(id => Names.isHomeApp(id, root.inApps, WorkspacesData.resolved))) {
             root.reply(answer, `workspace ${root.home}`);
             return;
         }
@@ -206,7 +206,7 @@ Singleton {
                     root.windows = answered.state;
                     // Closed while Hyprland answered: nothing to ask about.
                     const client = answered.live ? Names.clientAt(clients, run.address) : null;
-                    if (Names.promptWanted(client, root.home, root.inApps)) {
+                    if (Names.promptWanted(client, root.home, root.inApps, WorkspacesData.resolved)) {
                         root.ask({ kind: "window", address: run.address, allowHome: false });
                     }
                 }

@@ -90,6 +90,17 @@ export function moveWindowToWorkspace(address, name, lua) {
         : `movetoworkspace name:${n},${w}`;
 }
 
+// Move the window at `address` to the workspace named `name` without
+// following it or focusing it: a home app's window that opened before the
+// rule sending it home was in (SPEC.md §6.5).
+export function sendWindowTo(address, name, lua) {
+    const w = windowAddress(address);
+    const n = workspaceName(name);
+    return lua
+        ? `hl.dsp.window.move({ workspace = ${luaString("name:" + n)}, follow = false, window = ${luaString(w)} })`
+        : `movetoworkspacesilent name:${n},${w}`;
+}
+
 // Ask the window at `address` to close, as Super+Backspace does: the name
 // prompt's Esc for a new window on home.
 export function closeWindow(address, lua) {

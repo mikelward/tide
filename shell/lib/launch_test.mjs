@@ -170,3 +170,26 @@ test("a tracked run logs its report at its level", () => {
     [STARTED, exited(0), stderr("")].forEach(e => q.on(e));
     assert.deepEqual(quiet.lines, []);
 });
+
+// Regression: the shell's lookup of a home app's classes (WorkspacesData)
+// took both streams' end for the run's, before the exit code, and threw
+// the classes away. A run that waits for stdout finishes on the last of
+// exit code, stderr and stdout, in any order.
+test("a tracked run with output passes it once exit, stderr and stdout are all in", () => {
+    const stdout = text => ({ type: "stdout", text });
+    for (const events of [
+        [STARTED, stdout("a\nb\n"), stderr(""), exited(0)],
+        [stderr(""), stdout("a\nb\n"), exited(0), STOPPED, STARTED],
+        [exited(0), STARTED, stderr(""), stdout("a\nb\n")],
+    ]) {
+        const got = [];
+        const t = track(COMMAND, (ok, errors, output) => got.push([ok, output]), recorder(), true);
+        const done = events.map(e => t.on(e));
+        assert.deepEqual(got, [[true, "a\nb\n"]], JSON.stringify(events));
+        const lastOfThree = Math.max(...["exited", "stderr", "stdout"].map(type => events.findIndex(e => e.type === type)));
+        assert.equal(done.indexOf(true), lastOfThree, "done on the last of the three");
+    }
+    const failed = [];
+    track(COMMAND, (ok, errors, output) => failed.push([ok, output]), recorder(), true).on(STOPPED);
+    assert.deepEqual(failed, [[false, ""]], "one that never started has none");
+});

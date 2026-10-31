@@ -263,6 +263,15 @@ check "and launches nothing" not_contains "$(cat "$log")" "uwsm app"
 run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_PROGRAM=thunderbird FAKE_CLASSES="org.mozilla.Thunderbird" "$qs" launch env thunderbird
 check "without --app, it names the program past wrappers and its desktop entries' classes" \
     python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); assert r["apps"] == ["thunderbird", "org.mozilla.Thunderbird"], r' "$log.request"
+# A key bound to a launcher script grants '*', which names no app, so the
+# prompt is told the script's own classes: Super+Shift+C's `--app '*' --
+# runenv google-chat` is google-chat's, one of home's apps, not a window
+# to ask a workspace for (SPEC.md §6.5).
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_PROGRAM=google-chat FAKE_CLASSES="chrome-chat.google.com__-Default" \
+    "$qs" launch --app '*' -- runenv google-chat
+check "with --app '*', it names the program past wrappers and its classes" \
+    python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); assert r["apps"] == ["google-chat", "chrome-chat.google.com__-Default"], r' "$log.request"
+check "and still grants any app's window" contains "$(cat "$log")" 'tide_focus.grant("*", nil, nil, { workspace = "docs" })'
 run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_ANSWER=gibberish "$qs" launch app
 check "an answer it can't read launches nothing" not_contains "$(cat "$log")" "uwsm app"
 check "and says so" contains "$(cat "$tmp/err")" "no answer from the name prompt (gibberish)"
@@ -366,6 +375,16 @@ check "gio trash opens no app, so it grants no wildcard" \
 run "$qs" launch --app 'a"b\c' app
 check "the grant escapes the ID for Lua" \
     contains "$(cat "$log")" 'tide_focus.grant("a\"b\\c")'
+
+# tide app-classes prints what a launch's grant finds, for the shell's
+# home apps (SPEC.md §6.5).
+run FAKE_PROGRAM=google-calendar FAKE_CLASSES="chrome-calendar.google.com__-Default" "$qs" app-classes -- google-calendar
+check "app-classes exits 0" test $? -eq 0
+check "app-classes prints the program and its classes" \
+    test "$(cat "$tmp/out")" = "google-calendar
+chrome-calendar.google.com__-Default"
+run "$qs" app-classes
+check "app-classes needs a command" test $? -eq 2
 
 # A program's desktop entries name the classes its window may have; tide-grant
 # reads them (its own tests cover how).
@@ -897,6 +916,40 @@ check "without udev's data, keyboards exits 1" test $? -eq 1
 check "and says where it looked" contains "$(cat "$tmp/err")" "can't read udev's data in $tmp/no-udev"
 keyboards extra
 check "keyboards takes no arguments" test $? -eq 2
+
+# tide web-app opens a URL as scripts' launchers do: `chrome --app=URL`,
+# preferring scripts' chrome, then google-chrome, then the beta.
+webbin=$tmp/webbin
+mkdir "$webbin"
+for f in /usr/bin/* /bin/*; do
+    case "${f##*/}" in
+        chrome | google-chrome | google-chrome-beta) ;;
+        *) test -e "$webbin/${f##*/}" || ln -s "$f" "$webbin/${f##*/}" ;;
+    esac
+done
+for c in google-chrome-beta google-chrome chrome; do
+    # shellcheck disable=SC2016 # the fake expands them, not this
+    printf '#!/bin/sh\nprintf "%s %%s\\n" "$*" >> "$FAKE_LOG"\n' "$c" > "$webbin/$c.off"
+done
+web() {
+    : > "$log"
+    env PATH="$webbin" FAKE_LOG="$log" "$qs" web-app "$@" > "$tmp/out" 2> "$tmp/err"
+}
+web https://mail.google.com
+check "web-app with no Chrome exits 127" test $? -eq 127
+check "and says why" contains "$(cat "$tmp/err")" "no Chrome to open https://mail.google.com"
+mv "$webbin/google-chrome-beta.off" "$webbin/google-chrome-beta" && chmod +x "$webbin/google-chrome-beta"
+web https://mail.google.com
+check "web-app falls back to the beta" test "$(cat "$log")" = "google-chrome-beta --app=https://mail.google.com"
+mv "$webbin/google-chrome.off" "$webbin/google-chrome" && chmod +x "$webbin/google-chrome"
+web https://mail.google.com
+check "web-app prefers stable to the beta" test "$(cat "$log")" = "google-chrome --app=https://mail.google.com"
+mv "$webbin/chrome.off" "$webbin/chrome" && chmod +x "$webbin/chrome"
+web https://chat.google.com/
+check "web-app prefers scripts' chrome" test "$(cat "$log")" = "chrome --app=https://chat.google.com/"
+web mail.google.com
+check "web-app refuses what isn't a web address" test "$?:$(cat "$log")" = "2:"
+check "and says why" contains "$(cat "$tmp/err")" "mail.google.com isn't a web address"
 
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh "$qs" bin/tide_test.sh

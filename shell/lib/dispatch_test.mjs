@@ -1,7 +1,7 @@
 // Tests for dispatch.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, closeWindow, minimizeWindow } from "./dispatch.mjs";
+import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, closeWindow, minimizeWindow, sendWindowTo } from "./dispatch.mjs";
 
 test("a Lua config gets hl.dsp calls", () => {
     assert.equal(focusWorkspace(3, true), "hl.dsp.focus({ workspace = 3 })");
@@ -64,4 +64,11 @@ test("minimizing moves a window silently to its workspace's minimize workspace",
     assert.throws(() => minimizeWindow("x) os.exit(", "re", true), /not a window address/);
     assert.throws(() => minimizeWindow("55aa01", "a\nb", true), /not a workspace name/);
     assert.throws(() => minimizeWindow("55aa01", "", true), /not a workspace name/);
+});
+
+test("a home app's stray window goes home without following it", () => {
+    assert.equal(sendWindowTo("55AA01", "in", true),
+        'hl.dsp.window.move({ workspace = "name:in", follow = false, window = "address:0x55aa01" })');
+    assert.equal(sendWindowTo("0x55aa01", "in", false), "movetoworkspacesilent name:in,address:0x55aa01");
+    assert.throws(() => sendWindowTo("x) os.exit(", "in", true), /not a window address/);
 });

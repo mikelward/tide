@@ -57,6 +57,23 @@
 #     its first 15 characters (a process's name is no longer). Without
 #     pgrep, or if it fails, it starts it anyway, and says why.
 #
+#   tide app-classes [--] COMMAND [ARG...]
+#
+#     Prints the window classes COMMAND's app may have, one per line, as
+#     tide launch's grant finds them (SPEC.md §14.3): its program, past
+#     wrappers, and the desktop ID and StartupWMClass of each desktop entry
+#     that runs it, and, for a launcher script that runs
+#     `chrome --app=URL`, that window's class. The shell reads it to send
+#     home's apps' windows home (§6.5).
+#
+#   tide web-app URL
+#
+#     Opens URL as a Chrome `--app` window, as scripts' launchers do:
+#     with scripts' chrome if it's on PATH, else google-chrome, else
+#     google-chrome-beta, and no profile flags. Home's apps named by URL
+#     start this way at login (SPEC.md §6.5). Exits 2 for a URL that isn't
+#     http or https, and 127 with no Chrome.
+#
 #   tide workspace
 #
 #     Prints the focused workspace's name as TIDE_WORKSPACE holds it, for
@@ -163,12 +180,16 @@
 #     its fix (SPEC.md §5.4); see tide-doctor.
 
 prog=${0##*/}
+# The subcommand, for the lookups' messages.
+sub=launch
 nl='
 '
 
 usage() {
     echo "usage: $prog launch [--workspace NAME] [--app ID]... [--] COMMAND [ARG...]" >&2
     echo "       $prog launch --background [--unless-running] [--] COMMAND [ARG...]" >&2
+    echo "       $prog app-classes [--] COMMAND [ARG...]" >&2
+    echo "       $prog web-app URL" >&2
     echo "       $prog workspace" >&2
     echo "       $prog grant ID..." >&2
     echo "       $prog focus ID..." >&2
@@ -283,7 +304,7 @@ command_program() {
         return 0
     fi
     if ! runs=$(tide-grant --program -- "$@"); then
-        echo "$prog launch: tide-grant couldn't read the program $1 runs; granting $1" >&2
+        echo "$prog $sub: tide-grant couldn't read the program $1 runs; granting $1" >&2
         runs=$1
     fi
     # A command that runs no program (`env --help`) is granted its first word.
@@ -301,11 +322,11 @@ desktop_classes() {
     name=$1
     shift
     if ! command -v tide-grant >/dev/null 2>&1; then
-        echo "$prog launch: no tide-grant, so $name's desktop entries weren't read; granting $name alone (make install builds it)" >&2
+        echo "$prog $sub: no tide-grant, so $name's desktop entries weren't read; granting $name alone (make install builds it)" >&2
         return 0
     fi
     if ! tide-grant --classes -- "$@"; then
-        echo "$prog launch: tide-grant couldn't read $name's desktop entries; granting $name alone" >&2
+        echo "$prog $sub: tide-grant couldn't read $name's desktop entries; granting $name alone" >&2
     fi
 }
 
@@ -325,7 +346,7 @@ opener_classes() {
         case "${1##*/}" in
             gio) test "${2:-}" = open || return 3 ;;
         esac
-        echo "$prog launch: no tide-grant, so the app $1 opens with wasn't found; granting any app's window (make install builds it)" >&2
+        echo "$prog $sub: no tide-grant, so the app $1 opens with wasn't found; granting any app's window (make install builds it)" >&2
         return 0
     fi
     status=0
@@ -333,7 +354,7 @@ opener_classes() {
     case $status in
         0) ;;
         3) return 3 ;;
-        *) echo "$prog launch: tide-grant couldn't find the app $1 opens with; granting any app's window" >&2 ;;
+        *) echo "$prog $sub: tide-grant couldn't find the app $1 opens with; granting any app's window" >&2 ;;
     esac
 }
 
@@ -376,24 +397,33 @@ focused_workspace() {
     printf '%s\n' "$name"
 }
 
-# The window classes the command's app may have, as JSON strings, for the
-# name prompt to tell whether it's one of home's apps (SPEC.md §6.5): its
-# --app IDs, or else what the grant below would find, the program past
-# wrappers and its desktop entries' classes, or the opener's app's.
-launch_apps_json() {
-    test "$count" -eq 0 || {
-        printf '%s' "$app_json"
-        return 0
-    }
+# The window classes the command's app may have, one per line, as its
+# grant finds them (SPEC.md §14.3): the program past wrappers and its
+# desktop entries' classes, which include a launcher script's `--app`
+# window (google-calendar's chrome-calendar.google.com__-Default), or the
+# opener's app's.
+command_classes() {
     runs=$(command_program "$@")
     case "${runs##*/}" in
-        xdg-open | gio) classes=$(opener_classes "$@") ;;
+        xdg-open | gio) opener_classes "$@" ;;
         *)
-            classes=${runs##*/}
-            classes="$classes
-$(desktop_classes "${runs##*/}" "$@")"
+            printf '%s\n' "${runs##*/}"
+            desktop_classes "${runs##*/}" "$@"
             ;;
     esac
+}
+
+# The window classes the command's app may have, as JSON strings, for the
+# name prompt to tell whether it's one of home's apps (SPEC.md §6.5): its
+# --app IDs, or else what the grant below would find (command_classes).
+# A key bound to a wrapper script grants '*', which names no app, so that
+# one is looked up too: `--app '*' -- runenv google-chat` is google-chat's.
+launch_apps_json() {
+    if test "$count" -gt 0 && test "$wildcard" != yes; then
+        printf '%s' "$app_json"
+        return 0
+    fi
+    classes=$(command_classes "$@")
     out=
     while IFS= read -r class; do
         test -n "$class" && out="${out:+$out, }$(json_string "$class")"
@@ -401,6 +431,38 @@ $(desktop_classes "${runs##*/}" "$@")"
 $classes
 EOF2
     printf '%s' "$out"
+}
+
+# `tide app-classes`: command_classes, for the shell, which matches home's
+# apps' windows by them (SPEC.md §6.5).
+app_classes() {
+    sub='app-classes'
+    test "${1:-}" != -- || shift
+    test $# -gt 0 || usage
+    command_classes "$@"
+}
+
+# `tide web-app URL`: opens URL as a Chrome `--app` window, as scripts'
+# google-calendar does: through scripts' chrome, which picks the Linux
+# Chrome (and hands a plain URL to ChromeOS's browser), else Chrome
+# itself, stable before beta. No profile flags, so the window is the
+# default profile's (SPEC.md §6.5).
+web_app() {
+    test $# -eq 1 || usage
+    case "$1" in
+        http://?* | https://?*) ;;
+        *)
+            echo "$prog web-app: $1 isn't a web address (https://…)" >&2
+            exit 2
+            ;;
+    esac
+    for chrome in chrome google-chrome google-chrome-beta; do
+        if command -v "$chrome" >/dev/null 2>&1; then
+            exec "$chrome" --app="$1"
+        fi
+    done
+    echo "$prog web-app: no Chrome to open $1 in (chrome, google-chrome or google-chrome-beta)" >&2
+    exit 127
 }
 
 # A launch from home (SPEC.md §6.5): asks the shell's name prompt for a
@@ -1032,6 +1094,8 @@ keyboards() {
 
 case "${1:-}" in
     launch) shift; launch "$@" ;;
+    app-classes) shift; app_classes "$@" ;;
+    web-app) shift; web_app "$@" ;;
     workspace) shift; workspace "$@" ;;
     grant) shift; grant_only "$@" ;;
     focus) shift; focus_app "$@" ;;

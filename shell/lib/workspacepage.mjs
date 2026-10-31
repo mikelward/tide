@@ -11,7 +11,7 @@ import { loadWorkspaceSettings, parseWorkspaceSettings, sameName } from "./works
 // the field at the foot asks for.
 export const LISTS = Object.freeze([
     { key: "standing", heading: "STANDING WORKSPACES", ordered: true, hint: "Add a workspace, such as docs" },
-    { key: "inApps", heading: "HOME'S APPS", ordered: false, hint: "Add an app, such as org.gnome.Calendar or mail.google.com" },
+    { key: "inApps", heading: "HOME'S APPS", ordered: false, hint: "Add a program or web address, such as gmail" },
     { key: "namePatterns", heading: "NAME PATTERNS", ordered: true, hint: "Add a pattern, such as \\b([A-Z]+-[0-9]+)\\b" },
 ]);
 

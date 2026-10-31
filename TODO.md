@@ -175,13 +175,46 @@ once you have agreed with it or reversed it.
   can cancel the grant. Reading it after the grant would leave a grant
   behind for every launch from home.
 
-- [ ] **An `inApps` entry shaped like a host is a class and a site both.**
-  SPEC.md §6.5 says an entry is a window class or a site, but
-  `calendar.google.com` and `org.gnome.Calendar` look alike, so every
-  host-shaped entry matches both ways (`workspacenames.mjs`'s
-  `inAppPatterns`): a class pattern no window has costs nothing. The
-  alternative is a way to mark sites (`site:calendar.google.com`, or a URL).
-  Undoing it is that one function and its tests.
+- [ ] **An `inApps` entry shaped like a host is a class and a site both,
+  and starts nothing.** SPEC.md §6.5 kept `calendar.google.com` working
+  as it did: `calendar.google.com` and `org.gnome.Calendar` look alike, so
+  every host-shaped entry matches both ways (`workspacenames.mjs`'s
+  `homeAppEntry` and `inAppPatterns`), and since which it is can't be
+  told, it starts nothing at login. A web address (`https://…`) is the way
+  to name a site that starts. The alternative is dropping host entries
+  for web addresses only. Undoing it is those two functions and their
+  tests.
+- [ ] **Every bare-word `inApps` entry starts at login.** A word such as
+  `thunderbird` or `google-calendar` is a program and a class both, so
+  home starts it, unless it's running. A word that's only a class, with no
+  program of that name, fails to start, and Start at login's notification
+  names it; the fix is to write the class qualified, or drop it. The
+  alternative is a separate key for what starts (`inApps` matching only,
+  `startup` starting). Undoing it is `homeAppLaunches` in
+  `workspacenames.mjs` and its call in `StartupData.qml`.
+- [ ] **A launcher script's window class is read from its text.**
+  `tide-grant --classes` finds `--app=URL` in a `#!` script on PATH and
+  names Chrome's default-profile class for it, so `google-calendar`
+  resolves to `chrome-calendar.google.com__-Default`; the shell widens
+  that to the site, any profile. The alternative is a desktop entry per
+  script with `StartupWMClass`, which `scripts` doesn't ship. Undoing it
+  is `cmd/tide-grant/webapp.go`.
+- [ ] **`runenv` is a wrapper wherever it lives**, by its name alone, and
+  doesn't count as changing `PATH`, so `runenv google-chat` is looked up
+  as `google-chat`. The alternative is matching only `~/scripts/runenv`,
+  or treating it like `env PATH=…`, which would find no `--app` class.
+  It's `wrapperName` in `cmd/tide-grant/main.go`.
+- [ ] **Home's apps' windows that beat their rule are sent home after the
+  apply that covers them**, each once, rather than placed by a grant as
+  they open. A grant would give each focus at login, and a launcher
+  script's window has no class to grant before its lookup. The
+  alternative is a grant option that places a window without focusing
+  it, in `focus.lua`. Undoing it is `WorkspacesData.qml`'s
+  `rulesApplied` and `homeSweep` in `workspacenames.mjs`.
+- [ ] **`tide web-app` uses `scripts`' `chrome` first**, then
+  `google-chrome`, then `google-chrome-beta`, with no profile flags, as
+  `google-calendar` does; no Chromium fallback. Adding one is a word in
+  `bin/tide`'s `web_app`.
 - [ ] **A standing name matches a workspace's ignoring case, preferring an
   exact match.** The bar puts the standing `re`'s place to a workspace made
   as `RE`. When both `re` and `Re` exist, `re` takes the place and `Re` is
