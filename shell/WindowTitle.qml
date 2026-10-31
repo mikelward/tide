@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import "lib/dispatch.mjs" as Dispatch
@@ -107,6 +108,56 @@ Text {
             }
         }
     }
+    // Hovering it shows the title in full below it (SPEC.md §7.1), as the
+    // minimized tray shows an icon's title (MinimizedTray.qml). A
+    // HoverHandler takes no clicks, so the double-click still reaches the
+    // TapHandler.
+    HoverHandler {
+        id: hover
+    }
+
+    readonly property string hoverText: Title.hoverTitle(root.window, hover.hovered)
+
+    TextMetrics {
+        id: fullWidth
+
+        font: full.font
+        text: root.hoverText
+    }
+
+    PopupWindow {
+        visible: root.hoverText !== ""
+        anchor.item: root
+        anchor.edges: Edges.Bottom
+        anchor.gravity: Edges.Bottom
+        anchor.margins.bottom: -8
+        color: "transparent"
+        implicitWidth: full.width + 18
+        implicitHeight: full.implicitHeight + 10
+
+        Rectangle {
+            anchors.fill: parent
+            radius: 7
+            color: Theme.surface2
+            border.color: Theme.edge
+
+            Text {
+                id: full
+
+                anchors.centerIn: parent
+                // Its natural width, up to Title.HOVER_LINE average
+                // characters, past which it wraps.
+                width: Math.min(Math.ceil(fullWidth.advanceWidth) + 1, metrics.averageCharacterWidth * Title.HOVER_LINE)
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+                text: root.hoverText
+                color: Theme.fg
+                font.family: Theme.font
+                font.pixelSize: 12
+            }
+        }
+    }
+
     // Titles come from apps: never markup.
     textFormat: Text.PlainText
     elide: Text.ElideRight

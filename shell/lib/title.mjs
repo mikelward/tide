@@ -45,6 +45,17 @@ export function barTitle(data) {
     return barWindow(data)?.title ?? "";
 }
 
+// The full title hovering the bar's title shows (SPEC.md §7.1), uncut:
+// `window`'s (from barWindow) while `hovered`, else "", which shows
+// nothing. A blank title has nothing to show.
+export function hoverTitle(window, hovered) {
+    return hovered ? (window?.title ?? "") : "";
+}
+
+// The hover's lines are at most about this many characters wide, and
+// wrap past that, so a long title stays on the screen.
+export const HOVER_LINE = 100;
+
 // Whether an activewindowv2 event's data names a window. Hyprland sends an
 // empty address when focus moves to an empty workspace, and Quickshell
 // 0.3 ignores that event, leaving its active toplevel on the last window.
