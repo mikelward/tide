@@ -116,6 +116,7 @@ if test "\$1" = ipc; then
     case "\$*" in
         *"call launcher open"*) : >"\$XDG_RUNTIME_DIR/launcher-open" ;;
         *"call settings open"*) : >"\$XDG_RUNTIME_DIR/settings-open" ;;
+        *"call picker open characters"*) : >"\$XDG_RUNTIME_DIR/picker-open" ;;
         *"call sharepicker pick \$XDG_RUNTIME_DIR/"*) printf '%s' "\$7" >"\$XDG_RUNTIME_DIR/sharepicker-open" && echo shown ;;
         *"call sharepicker pick "*) echo "refused: \$7 isn't a tide-share-picker pipe" ;;
         *"call settings setSuspendOnAC true"*) : >"\$XDG_RUNTIME_DIR/idle-set" ;;
@@ -504,13 +505,19 @@ run() {
 # What a launcher says and does once the launch step opens it: it takes the
 # keyboard, then, once the query is typed, runs the app. Then the settings
 # panel does the same once it's opened and its keys are typed, running the
-# Network page's app.
+# Network page's app, and the picker, copying the character named.
 opened='until test -e "$XDG_RUNTIME_DIR/launcher-open"; do sleep 0.1; done'
 focused="echo '[1.0] {Default Queue} wl_keyboard#3.enter(1, wl_surface#2, array[0])'"
 typed='until test -s "$XDG_RUNTIME_DIR/typed"; do sleep 0.1; done; rm "$XDG_RUNTIME_DIR/typed"'
 ran="$opened; $focused; $typed; tide launch --app tide-test-probe -- tide-test-probe --flag"
 settings_opened='until test -e "$XDG_RUNTIME_DIR/settings-open"; do sleep 0.1; done'
-settings_ran="$ran; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor"
+picker_opened='until test -e "$XDG_RUNTIME_DIR/picker-open"; do sleep 0.1; done'
+# picked CHAR: the picker opens, takes the keyboard, and copies CHAR once
+# its query is typed.
+picked() {
+    printf '%s; %s; %s; wl-copy -- %s' "$picker_opened" "$focused" "$typed" "$1"
+}
+settings_ran="$ran; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor; $(picked é)"
 # Then the share picker opens on tide-share-picker's pipe, takes the
 # keyboard, and once its keys are typed, writes ANSWER there.
 share_opened='until test -s "$XDG_RUNTIME_DIR/sharepicker-open"; do sleep 0.1; done'
@@ -572,8 +579,15 @@ check "a launcher that runs the app typed passes" contains "$out" "ok: the launc
 check "having typed the query and Enter" test "$(head -n 1 "$tmp/clean/typed")" = cafepro
 check "and a settings panel that opens the Network page's app passes" contains "$out" "ok: the settings panel changes page with the arrows and opens the page's app"
 check "having pressed Down twice and Enter" test "$(sed -n 2p "$tmp/clean/typed")" = "-k Down -k Down -k Return"
+check "and a picker that copies the character named passes" contains "$out" "ok: the picker finds a character by name and copies it"
+check "having typed its name and Enter" test "$(sed -n 3p "$tmp/clean/typed")" = "e acute"
 check "and a share picker that answers the window chosen passes" contains "$out" "ok: the share picker answers tide-share-picker's pipe with the window chosen"
-check "having pressed Right and Enter" test "$(sed -n 3p "$tmp/clean/typed")" = "-k Right -k Return"
+check "having pressed Right and Enter" test "$(sed -n 4p "$tmp/clean/typed")" = "-k Right -k Return"
+
+stubs "$tmp/picker-wrong" "exit 0" "  INFO: Configuration Loaded" ":" "$ran; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor; $(picked á); $(shared '[SELECTION]r/window:7')"
+run "$tmp/picker-wrong"
+check "a picker that copies the wrong character fails" test "$code" -ne 0
+check "and says what it copied" contains "$out" "the picker should copy é with \`wl-copy -- é\`; it ran \`wl-copy -- á\`"
 
 stubs "$tmp/runs-nothing" "exit 0" "$loaded" ":" "$opened; $focused; $typed"
 run "$tmp/runs-nothing"
@@ -930,7 +944,7 @@ echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
 check "a lock that unlocks on the right password passes" test "$code" -eq 0
 check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
-check "having typed a wrong password, then the right one" test "$(sed -n 4,5p "$tmp/unlocks/typed")" = "not-pw
+check "having typed a wrong password, then the right one" test "$(sed -n 5,6p "$tmp/unlocks/typed")" = "not-pw
 pw"
 check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
 
@@ -987,7 +1001,7 @@ run "$tmp/clean"
 check "a greeter that logs in to tide on the right password passes" \
     contains "$out" "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
 check "having typed a wrong password, then the right one, then the code" \
-    test "$(sed -n 4,6p "$tmp/clean/typed")" = "not-tide-greeter-test
+    test "$(sed -n 5,7p "$tmp/clean/typed")" = "not-tide-greeter-test
 tide-greeter-test
 246810"
 

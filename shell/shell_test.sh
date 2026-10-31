@@ -977,7 +977,8 @@ focused() {
 # query leaves out its accent ("Café"), so the match also checks the
 # accent folding runs in Qt's engine. Then it opens the settings panel and
 # expects Down twice, past Idle and Sound, and Enter to open the Network
-# page's app, and checks the share picker (share). A stand-in tide on
+# page's app, then the picker's Characters tab to copy é, and checks the
+# share picker (share). A stand-in tide on
 # the shell's PATH keeps each command rather than running it. Its log is
 # $tmp/launch.qs.log.
 launch() {
@@ -1055,13 +1056,41 @@ launch() {
         echo "FAIL: the settings panel's Network page should run \`tide launch -- nm-connection-editor\`; it ran \`tide $_launched\`" >&2
         exit 1
     fi
+    # The picker (SPEC.md §8.4): its Characters tab reads the installed
+    # character list, and "e acute" and Enter copy é, through a stand-in
+    # wl-copy that keeps its arguments.
+    _what="the picker"
+    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s/copied"\n' "$tmp" >"$tmp/bin/wl-copy" || exit 1
+    chmod +x "$tmp/bin/wl-copy" || exit 1
+    _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
+    ipc call picker open characters >/dev/null || exit 1
+    focused "$_focus"
+    timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 "$wtype_path" "e acute
+" >"$tmp/wtype.log" 2>&1
+    typed $? "the picker"
+    i=0
+    until test -s "$tmp/copied"; do
+        if waited "the picker didn't copy é" "$i"; then
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    _copied=$(cat "$tmp/copied")
+    if test "$_copied" != "-- é"; then
+        echo "FAIL: the picker should copy é with \`wl-copy -- é\`; it ran \`wl-copy $_copied\`" >&2
+        exit 1
+    fi
     share
     kill "$qs_pid"
     wait "$qs_pid"
     qs_pid=
-    reports "the launcher ran an app, the settings panel opened one and the share picker answered"
+    reports "the launcher ran an app, the settings panel opened one, the picker copied é and the share picker answered"
     echo "ok: the launcher finds an app by a query without its accent, and runs it"
     echo "ok: the settings panel changes page with the arrows and opens the page's app"
+    echo "ok: the picker finds a character by name and copies it"
 }
 
 # share: on the shell launch() started, asks the share picker for a share

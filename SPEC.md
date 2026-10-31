@@ -1438,8 +1438,15 @@ See [`picker.png`](docs/mocks/picker.png).
   - `conf`'s key runs `qs -c tide ipc call picker toggle clipboard`.
     `toggle characters` opens the other tab.
 - **Search.**
-  - Clipboard: the launcher's fuzzy scorer over each entry's one-line
-    preview. With no query, newest first.
+  - Clipboard: each entry's one-line preview, whitespace folded: its
+    first 1,000 characters where cliphist takes `-preview-width` (0.6.0
+    and later), and its first 100 before.
+    - The launcher's fuzzy scorer reads the first 100 characters, since
+      its work grows with the square of the text's length and the rows
+      are built as you type. Entries that hold the query as plain text
+      further on come after those, so a search past character 100 still
+      finds them.
+    - With no query, newest first.
   - Characters: each word you type must start a word of the name, in any
     order. Whole words rank before prefixes, then the list's order:
     symbols, then emoji, each in Unicode's order. So `e acute` offers é and É, but

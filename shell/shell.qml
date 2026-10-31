@@ -57,6 +57,9 @@ ShellRoot {
     // The polkit prompt (opt-in; see PolkitData.qml), which does the same.
     PolkitPrompt {}
 
+    // The clipboard and characters picker on Super+C, which does the same.
+    PickerWindow {}
+
     // The screen-share picker, for tide-share-picker, which does the same.
     SharePicker {}
 
