@@ -32,6 +32,7 @@ wrapper=bin/tide-hyprland
 portals=xdg-desktop-portal/tide-portals.conf
 autostart=systemd/user/app-.service.d/tide-autostart.conf
 lock=systemd/user/tide-lock.service
+clipboard=systemd/user/tide-clipboard.service
 
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
@@ -164,6 +165,19 @@ check "the lock's PAM service checks the password like a login" \
 check "the lock asks PAM for its own service" \
     grep -qF 'config: "tide-lock"' shell/lock.qml
 
+# --- tide-clipboard.service -----------------------------------------------------
+# The picker's history (SPEC.md §8.4): every copy through tide clipboard
+# store, which skips a password manager's, capped at 200; the database
+# private to you; stopped with the session, and only in tide's.
+check "the history watches the clipboard through tide clipboard store" \
+    has_line "$clipboard" "ExecStart=wl-paste --watch tide clipboard store --max-items 200"
+check "the history's database is private" has_line "$clipboard" "UMask=0077"
+check "the history stops with the session" has_line "$clipboard" "PartOf=graphical-session.target"
+check "the history runs only in the tide session" \
+    has_line "$clipboard" "WantedBy=wayland-session@tide-hyprland.target"
+check "make install installs the history's unit" \
+    grep -q 'systemd/user/tide-clipboard.service' Makefile
+
 # --- systemd-analyze verify ---------------------------------------------------
 # Resolves the units as systemd would. tide-shell and hypridle aren't
 # installed here, so the copies point ExecStart at a stub; everything else is
@@ -185,7 +199,8 @@ if command -v systemd-analyze >/dev/null 2>&1; then
         > "$tmp/units/$agent_unit"
     cp "$autostart" "$tmp/units/app-.service.d/"
     sed "s|^ExecStart=qs .*\$|ExecStart=$tmp/stub|" "$lock" > "$tmp/units/tide-lock.service"
-    for u in tide.service tide-lock.service hypridle.service "$agent_unit"; do
+    sed "s|^ExecStart=wl-paste .*\$|ExecStart=$tmp/stub|" "$clipboard" > "$tmp/units/tide-clipboard.service"
+    for u in tide.service tide-lock.service tide-clipboard.service hypridle.service "$agent_unit"; do
         out=$(cd "$tmp/units" && XDG_RUNTIME_DIR="$tmp/run" \
             systemd-analyze verify --user --man=no "$u" 2>&1)
         status=$?

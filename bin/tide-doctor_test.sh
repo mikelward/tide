@@ -266,13 +266,14 @@ bus_conf() {
 }
 
 # run ENV...: runs the doctor in a tide session unless ENV says
-# otherwise, with the given fakes' answers.
+# otherwise, with the given fakes' answers. Any command that's there, sh,
+# stands in for cliphist.
 run() {
     env PATH="$fake:$tmp/qs-bin:$PATH" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" \
         XDG_CURRENT_DESKTOP=tide:Hyprland XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" HOME="$tmp/home" \
         XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_HOME="$tmp/no-data-home" XDG_DATA_DIRS="$tmp/share" \
         XDG_RUNTIME_DIR="$tmp/runtime" TIDE_DATADIR="$tmp/datadir" TIDE_SYSCONFDIR="$tmp/sysconf" \
-        FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_PID_hypridle=101 \
+        FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_PID_hypridle=101 TIDE_CLIPHIST=sh \
         "$@" sh "$doctor" > "$tmp/out" 2> "$tmp/err"
     status=$?
     out=$(cat "$tmp/out")
@@ -315,6 +316,16 @@ run FAKE_INACTIVE="hypridle.service=failed"
 check "a failed unit is a problem" test "$status" -eq 1
 check "a failed unit is named, with where to look" \
     contains "$out" "hypridle.service is failed: see \`systemctl --user status hypridle.service\`"
+
+# The clipboard history (§8.4): cliphist, and the unit that feeds it.
+run TIDE_CLIPHIST=no-such-cliphist
+check "no cliphist is a problem" test "$status" -eq 1
+check "no cliphist is named, with the fix" \
+    contains "$out" "cliphist isn't installed, so Super+C keeps no clipboard history: install the cliphist package"
+run FAKE_INACTIVE="tide-clipboard.service=inactive"
+check "a stopped history unit is a problem" test "$status" -eq 1
+check "a stopped history unit is named, with the fix" \
+    contains "$out" "tide-clipboard.service is inactive, so what you copy doesn't reach Super+C's history: \`systemctl --user enable --now tide-clipboard.service\`"
 
 # The lock (§10): its unit, its QML and its PAM file, each a lock that
 # never comes or never unlocks if it's missing.

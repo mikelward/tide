@@ -10,6 +10,7 @@
 #   - the session's units are running;
 #   - the lock's unit, QML and PAM file are installed, and the last lock
 #     didn't fail;
+#   - cliphist is installed and tide-clipboard.service runs;
 #   - qs, where it's installed, is a Quickshell that loads tide's shell;
 #   - each D-Bus name in §5.2 is owned by the unit that should own it, and
 #     no D-Bus activation file can start a rival for it;
@@ -76,6 +77,19 @@ if ! test -e "$lock_pam"; then
     problem "$lock_pam isn't installed, so the lock checks the password with PAM's \`other\` service, which may refuse every password: run \`make build\`, then \`sudo make install-session PREFIX=/usr\`, in the tide checkout"
 elif ! test -r "$lock_pam"; then
     problem "couldn't read $lock_pam, which the lock reads as you to check the password, so it may never unlock: \`sudo chmod 644 $lock_pam\`"
+fi
+
+# The clipboard history behind Super+C (§8.4): tide-clipboard.service
+# hands each copy to cliphist. Without either, the picker's Clipboard tab
+# says so only when it's opened. $TIDE_CLIPHIST stands in for cliphist in
+# the tests.
+cliphist=${TIDE_CLIPHIST:-cliphist}
+if ! command -v "$cliphist" >/dev/null 2>&1; then
+    problem "cliphist isn't installed, so Super+C keeps no clipboard history: install the cliphist package (scripts' \`setup --tide\` does), then \`systemctl --user restart tide-clipboard.service\`"
+fi
+state=$(systemctl --user is-active tide-clipboard.service 2>&1)
+if test "$state" != active; then
+    problem "tide-clipboard.service is ${state:-not active}, so what you copy doesn't reach Super+C's history: \`systemctl --user enable --now tide-clipboard.service\`, and \`journalctl --user -u tide-clipboard.service\` if it doesn't stay up"
 fi
 
 # Quickshell. tide-shell runs waybar when qs is too old for tide's shell,

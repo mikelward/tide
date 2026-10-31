@@ -127,6 +127,11 @@
 #     a notification. Exits 2, saying why, if it can't tell: outside a tide
 #     session, or when the guard can't be asked.
 #
+#   tide clipboard store | list | copy ID | delete ID | wipe
+#
+#     The clipboard history behind the picker on Super+C (SPEC.md §8.4);
+#     see tide-clipboard.
+#
 #   tide doctor
 #
 #     Checks the running session and prints one line per problem, with
@@ -146,6 +151,7 @@ usage() {
     echo "       $prog idle-lock" >&2
     echo "       $prog idle-suspend [--unplugged | --cancel]" >&2
     echo "       $prog prompt-focus" >&2
+    echo "       $prog clipboard store | list | copy ID | delete ID | wipe" >&2
     echo "       $prog doctor" >&2
     exit 2
 }
@@ -915,5 +921,6 @@ case "${1:-}" in
     prompt-focus) shift; prompt_focus "$@" ;;
     # Installed beside this script.
     doctor) shift; exec sh "$(dirname "$0")/tide-doctor" "$@" ;;
+    clipboard) shift; exec sh "$(dirname "$0")/tide-clipboard" "$@" ;;
     *) usage ;;
 esac

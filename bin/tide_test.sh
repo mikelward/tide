@@ -777,6 +777,11 @@ rm "$tmp/run-config-file"
 run XDG_RUNTIME_DIR="$runtime" FAKE_ON_BATTERY="b false" XDG_CONFIG_HOME="$tmp/no-such-config" "$qs" idle-suspend
 check "no config directory at all says nothing" test ! -s "$tmp/err"
 
+# tide clipboard is tide-clipboard, beside it (tide-clipboard_test.sh).
+out=$("$qs" clipboard frob 2>&1)
+check "tide clipboard reaches tide-clipboard's usage" test $? -eq 2
+check "and says so: $out" contains "$out" "tide clipboard store"
+
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh "$qs" bin/tide_test.sh
 fi
