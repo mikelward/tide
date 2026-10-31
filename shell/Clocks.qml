@@ -80,7 +80,8 @@ Row {
 
             visible: Title.clockShown(root.compact, clock.modelData)
             height: Theme.chipHeight
-            implicitWidth: row.implicitWidth + 14
+            // 5 px either side, so clocks sit 12 px apart with the Row's 2.
+            implicitWidth: row.implicitWidth + 10
 
             Row {
                 id: row

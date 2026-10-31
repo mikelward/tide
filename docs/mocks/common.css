@@ -278,10 +278,10 @@ body.sheet {
 .sicon.low { color: var(--danger); }
 .tray .sicon .ms { font-size: 17px; }
 
-.clocks { display: flex; align-items: center; gap: 2px; padding-left: 4px; }
+.clocks { display: flex; align-items: center; gap: 2px; }
 .clock {
   height: 26px;
-  padding: 0 7px;
+  padding: 0 5px;
   border-radius: 7px;
   display: flex;
   align-items: baseline;
