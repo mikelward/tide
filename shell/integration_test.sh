@@ -1777,17 +1777,6 @@ echo "ok: make install-shell over the running shell reloads it once, after every
 load_runs='hyprctl devices -j
 tide keyboards
 udevadm monitor --udev --subsystem-match=input'
-# A clocks.local.json and a wallpaper record the lock refuses, which it
-# should name.
-printf '{\n  "hour24": "no"\n}\n' >"$clocks_local" || exit 1
-printf 'wallpaper.png\n' >"$wallpaper_record" || exit 1
-after_load=lock_files
-load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
-after_load=
-# Gone again, or the shell after the greeter would report it too.
-rm "$clocks_local" || exit 1
-echo "ok: the lock names a clocks.local.json it can't take, and keeps its clock's settings"
-echo "ok: the lock names a wallpaper record it can't take"
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"
 load_runs=
 if test -n "$notify_path"; then
@@ -1816,6 +1805,25 @@ if test -n "$wtype_path"; then
 else
     echo "$prog: no wtype, so nothing is typed into the launcher; CI types into it" >&2
 fi
+# The lock comes after the other faces: Quickshell ends here without
+# unlocking, and sway then keeps the screen locked until another lock
+# unlocks it (below), so anything drawn before then, or photographed,
+# would be hidden behind it.
+load_runs='hyprctl devices -j
+tide keyboards
+udevadm monitor --udev --subsystem-match=input'
+# A clocks.local.json and a wallpaper record the lock refuses, which it
+# should name.
+printf '{\n  "hour24": "no"\n}\n' >"$clocks_local" || exit 1
+printf 'wallpaper.png\n' >"$wallpaper_record" || exit 1
+after_load=lock_files
+load lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
+after_load=
+load_runs=
+# Gone again, or the locks and the greeter after it would report it too.
+rm "$clocks_local" || exit 1
+echo "ok: the lock names a clocks.local.json it can't take, and keeps its clock's settings"
+echo "ok: the lock names a wallpaper record it can't take"
 if test -n "${TIDE_LOCK_PASSWORD:-}"; then
     # A wallpaper for the lock to draw, blurred, as it unlocks: a picture
     # it can't load, or an effect it can't make, fails the run.
