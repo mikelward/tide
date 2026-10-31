@@ -2859,6 +2859,10 @@ in `TODO.md`.
   - Still to check: whether the edge behavior is doable in Hyprland's
     Lua layout, and what a second display shows before anything is on it
     (today Hyprland gives it a numbered workspace).
+- **Minimizing a window.** A key to minimize the focused window, with a
+  bottom bar of the workspace's minimized windows to restore them from
+  (as the Windows tab would): which key, what each display's bar lists,
+  and how without a real minimize in Hyprland (TODO.md).
 - **More workspaces than the bar's left side holds.** The bar cuts names at
   16 characters, but has no rule yet for when they still don't fit.
 
