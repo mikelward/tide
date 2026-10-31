@@ -57,5 +57,13 @@ check "a push cancels the stale run, never main or an edit" \
     'grep -qxF "  cancel-in-progress: \${{ !$main_event && github.event.action != '"'"'edited'"'"' }}" "$ci"'
 check "an edit still starts a run" 'grep -qF "types: [opened, synchronize, reopened, edited]" "$ci"'
 
+# Every job gates the merge: lanes waits for each one and passes on its
+# result, so a job left out could fail without holding the pull request.
+lanes_job=$(job lanes)
+for name in $(awk '/^jobs:$/ { on = 1; next } on && /^  [a-z][a-z-]*:$/ { sub(/^  /, ""); sub(/:$/, ""); print }' "$ci" | grep -vx -e lanes -e classify); do
+    check "lanes waits for $name" 'printf "%s\n" "$lanes_job" | grep -q "needs: \[.*\b$name\b.*\]"'
+    check "and passes on its result" 'printf "%s\n" "$lanes_job" | grep -qF "$name=\${{ needs.$name.result }}"'
+done
+
 echo "ci_test.sh: $passed passed, $failures failed"
 test "$failures" -eq 0

@@ -47,8 +47,8 @@ jobs:
           pr: ${{ github.event.pull_request.number }}
 
   # Tests run on Lua 5.4, which Ubuntu packages; Hyprland embeds 5.5 and the
-  # layout uses nothing that differs between them. `make test` takes about
-  # four minutes, and installing Lua and qmllint has taken four and a half
+  # layout uses nothing that differs between them. `make test-fast` takes
+  # about a minute and a half, and installing Lua and qmllint has taken four and a half
   # on a slow mirror, so the limit leaves room for both. A mirror that
   # stalls mid-download is given up on after 30 s and tried again, rather
   # than holding the job until its limit cancels it, as Azure's Ubuntu
@@ -71,7 +71,22 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - run: make test
+      - run: make test-fast
+
+  # The load test's own tests (shell/shell_test_test.sh), apart from `test`
+  # because they take about five minutes: each case runs the whole load test
+  # against stand-ins, and most wait out its 2 s limit at the step they
+  # break. They need only python3 and the runner's own tools.
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: classify
+    if: needs.classify.outputs.docs_only != 'true'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - run: make test-harness
 
   # Loads the shell in Quickshell (shell/shell_test.sh): the release that
   # `setup --tide` builds on Ubuntu 26.04 (scripts repo), at the same
@@ -159,7 +174,7 @@ jobs:
     name: lanes
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [classify, test, shell]
+    needs: [classify, test, harness, shell]
     if: always()
     steps:
       - uses: actions/checkout@v5
@@ -171,4 +186,4 @@ jobs:
           pr: ${{ github.event.pull_request.number }}
           classify-result: ${{ needs.classify.result }}
           base-sha: ${{ needs.classify.outputs.base_sha }}
-          results: test=${{ needs.test.result }} shell=${{ needs.shell.result }}
+          results: test=${{ needs.test.result }} harness=${{ needs.harness.result }} shell=${{ needs.shell.result }}
