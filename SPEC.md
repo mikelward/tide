@@ -2537,7 +2537,8 @@ talk, a demo, or a meeting room's screen.
 - **Same face as the lock.** Login and lock are one QML component with two
   modes ([`lock.png`](docs/mocks/lock.png)): `shell/LockFace.qml`.
 - **Hostname.** It leads with the short hostname: the first label, with a
-  leading `<user>-` removed, the same rule as `i3statusdwm`.
+  leading `<user>-` removed, the same rule as `i3statusdwm`. It's only a
+  size above the user's name (32 px to 20), so neither dwarfs the other.
 - **Local's date and time** sit below the hostname. No zone clocks: the
   bar has them a click away, and the login and lock faces stay simple
   (maintainer, 2026-10-05).
