@@ -167,8 +167,10 @@ PanelWindow {
                     clip: true
                     maximumLength: 256
                     // What a name can't hold (Names.UNSAFE) can't be typed.
+                    // Qt matches it as PCRE, which has no \u escape, so the
+                    // control characters are \x: with \u, nothing could be.
                     validator: RegularExpressionValidator {
-                        regularExpression: /[^"'`\\\u0000-\u001f\u007f]*/
+                        regularExpression: /[^"'`\\\x00-\x1f\x7f]*/
                     }
                     onTextChanged: {
                         if (!root.settingText) {

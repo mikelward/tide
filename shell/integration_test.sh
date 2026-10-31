@@ -79,6 +79,15 @@ if fractional=$(grep -n -E 'pixelSize:.*[0-9]\.[0-9]' shell/*.qml); then
     exit 1
 fi
 
+# Qt matches a RegularExpressionValidator's expression as PCRE, which has
+# no \u escape: one with it is invalid, and refuses every key typed, which
+# only shows once something is typed. Checked here too, for the same reason.
+if escaped=$(grep -n -E 'regularExpression:.*\\u' shell/*.qml); then
+    echo "FAIL: a validator's expression is PCRE, with no \\u escape; use \\x or \\x{...}:" >&2
+    printf '%s\n' "$escaped" >&2
+    exit 1
+fi
+
 # Theme.qml takes its sizes from the mocks (SPEC.md §15), so the bar is
 # as tall as the mocks show it.
 theme_bar=$(sed -n 's/^ *readonly property int barHeight: \([0-9]*\)$/\1/p' shell/Theme.qml)
@@ -545,6 +554,12 @@ load() {
 reports() {
     if grep -E '@[A-Za-z]+\.qml|@lib/[a-z_]+\.mjs' "$log" >"$tmp/reports"; then
         echo "FAIL: $1, but its files reported:" >&2
+        cat "$tmp/reports" >&2
+        exit 1
+    fi
+    # Qt's, for an expression it couldn't compile, such as a validator's.
+    if grep 'invalid QRegularExpression' "$log" >"$tmp/reports"; then
+        echo "FAIL: $1, but a regular expression is invalid:" >&2
         cat "$tmp/reports" >&2
         exit 1
     fi
