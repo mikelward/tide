@@ -1,4 +1,5 @@
 import QtQuick
+import "lib/title.mjs" as Title
 
 // The clocks at the bar's right end (SPEC.md §7.3): each listed zone as
 // "LABEL HH:MM", then local as "MMM d HH:MM", with a small −1 / +1 on a zone
@@ -77,7 +78,7 @@ Row {
             readonly property string label: modelData.label
             readonly property string time: modelData.time
 
-            visible: !root.compact || modelData.local
+            visible: Title.clockShown(root.compact, clock.modelData)
             height: Theme.chipHeight
             implicitWidth: row.implicitWidth + 14
 

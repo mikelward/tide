@@ -1,7 +1,7 @@
 // Tests for title.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_TITLE, barTitle, barWindow, activeAtStart, hasFocus, titleWidth, collapseClocks, MIN_TITLE_ROOM } from "./title.mjs";
+import { MAX_TITLE, barTitle, barWindow, activeAtStart, hasFocus, titleWidth, collapseClocks, MIN_TITLE_ROOM, clockShown } from "./title.mjs";
 
 const editor = { address: "abc", monitor: "DP-1", title: "SPEC.md - tide" };
 
@@ -92,4 +92,15 @@ test("the zone clocks collapse only when the title would be squeezed", () => {
     // When the workspaces' side is what's short, hiding clocks wouldn't
     // help the centered title, so they stay.
     assert.equal(collapseClocks({ ...bar, left: 700, right: 1300, ...full }), false);
+});
+
+test("collapsed, only local's clock shows; a zone clock, with no local field, is hidden", () => {
+    const zone = { label: "SF", time: "23:41", dayOffset: -1 };
+    const local = { label: "Oct 3", time: "00:30", dayOffset: 0, local: true };
+    assert.equal(clockShown(false, zone), true);
+    assert.equal(clockShown(false, local), true);
+    assert.equal(clockShown(true, local), true);
+    // A boolean, not undefined, which QML can't assign to visible.
+    assert.equal(clockShown(true, zone), false);
+    assert.equal(clockShown(true, undefined), false);
 });

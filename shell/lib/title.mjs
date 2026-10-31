@@ -85,3 +85,10 @@ export function collapseClocks({ barWidth, left, right, gap, clocksWidth, fullCl
     // Hiding clocks only helps when the right side is what's short.
     return rightRoom < leftRoom && 2 * rightRoom - gap < MIN_TITLE_ROOM;
 }
+
+// Whether a clock from barClocks shows: every one, or only local's while
+// the clocks are collapsed. Only local's carries `local`, so a zone clock
+// has none, which must read as false, not undefined.
+export function clockShown(compact, clock) {
+    return !compact || clock?.local === true;
+}
