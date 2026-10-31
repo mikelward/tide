@@ -1,7 +1,7 @@
 // Tests for share.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isShareNode, shareLinks, liveShares, holdsPopups, sharingPill, PAIRING, PAIR_MS, chose, nodesSeen, settle, settleIn, kindOf, shareRows } from "./share.mjs";
+import { isShareNode, shareLinks, shareReaders, liveShares, holdsPopups, sharingPill, PAIRING, PAIR_MS, chose, nodesSeen, settle, settleIn, kindOf, shareRows } from "./share.mjs";
 
 const ACTIVE = 4;
 const PAUSED = 3;
@@ -25,8 +25,37 @@ test("a share is live while something actively consumes it", () => {
         { source: mic, target: chrome, state: ACTIVE },
         { source: null, target: chrome, state: ACTIVE },
     ];
-    assert.deepEqual(liveShares([share, idle, mic, chrome], links, ACTIVE), [share]);
+    assert.deepEqual(liveShares([share, idle, mic, chrome], links, ACTIVE), [{ id: 40, readers: [chrome] }]);
     assert.deepEqual(liveShares([share], [], ACTIVE), []);
+});
+
+test("a share keeps each app reading it, once", () => {
+    const share = { id: 40, name: "xdph-streaming-0" };
+    const chrome = { id: 60, name: "webrtc-consume-stream" };
+    const obs = { id: 61, name: "obs" };
+    const links = [
+        { source: share, target: chrome, state: ACTIVE },
+        { source: share, target: chrome, state: ACTIVE },
+        { source: share, target: obs, state: ACTIVE },
+        // A link whose app end Quickshell hasn't seen yet still makes it live.
+        { source: { id: 41, name: "xdph-streaming-1" }, target: null, state: ACTIVE },
+    ];
+    assert.deepEqual(liveShares([share, { id: 41, name: "xdph-streaming-1" }], links, ACTIVE), [
+        { id: 40, readers: [chrome, obs] },
+        { id: 41, readers: [] },
+    ]);
+});
+
+test("the apps reading shares are bound, each once", () => {
+    const share = { id: 40, name: "xdph-streaming-0" };
+    const chrome = { id: 60, name: "webrtc-consume-stream" };
+    const links = [
+        { source: share, target: chrome },
+        { source: { id: 41, name: "xdph-streaming-1" }, target: chrome },
+        { source: share, target: null },
+    ];
+    assert.deepEqual(shareReaders(links), [chrome]);
+    assert.deepEqual(shareReaders([]), []);
 });
 
 // Runs steps from PAIRING, settling after each as ShareData does:
@@ -186,4 +215,24 @@ test("a share the picker didn't name says so in the popover", () => {
     const bare = pair([["chose", "window", 1000], ["nodes", [40], 2000], settled(2000)]);
     assert.deepEqual(shareRows([share(40)], bare), [{ icon: "focus-windows-symbolic", label: "A window" }]);
     assert.deepEqual(shareRows([], PAIRING), []);
+});
+
+test("the popover names the app reading each share", () => {
+    const chrome = { id: 60, name: "webrtc-consume-stream", properties: { "application.name": "Chromium" } };
+    const obs = { id: 61, name: "obs", properties: { "application.name": "OBS Studio" } };
+    const s = pair([["chose", "window", 1000, "Meet - Design review"], ["nodes", [40], 2000], settled(2000)]);
+    assert.deepEqual(shareRows([{ id: 40, readers: [chrome] }], s), [
+        { icon: "focus-windows-symbolic", label: "Chromium · Window: Meet - Design review" },
+    ]);
+    // One the picker didn't name still says who's reading it.
+    assert.deepEqual(shareRows([{ id: 41, readers: [chrome] }], PAIRING), [
+        { icon: "video-display-symbolic", label: "Chromium · Not chosen in tide's picker" },
+    ]);
+    // Two apps are both named; two streams from one app, once.
+    const chrome2 = { id: 62, name: "webrtc-consume-stream", properties: { "application.name": "Chromium" } };
+    assert.equal(shareRows([{ id: 41, readers: [chrome, obs, chrome2] }], PAIRING)[0].label,
+        "Chromium, OBS Studio · Not chosen in tide's picker");
+    // Before its stream is bound, an app goes by its node's name.
+    assert.equal(shareRows([{ id: 41, readers: [{ id: 63, name: "webrtc-consume-stream" }] }], PAIRING)[0].label,
+        "webrtc-consume-stream · Not chosen in tide's picker");
 });

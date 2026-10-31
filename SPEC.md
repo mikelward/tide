@@ -1342,7 +1342,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | Icon | Shows | Click | Scroll / other |
 |---|---|---|---|
 | **Presenting** (accent) | presenter mode is on (§10) | turns presenter mode off | — |
-| Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen, window or area); stop it from the app | — |
+| Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen, window or area), and the app reading it; stop it from the app | — |
 | Privacy: mic (orange) | any app is capturing the microphone | per-app list with mute | — |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
 | Keep awake | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off | — |
@@ -2326,6 +2326,10 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
     pairing: the option's kind and label, such as "Window: Meet - Design
     review". One with none says it wasn't chosen in tide's picker. Stopping
     a share is the app's business, and the popover says so.
+  - Each row starts with the app reading the stream, such as "Chromium ·
+    Window: Meet - Design review". That's the far end of the stream's
+    PipeWire link, named as the volume popover names a stream: its
+    `application.name`. So a share you didn't start says who started it.
   - A stream restored from a token skips the picker, so there is no record.
     The shell then treats the share as a screen share and holds popups,
     which is the safe way to be wrong. A notification never leaks into a
