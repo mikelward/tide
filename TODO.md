@@ -38,6 +38,11 @@ once you have agreed with it or reversed it.
   own, or asking udev, which calls the touchpad's `-mouse` node a mouse.
   It's `deviceKind` in `input.mjs` and `is_touchpad` in `conf`'s
   `apply-input.sh`, kept in step by hand.
+- [ ] **A short name's first word loses `.` `,` `:` `;` `!` `?` `|` `…` and
+  dashes from its end, and a word with no letter or digit is passed over**
+  (SPEC.md §6.5). That makes `ABC-123:` `ABC-123` and skips a lone `—`.
+  The alternatives are a shorter list (only `:` `,` `|`), or also trimming
+  brackets and quotes. Reversible: one regex in `workspacenames.mjs`.
 - [ ] **The picker on `Super+C` is its own overlay, not two more switcher
   tabs** (SPEC.md §8.4). The switcher goes somewhere; the picker copies
   something, and the switcher's `Tab` cycle stays at four. The

@@ -855,10 +855,19 @@ in how long they last and what stays visible:
   example, `\b([A-Z]+-[0-9]+)\b` takes a ticket ID out of
   `ABC-123: Fix login - Tracker - Google Chrome`.
 - A pattern that matches with an empty group is passed over.
-- With no match, the name is the title cleaned up: a trailing
-  ` - APP` or ` — APP` dropped, where APP is the window's app name
-  (`Google Chrome`, `Mozilla Firefox`), runs of space made one, and cut
-  to 32 characters at a word break.
+- Patterns are how to get a better name than the first word, such as an
+  issue number or a project from a site's title.
+- With no match, the name is the title's first word. A trailing
+  ` - APP` or ` — APP` is dropped first, where APP is the window's app
+  name (`Google Chrome`, `Mozilla Firefox`), runs of space made one, and
+  the title cut to 32 characters at a word break.
+  - Punctuation clinging to the word's end goes: `.` `,` `:` `;` `!` `?`
+    `|` `…` and dashes. So `ABC-123: Fix login - Tracker - Google Chrome`
+    gives `ABC-123` with no patterns too.
+  - A word left with no letter or digit, such as a lone `—`, is passed
+    over for the next.
+  - A title with no such word gives an empty name, and the prompt
+    starts empty.
 - A pattern that doesn't compile, or has no capture group, is an error at
   load naming the pattern (§16.1). The last good list stays in effect.
 

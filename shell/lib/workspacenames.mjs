@@ -4,7 +4,7 @@
 // QML binds to.
 
 import { jsonError } from "./clocks.mjs";
-import { match } from "./fuzzy.mjs";
+import { isAlnum, match } from "./fuzzy.mjs";
 
 // The longest a name may be, in characters.
 export const MAX_NAME = 32;
@@ -374,10 +374,25 @@ export function cleanTitle(title, appName) {
     return cutName(t);
 }
 
+// Punctuation that clings to a word's end, as in `ABC-123:` or `Docs,`.
+const TRAILING_PUNCT = /[.,:;!?|\u2026\-\u2013\u2014]+$/;
+
+// The first word of `text` with its trailing punctuation dropped, passing
+// over words left with no letter or digit (a lone `—` or `|`), or "".
+export function firstWord(text) {
+    for (const word of String(text ?? "").split(/\s+/)) {
+        const w = word.replace(TRAILING_PUNCT, "");
+        if ([...w].some(isAlnum)) {
+            return w;
+        }
+    }
+    return "";
+}
+
 // The short name for a window titled `title` from app `appName` (SPEC.md
 // §6.5): the first capture group of the first of `patterns` (compiled,
 // from checkPatterns) that matches with a group that isn't empty, else
-// the cleaned title.
+// the cleaned title's first word.
 export function shortName(title, appName, patterns) {
     const text = String(title ?? "");
     for (const re of patterns) {
@@ -387,7 +402,7 @@ export function shortName(title, appName, patterns) {
             return cutName(group);
         }
     }
-    return cleanTitle(text, appName);
+    return firstWord(cleanTitle(text, appName));
 }
 
 // Whether a window of class `cls` is one of home's apps (`inApps`), as
