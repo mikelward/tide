@@ -2232,7 +2232,9 @@ talk, a demo, or a meeting room's screen.
   bar has them a click away, and the login and lock faces stay simple
   (maintainer, 2026-10-05).
 - **What the lock has and the login face doesn't:** the notification
-  count, the battery, Suspend and the "locked at" line, as the mock shows.
+  count, the battery and Suspend, as the mock shows. Under the user's name
+  there's nothing on either: no time it locked and no last login, which
+  don't help to unlock (maintainer, 2026-10-31).
 - **Greeter extras:**
   - The last user and session are preselected. The greeter remembers them
     in its own state directory, written as the session starts.

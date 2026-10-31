@@ -1300,18 +1300,15 @@ back. The checks it doesn't make yet are in `scripts`' TODO.md, under
 - SPEC.md §15 has the greeter follow the default light/dark schedule. Its
   face is the lock's, which is dark only, like the lock.
 
-- [ ] **Drop the "locked at" and last-login lines from the lock and the
-  greeter.** Neither helps unlock, and they crowd the face.
-  - "locked at" is `shell/LockFace.qml`'s own line (SPEC.md §11, the lock
-    mock). Take it out of both.
-  - A "Last login: …" line is most likely PAM's (`pam_lastlog` or
-    `pam_lastlog2` in the stack greetd or the lock runs) passed through
-    as an info message. Check which; then either stop showing PAM info
-    messages that only report the last login, or have `setup` leave that
-    module out of greetd's stack (mikelward/scripts). Keep the greeter
-    remembering the last user it picked (`last.json`), which is a
-    different thing.
-  - Update any test or stand-in that expects either line.
+- [ ] **Keep a last-login line off the lock and the greeter** (SPEC.md
+  §11: nothing under the user's name). The faces draw none of their own
+  any more, but PAM's `pam_lastlog` or `pam_lastlog2`, in the stack
+  greetd or the lock runs, may still pass "Last login: …" through as an
+  info message under the field. Check whether either does; if so, either
+  stop showing PAM info messages that only report the last login, or have
+  `setup` leave that module out of greetd's stack (mikelward/scripts).
+  Keep the greeter remembering the last user it picked (`last.json`),
+  which is a different thing.
 
 ## Screen sharing (M6)
 

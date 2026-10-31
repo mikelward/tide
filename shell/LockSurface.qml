@@ -10,7 +10,6 @@ WlSessionLockSurface {
     property var lockState: Lock.INITIAL
     property string hostname: ""
     property string user: ""
-    property date lockedAt: new Date()
     property bool hour24: true
     property string wallpaper: ""
     property string powerMessage: ""
@@ -30,7 +29,6 @@ WlSessionLockSurface {
         lockState: surface.lockState
         hostname: surface.hostname
         user: surface.user
-        lockedAt: surface.lockedAt
         hour24: surface.hour24
         wallpaper: surface.wallpaper
         powerMessage: surface.powerMessage
