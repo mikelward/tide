@@ -648,7 +648,8 @@ presenter() {
 # page: its defaults written for tide clipboard store, a cap set over a
 # hand edit, and a cap of 0 refused. Then the Power page: Lock set over a
 # hand edit, written for conf and the lid switch held, and a lid action
-# that isn't one refused. Before all that, it checks the
+# that isn't one refused. Then the Workspaces page: a standing workspace
+# added over a hand edit, and a pattern with no capture group refused. Before all that, it checks the
 # shell recorded no wallpaper for the lock, having none to draw (§15).
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
@@ -1071,6 +1072,33 @@ written_settings() {
     # Back to Suspend for the shells after this one, which expect to let go
     # of the lid switch as they start.
     rm "$power_local" || exit 1
+    # The Workspaces page: a standing workspace added over a hand edit,
+    # in workspaces.local.json and the file conf reads as the call answers,
+    # and a name pattern with no capture group refused.
+    printf '{\n  "inApps": []\n}\n' >"$workspaces_local" || exit 1
+    ipc call settings addWorkspaceItem standing docs >/dev/null || exit 1
+    _want='{
+  "inApps": [],
+  "standing": [
+    "in",
+    "re",
+    "oc",
+    "me",
+    "docs"
+  ]
+}'
+    if test "$(cat "$workspaces_local")" != "$_want" || ! grep -qxF '        "docs",' "$workspaces_conf"; then
+        echo "FAIL: the Workspaces page should add docs to the standing workspaces, keeping the hand-edited inApps, in $workspaces_local and $workspaces_conf as it answers; they have: $(cat "$workspaces_local" "$workspaces_conf" 2>&1)" >&2
+        exit 1
+    fi
+    _refused=$(ipc call settings addWorkspaceItem namePatterns '[A-Z]+') || exit 1
+    case "$_refused" in
+        *"has no capture group"*) ;;
+        *)
+            echo "FAIL: the Workspaces page should refuse a pattern with no capture group, saying why; it answered: $_refused" >&2
+            exit 1
+            ;;
+    esac
     settle
 }
 

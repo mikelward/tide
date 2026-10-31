@@ -9,6 +9,7 @@ import "lib/launch.mjs" as Run
 import "lib/mute.mjs" as Mute
 import "lib/report.mjs" as Report
 import "lib/workspacenames.mjs" as Names
+import "lib/workspacepage.mjs" as Page
 import "lib/workspaces.mjs" as Ws
 import "lib/writes.mjs" as Writes
 
@@ -162,6 +163,40 @@ Singleton {
 
     function removeMuted(index, entry) {
         return root.editMuted(list => Mute.withMuteRemoved(list, index, entry));
+    }
+
+    // The Workspaces page (SPEC.md §16): adds, moves or takes out an entry
+    // of list `key` (standing, inApps or namePatterns), in
+    // workspaces.local.json, as Page.editedList makes it. Each returns why
+    // it didn't, or "".
+    function addItem(key, item) {
+        return root.editList(key, list => Page.withItem(list, item));
+    }
+
+    function moveItem(key, index, item, step) {
+        return root.editList(key, list => Page.movedItem(list, index, item, step));
+    }
+
+    function removeItem(key, index, item) {
+        return root.editList(key, list => Page.withoutItem(list, index, item));
+    }
+
+    function editList(key, change) {
+        const sharedText = shared.readNow();
+        const localText = local.readNow();
+        const broken = [shared.broken, local.broken].filter(b => b !== "");
+        if (broken.length > 0) {
+            return `${broken[0]}; not changing ${key}`;
+        }
+        const result = Page.editedList(sharedText, localText, key, change);
+        if (result.error) {
+            return `${result.error}; not changing ${key}`;
+        }
+        const error = local.writeNow(result.text);
+        root.saveFailure = error === "" ? "" : `${error}; ${key} not saved`;
+        root.load();
+        root.report();
+        return root.saveFailure;
     }
 
     // Writes the muted list `change` makes of the one in effect to
