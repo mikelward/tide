@@ -3890,6 +3890,8 @@ are what "done" means.
   than fail. `make test` parses each module with `qmllint`, runs the Node
   tests with those built-ins removed, and scans the modules for those
   regular expressions, so each mistake fails a test rather than the shell.
+  `shell/integration_test.sh` also greps the modules and QML for `{ ...`,
+  so an object spread fails even where `qmllint` isn't installed.
 - **The shell, the lock and the greeter load.** `shell/integration_test.sh`
   installs the shell as `make install` does, and starts it with `qs -c
   tide`, the lock with `qs -p .../lock.qml` and the greeter with `qs -p
