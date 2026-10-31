@@ -9,8 +9,8 @@ PopupWindow {
 
     required property Item icon
 
-    function toggle() {
-        visible = !visible;
+    function toggle(opener) {
+        PopoverData.toggle(root, opener);
     }
 
     // Closes when the last share ends, rather than staying up empty.
@@ -28,7 +28,6 @@ PopupWindow {
     anchor.edges: Edges.Bottom | Edges.Right
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.bottom: -10
-    grabFocus: true
     color: "transparent"
     implicitWidth: 300
     implicitHeight: list.implicitHeight + 12
@@ -84,5 +83,9 @@ PopupWindow {
                 font.pixelSize: 12
             }
         }
+    }
+
+    PopoverGrab {
+        popover: root
     }
 }

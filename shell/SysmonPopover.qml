@@ -13,8 +13,8 @@ PopupWindow {
     required property Item icon
     property string tab: "cpu"
 
-    function toggle() {
-        visible = !visible;
+    function toggle(opener) {
+        PopoverData.toggle(root, opener);
     }
 
     onVisibleChanged: {
@@ -44,7 +44,6 @@ PopupWindow {
     anchor.edges: Edges.Bottom | Edges.Right
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.bottom: -10
-    grabFocus: true
     color: "transparent"
     implicitWidth: 300
     implicitHeight: card.implicitHeight
@@ -339,5 +338,9 @@ PopupWindow {
                 }
             }
         }
+    }
+
+    PopoverGrab {
+        popover: root
     }
 }

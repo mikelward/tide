@@ -39,12 +39,12 @@ PopupWindow {
     property int year: today.year
     property int month: today.month
 
-    function toggle() {
+    function toggle(opener) {
         if (!visible) {
             year = today.year;
             month = today.month;
         }
-        visible = !visible;
+        PopoverData.toggle(root, opener);
     }
 
     function step(by) {
@@ -57,7 +57,6 @@ PopupWindow {
     anchor.edges: Edges.Bottom | Edges.Right
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.bottom: -6
-    grabFocus: true
     color: "transparent"
     implicitWidth: 640
     implicitHeight: card.implicitHeight
@@ -332,5 +331,9 @@ PopupWindow {
                 }
             }
         }
+    }
+
+    PopoverGrab {
+        popover: root
     }
 }

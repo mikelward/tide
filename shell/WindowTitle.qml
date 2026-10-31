@@ -101,10 +101,15 @@ Text {
     // Double-clicking it toggles maximize on that window, like a title
     // bar (SPEC.md §7.1). It's always the focused window, so the dispatch
     // needs no address.
-    TapHandler {
-        onDoubleTapped: {
-            if (root.window) {
-                Hyprland.dispatch(Dispatch.toggleMaximize(Hyprland.usingLua));
+    // Hovered, only while there's a title to double-click.
+    BarHit {
+        visible: root.window !== null
+
+        TapHandler {
+            onDoubleTapped: {
+                if (root.window) {
+                    Hyprland.dispatch(Dispatch.toggleMaximize(Hyprland.usingLua));
+                }
             }
         }
     }

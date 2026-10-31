@@ -13,8 +13,8 @@ import "lib/notifications.mjs" as Notes
 PanelWindow {
     id: root
 
-    // The bar it opens under, which is in its focus grab so the bell can
-    // close it again; the bar closes it on any other press (Bar.qml). Not
+    // The bar it opens under. Every bar is in its focus grab, so the bell
+    // can close it again; a bar closes it on any other press (Bar.qml). Not
     // named `bar`, which Bar.qml's `bar: bar` would bind to itself.
     required property var panel
 
@@ -62,8 +62,11 @@ PanelWindow {
         onTriggered: root.now = Date.now()
     }
 
+    // Every bar is in it, as in a popover's (PopoverGrab.qml), so a press
+    // on another monitor's bar reaches that bar, which closes the center,
+    // rather than only ending the grab.
     HyprlandFocusGrab {
-        windows: [root, root.panel]
+        windows: [root].concat(PopoverData.bars)
         active: root.visible
         onCleared: HistoryData.close()
     }
