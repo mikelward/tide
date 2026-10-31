@@ -3,7 +3,7 @@
 #   make test             run the tests: test-fast and test-harness
 #   make test-fast        the tests but the load test's own (CI's test job)
 #   make test-harness     the load test's own tests, shell_test_test.sh, about
-#                         five minutes on its own (CI's harness job)
+#                         a minute and a half on four CPUs (CI's harness job)
 #   make build            build tide-grant, tide-tz and tide-greetd (needs Go)
 #                         into build/
 #   make install          build, then install the per-user parts: the

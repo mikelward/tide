@@ -557,6 +557,13 @@ login_as() {
 }
 greeter=$(login_as tide)
 
+loaded="  INFO: Configuration Loaded"
+
+# Each case_N is a case of its own, run in a process of its own (below).
+# Their bodies are left unindented: some hold multi-line strings and here
+# documents, which indenting would change.
+
+case_1() {
 stubs "$tmp/clean" "exit 0" "  INFO: Configuration Loaded"
 run "$tmp/clean"
 check "a shell that loads and answers passes" test "$code" -eq 0
@@ -570,34 +577,47 @@ check "and says the lock loaded" contains "$out" "ok: Quickshell loads the lock"
 check "and named a clocks.local.json it can't take" contains "$out" "ok: the lock names a clocks.local.json it can't take, and keeps its clock's settings"
 check "and a wallpaper record it can't take" contains "$out" "ok: the lock names a wallpaper record it can't take"
 check "and says the greeter loaded" contains "$out" "ok: Quickshell loads the greeter"
+}
 
+case_2() {
+stubs "$tmp/clean" "exit 0" "$loaded"
 run "$tmp/clean" TIDE_KEEP_LOG="$tmp/kept.log"
 check "a log asked for is kept" test "$code" -eq 0
 check "with Quickshell's lines in it" grep -q 'Configuration Loaded' "$tmp/kept.log"
+}
 
+case_3() {
+stubs "$tmp/clean" "exit 0" "$loaded"
 run "$tmp/clean" TIDE_KEEP_LOG="$tmp/no-such-dir/kept.log"
 check "a log that can't be kept fails a run that passed" test "$code" -ne 0
 check "and says so" contains "$out" "couldn't keep the logs in $tmp/no-such-dir/kept.log"
+}
 
+case_4() {
 stubs "$tmp/reports" "exit 0" "  WARN scene: @Bar.qml[31:-1]: ReferenceError: x is not defined
   INFO: Configuration Loaded"
 run "$tmp/reports"
 check "a shell whose file reports an error fails" test "$code" -ne 0
 check "and names the report" contains "$out" "@Bar.qml[31:-1]: ReferenceError"
+}
 
+case_5() {
 stubs "$tmp/stuck" "exec sleep 3600" "  INFO: Configuration Loaded"
 run "$tmp/stuck"
 check "a shell that loads but never answers IPC fails" test "$code" -ne 0
 check "and says so" contains "$out" "didn't answer IPC within 2 s"
 check "within the limit, not hanging ($took s)" test "$took" -lt 30
+}
 
+case_6() {
 stubs "$tmp/broken" "exit 0" " ERROR: Failed to load configuration"
 run "$tmp/broken"
 check "a shell that fails to load fails" test "$code" -ne 0
 check "and shows Quickshell's log" contains "$out" "Failed to load configuration"
+}
 
-loaded="  INFO: Configuration Loaded"
-
+case_7() {
+stubs "$tmp/clean" "exit 0" "$loaded"
 run "$tmp/clean"
 check "a launcher that runs the app typed passes" contains "$out" "ok: the launcher finds an app by a query without its accent, and runs it"
 check "having typed the query and Enter" test "$(head -n 1 "$tmp/clean/typed")" = cafepro
@@ -607,92 +627,127 @@ check "and a picker that copies the character named passes" contains "$out" "ok:
 check "having typed its name and Enter" test "$(sed -n 3p "$tmp/clean/typed")" = "e acute"
 check "and a share picker that answers the window chosen passes" contains "$out" "ok: the share picker answers tide-share-picker's pipe with the window chosen"
 check "having pressed Right and Enter" test "$(sed -n 4p "$tmp/clean/typed")" = "-k Right -k Return"
+}
 
+case_8() {
 stubs "$tmp/picker-wrong" "exit 0" "  INFO: Configuration Loaded" ":" "$ran; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor; $(picked á); $(shared '[SELECTION]r/window:7')"
 run "$tmp/picker-wrong"
 check "a picker that copies the wrong character fails" test "$code" -ne 0
 check "and says what it copied" contains "$out" "the picker should copy é with \`wl-copy -- é\`; it ran \`wl-copy -- á\`"
+}
 
+case_9() {
 stubs "$tmp/runs-nothing" "exit 0" "$loaded" ":" "$opened; $focused; $typed"
 run "$tmp/runs-nothing"
 check "a launcher that runs nothing fails" test "$code" -ne 0
 check "and says so" contains "$out" "the launcher didn't run Café Probe in 2 s"
 check "within the limit ($took s)" test "$took" -lt 30
+}
 
+case_10() {
 stubs "$tmp/runs-wrong" "exit 0" "$loaded" ":" "$opened; $focused; $typed; tide launch -- other"
 run "$tmp/runs-wrong"
 check "a launcher that runs the wrong app fails" test "$code" -ne 0
 check "and says what it ran" contains "$out" "it ran \`tide launch -- other\`"
+}
 
+case_11() {
 stubs "$tmp/launcher-unfocused" "exit 0" "$loaded" ":" "$opened"
 run "$tmp/launcher-unfocused"
 check "a launcher that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the launcher didn't take the keyboard in 2 s"
+}
 
+case_12() {
 stubs "$tmp/settings-nothing" "exit 0" "$loaded" ":" "$ran; $settings_opened; $focused; $typed"
 run "$tmp/settings-nothing"
 check "a settings panel that runs nothing fails" test "$code" -ne 0
 check "and says so" contains "$out" "the settings panel didn't open the Network page's app in 2 s"
+}
 
+case_13() {
 stubs "$tmp/settings-wrong" "exit 0" "$loaded" ":" "$ran; $settings_opened; $focused; $typed; tide launch -- other"
 run "$tmp/settings-wrong"
 check "a settings panel that runs the wrong app fails" test "$code" -ne 0
 check "and says what it ran" contains "$out" "it ran \`tide launch -- other\`"
+}
 
+case_14() {
 stubs "$tmp/settings-unfocused" "exit 0" "$loaded" ":" "$ran; $settings_opened"
 run "$tmp/settings-unfocused"
 check "a settings panel that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the settings panel didn't take the keyboard in 2 s"
+}
 
+case_15() {
 stubs "$tmp/share-wrong" "exit 0" "$loaded" ":" "$settings_ran; $(shared '[SELECTION]/screen:HEADLESS-1')"
 run "$tmp/share-wrong"
 check "a share picker that answers the wrong choice fails" test "$code" -ne 0
 check "and says what it answered" contains "$out" "it answered: [SELECTION]/screen:HEADLESS-1"
+}
 
+case_16() {
 stubs "$tmp/share-unfocused" "exit 0" "$loaded" ":" "$settings_ran; $share_opened"
 run "$tmp/share-unfocused"
 check "a share picker that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the share picker didn't take the keyboard in 2 s"
+}
 
+case_17() {
+stubs "$tmp/clean" "exit 0" "$loaded"
 run "$tmp/clean"
 check "a server that records what it's sent passes" contains "$out" "ok: the notification server takes notifications and records them"
 
 check "and presenter mode that holds keep awake, and ends with Do not disturb, passes" contains "$out" "ok: presenter mode holds keep awake, and Do not disturb turned off ends it"
+}
 
+case_18() {
 stubs "$tmp/presenter-sticks" "exit 0" "  INFO: Configuration Loaded"
 : >"$tmp/presenter-sticks/presenter-sticks"
 run "$tmp/presenter-sticks"
 check "presenter mode that Do not disturb doesn't end fails" test "$code" -ne 0
 check "and says so" contains "$out" "presenter should be off after Do not disturb was turned off while presenting; it's on"
+}
 
+case_19() {
 stubs "$tmp/forgets" "exit 0" "  INFO: Configuration Loaded"
 printf '#!/bin/sh\necho 1\n' >"$tmp/forgets/notify-send"
 run "$tmp/forgets"
 check "a server that records nothing fails" test "$code" -ne 0
 check "and says so" contains "$out" "the notification server didn't record \"Probe\" in its history"
+}
 
+case_20() {
 stubs "$tmp/refuses" "exit 0" "  INFO: Configuration Loaded"
 printf '#!/bin/sh\necho "no server" >&2\nexit 1\n' >"$tmp/refuses/notify-send"
 run "$tmp/refuses"
 check "a server that refuses a notification fails" test "$code" -ne 0
 check "and says so" contains "$out" "the notification server didn't take \"Probe\": no server"
+}
 
+case_21() {
 stubs "$tmp/placeholder" "exit 0" "  WARN: Could not load icon \"no-such\" at size QSize(16, 16) from request
   INFO: Configuration Loaded"
 run "$tmp/placeholder"
 check "a shell whose icon won't load fails" test "$code" -ne 0
 check "and says so" contains "$out" "an icon wouldn't load"
+}
 
+case_22() {
 stubs "$tmp/late" "exit 0" "$loaded" ":" "" full "$all_runs" ":" 0.5
 run "$tmp/late"
 check "a shell that runs tide-tz only after reading its files passes" test "$code" -eq 0
 check "having waited for it" contains "$out" "ok: Quickshell loads the shell"
+}
 
+case_23() {
 stubs "$tmp/no-clocks" "exit 0" "$loaded" ":" "" full "tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-clocks"
 check "a shell that never runs tide-tz fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "tide-tz..." in 2 s'
+}
 
+case_24() {
 # A tide-tz that lasts as long as the shell that started it: kill -0 fails
 # once the shell is gone, which is when it ends.
 stubs "$tmp/endless" "exit 0" "$loaded" ":" "" full "$all_runs" \
@@ -701,172 +756,236 @@ run "$tmp/endless"
 check "a tide-tz that never ends fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell wasn't done with tide-tz in 2 s"
 check "within the limit ($took s)" test "$took" -lt 30
+}
 
+case_25() {
 stubs "$tmp/warns" "exit 0" "  WARN qml: tide: tide-tz exited 1
 $loaded"
 run "$tmp/warns"
 check "a shell whose clocks warn fails" test "$code" -ne 0
 check "and says what they said" contains "$out" "tide: tide-tz exited 1"
+}
 
+case_26() {
 stubs "$tmp/probe-fails" "exit 0" "  WARN qml: tide: tide-sysmon probe exited 2: no probe
 $loaded"
 run "$tmp/probe-fails"
 check "a shell whose system monitor warns fails" test "$code" -ne 0
 check "and says what it said" contains "$out" "tide: tide-sysmon probe exited 2"
+}
 
+case_27() {
 stubs "$tmp/no-title" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-title"
 check "a shell that never asks hyprctl for the focused window fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl activewindow -j..." in 2 s'
+}
 
+case_28() {
 stubs "$tmp/no-replay" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-replay"
 check "a shell that never has the focus guard replay its windows fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.announce_waiting()..." in 2 s'
+}
 
+case_29() {
 stubs "$tmp/no-order" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-order"
 check "a shell that never tells the focus guard its marks fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_focus.set_order(..." in 2 s'
+}
 
+case_30() {
 stubs "$tmp/no-keyboards" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup"
 run "$tmp/no-keyboards"
 check "a lock that never asks hyprctl for the keyboards fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the lock never ran "hyprctl devices -j..." in 2 s'
+}
 
+case_31() {
 stubs "$tmp/lock-takes-any-clocks" "exit 0" "$loaded"
 : >"$tmp/lock-takes-any-clocks/lock-takes-any-clocks" || exit 1
 run "$tmp/lock-takes-any-clocks"
 check "a lock that doesn't name a clocks.local.json it can't take fails" test "$code" -ne 0
 check "and says so" contains "$out" "the lock didn't name the bad hour24 in"
+}
 
+case_32() {
 stubs "$tmp/lock-takes-any-wallpaper" "exit 0" "$loaded"
 : >"$tmp/lock-takes-any-wallpaper/lock-takes-any-wallpaper" || exit 1
 run "$tmp/lock-takes-any-wallpaper"
 check "a lock that doesn't name a wallpaper record it can't take fails" test "$code" -ne 0
 check "and says so" contains "$out" "and the relative path in"
+}
 
+case_33() {
 stubs "$tmp/no-wallpaper-record" "exit 0" "$loaded"
 : >"$tmp/no-wallpaper-record/no-wallpaper-record" || exit 1
 run "$tmp/no-wallpaper-record"
 check "a shell that records no wallpaper for the lock fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell didn't record no wallpaper for the lock in"
+}
 
+case_34() {
 stubs "$tmp/no-system-zone" "exit 0" "$loaded"
 : >"$tmp/no-system-zone/no-system-zone" || exit 1
 run "$tmp/no-system-zone"
 check "a shell that never sets the system time zone fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell didn't set the time zone to Asia/Tokyo with timedatectl and look the clocks up again"
+}
 
+case_35() {
 stubs "$tmp/no-scheme" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-scheme"
 check "a shell that never tells apps the color scheme fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "gsettings set org.gnome.desktop.interface color-scheme..." in 2 s'
+}
 
+case_36() {
 stubs "$tmp/no-scheme-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme vpns vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-scheme-monitor"
 check "a shell that never follows the color scheme fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "gsettings monitor org.gnome.desktop.interface color-scheme..." in 2 s'
+}
 
+case_37() {
 stubs "$tmp/no-vpns" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpn-monitor idle input devices binds layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-vpns"
 check "a shell that never lists the VPNs fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show..." in 2 s'
+}
 
+case_38() {
 stubs "$tmp/no-vpn-monitor" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns idle input devices binds layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-vpn-monitor"
 check "a shell that never follows the VPNs fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "nmcli monitor..." in 2 s'
+}
 
+case_39() {
 stubs "$tmp/no-idle" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor input devices binds layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-idle"
 check "a shell that never restarts hypridle on its timings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "systemctl --user try-restart hypridle.service..." in 2 s'
+}
 
+case_40() {
 stubs "$tmp/idle-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" 300
 run "$tmp/idle-unset"
 check "a shell that loses the first of two quick changes fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell didn't write a lock time of 600, a dim time of 120 and suspend on AC, keeping the hand-edited suspend time of 900, to"
+}
 
+case_41() {
 stubs "$tmp/no-input" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle devices binds layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-input"
 check "a shell that never applies the mouse, touchpad and keyboard settings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval conf_input.reload()..." in 2 s'
+}
 
+case_42() {
 stubs "$tmp/no-devices" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input binds layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-devices"
 check "a shell that never lists the mice and touchpads fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl devices -j..." in 2 s'
+}
 
+case_43() {
 stubs "$tmp/no-binds" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices layouts outputs dim workspaces startup keyboards"
 run "$tmp/no-binds"
 check "a shell that never lists the key bindings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl binds -j..." in 2 s'
+}
 
+case_44() {
 stubs "$tmp/no-layouts" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds outputs dim workspaces startup keyboards"
 run "$tmp/no-layouts"
 check "a shell that never applies the layout settings fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval tide_layout.reload()..." in 2 s'
+}
 
+case_45() {
 stubs "$tmp/no-outputs" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts dim workspaces startup keyboards"
 run "$tmp/no-outputs"
 check "a shell that never lists the monitors fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl monitors all -j..." in 2 s'
+}
 
+case_46() {
 stubs "$tmp/no-dim" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs workspaces startup keyboards"
 run "$tmp/no-dim"
 check "a shell that never applies the dim strength fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval conf_appearance.reload()..." in 2 s'
+}
 
+case_47() {
 stubs "$tmp/no-workspaces" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim startup keyboards"
 run "$tmp/no-workspaces"
 check "a shell that never applies home and its apps' rules fails" test "$code" -ne 0
 check "and says so" contains "$out" 'the shell never ran "hyprctl eval conf_workspaces.reload()..." in 2 s'
+}
 
+case_48() {
 stubs "$tmp/no-startup" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces keyboards"
 run "$tmp/no-startup"
 check "a shell that doesn't run Start at login fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell should record running Start at login's (empty) list for the graphical session in"
+}
 
+case_49() {
 stubs "$tmp/input-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" "" true
 run "$tmp/input-unset"
 check "a shell that loses the first of four quick device settings fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell didn't write a right-handed mouse, a touchpad without tap to click, the us,de keyboard layouts and a receiver's own speed and key repeat, keeping the hand-edited mouse speed of 0.5, to"
+}
 
+case_50() {
 stubs "$tmp/clocks-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" "" "" Kolkata
 run "$tmp/clocks-unset"
 check "a shell that loses a clock's label fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell didn't write the clocks for Asia/Kolkata, labeled IST, then the hand-edited UTC to"
+}
 
+case_51() {
 stubs "$tmp/appearance-unset" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "" "" "" "" 12
 run "$tmp/appearance-unset"
 check "a shell that loses an appearance setting fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell didn't write light from 06:30, a latitude of 51.5 and a dim strength of 0.12, keeping the hand-edited dark from 20:00, to"
+}
 
+case_52() {
 stubs "$tmp/input-warns" "exit 0" "  WARN qml: tide: couldn't apply the mouse, touchpad and keyboard settings: no conf_input
 $loaded"
 run "$tmp/input-warns"
 check "a shell whose settings don't apply fails" test "$code" -ne 0
 check "and says what it warned" contains "$out" "tide: couldn't apply the mouse, touchpad and keyboard settings"
+}
 
+case_53() {
 stubs "$tmp/idle-warns" "exit 0" "  WARN qml: tide: systemctl --user try-restart hypridle.service exited 1: Failed to connect to bus
 $loaded"
 run "$tmp/idle-warns"
 check "a shell whose hypridle restart warns fails" test "$code" -ne 0
 check "and says what it warned" contains "$out" "tide: systemctl --user try-restart hypridle.service exited 1"
+}
 
+case_54() {
 stubs "$tmp/scheme-warns" "exit 0" "  WARN qml: tide: gsettings set org.gnome.desktop.interface color-scheme prefer-dark exited 1: No schemas installed
 $loaded"
 run "$tmp/scheme-warns"
 check "a shell that can't set the color scheme fails" test "$code" -ne 0
 check "and says what it said" contains "$out" "tide: gsettings set org.gnome.desktop.interface color-scheme prefer-dark exited 1"
+}
 
+case_55() {
 stubs "$tmp/vpns-warn" "exit 0" "  WARN qml: tide: nmcli: can't read connection line \"Home\"
 $loaded"
 run "$tmp/vpns-warn"
 check "a shell that can't read the VPNs fails" test "$code" -ne 0
 check "and says what it said" contains "$out" "tide: nmcli: can't read connection line"
+}
 
+case_56() {
 # The stand-in gsettings and nmcli answer the shell's calls as GNOME's and
 # NetworkManager's would, and refuse what they wouldn't.
 # stand_in NAME ARG...: what NAME's stand-in says to ARG..., in out and code.
@@ -905,19 +1024,25 @@ check "not even its own calls with more arguments" test "$code" -eq 2
 out=$(env LC_ALL=C sh shell/nmcli_stand_in.sh "-t -f" NAME,UUID,TYPE,ACTIVE,STATE connection show 2>&1)
 code=$?
 check "or with two of them run together" test "$code" -eq 2
+}
 
+case_57() {
 stubs "$tmp/title-warns" "exit 0" "  WARN qml: tide: bar title: hyprctl activewindow gave no window; the title waits for the next focus change
 $loaded"
 run "$tmp/title-warns"
 check "a shell whose title can't read hyprctl fails" test "$code" -ne 0
 check "and says what it said" contains "$out" "tide: bar title: hyprctl activewindow gave no window"
+}
 
+case_58() {
 stubs "$tmp/guard-warns" "exit 0" "  WARN qml: tide: couldn't tell the focus guard which windows are marked: no guard
 $loaded"
 run "$tmp/guard-warns"
 check "a shell whose focus guard calls fail fails" test "$code" -ne 0
 check "and says what it said" contains "$out" "couldn't tell the focus guard"
+}
 
+case_59() {
 # The stand-in hyprctl answers the focus guard's calls as Hyprland would:
 # ok only for the two MarkData.qml makes, of functions focus.lua defines.
 # ctl CODE [STAND_IN]: what it says to `hyprctl eval CODE`, in out and code.
@@ -944,28 +1069,40 @@ sed 's/function M\.set_order(/function M.set_marks(/' hypr/tide/focus.lua >"$tmp
 ctl 'tide_focus.set_order({})' "$tmp/renamed/shell/hyprland_stand_in.py"
 check "or a call focus.lua doesn't define" test "$code" -ne 0
 check "and says so" contains "$out" "hypr/tide/focus.lua has no tide_focus.set_order"
+}
 
+case_60() {
 stubs "$tmp/badge-warns" "exit 0" "$loaded"
 echo "  WARN qml: tide-lock: hyprctl devices gave no keyboard; the layout badge stays hidden" >"$tmp/badge-warns/load-lock.txt" || exit 1
 run "$tmp/badge-warns"
 check "a lock that can't read its keyboards fails" test "$code" -ne 0
 check "as the lock loads" contains "$out" "the lock loaded, but its commands warned"
 check "and says what it said" contains "$out" "tide-lock: hyprctl devices gave no keyboard"
+}
 
+case_61() {
+stubs "$tmp/clean" "exit 0" "$loaded"
 run "$tmp/clean" GO=tide-test-no-such-go
 check "without Go, a run that requires Quickshell fails" test "$code" -ne 0
 check "and says so" contains "$out" "no tide-test-no-such-go (to build tide-tz, which the bar's clocks run, and tide-greetd, which the greeter talks to greetd through) on PATH"
+}
 
+case_62() {
+stubs "$tmp/clean" "exit 0" "$loaded"
 run "$tmp/clean" GO=tide-test-no-such-go TIDE_REQUIRE_QS=
 check "without Go, any other run is skipped" test "$code" -eq 0
 check "whole, as without Quickshell" contains "$out" "SKIP: shell/shell_test.sh: no tide-test-no-such-go"
 check "and loads nothing" test "$(printf '%s\n' "$out" | grep -c '^ok:')" -eq 0
+}
 
+case_63() {
 stubs "$tmp/deaf" "exit 0" "  INFO: Configuration Loaded" ":" "" deaf
 run "$tmp/deaf"
 check "a shell that never listens for Hyprland's events fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell never listened for the stand-in Hyprland's events"
+}
 
+case_64() {
 stubs "$tmp/windowless" "exit 0" "  INFO: Configuration Loaded" ":" "" windowless
 run "$tmp/windowless"
 check "a shell that never asks Hyprland for its windows fails" test "$code" -ne 0
@@ -975,7 +1112,9 @@ check "and says so" contains "$out" "the shell never asked the stand-in Hyprland
 # once the passwords are typed, PAM's verdicts. It takes what was typed, as
 # the launcher does, so the greeter that follows never reads it.
 typed='until test -s "$XDG_RUNTIME_DIR/typed"; do sleep 0.1; done; rm "$XDG_RUNTIME_DIR/typed"'
+}
 
+case_65() {
 stubs "$tmp/unlocks" "exit 0" "$loaded" "$focused; $typed
 echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
@@ -984,27 +1123,38 @@ check "and says so" contains "$out" "ok: the lock turns down a wrong password an
 check "having typed a wrong password, then the right one" test "$(sed -n 5,6p "$tmp/unlocks/typed")" = "not-pw
 pw"
 check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
+}
 
+case_66() {
+stubs "$tmp/clean" "exit 0" "$loaded"
 run "$tmp/clean"
 check "without a password, the lock isn't unlocked" contains "$out" "no TIDE_LOCK_PASSWORD, so the lock isn't unlocked"
+}
 
+case_67() {
 stubs "$tmp/unfocused" "exit 0" "$loaded" "exec sleep 3600"
 run "$tmp/unfocused" TIDE_LOCK_PASSWORD=pw
 check "a lock that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the lock didn't take the keyboard in 2 s"
 check "within the limit ($took s)" test "$took" -lt 30
+}
 
+case_68() {
 stubs "$tmp/dies" "exit 0" "$loaded" "exit 1"
 run "$tmp/dies" TIDE_LOCK_PASSWORD=pw
 check "a lock that exits before it takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the lock exited before it took the keyboard"
+}
 
+case_69() {
 stubs "$tmp/stays" "exit 0" "$loaded" "$focused; exec sleep 3600"
 run "$tmp/stays" TIDE_LOCK_PASSWORD=pw
 check "a lock that never unlocks fails" test "$code" -ne 0
 check "and says so" contains "$out" "the lock didn't unlock in 2 s"
 check "within the limit ($took s)" test "$took" -lt 30
+}
 
+case_70() {
 stubs "$tmp/stuck-typing" "exit 0" "$loaded" "$focused; exec sleep 3600"
 cat >"$tmp/stuck-typing/wtype" <<'EOF'
 #!/bin/sh
@@ -1014,26 +1164,35 @@ run "$tmp/stuck-typing" TIDE_LOCK_PASSWORD=pw
 check "a wtype that never finishes typing fails" test "$code" -ne 0
 check "and says so" contains "$out" "wtype didn't finish typing into the launcher in 2 s"
 check "within the limit ($took s)" test "$took" -lt 30
+}
 
+case_71() {
 stubs "$tmp/lets-in" "exit 0" "$loaded" "$focused; $typed
 echo 'Authenticated successfully.'; exit 0"
 run "$tmp/lets-in" TIDE_LOCK_PASSWORD=pw
 check "a lock that takes the wrong password fails" test "$code" -ne 0
 check "and says so" contains "$out" "PAM should turn down the wrong password"
+}
 
+case_72() {
 stubs "$tmp/crashes" "exit 0" "$loaded" "$focused; $typed
 echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 3"
 run "$tmp/crashes" TIDE_LOCK_PASSWORD=pw
 check "a lock that exits with an error on unlocking fails" test "$code" -ne 0
 check "and says so" contains "$out" "the lock exited 3 on unlocking"
+}
 
+case_73() {
 stubs "$tmp/unlock-reports" "exit 0" "$loaded" "$focused; $typed
 echo '  WARN scene: @lock.qml[40:-1]: TypeError: x is undefined'
 echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlock-reports" TIDE_LOCK_PASSWORD=pw
 check "a lock whose file reports an error while unlocking fails" test "$code" -ne 0
 check "and names the report" contains "$out" "@lock.qml[40:-1]: TypeError"
+}
 
+case_74() {
+stubs "$tmp/clean" "exit 0" "$loaded"
 run "$tmp/clean"
 check "a greeter that logs in to tide on the right password passes" \
     contains "$out" "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
@@ -1041,32 +1200,75 @@ check "having typed a wrong password, then the right one, then the code" \
     test "$(sed -n 5,7p "$tmp/clean/typed")" = "not-tide-greeter-test
 tide-greeter-test
 246810"
+}
 
+case_75() {
 stubs "$tmp/greeter-alpha" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "$(login_as alpha)"
 run "$tmp/greeter-alpha"
 check "a greeter that starts another session fails" test "$code" -ne 0
 check "and says what greetd saw" contains "$out" "start_session {\"cmd\": [\"alpha-session\"]"
+}
 
+case_76() {
 stubs "$tmp/greeter-forgets" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "$(login_as forgetful)"
 run "$tmp/greeter-forgets"
 check "a greeter that doesn't remember the login fails" test "$code" -ne 0
 check "and says so" contains "$out" "the greeter should remember probe and tide"
+}
 
+case_77() {
 stubs "$tmp/greeter-codeless" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "$(login_as codeless)"
 run "$tmp/greeter-codeless"
 check "a greeter that doesn't answer the visible prompt fails" test "$code" -ne 0
 check "and says what greetd saw" contains "$out" "start_session refused: session is not ready"
+}
 
+case_78() {
 stubs "$tmp/greeter-stays" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "$(login_as stays)"
 run "$tmp/greeter-stays"
 check "a greeter that never logs in fails" test "$code" -ne 0
 check "and says so" contains "$out" "the greeter didn't log in in 2 s"
 check "within the limit ($took s)" test "$took" -lt 30
+}
 
+case_79() {
 stubs "$tmp/greeter-unfocused" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "exec sleep 3600"
 run "$tmp/greeter-unfocused"
 check "a greeter that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the greeter didn't take the keyboard in 2 s"
+}
+
+# --case N RESULT: run case_N alone, and write its passes and failures to
+# RESULT, which a case that exits early leaves unwritten.
+if test "${1-}" = --case; then
+    "case_$2"
+    printf '%d %d\n' "$passes" "$failures" >"$3" || exit 1
+    exit 0
+fi
+
+# Otherwise every case, each in a process of its own with its own stand-ins
+# and directory, $TIDE_TEST_JOBS at a time (the CPUs online by default).
+# Each spends most of its time waiting on the load test, so they run in
+# about a quarter of the time on four CPUs that they take one by one.
+jobs=${TIDE_TEST_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
+case $jobs in
+    '' | *[!0-9]* | 0)
+        echo "shell_test_test.sh: TIDE_TEST_JOBS must be a whole number above 0, not '$jobs'" >&2
+        exit 1
+        ;;
+esac
+self=$(pwd)/shell/shell_test_test.sh
+cases=$(sed -n 's/^case_\([0-9][0-9]*\)() {$/\1/p' "$self")
+mkdir "$tmp/results" || exit 1
+printf '%s\n' $cases | xargs -P "$jobs" -I{} sh "$self" --case {} "$tmp/results/{}"
+for n in $cases; do
+    if test -f "$tmp/results/$n" && read -r _p _f <"$tmp/results/$n"; then
+        passes=$((passes + _p))
+        failures=$((failures + _f))
+    else
+        fail "case_$n ended before it finished"
+    fi
+done
 
 printf 'shell_test_test.sh: %d passed, %d failed\n' "$passes" "$failures"
 test "$failures" -eq 0

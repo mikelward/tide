@@ -74,9 +74,10 @@ jobs:
       - run: make test-fast
 
   # The load test's own tests (shell/shell_test_test.sh), apart from `test`
-  # because they take about five minutes: each case runs the whole load test
-  # against stand-ins, and most wait out its 2 s limit at the step they
-  # break. They need only python3 and the runner's own tools.
+  # because they take about a minute and a half even with their cases run
+  # side by side: each case runs the whole load test against stand-ins, and
+  # most wait out its 2 s limit at the step they break. They need only
+  # python3 and the runner's own tools.
   harness:
     runs-on: ubuntu-latest
     timeout-minutes: 15
