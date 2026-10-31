@@ -1178,7 +1178,13 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
     workspace, most recent first. Enter goes there, which clears its
     mark. With none, the tab says so.
 - **Each key opens it on its own tab:** a tap of `Super` on Workspaces, `Super+Space` on Apps, `Super+A` on Attention (§6.6).
-  The same key again, or `Esc`, closes it.
+  The same key again, or `Esc`, closes it; another tab's key moves to
+  that tab.
+  - `conf`'s keys run `qs -c tide ipc call switcher toggle TAB`, and
+    `launcher toggle` for Apps. The tap of `Super` is the `tide:launcher`
+    global shortcut (§8.2).
+  - The Windows tab lists the window used last first. A workspace that
+    isn't made yet says so on the Workspaces tab.
 - **`Tab` / `Shift+Tab`** move to the next or previous tab, and wrap.
 - Typing filters the tab you're on with the launcher's fuzzy scorer:
   names on Workspaces, titles and app names on Windows and Attention.
@@ -1969,11 +1975,11 @@ this spec.
     stands.
   - Enter on a row focuses that window, switching workspace, which clears
     its mark. The others keep theirs.
-  - This replaces `Super+Tab`'s cycle: a press went to the most recent
+  - This replaced `Super+Tab`'s cycle: a press went to the most recent
     mark, and further presses with Super held stepped through the rest,
     falling back to the window you were last in. The cycle's
     `tide_focus.focus_attention()`, `end_cycle()` and `tide-cycle`
-    events go (TODO.md). With no marks, the tab is empty, and there's no
+    events are gone. With no marks, the tab says so, and there's no
     fallback to the last window.
 - **Polkit prompts in M2.** The transitional polkit agent is a window of
   its own, and Lua can't see which process asked. So the guard applies the
