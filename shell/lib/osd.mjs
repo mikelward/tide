@@ -33,6 +33,14 @@ export function muteChanged(before, after) {
     return changed(before, after) && before.muted !== after.muted;
 }
 
+// Whether the OSD shows on the monitor named `screen`: while it's up, on
+// the monitor that had focus when it was shown (`monitor`). That's state
+// recorded by show(), not read back from the window, whose own screen and
+// visibility would feed back into this.
+export function shownOn({ showing, pill, monitor }, screen) {
+    return Boolean(showing && pill && monitor && monitor === screen);
+}
+
 // The pill for the output: its icon, the level as a fraction for the bar
 // (capped at 1; an app may push the volume past 100%), and the percentage.
 export function volumePill({ volume, muted }) {
@@ -62,4 +70,26 @@ export function micPill({ muted }) {
         level: null,
         label: muted ? "Mic off" : "Mic on",
     });
+}
+
+// The pill for keep awake after Super+S (SPEC.md §10): whether it's on now,
+// and why when only a live mic holds it, since the key can't turn that off.
+// `on` is what's in effect, `asked` your own toggle, `presenting` presenter
+// mode.
+export function keepAwakePill({ on, asked, presenting }) {
+    let label = "Keep awake off";
+    if (on) {
+        label = asked || presenting ? "Keep awake on" : "Awake while the mic is live";
+    }
+    return Object.freeze({ icon: "display-brightness-symbolic", level: null, label });
+}
+
+// The pill for presenter mode after Super+P. Without the shell as the
+// notification server there's no Do not disturb to turn on, so it says so.
+export function presenterPill({ presenting, dndAvailable }) {
+    let label = "Presenter mode off";
+    if (presenting) {
+        label = dndAvailable ? "Presenting" : "Presenting, keep awake only";
+    }
+    return Object.freeze({ icon: "x-office-presentation-symbolic", level: null, label });
 }

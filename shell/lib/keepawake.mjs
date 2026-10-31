@@ -1,6 +1,7 @@
 // Keep awake (SPEC.md §10): a bar toggle that holds an idle inhibitor, so
 // the screen doesn't dim, lock, blank or suspend for idleness. A click keeps
-// it on until the next click; it never times out.
+// it on until the next click; it never times out. A click itself is
+// presenter.mjs's keepAwakeToggled, since presenter mode holds it too.
 //
 // The state is {on, until}. `until` is from the versions that turned it off
 // after two hours: a config reload into this version carries their state
@@ -15,9 +16,4 @@ export const OFF = Object.freeze({ on: false, until: 0 });
 export function migrated(state, now) {
     const pending = Number.isFinite(state?.until) && state.until > now;
     return Object.freeze({ on: Boolean(state?.on) || pending, until: 0 });
-}
-
-// The state after a click: on, with no end, or off.
-export function toggled(state) {
-    return state?.on ? OFF : Object.freeze({ on: true, until: 0 });
 }

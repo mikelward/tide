@@ -592,6 +592,36 @@ EOF
         fi
     done
     settle
+    presenter
+}
+
+# want_status TARGET WANT WHAT: fails the test unless `ipc call TARGET
+# status` answers WANT, after WHAT.
+want_status() {
+    _status=$(ipc call "$1" status) || exit 1
+    if test "$_status" != "$2"; then
+        echo "FAIL: $1 should be $2 after $3; it's $_status" >&2
+        grep -v '^\[' "$log" >&2
+        exit 1
+    fi
+}
+
+# presenter: presenter mode (SPEC.md §10) over IPC, as Super+P and Super+S
+# call it, with the shell as the notification server: on, it holds keep
+# awake; turning Do not disturb off ends it and leaves keep awake on, as
+# yours; Super+S then turns that off. notify runs it.
+presenter() {
+    want_status presenter off "the shell started"
+    want_status keepawake off "the shell started"
+    ipc call presenter toggle >/dev/null || exit 1
+    want_status presenter on "Super+P"
+    want_status keepawake on "Super+P"
+    ipc call notifications setDnd false >/dev/null || exit 1
+    want_status presenter off "Do not disturb was turned off while presenting"
+    want_status keepawake on "Do not disturb was turned off while presenting"
+    ipc call keepawake toggle >/dev/null || exit 1
+    want_status keepawake off "Super+S"
+    settle
 }
 
 # written_settings: fails the test unless the shell started by writing
@@ -1417,6 +1447,7 @@ if test -n "$notify_path"; then
         fi
     done
     echo "ok: the notification server takes notifications and records them"
+    echo "ok: presenter mode holds keep awake, and Do not disturb turned off ends it"
 else
     echo "$prog: no notify-send, so the shell isn't sent notifications; CI sends them" >&2
 fi

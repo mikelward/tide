@@ -7,6 +7,7 @@ import Quickshell.Services.Notifications
 import "lib/history.mjs" as History
 import "lib/mute.mjs" as Mute
 import "lib/notifications.mjs" as Notes
+import "lib/presenter.mjs" as Presenter
 
 // The notification server (SPEC.md §9), its popup queue, and each popup's
 // countdown. The countdowns live here rather than in the popups, so there's
@@ -74,8 +75,10 @@ Singleton {
     // Do not disturb (§9), set from the center, the bell or IPC. While it's
     // on, a notification gets no popup unless it's a system sender's
     // critical one (Notes.passesDnd); it still goes to the history and
-    // marks its app's windows. It's kept across config reloads.
-    readonly property bool dnd: dndState.on
+    // marks its app's windows. It's kept across config reloads. Presenter
+    // mode holds it on too (PresenterData), over your own toggle (`ownDnd`).
+    readonly property bool dnd: dndState.on || PresenterData.on
+    readonly property bool ownDnd: dndState.on
     // Popups are held for Do not disturb, or while a screen is shared
     // (ShareData). The same rule decides what gets through either way.
     readonly property bool quiet: root.dnd || ShareData.holdingPopups
@@ -90,7 +93,14 @@ Singleton {
         property bool on: false
     }
 
+    // Turning it off while presenting ends presenter mode
+    // (Presenter.dndSet).
     function setDnd(on) {
+        PresenterData.apply(Presenter.dndSet(PresenterData.parts(), on));
+    }
+
+    // Your own toggle, for PresenterData.apply.
+    function setOwnDnd(on) {
         dndState.on = on;
     }
 

@@ -1,18 +1,10 @@
 // Tests for keepawake.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { OFF, migrated, toggled } from "./keepawake.mjs";
+import { OFF, migrated } from "./keepawake.mjs";
 
 test("it starts off", () => {
     assert.equal(OFF.on, false);
-});
-
-test("a click turns it on, with no end", () => {
-    assert.deepEqual(toggled(OFF), { on: true, until: 0 });
-});
-
-test("a second click turns it off", () => {
-    assert.deepEqual(toggled(toggled(OFF)), OFF);
 });
 
 test("an old deadline still to come carries over as on, with no end", () => {

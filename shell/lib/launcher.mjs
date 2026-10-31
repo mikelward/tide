@@ -61,9 +61,9 @@ export function launcherItems(entries) {
 // The built-in quick actions (§8), as rows like the apps', with symbolic
 // icons the launcher colors like the bar's: `hint` is the
 // key that does the same, so the launcher teaches the bindings. Do not
-// disturb and keep awake say whether they're on (`state.dnd`,
-// `state.keepAwake`, and `state.micHolds` when only a live mic holds keep
-// awake, which a click can't turn off). Do not disturb is there only
+// disturb, keep awake and presenter mode say whether they're on
+// (`state.dnd`, `state.keepAwake`, `state.presenting`, and `state.micHolds`
+// when only a live mic holds keep awake, which a click can't turn off). Do not disturb is there only
 // while the shell is the notification server (`state.notifications`), as
 // the bell is: under swaync it would hold nothing. Dark style says whether
 // it's on and until when (`state.dark`, `state.darkUntil` as "HH:MM", or ""
@@ -99,7 +99,8 @@ export function quickActions(state = {}) {
         quick("settings", "Settings", "Sound, network and Bluetooth", "preferences-system-symbolic", ["preferences", "control panel", "sound", "audio", "network", "wi-fi", "wifi", "bluetooth"]),
         state.notifications ? quick("dnd", "Do not disturb", onOff(state.dnd), "notifications-disabled-symbolic", ["dnd", "notifications", "quiet"]) : null,
         quick("dark-style", "Dark style", onOff(state.dark) + (state.darkUntil ? ` until ${state.darkUntil}` : ""), "night-light-symbolic", ["theme", "light", "night", "appearance", "mode"]),
-        quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), "display-brightness-symbolic", ["caffeine", "idle", "inhibit"]),
+        quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), "display-brightness-symbolic", ["caffeine", "idle", "inhibit"], "Super+S"),
+        quick("presenter", "Presenter mode", onOff(state.presenting), "x-office-presentation-symbolic", ["presentation", "slides", "projector", "meeting"], "Super+P"),
         quick("clear-clipboard", "Clear clipboard history", "Forget everything Super+C lists", "edit-clear-all-symbolic", ["clipboard", "wipe", "history", "cliphist", "forget"]),
         quick("reload", "Reload shell", "tide", "view-refresh-symbolic", ["restart", "quickshell"]),
     ].filter(q => q).map((q, rank) => Object.assign({}, q, { rank }));
@@ -129,7 +130,8 @@ export function windowScreenshot(address) {
 // What running a quick action takes: a command to run (`run`), with a
 // pause first for the launcher to leave the screen (`afterClose`, so a
 // screenshot doesn't catch it), or something the shell does itself
-// (`shell`: "settings", "dnd", "dark-style", "keep-awake", "reload"). "Screenshot window" takes the
+// (`shell`: "settings", "dnd", "dark-style", "keep-awake", "presenter",
+// "reload"). "Screenshot window" takes the
 // window recorded as the launcher opened (`context.window`, its normalized
 // Hyprland address; windowScreenshot), and "Screenshot screen" the monitor
 // it opened on (`context.output`, Hyprland's name for it), so a focus change
@@ -159,6 +161,7 @@ export function quickCommand(id, context = {}) {
     case "dnd":
     case "dark-style":
     case "keep-awake":
+    case "presenter":
     case "reload":
         return { shell: id };
     default:

@@ -515,6 +515,24 @@ once you have agreed with it or reversed it.
 - [ ] **Muting drops Hyprland's urgent flag too**, not only the guard's
   and notifications' marks, so a muted app's own activation doesn't flag
   it. Keeping it is one condition in `markedWindows`.
+- [ ] **Turning Do not disturb or keep awake off while presenting ends
+  presenter mode, and the other stays on, as yours** (SPEC.md §10). Both
+  read on while presenting, so a toggle can only mean "off". The
+  alternatives: put both back as they were before presenter mode, or
+  leave presenter mode on and ignore the toggle. It's `dndSet` and
+  `keepAwakeToggled` in `shell/lib/presenter.mjs`.
+- [ ] **Super+S and Super+P show the OSD; a click on the bar doesn't.** The
+  pointer is already on the icon that changed, and the key may be pressed
+  with the bar on another monitor. Showing it for clicks too is one call
+  in `KeepAwakeData.toggle` and `PresenterData.toggle`.
+- [ ] **Under swaync, presenter mode is keep awake alone**, and its OSD
+  says so. Driving swaync's own DND (`swaync-client --dnd-on`) would cover
+  the transitional setup, at the cost of a second DND to keep in step until
+  swaync retires. It's `NotificationData.enabled` in `PresenterData.qml`'s
+  pill.
+- [ ] **The Presenting pill is in the accent color, first on the right,**
+  left of the privacy pills, so it reads as something you turned on, not a
+  warning. Moving it is one anchor in `shell/Bar.qml`.
 
 ## Transitional shell (M2)
 
@@ -627,6 +645,13 @@ tested where it can be without a live session.
   marked `media.category` Monitor or Manager, or `stream.monitor`
   (pavucontrol's, through pipewire-pulse). On a live session, check that a Meet call holds it, and
   that pavucontrol's level meters don't.
+- `Super+S` toggles keep awake and `Super+P` presenter mode (SPEC.md
+  §10), through `qs -c tide ipc call keepawake toggle` and `presenter
+  toggle`, each with an OSD; presenter mode's pill is
+  `shell/PresenterPill.qml`, its state `shell/PresenterData.qml` and
+  `shell/lib/presenter.mjs`. CI calls both over IPC with the shell as the
+  notification server. On a live session, check the keys, the OSD, the
+  pill on every monitor, and that hypridle stays off while presenting.
 - The orange mic pill (§7.4) is `shell/MicPill.qml`, left of the tray
   beside the Sharing pill, shown while `MicData.live`; a click lists each
   app recording, and a click on one mutes or unmutes its recording
