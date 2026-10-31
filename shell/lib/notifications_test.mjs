@@ -249,6 +249,14 @@ test("Do not disturb holds whatever in the queue doesn't pass, as it is now", ()
     assert.deepEqual(heldByDnd([shell, chat], true, URGENCY), [shell, chat]);
 });
 
+test("with criticals set not to break through, Do not disturb holds a system critical too", () => {
+    const shell = { appName: "tide", desktopEntry: "", urgency: URGENCY.Critical };
+    assert.equal(passesDnd(shell, URGENCY, false), false);
+    assert.deepEqual(heldByDnd([shell], true, URGENCY, false), [shell]);
+    assert.deepEqual(heldByDnd([shell], true, URGENCY, true), []);
+    assert.deepEqual(heldByDnd([shell], false, URGENCY, false), [], "off, nothing's held");
+});
+
 test("a popup that goes rests, still live, out of the queue", () => {
     const a = { id: 1 }, b = { id: 2 };
     assert.deepEqual(rest([a, b], [], a), { queue: [b], resting: [a] });

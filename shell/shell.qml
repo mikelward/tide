@@ -82,6 +82,8 @@ ShellRoot {
         OutputsData.listMonitors();
         // Start at login's commands, once a session.
         StartupData.load();
+        // Do not disturb's schedule, checked from the start.
+        NotificationSettingsData.load();
     }
 
     // A toplevel's class and fullscreen state come from Hyprland's client

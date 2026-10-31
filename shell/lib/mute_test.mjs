@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadWorkspaceSettings, withMuted } from "./workspacenames.mjs";
-import { appWindowSite, windowMuted, noteOf, noteMuted, windowEntry, noteEntry, toggledMuted, groupNote } from "./mute.mjs";
+import { appWindowSite, windowMuted, noteOf, noteMuted, windowEntry, noteEntry, toggledMuted, groupNote, withMuteAdded, withMuteRemoved } from "./mute.mjs";
 
 test("an app ID mutes windows as home's apps match them", () => {
     assert.equal(windowMuted("org.gnome.Nautilus", ["nautilus"]), true, "a bare name, the last part of a qualified one");
@@ -104,4 +104,19 @@ test("each mute surface matches the entry it writes, a .desktop-suffixed ID incl
     assert.equal(windowMuted("org.telegram.desktop", ["org.telegram"]), true);
     assert.equal(noteMuted(noteOf("org.telegram.desktop", "", ""), ["org.telegram"]), true);
     assert.equal(noteMuted(noteOf("org.telegram", "", ""), ["org.telegram.desktop"]), true);
+});
+
+test("the Notifications page adds an entry as loading would take it, once", () => {
+    assert.deepEqual(withMuteAdded(["slack"], "  site:chat.google.com "), { list: ["slack", "site:chat.google.com"] });
+    assert.deepEqual(withMuteAdded([], "Example App"), { list: ["Example App"] });
+    assert.match(withMuteAdded(["Slack"], "slack").error, /slack is muted already/);
+    assert.match(withMuteAdded([], "site:").error, /"site:" names no host/);
+    assert.match(withMuteAdded([], "   ").error, /isn't an app or a site/);
+});
+
+test("the Notifications page takes out an entry by its place and text", () => {
+    assert.deepEqual(withMuteRemoved(["a", "b"], 1, "b"), { list: ["a"] });
+    assert.deepEqual(withMuteRemoved(["a", "b"], undefined, "a"), { list: ["b"] });
+    assert.match(withMuteRemoved(["b", "a"], 1, "b").error, /entry 2 isn't b/);
+    assert.match(withMuteRemoved(["a"], undefined, "z").error, /z isn't muted/);
 });

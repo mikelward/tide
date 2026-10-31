@@ -136,6 +136,9 @@ if test "\$1" = ipc; then
         *"call settings addClock US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the clocks" ;;
         *"call settings setSystemZone US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the time zone" ;;
         *"call settings setSystemZone Asia/Tokyo"*) : >"\$XDG_RUNTIME_DIR/zone-set" ;;
+        *"call settings setNotifications dndScheduled true"*) printf '{\n  "criticalsBreakThrough": false,\n  "dndScheduled": true\n}\n' >"\$HOME/.config/tide/notifications.local.json" ;;
+        *"call settings setNotifications dndDays mon,funday"*) echo 'dndDays: "funday" isn'"'"'t a day; use mon, tue, wed, thu, fri, sat, sun; not changing dndDays' ;;
+        *"call settings removeMuted org.example.Noisy"*) printf '{\n  "muted": [\n    "site:chat.example.com"\n  ]\n}\n' >"\$HOME/.config/tide/workspaces.local.json" ;;
         # Presenter mode as the shell keeps it (shell/lib/presenter.mjs):
         # it holds keep awake over your own toggle, and turning Do not
         # disturb or keep awake off ends it. DIR/presenter-sticks keeps it

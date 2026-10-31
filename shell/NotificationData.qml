@@ -74,7 +74,8 @@ Singleton {
 
     // Do not disturb (§9), set from the center, the bell or IPC. While it's
     // on, a notification gets no popup unless it's a system sender's
-    // critical one (Notes.passesDnd); it still goes to the history and
+    // critical one and the Notifications page lets those through
+    // (Notes.passesDnd); it still goes to the history and
     // marks its app's windows. It's kept across config reloads. Presenter
     // mode holds it on too (PresenterData), over your own toggle (`ownDnd`).
     readonly property bool dnd: dndState.on || PresenterData.on
@@ -84,6 +85,9 @@ Singleton {
     readonly property bool quiet: root.dnd || ShareData.holdingPopups
 
     onQuietChanged: root.holdForDnd()
+    // Do not disturb starting during a share leaves `quiet` as it was, but
+    // can hold a critical the share let through (criticalsBreakThrough).
+    onDndChanged: root.holdForDnd()
 
     PersistentProperties {
         id: dndState
@@ -99,8 +103,17 @@ Singleton {
         PresenterData.apply(Presenter.dndSet(PresenterData.parts(), on));
     }
 
-    // Your own toggle, for PresenterData.apply.
+    // Your own toggle, for PresenterData.apply. The schedule leaves one
+    // you've set (NotificationSettingsData).
     function setOwnDnd(on) {
+        const was = dndState.on;
+        dndState.on = on;
+        NotificationSettingsData.ownChanged(was, on);
+    }
+
+    // The Notifications page's schedule turning it on or off as a window
+    // starts or ends (shell/lib/dnd.mjs).
+    function setScheduledDnd(on) {
         dndState.on = on;
     }
 
@@ -110,7 +123,10 @@ Singleton {
     // rests, as a popup timing out does, keeping its history entry, its
     // marks and its actions.
     function holdForDnd() {
-        const held = Notes.heldByDnd(root.queue, root.quiet, root.urgency);
+        // "Critical alerts break through" is Do not disturb's; a share
+        // holds by its own rule.
+        const breakThrough = !root.dnd || NotificationSettingsData.settings.criticalsBreakThrough;
+        const held = Notes.heldByDnd(root.queue, root.quiet, root.urgency, breakThrough);
         if (ShareData.holdingPopups) {
             ShareData.counted(held.length);
         }
