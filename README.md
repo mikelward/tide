@@ -116,7 +116,10 @@ starts it otherwise (under waybar, say), or when
 `~/.config/tide/autostart` lists it; `tide-agent` then stands aside. A Wi-Fi password is asked for in the
 network popover, and a VPN's in a prompt of the shell's own, or in the
 VPN plugin's window. A request NetworkManager makes on its own, such as a
-reconnect, arrives as a notification first.
+reconnect, arrives as a notification first. `tide-agent` is also BlueZ's
+pairing agent: a device asking to pair, or to use a service, shows as a
+notification, then a prompt to confirm, type or show the code. It stands
+aside while blueman's applet runs.
 
 `tide doctor` checks the running session and prints one line per
 problem, with its fix: units that aren't running, D-Bus names owned by the

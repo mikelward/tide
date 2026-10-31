@@ -4,9 +4,10 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 import "lib/agent.mjs" as Agent
 
-// The network prompt (SPEC.md §5.6), for AgentData's request: the
-// connection, what it needs, and a field for each thing tide-agent asks
-// for, centered on the focused monitor over a dimmed backdrop, like the
+// The network and Bluetooth prompt (SPEC.md §5.6), for AgentData's
+// request: the connection or device, what it needs, and a field for each
+// thing tide-agent asks for (none, for a pairing to confirm or a code to
+// show), centered on the focused monitor over a dimmed backdrop, like the
 // polkit prompt. It takes the keyboard when AgentData says it may (§14.1);
 // otherwise it waits for a click. Enter moves to the next field and
 // submits from the last; Escape or Cancel says no, which stops
@@ -18,6 +19,7 @@ PanelWindow {
     readonly property var request: AgentData.current
     readonly property bool wanted: AgentData.showing === "prompt" && root.request !== null
     readonly property var fields: root.request?.fields ?? []
+    readonly property var buttons: root.request ? Agent.buttons(root.request) : []
 
     onWantedChanged: {
         if (wanted) {
@@ -32,10 +34,13 @@ PanelWindow {
         }
     }
 
+    // With no field, the card itself takes Enter and Escape.
     function focusField(i) {
         const item = inputs.itemAt(i);
         if (item) {
             item.input.forceActiveFocus();
+        } else {
+            keys.forceActiveFocus();
         }
     }
 
@@ -55,6 +60,19 @@ PanelWindow {
     function cancel() {
         if (root.request) {
             AgentData.cancel(root.request.id);
+        }
+    }
+
+    function press(button) {
+        if (!root.request || !button) {
+            return;
+        }
+        if (button.answer === "reply") {
+            root.submit();
+        } else if (button.answer === "decline") {
+            AgentData.decline(root.request.id);
+        } else {
+            root.cancel();
         }
     }
 
@@ -89,6 +107,14 @@ PanelWindow {
             onClicked: root.focusField(0)
         }
 
+        Item {
+            id: keys
+
+            Keys.onReturnPressed: root.press(root.buttons[1])
+            Keys.onEnterPressed: root.press(root.buttons[1])
+            Keys.onEscapePressed: root.cancel()
+        }
+
         Column {
             id: column
 
@@ -104,7 +130,7 @@ PanelWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     implicitWidth: 22
                     implicitHeight: 22
-                    name: root.request?.kind === "wifi" ? "network-wireless-symbolic" : root.request?.kind === "vpn" ? "network-vpn-symbolic" : "dialog-password-symbolic"
+                    name: root.request ? Agent.icon(root.request) : "dialog-password-symbolic"
                     color: Theme.accent
                 }
 
@@ -209,13 +235,12 @@ PanelWindow {
                 spacing: 8
 
                 Repeater {
-                    model: [{
-                            label: "Cancel",
-                            primary: false
-                        }, {
-                            label: "Connect",
-                            primary: true
-                        }]
+                    // Secondary then primary; a code only shown has no primary.
+                    model: root.buttons.filter(b => b !== null).map((b, i) => ({
+                                label: b.label,
+                                answer: b.answer,
+                                primary: b.answer === "reply"
+                            }))
 
                     Rectangle {
                         required property var modelData
@@ -231,7 +256,7 @@ PanelWindow {
                         }
 
                         TapHandler {
-                            onTapped: parent.modelData.primary ? root.submit() : root.cancel()
+                            onTapped: root.press(parent.modelData)
                         }
 
                         Text {

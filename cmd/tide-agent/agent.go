@@ -353,7 +353,10 @@ func (a *agent) reconcile() {
 	a.mu.Lock()
 	nm, applet, registered := a.nmOwner, a.appletOwner, a.registered
 	a.mu.Unlock()
-	manager := a.sys.Object(nmName, agentManager)
+	// Bound to the NetworkManager it read, as the BlueZ agent's is: calls
+	// go to that unique name, and the result counts only if it's still
+	// the owner.
+	manager := a.sys.Object(nm, agentManager)
 	switch {
 	case nm == "":
 		a.tell(map[string]any{"type": "status", "state": "waiting"})
@@ -362,7 +365,7 @@ func (a *agent) reconcile() {
 			if err := manager.Call("org.freedesktop.NetworkManager.AgentManager.Unregister", 0).Err; err != nil {
 				a.logf("couldn't unregister from NetworkManager for nm-applet: %v", err)
 			}
-			a.setRegistered(false)
+			a.setRegistered(nm, false)
 		}
 		a.tell(map[string]any{"type": "status", "state": "standing-aside", "pid": ownerPID(a.session, applet)})
 	case !registered:
@@ -371,15 +374,23 @@ func (a *agent) reconcile() {
 			a.tell(map[string]any{"type": "status", "state": "unregistered", "message": err.Error()})
 			return
 		}
-		a.setRegistered(true)
+		if !a.setRegistered(nm, true) {
+			return
+		}
 		a.tell(map[string]any{"type": "status", "state": "registered"})
 	}
 }
 
-func (a *agent) setRegistered(r bool) {
+// setRegistered records the result of a call made to owner, if it still
+// owns the name; it says whether it did.
+func (a *agent) setRegistered(owner string, r bool) bool {
 	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.nmOwner != owner {
+		return false
+	}
 	a.registered = r
-	a.mu.Unlock()
+	return true
 }
 
 // reconciler runs reconcile once per kick, off the signal goroutine, since
@@ -404,12 +415,23 @@ func (a *agent) poke() {
 
 func (a *agent) nmChanged(owner string) {
 	a.mu.Lock()
+	gone := a.nmOwner != "" && owner != a.nmOwner
 	if owner != a.nmOwner {
 		// A new NetworkManager knows no agents.
 		a.registered = false
 	}
 	a.nmOwner = owner
+	var cancels []context.CancelFunc
+	if gone {
+		// Its requests went with it: nobody is left to answer.
+		for _, p := range a.requests {
+			cancels = append(cancels, p.cancel)
+		}
+	}
 	a.mu.Unlock()
+	for _, c := range cancels {
+		c()
+	}
 	a.poke()
 }
 

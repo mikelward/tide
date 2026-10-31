@@ -25,8 +25,14 @@
 //	{"type": "lock", "locked": bool}       tide-lock.service started or stopped
 //	{"type": "missed", "connection": {...}} a request declined while locked,
 //	                                       or that nobody answered in time
+//	{"type": "bt-status", "state": ...}    the same, for BlueZ's pairing
+//	                                       agent ("standing-aside" with
+//	                                       blueman's applet's pid)
 //	{"type": "fault", "message"}           then it exits 1
 //
+// It's also BlueZ's default pairing agent (org.bluez.Agent1), passing its
+// requests on as bt-* kinds (shell.go), and standing aside while
+// org.blueman.Applet has an owner, as it does for nm-applet.
 // Saved secrets come from the keyring, under nm-applet's schema. A line
 // from or to the shell can hold a password, so none is ever logged. It
 // exits 0 when stdin closes.
@@ -36,6 +42,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/godbus/dbus/v5"
@@ -45,6 +52,8 @@ type config struct {
 	system, session func() (*dbus.Conn, error)
 	dirs            []string
 	timeout         time.Duration
+	// BlueZ's, which is shorter; zero is bluezTimeout.
+	btTimeout time.Duration
 }
 
 func main() {
@@ -89,24 +98,59 @@ func run(stdin io.Reader, stdout, stderr io.Writer, cfg config) int {
 	if err := sys.Export(secretAgent{a}, agentPath, agentIface); err != nil {
 		return fault("couldn't offer the agent on the system bus: %v", err)
 	}
+	bt := &btAgent{a: a, timeout: cfg.btTimeout, kick: make(chan struct{}, 1)}
+	if bt.timeout == 0 {
+		bt.timeout = bluezTimeout
+	}
+	if err := sys.Export(bluezAgent{bt}, bluezPath, bluezIface); err != nil {
+		return fault("couldn't offer the pairing agent on the system bus: %v", err)
+	}
 
-	readErr := make(chan error, 1)
-	go func() { readErr <- shell.read(stdin) }()
-	go a.reconciler(shell.done)
-
+	// Order matters: every signal the agents act on is watched (each
+	// AddMatch has returned, so the bus delivers from then on) before
+	// anything registers, so nothing that happens just after registering
+	// is missed. The name watchers only record owners and queue a kick;
+	// the reconcilers that register start last.
 	sysSignals := watchSignals(sys)
 	sessionSignals := watchSignals(session)
-	if err := watchName(sys, sysSignals, nmName, a.nmChanged); err != nil {
+	if err := bt.watchDevices(sys, sysSignals); err != nil {
 		return fault("%v", err)
 	}
-	if err := watchName(session, sessionSignals, appletName, a.appletChanged); err != nil {
-		return fault("%v", err)
+	locked := func(l bool) {
+		a.setLocked(l)
+		if l {
+			// A code shown under the lock can't be seen: its pairing ends.
+			bt.endCurrent("", endLocked)
+		}
 	}
-	if err := watchLock(session, sessionSignals, a.setLocked); err != nil {
+	if err := watchLock(session, sessionSignals, locked); err != nil {
 		// Without it, a request while locked is asked for under the lock,
 		// where it can't be seen, and times out into a missed request.
 		fmt.Fprintf(stderr, "tide-agent: %v; requests while locked go unseen until they time out\n", err)
 	}
+	// The rivals before the services, so the first registration already
+	// knows whether to stand aside.
+	if err := watchName(session, sessionSignals, appletName, a.appletChanged); err != nil {
+		return fault("%v", err)
+	}
+	if err := watchName(session, sessionSignals, bluemanName, bt.bluemanChanged); err != nil {
+		return fault("%v", err)
+	}
+	if err := watchName(sys, sysSignals, nmName, a.nmChanged); err != nil {
+		return fault("%v", err)
+	}
+	if err := watchName(sys, sysSignals, bluezName, bt.bluezChanged); err != nil {
+		return fault("%v", err)
+	}
+
+	readErr := make(chan error, 1)
+	go func() { readErr <- shell.read(stdin) }()
+	// Each reconciler finishes the registration it's in before it stops,
+	// so the exit below unregisters whatever got registered.
+	var reconcilers sync.WaitGroup
+	reconcilers.Add(2)
+	go func() { defer reconcilers.Done(); a.reconciler(shell.done) }()
+	go func() { defer reconcilers.Done(); bt.reconciler(shell.done) }()
 
 	err = <-readErr
 	// Every request waiting on the shell has been answered "gone"; end the
@@ -117,12 +161,14 @@ func run(stdin io.Reader, stdout, stderr io.Writer, cfg config) int {
 		p.cancel()
 	}
 	a.mu.Unlock()
+	reconcilers.Wait()
+	bt.unregister()
 	a.inflight.Wait()
 	a.mu.Lock()
-	registered := a.registered
+	registered, nm := a.registered, a.nmOwner
 	a.mu.Unlock()
 	if registered {
-		if uerr := sys.Object(nmName, agentManager).Call("org.freedesktop.NetworkManager.AgentManager.Unregister", 0).Err; uerr != nil {
+		if uerr := sys.Object(nm, agentManager).Call("org.freedesktop.NetworkManager.AgentManager.Unregister", 0).Err; uerr != nil {
 			// It drops the agent anyway once the connection closes.
 			fmt.Fprintf(stderr, "tide-agent: couldn't unregister from NetworkManager: %v\n", uerr)
 		}

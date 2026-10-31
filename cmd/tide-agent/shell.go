@@ -30,7 +30,10 @@ type connInfo struct {
 // A request for the shell to ask for something (SPEC.md §5.6). Kind is
 // "wifi", "8021x", "vpn" (fields from the plugin's dialog) or
 // "vpn-dialog" (the plugin's own window, which runs once the shell says
-// "go").
+// "go"); or for BlueZ, "bt-pin", "bt-passkey", "bt-confirm",
+// "bt-authorize", "bt-service" and "bt-display" (a code to show, which
+// stays until it's canceled). Accept and Decline name the prompt's buttons
+// where they aren't Connect and Cancel; a bt-display has no Accept.
 type request struct {
 	Type          string   `json:"type"`
 	ID            string   `json:"id"`
@@ -41,6 +44,8 @@ type request struct {
 	Connection    connInfo `json:"connection"`
 	SSID          string   `json:"ssid,omitempty"`
 	UserRequested bool     `json:"userRequested"`
+	Accept        string   `json:"accept,omitempty"`
+	Decline       string   `json:"decline,omitempty"`
 }
 
 // The shell's answer to a request: "reply" with values, "go", "cancel"

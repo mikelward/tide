@@ -348,7 +348,7 @@ work". The old setup shows how it fought itself:
 | Theme schedule | tide | `tide.service` | `theme-daemon.sh` retired |
 | Audio | PipeWire + WirePlumber | their own socket units | PulseAudio |
 | Network, Bluetooth | NetworkManager, BlueZ (system) | system units | tray applets |
-| Network passwords (NetworkManager's secret agent), and later Bluetooth pairing (BlueZ's agent) | `tide-agent`, asking through the shell (§5.6) | the shell, unless `TIDE_AGENT=0` | nm-applet skipped by autostart while the shell's agent runs, and stood aside for when it runs anyway |
+| Network passwords (NetworkManager's secret agent), and Bluetooth pairing (BlueZ's agent) | `tide-agent`, asking through the shell (§5.6) | the shell, unless `TIDE_AGENT=0` | nm-applet skipped by autostart while the shell's agent runs, and stood aside for when it runs anyway |
 | Secrets | gnome-keyring, unlocked by PAM at login | greetd PAM + `gnome-keyring-daemon.socket` | KWallet in this session |
 | Lid, power button | logind's defaults (`HandleLidSwitch=suspend`, `HandleLidSwitchDocked=ignore`), plus a Hyprland `bindl` pair on the lid switch: closing it with an external monitor attached disables the internal panel, and opening it re-enables the panel with its configured mode and returns the panel's workspaces to it | logind / Hyprland | `lid.sh`'s own suspend logic, and the `HandleLidSwitch=ignore` drop-in the old `setup-hypr` installed |
 | "Show in folder" (`org.freedesktop.FileManager1`) | Nautilus (§16.2) | D-Bus activation via tide's user-level service file → `tide-filemanager.service`, whose launcher picks Dolphin under Plasma and which stops with the session | the arbitrary pick between Dolphin's and Nautilus's system activation files |
@@ -804,26 +804,40 @@ exiting). It reports:
 - with `TIDE_AGENT=0`, or waybar as the bar: no nm-applet either, since
   then nothing asks for a VPN's password.
 
-**Bluetooth pairing** (the next step, in the same helper). tide has no
-pairing agent of its own, and blueman's applet is off the autostart list
-(§5.4). blueman-manager still starts its applet while it's open, so
+**Bluetooth pairing**, in the same helper. tide had no pairing agent of
+its own once blueman's applet left the autostart list (§5.4). blueman-manager still starts its applet while it's open, so
 pairing from it keeps working. The helper's second job is BlueZ's `org.bluez.Agent1`,
 registered with `AgentManager1` as the default agent, capability
 `KeyboardDisplay`. It stands aside while `org.blueman.Applet` has an
 owner, as it does for nm-applet. BlueZ uses the agent of the process that
 asked to pair, else the most recent default (`agent_get`, BlueZ 5.87), so
-standing aside hands blueman-manager's pairings to blueman. Its requests
-use the same prompt, routed the same way, under the device's name:
+standing aside hands blueman-manager's pairings to blueman. Only BlueZ's
+own connection may call it, and only bluetoothd's `NameOwnerChanged` is
+believed, as for NetworkManager. Its requests use the same prompt, under
+the device's name (its alias):
+
+- **Routing.** A pairing the agent sees comes from a device, or from a
+  program with no agent of its own, so it can't be told from your action:
+  it's always a notification first (**Open**), by §14.1's rule. A code to
+  type on the device is shown at once without the keyboard, since there's
+  nothing to type here.
+- **While locked**, every request is rejected and nothing is offered after:
+  the device asks again.
 
 | BlueZ asks | The prompt |
 |---|---|
 | `RequestConfirmation` | "Does Device show 123456?", **Pair** or **Cancel** |
-| `DisplayPasskey`, `DisplayPinCode` | the code to type on the device, **Cancel**; it goes when pairing ends or BlueZ calls `Cancel` |
-| `RequestPinCode`, `RequestPasskey` | a field |
+| `DisplayPasskey`, `DisplayPinCode` | the code to type on the device, zero-padded to six digits, and how many keys it has typed. bluetoothd doesn't reliably call `Cancel` after these, so the code also goes when the device pairs, disconnects or is removed, as bluetoothd reports it, and when bluetoothd itself goes or restarts. **Cancel** or a decline from the shell, the lock, and 55 s with no end cancel the pairing (`Device1.CancelPairing`) |
+| `RequestPinCode`, `RequestPasskey` | a field: a PIN of 1–16 characters, or a passkey from 0 to 999999, anything else rejected |
 | `RequestAuthorization` | "Pair with Device?", **Pair** or **Cancel** |
-| `AuthorizeService` | for a device that isn't trusted: "Allow Device to use SERVICE?", **Allow** or **Deny** |
+| `AuthorizeService` | for a device that isn't trusted: "Allow Device to use SERVICE?", **Allow** or **Deny**, with common services by name (audio playback, hands-free calls, input) |
 
-`Cancel` closes it, and Esc answers `org.bluez.Error.Canceled`. The popover
+`Cancel` closes it. Esc and **Cancel** answer `org.bluez.Error.Canceled`,
+and **Deny** `org.bluez.Error.Rejected`. bluetoothd waits 60 s for an
+answer (`REQUEST_TIMEOUT`, `src/agent.c`, BlueZ 5.87), and the helper gives
+up at 55 s. A new request ends the one before it, which BlueZ has
+abandoned, and bluetoothd going takes down whatever it had asked. So does
+NetworkManager going, for its requests. The popover
 gains no pairing of its own: *pair* still opens blueman-manager.
 
 **Steps.**

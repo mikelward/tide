@@ -19,8 +19,9 @@ Singleton {
     readonly property bool enabled: Quickshell.env("TIDE_AGENT") !== "0"
 
     // tide-agent's last status message ({state, pid, message}), null
-    // until it sends one.
+    // until it sends one, and its BlueZ pairing agent's.
     property var status: null
+    property var btStatus: null
     // Whether tide-lock.service runs, from tide-agent.
     property bool locked: false
     // Requests declined while locked, offered once the lock goes.
@@ -95,6 +96,10 @@ Singleton {
             root.attempt = 0;
             root.warned = false;
             console.log(`tide: network agent: ${Agent.statusText(true, true, m)}`);
+            break;
+        case "bt-status":
+            root.btStatus = m;
+            console.log(`tide: Bluetooth pairing agent: ${m.state}${m.pid ? ` (pid ${m.pid})` : ""}${m.message ? `: ${m.message}` : ""}`);
             break;
         case "lock":
             root.locked = m.locked;
@@ -205,6 +210,9 @@ Singleton {
             break;
         case "prompt":
             root.show(true);
+            break;
+        case "display":
+            root.show(false);
             break;
         case "guard":
             runner.createObject(root, {
@@ -320,6 +328,7 @@ Singleton {
     function stopped(code) {
         root.started = false;
         root.status = null;
+        root.btStatus = null;
         root.reevaluate();
         if (!root.enabled) {
             return;
