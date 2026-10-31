@@ -1488,6 +1488,32 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
   - The built-in quick actions.
   - The existing launcher scripts (`browser1`, `google-meet`, …), which `conf`
     gets `.desktop` files for, so they appear by name with their key hint.
+- **What it leaves out.** Entries for other desktops, which don't work
+  under tide; its own Settings covers theirs (§16).
+  - `NoDisplay` entries, as before.
+  - `OnlyShowIn` and `NotShowIn`, by the Desktop Entry spec, against
+    `XDG_CURRENT_DESKTOP`'s names in order: `tide`, then `Hyprland` (§5).
+    The first name either list holds decides. With none, an entry with
+    `OnlyShowIn` is hidden. A shell started without the variable uses
+    `tide:Hyprland`.
+  - Quickshell 0.3.1's `DesktopEntry` has neither key, only `Categories`
+    and `NoDisplay`. So the shell reads them itself, with one `find` and
+    `awk` over the same directories, as it starts and whenever the entries
+    change. That runs off the launcher's path; opening the launcher reads
+    nothing.
+  - That hides GNOME's, Xfce's, MATE's, Cinnamon's, LXQt's, Budgie's and
+    COSMIC's settings and their panels: every one says `OnlyShowIn`.
+  - KDE's System Settings doesn't, for other desktops: its
+    `kdesystemsettings.desktop` says `NotShowIn=KDE`. So a `Settings`
+    entry is also left out when it runs a desktop's settings app:
+    `systemsettings`, `systemsettings5`, `kcmshell6`, `kcmshell5`,
+    `gnome-control-center`, `xfce4-settings-manager`, `mate-control-center`,
+    `cinnamon-settings`, `lxqt-config`, `budgie-control-center` or
+    `cosmic-settings`, past any `env`.
+  - The tools Settings' pages open stay, though some carry other desktops'
+    categories: `pavucontrol` (`X-XFCE-SettingsDialog`),
+    `nm-connection-editor` and `blueman-manager` (`GNOME`), and
+    `nwg-displays`.
 - **Matching.**
   - Fuzzy subsequence matching, scored fzf-style: consecutive runs and word
     starts beat scattered hits.
@@ -4144,6 +4170,44 @@ Checked 2026-09-29, for §21.1:
   [`server.c`](https://github.com/swaywm/sway/blob/1652c54b73f67df17b7b4ab0b0f7048204aa8104/sway/server.c)
   (at 1652c54, 2026-09-29)
   (`ext_foreign_toplevel_list_v1`, `ext_image_copy_capture_manager_v1`)
+
+Checked 2026-10-31, for §8.2's other desktops' settings apps:
+
+- Quickshell 0.3.1's `DesktopEntry`, with no `OnlyShowIn` or `NotShowIn`:
+  [`src/core/desktopentry.hpp`](https://github.com/quickshell-mirror/quickshell/blob/1a4716cde794a59928d9d9fc15f2afc7a95de360/src/core/desktopentry.hpp)
+  and the directories it scans, in
+  [`desktopentry.cpp`](https://github.com/quickshell-mirror/quickshell/blob/1a4716cde794a59928d9d9fc15f2afc7a95de360/src/core/desktopentry.cpp)
+- GNOME Settings, `OnlyShowIn=GNOME;`, and each panel `OnlyShowIn`:
+  [`shell/org.gnome.Settings.desktop.in`](https://github.com/GNOME/gnome-control-center/blob/d5a89203fae0cb3c82b760fe6018264df57b96d8/shell/org.gnome.Settings.desktop.in)
+  (at d5a8920, 2026-10-31)
+- KDE System Settings: `systemsettings.desktop` says `OnlyShowIn=KDE;`,
+  [`kdesystemsettings.desktop`](https://github.com/KDE/systemsettings/blob/3b9f0a7c01f8948953775dcb34587dfc1a3adb56/app/kdesystemsettings.desktop)
+  says `NotShowIn=KDE;` (at 3b9f0a7, 2026-10-30), and Plasma 5.27's
+  runs `systemsettings5`
+- KCM entries, `NoDisplay=true` with no `OnlyShowIn`, running
+  `systemsettings` or `kcmshell6`:
+  [`tools/kcmmetadatagenerator.cpp`](https://github.com/KDE/kcmutils/blob/8ac5fbce2f46457e7c44573035ae8b54acc842b6/tools/kcmmetadatagenerator.cpp)
+  (at 8ac5fbc, 2026-10-29); KF5's runs `kcmshell5`
+- Xfce, each `OnlyShowIn=XFCE;`: xfce4-settings'
+  [`xfce4-settings-manager.desktop.in`](https://github.com/xfce-mirror/xfce4-settings/blob/2b7106b873d9d5163146cc383104582247b29f08/xfce4-settings-manager/xfce4-settings-manager.desktop.in)
+  and its `dialogs/*/xfce4-*-settings.desktop.in` (at 2b7106b,
+  2026-10-26), and the panels in xfwm4, xfce4-panel, xfdesktop,
+  xfce4-power-manager, xfce4-notifyd and xfce4-session
+- MATE (`OnlyShowIn=MATE;`), Cinnamon (`X-Cinnamon`), LXQt (`LXQt`),
+  Budgie (`Budgie`) and COSMIC (`COSMIC`): mate-control-center at 24bc243,
+  cinnamon at 4f0f8ed, lxqt-config at 20661be, budgie-control-center at
+  910beef and cosmic-settings at d678586
+- The tools §16 opens, with no `OnlyShowIn`:
+  [`nm-connection-editor.desktop.in`](https://github.com/GNOME/network-manager-applet/blob/57f6d32928bd6baed3d856f0f959e02abdcd324b/nm-connection-editor.desktop.in)
+  (`GNOME;GTK;Settings;…`),
+  [`blueman-manager.desktop.in`](https://github.com/blueman-project/blueman/blob/ec7c9d20c3a15c80854aa9f4f10a36f381894618/data/blueman-manager.desktop.in)
+  (`GTK;GNOME;Settings;…`),
+  [`org.pulseaudio.pavucontrol.desktop.in`](https://github.com/pulseaudio/pavucontrol/blob/27980e1fbe3d3c3fb36596a43a99c842dc60ebd6/src/org.pulseaudio.pavucontrol.desktop.in)
+  (`…;Settings;X-XFCE-SettingsDialog;…`) and
+  [`nwg-displays.desktop`](https://github.com/nwg-piotr/nwg-displays/blob/412eff2779cf123f308753faab1a182dd474ba7a/nwg-displays.desktop)
+  (`Settings;DesktopSettings;`)
+- Upstream files only: Debian's and Fedora's packaging weren't reachable
+  to check for patches.
 
 Checked 2026-10-31, for §5.5's blueman applet:
 

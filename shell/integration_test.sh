@@ -1172,7 +1172,8 @@ focused() {
 # fails the test unless Enter runs the app the query names, through `tide
 # launch`. The app is a desktop entry only this test installs, and the
 # query leaves out its accent ("Café"), so the match also checks the
-# accent folding runs in Qt's engine. Then "mouse" and Enter must open the
+# accent folding runs in Qt's engine. A better match that says
+# OnlyShowIn=GNOME must be left out. Then "mouse" and Enter must open the
 # settings panel on its Mouse page. Then it opens the settings panel and
 # expects Down twice, past Idle and Sound, and Enter to open the Network
 # page's app, then the picker's Characters tab to copy é, and checks the
@@ -1186,6 +1187,10 @@ launch() {
     mkdir -p "$tmp/home/.local/share/applications" "$tmp/bin" || exit 1
     printf '[Desktop Entry]\nType=Application\nName=Café Probe\nExec=tide-test-probe --flag\n' \
         >"$tmp/home/.local/share/applications/tide-test-probe.desktop" || exit 1
+    # A better match for the query, but for GNOME only, so the launcher
+    # leaves it out (SPEC.md §8.2).
+    printf '[Desktop Entry]\nType=Application\nName=Cafepro\nExec=tide-test-gnome\nOnlyShowIn=GNOME;\n' \
+        >"$tmp/home/.local/share/applications/tide-test-gnome.desktop" || exit 1
     printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s/launched"\n' "$tmp" >"$tmp/bin/tide" || exit 1
     chmod +x "$tmp/bin/tide" || exit 1
     keyboard
@@ -1204,6 +1209,23 @@ launch() {
         sleep 0.1
         i=$((i + 1))
     done
+    # The entries' OnlyShowIn and NotShowIn are read by a command of their
+    # own, which logs when it's done: followed through a FIFO, so the line
+    # ends the wait as it's written.
+    mkfifo "$tmp/show-in.fifo" || exit 1
+    tail -n +1 -f "$log" >"$tmp/show-in.fifo" &
+    _tail=$!
+    timeout "$wait" grep -q -m 1 'read OnlyShowIn and NotShowIn' <"$tmp/show-in.fifo"
+    _read=$?
+    # tail may have gone already, on writing to the FIFO grep closed.
+    kill "$_tail" 2>/dev/null
+    wait "$_tail" 2>/dev/null
+    rm -f "$tmp/show-in.fifo" || exit 1
+    if test "$_read" -ne 0; then
+        echo "FAIL: the shell didn't read the desktop entries' OnlyShowIn in $wait s" >&2
+        grep -v '^\[' "$log" >&2
+        exit 1
+    fi
     # What loading queued, the desktop entries Quickshell scanned among it,
     # has been handed over once the shell has answered twice: it may answer
     # before the rest of the pass a request arrives in, but a second
@@ -1309,7 +1331,7 @@ launch() {
     wait "$qs_pid"
     qs_pid=
     reports "the launcher ran an app, the settings panel opened one, the picker copied é, the share picker answered and the name prompt went to a workspace"
-    echo "ok: the launcher finds an app by a query without its accent, and runs it"
+    echo "ok: the launcher finds an app by a query without its accent, and runs it, not a better match for GNOME"
     echo "ok: the launcher's Mouse settings opens the settings panel on its Mouse page"
     echo "ok: the settings panel changes page with the arrows and opens the page's app"
     echo "ok: the picker finds a character by name and copies it"

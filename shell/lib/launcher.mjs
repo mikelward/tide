@@ -15,14 +15,141 @@ function basename(path) {
     return String(path ?? "").split("/").pop();
 }
 
+// What tide's session sets XDG_CURRENT_DESKTOP to (SPEC.md §5), for a
+// shell started without it: the shell runs only in tide.
+export const DESKTOP = "tide:Hyprland";
+
+// The desktop names OnlyShowIn and NotShowIn are matched against, in
+// order, from XDG_CURRENT_DESKTOP's value.
+export function desktopNames(value) {
+    const names = String(value || "").split(":").filter(n => n !== "");
+    return names.length > 0 ? names : DESKTOP.split(":");
+}
+
+// Quickshell 0.3's DesktopEntry has no OnlyShowIn or NotShowIn, so
+// LauncherData runs this with `sh -c` as the shell starts, and again when
+// the entries change. For each .desktop file in the directories Quickshell
+// scans, in its order, it prints "@<path under applications/>", then
+// those two keys from the [Desktop Entry] group, each with "|" in front.
+// It exits 1 if a directory or file couldn't be read, having said why.
+export const SHOW_IN_SCRIPT = [
+    "status=0",
+    "IFS=:",
+    'for dir in "${XDG_DATA_HOME:-$HOME/.local/share}" ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do',
+    '    apps=${dir%/}/applications',
+    '    test -d "$apps" || continue',
+    "    find -L \"$apps\" -name '*.desktop' -type f -exec awk -v root=\"$apps\" '",
+    '        FNR == 1 { group = ""; print "@" substr(FILENAME, length(root) + 2) }',
+    '        /^[ \\t]*\\[/ { group = $0; sub(/^[ \\t]+/, "", group); sub(/[ \\t\\r]+$/, "", group); next }',
+    '        group == "[Desktop Entry]" && /^[ \\t]*(OnlyShowIn|NotShowIn)[ \\t]*=/ { print "|" $0 }',
+    "    ' {} + || status=1",
+    "done",
+    "exit $status",
+].join("\n");
+
+function showInList(value) {
+    return value.split(";").map(s => s.trim()).filter(s => s !== "");
+}
+
+// SHOW_IN_SCRIPT's output, keyed by desktop file ID as Quickshell gives
+// it (the path with "/" as "-", less ".desktop"): {only, not}, `only` null
+// when the entry has no OnlyShowIn. The first file with an ID counts, as
+// in Quickshell's scan, and the first of a repeated key.
+export function parseShowIn(output) {
+    const showIn = {};
+    let current = null;
+    for (const raw of String(output || "").split("\n")) {
+        if (raw.startsWith("@")) {
+            const id = raw.slice(1).replace(/\.desktop$/, "").split("/").join("-");
+            current = Object.prototype.hasOwnProperty.call(showIn, id) ? null : { only: null, not: null };
+            if (current !== null) {
+                showIn[id] = current;
+            }
+            continue;
+        }
+        if (!raw.startsWith("|") || current === null) {
+            continue;
+        }
+        const line = raw.slice(1);
+        const eq = line.indexOf("=");
+        const key = line.slice(0, eq).trim();
+        const value = showInList(line.slice(eq + 1));
+        if (key === "OnlyShowIn" && current.only === null) {
+            current.only = value;
+        } else if (key === "NotShowIn" && current.not === null) {
+            current.not = value;
+        }
+    }
+    for (const id in showIn) {
+        showIn[id] = Object.freeze({ only: showIn[id].only, not: showIn[id].not ?? [] });
+    }
+    return showIn;
+}
+
+// Whether an entry with these keys (parseShowIn's) shows on a desktop
+// with these names (desktopNames'), by the Desktop Entry spec: the first
+// name either list holds decides; with none, an entry with an OnlyShowIn
+// is hidden and any other shown.
+export function shownIn(keys, names) {
+    if (!keys) {
+        return true;
+    }
+    for (const name of names) {
+        if (keys.only !== null && keys.only.indexOf(name) >= 0) {
+            return true;
+        }
+        if (keys.not.indexOf(name) >= 0) {
+            return false;
+        }
+    }
+    return keys.only === null;
+}
+
+// Other desktops' settings apps, which don't work in tide; its own
+// Settings covers them (§16). Most say OnlyShowIn, but KDE's System
+// Settings has a second entry for other desktops (NotShowIn=KDE), so a
+// Settings entry that runs one of these is left out too. Panels run the
+// same program with an argument (`gnome-control-center sound`).
+export const SETTINGS_APPS = Object.freeze([
+    "systemsettings", "systemsettings5", "kcmshell6", "kcmshell5",
+    "gnome-control-center", "xfce4-settings-manager", "mate-control-center",
+    "cinnamon-settings", "lxqt-config", "budgie-control-center", "cosmic-settings",
+]);
+
+// The program a command runs, past `env` and its assignments.
+function program(command) {
+    let i = 0;
+    if (basename(command[0]) === "env") {
+        i = 1;
+        while (i < command.length && String(command[i]).indexOf("=") > 0) {
+            i += 1;
+        }
+    }
+    return basename(command[i]);
+}
+
+export function otherDesktopSettings(entry) {
+    return [...(entry.categories ?? [])].indexOf("Settings") >= 0
+        && SETTINGS_APPS.indexOf(program(entry.command)) >= 0;
+}
+
 // One row per app a desktop entry shows, and one per desktop action it
 // offers ("New Incognito Window"), as plain objects. Entries marked
-// NoDisplay, or with nothing to run, are left out. `entries` are
-// Quickshell DesktopEntry objects or anything with their properties.
-export function launcherItems(entries) {
+// NoDisplay, or with nothing to run, are left out, and so are those for
+// other desktops: their OnlyShowIn and NotShowIn (`desktop.showIn`, from
+// parseShowIn) against `desktop.names` (desktopNames'), and their settings
+// apps (otherDesktopSettings). `entries` are Quickshell DesktopEntry
+// objects or anything with their properties.
+export function launcherItems(entries, desktop = {}) {
+    const names = desktop.names ?? desktopNames("");
+    const showIn = desktop.showIn ?? {};
     const items = [];
     for (const e of entries) {
         if (!e || e.noDisplay || !e.command || e.command.length === 0) {
+            continue;
+        }
+        const keys = Object.prototype.hasOwnProperty.call(showIn, e.id) ? showIn[e.id] : null;
+        if (!shownIn(keys, names) || otherDesktopSettings(e)) {
             continue;
         }
         const app = {
