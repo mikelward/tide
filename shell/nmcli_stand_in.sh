@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# A stand-in for nmcli, for shell/shell_test.sh: the shell's own calls,
+# A stand-in for nmcli, for shell/integration_test.sh: the shell's own calls,
 # answered as NetworkManager's would answer them.
 #
 #   LC_ALL=C nmcli_stand_in.sh -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show
@@ -21,7 +21,7 @@ case "$#|$*" in
         ;;
     "5|-t -f NAME,UUID,TYPE,ACTIVE,STATE connection show")
         if test "${LC_ALL:-}" != C; then
-            echo "nmcli: the load test's stand-in lists connections only for LC_ALL=C" >&2
+            echo "nmcli: the integration test's stand-in lists connections only for LC_ALL=C" >&2
             exit 2
         fi
         cat <<'LIST'
@@ -32,7 +32,7 @@ Wired connection 1:6c0d4c3e-1a2b-4c5d-8e9f-000000000004:802-3-ethernet:no:
 LIST
         ;;
     *)
-        echo "nmcli: the load test's stand-in doesn't answer $*" >&2
+        echo "nmcli: the integration test's stand-in doesn't answer $*" >&2
         exit 2
         ;;
 esac

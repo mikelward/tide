@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Tests for shell/shell_test.sh itself, with stand-ins for qs, sway,
+# Tests for shell/integration_test.sh itself, with stand-ins for qs, sway,
 # wtype, notify-send and go, so they run without Quickshell: what the load
 # test does with a shell that loads cleanly, one whose files report an
 # error, one whose event loop never answers, one that ignores Hyprland, one
@@ -13,7 +13,7 @@
 # Network page's app or doesn't, a lock that can't read its
 # keyboards, or unlocks or doesn't, and a greeter that logs in or doesn't.
 # The stand-in Hyprland, hyprctl, tide-sysmon, gsettings, nmcli and greetd
-# are the load test's own, and the stand-in gsettings and nmcli answer as
+# are the integration test's own, and the stand-in gsettings and nmcli answer as
 # GNOME's and NetworkManager's would.
 
 cd "$(dirname "$0")/.." || exit 1
@@ -34,7 +34,7 @@ contains() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
 
 # The stand-in sway has to make a real Wayland socket for the test to find.
 if ! command -v python3 >/dev/null 2>&1; then
-    echo "SKIP: shell/shell_test_test.sh: no python3 for the stand-in sway"
+    echo "SKIP: shell/integration_test_test.sh: no python3 for the stand-in sway"
     exit 0
 fi
 
@@ -502,7 +502,7 @@ echo 1
 EOF
     cat >"$1/go" <<EOF
 #!/bin/sh
-# As the load test runs it: go build -buildvcs=false -o OUT ./cmd/tide-tz,
+# As the integration test runs it: go build -buildvcs=false -o OUT ./cmd/tide-tz,
 # then the same for ./cmd/tide-greetd, which the stand-in greeter never runs.
 case "\$1 \$2 \$3 \$5" in
 "build -buildvcs=false -o ./cmd/tide-tz") printf '#!/bin/sh\n%s\n' '${8:-:}' >"\$4" ;;
@@ -514,14 +514,14 @@ EOF
     chmod +x "$1/sway" "$1/qs" "$1/wtype" "$1/notify-send" "$1/go" || exit 1
 }
 
-# run DIR [VAR=VALUE...]: the load test with DIR's stand-ins, a 2 s limit,
+# run DIR [VAR=VALUE...]: the integration test with DIR's stand-ins, a 2 s limit,
 # Quickshell required, so a missing stand-in fails instead of skipping, and
 # any settings given. Sets $out, $code and $took (seconds).
 run() {
     _dir=$1
     shift
     _start=$(date +%s)
-    out=$(env PATH="$_dir:$PATH" TIDE_REQUIRE_QS=1 TIDE_LOAD_WAIT=2 "$@" sh shell/shell_test.sh 2>&1)
+    out=$(env PATH="$_dir:$PATH" TIDE_REQUIRE_QS=1 TIDE_STEP_WAIT=2 "$@" sh shell/integration_test.sh 2>&1)
     code=$?
     took=$(($(date +%s) - _start))
 }
@@ -1091,7 +1091,7 @@ case_62() {
 stubs "$tmp/clean" "exit 0" "$loaded"
 run "$tmp/clean" GO=tide-test-no-such-go TIDE_REQUIRE_QS=
 check "without Go, any other run is skipped" test "$code" -eq 0
-check "whole, as without Quickshell" contains "$out" "SKIP: shell/shell_test.sh: no tide-test-no-such-go"
+check "whole, as without Quickshell" contains "$out" "SKIP: shell/integration_test.sh: no tide-test-no-such-go"
 check "and loads nothing" test "$(printf '%s\n' "$out" | grep -c '^ok:')" -eq 0
 }
 
@@ -1248,16 +1248,16 @@ fi
 
 # Otherwise every case, each in a process of its own with its own stand-ins
 # and directory, $TIDE_TEST_JOBS at a time (the CPUs online by default).
-# Each spends most of its time waiting on the load test, so they run in
+# Each spends most of its time waiting on the integration test, so they run in
 # about a quarter of the time on four CPUs that they take one by one.
 jobs=${TIDE_TEST_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
 case $jobs in
     '' | *[!0-9]* | 0)
-        echo "shell_test_test.sh: TIDE_TEST_JOBS must be a whole number above 0, not '$jobs'" >&2
+        echo "integration_test_test.sh: TIDE_TEST_JOBS must be a whole number above 0, not '$jobs'" >&2
         exit 1
         ;;
 esac
-self=$(pwd)/shell/shell_test_test.sh
+self=$(pwd)/shell/integration_test_test.sh
 cases=$(sed -n 's/^case_\([0-9][0-9]*\)() {$/\1/p' "$self")
 mkdir "$tmp/results" || exit 1
 printf '%s\n' $cases | xargs -P "$jobs" -I{} sh "$self" --case {} "$tmp/results/{}"
@@ -1270,5 +1270,5 @@ for n in $cases; do
     fi
 done
 
-printf 'shell_test_test.sh: %d passed, %d failed\n' "$passes" "$failures"
+printf 'integration_test_test.sh: %d passed, %d failed\n' "$passes" "$failures"
 test "$failures" -eq 0

@@ -73,12 +73,12 @@ jobs:
           go-version-file: go.mod
       - run: make test-fast
 
-  # The load test's own tests (shell/shell_test_test.sh), apart from `test`
-  # because they take about a minute and a half even with their cases run
-  # side by side: each case runs the whole load test against stand-ins, and
-  # most wait out its 2 s limit at the step they break. They need only
-  # python3 and the runner's own tools.
-  harness:
+  # The integration test's self-tests (shell/integration_test_test.sh),
+  # apart from `test` because they take about a minute and a half even with
+  # their cases run side by side: each case runs the whole integration test
+  # against stand-ins, and most wait out its 2 s limit at the step they
+  # break. They need only python3 and the runner's own tools.
+  selftest:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: classify
@@ -87,9 +87,9 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - run: make test-harness
+      - run: make test-selftest
 
-  # Loads the shell in Quickshell (shell/shell_test.sh): the release that
+  # Loads the shell in Quickshell (shell/integration_test.sh): the release that
   # `setup --tide` builds on Ubuntu 26.04 (scripts repo), at the same
   # commit, against the same distro Qt. Keep the pin in step with
   # setup-tide's QUICKSHELL_TAG and QUICKSHELL_COMMIT. The build is cached
@@ -99,7 +99,7 @@ jobs:
   # repository. A cold build takes about 20 minutes, a cached run a few.
   # It depends on the Ubuntu archive and the Quickshell mirror on GitHub;
   # either one down fails this job until a re-run succeeds.
-  shell:
+  integration:
     runs-on: ubuntu-latest
     container: ubuntu:26.04
     timeout-minutes: 60
@@ -169,13 +169,13 @@ jobs:
           printf 'root:%s\n' "$TIDE_LOCK_PASSWORD" | chpasswd
           install -m 644 pam/tide-lock /etc/pam.d/tide-lock
       - name: Load the shell, notify it, and unlock the lock
-        run: PATH="$QUICKSHELL_PREFIX/bin:$PATH" TIDE_REQUIRE_QS=1 sh shell/shell_test.sh
+        run: PATH="$QUICKSHELL_PREFIX/bin:$PATH" TIDE_REQUIRE_QS=1 sh shell/integration_test.sh
 
   lanes:
     name: lanes
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [classify, test, harness, shell]
+    needs: [classify, test, selftest, integration]
     if: always()
     steps:
       - uses: actions/checkout@v5
@@ -187,4 +187,4 @@ jobs:
           pr: ${{ github.event.pull_request.number }}
           classify-result: ${{ needs.classify.result }}
           base-sha: ${{ needs.classify.outputs.base_sha }}
-          results: test=${{ needs.test.result }} harness=${{ needs.harness.result }} shell=${{ needs.shell.result }}
+          results: test=${{ needs.test.result }} selftest=${{ needs.selftest.result }} integration=${{ needs.integration.result }}

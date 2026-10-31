@@ -35,13 +35,13 @@ done
 
 # `shell` runs apt-get as root in a container, so it writes the settings to
 # apt's config first.
-shell_job=$(job shell)
-conf_line=$(printf '%s\n' "$shell_job" | grep -n '80-ci-timeouts' | head -n 1)
-apt_line=$(printf '%s\n' "$shell_job" | grep -n 'apt-get' | head -n 1 | cut -d: -f1)
-check "the shell job writes apt's timeouts" 'test -n "$conf_line"'
+integration_job=$(job integration)
+conf_line=$(printf '%s\n' "$integration_job" | grep -n '80-ci-timeouts' | head -n 1)
+apt_line=$(printf '%s\n' "$integration_job" | grep -n 'apt-get' | head -n 1 | cut -d: -f1)
+check "the integration job writes apt's timeouts" 'test -n "$conf_line"'
 check "before its first apt-get" 'test -n "$conf_line" && test -n "$apt_line" && test "${conf_line%%:*}" -lt "$apt_line"'
 for setting in 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' 'Acquire::Retries "3";'; do
-    check "the shell job's apt config says $setting" 'printf "%s\n" "$conf_line" | grep -q -F -- "$setting"'
+    check "the integration job's apt config says $setting" 'printf "%s\n" "$conf_line" | grep -q -F -- "$setting"'
 done
 
 # One workflow-level concurrency group: a pull request's runs share one, keyed

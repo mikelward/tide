@@ -1,4 +1,4 @@
-"""A stand-in for greetd, for shell/shell_test.sh.
+"""A stand-in for greetd, for shell/integration_test.sh.
 
   greetd_stand_in.py SOCKET LOG USER PASSWORD [CODE]
 
