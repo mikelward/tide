@@ -825,7 +825,7 @@ check "a shell whose icon won't load fails" test "$code" -ne 0
 check "and says so" contains "$out" "an icon wouldn't load"
 }
 
-case_96() {
+case_100() {
 stubs "$tmp/bad-regex" "exit 0" "  WARN: QRegularExpressionPrivate::doMatch(): called on an invalid QRegularExpression object (pattern is '\\A(?:[^\\u0000]*)\\z')
   INFO: Configuration Loaded"
 run "$tmp/bad-regex"
@@ -1454,6 +1454,12 @@ case $jobs in
 esac
 self=$(pwd)/shell/integration_test_test.sh
 cases=$(sed -n 's/^case_\([0-9][0-9]*\)() {$/\1/p' "$self")
+# A number used twice runs only its last case, so the first never runs.
+dups=$(printf '%s\n' $cases | sort -n | uniq -d)
+if test -n "$dups"; then
+    echo "integration_test_test.sh: case numbers used more than once: $(echo $dups)" >&2
+    exit 1
+fi
 mkdir "$tmp/results" || exit 1
 printf '%s\n' $cases | xargs -P "$jobs" -I{} sh "$self" --case {} "$tmp/results/{}"
 for n in $cases; do
