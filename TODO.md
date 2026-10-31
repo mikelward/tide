@@ -43,9 +43,6 @@ once you have agreed with it or reversed it.
   unlock**, since the device asks again. The alternative is to hold it
   for after unlock, which bluetoothd's 60 s rarely allows. Reversible:
   `missedOnDecline`.
-- [ ] **`tide doctor` has no line for the pairing agent yet**: its status
-  (`bt-status`) is only logged. The alternative is an `ipc call` and a
-  doctor check like the network agent's, which would be an addition.
 - [ ] **The BlueZ PR stacks on #262**, since it needs the shell side,
   and not on #263.
 - [ ] **The BlueZ pairing agent goes in the same helper, as its own step

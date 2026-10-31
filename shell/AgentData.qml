@@ -389,6 +389,12 @@ Singleton {
         function status(): string {
             return Agent.statusText(root.enabled, helper.running, root.status);
         }
+
+        // The BlueZ pairing agent's, in the same words: its bt-status
+        // messages have the same shape.
+        function bluetooth(): string {
+            return Agent.statusText(root.enabled, helper.running, root.btStatus);
+        }
     }
 
     // One run of a command whose answer matters, as PolkitData's.

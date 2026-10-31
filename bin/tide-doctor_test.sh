@@ -207,6 +207,18 @@ mkdir "$tmp/qs-bin"
 # $FAKE_QS_IPC_FAILS.
 cat > "$tmp/qs-bin/qs" <<'FAKE'
 #!/bin/sh
+if test "$*" = "-c tide ipc call agent bluetooth"; then
+    case " $FAKE_PROCS " in
+        *" qs "*) ;;
+        *) echo "No running instances for /home/user/.config/quickshell/tide/shell.qml" >&2; exit 255 ;;
+    esac
+    if test -n "$FAKE_QS_BT_FAILS"; then
+        echo "$FAKE_QS_BT_FAILS" >&2
+        exit 1
+    fi
+    printf '%s\n' "${FAKE_QS_BT:-registered}"
+    exit 0
+fi
 if test "$*" = "-c tide ipc call agent status"; then
     # Only a running shell answers: no qs process is waybar's bar.
     case " $FAKE_PROCS " in
@@ -286,7 +298,7 @@ run() {
     env PATH="$fake:$tmp/qs-bin:$PATH" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" \
         XDG_CURRENT_DESKTOP=tide:Hyprland XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" HOME="$tmp/home" \
         XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_HOME="$tmp/no-data-home" XDG_DATA_DIRS="$tmp/share" \
-        XDG_RUNTIME_DIR="$tmp/runtime" TIDE_DATADIR="$tmp/datadir" TIDE_SYSCONFDIR="$tmp/sysconf" \
+        XDG_RUNTIME_DIR="$tmp/runtime" TIDE_DATADIR="$tmp/datadir" TIDE_SYSCONFDIR="$tmp/sysconf" TIDE_SYSFS="$tmp/sys" \
         FAKE_PROCS="hypridle swaync waybar hyprpolkitagent nm-applet" FAKE_PID_hypridle=101 TIDE_CLIPHIST=sh \
         "$@" sh "$doctor" > "$tmp/out" 2> "$tmp/err"
     status=$?
@@ -751,6 +763,38 @@ check "failing to ask the shell is reported" \
 run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent nm-applet"
 check "with the shell as polkit agent, tide-shell's stand-in under waybar is fine" test "$out" = "No problems found."
 healthy
+
+# The pairing agent (SPEC.md §5.6), with an adapter to pair with.
+healthy
+mkdir -p "$tmp/sys/class/bluetooth/hci0"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs"
+check "a registered pairing agent is fine" test "$out" = "No problems found."
+for state in starting "standing-aside 400" off; do
+    run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_BT="$state"
+    check "a pairing agent that's $state is fine" test "$out" = "No problems found."
+done
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_BT=waiting
+check "no bluetoothd is a problem, with the fix" contains "$out" "bluetoothd isn't running, so no device can pair"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_BT="unregistered agent already exists"
+check "a refused pairing agent is a problem, with BlueZ's reason" \
+    contains "$out" "BlueZ didn't take the shell's pairing agent (agent already exists)"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_BT=missing
+check "a missing tide-agent is a pairing problem too" contains "$out" "tide-agent isn't running, so a device that asks to pair goes unanswered"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_BT_FAILS="ipc: no function bluetooth"
+check "failing to ask about the pairing agent is reported" \
+    contains "$out" "couldn't ask the shell whether its Bluetooth pairing agent works (qs ipc: ipc: no function bluetooth)"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_BT=bogus
+check "a status doctor doesn't know is named" contains "$out" "couldn't tell whether the shell's pairing agent works (qs ipc said 'bogus')"
+# Under waybar, no shell runs it: blueman-manager pairs with its own.
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent nm-applet" FAKE_QS_BT=missing
+check "under waybar the pairing agent isn't asked about" test "$out" = "No problems found."
+# No adapter, nothing to pair with: the check is skipped.
+rm -r "$tmp/sys/class/bluetooth/hci0"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_BT=waiting
+check "with no Bluetooth adapter, the pairing agent isn't checked" test "$out" = "No problems found."
+rm -r "$tmp/sys"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_BT=waiting
+check "with no Bluetooth class in sysfs at all, it isn't either" test "$out" = "No problems found."
 
 # The shell's network agent (SPEC.md §5.6), on by default.
 healthy

@@ -701,6 +701,37 @@ elif test -z "$agent_on"; then
             ;;
     esac
 fi
+# The pairing agent (SPEC.md §5.6), BlueZ's, in the same tide-agent: only
+# where there's an adapter to pair with, and a Quickshell shell to run it.
+# Under waybar, blueman-manager brings its own agent while it's open.
+# $TIDE_SYSFS stands in for /sys in the tests.
+bt_dir=${TIDE_SYSFS:-/sys}/class/bluetooth
+adapters=
+for hci in "$bt_dir"/hci*; do
+    test -e "$hci" && adapters=1
+done
+if test -n "$adapters" && test -n "$shell_runs"; then
+    if ! bt_state=$(qs -c tide ipc call agent bluetooth 2>&1); then
+        problem "couldn't ask the shell whether its Bluetooth pairing agent works (qs ipc: $(printf '%s\n' "$bt_state" | tail -n 1)), so whether a device can pair isn't known"
+    else
+        case "$bt_state" in
+            # standing-aside: blueman's applet runs, and is the agent.
+            registered | starting | standing-aside* | off) ;;
+            waiting)
+                problem "bluetoothd isn't running, so no device can pair: \`systemctl status bluetooth\`"
+                ;;
+            unregistered*)
+                problem "BlueZ didn't take the shell's pairing agent (${bt_state#unregistered }), so a device that asks to pair goes unanswered: \`journalctl --user -u tide.service\` says more"
+                ;;
+            missing)
+                problem "tide-agent isn't running, so a device that asks to pair goes unanswered: is it installed (\`make install-session\`)? \`journalctl --user -u tide.service\` says why"
+                ;;
+            *)
+                problem "couldn't tell whether the shell's pairing agent works (qs ipc said '$bt_state')"
+                ;;
+        esac
+    fi
+fi
 # The shell runs one wallpaper daemon or the other, never both.
 if test "$(count swww-daemon)" -gt 0 && test "$(count swaybg)" -gt 0; then
     problem "swww-daemon and swaybg are both running: only one should draw the wallpaper; \`systemctl --user restart tide.service\` starts just one"

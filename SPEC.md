@@ -560,7 +560,7 @@ flowchart TD
   - the home workspace (§6.5): there, and kept by `conf`'s `persistent`
     rule, with the shell's `tide-workspaces.lua` naming it;
   - the network agent (§5.6): `tide-agent` registered, or what holds
-    the job instead.
+    the job instead; and, with a Bluetooth adapter, its pairing agent.
 
   It prints one line per problem, with the fix. Each feature that leans on
   something outside tide adds its check here, by principle 6 (§1).
@@ -803,6 +803,14 @@ exiting). It reports:
   ask instead (fine if you listed it);
 - with `TIDE_AGENT=0`, or waybar as the bar: no nm-applet either, since
   then nothing asks for a VPN's password.
+
+With a Bluetooth adapter (`/sys/class/bluetooth/hci*`) and the Quickshell
+shell running, it also asks `ipc call agent bluetooth`, which answers in
+the same words for the pairing agent. bluetoothd not running, BlueZ
+refusing the agent, and `tide-agent` missing are reported. Registered,
+starting, and standing aside for blueman's applet are fine. With no
+adapter, or under waybar, where blueman-manager brings its own agent,
+nothing is checked.
 
 **Bluetooth pairing**, in the same helper. tide had no pairing agent of
 its own once blueman's applet left the autostart list (§5.4). blueman-manager still starts its applet while it's open, so
