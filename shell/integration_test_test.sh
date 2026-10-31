@@ -795,6 +795,14 @@ check "a shell whose icon won't load fails" test "$code" -ne 0
 check "and says so" contains "$out" "an icon wouldn't load"
 }
 
+case_96() {
+stubs "$tmp/bad-regex" "exit 0" "  WARN: QRegularExpressionPrivate::doMatch(): called on an invalid QRegularExpression object (pattern is '\\A(?:[^\\u0000]*)\\z')
+  INFO: Configuration Loaded"
+run "$tmp/bad-regex"
+check "a shell with an invalid regular expression fails" test "$code" -ne 0
+check "and says so" contains "$out" "a regular expression is invalid"
+}
+
 case_22() {
 stubs "$tmp/late" "exit 0" "$loaded" ":" "" full "$all_runs" ":" 0.5
 run "$tmp/late"
