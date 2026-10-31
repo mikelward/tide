@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { LAYOUT_INITIAL, layoutNext, layoutBadge, mainKeymap, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText } from "./lock.mjs";
+import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, mainKeymap, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -486,4 +486,87 @@ test("a failed read hides the badge, and a refresh during it still rereads", () 
     assert.equal(failed.state.querying, true);
     assert.equal(failed.queries, 2);
     assert.equal(layout(failed.state, { type: "answer", keymap: "German" }).state.keymap, "German");
+});
+
+// keyboards EVENT...: keyboardsNext over EVENTs from the start.
+function keyboards(...events) {
+    let state = KEYBOARDS_INITIAL;
+    for (const event of events) {
+        state = keyboardsNext(state, event).state;
+    }
+    return state;
+}
+
+test("until tide keyboards answers, there counts as a keyboard", () => {
+    assert.equal(hasKeyboard(KEYBOARDS_INITIAL), true);
+    const r = keyboardsNext(KEYBOARDS_INITIAL, { type: "refresh" });
+    assert.equal(r.query, true);
+    assert.equal(hasKeyboard(r.state), true);
+});
+
+test("a keyboard's name means one; no names, none", () => {
+    const one = keyboards({ type: "refresh" }, { type: "answer", names: "Keychron K2\n" });
+    assert.equal(one.count, 1);
+    assert.equal(hasKeyboard(one), true);
+    // The KVM switches away: the next read names none.
+    const none = keyboards({ type: "refresh" }, { type: "answer", names: "Keychron K2\n" },
+        { type: "refresh" }, { type: "answer", names: "" });
+    assert.equal(none.count, 0);
+    assert.equal(hasKeyboard(none), false);
+});
+
+test("a read that failed counts as a keyboard, rather than hide the focus", () => {
+    const state = keyboards({ type: "refresh" }, { type: "answer", names: "" },
+        { type: "refresh" }, { type: "answer", names: null });
+    assert.equal(state.count, null);
+    assert.equal(hasKeyboard(state), true);
+});
+
+test("without the watch on udev, a change would go unseen, so there counts as a keyboard", () => {
+    const state = keyboards({ type: "refresh" }, { type: "answer", names: "" }, { type: "lost" });
+    assert.equal(hasKeyboard(state), true);
+    // A read already running still answers, and the watch stays lost.
+    const later = keyboardsNext(keyboardsNext(state, { type: "refresh" }).state, { type: "answer", names: "" }).state;
+    assert.equal(hasKeyboard(later), true);
+});
+
+test("an input event during a read reads once more after it", () => {
+    let r = keyboardsNext(KEYBOARDS_INITIAL, { type: "refresh" });
+    r = keyboardsNext(r.state, { type: "refresh" });
+    assert.equal(r.query, false);
+    r = keyboardsNext(r.state, { type: "refresh" });
+    assert.equal(r.query, false);
+    r = keyboardsNext(r.state, { type: "answer", names: "" });
+    assert.equal(r.query, true);
+    assert.equal(r.state.querying, true);
+    r = keyboardsNext(r.state, { type: "answer", names: "Keychron K2\n" });
+    assert.equal(r.query, false);
+    assert.equal(r.state.count, 1);
+});
+
+test("the field shows its focus in the accent, with a caret, only with focus and a keyboard", () => {
+    const ready = fieldLook({ focused: true, keyboard: true, error: false });
+    assert.deepEqual(ready, { border: "#78aeed", borderWidth: 1.5, caret: true });
+    const quiet = { border: "#29ffffff", borderWidth: 1, caret: false };
+    // Another monitor's face, which the keys don't reach.
+    assert.deepEqual(fieldLook({ focused: false, keyboard: true, error: false }), quiet);
+    // The KVM switched away: focus, but nothing to type with.
+    assert.deepEqual(fieldLook({ focused: true, keyboard: false, error: false }), quiet);
+});
+
+test("a failed attempt's red wins over the focus, and the caret stays where the keys go", () => {
+    assert.deepEqual(fieldLook({ focused: true, keyboard: true, error: true }),
+        { border: "#ff7b63", borderWidth: 1.5, caret: true });
+    assert.deepEqual(fieldLook({ focused: false, keyboard: true, error: true }),
+        { border: "#ff7b63", borderWidth: 1.5, caret: false });
+});
+
+test("the caret shows at once, blinks, then holds still", () => {
+    assert.equal(caretShown(0), true);
+    assert.equal(caretShown(1), false);
+    assert.equal(caretShown(2), true);
+    assert.equal(caretBlinks(CARET_BLINK_TICKS - 1), true);
+    assert.equal(caretBlinks(CARET_BLINK_TICKS), false);
+    assert.equal(caretShown(CARET_BLINK_TICKS), true);
+    assert.equal(caretShown(CARET_BLINK_TICKS + 1), true);
 });

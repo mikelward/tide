@@ -28,7 +28,10 @@
 # the focus guard's calls, conf's conf_input.reload() and
 # conf_appearance.reload() and the Keys page's bindings; stand-in
 # gsettings and nmcli, for light and dark and the VPNs, whose monitors
-# report nothing; and a stand-in systemctl, for restarting hypridle once
+# report nothing; the real `tide keyboards` over one stand-in keyboard,
+# and a stand-in udevadm whose monitor reports no device coming or going,
+# for the lock's and the greeter's field focus; and a stand-in systemctl,
+# for restarting hypridle once
 # the shell has written its timings, which it checks are the defaults, as
 # it checks the mouse, touchpad and keyboard settings it writes are none. Data from a timer, a file
 # read, a monitor, or any other command isn't covered.
@@ -232,10 +235,21 @@ chmod +x "$tmp/helpers/real/hyprctl" || exit 1
 # say what they answer), copied so their monitors can exec a tail that
 # ends with the shell; systemctl and timedatectl, for hypridle and the
 # system's time zone.
-for _helper in gsettings nmcli systemctl timedatectl; do
+for _helper in gsettings nmcli systemctl timedatectl udevadm; do
     cp "shell/${_helper}_stand_in.sh" "$tmp/helpers/real/$_helper" || exit 1
     chmod +x "$tmp/helpers/real/$_helper" || exit 1
 done
+# tide keyboards, as the lock and the greeter run it, over one keyboard
+# laid out as sysfs and udev's data have it.
+mkdir -p "$tmp/input/event0/device" "$tmp/udev" || exit 1
+printf '13:64\n' >"$tmp/input/event0/dev" || exit 1
+printf 'Test keyboard\n' >"$tmp/input/event0/device/name" || exit 1
+printf 'E:ID_INPUT=1\nE:ID_INPUT_KEY=1\nE:ID_INPUT_KEYBOARD=1\n' >"$tmp/udev/c13:64" || exit 1
+cat >"$tmp/helpers/real/tide" <<EOF || exit 1
+#!/bin/sh
+TIDE_KEYBOARDS_SYS="$tmp/input" TIDE_KEYBOARDS_UDEV="$tmp/udev" exec sh "$PWD/bin/tide" "\$@"
+EOF
+chmod +x "$tmp/helpers/real/tide" || exit 1
 # With the Go that's installed, as the Makefile builds. Without git's
 # status, which git refuses for a checkout another user owns (CI's, in its
 # container): a binary for this run needs no stamp.
@@ -248,7 +262,7 @@ if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/tide-greetd" ./
     echo "FAIL: couldn't build tide-greetd: $(cat "$tmp/go.log")" >&2
     exit 1
 fi
-helpers="tide-sysmon tide-tz hyprctl gsettings nmcli systemctl timedatectl"
+helpers="tide-sysmon tide-tz hyprctl gsettings nmcli systemctl timedatectl udevadm tide"
 : >"$tmp/helpers.log" || exit 1
 for _helper in $helpers; do
     cat >"$tmp/helpers/$_helper" <<EOF || exit 1
@@ -534,7 +548,7 @@ load() {
     # The commands' inputs are fixed (the default zones, $TZ, the system's
     # tzdata; the stand-ins' answers), so anything the shell's commands
     # warn of is a failure.
-    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl)|replay|tell|apply)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl)" "$log" >"$tmp/reports"; then
+    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl)|replay|tell|apply)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl|keyboards)" "$log" >"$tmp/reports"; then
         echo "FAIL: $_what loaded, but its commands warned:" >&2
         cat "$tmp/reports" >&2
         exit 1
@@ -1678,7 +1692,9 @@ echo "ok: the shell changes the clocks as the Clocks page asks, and looks them u
 echo "ok: the shell writes the layout settings, and new ones, and applies them"
 echo "ok: the shell sets the Appearance page's settings, applies the dim, and refuses one that wouldn't work"
 echo "ok: the shell writes the display settings, and new ones, and applies them"
-load_runs='hyprctl devices -j'
+load_runs='hyprctl devices -j
+tide keyboards
+udevadm monitor --udev --subsystem-match=input'
 # A clocks.local.json and a wallpaper record the lock refuses, which it
 # should name.
 printf '{\n  "hour24": "no"\n}\n' >"$clocks_local" || exit 1

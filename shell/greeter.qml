@@ -186,6 +186,15 @@ ShellRoot {
         name: "tide-greeter"
     }
 
+    // Whether there's a keyboard to type with, for the field's focus
+    // (LockKeyboards.qml); the badge is read again as one comes or goes.
+    LockKeyboards {
+        id: keyboards
+        name: "tide-greeter"
+
+        onCountChanged: keymap.refresh()
+    }
+
     // A read's output counts once its stream ends, which a started command
     // always reaches. Quickshell reports a command that can't start only by
     // stopping without `started` (shell/lib/launch.mjs), and that read is
@@ -399,6 +408,7 @@ ShellRoot {
                 powerMessage: powerActions.message
                 powerBusy: powerActions.busy
                 layout: keymap.badge
+                keyboard: keyboards.present
                 users: root.users
                 userName: root.user
                 userPickable: Greeter.canPickUser(root.face)

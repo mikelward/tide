@@ -139,6 +139,19 @@
 #     a notification. Exits 2, saying why, if it can't tell: outside a tide
 #     session, or when the guard can't be asked.
 #
+#   tide keyboards
+#
+#     Prints the name of each keyboard plugged in, one per line, and nothing
+#     when there's none. The lock and the greeter show the password field's
+#     focus only while there's one to type with (SPEC.md §10), and run it
+#     again on each input device udev adds or removes. A keyboard is what
+#     udev tags ID_INPUT_KEYBOARD: an input device with every key from Esc
+#     to D, so not a power button or a mouse's side buttons, though a USB
+#     receiver's keyboard part counts whether or not a keyboard is paired.
+#     One behind a monitor's USB hub comes and goes as the monitor's KVM
+#     switches to this machine and away. Exits 1, saying why, if it can't
+#     read the input devices from /sys or udev's data from /run/udev.
+#
 #   tide clipboard store | list | copy ID | delete ID | wipe
 #
 #     The clipboard history behind the picker on Super+C (SPEC.md §8.4);
@@ -164,6 +177,7 @@ usage() {
     echo "       $prog idle-lock" >&2
     echo "       $prog idle-suspend [--unplugged | --cancel]" >&2
     echo "       $prog prompt-focus" >&2
+    echo "       $prog keyboards" >&2
     echo "       $prog clipboard store | list | copy ID | delete ID | wipe" >&2
     echo "       $prog doctor" >&2
     exit 2
@@ -991,6 +1005,31 @@ prompt_focus() {
     exit 2
 }
 
+# The input devices' and udev's directories, overridable for the tests.
+keyboards_sys=${TIDE_KEYBOARDS_SYS:-/sys/class/input}
+keyboards_udev=${TIDE_KEYBOARDS_UDEV:-/run/udev/data}
+
+keyboards() {
+    test $# -eq 0 || usage
+    if ! test -d "$keyboards_sys" || ! test -r "$keyboards_sys"; then
+        echo "$prog keyboards: can't read the input devices in $keyboards_sys" >&2
+        exit 1
+    fi
+    if ! test -d "$keyboards_udev" || ! test -r "$keyboards_udev"; then
+        echo "$prog keyboards: can't read udev's data in $keyboards_udev" >&2
+        exit 1
+    fi
+    # udev keeps an event device's properties in c<major>:<minor>, its
+    # dev file's numbers. A device that goes while this reads is skipped.
+    for node in "$keyboards_sys"/event*; do
+        IFS= read -r numbers 2>/dev/null <"$node/dev" || continue
+        grep -qx 'E:ID_INPUT_KEYBOARD=1' "$keyboards_udev/c$numbers" 2>/dev/null || continue
+        name=
+        IFS= read -r name 2>/dev/null <"$node/device/name" || :
+        printf '%s\n' "${name:-${node##*/}}"
+    done
+}
+
 case "${1:-}" in
     launch) shift; launch "$@" ;;
     workspace) shift; workspace "$@" ;;
@@ -1001,6 +1040,7 @@ case "${1:-}" in
     idle-lock) shift; idle_lock "$@" ;;
     idle-suspend) shift; idle_suspend "$@" ;;
     prompt-focus) shift; prompt_focus "$@" ;;
+    keyboards) shift; keyboards "$@" ;;
     # Installed beside this script.
     doctor) shift; exec sh "$(dirname "$0")/tide-doctor" "$@" ;;
     clipboard) shift; exec sh "$(dirname "$0")/tide-clipboard" "$@" ;;

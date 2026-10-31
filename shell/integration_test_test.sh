@@ -405,7 +405,15 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
         esac
     else
         case " ${7-$all_runs} " in
-            *" keyboards "*) hyprctl devices -j >/dev/null 2>&1 & ;;
+            *" keyboards "*)
+                hyprctl devices -j >/dev/null 2>&1 &
+                # And the keyboards for the field's focus, and the watch
+                # on udev for their coming and going.
+                if ! test -e "\$(dirname "\$0")/no-keyboard-watch"; then
+                    tide keyboards >/dev/null 2>&1 &
+                    udevadm monitor --udev --subsystem-match=input >/dev/null 2>&1 &
+                fi
+                ;;
         esac
     fi
 fi
@@ -1386,6 +1394,43 @@ stubs "$tmp/no-show-in" "exit 0" "$loaded"
 run "$tmp/no-show-in"
 check "a shell that never reads the desktop entries' OnlyShowIn fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell didn't read the desktop entries' OnlyShowIn in"
+}
+
+case_97() {
+stubs "$tmp/no-keyboard-watch" "exit 0" "$loaded"
+: >"$tmp/no-keyboard-watch/no-keyboard-watch" || exit 1
+run "$tmp/no-keyboard-watch"
+check "a lock that never counts the keyboards for the field's focus fails" test "$code" -ne 0
+check "and says so" contains "$out" 'the lock never ran "tide keyboards..." in 2 s'
+}
+
+case_98() {
+stubs "$tmp/keyboards-warn" "exit 0" "$loaded"
+echo "  WARN qml: tide-lock: keyboards: couldn't start udevadm monitor; the password field shows its focus whether or not there's a keyboard" >"$tmp/keyboards-warn/load-lock.txt" || exit 1
+run "$tmp/keyboards-warn"
+check "a lock that can't watch for keyboards fails" test "$code" -ne 0
+check "and says what it said" contains "$out" "tide-lock: keyboards: couldn't start udevadm monitor"
+}
+
+case_99() {
+# The stand-in udevadm prints its monitor's header, then waits on its
+# parent in a tail, here one that says how it was asked; and it answers
+# nothing else.
+mkdir -p "$tmp/udevadm-tail" || exit 1
+printf '#!/bin/sh\necho "tail $*"\n' >"$tmp/udevadm-tail/tail" || exit 1
+chmod +x "$tmp/udevadm-tail/tail" || exit 1
+out=$(PATH="$tmp/udevadm-tail:$PATH" sh shell/udevadm_stand_in.sh monitor --udev --subsystem-match=input 2>&1)
+code=$?
+check "the stand-in udevadm prints the monitor's header" \
+    contains "$code:$out" "0:monitor will print the received events for:
+UDEV - the event which udev sends out after rule processing"
+check "then waits on its parent" contains "$out" "
+tail --pid="
+check "for good" contains "$out" " -f /dev/null"
+out=$(sh shell/udevadm_stand_in.sh info --query=property /dev/input/event0 2>&1)
+code=$?
+check "and answers nothing else" test "$code" -eq 2
+check "naming what it got" contains "$out" "not info --query=property /dev/input/event0"
 }
 
 # --case N RESULT: run case_N alone, and write its passes and failures to

@@ -59,6 +59,15 @@ ShellRoot {
         id: keymap
     }
 
+    // Whether there's a keyboard to type with, for the field's focus
+    // (LockKeyboards.qml). A keyboard coming or going can change the main
+    // one, so the badge is read again.
+    LockKeyboards {
+        id: keyboards
+
+        onCountChanged: keymap.refresh()
+    }
+
     // The notification count in the corner: read from the history the bar
     // saves (shell/HistoryData.qml), and followed as it changes, so the
     // lock needs no channel to the shell. No file (nothing has arrived yet)
@@ -263,6 +272,7 @@ ShellRoot {
             powerMessage: powerActions.message
             powerBusy: powerActions.busy
             layout: keymap.badge
+            keyboard: keyboards.present
             unread: root.unread
             onEvent: event => root.dispatch(event)
             onPower: id => powerActions.press(id)
