@@ -1304,7 +1304,7 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 
 # The shell makes all these calls; without them, the run says nothing
 # about the clocks, the system monitor, the title, the focus guard (its
-# replay of the waiting windows, and its order for Super+Tab), light and
+# replay of the waiting windows, and the marks' order), light and
 # dark, the VPNs, hypridle's timings, the mouse, touchpad and keyboard
 # settings, the list of mice and touchpads, the key bindings, the layout
 # settings, the monitors and their settings, the dim strength, or home and

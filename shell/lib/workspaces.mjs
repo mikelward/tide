@@ -14,7 +14,7 @@ export const BAR_NAME = 16;
 // the QML feeds Hyprland's and the notification daemon's events through
 // updateMarks and hands the result to barWorkspaces. The state is
 //
-//   {guard: [address], guardAt, notes: {id: {app, wide: [address], direct: [address], at}}, cycling}
+//   {guard: [address], guardAt, notes: {id: {app, wide: [address], direct: [address], at}}}
 //
 // where `guard` holds the windows the focus guard kept from focus, and
 // `notes` each notification's marks by its ID, so dismissing one clears
@@ -22,9 +22,9 @@ export const BAR_NAME = 16;
 // whole app and `direct` ones from naming the window; only the app's own
 // activation tells them apart. `guardAt` and each note's `at` say when each
 // window was last marked ({address: n}, larger is later, one clock for
-// both), so Super+Tab's order comes from the marks still standing
+// both), so the Attention tab's order comes from the marks still standing
 // (attentionOrder). Hyprland's own urgent flag lives on the window.
-export const NO_MARKS = Object.freeze({ guard: Object.freeze([]), guardAt: Object.freeze({}), notes: Object.freeze({}), cycling: false });
+export const NO_MARKS = Object.freeze({ guard: Object.freeze([]), guardAt: Object.freeze({}), notes: Object.freeze({}) });
 
 // The marks after one event, without changing `marks`. Events:
 //
@@ -49,10 +49,6 @@ export const NO_MARKS = Object.freeze({ guard: Object.freeze([]), guardAt: Objec
 //       mark on it clears, and so does every notification's that covered it.
 //   {type: "dismissed", id}      the notification was dismissed.
 //   {type: "closed", address}    the window is gone.
-//   {type: "cycleStart"}         Super+Tab started stepping through the
-//       marked windows: focusing one doesn't clear anything (`cycling`)...
-//   {type: "cycleEnd", address}  ...until Super is released, which clears
-//       only the window the cycle landed on (null for none).
 //   {type: "guardReset"}         the focus guard's state was rebuilt (a
 //       Hyprland config reload runs focus.lua afresh): its marks go, and
 //       the shell asks it to announce what still waits.
@@ -66,16 +62,6 @@ function fromEntries(pairs) {
 }
 
 export function updateMarks(marks, event) {
-    if (event.type === "cycleStart") {
-        return Object.assign({}, marks, { cycling: true });
-    }
-    if (event.type === "cycleEnd") {
-        const ended = Object.assign({}, marks, { cycling: false });
-        return event.address ? updateMarks(ended, { type: "focused", address: event.address }) : ended;
-    }
-    if (event.type === "focused" && marks.cycling) {
-        return marks;
-    }
     let guard = marks.guard;
     let guardAt = marks.guardAt ?? {};
     const notes = {};
@@ -148,8 +134,7 @@ export function updateMarks(marks, event) {
         throw new Error(`unknown mark event ${event.type}`);
     }
     guardAt = fromEntries(guard.map((a) => [a, guardAt[a] ?? 0]));
-    // A rebuilt guard has no cycle running.
-    return { guard, guardAt, notes, cycling: event.type !== "guardReset" && (marks.cycling ?? false) };
+    return { guard, guardAt, notes };
 }
 
 // Whether `app` matches any of `apps`, an app or a list of them (sameApp):
@@ -238,19 +223,11 @@ export function focusRank(order, address, historyId) {
 // keeping a window from focus (custom>>tide-attention>>ADDRESS,
 // SPEC.md §14.3), a window being focused, one closing, a window asking for
 // focus (`urgent`, which the QML turns into activatedEvent once it knows
-// the window's app), Super+Tab's cycle starting or ending
-// (custom>>tide-cycle>>start, custom>>tide-cycle>>end>>ADDRESS),
-// or a config reload rebuilding the guard.
+// the window's app), or a config reload rebuilding the guard.
 // Notifications' events come from the notification server instead.
 export function markEvent(name, data) {
     if (name === "configreloaded") {
         return { type: "guardReset" };
-    }
-    if (name === "custom" && String(data) === "tide-cycle>>start") {
-        return { type: "cycleStart" };
-    }
-    if (name === "custom" && String(data).startsWith("tide-cycle>>end>>")) {
-        return { type: "cycleEnd", address: normalizeAddress(String(data).slice("tide-cycle>>end>>".length)) };
     }
     let type;
     let raw;
@@ -274,7 +251,7 @@ export function markEvent(name, data) {
 }
 
 // Every window marked for attention, oldest mark first, for the focus
-// guard's Super+Tab (tide_focus.set_order): the guard's own and
+// guard (tide_focus.set_order) and the Attention tab: the guard's own and
 // notifications', each placed by its latest mark still standing. So
 // dismissing a newer notification puts a window back where an older mark
 // had it, and a guard hearing the whole list at once, after a reload,
