@@ -58,14 +58,15 @@ test("the brightness pill shows the backlight's level", () => {
     assert.equal(brightnessPill(NaN).label, "0%", "a bad level reads as 0");
 });
 
-test("Super+S's pill says whether keep awake is on now", () => {
-    assert.deepEqual(keepAwakePill({ on: true, asked: true, presenting: false }), { icon: "display-brightness-symbolic", level: null, label: "Keep awake on" });
-    assert.equal(keepAwakePill({ on: false, asked: false, presenting: false }).label, "Keep awake off");
-    assert.equal(keepAwakePill({ on: true, asked: false, presenting: true }).label, "Keep awake on");
+test("keep awake's pill is the cup, saying whether it's keeping awake now", () => {
+    assert.deepEqual({ ...keepAwakePill({ on: true, asked: true, presenting: false }) }, { icon: "keep-awake-symbolic.svg", level: null, label: "Keeping awake" });
+    assert.equal(keepAwakePill({ on: false, asked: false, presenting: false }).label, "Not keeping awake");
+    assert.notEqual(keepAwakePill({ on: true, asked: true, presenting: false }).icon, brightnessPill(50).icon, "not brightness's sun");
 });
 
-test("Super+S's pill says why keep awake stays on when only the mic holds it", () => {
-    assert.equal(keepAwakePill({ on: true, asked: false, presenting: false }).label, "Awake while the mic is live");
+test("keep awake's pill says what holds it when you didn't ask", () => {
+    assert.equal(keepAwakePill({ on: true, asked: false, presenting: false }).label, "Keeping awake while the mic is live");
+    assert.equal(keepAwakePill({ on: true, asked: false, presenting: true }).label, "Keeping awake while presenting");
 });
 
 test("Super+P's pill says whether presenter mode is on, and when it can't turn on Do not disturb", () => {

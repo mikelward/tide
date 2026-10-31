@@ -1359,7 +1359,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen, window or area), and the app reading it; stop it from the app | — |
 | Privacy: mic (orange) | any app is capturing the microphone | per-app list with mute | — |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
-| Keep awake | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off | — |
+| Keep awake: a cup of coffee | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off; the OSD says which | hover: what it's doing, in the OSD's words |
 | Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | — |
 | Bluetooth audio | one icon per connected headphones, headset or speakers, beside Bluetooth | the Bluetooth popover | hover: its name and battery |
 | Network | Wi-Fi strength / wired / VPN lock / offline | network list, VPNs; *settings* opens `nm-connection-editor` | — |
@@ -2079,10 +2079,15 @@ one of them:
   never left on by accident across a login.
 - It also switches on automatically **while the microphone is live**, so an
   audio-only call with no video on screen doesn't blank.
-- **`Super+S`** toggles it as a click on the bar's icon does. The OSD (§9)
-  then says "Keep awake on" or "Keep awake off". When only a live mic
-  still holds it, it says "Awake while the mic is live", since the key
-  can't turn that off.
+- **`Super+S`** toggles it as a click on the bar's icon does, and so does
+  the switcher's Keep awake. Each time, the OSD (§9) says "Keeping awake"
+  or "Not keeping awake", as tilemo's alert does, since the bar's icon may
+  be on another monitor. When something else holds it, it says what:
+  "Keeping awake while the mic is live" or "Keeping awake while
+  presenting", since a toggle can't turn that off. Hovering over the bar's
+  icon says the same.
+- **Its icon is a cup of coffee,** on the bar, the OSD and the switcher, as
+  on tilemo. It was the sun, which is brightness's icon too.
 
 **Presenter mode** is Do not disturb (§9) and keep awake together, for a
 talk, a demo, or a meeting room's screen.
@@ -2924,7 +2929,8 @@ to be focused.
     way. So far that is the system monitor's two (Adwaita 46 has neither):
     a square chip with pins on four sides for the CPU, and a module with
     contacts along one edge for memory, the shapes people already read as
-    a processor and RAM.
+    a processor and RAM; and keep awake's cup of coffee with steam, as
+    tilemo's bar draws it.
   - The cursor theme and size are set once, in the uwsm environment, for
     every toolkit.
 

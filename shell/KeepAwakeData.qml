@@ -24,10 +24,20 @@ Singleton {
     // Turns your request on or off. While the mic is live it stays on
     // either way; the click still decides what's left once the call ends.
     // While presenting it reads on, so a click turns it off and ends
-    // presenter mode (Presenter.keepAwakeToggled).
+    // presenter mode (Presenter.keepAwakeToggled). The OSD then says what
+    // it's doing, from Super+S, the bar's cup or the switcher alike, since
+    // the bar's icon may be on another monitor.
     function toggle() {
         PresenterData.apply(Presenter.keepAwakeToggled(PresenterData.parts(), NotificationData.enabled));
+        OsdData.show(Osd.keepAwakePill(root.state));
     }
+
+    // What's holding it, as KeepAwake.sign and the OSD take it.
+    readonly property var state: ({
+        on: root.on,
+        asked: root.asked,
+        presenting: PresenterData.on
+    })
 
     // Your own toggle, for PresenterData.apply.
     function setAsked(on) {
@@ -35,8 +45,7 @@ Singleton {
         held.until = 0;
     }
 
-    // `qs -c tide ipc call keepawake toggle`, from Super+S. The OSD says
-    // what it did, since the bar's icon may be on another monitor.
+    // `qs -c tide ipc call keepawake toggle`, from Super+S.
     // `status` says whether it's in effect, "on" or "off".
     IpcHandler {
         target: "keepawake"
@@ -47,11 +56,6 @@ Singleton {
 
         function toggle(): void {
             root.toggle();
-            OsdData.show(Osd.keepAwakePill({
-                on: root.on,
-                asked: root.asked,
-                presenting: PresenterData.on
-            }));
         }
     }
 

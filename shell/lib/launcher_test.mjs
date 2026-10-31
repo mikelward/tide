@@ -359,6 +359,11 @@ test("Clear clipboard history wipes cliphist's history, notifying a failure", ()
     assert.equal(search(quickActions(), "cliphist")[0].item.id, "clear-clipboard");
 });
 
+test("keep awake is the cup, as on the bar and the OSD, and coffee finds it", () => {
+    assert.equal(byId(quickActions(), "icon")["keep-awake"], "keep-awake-symbolic.svg");
+    assert.equal(search(quickActions(), "coffee")[0].item.id, "keep-awake");
+});
+
 test("a quick action shows the key that does the same", () => {
     const hints = byId(quickActions(), "hint");
     assert.equal(hints["screenshot-window"], "Alt+Print");

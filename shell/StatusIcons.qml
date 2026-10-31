@@ -6,6 +6,7 @@ import Quickshell.Services.Pipewire
 import Quickshell.Services.UPower
 import "lib/barclick.mjs" as Click
 import "lib/bluetooth.mjs" as Bt
+import "lib/keepawake.mjs" as KeepAwake
 import "lib/network.mjs" as Net
 import "lib/status.mjs" as Status
 
@@ -52,14 +53,15 @@ Row {
         objects: [root.sink]
     }
 
-    // Keep awake: always here, faint while off and in the accent color
-    // while on, whether you asked, the mic is live or you're presenting. A
-    // click turns your request on, until the next click turns it off.
+    // Keep awake: a cup of coffee, always here, faint while off and in the
+    // accent color while on, whether you asked, the mic is live or you're
+    // presenting. A click turns your request on, until the next click turns
+    // it off, and the OSD says what it did; hovering says what it's doing.
     SymbolicIcon {
         id: keepAwake
 
         anchors.verticalCenter: parent.verticalCenter
-        name: "display-brightness-symbolic"
+        name: KeepAwake.ICON
         color: KeepAwakeData.on ? Theme.accent : Theme.fgFaint
 
         BarHit {
@@ -67,6 +69,40 @@ Row {
 
             TapHandler {
                 onTapped: KeepAwakeData.toggle()
+            }
+        }
+
+        // A HoverHandler takes no clicks, so the tap still lands.
+        HoverHandler {
+            id: keepAwakeHover
+        }
+
+        PopupWindow {
+            visible: keepAwakeHover.hovered
+            anchor.item: keepAwake
+            anchor.edges: Edges.Bottom
+            anchor.gravity: Edges.Bottom
+            anchor.margins.bottom: -8
+            color: "transparent"
+            implicitWidth: keepAwakeTip.implicitWidth + 18
+            implicitHeight: keepAwakeTip.implicitHeight + 10
+
+            Rectangle {
+                anchors.fill: parent
+                radius: 7
+                color: Theme.surface2
+                border.color: Theme.edge
+
+                Text {
+                    id: keepAwakeTip
+
+                    anchors.centerIn: parent
+                    textFormat: Text.PlainText
+                    text: KeepAwake.sign(KeepAwakeData.state)
+                    color: Theme.fg
+                    font.family: Theme.font
+                    font.pixelSize: 12
+                }
             }
         }
     }

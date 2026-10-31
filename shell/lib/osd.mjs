@@ -3,6 +3,7 @@
 // QML binds to.
 
 import { volumeIcon } from "./status.mjs";
+import { ICON as KEEP_AWAKE_ICON, sign as keepAwakeSign } from "./keepawake.mjs";
 
 export const SHOWN_MS = 1200;
 
@@ -72,16 +73,12 @@ export function micPill({ muted }) {
     });
 }
 
-// The pill for keep awake after Super+S (SPEC.md §10): whether it's on now,
-// and why when only a live mic holds it, since the key can't turn that off.
-// `on` is what's in effect, `asked` your own toggle, `presenting` presenter
-// mode.
-export function keepAwakePill({ on, asked, presenting }) {
-    let label = "Keep awake off";
-    if (on) {
-        label = asked || presenting ? "Keep awake on" : "Awake while the mic is live";
-    }
-    return Object.freeze({ icon: "display-brightness-symbolic", level: null, label });
+// The pill for keep awake after a toggle (SPEC.md §10): whether it's on
+// now, and what holds it when you didn't ask, since a toggle can't turn
+// that off (keepawake.mjs's sign). `on` is what's in effect, `asked` your
+// own toggle, `presenting` presenter mode.
+export function keepAwakePill(state) {
+    return Object.freeze({ icon: KEEP_AWAKE_ICON, level: null, label: keepAwakeSign(state) });
 }
 
 // The pill for presenter mode after Super+P. Without the shell as the
