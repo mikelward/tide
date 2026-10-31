@@ -686,6 +686,15 @@ in how long they last and what stays visible:
   dims like any other inactive window. Closing the dialog returns focus to
   the parent. A dialog from any other app opens unfocused and is marked
   urgent (§14).
+- **Resizing by an edge.** Drag a floating window's edge or corner, no key
+  held. The grab zone is the 8 px just outside the window, with a resize
+  cursor there; a click inside the window always reaches the app.
+  - That's Hyprland's own `resize_on_border`, with
+    `extend_border_grab_area = 8` and no border.
+  - Hyprland 0.56.2 grows a floating window's hit box by that zone
+    (`CViewHitTester::windowAt`), and starts a resize on a press there
+    that's outside the window (`CInputManager::processMouseDownNormal`).
+  - So those 8 px take clicks from whatever is below them.
 - **Any window can be floated** with `Super+Shift+F` / `Super+Insert`.
   Floating windows remember their size and position per app for the session.
 - **Picture-in-picture** floats and is pinned, visible on every workspace, in
@@ -959,12 +968,52 @@ with new keys in **bold**:
 | **`Super+Up`** / **`Super+Shift+Up`** / **`Super+Down`** | maximize / fullscreen / restore the current window |
 | `Super+Shift+F`, `Super+Insert` | toggle floating |
 | **`Super`+middle-click** | toggle maximize on the window under the pointer |
+| **drag the master/stack edge** | resize the master (`mfact`), as `Super+\` / `Super+/` do, following the pointer; no key held (below) |
+| **drag a floating window's edge or corner** | resize it, no key held (§6.4) |
+| `Super`+left-drag / `Super`+right-drag | move / resize a floating window |
 | `Super+Shift+R` | resize mode (floating windows) |
 | **`Super+Shift+N`** | notification center |
 | `Print` / **`Alt+Print`** / `Shift+Print`, `Super+Print` | screenshot screen / window / region |
 | **`XF86AudioMicMute`**, **`Super+Shift+M`** | toggle microphone mute (system-wide) |
 | media, brightness, volume keys | as today, with OSD |
 
+- **Dragging the master/stack edge.** A plain left-press within 4 px
+  either side of the edge between the masters and the stack starts a
+  drag, and the edge follows the pointer until the button is released.
+  - The edges are tile's, twocol's and threecol's with one stack window.
+    In threecol with stacks either side, either side of the centered
+    master drags it, and it grows or shrinks both ways.
+  - The rows of a stack are always equal, so there's no edge to drag
+    between two of them; nor between twocol's two masters, which split
+    their side equally.
+  - Anywhere else, and over a floating window, its 8 px resize zone, or a
+    notification or other top or overlay layer, the press reaches the app
+    as usual. So does one on a monitor that isn't focused, under a
+    fullscreen or maximized window, or with a special workspace shown.
+  - The layout keeps where the tiles were from its last layout, and a
+    press checks that those windows are still tiled on that workspace.
+    Hyprland doesn't lay out a workspace its last tiled windows leave, so
+    without that check an emptied workspace would keep an invisible edge.
+  - While any of the bar's popovers or menus is open, every press passes
+    on. Each is an `xdg_popup` of the bar, and Hyprland 0.56.2's Lua sees
+    only a layer's own surface, so the shell tells the layout
+    (`tide_layout.set_popups_open`). What it tells is whether the one open
+    popover §7.1 allows is there (`PopoverData.qml`). It says again as it
+    starts and after a config load, which starts the layout afresh.
+  - It's the layout's own, in Lua: `drag_press` and `drag_release`, bound
+    to the plain left button's press and release.
+  - Hyprland 0.56.2 can't do it for us. With no gaps the edge is inside a
+    tile, so `resize_on_border` never starts there. A drag that does reach a
+    tiled window is only a relayout to a Lua layout
+    (`CLuaTiledAlgorithm::resizeTarget` drops the delta; main, 2026-10-31,
+    too). So `Super`+right-drag doesn't resize a tile either.
+  - Lua sees no pointer motion, so a 16 ms timer follows the pointer, and
+    only while a drag is on. It sends an `mfact` layoutmsg when the value
+    changes.
+  - There's no resize cursor on this edge: Hyprland's comes only from
+    `resize_on_border`, and its Lua can't set one.
+  - The grab is `resize_grab`, a `setup()` option, in pixels either side;
+    0 turns edge dragging off.
 - **`Super+End`** never goes to home, so it isn't Hyprland's
   `workspace previous`. It uses the same Lua history as `Super+Tab`
   (§6.5), skipping any workspace removed since.

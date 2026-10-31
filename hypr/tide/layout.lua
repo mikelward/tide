@@ -64,6 +64,9 @@ M.defaults = {
     -- workspace, or tiled again after floating, counts as new.
     new_window = "end",
     mfact_step = 0.025,
+    -- How far either side of a split edge a plain left-drag grabs it, in
+    -- pixels (drag_press below); 0 turns edge dragging off.
+    resize_grab = 4,
 }
 
 local function copy(t)
@@ -262,6 +265,8 @@ local function recalculate(ctx)
         return
     end
     local st = state_for(id, ctx.area)
+    -- Where the tiles are, for a drag on a split edge to find them.
+    st.area, st.n = copy(ctx.area), n
     -- A window whose address can't be read (it's going away) is left out
     -- of the order, so it leaves no hole for the helpers to trip on, and
     -- takes a place after the rest.
@@ -354,7 +359,7 @@ local function layout_msg(ctx, msg)
             return "tide: mfact expects +d, -d or a value"
         end
         local v = sign == "+" and o.mfact + num or sign == "-" and o.mfact - num or num
-        o.mfact = geometry.clamp(v, 0.1, 0.9)
+        o.mfact = geometry.clamp(v, geometry.mfact_min, geometry.mfact_max)
     elseif cmd == "addmaster" or cmd == "removemaster" then
         if o.nmaster == nil then
             return true
@@ -462,6 +467,204 @@ function M.move(delta)
     hl.dispatch(hl.dsp.window.swap({ target = selector(order[j]) }))
 end
 
+-- Dragging a split edge with the pointer, no modifier held (SPEC.md §6.6).
+-- Hyprland 0.56.2 hands a tiled window's border drag to a Lua layout as
+-- nothing but a relayout (`CLuaTiledAlgorithm::resizeTarget` drops the
+-- delta), and with no gaps the edge between two tiles is inside one of
+-- them, so its own resize_on_border never starts there. So a plain
+-- left-button bind asks drag_press whether the press is on an edge: if
+-- not, the click goes on to the window as usual; if so, it's taken, and a
+-- timer follows the pointer with mfact layoutmsgs until drag_release.
+-- Lua sees no pointer motion, hence the timer, which runs only while a
+-- drag does. Both run from a bind or a timer, never a layout callback.
+local PASS = { pass_event = true }
+local DRAG_TICK_MS = 16
+local drag, drag_timer
+-- Whether one of the shell's popovers or menus is open. Each is an
+-- xdg_popup of the bar, which Hyprland 0.56.2's Lua can't see (a layer's
+-- x, y, w and h are its own surface's alone), so the shell says
+-- (set_popups_open), and while one is open every press passes on.
+local popups_open = false
+
+-- From the shell, through `hyprctl eval`, whenever its first popover opens
+-- or its last closes, and again as it starts and after a config load.
+function M.set_popups_open(open)
+    if type(open) ~= "boolean" then
+        error("tide: set_popups_open expects true or false, not " .. tostring(open), 0)
+    end
+    popups_open = open
+end
+
+-- A config value, or nil if it can't be read.
+local function config_value(key)
+    local ok, v = pcall(hl.get_config, key)
+    if ok then
+        return v
+    end
+end
+
+local function truthy(v)
+    return v == true or (type(v) == "number" and v ~= 0)
+end
+
+-- Whether something above the tiles takes a press at (x, y): a floating
+-- window, with the ring outside it where Hyprland starts its own border
+-- resize, or a top or overlay layer (a notification, the switcher); the
+-- shell's popovers are popups of a layer, which set_popups_open covers. If the
+-- windows or layers can't be read, the answer is yes, so the click goes
+-- where it would have without tide.
+local function covered(x, y)
+    local ring = 0
+    if truthy(config_value("general:resize_on_border")) then
+        ring = (tonumber(config_value("general:border_size")) or 0)
+            + (tonumber(config_value("general:extend_border_grab_area")) or 0)
+    end
+    local ok, windows = pcall(hl.get_windows)
+    if not ok or type(windows) ~= "table" then
+        return true
+    end
+    for _, w in ipairs(windows) do
+        local at, size = field(w, "at"), field(w, "size")
+        if field(w, "floating") and field(w, "visible") and at and size then
+            if geometry.contains({ x = at.x, y = at.y, w = size.x, h = size.y }, x, y, ring) then
+                return true
+            end
+        end
+    end
+    local ok_layers, layers = pcall(hl.get_layers)
+    if not ok_layers or type(layers) ~= "table" then
+        return true
+    end
+    for _, l in ipairs(layers) do
+        local level, lx, ly, lw, lh = field(l, "layer"), field(l, "x"), field(l, "y"), field(l, "w"), field(l, "h")
+        -- zwlr_layer_shell_v1: 2 is top, 3 overlay; below them are the
+        -- wallpaper and the like, under the windows.
+        if field(l, "mapped") and level and level >= 2 and lx and lw then
+            if geometry.contains({ x = lx, y = ly, w = lw, h = lh }, x, y) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Whether workspace `id`'s cached tiles (st.area, st.n) are still there:
+-- every window its last recalculate laid out is still a tiled window on it.
+-- Hyprland calls no recalculate for a workspace its last tiled windows leave,
+-- so without this an emptied workspace would keep an invisible edge that
+-- takes presses and drags a master that isn't there. If the windows can't
+-- be read, the answer is no, so the click goes where it would have without
+-- tide.
+local function tiles_current(id, st)
+    if #st.order == 0 then
+        return false
+    end
+    local ok, windows = pcall(hl.get_windows)
+    if not ok or type(windows) ~= "table" then
+        return false
+    end
+    local here = {}
+    for _, w in ipairs(windows) do
+        local address = field(w, "address")
+        if address and not field(w, "floating") and field(field(w, "workspace"), "id") == id then
+            here[address] = true
+        end
+    end
+    for _, address in ipairs(st.order) do
+        if not here[address] then
+            return false
+        end
+    end
+    return true
+end
+
+local function stop_drag()
+    drag = nil
+    if drag_timer then
+        drag_timer:set_enabled(false)
+    end
+end
+
+-- One step of a drag: the mfact that puts the edge under the pointer, sent
+-- as a layoutmsg when it changes. A layoutmsg goes to the focused
+-- monitor's workspace, so a step is skipped while that's not the dragged
+-- one, and a mode change ends the drag.
+local function drag_step()
+    if not drag then
+        stop_drag()
+        return
+    end
+    local st = workspaces[drag.ws]
+    if not st or st.mode ~= drag.mode then
+        stop_drag()
+        return
+    end
+    if active_workspace_id() ~= drag.ws then
+        return
+    end
+    local ok, pos = pcall(hl.get_cursor_pos)
+    if not ok or not pos then
+        return -- no pointer to follow this step; the next one tries again
+    end
+    local v = geometry.drag_mfact(drag.edge, drag.area, pos.x - drag.offset)
+    v = v and tonumber(string.format("%.4f", v))
+    if v and v ~= drag.mfact then
+        drag.mfact = v
+        hl.dispatch(hl.dsp.layout(string.format("mfact %.4f", v)))
+    end
+end
+
+-- The left button's press, unmodified: starts a drag if it's on a split
+-- edge of the focused monitor's tiles with nothing above them there, and
+-- otherwise passes the click on, which also leaves floating windows'
+-- edges to Hyprland's resize_on_border.
+function M.drag_press()
+    local grab = config.resize_grab
+    if grab <= 0 or popups_open then
+        return PASS
+    end
+    local ok_pos, pos = pcall(hl.get_cursor_pos)
+    local ok_mon, mon = pcall(hl.get_monitor_at_cursor)
+    if not (ok_pos and pos and ok_mon and mon) then
+        return PASS
+    end
+    if not field(mon, "focused") or field(mon, "active_special_workspace") then
+        return PASS
+    end
+    local ws = field(mon, "active_workspace")
+    local id = field(ws, "id")
+    local st = id ~= nil and workspaces[id]
+    if not st or not st.area or field(ws, "has_fullscreen") then
+        return PASS
+    end
+    if not tiles_current(id, st) then
+        -- Stale, so dropped: the next recalculate with windows sets it again.
+        st.area, st.n = nil, nil
+        return PASS
+    end
+    local o = st.opts[st.mode]
+    local edge = geometry.edge_at(geometry.split_edges(st.mode, st.area, st.n, o), st.area, pos.x, pos.y, grab)
+    if not edge or covered(pos.x, pos.y) then
+        return PASS
+    end
+    -- The edge keeps its offset from the pointer, so it doesn't jump to it.
+    drag = { ws = id, mode = st.mode, edge = edge, area = copy(st.area), offset = pos.x - edge.x, mfact = o.mfact }
+    if drag_timer then
+        drag_timer:set_enabled(true)
+    else
+        drag_timer = hl.timer(drag_step, { timeout = DRAG_TICK_MS, type = "repeat" })
+    end
+end
+
+-- The left button's release, whatever the modifiers: the last step, then
+-- the drag ends. Any other release finds no drag and does nothing.
+function M.drag_release()
+    if drag then
+        drag_step()
+        stop_drag()
+    end
+end
+
 -- The options setup() accepts, as a schema. Every key, type and range is
 -- here, so validation is one walk over the merged config: an unknown key
 -- (a typo) or a list with holes is an error, not silently ignored.
@@ -507,6 +710,7 @@ local schema = record({
     }),
     cycle = list({ kind = "mode" }, 1, true),
     mfact_step = number(0.001, 0.5),
+    resize_grab = number(0, 32, true),
     new_window = { kind = "new_window" },
 })
 
@@ -705,6 +909,8 @@ function M.setup(opts)
         hl.notification.create({ text = "tide layouts: " .. settings_err, duration = 15000, icon = "error" })
     end
     workspaces = {}
+    -- A config load forgets the shell's popovers until it says again.
+    drag, drag_timer, popups_open = nil, nil, false
     hl.layout.register("tide", {
         recalculate = recalculate,
         layout_msg = layout_msg,
@@ -713,7 +919,7 @@ function M.setup(opts)
         announce(field(ws, "id"))
     end)
     -- For the shell, which calls it through `hyprctl eval`.
-    _G.tide_layout = { reload = M.reload }
+    _G.tide_layout = { reload = M.reload, set_popups_open = M.set_popups_open }
     return M
 end
 

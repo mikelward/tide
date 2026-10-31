@@ -10,8 +10,10 @@ import "lib/barclick.mjs" as Click
 Singleton {
     id: root
 
-    // The open popover, and the click target that opened it, if any.
-    property var open: null
+    // The open popover, and the click target that opened it, if any. Typed
+    // as objects, so one destroyed while open (its monitor unplugged) reads
+    // as none.
+    property QtObject open: null
     property Item opener: null
     // Every monitor's bar.
     property var bars: []
@@ -37,15 +39,20 @@ Singleton {
     // A popover shown or hidden, by toggle() or its own doing: one showing
     // closes any other.
     function shown(popover) {
-        if (popover.visible) {
-            if (root.open !== null && root.open !== popover) {
-                root.open.visible = false;
-            }
-            root.open = popover;
-        } else if (root.open === popover) {
-            root.open = null;
-            root.opener = null;
+        const next = Click.shownState({ open: root.open, opener: root.opener }, popover, popover.visible);
+        root.open = next.open;
+        root.opener = next.opener;
+        // After `open` has moved on, so its own shown() changes nothing.
+        if (next.hide !== null) {
+            next.hide.visible = false;
         }
+    }
+
+    // A popover going away, as its monitor is unplugged, closed or not.
+    function gone(popover) {
+        const next = Click.shownState({ open: root.open, opener: root.opener }, popover, false);
+        root.open = next.open;
+        root.opener = next.opener;
     }
 
     // A press on a bar, at `scenePoint` in the bar `window`: anywhere but the

@@ -169,6 +169,84 @@ test("an unknown mode is an error", function()
     eq(ok, false, "arrange spiral")
 end)
 
+-- Whether some box in `boxes` starts at `x`, so an edge sits between tiles.
+local function some_box_starts_at(boxes, x)
+    for _, b in ipairs(boxes) do
+        if b.x == x then
+            return true
+        end
+    end
+    return false
+end
+
+test("split edges sit exactly where the tiles meet, in every mode", function()
+    local odd = { x = 7, y = 33, w = 2561, h = 1397 }
+    local opts = {
+        tile = { mfact = 0.55, nmaster = 1 },
+        threecol = { mfact = 0.5, nmaster = 1 },
+        twocol = { mfact = 0.72, nmaster = 2 },
+    }
+    local want = { tile = 1, twocol = 1 }
+    for mode, o in pairs(opts) do
+        for n = 2, 9 do
+            local boxes = geometry.arrange(mode, odd, n, o, RULES)
+            local edges = geometry.split_edges(mode, odd, n, o)
+            local count = want[mode] or (n == 2 and 1 or 2)
+            if mode == "twocol" and n == 2 then
+                count = 0
+            end
+            eq(#edges, count, mode .. " n=" .. n .. " edge count")
+            for i, e in ipairs(edges) do
+                eq(some_box_starts_at(boxes, e.x), true, mode .. " n=" .. n .. " edge " .. i .. " at " .. e.x)
+            end
+        end
+    end
+end)
+
+test("split edges: tile at 0.55 on 1920, threecol's center pair, none to drag", function()
+    local tile = geometry.split_edges("tile", HD, 3, { mfact = 0.55, nmaster = 1 })
+    eq(tile[1].x, 1056, "tile edge")
+    eq(tile[1].kind, "left", "tile kind")
+    local three = geometry.split_edges("threecol", UW, 3, { mfact = 0.5, nmaster = 1 })
+    eq(three[1].x, 860, "threecol left side of the master")
+    eq(three[2].x, 2580, "threecol right side of the master")
+    eq(three[1].kind, "center", "threecol kind")
+    eq(three[1].side, "left", "the master's left side")
+    eq(three[2].side, "right", "the master's right side")
+    eq(#geometry.split_edges("tile", HD, 1, { mfact = 0.55, nmaster = 1 }), 0, "a lone window")
+    eq(#geometry.split_edges("tile", HD, 3, { mfact = 0.55, nmaster = 0 }), 0, "tile as rows")
+    eq(#geometry.split_edges("tile", HD, 3, { mfact = 0.55, nmaster = 3 }), 0, "all masters")
+    eq(#geometry.split_edges("threecol", UW, 2, { mfact = 0.5, nmaster = 2 }), 0, "threecol with no stack")
+    eq(#geometry.split_edges("monocle", HD, 3, {}), 0, "monocle")
+end)
+
+test("an edge's grab zone straddles it and stays inside the area", function()
+    local edges = geometry.split_edges("tile", HD, 2, { mfact = 0.55, nmaster = 1 })
+    eq(geometry.edge_at(edges, HD, 1052, 500, 4) ~= nil, true, "4 px left of the edge")
+    eq(geometry.edge_at(edges, HD, 1059, 500, 4) ~= nil, true, "3 px right of the edge")
+    eq(geometry.edge_at(edges, HD, 1051, 500, 4), nil, "5 px left")
+    eq(geometry.edge_at(edges, HD, 1060, 500, 4), nil, "4 px right is the stack's")
+    eq(geometry.edge_at(edges, HD, 1056, 20, 4), nil, "on the bar, above the area")
+    eq(geometry.edge_at(edges, HD, 1056, 1080, 4), nil, "below the area")
+    eq(geometry.edge_at(edges, HD, 1056, 500, 0), nil, "grab 0 grabs nothing")
+end)
+
+test("dragging an edge maps the pointer to mfact, clamped", function()
+    local left = { x = 1056, kind = "left" }
+    eq(geometry.drag_mfact(left, HD, 1152), 0.6, "left edge at 60%")
+    eq(geometry.drag_mfact(left, HD, -50), 0.1, "clamped at 0.1")
+    eq(geometry.drag_mfact(left, HD, 1915), 0.9, "clamped at 0.9")
+    local cleft = { x = 860, kind = "center", side = "left" }
+    local cright = { x = 2580, kind = "center", side = "right" }
+    eq(geometry.drag_mfact(cleft, UW, 688), 0.6, "left side dragged left grows the master")
+    eq(geometry.drag_mfact(cright, UW, 2752), 0.6, "the right side dragged right the same")
+    eq(geometry.drag_mfact(cleft, UW, 1720), 0.1, "the left side at the center clamps at 0.1")
+    eq(geometry.drag_mfact(cleft, UW, 2752), 0.1, "and past it holds at 0.1, not growing again")
+    eq(geometry.drag_mfact(cright, UW, 688), 0.1, "the right side past the center too")
+    eq(geometry.drag_mfact(cleft, UW, 0), 0.9, "clamped at 0.9")
+    eq(geometry.drag_mfact(cright, UW, 3440), 0.9, "clamped at 0.9 on the right")
+end)
+
 -- layout.lua against a stub hl ---------------------------------------------
 
 local function stub_hl()
@@ -207,6 +285,56 @@ local function stub_hl()
     end
     h.get_active_window = function()
         return h.active_window and { address = h.active_window } or nil
+    end
+    -- The pointer, its monitor, and what's above the tiles, for drags.
+    h.cursor = { x = 0, y = 0 }
+    h.monitor = { focused = true, active_workspace_id = 1 }
+    h.windows, h.layers = {}, {}
+    -- Each workspace's tiled windows, as its last layout had them; the
+    -- layout checks them before a drag (tiles_current).
+    h.tiled = {}
+    h.config = {
+        ["general:resize_on_border"] = true,
+        ["general:border_size"] = 0,
+        ["general:extend_border_grab_area"] = 8,
+    }
+    h.timers = {}
+    h.get_cursor_pos = function()
+        return { x = h.cursor.x, y = h.cursor.y }
+    end
+    h.get_monitor_at_cursor = function()
+        local m = h.monitor
+        return {
+            focused = m.focused,
+            active_workspace = { id = m.active_workspace_id, has_fullscreen = m.has_fullscreen or false },
+            active_special_workspace = m.special,
+        }
+    end
+    h.get_windows = function()
+        local all = {}
+        for _, list in pairs(h.tiled) do
+            for _, w in ipairs(list) do
+                all[#all + 1] = w
+            end
+        end
+        for _, w in ipairs(h.windows) do
+            all[#all + 1] = w
+        end
+        return all
+    end
+    h.get_layers = function()
+        return h.layers
+    end
+    h.get_config = function(key)
+        return h.config[key]
+    end
+    h.timer = function(fn, opts)
+        local t = { fn = fn, opts = opts, enabled = true }
+        function t:set_enabled(on)
+            self.enabled = on
+        end
+        table.insert(h.timers, t)
+        return t
     end
     -- A layoutmsg dispatch runs the layout's callback, as Hyprland does.
     h.dispatch = function(d)
@@ -260,8 +388,18 @@ local function settings_file(text)
     return path
 end
 
+-- The windows of targets `t`, as Hyprland lists them, for get_windows.
+local function tile(ws, t)
+    local list = {}
+    for i, target in ipairs(t) do
+        list[i] = target.window
+    end
+    hl.tiled[ws] = list
+end
+
 local function relayout(layout, area, ws, n)
     local t = targets(ws, n)
+    tile(ws, t)
     layout.recalculate({ area = area, targets = t })
     return t
 end
@@ -718,6 +856,7 @@ end
 
 local function lay(layout, area, ws, ids)
     local t = windows(ws, ids)
+    tile(ws, t)
     layout.recalculate({ area = area, targets = t })
     return t
 end
@@ -933,6 +1072,244 @@ test("reload takes a new new_window for the next new window", function()
     lay(layout, HD, 1, { 1, 2, 3 })
     eq(order_of(qs, 1), "0x102 0x101 0x103", "the end after a reload, the rest kept")
     os.remove(path)
+end)
+
+-- drags on a split edge ------------------------------------------------------
+
+-- The layoutmsgs dispatched since `from`, as text.
+local function layout_msgs(from)
+    local out = {}
+    for i = from + 1, #hl.dispatched do
+        if hl.dispatched[i].kind == "layout" then
+            out[#out + 1] = hl.dispatched[i].arg
+        end
+    end
+    return table.concat(out, " | ")
+end
+
+-- Each enabled timer fires once, as Hyprland's event loop would.
+local function tick()
+    for _, t in ipairs(hl.timers) do
+        if t.enabled then
+            t.fn()
+        end
+    end
+end
+
+local function drag_setup(opts)
+    local qs, layout = fresh(opts)
+    hl.area = HD
+    relayout(layout, HD, 1, 3)
+    return qs, layout
+end
+
+test("a press on the master/stack edge starts a drag that follows the pointer", function()
+    local qs, layout = drag_setup()
+    hl.cursor = { x = 1058, y = 500 }
+    eq(qs.drag_press(), nil, "the press is taken")
+    eq(#hl.timers, 1, "a timer follows the pointer")
+    eq(hl.timers[1].opts.type, "repeat", "repeating")
+    local from = #hl.dispatched
+    tick()
+    eq(layout_msgs(from), "", "no move, no layoutmsg")
+    hl.cursor.x = 1154
+    tick()
+    eq(layout_msgs(from), "mfact 0.6000", "the edge, not the pointer, lands at 60%")
+    tick()
+    eq(layout_msgs(from), "mfact 0.6000", "nothing again while the pointer stays")
+    hl.cursor.x = 1250
+    qs.drag_release()
+    eq(layout_msgs(from), "mfact 0.6000 | mfact 0.6500", "release takes the last step")
+    eq(hl.timers[1].enabled, false, "and stops the timer")
+    local t = relayout(layout, HD, 1, 3)
+    eq(t[1].placed.w, 1248, "master at 0.65")
+    from = #hl.dispatched
+    hl.cursor.x = 400
+    tick()
+    qs.drag_release()
+    eq(layout_msgs(from), "", "after release nothing follows the pointer")
+end)
+
+test("a drag reuses its timer and clamps at mfact's ends", function()
+    local qs = drag_setup()
+    hl.cursor = { x = 1056, y = 500 }
+    qs.drag_press()
+    local from = #hl.dispatched
+    hl.cursor.x = -300
+    tick()
+    hl.cursor.x = 5000
+    qs.drag_release()
+    eq(layout_msgs(from), "mfact 0.1000 | mfact 0.9000", "clamped both ways")
+    hl.cursor = { x = 1728, y = 500 }
+    eq(qs.drag_press(), nil, "the edge is at 0.9 now")
+    eq(#hl.timers, 1, "the same timer")
+    eq(hl.timers[1].enabled, true, "enabled again")
+    qs.drag_release()
+end)
+
+test("an emptied workspace keeps no edge to drag", function()
+    -- Its last tiled windows leave together, and Hyprland calls no
+    -- recalculate for none, so the layout still has their tiles cached.
+    local qs, layout = drag_setup()
+    hl.tiled[1] = {}
+    layout.recalculate({ area = HD, targets = {} })
+    hl.cursor = { x = 1056, y = 500 }
+    local from = #hl.dispatched
+    local r = qs.drag_press()
+    eq(type(r) == "table" and r.pass_event, true, "the press on the old edge passes on")
+    eq(#hl.timers, 0, "no drag")
+    qs.drag_release()
+    eq(layout_msgs(from), "", "and the saved mfact is untouched")
+end)
+
+test("a workspace whose tiles moved elsewhere keeps no edge to drag", function()
+    local qs = drag_setup()
+    -- All three moved to workspace 2, which isn't shown.
+    for _, w in ipairs(hl.tiled[1]) do
+        w.workspace = { id = 2 }
+    end
+    hl.cursor = { x = 1056, y = 500 }
+    local r = qs.drag_press()
+    eq(type(r) == "table" and r.pass_event, true, "passes on")
+    eq(#hl.timers, 0, "no drag")
+end)
+
+test("a press passes on when the windows can't be read", function()
+    local qs = drag_setup()
+    hl.get_windows = function()
+        error("gone")
+    end
+    hl.cursor = { x = 1056, y = 500 }
+    local r = qs.drag_press()
+    eq(type(r) == "table" and r.pass_event, true, "passes on")
+end)
+
+test("presses that aren't on an edge pass through to the window", function()
+    local qs = drag_setup()
+    local function passes(what)
+        local r = qs.drag_press()
+        eq(type(r) == "table" and r.pass_event, true, what)
+        eq(#hl.timers, 0, what .. ": no drag")
+    end
+    hl.cursor = { x = 1000, y = 500 }
+    passes("inside the master")
+    hl.cursor = { x = 1056, y = 20 }
+    passes("on the bar above the edge")
+    hl.cursor = { x = 1056, y = 500 }
+    hl.windows = { { floating = true, visible = true, at = { x = 900, y = 400 }, size = { x = 300, y = 200 } } }
+    passes("on a floating window over the edge")
+    hl.windows = { { floating = true, visible = true, at = { x = 1062, y = 400 }, size = { x = 300, y = 200 } } }
+    passes("in a floating window's own border-resize ring")
+    hl.windows = { { floating = true, visible = false, at = { x = 900, y = 400 }, size = { x = 300, y = 200 } } }
+    hl.layers = { { mapped = true, layer = 3, x = 1000, y = 450, w = 200, h = 100 } }
+    passes("on a notification, an overlay layer")
+    hl.layers = {}
+    hl.monitor.focused = false
+    passes("on a monitor that isn't focused, where a layoutmsg wouldn't go")
+    hl.monitor.focused = true
+    hl.monitor.has_fullscreen = true
+    passes("under a fullscreen or maximized window")
+    hl.monitor.has_fullscreen = false
+    hl.monitor.special = { id = -99 }
+    passes("with a special workspace shown")
+    hl.monitor.special = nil
+    hl.monitor.active_workspace_id = 2
+    passes("on a workspace the layout hasn't laid out")
+    hl.monitor.active_workspace_id = 1
+    hl.windows = { { floating = true, visible = false, at = { x = 900, y = 400 }, size = { x = 300, y = 200 } } }
+    hl.layers = { { mapped = true, layer = 0, x = 0, y = 0, w = 1920, h = 1080 } }
+    eq(qs.drag_press(), nil, "a hidden float and the wallpaper don't cover it")
+    qs.drag_release()
+end)
+
+test("while the shell has a popover open, every press passes", function()
+    local qs = drag_setup()
+    hl.cursor = { x = 1056, y = 500 }
+    tide_layout.set_popups_open(true)
+    local r = qs.drag_press()
+    eq(r and r.pass_event, true, "a popover over the edge keeps its click")
+    eq(#hl.timers, 0, "no drag")
+    tide_layout.set_popups_open(false)
+    eq(qs.drag_press(), nil, "closed again, the edge drags")
+    qs.drag_release()
+    for _, bad in ipairs({ "true", 1 }) do
+        local ok, err = pcall(tide_layout.set_popups_open, bad)
+        eq(ok, false, "set_popups_open(" .. tostring(bad) .. ") accepted")
+        eq(tostring(err):find("expects true or false", 1, true) ~= nil, true, tostring(err))
+    end
+end)
+
+test("a config load forgets an open popover until the shell says again", function()
+    local qs = drag_setup()
+    tide_layout.set_popups_open(true)
+    qs.setup({})
+    relayout(hl.registered.tide, HD, 1, 3)
+    hl.cursor = { x = 1056, y = 500 }
+    eq(qs.drag_press(), nil, "the shell resends after a config load")
+    qs.drag_release()
+end)
+
+test("a press passes when what's above the tiles can't be read", function()
+    local qs = drag_setup()
+    hl.cursor = { x = 1056, y = 500 }
+    hl.get_windows = function()
+        error("no windows")
+    end
+    local r = qs.drag_press()
+    eq(r and r.pass_event, true, "passes")
+end)
+
+test("resize_grab sets the zone, and 0 turns edge drags off", function()
+    local qs = drag_setup({ resize_grab = 10 })
+    hl.cursor = { x = 1047, y = 500 }
+    eq(qs.drag_press(), nil, "9 px left with a 10 px grab")
+    qs.drag_release()
+    qs = drag_setup({ resize_grab = 0 })
+    hl.cursor = { x = 1056, y = 500 }
+    local r = qs.drag_press()
+    eq(r and r.pass_event, true, "off")
+    for _, bad in ipairs({ -1, 2.5, 100 }) do
+        hl = stub_hl()
+        local ok = pcall(load_layout().setup, { resize_grab = bad })
+        eq(ok, false, "resize_grab " .. bad .. " accepted")
+    end
+end)
+
+test("a drag pauses while another workspace is focused and ends on a mode change", function()
+    local qs, layout = drag_setup()
+    relayout(layout, HD, 2, 2)
+    hl.cursor = { x = 1056, y = 500 }
+    qs.drag_press()
+    local from = #hl.dispatched
+    hl.active_ws = 2
+    hl.cursor.x = 1152
+    tick()
+    eq(layout_msgs(from), "", "workspace 2's layout is left alone")
+    hl.active_ws = 1
+    tick()
+    eq(layout_msgs(from), "mfact 0.6000", "back on workspace 1")
+    layout.layout_msg({ area = HD, targets = {} }, "mode twocol")
+    from = #hl.dispatched
+    hl.cursor.x = 1300
+    tick()
+    eq(layout_msgs(from), "", "no mfact for a mode the drag didn't start in")
+    eq(hl.timers[1].enabled, false, "the drag is over")
+end)
+
+test("dragging either side of threecol's centered master grows it both ways", function()
+    local qs, layout = fresh()
+    hl.area = UW
+    relayout(layout, UW, 1, 3)
+    eq(qs.mode(1), "threecol", "ultrawide starts in threecol")
+    hl.cursor = { x = 860, y = 700 }
+    eq(qs.drag_press(), nil, "the master's left side")
+    local from = #hl.dispatched
+    hl.cursor.x = 688
+    qs.drag_release()
+    eq(layout_msgs(from), "mfact 0.6000", "dragged left, the master grows")
+    local t = relayout(layout, UW, 1, 3)
+    eq(t[1].placed.w, 2064, "60% of 3440, centered")
+    eq(t[1].placed.x, 688, "both sides moved")
 end)
 
 print(string.format("%d passed, %d failed", passed, failures))

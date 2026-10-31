@@ -71,6 +71,7 @@ ShellRoot {
     // panel first shows them.
     // The mice and touchpads are listed then too, and again as a Mouse or
     // Touchpad page shows; so are the key bindings, for the Keys page.
+    // The layout hears that no popover is open (PopupsData).
     Component.onCompleted: {
         IdleData.load();
         InputData.load();
@@ -88,6 +89,7 @@ ShellRoot {
         ClipboardSettingsData.load();
         // The lid's action, put right from the start.
         PowerData.load();
+        PopupsData.resync();
     }
 
     // A toplevel's class and fullscreen state come from Hyprland's client

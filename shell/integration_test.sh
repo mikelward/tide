@@ -1540,8 +1540,8 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # replay of the waiting windows, and the marks' order), light and
 # dark, the VPNs, hypridle's timings, the mouse, touchpad and keyboard
 # settings, the list of mice and touchpads, the key bindings, the layout
-# settings, the monitors and their settings, the dim strength, or home and
-# its apps' rules.
+# settings, whether a popover is open, the monitors and their settings, the
+# dim strength, or home and its apps' rules.
 # The lock and the greeter only ask for the keyboards, for their layout
 # badges.
 shell_runs='tide-tz
@@ -1559,6 +1559,7 @@ hyprctl eval conf_input.reload()
 hyprctl devices -j
 hyprctl binds -j
 hyprctl eval tide_layout.reload()
+hyprctl eval tide_layout.set_popups_open(false)
 hyprctl monitors all -j
 hyprctl eval conf_outputs.reload()
 hyprctl eval conf_appearance.reload()

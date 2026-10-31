@@ -95,6 +95,12 @@ once you have agreed with it or reversed it.
   speakers (`audio-speakers-symbolic`), though earbuds that don't call
   themselves headphones land there too. Both live in `audioIcons` in
   `shell/lib/bluetooth.mjs`, so either is a small change.
+- [ ] **Edge-drag zones: 4 px either side of the master/stack edge, and
+  8 px outside a floating window** (SPEC.md §6.4, §6.6). Small enough that
+  a click near an edge still reaches the app; Hyprland's default outside a
+  floating window is 15 px. The alternatives are wider zones, or a tiled
+  zone only on one side of the edge. Reversible: `resize_grab` in
+  `layout.lua` and `extend_border_grab_area` in conf's `hyprland.lua`.
 - [ ] **The picker on `Super+C` is its own overlay, not two more switcher
   tabs** (SPEC.md §8.4). The switcher goes somewhere; the picker copies
   something, and the switcher's `Tab` cycle stays at four. The
@@ -1396,23 +1402,31 @@ Deferred: it needs a Hyprland patch, and the MVP comes first.
 
 ## Drag to resize a tiled window
 
-Deferred: it needs a Hyprland patch, and the MVP comes first.
+Dragging the master/stack edge works now, with no key held (SPEC.md §6.6),
+through `drag_press` / `drag_release` in `layout.lua` and a 16 ms
+`hl.timer` while a drag is on. Tested only against the `hl` stub.
 
-- Floating windows already resize with `Super`+right-drag or by dragging an
-  edge. Under the master fallback, dragging a tiled window changes `mfact`.
-- Under `lua:tide` a drag does nothing. Hyprland 0.56 drops it before it
-  reaches a Lua layout: `CLuaTiledAlgorithm::resizeTarget`
-  (`src/config/lua/layout/LuaLayoutProvider.cpp`) ignores the delta and only
-  recalculates.
-- Plan: a small upstream patch that passes the delta and corner to an optional
-  Lua `resize` callback. `layout.lua` then maps a drag across the
-  master/stack boundary to `mfact`, per workspace and mode like
-  `Super+\` / `Super+/`. Pick it up on the Hyprland upgrade PR that brings the
-  patch in.
-- Rejected: polling the cursor with `hl.timer` while the button is held. It
-  works today, but it's a polling loop on a hot path and fights Hyprland's
-  own drag.
-- Until then, the keys resize the master.
+- On a real session, check: dragging the master/stack edge in tile, and
+  either side of threecol's centered master; a click 5 px or more from the
+  edge still focuses and clicks the window; a click on a floating window,
+  popover or notification over the edge still reaches it; the drag ends
+  when the button comes up with `Shift` or `Super` pressed meanwhile; a
+  click on a bar popover (the clocks, say) over the edge reaches it.
+- The split follows the pointer live during a drag, through the timer,
+  as confirmed (2026-10-31). That reverses the earlier call against
+  polling the cursor: the timer runs only during a drag, and the press it
+  starts from is taken, so Hyprland's own drag never starts to fight it.
+  What's left on the hot path is a Lua call on every plain left click.
+- Still wanted: a small upstream patch passing a tiled resize's delta and
+  corner to an optional Lua `resize` callback
+  (`CLuaTiledAlgorithm::resizeTarget` in
+  `src/config/lua/layout/LuaLayoutProvider.cpp` drops it, on 0.56.2 and on
+  main). With it, `Super`+right-drag on a tile resizes too, and the timer
+  goes. Pick it up on the Hyprland upgrade PR that brings the patch in.
+- No resize cursor on the tiled edge: Hyprland 0.56.2's Lua can't set one,
+  and its own comes only from `resize_on_border`.
+- Rows within a stack are equal, so they have no edge to drag. Per-window
+  weights in `geometry.lua` would add one.
 
 ## Double-click the bar to maximize
 
