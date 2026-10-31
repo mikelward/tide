@@ -25,7 +25,7 @@ Singleton {
     // The settings in effect: the last good ones.
     property var settings: Appearance.DEFAULTS
     property bool loaded: false
-    readonly property var now: Appearance.themeAt(root.settings, clock.minute, flipped.override)
+    readonly property var now: Appearance.themeAt(root.settings, clock.minute, root.flipOverride)
     readonly property bool dark: root.now.dark
     // When the next change is due as "HH:MM", or "" when the mode is fixed.
     readonly property string until: root.now.next === null ? "" : Appearance.clockTime(root.now.next)
@@ -42,23 +42,30 @@ Singleton {
     property var target: Writes.TARGET
 
     // A config reload keeps a flip, so reloading the shell doesn't undo it.
+    // Kept as JSON text: PersistentProperties copies each
+    // property from the old engine's object to the new one's, and a JS
+    // object can't cross engines (Qt: "JSValue can't be reassigned to
+    // another engine"), so it read undefined after a reload.
     PersistentProperties {
         id: flipped
 
         reloadableId: "tide-appearance"
 
-        property var override: null
+        property string overrideJson: "null"
     }
 
+    // The flip in effect (Appearance.flip), or null.
+    readonly property var flipOverride: JSON.parse(flipped.overrideJson)
+
     function flip() {
-        flipped.override = Appearance.flip(root.settings, Date.now(), flipped.override);
+        flipped.overrideJson = JSON.stringify(Appearance.flip(root.settings, Date.now(), root.flipOverride));
     }
 
     // A flip that has run out is dropped, so it can't come back if the
     // settings return to what it was made under.
     onNowChanged: {
-        if (flipped.override !== null && root.now.override === null) {
-            flipped.override = null;
+        if (root.flipOverride !== null && root.now.override === null) {
+            flipped.overrideJson = "null";
         }
     }
 

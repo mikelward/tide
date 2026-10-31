@@ -25,18 +25,25 @@ Singleton {
     // empty after a reload while the carried ones are still arriving.
     property var resting: []
 
+    // Kept as JSON text: PersistentProperties copies each
+    // property from the old engine's object to the new one's, and a JS
+    // object can't cross engines (Qt: "JSValue can't be reassigned to
+    // another engine"), so it read undefined after a reload.
     PersistentProperties {
         id: restingState
 
         reloadableId: "tide-resting"
 
-        property var ids: []
+        property string idsJson: "[]"
     }
+
+    // The resting notifications' ids, as kept across reloads.
+    readonly property var restingIds: JSON.parse(restingState.idsJson)
 
     function setResting(next) {
         const gone = new Set(root.resting.filter(n => !next.includes(n)).map(n => n.id));
         const added = next.filter(n => !root.resting.includes(n)).map(n => n.id);
-        restingState.ids = [...restingState.ids.filter(id => !gone.has(id) && !added.includes(id)), ...added];
+        restingState.idsJson = JSON.stringify([...root.restingIds.filter(id => !gone.has(id) && !added.includes(id)), ...added]);
         root.resting = next;
     }
 
@@ -243,7 +250,7 @@ Singleton {
             isMuted: n => root.isMuted(n),
             // One that was resting before a config reload goes on resting,
             // rather than popping up again.
-            wasResting: n => n.lastGeneration && restingState.ids.includes(n.id),
+            wasResting: n => n.lastGeneration && root.restingIds.includes(n.id),
             restart: n => root.restart(n),
             // One carried over a config reload is usually in the history
             // already.
