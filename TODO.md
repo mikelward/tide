@@ -30,6 +30,20 @@ once you have agreed with it or reversed it.
   card grows to fit them rather than scrolling. The alternative is
   grouping them (Start at login beside Idle, say). Reversible by
   reordering `PAGES`.
+- [ ] **Do not disturb's schedule turns your own toggle on and off at the
+  window's edges**, rather than holding it on for the whole window. So the
+  bell can end it early, and one you turned on yourself outlives the
+  window. The alternative is a third source beside your toggle and
+  presenter mode that the bell can't override. Reversible in
+  `shell/lib/dnd.mjs`'s `scheduleStep`.
+- [ ] **Critical alerts break through is one switch, for Do not disturb
+  only.** Off holds even the battery warning; a screen share keeps its own
+  rule. The alternative is a three-way choice (system only, every app's,
+  none). It's an added value for `criticalsBreakThrough`.
+- [ ] **The muted list lives on the Notifications page**, writing
+  `workspaces.local.json` beside the switcher's and the center's mute
+  actions, not on a Workspaces page. Muting is about being told; the key
+  stays where tilemo reads it. Reversible by moving the rows.
 
 - [ ] **A laptop's pointing stick and its touchpad's I2C nodes are
   touchpads** (SPEC.md §16): listed on the Touchpad page and given its
@@ -977,6 +991,13 @@ from the keyboard (`shell/integration_test.sh`).
   - Tell a Chrome `--app` window that's already open from a command that
     would open another (`--unless-running` sees only processes), say by
     the site's window being on Hyprland's client list.
+- Notifications (`shell/lib/dnd.mjs`, `shell/NotificationSettingsData.qml`)
+  sets Do not disturb's schedule and whether criticals break through,
+  writing `notifications.local.json`, and lists and edits `muted`. Still
+  to do:
+  - On a live session, check a window's start and end flip the bell, that
+    the bell ends one early, and that a shell restarted in a window has it
+    on.
 
 ## Notifications (M4)
 
