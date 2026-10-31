@@ -356,8 +356,8 @@ export function layoutChoices(path) {
 export function layoutRows(effective) {
     const rows = [
         { kind: "number", path: "ultrawideAspect", label: "Ultrawide from aspect" },
-        { kind: "choice", path: "defaultMode.normal", label: "Other monitors start in" },
         { kind: "choice", path: "defaultMode.ultrawide", label: "Ultrawides start in" },
+        { kind: "choice", path: "defaultMode.normal", label: "Other monitors start in" },
         { kind: "choice", path: "newWindow", label: "New windows go" },
         { kind: "heading", label: "MASTER WIDTH" },
     ];

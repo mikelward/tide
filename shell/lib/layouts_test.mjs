@@ -267,7 +267,7 @@ test("the page has a row for each setting, and one per lone-window rule", () => 
     const rows = layoutRows(effectiveLayouts({}));
     const paths = rows.filter(r => r.kind !== "heading").map(r => r.kind === "single" ? `single[${r.index}]` : r.path);
     assert.deepEqual(paths, [
-        "ultrawideAspect", "defaultMode.normal", "defaultMode.ultrawide", "newWindow",
+        "ultrawideAspect", "defaultMode.ultrawide", "defaultMode.normal", "newWindow",
         "modes.tile.mfact", "modes.threecol.mfact", "modes.twocol.mfact",
         "modes.tile.nmaster", "modes.threecol.nmaster", "modes.twocol.nmaster",
         "single[0]", "single[1]",
