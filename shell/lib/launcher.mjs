@@ -356,13 +356,10 @@ export function grantIds(item) {
 }
 
 // The `tide launch` command that runs `item`, granting focus to the
-// classes grantIds lists; `newWorkspace` (Ctrl+Enter) asks for its first
-// window on an empty workspace.
-export function launchCommand(item, { newWorkspace = false } = {}) {
+// classes grantIds lists. Ctrl+Enter gives the name prompt what follows
+// `tide launch`, which it runs with `--workspace NAME` (SPEC.md §6.5).
+export function launchCommand(item) {
     const command = ["tide", "launch"];
-    if (newWorkspace) {
-        command.push("--new-workspace");
-    }
     for (const id of grantIds(item)) {
         command.push("--app", id);
     }
@@ -377,9 +374,9 @@ function escapeHtml(s) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-// Whether Ctrl+Enter's "on a new empty workspace" applies to `item`: an
-// app or a desktop action opens a window it can go to. A quick action
-// opens none, so Ctrl+Enter runs it as Enter does.
+// Whether Ctrl+Enter's "on a new workspace" applies to `item`: an app or a
+// desktop action opens a window it can go to. A quick action opens none,
+// so Ctrl+Enter runs it as Enter does.
 export function opensWindow(item) {
     return item?.kind === "app" || item?.kind === "action";
 }

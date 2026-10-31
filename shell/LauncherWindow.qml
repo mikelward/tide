@@ -16,7 +16,7 @@ import "lib/workspaces.mjs" as Workspaces
 // Escape or a click on the backdrop closes it. Its quick actions take
 // screenshots, run the session actions, open the settings panel, flip Do
 // not disturb and keep awake, and reload the shell, and Ctrl+Enter opens an
-// app on a new workspace.
+// app on a workspace the name prompt names.
 PanelWindow {
     id: root
 
@@ -105,8 +105,8 @@ PanelWindow {
         }
     }
 
-    // Runs the row at `index`; `newWorkspace` (Ctrl+Enter) asks for an
-    // app's window on an empty workspace.
+    // Runs the row at `index`; `newWorkspace` (Ctrl+Enter) asks for a
+    // workspace for the app's window first, in the name prompt.
     function runRow(index, newWorkspace) {
         const row = rows[index];
         if (!row || checking) {
@@ -131,14 +131,16 @@ PanelWindow {
         if (row.item.kind === "quick") {
             runQuick(row.item.id);
         } else {
-            // Ctrl+Enter asks the focus guard to take the app's first window
-            // to an empty workspace as it opens (`tide launch
-            // --new-workspace`), so nothing waits here, and a key you press
-            // before the window opens cancels the move with the grant.
-            const options = {
-                newWorkspace: newWorkspace && Search.opensWindow(row.item)
-            };
-            Launcher.start(Search.launchCommand(row.item, options), row.item.workingDirectory);
+            // Ctrl+Enter names the workspace first (SPEC.md §8.2), and the
+            // prompt launches with `tide launch --workspace NAME`: the focus
+            // guard takes the app's first window there as it opens. From
+            // home, Enter asks the same, as `tide launch` hands it over.
+            const command = Search.launchCommand(row.item);
+            if (newWorkspace && Search.opensWindow(row.item)) {
+                PromptData.askLaunch(command.slice(2), row.item.workingDirectory ?? "", Search.grantIds(row.item));
+            } else {
+                Launcher.start(command, row.item.workingDirectory);
+            }
         }
     }
 

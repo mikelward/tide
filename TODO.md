@@ -7,6 +7,39 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **Workspace names can't hold quotes, backslashes or control
+  characters.** That's `workspacenames.mjs`'s `UNSAFE`, which the
+  settings, the prompt's input and `tide launch --workspace` all refuse.
+  It removes every quoting hazard on the way to Hyprland, Lua, JSON, the
+  FIFO and sh at once. The alternative is escaping for each of those
+  everywhere a name goes. It's reversible by widening the set, once each
+  path escapes on its own.
+- [ ] **The name prompt's first row is the typed name, when it's new.** So
+  Enter on a new name makes it, and `↓` picks a matching workspace. The
+  alternative, the best fuzzy match first as in the launcher, would turn
+  `docs` into an existing `docs-review` on Enter. It's
+  `workspacenames.mjs`'s `promptRows`.
+- [ ] **Esc on `Super+Return`'s prompt leaves the window where it is**,
+  where Esc on a new window's prompt closes the window (SPEC.md §6.5). A
+  window you chose to move isn't new, so closing it would lose work.
+  It's `PromptData.cancel`.
+- [ ] **A click on the name prompt's backdrop does nothing.** The launcher
+  closes on one, but here closing means Esc, which closes the window. It's
+  one MouseArea in `NamePrompt.qml`.
+- [ ] **A window asks for a name when it's first focused on home**, judged
+  from `hyprctl clients -j` then, by its address, rather than as it opens. That
+  covers a window the guard focuses as it opens and one it left waiting
+  with one rule. It also means a window moved to home before it was ever
+  focused asks. It's `PromptData.qml`'s event handler.
+- [ ] **A launch's prompt starts empty.** There's no window to take a short
+  name from. The app's name would be the other choice. It's
+  `NamePrompt.qml`'s `suggested`.
+- [ ] **`tide launch` reads the focused workspace before granting focus**,
+  to tell a launch from home, which asks for a name and grants nothing,
+  from the rest. That's one `hyprctl` call, a few ms, before a key press
+  can cancel the grant. Reading it after the grant would leave a grant
+  behind for every launch from home.
+
 - [ ] **An `inApps` entry shaped like a host is a class and a site both.**
   SPEC.md §6.5 says an entry is a window class or a site, but
   `calendar.google.com` and `org.gnome.Calendar` look alike, so every
@@ -1146,9 +1179,14 @@ Built, tested against stubs and fixtures only (no live Hyprland here):
 the bar by name, with the standing workspaces (`standing`, home first)
 always listed; home's rename undone; `workspaces.json` loaded and checked,
 and `tide-workspaces.lua` written for `conf`; `tide launch --workspace` and
-`TIDE_WORKSPACE`; `tide workspace`. To check on a live session: home exists
+`TIDE_WORKSPACE`; `tide workspace`; the name prompt, with `namePatterns`,
+for a new window on home, a launch from home, the launcher's Ctrl+Enter
+and Super+Return (`qs -c tide ipc call prompt move`, bound in conf). To check on a live session: home exists
 from the first frame and survives a config reload; a standing workspace is
-made by clicking it on the bar; a rename of home is undone.
+made by clicking it on the bar; a rename of home is undone; the prompt
+opens for a window you open on home and for one first focused there, not
+for a dialog, and Enter, Esc and an existing name do what SPEC.md §6.5
+says; a launch from home asks first, and Esc launches nothing.
 
 - **Redesign workspaces across several monitors** (SPEC.md §21), a
   follow-up to M8, which is built for one monitor; extra monitors keep
@@ -1173,13 +1211,11 @@ made by clicking it on the bar; a rename of home is undone.
   special workspace per workspace).
 - **Decide what the bar does when named workspaces outgrow its left side**
   (SPEC.md §7.3, §21).
-- **Home in `conf`.** A `persistent`, `default` workspace rule for home,
-  named as `tide-workspaces.lua` says (`in` until the shell writes one);
-  window rules sending `inApps`' windows there without switching, from
-  the same file; `conf_workspaces.reload()`, which the shell calls;
-  `workspaces.json` with the standing list and mail, chat, calendar and
-  music in `inApps`. Check on 0.56.2 that home exists from the first frame
-  and survives a config reload.
+- **Check home in `conf` on 0.56.2** (mikelward/conf#434): home exists
+  from the first frame, as the first monitor's workspace, and survives a
+  config reload; home's apps open there without switching. Shell sessions
+  named from `TIDE_WORKSPACE` (conf#435): a terminal launched on a named
+  workspace attaches to `NAME:1`.
 - **Workspace keys in `conf`.** `Super+Return` opens the name prompt for
   the focused window; `Alt+Tab` takes the old `Super+Return` swap, with
   the layout remembering the previous master per workspace
@@ -1195,26 +1231,6 @@ made by clicking it on the bar; a rename of home is undone.
   `end_cycle()`, the Super release binding and the `tide-cycle` events in
   `hypr/tide/focus.lua` and the shell give way to the Attention tab;
   `set_order` stays.
-- **The name prompt** (a shell surface, like the launcher): the existing
-  names and the standing ones filtered as you type, a new name allowed,
-  home refused for another
-  app's window; the default from `namePatterns` or the cleaned title,
-  following the title until you type; Enter moves the window (or launches
-  there), Esc closes the window politely or cancels the launch. It opens
-  for a window on home only when the focus guard would focus it, and
-  otherwise when that window is first focused.
-- **`namePatterns`** checked at load, naming a pattern that doesn't
-  compile or has no capture group; a pure function for the short name,
-  with `node --test` cases. (`workspacenames.mjs` takes the list already,
-  as text.)
-- **Drop `tide launch --new-workspace`** once the launcher's `Ctrl+Enter`,
-  and `Enter` from home for an app not home's, open the name prompt first
-  and launch with `--workspace`. Check on a live session that
-  `TIDE_WORKSPACE` survives `uwsm app`'s scope.
-- **`conf`'s shpool and tmux startup** names its session from
-  `TIDE_WORKSPACE` when it's set and not empty, and otherwise keeps today's
-  default. That's `conf`'s session-manager code (`want_shpool`,
-  `session_backend`, `autosession`) across every shell.
 - **The switcher.** The launcher (`shell/LauncherWindow.qml`) becomes the
   Apps tab of one overlay with Workspaces, Windows and Attention; `Tab` and
   `Shift+Tab` move between tabs, so the launcher's section jump moves to

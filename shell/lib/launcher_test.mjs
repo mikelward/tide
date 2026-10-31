@@ -433,10 +433,10 @@ test("Ctrl+Enter moves to a new workspace only for what opens a window", () => {
     assert.equal(opensWindow(undefined), false);
 });
 
-test("Ctrl+Enter's launch asks for a new workspace", () => {
+test("a launch asks for no workspace itself: the name prompt adds --workspace", () => {
     const app = items.find(i => i.kind === "app");
-    const plain = launchCommand(app);
-    const asked = launchCommand(app, { newWorkspace: true });
-    assert.deepEqual(asked, ["tide", "launch", "--new-workspace", ...plain.slice(2)]);
-    assert.deepEqual(launchCommand(app, { newWorkspace: false }), plain);
+    const command = launchCommand(app);
+    assert.deepEqual(command.slice(0, 2), ["tide", "launch"]);
+    assert.ok(!command.includes("--new-workspace"));
+    assert.ok(!command.includes("--workspace"));
 });

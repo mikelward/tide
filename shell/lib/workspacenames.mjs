@@ -4,6 +4,7 @@
 // QML binds to.
 
 import { jsonError } from "./clocks.mjs";
+import { match } from "./fuzzy.mjs";
 
 // The longest a name may be, in characters.
 export const MAX_NAME = 32;
@@ -19,8 +20,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
     namePatterns: Object.freeze([]),
 });
 
+// What a workspace's name can't hold: quotes, backslashes and control
+// characters. A name goes into Hyprland's `name:` selectors, Lua strings,
+// JSON over IPC, a FIFO and the shell's command lines; with none of these
+// in it, no quoting can go wrong anywhere it goes.
+export const UNSAFE = /["'`\\\u0000-\u001f\u007f]/;
+
 // A name as typed, made one: trimmed, and refused if it's empty, runs over
-// more than one line or is longer than MAX_NAME. {name} or {error}.
+// more than one line, holds an UNSAFE character or is longer than
+// MAX_NAME. {name} or {error}.
 export function checkName(text) {
     const name = String(text ?? "").trim();
     if (name === "") {
@@ -28,6 +36,9 @@ export function checkName(text) {
     }
     if (/[\n\r]/.test(name)) {
         return { error: "a workspace's name is one line" };
+    }
+    if (UNSAFE.test(name)) {
+        return { error: "a workspace's name can't have quotes, backslashes or control characters" };
     }
     if ([...name].length > MAX_NAME) {
         return { error: `a workspace's name is at most ${MAX_NAME} characters` };
@@ -76,6 +87,12 @@ function settingsError(value) {
         const err = listError(key, value[key]);
         if (err) {
             return err;
+        }
+    }
+    if (value.namePatterns !== undefined) {
+        const checked = checkPatterns(value.namePatterns);
+        if (checked.error) {
+            return checked.error;
         }
     }
     if (value.standing !== undefined) {
@@ -190,4 +207,234 @@ export function workspacesLua(settings) {
         + `    home = ${luaString(homeName(settings))},\n`
         + `    in_apps = ${list(inAppPatterns(settings.inApps ?? []))},\n`
         + "}\n";
+}
+
+// Why `pattern` can't name a workspace, or null. It's JavaScript's syntax,
+// as the shell runs it in Qt's engine, which has no lookbehind, named
+// groups or Unicode property escapes: there those match nothing rather
+// than fail, so they're refused here, by name, instead (SPEC.md §6.5,
+// §20). It needs a capture group, whose text is the name.
+function patternError(pattern) {
+    const named = `namePatterns: ${JSON.stringify(pattern)}`;
+    if (/\(\?<[=!]/.test(pattern)) {
+        return `${named} uses a lookbehind, which the shell's JavaScript doesn't have`;
+    }
+    if (/\(\?</.test(pattern)) {
+        return `${named} uses a named group, which the shell's JavaScript doesn't have`;
+    }
+    if (/\\[pP]\{/.test(pattern)) {
+        return `${named} uses a Unicode property escape, which the shell's JavaScript doesn't have`;
+    }
+    let groups;
+    try {
+        // The pattern itself first: one that compiles only with the `|`
+        // after it (one ending in a lone backslash) doesn't compile.
+        new RegExp(pattern);
+        groups = new RegExp(`${pattern}|`).exec("").length - 1;
+    } catch (e) {
+        return `${named} doesn't compile: ${e.message}`;
+    }
+    return groups === 0 ? `${named} has no capture group, whose text would be the name` : null;
+}
+
+// The title patterns compiled, in order: {patterns} or {error}, naming the
+// first that can't be used.
+export function checkPatterns(list) {
+    const patterns = [];
+    for (const p of list) {
+        const err = patternError(p);
+        if (err) {
+            return { error: err };
+        }
+        patterns.push(new RegExp(p));
+    }
+    return { patterns };
+}
+
+// `text` as a name can be: without UNSAFE characters, runs of space made
+// one, and cut to MAX_NAME characters at a word break, where there's one.
+function cutName(text) {
+    const safe = String(text).split("").filter((c) => !UNSAFE.test(c)).join("").replace(/\s+/g, " ").trim();
+    const chars = [...safe];
+    if (chars.length <= MAX_NAME) {
+        return safe;
+    }
+    const head = chars.slice(0, MAX_NAME).join("");
+    const space = head.lastIndexOf(" ");
+    return (chars[MAX_NAME] !== " " && space > 0 ? head.slice(0, space) : head).trim();
+}
+
+// A window's title as a name: a trailing " - APP" or " — APP" dropped,
+// where APP is its app's name, runs of space made one, and cut to
+// MAX_NAME characters at a word break.
+export function cleanTitle(title, appName) {
+    let t = String(title ?? "").replace(/\s+/g, " ").trim();
+    const app = String(appName ?? "").replace(/\s+/g, " ").trim();
+    if (app !== "") {
+        for (const sep of [" - ", " — "]) {
+            if (t.endsWith(sep + app)) {
+                t = t.slice(0, t.length - sep.length - app.length).trim();
+                break;
+            }
+        }
+    }
+    return cutName(t);
+}
+
+// The short name for a window titled `title` from app `appName` (SPEC.md
+// §6.5): the first capture group of the first of `patterns` (compiled,
+// from checkPatterns) that matches with a group that isn't empty, else
+// the cleaned title.
+export function shortName(title, appName, patterns) {
+    const text = String(title ?? "");
+    for (const re of patterns) {
+        const m = re.exec(text);
+        const group = m && m[1] !== undefined ? m[1].replace(/\s+/g, " ").trim() : "";
+        if (group !== "") {
+            return cutName(group);
+        }
+    }
+    return cleanTitle(text, appName);
+}
+
+// Whether a window of class `cls` is one of home's apps (`inApps`), as
+// conf's window rules match it (inAppPatterns).
+export function isHomeApp(cls, inApps) {
+    const c = String(cls ?? "");
+    if (c === "") {
+        return false;
+    }
+    return inAppPatterns(inApps).some((p) => new RegExp(`^(?:${p.replace(/^\(\?i\)/, "")})$`, "i").test(c));
+}
+
+// The client at `address` in `hyprctl clients -j`'s list, or null.
+export function clientAt(clients, address) {
+    return (Array.isArray(clients) ? clients : []).find((c) => c && normalizeAddress(c.address) === address) ?? null;
+}
+
+// A window address as Quickshell spells it (workspaces.mjs's
+// normalizeAddress), without importing that module, which imports this.
+function normalizeAddress(address) {
+    const hex = String(address ?? "").trim().toLowerCase().replace(/^0x/, "").replace(/^0+(?=.)/, "");
+    return /^[0-9a-f]+$/.test(hex) ? hex : null;
+}
+
+// Whether a window Hyprland describes as `client` (an object from
+// `hyprctl clients -j`) takes the name prompt as it's first focused: it's
+// on home, tiled, has a class or a title (a status popup has neither), and
+// isn't one of home's apps (SPEC.md §6.5).
+export function promptWanted(client, home, inApps) {
+    if (!client || typeof client !== "object") {
+        return false;
+    }
+    const cls = String(client.class ?? "");
+    const title = String(client.title ?? "");
+    return client.workspace?.name === home && client.floating !== true
+        && !(cls === "" && title === "") && !isHomeApp(cls, inApps);
+}
+
+// The name prompt's rows for what's typed: first the typed name itself,
+// when no workspace has it yet ({name, isNew: true}), then the workspaces
+// in `names` (the bar's order) that match it, best first, each {name,
+// isNew: false, positions}. Home is offered only when `allowHome` (a home
+// app's window), and a typed name that is home's otherwise gets no row.
+export function promptRows({ names, typed, home, allowHome = false }) {
+    const t = String(typed ?? "").trim();
+    const offered = names.filter((n) => allowHome || !sameName(n, home));
+    const rows = [];
+    const existing = matchName(offered, t);
+    if (t !== "" && existing === null && (allowHome || !sameName(t, home)) && !checkName(t).error) {
+        rows.push({ name: t, isNew: true, positions: [] });
+    }
+    const scored = [];
+    offered.forEach((n, i) => {
+        const m = match(t, n);
+        if (m) {
+            scored.push({ name: n, isNew: false, positions: m.positions, score: m.score, exact: sameName(n, t), i });
+        }
+    });
+    scored.sort((a, b) => (b.exact - a.exact) || (b.score - a.score) || (a.i - b.i));
+    for (const r of scored) {
+        rows.push({ name: r.name, isNew: false, positions: r.positions });
+    }
+    return rows;
+}
+
+// What Enter on row `selected` does: {name} to go to, or {error} saying
+// why nothing can. With no row, it's why the typed name won't do.
+export function promptChoice({ rows, selected, typed, home, allowHome = false }) {
+    const row = rows[selected];
+    if (row) {
+        return { name: row.name };
+    }
+    const checked = checkName(typed);
+    if (checked.error) {
+        return checked;
+    }
+    if (!allowHome && sameName(checked.name, home)) {
+        return { error: `${home} is home, which holds only its own apps` };
+    }
+    return { error: "nothing matches" };
+}
+
+// The prompts waiting their turn (SPEC.md §6.5, §8.1), the first being the
+// one shown. A request is {kind, id, ...}:
+//   {kind: "window", address}  a new window on home, first focused
+//   {kind: "move", address}    Super+Return on the focused window
+//   {kind: "launch", argv, cwd, apps}  a launch from home or Ctrl+Enter
+// One prompt following another isn't the first one's Esc: each waits for
+// its own Enter or Esc, or for its window to close.
+export const NO_PROMPTS = Object.freeze({ queue: Object.freeze([]), next: 1 });
+
+export function promptQueued(state, request) {
+    if (request.address !== undefined && state.queue.some((r) => r.address === request.address)) {
+        return state;
+    }
+    return { queue: state.queue.concat([Object.assign({}, request, { id: state.next })]), next: state.next + 1 };
+}
+
+// The prompt with ID `id` answered: it goes, and the next is shown.
+export function promptDone(state, id) {
+    return { queue: state.queue.filter((r) => r.id !== id), next: state.next };
+}
+
+// The window at `address` closed: its prompts go, unanswered.
+export function promptWindowGone(state, address) {
+    return { queue: state.queue.filter((r) => r.address !== address), next: state.next };
+}
+
+// The windows the prompt is waiting to judge (SPEC.md §6.5), so a lookup
+// that answers after its window closed is dropped, not queued: `pending`
+// opened and not focused yet, `looking` focused, their lookup out. Every
+// async answer about a window goes through windowAnswered, which says
+// whether the window is still there to act on. At most 100 of each.
+export const NO_WINDOWS = Object.freeze({ pending: Object.freeze([]), looking: Object.freeze([]) });
+
+export function windowOpened(state, address) {
+    return { pending: [address].concat(state.pending.filter((a) => a !== address)).slice(0, 100), looking: state.looking };
+}
+
+// The window was focused: {state, lookup}, lookup saying whether to ask
+// Hyprland about it now, which only its first focus does.
+export function windowFocused(state, address) {
+    if (!state.pending.includes(address)) {
+        return { state, lookup: false };
+    }
+    return {
+        state: { pending: state.pending.filter((a) => a !== address), looking: [address].concat(state.looking.filter((a) => a !== address)).slice(0, 100) },
+        lookup: true,
+    };
+}
+
+export function windowClosed(state, address) {
+    return { pending: state.pending.filter((a) => a !== address), looking: state.looking.filter((a) => a !== address) };
+}
+
+// A lookup about the window at `address` answered: {state, live}, live
+// saying whether it's still open, and so may still ask.
+export function windowAnswered(state, address) {
+    return {
+        state: { pending: state.pending, looking: state.looking.filter((a) => a !== address) },
+        live: state.looking.includes(address),
+    };
 }
