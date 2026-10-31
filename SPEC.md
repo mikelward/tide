@@ -1246,6 +1246,15 @@ See [`bar.png`](docs/mocks/bar.png).
 | Notifications | dot when unread, a bell with *z* for DND | notification center | middle-click toggles DND |
 | Session | — | lock, log out, suspend, restart, shut down | — |
 
+**Spacing.**
+
+- The status icons sit 10 px apart, and the session icon sits as far
+  from the first clock.
+- The clocks sit 12 px apart: 5 px inside each, either side of its text,
+  and 2 px between them.
+- The volume's % is held as wide as two digits, so the icons after it
+  don't move as the level changes, except at 100%.
+
 **Tray menus.**
 
 - The shell draws an app's menu itself, like its other menus, from the

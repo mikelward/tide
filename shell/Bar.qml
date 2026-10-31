@@ -97,7 +97,9 @@ PanelWindow {
 
         monitorName: bar.monitor?.name ?? ""
         anchors.right: clocks.left
-        anchors.rightMargin: 12
+        // With a clock's own 5 px, the session icon sits as far from the
+        // first clock as the status items sit from each other (§7.4).
+        anchors.rightMargin: 5
         anchors.verticalCenter: parent.verticalCenter
     }
 

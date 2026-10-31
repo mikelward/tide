@@ -43,6 +43,14 @@ once you have agreed with it or reversed it.
   (SPEC.md §6.5). That makes `ABC-123:` `ABC-123` and skips a lone `—`.
   The alternatives are a shorter list (only `:` `,` `|`), or also trimming
   brackets and quotes. Reversible: one regex in `workspacenames.mjs`.
+- [ ] **The volume's % is held two digits wide, not `100%`** (SPEC.md
+  §7.4), so the gap before the battery matches the others; at 100% the
+  icons after it move over by a digit. The alternative is no held width
+  at all, so they move at every 9%/10% crossing. Reversible: the
+  TextMetrics text in `StatusIcons.qml`.
+- [ ] **The mocks keep their hairline before the clocks**, which the live
+  bar has never drawn; only the clocks' padding was tightened to match.
+  Reversible: drop `<span class="sep">` before `.clocks` in the mocks.
 - [ ] **The picker on `Super+C` is its own overlay, not two more switcher
   tabs** (SPEC.md §8.4). The switcher goes somewhere; the picker copies
   something, and the switcher's `Tab` cycle stays at four. The
