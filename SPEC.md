@@ -1811,8 +1811,11 @@ See [`switcher.png`](docs/mocks/switcher.png).
   - Every `.desktop` entry on `XDG_DATA_DIRS`, including its desktop actions
     (such as "New Incognito Window").
   - The built-in quick actions.
-  - The existing launcher scripts (`browser1`, `google-meet`, …), which `conf`
-    gets `.desktop` files for, so they appear by name with their key hint.
+  - The existing launcher scripts (`browser1`, `google-meet`, …), which
+    `scripts`' `setup-tide` writes `.desktop` files for, so they appear by
+    name. A web app's entry has its site's icon and names its `--app`
+    window's class (§14.3), so its window takes focus. Only the scripts that
+    open an app are listed: the rest are command-line tools.
 - **What it leaves out.** Entries for other desktops, which don't work
   under tide; its own Settings covers theirs (§16).
   - `NoDisplay` entries, as before.

@@ -228,8 +228,10 @@ once you have agreed with it or reversed it.
   names Chrome's default-profile class for it, so `google-calendar`
   resolves to `chrome-calendar.google.com__-Default`; the shell widens
   that to the site, any profile. The alternative is a desktop entry per
-  script with `StartupWMClass`, which `scripts` doesn't ship. Undoing it
-  is `cmd/tide-grant/webapp.go`.
+  script with `StartupWMClass`. `scripts`' `setup-tide` now writes those
+  for the app scripts, for the launcher, but key bindings and terminal
+  commands still need the text read. Undoing it is
+  `cmd/tide-grant/webapp.go`.
 - [ ] **`runenv` is a wrapper wherever it lives**, by its name alone, and
   doesn't count as changing `PATH`, so `runenv google-chat` is looked up
   as `google-chat`. The alternative is matching only `~/scripts/runenv`,
@@ -856,6 +858,11 @@ tested where it can be without a live session.
   Still to do:
   - Point `conf`'s `Super+Space` at `global, tide:launcher` instead of
     fuzzel, once it's been tried live.
+  - Show a launcher script's key hint (`Super+M` beside Google Meet), as
+    the quick actions show theirs, read from `conf`'s binds. `scripts`'
+    `setup-tide` gives the scripts their entries, names and icons; on a
+    live session, check that Gmail is listed with its site icon and its
+    window takes focus.
   - Quick actions: screenshots, the session actions, Do not disturb (while
     the shell serves notifications), keep awake and reload are in, with
     their keys shown. A blocked power action
