@@ -182,6 +182,31 @@ test("the focus guard's and notifications' marks give icons as Hyprland's urgent
     assert.deepEqual(barWorkspaces({ ...one, windows, marks: cleared })[2].icons, []);
 });
 
+test("a minimized window wanting attention shows on the chip it came from, and a click restores it", () => {
+    const windows = [
+        win("a", 3, "kitty"),
+        win("b", -97, "chat", { workspaceName: "special:minimized:3", urgent: true }),
+        win("c", -97, "mail", { workspaceName: "special:minimized:3" }),
+        win("d", -96, "music", { workspaceName: "special:minimized:re", urgent: true }),
+    ];
+    const bar = barWorkspaces({ ...one, windows });
+    assert.deepEqual(bar[2].icons, [{ address: "b", app: "chat", marked: true, restoreTo: "3" }]);
+    assert.equal(bar[2].urgent, true);
+    assert.equal(bar[2].count, 1, "minimized windows aren't counted as on it");
+    // A workspace destroyed once its windows were all minimized: a standing
+    // one is still on the bar, empty, and shows them.
+    const named = barWorkspaces({ monitor: "DP-1", monitors: [{ name: "DP-1", workspace: -1338 }],
+        workspaces: [{ id: -1338, name: "in" }], windows, standing: ["in", "re"] });
+    assert.equal(named[1].state, "empty");
+    assert.deepEqual(named[1].icons.map((i) => [i.address, i.restoreTo]), [["d", "re"]]);
+    assert.equal(named[1].urgent, true);
+});
+
+test("an ordinary window's icon has nothing to restore", () => {
+    const bar = barWorkspaces({ ...one, windows: [win("a", 3, "kitty", { urgent: true, workspaceName: "3" })] });
+    assert.equal(bar[2].icons[0].restoreTo, null);
+});
+
 test("an urgent window makes its workspace urgent", () => {
     const bar = barWorkspaces({ ...one, windows: [win("a", 4, "kitty", { urgent: true }), win("b", 6, "kitty")] });
     assert.equal(bar[3].urgent, true);
@@ -449,4 +474,12 @@ test("a window focused since the shell started ranks above the startup order", (
     assert.equal(focusRank(order, "c3", 2), 3);
     assert.equal(focusRank(order, "d4", -1), Infinity);
     assert.equal(focusRank(order, "e5", undefined), Infinity);
+});
+
+test("a minimized window's attention icon finds its standing chip ignoring case", () => {
+    const windows = [win("b", -97, "chat", { workspaceName: "special:minimized:Re", urgent: true })];
+    const bar = barWorkspaces({ monitor: "DP-1", monitors: [{ name: "DP-1", workspace: -1338 }],
+        workspaces: [{ id: -1338, name: "in" }], windows, standing: ["in", "re"] });
+    assert.deepEqual(bar[1].icons.map((i) => [i.address, i.restoreTo]), [["b", "Re"]]);
+    assert.equal(bar[1].urgent, true);
 });

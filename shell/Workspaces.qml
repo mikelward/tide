@@ -30,6 +30,7 @@ Row {
     readonly property var windows: Hyprland.toplevels.values.map(t => ({
         address: Ws.normalizeAddress(t.address),
         workspace: t.workspace ? t.workspace.id : null,
+        workspaceName: t.workspace?.name ?? "",
         app: t.lastIpcObject?.class || t.wayland?.appId || "",
         urgent: t.urgent,
         fullscreen: t.lastIpcObject?.fullscreen ?? 0,
@@ -115,12 +116,15 @@ Row {
                         }
 
                         // A click focuses that window (SPEC.md §7.2), which
-                        // clears its mark; the chip's own click, under it,
-                        // doesn't fire as well.
+                        // clears its mark, or restores a minimized one
+                        // (§6.7); the chip's own click, under it, doesn't
+                        // fire as well.
                         MouseArea {
                             anchors.fill: parent
                             acceptedButtons: Qt.LeftButton
-                            onClicked: Hyprland.dispatch(Dispatch.focusWindow(icon.modelData.address, Hyprland.usingLua))
+                            onClicked: Hyprland.dispatch(icon.modelData.restoreTo !== null
+                                ? Dispatch.moveWindowToWorkspace(icon.modelData.address, icon.modelData.restoreTo, Hyprland.usingLua)
+                                : Dispatch.focusWindow(icon.modelData.address, Hyprland.usingLua))
                         }
                     }
                 }

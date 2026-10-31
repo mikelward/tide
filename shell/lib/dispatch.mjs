@@ -4,6 +4,8 @@
 // them; the old text form is ignored there. Under hyprlang it's the text
 // form.
 
+import { minimizedWorkspace } from "./minimized.mjs";
+
 // Go to workspace `id`.
 export function focusWorkspace(id, lua) {
     if (!Number.isInteger(id)) {
@@ -93,4 +95,16 @@ export function moveWindowToWorkspace(address, name, lua) {
 export function closeWindow(address, lua) {
     const w = windowAddress(address);
     return lua ? `hl.dsp.window.close({ window = ${luaString(w)} })` : `closewindow ${w}`;
+}
+
+// Minimize the window at `address` from the workspace named `name`: a
+// silent move to that workspace's minimize workspace, which nothing shows
+// (SPEC.md §6.7). Focus goes to the window that was under it. Restoring it
+// is moveWindowToWorkspace back to `name`.
+export function minimizeWindow(address, name, lua) {
+    const w = windowAddress(address);
+    const target = minimizedWorkspace(workspaceName(name));
+    return lua
+        ? `hl.dsp.window.move({ workspace = ${luaString(target)}, follow = false, window = ${luaString(w)} })`
+        : `movetoworkspacesilent ${target},${w}`;
 }
