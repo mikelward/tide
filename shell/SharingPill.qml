@@ -1,4 +1,5 @@
 import QtQuick
+import "lib/barclick.mjs" as Click
 import "lib/share.mjs" as Share
 
 // The red Sharing pill (SPEC.md §7.4): shown while a screen share is live
@@ -7,11 +8,24 @@ import "lib/share.mjs" as Share
 Rectangle {
     id: root
 
+    // How far its click target reaches past it (Bar.qml).
+    property var reach: ({ left: Click.PAD, right: Click.PAD })
+
     visible: Share.sharingPill(ShareData.shares)
     implicitWidth: visible ? row.implicitWidth + 16 : 0
     implicitHeight: 24
     radius: 12
     color: Theme.dangerBg
+
+    // First, so its hover goes over the pill's fill and under its content.
+    BarHit {
+        reach: root.reach
+        behind: false
+
+        TapHandler {
+            onTapped: popover.toggle(parent)
+        }
+    }
 
     Row {
         id: row
@@ -34,10 +48,6 @@ Rectangle {
             font.pixelSize: 12
             font.weight: Font.DemiBold
         }
-    }
-
-    TapHandler {
-        onTapped: popover.toggle()
     }
 
     SharingPopover {

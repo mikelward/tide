@@ -12,15 +12,14 @@ PopupWindow {
     readonly property var adapter: Bluetooth.defaultAdapter
     readonly property var devices: Bt.pairedDevices(root.adapter?.devices.values ?? [])
 
-    function toggle() {
-        visible = !visible;
+    function toggle(opener) {
+        PopoverData.toggle(root, opener);
     }
 
     anchor.item: icon
     anchor.edges: Edges.Bottom | Edges.Right
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.bottom: -10
-    grabFocus: true
     color: "transparent"
     implicitWidth: 280
     // No taller than most of the screen; the rows scroll past that.
@@ -89,5 +88,9 @@ PopupWindow {
                 }
             }
         }
+    }
+
+    PopoverGrab {
+        popover: root
     }
 }

@@ -16,15 +16,14 @@ PopupWindow {
         outStream: PwNodeType.AudioOutStream,
     })
 
-    function toggle() {
-        visible = !visible;
+    function toggle(opener) {
+        PopoverData.toggle(root, opener);
     }
 
     anchor.item: icon
     anchor.edges: Edges.Bottom | Edges.Right
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.bottom: -10
-    grabFocus: true
     color: "transparent"
     implicitWidth: 320
     // No taller than most of the screen; the rows scroll past that.
@@ -150,5 +149,9 @@ PopupWindow {
                 }
             }
         }
+    }
+
+    PopoverGrab {
+        popover: root
     }
 }

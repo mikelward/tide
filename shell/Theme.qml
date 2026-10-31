@@ -27,6 +27,10 @@ Singleton {
     readonly property color fgFaint: palette.fgFaint
     readonly property color surface: palette.surface
     readonly property color surface2: palette.surface2
+    // A bar target under the pointer, and pressed: the text color, faint,
+    // so it reads over the bar and over a pill or workspace's own fill.
+    readonly property color hover: Qt.rgba(fg.r, fg.g, fg.b, 0.08)
+    readonly property color pressed: Qt.rgba(fg.r, fg.g, fg.b, 0.15)
     // The hairline around popovers, popups and the OSD, and between the
     // center's entries.
     readonly property color edge: palette.edge

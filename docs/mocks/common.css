@@ -264,7 +264,6 @@ body.sheet {
 }
 .sicon .ms { font-size: 18px; }
 .sicon.dim { color: var(--fg-dim); }
-.sicon.hover { background: var(--surface); }
 .sicon.badge { position: relative; }
 .sicon.badge::after {
   content: '';
@@ -277,6 +276,14 @@ body.sheet {
 }
 .sicon.low { color: var(--danger); }
 .tray .sicon .ms { font-size: 17px; }
+
+/* A bar target under the pointer (shell/BarHit.qml, Theme.hover): the text
+   color, faint, over whatever fill it has. Its whole span counts, so the
+   clocks hover as one row. */
+.sicon.hover, .ws.hover, .pill.hover, .clocks.hover {
+  background-image: linear-gradient(color-mix(in srgb, var(--fg) 8%, transparent) 0 0);
+}
+.clocks.hover { border-radius: 7px; }
 
 .clocks { display: flex; align-items: center; gap: 2px; }
 .clock {
@@ -306,7 +313,6 @@ body.sheet {
 }
 .clock.local .tz { font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--fg-dim); }
 .clock.local .t { font-weight: 700; }
-.clock.hover { background: var(--surface); }
 
 /* ---- Desktop + windows ---- */
 

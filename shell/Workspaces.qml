@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Widgets
+import "lib/barclick.mjs" as Click
 import "lib/dispatch.mjs" as Dispatch
 import "lib/workspaces.mjs" as Ws
 
@@ -16,6 +17,8 @@ Row {
 
     // This bar's monitor, as Hyprland names it.
     required property string monitorName
+    // How far the click targets at the ends reach past them (Bar.qml).
+    property var reach: ({ left: Click.PAD, right: Click.PAD })
 
     spacing: 3
 
@@ -70,10 +73,24 @@ Row {
             border.width: modelData.urgent || modelData.state === "elsewhere" ? 1.5 : 0
             border.color: modelData.urgent ? Theme.urgentRing : Theme.accent
 
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.LeftButton
-                onClicked: Hyprland.dispatch(Dispatch.focusWorkspaceName(chip.modelData.name, Hyprland.usingLua))
+            // First, so its hover goes over the chip's fill and under its
+            // name and icons, whose own targets are over it.
+            BarHit {
+                reach: Click.groupReach({
+                    x: chip.x,
+                    width: chip.width,
+                    groupWidth: root.width,
+                    spacing: root.spacing,
+                    left: root.reach.left,
+                    right: root.reach.right
+                })
+                behind: false
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton
+                    onClicked: Hyprland.dispatch(Dispatch.focusWorkspaceName(chip.modelData.name, Hyprland.usingLua))
+                }
             }
 
             Row {
@@ -121,12 +138,17 @@ Row {
                         // clears its mark, or restores a minimized one
                         // (§6.7); the chip's own click, under it, doesn't
                         // fire as well.
-                        MouseArea {
-                            anchors.fill: parent
-                            acceptedButtons: Qt.LeftButton
-                            onClicked: Hyprland.dispatch(icon.modelData.restoreTo !== null
-                                ? Dispatch.moveWindowToWorkspace(icon.modelData.address, icon.modelData.restoreTo, Hyprland.usingLua)
-                                : Dispatch.focusWindow(icon.modelData.address, Hyprland.usingLua))
+                        BarHit {
+                            reach: ({ left: 2, right: 2 })
+                            targetHeight: icon.height + 4
+
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.LeftButton
+                                onClicked: Hyprland.dispatch(icon.modelData.restoreTo !== null
+                                    ? Dispatch.moveWindowToWorkspace(icon.modelData.address, icon.modelData.restoreTo, Hyprland.usingLua)
+                                    : Dispatch.focusWindow(icon.modelData.address, Hyprland.usingLua))
+                            }
                         }
                     }
                 }

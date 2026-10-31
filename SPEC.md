@@ -1105,6 +1105,31 @@ See [`bar.png`](docs/mocks/bar.png).
 - **Double-clicking the title** toggles maximize on the window it names, as
   a title bar's double-click would (§6.3). That's always the focused
   window; a blank title does nothing.
+- **Every click on the bar counts, the first one too.** Each target is
+  clicked anywhere in its span (icon, text and the room between them), the
+  bar's full height, and out to halfway to its neighbor, so no gap is
+  dead. That's each workspace, the window title, each pill, tray icon and
+  status icon, and the clocks, which are one target together. A window's
+  icon in its workspace is its own small target. Reach is apart from the
+  visual spacing (`shell/lib/barclick.mjs`, `shell/BarHit.qml`).
+- **Hovered, a target shows its whole span** as a rounded rect, the text
+  color at 8% over whatever fill it has, and 15% while pressed
+  (`Theme.hover`, `Theme.pressed`). So it reads on both palettes, on the
+  bar and over a pill or workspace.
+- **One popover at a time.** A press anywhere on a bar closes the open
+  popover, unless it's on the item that opened it, whose click closes it.
+  The press then acts on what it's on, so the first click on another icon
+  opens that one. A press off the bar closes it too.
+- **Why not PopupWindow's `grabFocus`.** It is an `xdg_popup` grab. Hyprland
+  adds only the popup and an `xdg` parent to it, never a layer-shell
+  parent such as the bar (Hyprland 0.56.2, `protocols/XDGShell.cpp`,
+  `addOrStartGrab`). So a press on the bar went to the popup and only
+  ended the grab (`InputManager.cpp`, `mouseMoveUnified`). Instead each
+  popover holds a `HyprlandFocusGrab` with every bar in it
+  (`shell/PopoverGrab.qml`). While one is open the bars take the keyboard
+  on demand, so a click into it can type (the network password).
+  The notification center's grab takes in every bar too, so a click on
+  another monitor's bar closes it and acts there.
 
 ### 7.2 Workspaces
 

@@ -18,8 +18,8 @@ PopupWindow {
     // Labels line up when any row has an icon.
     readonly property bool indent: rows.some(r => !r.separator && r.icon !== "")
 
-    function toggle() {
-        visible = !visible;
+    function toggle(opener) {
+        PopoverData.toggle(root, opener);
     }
 
     function click(row) {
@@ -46,7 +46,6 @@ PopupWindow {
     anchor.edges: Edges.Bottom | Edges.Right
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.bottom: -10
-    grabFocus: true
     color: "transparent"
     implicitWidth: 260
     // No taller than most of the screen; the rows scroll past that.
@@ -143,5 +142,9 @@ PopupWindow {
                 }
             }
         }
+    }
+
+    PopoverGrab {
+        popover: root
     }
 }

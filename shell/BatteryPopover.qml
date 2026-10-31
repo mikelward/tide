@@ -11,15 +11,14 @@ PopupWindow {
     required property Item icon
     readonly property var battery: UPower.displayDevice
 
-    function toggle() {
-        visible = !visible;
+    function toggle(opener) {
+        PopoverData.toggle(root, opener);
     }
 
     anchor.item: icon
     anchor.edges: Edges.Bottom | Edges.Right
     anchor.gravity: Edges.Bottom | Edges.Left
     anchor.margins.bottom: -10
-    grabFocus: true
     color: "transparent"
     implicitWidth: 260
     implicitHeight: card.implicitHeight
@@ -100,5 +99,9 @@ PopupWindow {
                 font.pixelSize: 12
             }
         }
+    }
+
+    PopoverGrab {
+        popover: root
     }
 }

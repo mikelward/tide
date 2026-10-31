@@ -4,6 +4,7 @@ import Quickshell.Bluetooth
 import Quickshell.Networking
 import Quickshell.Services.Pipewire
 import Quickshell.Services.UPower
+import "lib/barclick.mjs" as Click
 import "lib/bluetooth.mjs" as Bt
 import "lib/network.mjs" as Net
 import "lib/status.mjs" as Status
@@ -21,10 +22,26 @@ Row {
 
     // The bar's monitor, which the bell opens the notification center on.
     property string monitorName: ""
+    // How far the click targets at the group's ends reach past it (Bar.qml).
+    property var reach: ({ left: Click.PAD, right: Click.PAD })
 
-    // Whether a point in the bar's scene is on the bell.
+    // Whether a point in the bar's scene is on the bell's click target.
     function onBell(scenePoint) {
-        return bell.visible && bell.contains(bell.mapFromItem(null, scenePoint.x, scenePoint.y));
+        const area = bellHit.area;
+        return bell.visible && area.contains(area.mapFromItem(null, scenePoint.x, scenePoint.y));
+    }
+
+    // How far an icon's click target reaches past it: half the spacing to
+    // a neighbor, and the group's reach at its ends.
+    function reachOf(item) {
+        return Click.groupReach({
+            x: item.x,
+            width: item.width,
+            groupWidth: root.width,
+            spacing: root.spacing,
+            left: root.reach.left,
+            right: root.reach.right
+        });
     }
 
     readonly property var sink: Pipewire.defaultAudioSink
@@ -45,8 +62,12 @@ Row {
         name: "display-brightness-symbolic"
         color: KeepAwakeData.on ? Theme.accent : Theme.fgFaint
 
-        TapHandler {
-            onTapped: KeepAwakeData.toggle()
+        BarHit {
+            reach: root.reachOf(keepAwake)
+
+            TapHandler {
+                onTapped: KeepAwakeData.toggle()
+            }
         }
     }
 
@@ -64,8 +85,12 @@ Row {
         name: view.icon || "bluetooth-active-symbolic"
         color: view.on ? Theme.fg : Theme.fgFaint
 
-        TapHandler {
-            onTapped: bluetoothPopover.toggle()
+        BarHit {
+            reach: root.reachOf(bluetooth)
+
+            TapHandler {
+                onTapped: bluetoothPopover.toggle(parent)
+            }
         }
 
         BluetoothPopover {
@@ -89,11 +114,16 @@ Row {
             anchors.verticalCenter: parent.verticalCenter
             name: modelData.icon
 
-            TapHandler {
-                onTapped: bluetoothPopover.toggle()
+            BarHit {
+                reach: root.reachOf(audioDevice)
+
+                TapHandler {
+                    onTapped: bluetoothPopover.toggle(parent)
+                }
             }
 
-            // A HoverHandler takes no clicks, so the tap still lands.
+            // A HoverHandler takes no clicks, so the tap still lands. It
+            // covers the icon alone, so the name shows only over it.
             HoverHandler {
                 id: audioHover
             }
@@ -171,8 +201,12 @@ Row {
             }
         }
 
-        TapHandler {
-            onTapped: networkPopover.toggle()
+        BarHit {
+            reach: root.reachOf(network)
+
+            TapHandler {
+                onTapped: networkPopover.toggle(parent)
+            }
         }
 
         NetworkPopover {
@@ -198,6 +232,34 @@ Row {
                 muted: root.sink?.audio?.muted ?? true,
                 volume: root.sink?.audio?.volume,
             })
+
+            // In here, not the Row itself, which would cull a target that
+            // takes no room (BarHit.qml). Scrolling over it changes the
+            // volume too.
+            BarHit {
+                span: volume
+                reach: root.reachOf(volume)
+
+                TapHandler {
+                    onTapped: volumePopover.toggle(parent)
+                }
+
+                WheelHandler {
+                    onWheel: event => {
+                        const audio = root.sink?.audio;
+                        if (!audio) {
+                            return;
+                        }
+                        volume.wheel += event.angleDelta.y;
+                        const notches = Math.trunc(volume.wheel / 120);
+                        if (notches === 0) {
+                            return;
+                        }
+                        volume.wheel -= notches * 120;
+                        audio.volume = Status.scrolledVolume(audio.volume, notches);
+                    }
+                }
+            }
         }
 
         // Wide enough for two digits, as almost every level is, so the icons
@@ -226,30 +288,10 @@ Row {
 
         property real wheel: 0
 
-        TapHandler {
-            onTapped: volumePopover.toggle()
-        }
-
         VolumePopover {
             id: volumePopover
 
             icon: volume
-        }
-
-        WheelHandler {
-            onWheel: event => {
-                const audio = root.sink?.audio;
-                if (!audio) {
-                    return;
-                }
-                volume.wheel += event.angleDelta.y;
-                const notches = Math.trunc(volume.wheel / 120);
-                if (notches === 0) {
-                    return;
-                }
-                volume.wheel -= notches * 120;
-                audio.volume = Status.scrolledVolume(audio.volume, notches);
-            }
         }
     }
 
@@ -267,10 +309,6 @@ Row {
         visible: view.visible
         spacing: 2
 
-        TapHandler {
-            onTapped: batteryPopover.toggle()
-        }
-
         BatteryPopover {
             id: batteryPopover
 
@@ -281,6 +319,17 @@ Row {
             anchors.verticalCenter: parent.verticalCenter
             name: battery.view.icon || "battery-missing-symbolic"
             color: battery.ink
+
+            // In here, not the Row itself, which would cull a target that
+            // takes no room (BarHit.qml).
+            BarHit {
+                span: battery
+                reach: root.reachOf(battery)
+
+                TapHandler {
+                    onTapped: batteryPopover.toggle(parent)
+                }
+            }
         }
 
         Text {
@@ -305,10 +354,6 @@ Row {
         anchors.verticalCenter: parent.verticalCenter
         spacing: 2
 
-        TapHandler {
-            onTapped: sysmonPopover.toggle()
-        }
-
         SysmonPopover {
             id: sysmonPopover
 
@@ -319,6 +364,17 @@ Row {
             anchors.verticalCenter: parent.verticalCenter
             file: "cpu-symbolic.svg"
             color: sysmon.ink
+
+            // In here, not the Row itself, which would cull a target that
+            // takes no room (BarHit.qml).
+            BarHit {
+                span: sysmon
+                reach: root.reachOf(sysmon)
+
+                TapHandler {
+                    onTapped: sysmonPopover.toggle(parent)
+                }
+            }
         }
 
         // Wide and aligned as the volume's %.
@@ -366,14 +422,20 @@ Row {
             color: Theme.accent
         }
 
-        TapHandler {
-            onTapped: HistoryData.toggleAt(root.monitorName)
-        }
+        BarHit {
+            id: bellHit
 
-        // Middle-click toggles Do not disturb (§7.4).
-        TapHandler {
-            acceptedButtons: Qt.MiddleButton
-            onTapped: NotificationData.setDnd(!NotificationData.dnd)
+            reach: root.reachOf(bell)
+
+            TapHandler {
+                onTapped: HistoryData.toggleAt(root.monitorName)
+            }
+
+            // Middle-click toggles Do not disturb (§7.4).
+            TapHandler {
+                acceptedButtons: Qt.MiddleButton
+                onTapped: NotificationData.setDnd(!NotificationData.dnd)
+            }
         }
     }
 
@@ -383,8 +445,12 @@ Row {
         anchors.verticalCenter: parent.verticalCenter
         name: "system-shutdown-symbolic"
 
-        TapHandler {
-            onTapped: sessionMenu.toggle()
+        BarHit {
+            reach: root.reachOf(session)
+
+            TapHandler {
+                onTapped: sessionMenu.toggle(parent)
+            }
         }
 
         SessionMenu {

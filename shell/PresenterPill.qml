@@ -1,4 +1,5 @@
 import QtQuick
+import "lib/barclick.mjs" as Click
 
 // The Presenting pill (SPEC.md §7.4): shown while presenter mode is on
 // (PresenterData), in the accent color, so it reads as something you
@@ -6,11 +7,24 @@ import QtQuick
 Rectangle {
     id: root
 
+    // How far its click target reaches past it (Bar.qml).
+    property var reach: ({ left: Click.PAD, right: Click.PAD })
+
     visible: PresenterData.on
     implicitWidth: visible ? row.implicitWidth + 16 : 0
     implicitHeight: 24
     radius: 12
     color: Theme.accentBg
+
+    // First, so its hover goes over the pill's fill and under its content.
+    BarHit {
+        reach: root.reach
+        behind: false
+
+        TapHandler {
+            onTapped: PresenterData.toggle()
+        }
+    }
 
     Row {
         id: row
@@ -35,7 +49,4 @@ Rectangle {
         }
     }
 
-    TapHandler {
-        onTapped: PresenterData.toggle()
-    }
 }
