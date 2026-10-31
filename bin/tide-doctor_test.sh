@@ -202,10 +202,19 @@ FAKE
 # exits $FAKE_QS_VERSION_STATUS. It comes before any real qs on PATH, and in
 # a directory of its own, so a run can leave it off.
 mkdir "$tmp/qs-bin"
-# qs -c tide ipc call polkit status answers $FAKE_QS_POLKIT (registered by
-# default), or fails with $FAKE_QS_IPC_FAILS.
+# qs -c tide ipc call polkit status answers $FAKE_QS_POLKIT, and ... agent
+# status $FAKE_QS_AGENT (registered by default, both), or either fails with
+# $FAKE_QS_IPC_FAILS.
 cat > "$tmp/qs-bin/qs" <<'FAKE'
 #!/bin/sh
+if test "$*" = "-c tide ipc call agent status"; then
+    if test -n "$FAKE_QS_IPC_FAILS"; then
+        echo "$FAKE_QS_IPC_FAILS" >&2
+        exit 1
+    fi
+    printf '%s\n' "${FAKE_QS_AGENT:-registered}"
+    exit 0
+fi
 if test "$*" = "-c tide ipc call polkit status"; then
     if test -n "$FAKE_QS_IPC_FAILS"; then
         echo "$FAKE_QS_IPC_FAILS" >&2
@@ -735,6 +744,33 @@ check "failing to ask the shell is reported" \
 # Under waybar tide-shell starts an agent of its own in the unit.
 run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent"
 check "with the shell as polkit agent, tide-shell's stand-in under waybar is fine" test "$out" = "No problems found."
+healthy
+
+# The shell's network agent (SPEC.md §5.6), with TIDE_AGENT=1.
+healthy
+printf 'TIDE_AGENT=1\0' > "$tmp/proc/100/environ"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs"
+check "a registered network agent is fine" test "$out" = "No problems found."
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT="standing-aside 300"
+check "nm-applet holding the job is a problem, naming it" \
+    contains "$out" "nm-applet (pid 300) is running, so its dialogs ask for network passwords instead of the shell's (TIDE_AGENT=1)"
+mkdir -p "$tmp/config/tide"
+printf '# kept\nnm-applet\n' > "$tmp/config/tide/autostart"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT="standing-aside 300"
+check "nm-applet you listed may hold the job" test "$out" = "No problems found."
+rm "$tmp/config/tide/autostart"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT=missing
+check "a missing tide-agent is a problem, with the fix" contains "$out" "tide-agent isn't running, so nothing asks for network passwords"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT=waiting
+check "no NetworkManager is a problem" contains "$out" "NetworkManager isn't running"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_AGENT="unregistered permission denied"
+check "a refused agent is a problem, with NetworkManager's reason" \
+    contains "$out" "NetworkManager didn't take the shell's network agent (permission denied)"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent qs" FAKE_QS_IPC_FAILS="ipc: no running instance"
+check "failing to ask about the network agent is reported" \
+    contains "$out" "couldn't ask the shell whether its network agent works (qs ipc: ipc: no running instance)"
+run FAKE_PROCS="hypridle swaync waybar hyprpolkitagent" FAKE_QS_AGENT=missing
+check "with no shell running, the agent isn't asked about" test -z "$(grep 'network' "$tmp/out")"
 healthy
 
 healthy

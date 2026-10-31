@@ -19,6 +19,19 @@ PopupWindow {
     property var promptState: Net.NO_PROMPT
     readonly property var pending: promptState.pending
     readonly property var asking: promptState.asking
+    // tide-agent's request for the key to the network this popover tried
+    // (SPEC.md §5.6), asked in the same row while this popover owns it;
+    // null when there's none. AgentData moves it to the prompt once this
+    // popover stops holding it (checkOwner), however that happens.
+    readonly property var agentAsk: AgentData.showing === "popover" && AgentData.owner === root ? AgentData.current : null
+    readonly property bool asked: root.asking !== null || root.agentAsk !== null
+
+    onAgentAskChanged: {
+        if (root.agentAsk) {
+            flick.contentY = 0;
+        }
+    }
+    onPendingChanged: AgentData.checkOwner()
 
     function prompt(event) {
         promptState = Net.prompt(promptState, event);
@@ -42,10 +55,15 @@ PopupWindow {
         if (!visible) {
             prompt({ type: "cancel" });
         }
+        AgentData.checkOwner();
     }
 
-    // A monitor unplugged with its popover open still counts it closed.
-    Component.onDestruction: NetworkData.open = Net.trackOpen(NetworkData.open, root, false)
+    // A monitor unplugged with its popover open still counts it closed,
+    // and a request it held moves to the prompt.
+    Component.onDestruction: {
+        NetworkData.open = Net.trackOpen(NetworkData.open, root, false);
+        AgentData.ownerGone(root);
+    }
 
     // Only the network this popover asked to connect: every monitor's
     // popover hears every network, so this answers just its own request.
@@ -115,7 +133,7 @@ PopupWindow {
                 // network this popover tried. It's at the top, where it's in
                 // view however long the list below is.
                 Rectangle {
-                    visible: root.asking !== null
+                    visible: root.asked
                     width: list.width
                     height: visible ? 52 : 0
                     radius: 7
@@ -134,7 +152,7 @@ PopupWindow {
                         elide: Text.ElideRight
                         // Network names come from the air: never markup.
                         textFormat: Text.PlainText
-                        text: `Password for ${root.asking?.name ?? ""}`
+                        text: `Password for ${root.asking?.name ?? root.agentAsk?.ssid ?? ""}`
                         color: Theme.fgDim
                         font.family: Theme.font
                         font.pixelSize: 12
@@ -155,6 +173,14 @@ PopupWindow {
                         focus: parent.visible
                         onAccepted: {
                             // Hiding the field clears it, so read it first.
+                            const ask = root.agentAsk;
+                            if (ask) {
+                                const field = ask.fields.length > 0 ? ask.fields[0].key : "psk";
+                                const values = {};
+                                values[field] = text;
+                                AgentData.reply(ask.id, values);
+                                return;
+                            }
                             const network = root.asking;
                             const psk = text;
                             if (!network) {
@@ -163,7 +189,13 @@ PopupWindow {
                             root.prompt({ type: "submit" });
                             network.connectWithPsk(psk);
                         }
-                        Keys.onEscapePressed: root.prompt({ type: "cancel" })
+                        Keys.onEscapePressed: {
+                            if (root.agentAsk) {
+                                AgentData.cancel(root.agentAsk.id);
+                            } else {
+                                root.prompt({ type: "cancel" });
+                            }
+                        }
 
                         Text {
                             visible: password.text === ""

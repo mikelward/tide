@@ -108,6 +108,15 @@ the shell, and `tide-shell` starts no other agent. Its prompt takes the
 keyboard only right after you press a key (a `pkexec` in a terminal);
 otherwise a notification offers **Authenticate**.
 
+The shell can also ask for network passwords in place of nm-applet
+(SPEC.md §5.6): set `TIDE_AGENT=1` the same way, install `tide-agent`
+(`make install-session`) and restart the shell. It then runs `tide-agent`,
+NetworkManager's secret agent, and autostart skips nm-applet unless
+`~/.config/tide/autostart` lists it. A Wi-Fi password is asked for in the
+network popover, and a VPN's in a prompt of the shell's own, or in the
+VPN plugin's window. A request NetworkManager makes on its own, such as a
+reconnect, arrives as a notification first.
+
 `tide doctor` checks the running session and prints one line per
 problem, with its fix: units that aren't running, D-Bus names owned by the
 wrong process or that D-Bus could start a rival for, daemons running twice

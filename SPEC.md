@@ -766,13 +766,19 @@ SERVICE`, `-i` when it may ask, `-r` for new secrets, and each hint as
   it cancels.
 - **Esc**, or the prompt's **Cancel**, answers "user canceled", which
   stops NetworkManager asking anyone else. A click on the backdrop does
-  nothing, as with polkit, so a stray click can't cancel. Closing the
-  popover with its row up cancels too.
+  nothing, as with polkit, so a stray click can't cancel. A popover that
+  lets its row's request go (closed, its monitor unplugged, another
+  network clicked) hands it on by the same rule, as if no popover had
+  tried it, so a request is never left where nothing shows it.
 - **While locked**, the shell shows nothing: the lock is a process of its
   own (principle 2, §1), and a prompt under it can't be seen. The helper
   watches `tide-lock.service` and tells the shell when it starts and stops.
   A request that needs typing while it runs is declined at once, and the
-  shell is told it was missed; saved secrets are still answered, since the
+  shell is told it was missed. One already showing or waiting when the
+  lock starts is declined and kept the same way: the shell looks at every
+  outstanding request again after each change (the lock, a popover
+  letting go, `tide-agent` stopping), so each ends shown, rerouted,
+  declined or dropped, never held; saved secrets are still answered, since the
   keyring stays unlocked.
 - **A missed request** (declined while locked, or timed out) leaves one
   notification per connection once you're back: "Couldn't connect to

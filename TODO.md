@@ -1439,8 +1439,13 @@ run `nmcli connection up` without `--ask`. `tide-agent` replaces it:
 
 - [x] `cmd/tide-agent`: NetworkManager's secret agent, the keyring, VPN
   auth dialogs, tested against stand-ins only.
-- [ ] The shell's prompt, the popover's row, notifications, `TIDE_AGENT=1`,
-  `ipc call agent status`, and `tide doctor`.
+- [x] The shell's prompt, the popover's row, notifications, `TIDE_AGENT=1`,
+  `ipc call agent status`, and `tide doctor`, tested against stand-ins
+  only. Still to come:
+  - `tide doctor`'s line for neither the agent nor nm-applet running goes
+    in with step 5, when the agent is the default: until then nearly every
+    session without `TIDE_AGENT=1` runs nm-applet, and the check would
+    only flag test fixtures.
 - [ ] The BlueZ pairing agent.
 - [ ] On a live session with `TIDE_AGENT=1`, check §5.6's list, then remove
   `nm-applet` from the list, its tests and SPEC.md §5.4, and make the

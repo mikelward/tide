@@ -45,6 +45,10 @@ Singleton {
     function toggleVpn(vpn) {
         const action = Vpn.toggleAction(vpn);
         root.vpnFailed = null;
+        if (action === "up") {
+            // A password it asks for follows your click (SPEC.md §5.6).
+            AgentData.noteStarted(vpn.uuid);
+        }
         Launcher.run(Vpn.toggleCommand(vpn), ok => {
             if (!ok) {
                 // nmcli's own message is in the log (Launcher).
