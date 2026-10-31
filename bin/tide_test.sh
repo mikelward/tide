@@ -539,9 +539,15 @@ check "an unknown subcommand is a usage error" test $? -eq 2
 allowed() {
     env XDG_CONFIG_HOME="$tmp/config" sh "$qs" autostart-allowed "$1" 2>"$tmp/err"
 }
+# With the shell's network agent on (SPEC.md §5.6).
+allowed_with_agent() {
+    env TIDE_AGENT=1 XDG_CONFIG_HOME="$tmp/config" sh "$qs" autostart-allowed "$1" 2>"$tmp/err"
+}
 # nm-applet stays for its secret agent; the bar draws Bluetooth, so
 # blueman's applet isn't allowed by default.
 check "nm-applet's autostart is allowed" allowed 'app-nm\x2dapplet@autostart.service'
+check "with TIDE_AGENT=1, nm-applet's autostart is skipped" \
+    test "$(allowed_with_agent 'app-nm\x2dapplet@autostart.service'; echo $?)" -eq 1
 check "blueman's autostart is skipped" test "$(allowed 'app-blueman@autostart.service'; echo $?)" -eq 1
 check "another desktop's autostart is skipped" test "$(allowed 'app-hplip\x2dsystray@autostart.service'; echo $?)" -eq 1
 check "a skip says how to allow it" \
@@ -556,6 +562,9 @@ check "half of an ID with a space isn't allowed" test "$(allowed 'app-has@autost
 check "an ID starting with # is allowed by its escaped form" allowed 'app-\x23lead@autostart.service'
 check "a commented-out line allows nothing" test "$(allowed 'app-commented\x2dout@autostart.service'; echo $?)" -eq 1
 check "the default still applies beside the user's list" allowed 'app-nm\x2dapplet@autostart.service'
+printf 'nm-applet\n' >> "$tmp/config/tide/autostart"
+check "with TIDE_AGENT=1, nm-applet still starts when the user's list names it" \
+    allowed_with_agent 'app-nm\x2dapplet@autostart.service'
 check "an applet the user's list lacks is skipped" \
     test "$(allowed 'app-blueman@autostart.service'; echo $?)" -eq 1
 check "an entry the user's list lacks is still skipped" \

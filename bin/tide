@@ -106,7 +106,9 @@
 #     which skips the unit, if it isn't, and 3 if it can't tell (an
 #     unreadable list), which the drop-in turns into a failed unit. The
 #     allowlist is nm-applet, plus the desktop IDs in
-#     ${XDG_CONFIG_HOME:-~/.config}/tide/autostart. That file holds one
+#     ${XDG_CONFIG_HOME:-~/.config}/tide/autostart. With TIDE_AGENT=1 the
+#     shell's tide-agent asks for network passwords (SPEC.md §5.6), so
+#     nm-applet is on it only if that file lists it. That file holds one
 #     desktop ID per line; lines starting with # are comments, so an ID
 #     that itself starts with # is written escaped, as \x23ID.
 #
@@ -860,6 +862,10 @@ autostart_allowed() {
         fi
     fi
     for a in $autostart_default; do
+        # One agent answers NetworkManager: tide-agent, with TIDE_AGENT=1.
+        if test "$a" = nm-applet && test "${TIDE_AGENT:-}" = 1; then
+            continue
+        fi
         if test "$a" = "$id"; then
             exit 0
         fi
