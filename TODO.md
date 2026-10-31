@@ -7,6 +7,32 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **`tide-agent` is started by the shell, not a systemd unit** (SPEC.md
+  §5.6): it lives as long as something can show its prompts, and talks to
+  the shell over its stdin and stdout, like `tide-greetd`. The alternative
+  is a user unit talking to the shell over `qs ipc`, which would need a
+  second channel for passwords. Reversible: the protocol stays the same
+  over any pipe.
+- [ ] **godbus v5.1.0, not v5.2.4,** for having no dependencies of its own
+  (v5.2 needs `golang.org/x/sys`). Moving up is a `go get`.
+- [ ] **`TIDE_AGENT=1` opts in until a live session has run it,** as
+  `TIDE_POLKIT=1` does; the last step makes it the default. The
+  alternative is on at once, standing aside for nm-applet while it's on
+  the autostart list. Reversible by the default in one place.
+- [ ] **Nothing is asked on the lock screen.** A request that needs typing
+  while locked is declined and turns into a notification after unlock;
+  saved secrets still answer. GNOME Shell prompts on its lock screen
+  instead, which tide's lock, a process of its own, would need a second
+  agent client for. Reversible: the shell's routing decides it.
+- [ ] **PPPoE, mobile broadband, WireGuard keys and hidden networks are
+  declined** with `NoSecrets`, for `nmcli --ask` or nm-connection-editor.
+  Each is an addition to the helper's table, if one comes up.
+- [ ] **The BlueZ pairing agent goes in the same helper, as its own step
+  after the NetworkManager one,** rather than a second helper or nothing:
+  blueman-manager brings its own agent while open, so it's for pairing a
+  device starts. Reversible: it's a second registration the helper can
+  drop.
+
 - [ ] **The launcher leaves out a `Settings` entry that runs another
   desktop's settings app, by program name** (`launcher.mjs`'s
   `SETTINGS_APPS`), on top of honoring `OnlyShowIn` / `NotShowIn`. Every
@@ -1392,14 +1418,21 @@ autostart entries, and a second bar on any monitor. Still to do:
   session, check that the bar's reservation matches its height at each
   scale, so a lone tide bar reports nothing.
 
-## Take nm-applet off the autostart allowlist
+## Take nm-applet off the autostart allowlist (SPEC.md §5.6)
 
 `nm-applet` stays on the default allowlist (`autostart_default` in
 `bin/tide`, SPEC.md §5.4) only for its NetworkManager secret agent, which
 asks for a VPN's unsaved password or one-time code, since the VPN rows
-run `nmcli connection up` without `--ask`. tide's own secret agent is
-being built now; once it registers with NetworkManager, remove
-`nm-applet` from the list, its tests and SPEC.md §5.4.
+run `nmcli connection up` without `--ask`. `tide-agent` replaces it:
+
+- [ ] `cmd/tide-agent`: NetworkManager's secret agent, the keyring, VPN
+  auth dialogs.
+- [ ] The shell's prompt, the popover's row, notifications, `TIDE_AGENT=1`,
+  `ipc call agent status`, and `tide doctor`.
+- [ ] The BlueZ pairing agent.
+- [ ] On a live session with `TIDE_AGENT=1`, check §5.6's list, then remove
+  `nm-applet` from the list, its tests and SPEC.md §5.4, and make the
+  agent the default.
 
 ## Grants for terminal commands
 
