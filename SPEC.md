@@ -126,6 +126,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **System monitor popover**: the CPU and Memory tabs, and throttling. [`sysmon.png`](docs/mocks/sysmon.png) | ![system monitor](docs/mocks/sysmon.png) |
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
 | **Screen-share picker**: screens, windows, 16:9 area. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
+| **Picker**: `Super+C`'s Clipboard tab, and its Characters tab searched by name. [`picker.png`](docs/mocks/picker.png) | ![picker](docs/mocks/picker.png) |
 | **Screenshots**: region and window modes. [`screenshot.png`](docs/mocks/screenshot.png) | ![screenshot](docs/mocks/screenshot.png) |
 | **Minimized windows**: the five ways to show them that were weighed; C, the corner tray, was chosen (§6.7). Its bars still show the chips' old app icons. [`minimized.png`](docs/mocks/minimized.png) | ![minimized windows](docs/mocks/minimized.png) |
 | **Fonts**: the same pieces in Ubuntu + Ubuntu Mono, Ubuntu Sans + Ubuntu Sans Mono, and Inter + JetBrains Mono. [`fonts.png`](docs/mocks/fonts.png) | ![fonts](docs/mocks/fonts.png) |
@@ -350,6 +351,7 @@ work". The old setup shows how it fought itself:
 | Lid, power button | logind's defaults (`HandleLidSwitch=suspend`, `HandleLidSwitchDocked=ignore`), plus a Hyprland `bindl` pair on the lid switch: closing it with an external monitor attached disables the internal panel, and opening it re-enables the panel with its configured mode and returns the panel's workspaces to it | logind / Hyprland | `lid.sh`'s own suspend logic, and the `HandleLidSwitch=ignore` drop-in the old `setup-hypr` installed |
 | "Show in folder" (`org.freedesktop.FileManager1`) | Nautilus (§16.2) | D-Bus activation via tide's user-level service file → `tide-filemanager.service`, whose launcher picks Dolphin under Plasma and which stops with the session | the arbitrary pick between Dolphin's and Nautilus's system activation files |
 | Terminal for `Terminal=true` apps | kitty, via `xdg-terminal-exec` | on demand | GLib's fallback list (Konsole) |
+| Clipboard history | cliphist, fed by `tide clipboard store` (§8.4) | `tide-clipboard.service` | other clipboard managers aren't started |
 | Apps | you | `tide launch` from keybinds and the launcher, which waits for the shell to be ready, then runs `uwsm app --` (§5.4) | — |
 
 **M2 transitional shell.** Until the Quickshell shell lands (M3 and M4),
@@ -925,7 +927,8 @@ with new keys in **bold**:
 | **`Super+Tab`** | flip between home and the workspace you last used: from any other workspace it goes to home, and from home back to the last other one, so presses toggle |
 | **`Super+A`** | the switcher, on its Attention tab: every window wanting attention, on any workspace, most recent first; Enter goes there |
 | **`Super+Alt+Space`** | next keyboard layout, once there are two, on every keyboard (§16) |
-| `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `C` / `Shift+C` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
+| `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `Shift+C` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
+| **`Super+C`** | the picker, on its Clipboard tab: what you've copied, and emoji and symbols by name (§8.4); C for clipboard and characters. It was Google Calendar, which has no key now; the launcher finds it |
 | **`Super+V`** | a terminal on the VM, `Super+W`'s twin: the `terminal_on_vm` helper, with the host from `~/.vm` |
 | `Super+Backspace` | close window |
 | **`Super+Z`** | minimize the focused window; its icon goes to the corner tray, and a click there restores it (§6.7) |
@@ -1370,6 +1373,7 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
   - Do not disturb, keep awake, and dark style. Dark style shows whether
     it's on and until when, and flips light and dark until the schedule's
     next change (§15).
+  - Clear clipboard history (§8.4).
   - Reload shell.
 
   Power actions check logind inhibitors and ask only when something is
@@ -1405,6 +1409,123 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
     checked on the pinned Chrome.
   - Without it, or with it down, the tab shows windows only and says the
     browser's tabs aren't listed. No network call, so no hang.
+
+### 8.4 The picker: clipboard history and characters
+
+See [`picker.png`](docs/mocks/picker.png).
+
+- **One overlay, two tabs**, on `Super+C`:
+  - **Clipboard:** what you've copied, newest first, one line each. An
+    image shows as its format, size and dimensions.
+  - **Characters:** emoji and symbols, found by name: `arrow`,
+    `e acute`, `shrug`.
+- **It's its own overlay, not two more switcher tabs.** The switcher
+  takes you somewhere; the picker puts something on the clipboard. Kept
+  apart, the switcher's `Tab` still cycles four tabs.
+- It's drawn like the switcher (§8.1), on the focused monitor, and takes
+  the keyboard the same way (§14.2).
+- **Keys.** All single-modifier, like the rest of tide's.
+  - `Super+C` opens it on Clipboard. `Super+C` again, `Esc`, or a click
+    on the backdrop closes it.
+  - `Tab` / `Shift+Tab` move between the two tabs.
+  - `↑`/`↓` or `Ctrl+N`/`Ctrl+P` move the selection.
+  - `Enter` copies the selection to the clipboard and closes. `Ctrl+V`
+    then pastes it, as after any copy.
+  - `Shift+Delete` removes the selected entry from the history, as it
+    removes a suggestion in a browser's address bar.
+  - `conf`'s key runs `qs -c tide ipc call picker toggle clipboard`.
+    `toggle characters` opens the other tab.
+- **Search.**
+  - Clipboard: the launcher's fuzzy scorer over each entry's one-line
+    preview. With no query, newest first.
+  - Characters: each word you type must start a word of the name, in any
+    order. Whole words rank before prefixes, then the list's order:
+    symbols, then emoji, each in Unicode's order. So `e acute` offers é and É, but
+    not á.
+  - With no query, the Characters tab lists the whole list in its order.
+- **Enter doesn't paste for you, yet.** Pasting means sending the window
+  you were in a key, `Ctrl+V` in most apps and `Ctrl+Shift+V` in a
+  terminal.
+  - Hyprland's `sendshortcut` dispatcher would do it, but its Lua form
+    on 0.56 isn't checked yet.
+  - wtype would do it too, but only once the picker's surface has gone
+    and the keyboard is back with that window, which nothing reports.
+  - So Enter copies, which always works, and pasting is in TODO.md.
+
+**The history.**
+
+- `tide-clipboard.service` runs `wl-paste --watch tide clipboard store`,
+  which hands each new copy to `cliphist store`.
+  - It watches the clipboard only, not the primary selection
+    (middle-click).
+  - It's `PartOf=graphical-session.target` and wanted by the tide
+    session's target, so it stops at logout, and a Plasma session doesn't
+    run it.
+  - `UMask=0077`. cliphist opens its database with mode 0644 (0.7.0's
+    `initDBOption`), so this makes the file 0600, in a 0700 directory.
+- **The database** is cliphist's default, `$XDG_CACHE_HOME/cliphist/db`,
+  so a cliphist you already ran keeps its history. It outlives a logout
+  and a reboot, like the clipboard history on a phone.
+- **Size cap: the newest 200 entries** (`cliphist -max-items 200`; its
+  own default is 750).
+  - cliphist skips a copy over 5 MB, and a copy of an entry among the
+    last 100 (0.7.0; 20 in 0.4.0) moves that entry to the top rather than
+    storing it twice.
+- **Wiping it.**
+  - The launcher's **Clear clipboard history** action, and `tide
+    clipboard wipe`, run `cliphist wipe`. A failure says why: on the
+    terminal, or in a notification from the launcher.
+  - `Shift+Delete` in the picker removes one entry.
+- **Without cliphist**, or with the unit not running, the Clipboard tab
+  says so, naming what's missing, and `tide doctor` reports it (§5.4).
+  The Characters tab still works.
+
+**Never storing passwords.**
+
+- Password managers mark a copied password with the
+  `x-kde-passwordManagerHint` MIME type, whose data is `secret`.
+  - KeePassXC sets it on Linux (`src/gui/Clipboard.cpp`, from 2.5.0
+    through 2.7.10).
+  - Bitwarden's desktop app sets it through arboard 3.6.1's
+    `exclude_from_history`, on Wayland and X11. Its browser extension
+    copies through the browser, which doesn't.
+- **Released tools don't filter on it yet.**
+  - wl-clipboard 2.2.1, the latest release and Ubuntu 24.04's, sets
+    `CLIPBOARD_STATE` to `data` or `nil` only. Its main branch (2.3.0 in
+    `meson.build`, unreleased) sets `sensitive` when the hint is offered.
+  - cliphist 0.5.0 and later skip a copy whose `CLIPBOARD_STATE` is
+    `sensitive`. 0.4.0, Ubuntu 24.04's, stores it.
+- **So `tide clipboard store` checks for itself**, before cliphist sees
+  the copy. It drops it when `CLIPBOARD_STATE` is `sensitive`, or when
+  `wl-paste --list-types` lists the hint.
+  - **The gap:** the type list is read just after the copy arrives. A
+    password replaced by another copy within those few milliseconds is
+    checked against its replacement. A wl-clipboard that reports
+    `sensitive` closes the gap, since the state comes with the copy.
+  - A password copied from an app that sets no hint, a browser's own
+    password field say, is stored like any other copy. `Shift+Delete`
+    removes it, and Clear clipboard history removes everything.
+
+**The characters.**
+
+- The list ships with the shell as `shell/chars/chars.tsv`: character,
+  name and group, one per line, about 3,600 of them in 130 KB.
+  - Every fully-qualified emoji, without the skin-tone variants, by its
+    CLDR short name: `person shrugging`, `flag: japan`.
+  - Accented Latin letters, Greek letters, punctuation, currency,
+    arrows, math, technical symbols such as ⌘ and ⏎, shapes and
+    dingbats, by their Unicode names: `latin small letter e with acute`,
+    `rightwards arrow`, `em dash`.
+  - A symbol that is also an emoji is listed once, as the emoji.
+  - Names are lowercase ASCII, so `cote` finds Côte d'Ivoire's flag.
+- `shell/chars/generate.mjs` builds it from Unicode 16.0's
+  `emoji-test.txt` and `UnicodeData.txt`. tilemo copies the file
+  unchanged.
+- **License:** Unicode's data files are under the Unicode License v3,
+  which allows copying and redistribution with its notice. The notice
+  ships beside the list, as `shell/chars/LICENSE-UNICODE`.
+- **Cost and reliability:** nothing to pay, and no network: the list is
+  read from disk when the shell first opens the Characters tab.
 
 ## 9. Notifications
 
@@ -2842,7 +2963,7 @@ light/dark switch.
 | Archives | built into Nautilus | File Roller if Thunar wins |
 | Displays | nwg-displays (GTK 3) | writes Hyprland's monitor config; also linked from Settings |
 | Bluetooth pairing | blueman-manager (GTK 3) | overskride is GTK 4 but thinly packaged |
-| Clipboard history | `cliphist`, with a picker in the launcher | `wl-paste --watch cliphist store` as a unit |
+| Clipboard history | `cliphist`, with the picker on `Super+C` (§8.4) | `tide-clipboard.service` runs `wl-paste --watch tide clipboard store`, which skips password-manager copies |
 | Audio mixer | pavucontrol (GTK 4) | pwvucontrol for the libadwaita look |
 | Calculator | GNOME Calculator | qalculate-gtk for power use |
 
@@ -2884,9 +3005,9 @@ light/dark switch.
 
 | Repo | Gets |
 |---|---|
-| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant` and `tide idle-suspend`. The Lua tiling layout. `make install`. |
+| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. The Lua tiling layout. `make install`. |
 | **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces and home's apps), the `persistent` workspace rule for home, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
-| **scripts** | `setup --tide`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
+| **scripts** | `setup --tide`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, cliphist, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |
 | **dwl** (exploration) | The tide fork of dwl that §21.1 is exploring, on upstream's history, under dwl's GPL-3.0-or-later license: the layouts, dimming and IPC it would add. Nothing else depends on it until §21.1's next steps are done and §3.1 is rewritten around it. |
 
@@ -3419,6 +3540,35 @@ Checked 2026-09-28, against these releases:
 - Krohnkite: [repo](https://codeberg.org/anametologin/Krohnkite)
 - xdg-desktop-portal-hyprland: [1.3.9 custom picker](https://github.com/hyprwm/xdg-desktop-portal-hyprland/releases/tag/v1.3.9)
 - xdg-desktop-portal: [Settings portal](https://github.com/flatpak/xdg-desktop-portal/blob/main/data/org.freedesktop.impl.portal.Settings.xml)
+
+Checked 2026-10-31, for §8.4's picker:
+
+- cliphist 0.7.0 (`v0.7.0`, and 0.4.0 to 0.6.1 for when each change
+  landed): [`cliphist.go`](https://github.com/sentriz/cliphist/blob/v0.7.0/cliphist.go)
+  (`store`'s `CLIPBOARD_STATE` switch, the 5 MB limit, `-max-items` 750
+  and `-max-dedupe-search` 100, the database's 0644 mode and 0700
+  directory, `wipe`), [`CHANGELOG.md`](https://github.com/sentriz/cliphist/blob/v0.7.0/CHANGELOG.md).
+  License: GPL-3.0.
+- wl-clipboard 2.2.1 (`v2.2.1`):
+  [`src/wl-paste.c`](https://github.com/bugaevc/wl-clipboard/blob/v2.2.1/src/wl-paste.c)
+  (`CLIPBOARD_STATE` is `data` or `nil`); on `master`,
+  [`src/wl-paste.c`](https://github.com/bugaevc/wl-clipboard/blob/master/src/wl-paste.c)
+  (`sensitive` for `x-kde-passwordManagerHint`) and
+  [`meson.build`](https://github.com/bugaevc/wl-clipboard/blob/master/meson.build)
+  (2.3.0).
+- KeePassXC 2.5.0 to 2.7.10:
+  [`src/gui/Clipboard.cpp`](https://github.com/keepassxreboot/keepassxc/blob/2.7.10/src/gui/Clipboard.cpp).
+- Bitwarden's desktop app (`main`):
+  [`desktop_native/core/src/clipboard`](https://github.com/bitwarden/clients/tree/main/apps/desktop/desktop_native/core/src/clipboard),
+  which pins arboard 3.6.1, whose
+  [`src/platform/linux/wayland.rs`](https://docs.rs/crate/arboard/3.6.1/source/src/platform/linux/wayland.rs)
+  adds the hint.
+- Ubuntu 24.04's packages: wl-clipboard 2.2.1, cliphist 0.4.0
+  (`apt-cache policy`).
+- Unicode 16.0:
+  [`emoji-test.txt`](https://www.unicode.org/Public/emoji/16.0/emoji-test.txt),
+  [`UnicodeData.txt`](https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt),
+  [Unicode License v3](https://www.unicode.org/license.txt).
 
 Checked 2026-10-31, for §6.5's named workspaces:
 

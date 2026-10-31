@@ -7,6 +7,31 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **The picker on `Super+C` is its own overlay, not two more switcher
+  tabs** (SPEC.md §8.4). The switcher goes somewhere; the picker copies
+  something, and the switcher's `Tab` cycle stays at four. The
+  alternative is Clipboard and Characters tabs in `LauncherWindow.qml`.
+  It's reversible by moving the two tabs' rows into the switcher.
+- [ ] **Enter in the picker copies; it doesn't paste.** Pasting needs
+  Hyprland's `sendshortcut` in Lua form, unchecked on 0.56, or wtype timed
+  against the picker's surface going away, and a terminal wants
+  `Ctrl+Shift+V`. The alternative is pasting into the window you were in
+  (see *Paste from the picker* below). Reversible: paste adds a step after
+  the copy.
+- [ ] **Clipboard history keeps the newest 200 entries**, and survives
+  logout, in cliphist's default database. cliphist's default is 750; 200
+  is a few days of copying and keeps old secrets around for less long. The
+  alternatives are another cap, or wiping at logout. It's one flag in
+  `tide-clipboard.service`.
+- [ ] **`Shift+Delete` forgets one clipboard entry, and Clear clipboard
+  history doesn't ask first.** `Shift+Delete` is how a browser's address
+  bar forgets a suggestion, and leaves plain `Delete` to the search field.
+  Clear is chosen by name in the launcher, and loses only copies. The
+  alternative is a confirmation row, as power actions have.
+- [ ] **The character list is Unicode 16.0, not 17.0.** An emoji font
+  older than 17.0, as a long-term-support distro may ship, would draw 17.0's
+  new emoji as boxes. Reversible by regenerating `shell/chars/chars.tsv` from 17.0.
+
 - [ ] **Workspace names can't hold quotes, backslashes or control
   characters.** That's `workspacenames.mjs`'s `UNSAFE`, which the
   settings, the prompt's input and `tide launch --workspace` all refuse.
@@ -1344,3 +1369,11 @@ If the fork is adopted, machines build a pinned release tag, never a branch:
   immutable, since a moved tag would silently change what machines build.
   The repository is public, so nothing secret ever goes in it, on any
   branch: per-machine settings stay in an untracked local file.
+
+## Paste from the picker
+
+`Super+C`'s Enter copies (SPEC.md §8.4). To paste too, check
+Hyprland 0.56's Lua form of `sendshortcut` against its source, then send
+`Ctrl+V` to the window the picker opened over, or `Ctrl+Shift+V` when its
+class is a terminal's. If Hyprland can't, use wtype once the picker's
+layer surface is gone, and find a signal for that rather than a delay.
