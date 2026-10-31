@@ -100,6 +100,7 @@ export function quickActions(state = {}) {
         state.notifications ? quick("dnd", "Do not disturb", onOff(state.dnd), "notifications-disabled-symbolic", ["dnd", "notifications", "quiet"]) : null,
         quick("dark-style", "Dark style", onOff(state.dark) + (state.darkUntil ? ` until ${state.darkUntil}` : ""), "night-light-symbolic", ["theme", "light", "night", "appearance", "mode"]),
         quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), "display-brightness-symbolic", ["caffeine", "idle", "inhibit"]),
+        quick("clear-clipboard", "Clear clipboard history", "Forget everything Super+C lists", "edit-clear-all-symbolic", ["clipboard", "wipe", "history", "cliphist", "forget"]),
         quick("reload", "Reload shell", "tide", "view-refresh-symbolic", ["restart", "quickshell"]),
     ].filter(q => q).map((q, rank) => Object.assign({}, q, { rank }));
 }
@@ -151,6 +152,9 @@ export function quickCommand(id, context = {}) {
         // blocked asks before going ahead (confirmRows); `power` says to
         // keep the launcher open until it knows.
         return { run: actionCommand(id, false), afterClose: false, power: ["suspend", "reboot", "poweroff"].includes(id) };
+    case "clear-clipboard":
+        // Says why in a notification if it fails (SPEC.md §8.4).
+        return { run: ["tide", "clipboard", "wipe", "--notify"], afterClose: false };
     case "settings":
     case "dnd":
     case "dark-style":

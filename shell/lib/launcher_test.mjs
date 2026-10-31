@@ -203,18 +203,24 @@ test("moving the selection stops at the ends", () => {
     assert.equal(moved(0, 1, 0), -1);
 });
 
-test("the quick actions are the screenshots, the session, settings, the toggles and reload", () => {
+test("the quick actions are the screenshots, the session, settings, the toggles, clearing the clipboard and reload", () => {
     assert.deepEqual(quickActions({ notifications: true }).map(q => q.id), [
         "screenshot-window", "screenshot-screen", "screenshot-region",
         "lock", "logout", "suspend", "reboot", "poweroff",
         "settings",
-        "dnd", "dark-style", "keep-awake", "reload",
+        "dnd", "dark-style", "keep-awake", "clear-clipboard", "reload",
     ]);
     // Every one has something to run.
     for (const q of quickActions({ notifications: true })) {
         assert.ok(quickCommand(q.id));
     }
     assert.throws(() => quickCommand("nope"));
+});
+
+test("Clear clipboard history wipes cliphist's history, notifying a failure", () => {
+    assert.deepEqual(quickCommand("clear-clipboard"), { run: ["tide", "clipboard", "wipe", "--notify"], afterClose: false });
+    assert.equal(search(quickActions(), "clear clip")[0].item.id, "clear-clipboard");
+    assert.equal(search(quickActions(), "cliphist")[0].item.id, "clear-clipboard");
 });
 
 test("a quick action shows the key that does the same", () => {
