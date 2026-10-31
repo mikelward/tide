@@ -123,7 +123,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Launcher**: empty query and a fuzzy query. Predates the switcher's tabs (§8) and named workspaces, and is to be redrawn (TODO.md). [`launcher.png`](docs/mocks/launcher.png) | ![launcher](docs/mocks/launcher.png) |
 | **Notifications**: popups, OSD, the notification center while sharing. [`notifications.png`](docs/mocks/notifications.png) | ![notifications](docs/mocks/notifications.png) |
 | **Clocks popover**: zones, working-hours strips, DST warning, calendar. [`clocks.png`](docs/mocks/clocks.png) | ![clocks](docs/mocks/clocks.png) |
-| **Settings**: the panel's newer pages: Start at login, Notifications and Clipboard. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
+| **Settings**: the panel's newer pages: Start at login, Notifications, Clipboard and Power. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
 | **System monitor popover**: the CPU and Memory tabs, and throttling. [`sysmon.png`](docs/mocks/sysmon.png) | ![system monitor](docs/mocks/sysmon.png) |
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
 | **Screen-share picker**: screens, windows, 16:9 area. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
@@ -2800,6 +2800,7 @@ tide's own, and links out for the rest:
 | Start at login | the commands the session runs once as it starts |
 | Notifications | Do not disturb on a schedule, whether critical alerts break through, and the muted apps and sites (§9) |
 | Clipboard | the history on or off, how many copies it keeps, and Clear history (§8.4) |
+| Power | the battery, the power profile, and what closing the lid does |
 
 Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
@@ -3128,6 +3129,55 @@ stays hand-written.
   - Over IPC, `setClipboard KEY VALUE` sets one, and `clearClipboard`
     clears the history.
 
+- **Power** shows the battery and sets the power profile and what closing
+  the lid does.
+  - The battery's charge and time left are UPower's, as the bar's
+    battery popover shows them (§7.4).
+  - The power profiles are power-profiles-daemon's, chosen as in that
+    popover; it keeps the choice for the whole machine. As the page shows,
+    the shell lists the system bus's names (`busctl --system list
+    --acquired --activatable`). Without `net.hadess.PowerProfiles` or
+    `org.freedesktop.UPower.PowerProfiles` among them, running or
+    activatable, the page says power-profiles-daemon isn't there and
+    offers none.
+  - **Closing the lid** with no other monitor suspends, locks or does
+    nothing: `lidClose` in `power.json` and `power.local.json`, `suspend`
+    by default. ‹ and › step through them. Anything else is refused, and
+    the page says why; in the files, it's an error at load naming the
+    setting.
+  - Suspend is logind's own (`HandleLidSwitch=suspend`), so it needs nothing
+    from tide. For Lock and Do nothing, the shell starts
+    `tide-lid-inhibit.service`, which holds logind's `handle-lid-switch`
+    inhibitor (`systemd-inhibit --mode=block`), so logind leaves the lid
+    alone. For Suspend it stops it. It's `PartOf=graphical-session.target`,
+    so it goes at logout.
+  - The unit counts as started only once logind has granted the inhibitor:
+    `systemd-inhibit` runs its command only then, and that command is
+    `systemd-notify --ready --exec`, which then becomes the `sleep` that
+    keeps it (`Type=notify`; `--exec` needs systemd 254). A refusal exits
+    before it, so `systemctl start` fails, and the shell reports it and
+    tries again, rather than taking a lid logind still suspends on for
+    held.
+  - The shell writes the choice to `~/.config/hypr/tide-power.lua`, and
+    `conf`'s `hyprland.lua` reads it as the lid closes: with no other
+    monitor, Lock runs `loginctl lock-session`, and Do nothing leaves the
+    panel as it is. With another monitor, the lid turns the panel off, as it
+    always has, whichever is chosen.
+  - The shell puts the unit right as it starts, too, since the unit
+    outlives a shell that died with it the other way. A file it can't
+    write, or a `systemctl` that fails, is a notification once and tried
+    again every 30 s.
+  - polkit lets an active local session take the inhibitor
+    (`org.freedesktop.login1.inhibit-handle-lid-switch`, `allow_active`).
+    The unit runs in the user's manager, outside the session, as GNOME's
+    power daemon does; whether polkit grants it there is for a live session
+    to check (TODO.md).
+  - Over IPC, `setPower lidClose VALUE` sets it.
+  - **Cost and reliability:** nothing to pay. `systemd-inhibit` and
+    `busctl` ship with systemd; power-profiles-daemon is optional, and
+    without it the page says so. The busctl listing runs only as the page
+    shows.
+
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or
   `qs -c tide ipc call settings toggle`. A page's own action in the
@@ -3148,7 +3198,7 @@ sway's `config.local`:
 - **Shared defaults.** Every tide config file
   `~/.config/tide/<name>.json` (`clocks`, `idle`, `layouts`,
   `appearance`, `outputs`, `workspaces`, `startup`, `notifications`,
-  `clipboard`)
+  `clipboard`, `power`)
   holds the shared defaults and is installed from `conf`.
 - **Per-machine overrides.** An optional **`<name>.local.json`** beside it
   is read last. It is machine-specific and never committed.
