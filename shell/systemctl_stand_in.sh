@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# A stand-in for systemctl, for shell/shell_test.sh: the calls the shell
+# A stand-in for systemctl, for shell/integration_test.sh: the calls the shell
 # makes, answered as a user manager with hypridle.service running and a
 # graphical session started would: restarting hypridle once it has written
 # hypridle's timings (shell/IdleData.qml), and the graphical session's
@@ -17,5 +17,5 @@ if test "$*" = "--user show -p InvocationID --value graphical-session.target"; t
     echo 0123456789abcdef0123456789abcdef
     exit 0
 fi
-echo "systemctl: the load test's stand-in has only --user try-restart hypridle.service and the graphical session's InvocationID, not $*" >&2
+echo "systemctl: the integration test's stand-in has only --user try-restart hypridle.service and the graphical session's InvocationID, not $*" >&2
 exit 1

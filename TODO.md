@@ -610,7 +610,7 @@ packaged). It also runs
 - The shell's polkit agent (`shell/PolkitData.qml`, `shell/PolkitPrompt.qml`,
   `shell/lib/polkit.mjs`) is in, opt-in with `TIDE_POLKIT=1`, and
   `tide-shell` then starts no other. Only parsed with `qmlformat`, and made
-  in CI's load test with no polkitd to register with. Still to do:
+  in CI's integration test with no polkitd to register with. Still to do:
   - Try it on a real session: `pkexec true` typed in a terminal gets the
     prompt with the keyboard; `sleep 5; pkexec true`, with your hands off
     the keyboard, gets the **Authenticate** notification, which opens it;
@@ -670,15 +670,15 @@ tested where it can be without a live session.
   300 lines touched). A PR of its own, about the size of #207's mark
   changes.
 
-- The load test (`shell/shell_test.sh`) stops the shell once it has taken
-  in the stand-in Hyprland's answers and events and the output of its own
-  commands (`tide-tz`, stand-ins for `tide-sysmon`, `hyprctl`, `gsettings`
-  and `nmcli`). So an error the shell reports later, from a timer, a file
+- The integration test (`shell/integration_test.sh`) stops the shell once it
+  has taken in the stand-in Hyprland's answers and events and the output of
+  its own commands (`tide-tz`, stand-ins for `tide-sysmon`, `hyprctl`,
+  `gsettings` and `nmcli`). So an error the shell reports later, from a timer, a file
   read or a monitor's line (`gsettings monitor`, `nmcli monitor`, whose
   stand-ins report nothing), isn't caught. Keeping it
   running a few seconds more would catch some, at that cost on every run,
   and as a timed wait. Kept as it is for now.
-- The load test's `tide-sysmon` probe names no sensors, so the system
+- The integration test's `tide-sysmon` probe names no sensors, so the system
   monitor's sensor and throttle reads aren't covered. Covering them needs
   a fake `/sys` the shell reads through (the probe names real paths today),
   and a way to wait for the shell's background reads of it.
@@ -709,7 +709,7 @@ tested where it can be without a live session.
   `shell/lib/launcher.mjs`), run through `tide launch`. It answers
   Hyprland's `tide:launcher` global shortcut and
   `qs -c tide ipc call launcher toggle`. CI opens it in Quickshell,
-  types a query and runs the app it names (`shell/shell_test.sh`).
+  types a query and runs the app it names (`shell/integration_test.sh`).
   Still to do:
   - Point `conf`'s `Super+Space` at `global, tide:launcher` instead of
     fuzzel, once it's been tried live.
@@ -867,7 +867,7 @@ tested where it can be without a live session.
 `shell/SettingsWindow.qml`, from the launcher's Settings action or
 `qs -c tide ipc call settings toggle`, with its pages in
 `shell/lib/settings.mjs`. CI opens it and opens the Network page's app
-from the keyboard (`shell/shell_test.sh`).
+from the keyboard (`shell/integration_test.sh`).
 
 - In: Idle (below), Sound (the devices, as the volume popover lists them,
   and `pavucontrol`), Network (`nm-connection-editor`) and Bluetooth
@@ -979,7 +979,7 @@ always-on server would take it over by accident. `shell/NotificationData.qml`
 holds the queue, and
 `shell/NotificationPopups.qml` draws it on the focused monitor, from
 `shell/lib/notifications.mjs`. A click grants focus to the sender's app
-(`tide grant`) before invoking the action. CI's load test runs the
+(`tide grant`) before invoking the action. CI's integration test runs the
 server headless: it takes a notification and a critical one, keeps both in
 the history, and draws their popups with every icon loaded (SPEC.md §20).
 Nothing has run in a live session. Still to do:
@@ -1079,7 +1079,7 @@ SPEC.md §10's lock is `tide-lock`: `shell/lock.qml` and
 date, the user, the field and PAM's messages) and the screensaver face, which
 an idle lock opens on (`tide idle-lock`). CI runs it in Quickshell under
 headless sway: it loads, turns down a wrong password through PAM, and
-unlocks on the right one (`shell/shell_test.sh`). Nothing has run it on
+unlocks on the right one (`shell/integration_test.sh`). Nothing has run it on
 Hyprland yet. Still to do:
 
 - Try it on a real session: `make install`, `sudo make install-session`
@@ -1121,7 +1121,7 @@ Hyprland yet. Still to do:
   on battery only, and on AC leaves the flag for unplugging while idle,
   which `shell/UnplugSuspend.qml` acts on (§10, `shell/lib/unplug.mjs`),
   and the step's `on-resume` clears (mikelward/conf#414). UPower is on the
-  system bus, which the load test doesn't fake, so the switch to battery
+  system bus, which the integration test doesn't fake, so the switch to battery
   is only driven in node. On a real session, check that unplugging after
   the 30 minutes suspends, and that unplugging after coming back to the
   machine doesn't. Three edges are left:
@@ -1169,7 +1169,7 @@ SPEC.md §11's greeter is `tide-greeter`: Hyprland with
 (`shell/LockFace.qml`), logging in through greetd. `make install-session`
 installs it under `$(PREFIX)`, with a greetd config template. CI loads it in
 Quickshell under headless sway and logs in on a stand-in greetd
-(`shell/shell_test.sh`); nothing has run it under greetd or Hyprland yet.
+(`shell/integration_test.sh`); nothing has run it under greetd or Hyprland yet.
 `setup --tide` makes greetd the display manager (mikelward/scripts#288):
 it installs greetd and the template, gives the greeter user a home, builds
 Hyprland and Quickshell under `/opt` where the greeter user can run them,
@@ -1208,7 +1208,7 @@ back. The checks it doesn't make yet are in `scripts`' TODO.md, under
   The field should also always have focus: check that it takes it when the
   face appears, on every monitor's face, and gets it back after a click
   elsewhere, a failed password, a monitor plugged in, or the session menu
-  closing. A test in `shell_test.sh` can type without clicking first and
+  closing. A test in `integration_test.sh` can type without clicking first and
   expect the login to go through.
 
 - [ ] **Drop the "locked at" and last-login lines from the lock and the
@@ -1228,7 +1228,7 @@ back. The checks it doesn't make yet are in `scripts`' TODO.md, under
 
 The picker (SPEC.md §12) is `bin/tide-share-picker` and
 `shell/SharePicker.qml`, with its logic in `shell/lib/sharepicker.mjs`.
-The load test answers it with a window from Right and Enter; the
+The integration test answers it with a window from Right and Enter; the
 thumbnails and xdph itself are unchecked. Still to do:
 
 - `conf`'s `xdph.conf` runs the picker through its own `share-picker.sh`,

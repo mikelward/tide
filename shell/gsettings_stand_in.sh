@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# A stand-in for gsettings, for shell/shell_test.sh: the shell's own calls,
-# answered as GNOME's would answer them.
+# A stand-in for gsettings, for shell/integration_test.sh: the shell's own
+# calls, answered as GNOME's would answer them.
 #
 #   gsettings_stand_in.sh set org.gnome.desktop.interface color-scheme VALUE
 #   gsettings_stand_in.sh set org.gnome.desktop.interface gtk-theme NAME
@@ -41,7 +41,7 @@ case "$#|${1:-}|${2:-}|${3:-}" in
         ;;
     "4|set|org.gnome.desktop.interface|gtk-theme") ;;
     *)
-        echo "gsettings: the load test's stand-in doesn't answer $*" >&2
+        echo "gsettings: the integration test's stand-in doesn't answer $*" >&2
         exit 2
         ;;
 esac

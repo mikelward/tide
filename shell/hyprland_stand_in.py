@@ -1,4 +1,4 @@
-"""A stand-in for Hyprland's IPC, for shell/shell_test.sh.
+"""A stand-in for Hyprland's IPC, for shell/integration_test.sh.
 
   hyprland_stand_in.py serve DIR   listen in DIR, as Hyprland does in
                                    $XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE

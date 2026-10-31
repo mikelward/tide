@@ -1,9 +1,11 @@
 # tide
 #
-#   make test             run the tests: test-fast and test-harness
-#   make test-fast        the tests but the load test's own (CI's test job)
-#   make test-harness     the load test's own tests, shell_test_test.sh, about
-#                         a minute and a half on four CPUs (CI's harness job)
+#   make test             run the tests: test-fast and test-selftest
+#   make test-fast        all but the integration test's self-tests (CI's test
+#                         job)
+#   make test-selftest    the integration test's self-tests,
+#                         shell/integration_test_test.sh, about a minute and a
+#                         half on four CPUs (CI's selftest job)
 #   make build            build tide-grant, tide-tz and tide-greetd (needs Go)
 #                         into build/
 #   make install          build, then install the per-user parts: the
@@ -51,14 +53,14 @@ QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test test-fast test-harness build install install-shell install-session mocks palette chars
-test: test-fast test-harness
+.PHONY: test test-fast test-selftest build install install-shell install-session mocks palette chars
+test: test-fast test-selftest
 
-# The load test's own tests run the whole load test against stand-ins for
-# each of their cases, which takes minutes, so CI runs them as a job of
-# their own beside test-fast's.
-test-harness:
-	sh shell/shell_test_test.sh
+# The integration test's self-tests run the whole integration test against
+# stand-ins for each of their cases, which takes minutes, so CI runs them as
+# a job of their own beside test-fast's.
+test-selftest:
+	sh shell/integration_test_test.sh
 
 test-fast:
 	@test -n "$(LUA)" || { echo "make test: no lua5.5, lua5.4 or lua on PATH" >&2; exit 1; }
@@ -73,7 +75,7 @@ test-fast:
 	sh bin/tide-sysmon_test.sh
 	sh bin/tide-greeter_test.sh
 	sh bin/tide-share-picker_test.sh
-	sh shell/shell_test.sh
+	sh shell/integration_test.sh
 	sh .github/workflows/ci_test.sh
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
 	$(QMLLINT) $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs))
@@ -125,7 +127,7 @@ install: build install-shell
 	install -d "$(PORTAL_DIR)"
 	install -m 644 xdg-desktop-portal/tide-portals.conf "$(PORTAL_DIR)/"
 
-# The Quickshell config alone, which shell/shell_test.sh loads.
+# The Quickshell config alone, which shell/integration_test.sh loads.
 install-shell:
 	install -d "$(SHELL_DIR)/lib"
 	install -m 644 shell/*.qml "$(SHELL_DIR)/"

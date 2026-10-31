@@ -60,14 +60,14 @@
 #                        (default: go)
 #   $TIDE_REQUIRE_QS     set (CI sets it) to fail, not skip, without qs,
 #                        sway, python3, Go, wtype or notify-send
-#   $TIDE_LOAD_WAIT      seconds to wait for each step (default: 60)
+#   $TIDE_STEP_WAIT      seconds to wait for each step (default: 60)
 #   $TIDE_KEEP_LOG       a file to copy Quickshell's logs to
 #   $TIDE_LOCK_PASSWORD  the running user's password, to unlock the lock with.
 #                        CI sets one in its throwaway container. It goes on
 #                        wtype's command line, so never give it a real one.
 
 cd "$(dirname "$0")/.." || exit 1
-prog=shell/shell_test.sh
+prog=shell/integration_test.sh
 
 # Qt's font.pixelSize is an int: a fractional literal fails the whole
 # config as it loads, and a fractional value in an expression is cut short.
@@ -147,10 +147,10 @@ if ! notify_path=$(command -v notify-send); then
     notify_path=
 fi
 
-wait=${TIDE_LOAD_WAIT:-60}
+wait=${TIDE_STEP_WAIT:-60}
 case "$wait" in
     '' | *[!0-9]* | 0*)
-        echo "$prog: TIDE_LOAD_WAIT must be a whole number of seconds, not '$wait'" >&2
+        echo "$prog: TIDE_STEP_WAIT must be a whole number of seconds, not '$wait'" >&2
         exit 1
         ;;
 esac
@@ -202,7 +202,7 @@ cat >"$tmp/helpers/real/tide-sysmon" <<'EOF' || exit 1
 case $1 in
     probe) printf 'page\t4096\n' ;;
     *)
-        echo "tide-sysmon: the load test's stand-in has only probe, not $1" >&2
+        echo "tide-sysmon: the integration test's stand-in has only probe, not $1" >&2
         exit 2
         ;;
 esac
