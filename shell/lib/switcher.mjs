@@ -26,6 +26,17 @@ export const PLACEHOLDERS = Object.freeze({
     attention: "Go to a window that wants attention",
 });
 
+// The footer's key hints on `tab`, as [key, what it does]. Ctrl+Enter
+// (§8.2) and PgDn's sections are the Apps tab's alone, Ctrl+M (§9) the
+// Windows and Attention tabs'; Enter goes on the tabs that list places.
+export function footerKeys(tab) {
+    const apps = tab === "apps";
+    return [["↑↓", "select"], ["↵", apps ? "run" : "go"]]
+        .concat(apps ? [["Ctrl+↵", "new workspace"], ["PgDn", "next section"]] : [])
+        .concat(tab === "windows" || tab === "attention" ? [["Ctrl+M", "mute"]] : [])
+        .concat([["Tab", "next tab"], ["Esc", "close"]]);
+}
+
 // The tab `step` tabs on from `tab` (Tab is 1, Shift+Tab -1), wrapping.
 export function movedTab(tab, step) {
     const i = TABS.indexOf(tab);
