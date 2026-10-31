@@ -1403,7 +1403,10 @@ before the switcher had tabs; it's to be redrawn (TODO.md).
 - **Quick actions:**
   - Screenshot window / screen / region.
   - Lock, log out, suspend, restart, shut down.
-  - Settings.
+  - Settings, and one for each of its pages ("Mouse settings"), which
+    opens the panel on that page (§16). A page's is found by its name and
+    what it covers ("left-handed", "wifi", "time zone"), so it's listed
+    only for a query, not among the empty query's actions.
   - Do not disturb, keep awake, presenter mode, and dark style. Dark style shows whether
     it's on and until when, and flips light and dark until the schedule's
     next change (§15).
@@ -3012,7 +3015,9 @@ stays hand-written.
 
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or
-  `qs -c tide ipc call settings toggle`.
+  `qs -c tide ipc call settings toggle`. A page's own action in the
+  launcher, or `qs -c tide ipc call settings openPage mouse`, opens it on
+  that page, or moves an open one there.
 - Escape or a click on the backdrop closes it.
 - The pages run down its side in this table's order. Up and Down change
   the page.

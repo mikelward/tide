@@ -5,6 +5,7 @@
 import { score as used } from "./frecency.mjs";
 import { match } from "./fuzzy.mjs";
 import { ACTIONS as SESSION, actionCommand } from "./session.mjs";
+import { PAGES } from "./settings.mjs";
 
 // A match outside the name (generic name, keywords, the command) still
 // finds an app, but below one that matches its name as well.
@@ -68,7 +69,10 @@ export function launcherItems(entries) {
 // the bell is: under swaync it would hold nothing. Dark style says whether
 // it's on and until when (`state.dark`, `state.darkUntil` as "HH:MM", or ""
 // when it doesn't change on its own); running it flips it until then
-// (SPEC.md §15). Settings opens the settings panel (§16).
+// (SPEC.md §15). Settings opens the settings panel (§16), and each of its
+// pages has a row of its own ("Mouse settings"), which opens the panel on
+// that page. Those are found by a query only (`queryOnly`), so the empty
+// query's Actions don't list a dozen of them.
 export function quickActions(state = {}) {
     const quick = (id, name, sub, icon, keywords, hint = "") => ({
         kind: "quick",
@@ -96,7 +100,8 @@ export function quickActions(state = {}) {
         quick("suspend", session.suspend.label, "Session", session.suspend.icon, ["sleep"]),
         quick("reboot", session.reboot.label, "Session", session.reboot.icon, ["reboot"]),
         quick("poweroff", session.poweroff.label, "Session", session.poweroff.icon, ["power off", "halt"]),
-        quick("settings", "Settings", "Sound, network and Bluetooth", "preferences-system-symbolic", ["preferences", "control panel", "sound", "audio", "network", "wi-fi", "wifi", "bluetooth"]),
+        quick("settings", "Settings", "Sound, network, mouse, keyboard and more", "preferences-system-symbolic", ["preferences", "control panel"]),
+        ...PAGES.map(p => Object.assign(quick(`settings-${p.id}`, `${p.label} settings`, "Settings", p.icon, p.keywords), { queryOnly: true })),
         state.notifications ? quick("dnd", "Do not disturb", onOff(state.dnd), "notifications-disabled-symbolic", ["dnd", "notifications", "quiet"]) : null,
         quick("dark-style", "Dark style", onOff(state.dark) + (state.darkUntil ? ` until ${state.darkUntil}` : ""), "night-light-symbolic", ["theme", "light", "night", "appearance", "mode"]),
         quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), "display-brightness-symbolic", ["caffeine", "idle", "inhibit"], "Super+S"),
@@ -130,7 +135,8 @@ export function windowScreenshot(address) {
 // What running a quick action takes: a command to run (`run`), with a
 // pause first for the launcher to leave the screen (`afterClose`, so a
 // screenshot doesn't catch it), or something the shell does itself
-// (`shell`: "settings", "dnd", "dark-style", "keep-awake", "presenter",
+// (`shell`: "settings", with the `page` to open on or "" for the first,
+// "dnd", "dark-style", "keep-awake", "presenter",
 // "reload"). "Screenshot window" takes the
 // window recorded as the launcher opened (`context.window`, its normalized
 // Hyprland address; windowScreenshot), and "Screenshot screen" the monitor
@@ -157,14 +163,19 @@ export function quickCommand(id, context = {}) {
     case "clear-clipboard":
         // Says why in a notification if it fails (SPEC.md §8.4).
         return { run: ["tide", "clipboard", "wipe", "--notify"], afterClose: false };
-    case "settings":
     case "dnd":
     case "dark-style":
     case "keep-awake":
     case "presenter":
     case "reload":
         return { shell: id };
+    case "settings":
+        return { shell: "settings", page: "" };
     default:
+        // A page's row opens the panel on that page.
+        if (id.startsWith("settings-") && PAGES.some(p => `settings-${p.id}` === id)) {
+            return { shell: "settings", page: id.slice("settings-".length) };
+        }
         throw new Error(`unknown quick action: ${id}`);
     }
 }
@@ -278,7 +289,7 @@ export function search(items, query, frecency = {}, now = 0) {
     if (query.trim() === "") {
         const apps = items.filter(i => i.kind === "app").map(item => ({ item, used: usage(item) }));
         apps.sort((a, b) => b.used - a.used || byName(a.item, b.item));
-        const quick = items.filter(i => i.kind === "quick");
+        const quick = items.filter(i => i.kind === "quick" && !i.queryOnly);
         return apps
             .map(a => ({ item: a.item, positions: [], section: a.used > 0 ? "Recent" : "Apps" }))
             .concat(quick.map(item => ({ item, positions: [], section: "Actions" })));

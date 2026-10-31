@@ -1042,7 +1042,8 @@ focused() {
 # fails the test unless Enter runs the app the query names, through `tide
 # launch`. The app is a desktop entry only this test installs, and the
 # query leaves out its accent ("Café"), so the match also checks the
-# accent folding runs in Qt's engine. Then it opens the settings panel and
+# accent folding runs in Qt's engine. Then "mouse" and Enter must open the
+# settings panel on its Mouse page. Then it opens the settings panel and
 # expects Down twice, past Idle and Sound, and Enter to open the Network
 # page's app, then the picker's Characters tab to copy é, and checks the
 # share picker (share). A stand-in tide on
@@ -1102,6 +1103,28 @@ launch() {
         echo "FAIL: the launcher should run Café Probe as \`tide launch --app tide-test-probe -- tide-test-probe --flag\`; it ran \`tide $_launched\`" >&2
         exit 1
     fi
+    # "mouse" and Enter in the launcher open the settings panel on its Mouse
+    # page; it found nothing to run, once. The panel sets its page before it
+    # maps, so once it has the keyboard, after the launcher's, and the shell
+    # has handled what came before (barrier), it shows the page it opened on.
+    _what="the launcher's Mouse settings"
+    _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
+    ipc call launcher open >/dev/null || exit 1
+    focused "$_focus"
+    timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 "$wtype_path" "mouse
+" >"$tmp/wtype.log" 2>&1
+    typed $? "the launcher"
+    _what="the settings panel the launcher's Mouse settings opens"
+    focused "$((_focus + 1))"
+    barrier
+    _page=$(ipc call settings shownPage) || exit 1
+    if test "$_page" != mouse; then
+        echo "FAIL: the launcher's Mouse settings should open the settings panel on its Mouse page; it shows \"$_page\"" >&2
+        grep -v '^\[' "$log" >&2
+        exit 1
+    fi
+    ipc call settings close >/dev/null || exit 1
     _what="the settings panel"
     _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
     ipc call settings open >/dev/null || exit 1
@@ -1156,6 +1179,7 @@ launch() {
     qs_pid=
     reports "the launcher ran an app, the settings panel opened one, the picker copied é and the share picker answered"
     echo "ok: the launcher finds an app by a query without its accent, and runs it"
+    echo "ok: the launcher's Mouse settings opens the settings panel on its Mouse page"
     echo "ok: the settings panel changes page with the arrows and opens the page's app"
     echo "ok: the picker finds a character by name and copies it"
 }

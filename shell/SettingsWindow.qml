@@ -24,17 +24,27 @@ PanelWindow {
     property int page: 0
     readonly property var current: Settings.PAGES[page]
 
-    function open() {
+    // Opens on page `id` (settings.mjs's), or on the first with none; one
+    // already open moves to it. Answers why not, or "".
+    function open(id) {
+        const at = id ? Settings.pageIndex(id) : 0;
+        if (at < 0) {
+            return `no ${id} page; the pages are ${Settings.PAGES.map(p => p.id).join(", ")}`;
+        }
         if (visible) {
-            return;
+            if (id) {
+                page = at;
+            }
+            return "";
         }
         const focused = Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor);
         if (focused) {
             screen = focused;
         }
-        page = 0;
+        page = at;
         visible = true;
         keys.forceActiveFocus();
+        return "";
     }
 
     function close() {
@@ -88,7 +98,16 @@ PanelWindow {
             root.toggle();
         }
         function open(): void {
-            root.open();
+            root.open("");
+        }
+        // Opens on one page, as the launcher's "Mouse settings" does: `qs
+        // -c tide ipc call settings openPage mouse`. Answers why not, or "".
+        function openPage(page: string): string {
+            return root.open(page);
+        }
+        // The page showing, by its id, or "" while closed.
+        function shownPage(): string {
+            return root.visible ? root.current.id : "";
         }
         function close(): void {
             root.close();
@@ -204,8 +223,8 @@ PanelWindow {
     Connections {
         target: SettingsData
 
-        function onOpenRequested() {
-            root.open();
+        function onOpenRequested(page) {
+            root.report(root.open(page));
         }
     }
 
