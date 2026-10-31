@@ -1,6 +1,9 @@
 # tide
 #
-#   make test             run the tests
+#   make test             run the tests: test-fast and test-harness
+#   make test-fast        the tests but the load test's own (CI's test job)
+#   make test-harness     the load test's own tests, shell_test_test.sh, about
+#                         five minutes on its own (CI's harness job)
 #   make build            build tide-grant, tide-tz and tide-greetd (needs Go)
 #                         into build/
 #   make install          build, then install the per-user parts: the
@@ -48,8 +51,16 @@ QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test build install install-shell install-session mocks palette chars
-test:
+.PHONY: test test-fast test-harness build install install-shell install-session mocks palette chars
+test: test-fast test-harness
+
+# The load test's own tests run the whole load test against stand-ins for
+# each of their cases, which takes minutes, so CI runs them as a job of
+# their own beside test-fast's.
+test-harness:
+	sh shell/shell_test_test.sh
+
+test-fast:
 	@test -n "$(LUA)" || { echo "make test: no lua5.5, lua5.4 or lua on PATH" >&2; exit 1; }
 	$(LUA) hypr/tide/layout_test.lua
 	$(LUA) hypr/tide/focus_test.lua
@@ -62,7 +73,6 @@ test:
 	sh bin/tide-sysmon_test.sh
 	sh bin/tide-greeter_test.sh
 	sh bin/tide-share-picker_test.sh
-	sh shell/shell_test_test.sh
 	sh shell/shell_test.sh
 	sh .github/workflows/ci_test.sh
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
