@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: picker</title>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=block">
+<style>
+  .stage {
+    width: 610px;
+    height: 640px;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(400px 260px at 20% 25%, #123338, transparent 70%),
+      radial-gradient(500px 320px at 85% 80%, #2b1c3f, transparent 70%),
+      #16213a;
+    box-shadow: 0 0 0 1px #2a2a30;
+  }
+  .stage::before { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.35); }
+  .picker { position: absolute; left: 25px; top: 56px; width: 560px; padding: 10px; }
+  .tabs { display: flex; gap: 4px; padding-bottom: 8px; }
+  .tabs .t { height: 26px; padding: 0 10px; border-radius: 8px; display: flex; align-items: center; font-size: 12px; font-weight: 600; color: var(--fg-dim); }
+  .tabs .t.on { background: var(--accent-bg); color: #fff; }
+  .search { height: 46px; border-radius: 12px; background: var(--surface-2); display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 16px; color: var(--fg); }
+  .search .ms { font-size: 22px; color: var(--fg-dim); }
+  .search .ph { color: var(--fg-faint); }
+  .search .caret { width: 2px; height: 20px; background: var(--accent); margin-left: -8px; }
+  .search .scope { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--fg-dim); }
+  .list { margin-top: 8px; }
+  .res { height: 48px; border-radius: 10px; display: flex; align-items: center; gap: 12px; padding: 0 10px; }
+  .res.sel { background: var(--accent-bg); color: #fff; }
+  .res.sel .sub { color: rgba(255,255,255,.82); }
+  .res .nm { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .res .sub { font-size: 12px; color: var(--fg-dim); margin-top: 1px; }
+  .res .txt { flex: 1; min-width: 0; }
+  .glyph { width: 32px; height: 32px; border-radius: 8px; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 20px; flex: none; font-family: 'Inter', 'Noto Color Emoji', sans-serif; }
+  .res.sel .glyph { background: rgba(255,255,255,.16); }
+  .glyph .ms { font-size: 18px; color: var(--fg-dim); }
+  .res.sel .glyph .ms { color: #fff; }
+  .hl { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; }
+  .res.sel .hl { color: #fff; }
+  .foot { display: flex; gap: 16px; padding: 12px 10px 4px; margin-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--fg-dim); }
+  .foot kbd.k { margin-right: 4px; }
+  .foot .r { margin-left: auto; }
+  .mono { font-family: var(--font-mono); font-size: 15px; font-weight: 400; }
+</style>
+</head>
+<body class="sheet" data-width="1320" data-scale="2">
+
+<h1>Picker</h1>
+<p class="lede"><b>Super+C</b> opens the picker on the focused monitor, drawn like the switcher: a <b>Clipboard</b> tab of what you've copied, newest first, and a <b>Characters</b> tab of emoji and symbols, found by name. <b>Tab</b> moves between them; <b>Enter</b> copies the selection and closes, and <b>Ctrl+V</b> pastes it. Every entry here is a placeholder.</p>
+
+<div class="row">
+<div>
+<div class="stage theme-dark">
+  <div class="picker card">
+    <div class="tabs"><div class="t on">Clipboard</div><div class="t">Characters</div></div>
+    <div class="search"><i class="ms">search</i><span class="ph">Search what you've copied</span></div>
+    <div class="list">
+      <div class="res sel"><span class="glyph"><i class="ms">notes</i></span><div class="txt"><div class="nm mono">git commit --amend --no-edit</div><div class="sub">Text</div></div></div>
+      <div class="res"><span class="glyph"><i class="ms">link</i></span><div class="txt"><div class="nm mono">https://example.com/docs/setup#keys</div><div class="sub">Link</div></div></div>
+      <div class="res"><span class="glyph"><i class="ms">image</i></span><div class="txt"><div class="nm">Image</div><div class="sub">PNG · 1280×720 · 240 KiB</div></div></div>
+      <div class="res"><span class="glyph"><i class="ms">notes</i></span><div class="txt"><div class="nm mono">Agenda: review the picker mock, then the key table…</div><div class="sub">Text</div></div></div>
+      <div class="res"><span class="glyph"><i class="ms">notes</i></span><div class="txt"><div class="nm mono">host1:/home/user/notes.txt</div><div class="sub">Text</div></div></div>
+      <div class="res"><span class="glyph"><i class="ms">notes</i></span><div class="txt"><div class="nm mono">make test</div><div class="sub">Text</div></div></div>
+    </div>
+    <div class="foot"><span><kbd class="k">↑↓</kbd>select</span><span><kbd class="k">↵</kbd>copy</span><span><kbd class="k">Shift+Del</kbd>forget</span><span><kbd class="k">Tab</kbd>characters</span><span class="r"><kbd class="k">Esc</kbd>close</span></div>
+  </div>
+</div>
+<div class="cap" style="max-width:600px"><b>Clipboard</b>: the newest 200 copies, newest first, kept by cliphist. Each shows as one line, its whitespace folded. An image shows as its format, dimensions and size. A copy a password manager marks (<code>x-kde-passwordManagerHint</code>) is never stored. <kbd>Shift+Del</kbd> forgets one entry; the launcher's Clear clipboard history forgets them all.</div>
+</div>
+
+<div>
+<div class="stage theme-dark">
+  <div class="picker card">
+    <div class="tabs"><div class="t">Clipboard</div><div class="t on">Characters</div></div>
+    <div class="search"><i class="ms">search</i><span>e acute</span><span class="caret"></span><span class="scope">2 results</span></div>
+    <div class="list">
+      <div class="res sel"><span class="glyph">é</span><div class="txt"><div class="nm">latin small letter <span class="hl">e</span> with <span class="hl">acute</span></div><div class="sub">Latin-1 · U+00E9</div></div></div>
+      <div class="res"><span class="glyph">É</span><div class="txt"><div class="nm">latin capital letter <span class="hl">e</span> with <span class="hl">acute</span></div><div class="sub">Latin-1 · U+00C9</div></div></div>
+    </div>
+    <div class="tabs" style="margin-top:22px"><div class="t">Clipboard</div><div class="t on">Characters</div></div>
+    <div class="search"><i class="ms">search</i><span>shrug</span><span class="caret"></span><span class="scope">3 results</span></div>
+    <div class="list">
+      <div class="res sel"><span class="glyph">🤷</span><div class="txt"><div class="nm">person <span class="hl">shrug</span>ging</div><div class="sub">People &amp; Body</div></div></div>
+      <div class="res"><span class="glyph">🤷‍♂️</span><div class="txt"><div class="nm">man <span class="hl">shrug</span>ging</div><div class="sub">People &amp; Body</div></div></div>
+      <div class="res"><span class="glyph">🤷‍♀️</span><div class="txt"><div class="nm">woman <span class="hl">shrug</span>ging</div><div class="sub">People &amp; Body</div></div></div>
+    </div>
+    <div class="foot"><span><kbd class="k">↑↓</kbd>select</span><span><kbd class="k">↵</kbd>copy</span><span><kbd class="k">Tab</kbd>clipboard</span><span class="r"><kbd class="k">Esc</kbd>close</span></div>
+  </div>
+</div>
+<div class="cap" style="max-width:600px"><b>Characters</b>: about 3,600 emoji and symbols, from Unicode 16.0. Each word typed must start a word of the name, in any order, so <code>e acute</code> offers é and É but not á; whole words rank first, then Unicode's order.</div>
+</div>
+</div>
+
+</body>
+</html>
