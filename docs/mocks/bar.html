@@ -27,15 +27,11 @@
   <div class="bar">
     <div class="bar-left">
       <span class="logo"><svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/></svg></span>
-      <div class="ws occupied"><span class="n">1</span></div>
-      <div class="ws active"><span class="n">2</span></div>
-      <div class="ws occupied"><span class="n">3</span></div>
-      <div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div>
-      <div class="ws occupied"><span class="n">5</span></div>
-      <div class="ws empty"><span class="n">6</span></div>
-      <div class="ws empty"><span class="n">7</span></div>
-      <div class="ws empty"><span class="n">8</span></div>
-      <div class="ws empty"><span class="n">9</span></div>
+      <div class="ws occupied"><span class="n">in</span></div>
+      <div class="ws active"><span class="n">re</span></div>
+      <div class="ws occupied"><span class="n">oc</span></div>
+      <div class="ws urgent"><span class="n">me</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">tide</span></div>
       <span class="layout-sym">|M|</span>
     </div>
     <span class="bar-title">SPEC.md — tide - Google Chrome</span>
@@ -62,22 +58,18 @@
   </div>
   <div class="under"></div>
 </div>
-<p class="note">Left to right: tide's wave logo, in the accent blue, which opens the launcher; workspaces 1–9, each by name, with an app icon only for a window that wants attention (on 4 here), and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (keep awake, faint while off; Bluetooth, faint while off, as in the light bar; headphones while a Bluetooth audio device is connected; network; volume, battery and CPU, each with its percentage; notifications; session), then the clocks: local alone here, all four where there&rsquo;s room. The zone clocks carry short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT). The local clock swaps its label for the date.</p>
+<p class="note">Left to right: tide's wave logo, in the accent blue, which opens the launcher; the workspaces by name, the standing ones (in, re, oc, me) first, with an app icon only for a window that wants attention (on me here), and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (keep awake, faint while off; Bluetooth, faint while off, as in the light bar; headphones while a Bluetooth audio device is connected; network; volume, battery and CPU, each with its percentage; notifications; session), then the clocks: local alone here, all four where there&rsquo;s room. The zone clocks carry short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT). The local clock swaps its label for the date.</p>
 
 <h2>Light (07:00–19:00 by default)</h2>
 <div class="frame light theme-light">
   <div class="bar">
     <div class="bar-left">
       <span class="logo"><svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/></svg></span>
-      <div class="ws occupied"><span class="n">1</span></div>
-      <div class="ws active"><span class="n">2</span></div>
-      <div class="ws occupied"><span class="n">3</span></div>
-      <div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div>
-      <div class="ws occupied"><span class="n">5</span></div>
-      <div class="ws empty"><span class="n">6</span></div>
-      <div class="ws empty"><span class="n">7</span></div>
-      <div class="ws empty"><span class="n">8</span></div>
-      <div class="ws empty"><span class="n">9</span></div>
+      <div class="ws occupied"><span class="n">in</span></div>
+      <div class="ws active"><span class="n">re</span></div>
+      <div class="ws occupied"><span class="n">oc</span></div>
+      <div class="ws urgent"><span class="n">me</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div>
+      <div class="ws occupied"><span class="n">tide</span></div>
       <span class="layout-sym">|M|</span>
     </div>
     <span class="bar-title">SPEC.md — tide - Google Chrome</span>
@@ -106,11 +98,11 @@
 
 <h2>Workspace states</h2>
 <div class="chips theme-dark">
-  <div class="chip"><div class="bar"><div class="ws active"><span class="n">2</span></div></div><div class="cap"><b>Current</b>: accent fill.</div></div>
-  <div class="chip"><div class="bar"><div class="ws occupied"><span class="n">1</span></div></div><div class="cap"><b>Occupied</b>: surface fill and the name, no app icons.</div></div>
-  <div class="chip"><div class="bar"><div class="ws visible"><span class="n">6</span></div></div><div class="cap"><b>Shown on another monitor</b>: accent outline.</div></div>
-  <div class="chip"><div class="bar"><div class="ws empty"><span class="n">7</span></div></div><div class="cap"><b>Empty</b>: faint number. All nine are always shown.</div></div>
-  <div class="chip"><div class="bar"><div class="ws urgent"><span class="n">4</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div></div><div class="cap"><b>Urgent</b>: amber, with the icon of each window that wants attention, ringed. A click on one focuses that window, which clears it. <kbd>Super+A</kbd> lists them all.</div></div>
+  <div class="chip"><div class="bar"><div class="ws active"><span class="n">re</span></div></div><div class="cap"><b>Current</b>: accent fill.</div></div>
+  <div class="chip"><div class="bar"><div class="ws occupied"><span class="n">in</span></div></div><div class="cap"><b>Occupied</b>: surface fill and the name, no app icons.</div></div>
+  <div class="chip"><div class="bar"><div class="ws visible"><span class="n">docs</span></div></div><div class="cap"><b>Shown on another monitor</b>: accent outline.</div></div>
+  <div class="chip"><div class="bar"><div class="ws empty"><span class="n">oc</span></div></div><div class="cap"><b>Empty</b>: faint name. Only a standing workspace stays on the bar empty.</div></div>
+  <div class="chip"><div class="bar"><div class="ws urgent"><span class="n">me</span><span class="apps"><span class="appicon app-chat flag"><i class="ms">chat</i></span></span></div></div><div class="cap"><b>Urgent</b>: amber, with the icon of each window that wants attention, ringed. A click on one focuses that window, which clears it. <kbd>Super+A</kbd> lists them all.</div></div>
 </div>
 
 <h2>Status states</h2>
