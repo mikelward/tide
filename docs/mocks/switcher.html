@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: switcher</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .stage {
+    width: 610px;
+    height: 560px;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(400px 260px at 20% 25%, #123338, transparent 70%),
+      radial-gradient(500px 320px at 85% 80%, #2b1c3f, transparent 70%),
+      #16213a;
+    box-shadow: 0 0 0 1px #2a2a30;
+  }
+  .stage::before { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.35); }
+  .switcher { position: absolute; left: 25px; top: 40px; width: 560px; padding: 10px; }
+  .tabs { display: flex; gap: 4px; padding-bottom: 8px; }
+  .tab { height: 26px; padding: 0 10px; border-radius: 8px; display: flex; align-items: center; font-size: 12px; font-weight: 600; color: var(--fg-dim); }
+  .tab.on { background: var(--accent-bg); color: #fff; }
+  .search { height: 46px; border-radius: 12px; background: var(--surface-2); display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 16px; color: var(--fg); }
+  .search .ms { font-size: 22px; color: var(--fg-dim); }
+  .search .ph { color: var(--fg-faint); }
+  .search .caret { width: 2px; height: 20px; background: var(--accent); margin-left: -8px; }
+  .search .scope { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--fg-dim); }
+  .sec { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-faint); margin: 14px 10px 6px; }
+  .list { margin-top: 8px; }
+  .res { height: 48px; border-radius: 10px; display: flex; align-items: center; gap: 12px; padding: 0 10px; }
+  .res.sel { background: var(--accent-bg); color: #fff; }
+  .res.sel .sub, .res.sel kbd.k { color: rgba(255,255,255,.82); }
+  .res.sel kbd.k { background: rgba(255,255,255,.16); box-shadow: none; }
+  .res .nm { font-weight: 600; font-size: 14px; }
+  .res .sub { font-size: 12px; color: var(--fg-dim); margin-top: 1px; }
+  .res .txt { flex: 1; min-width: 0; }
+  .res .hint { display: flex; gap: 4px; }
+  .res .mute { font-size: 16px; color: var(--fg-dim); }
+  .res.sel .mute { color: #fff; }
+  .hl { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; }
+  .res.sel .hl { color: #fff; }
+  .foot { display: flex; flex-wrap: wrap; gap: 6px 16px; white-space: nowrap; padding: 12px 10px 4px; margin-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--fg-dim); }
+  .foot kbd.k { margin-right: 4px; }
+  .pad { height: 48px; }
+</style>
+</head>
+<body class="sheet" data-width="1320" data-scale="2">
+
+<h1>Switcher</h1>
+<p class="lede">One overlay with four tabs: <b>Apps</b> (the launcher), <b>Workspaces</b>, <b>Windows</b> and <b>Attention</b>. Each key opens it on its own tab: a tap of <b>Super</b> on Workspaces, <b>Super+Space</b> on Apps, <b>Super+A</b> on Attention. <b>Tab</b> and <b>Shift+Tab</b> move between the tabs, typing filters the one you're on, and <b>Esc</b> or the same key again closes it. It opens centered near the top of the focused monitor and dims everything behind it.</p>
+
+<div class="row">
+<div>
+<div class="stage theme-dark">
+  <div class="switcher card">
+    <div class="tabs"><span class="tab on">Apps</span><span class="tab">Workspaces</span><span class="tab">Windows</span><span class="tab">Attention</span></div>
+    <div class="search"><i class="ms">search</i><span class="ph">Search apps and actions</span></div>
+    <div class="sec">Recent</div>
+    <div class="res sel"><span class="appicon lg app-term"><i class="ms">terminal</i></span><div class="txt"><div class="nm">kitty</div><div class="sub">Terminal</div></div><span class="hint"><kbd class="k">Super+T</kbd></span></div>
+    <div class="res"><span class="appicon lg app-web"><i class="ms">public</i></span><div class="txt"><div class="nm">Chrome</div><div class="sub">Web browser</div></div><span class="hint"><kbd class="k">Super+G</kbd></span></div>
+    <div class="res"><span class="appicon lg app-meet"><i class="ms">videocam</i></span><div class="txt"><div class="nm">Meet</div><div class="sub">Chrome app</div></div><span class="hint"><kbd class="k">Super+M</kbd></span></div>
+    <div class="sec">Actions</div>
+    <div class="res"><span class="appicon lg app-action"><i class="ms">screenshot_region</i></span><div class="txt"><div class="nm">Screenshot window</div><div class="sub">The window you were in · clipboard + ~/Pictures/Screenshots</div></div><span class="hint"><kbd class="k">Alt+Print</kbd></span></div>
+    <div class="res"><span class="appicon lg app-action"><i class="ms">lock</i></span><div class="txt"><div class="nm">Lock</div><div class="sub">Session</div></div><span class="hint"><kbd class="k">Super+L</kbd></span></div>
+    <div class="res"><span class="appicon lg app-settings"><i class="ms">settings</i></span><div class="txt"><div class="nm">Settings</div><div class="sub">tide settings</div></div></div>
+    <div class="foot"><span><kbd class="k">↑↓</kbd>select</span><span><kbd class="k">↵</kbd>run</span><span><kbd class="k">Ctrl+↵</kbd>new workspace</span><span><kbd class="k">PgDn</kbd>next section</span><span><kbd class="k">Tab</kbd>next tab</span><span><kbd class="k">Esc</kbd>close</span></div>
+  </div>
+</div>
+<div class="cap" style="max-width:600px"><b>Apps</b> (<kbd>Super+Space</kbd>): the launcher. With no query, the apps you use most and most recently, then the quick actions; a query is fuzzy-matched, its top hit preselected. The key hints teach the bindings. <kbd>Ctrl+↵</kbd> runs the app on a new workspace, asking its name first, and <kbd>PgDn</kbd> jumps to the next section.</div>
+</div>
+
+<div>
+<div class="stage theme-dark">
+  <div class="switcher card">
+    <div class="tabs"><span class="tab">Apps</span><span class="tab on">Workspaces</span><span class="tab">Windows</span><span class="tab">Attention</span></div>
+    <div class="search"><i class="ms">search</i><span class="ph">Go to a workspace</span><span class="scope">5 results</span></div>
+    <div class="list">
+    <div class="res"><span class="appicon lg app-mail"><i class="ms">mail</i></span><div class="txt"><div class="nm">home</div><div class="sub">home · 2 windows</div></div></div>
+    <div class="res sel"><span class="appicon lg app-term"><i class="ms">terminal</i></span><div class="txt"><div class="nm">PR-12</div><div class="sub">current</div></div></div>
+    <div class="res"><span class="appicon lg app-chat"><i class="ms">chat</i></span><div class="txt"><div class="nm">in</div><div class="sub">1 window</div></div></div>
+    <div class="res"><span class="appicon lg app-web"><i class="ms">public</i></span><div class="txt"><div class="nm">docs</div><div class="sub">3 windows</div></div></div>
+    <div class="res"><span class="appicon lg app-action"><i class="ms">apps</i></span><div class="txt"><div class="nm">re</div><div class="sub">not made yet</div></div></div>
+    </div>
+    <div class="pad"></div>
+    <div class="foot"><span><kbd class="k">↑↓</kbd>select</span><span><kbd class="k">↵</kbd>go</span><span><kbd class="k">Tab</kbd>next tab</span><span><kbd class="k">Esc</kbd>close</span></div>
+  </div>
+</div>
+<div class="cap" style="max-width:600px"><b>Workspaces</b> (tap <kbd>Super</kbd>): every workspace in the bar's order, home first, each with its first window's app and how many windows it has. A standing workspace is listed before it's made, and <kbd>↵</kbd> on it makes it.</div>
+</div>
+</div>
+
+<div class="row" style="margin-top:22px">
+<div>
+<div class="stage theme-dark">
+  <div class="switcher card">
+    <div class="tabs"><span class="tab">Apps</span><span class="tab">Workspaces</span><span class="tab on">Windows</span><span class="tab">Attention</span></div>
+    <div class="search"><i class="ms">search</i><span class="ph">Go to a window</span><span class="scope">6 results</span></div>
+    <div class="list">
+    <div class="res sel"><span class="appicon lg app-term"><i class="ms">terminal</i></span><div class="txt"><div class="nm">make test — ~/src/tide</div><div class="sub">kitty · PR-12</div></div></div>
+    <div class="res"><span class="appicon lg app-web"><i class="ms">public</i></span><div class="txt"><div class="nm">Pull request #12 · tide</div><div class="sub">Chrome · PR-12</div></div></div>
+    <div class="res"><span class="appicon lg app-music"><i class="ms">music_note</i></span><div class="txt"><div class="nm">Focus playlist</div><div class="sub">Music · PR-12 · minimized</div></div></div>
+    <div class="res"><span class="appicon lg app-mail"><i class="ms">mail</i></span><div class="txt"><div class="nm">Inbox (3)</div><div class="sub">Mail · home</div></div></div>
+    <div class="res"><span class="appicon lg app-chat"><i class="ms">chat</i></span><div class="txt"><div class="nm">Chat</div><div class="sub">Chat · in</div></div></div>
+    <div class="res"><span class="appicon lg app-cal"><i class="ms">calendar_month</i></span><div class="txt"><div class="nm">Calendar</div><div class="sub">Calendar · home · muted</div></div><i class="ms mute">notifications_off</i></div>
+    </div>
+    <div class="foot"><span><kbd class="k">↑↓</kbd>select</span><span><kbd class="k">↵</kbd>go</span><span><kbd class="k">Ctrl+M</kbd>mute</span><span><kbd class="k">Tab</kbd>next tab</span><span><kbd class="k">Esc</kbd>close</span></div>
+  </div>
+</div>
+<div class="cap" style="max-width:600px"><b>Windows</b>: every window on any workspace, the one used last first, with its app and workspace. <kbd>↵</kbd> goes to it, switching workspace. A minimized window is listed under the workspace it came from, marked minimized, and <kbd>↵</kbd> restores it there. <kbd>Ctrl+M</kbd>, or the bell on a hovered row, mutes the row's app; a muted row keeps its bell. Browser tabs join this list later (§8.3).</div>
+</div>
+
+<div>
+<div class="stage theme-dark">
+  <div class="switcher card">
+    <div class="tabs"><span class="tab">Apps</span><span class="tab">Workspaces</span><span class="tab">Windows</span><span class="tab on">Attention</span></div>
+    <div class="search"><i class="ms">search</i><span class="ph">Go to a window that wants attention</span><span class="scope">3 results</span></div>
+    <div class="list">
+    <div class="res sel"><span class="appicon lg app-chat"><i class="ms">chat</i></span><div class="txt"><div class="nm">Chat</div><div class="sub">Chat · in</div></div></div>
+    <div class="res"><span class="appicon lg app-term"><i class="ms">terminal</i></span><div class="txt"><div class="nm">build finished — ~/src/scripts</div><div class="sub">kitty · docs</div></div></div>
+    <div class="res"><span class="appicon lg app-mail"><i class="ms">mail</i></span><div class="txt"><div class="nm">Inbox (3)</div><div class="sub">Mail · home</div></div></div>
+    </div>
+    <div class="pad"></div><div class="pad"></div><div class="pad"></div>
+    <div class="foot"><span><kbd class="k">↑↓</kbd>select</span><span><kbd class="k">↵</kbd>go</span><span><kbd class="k">Ctrl+M</kbd>mute</span><span><kbd class="k">Tab</kbd>next tab</span><span><kbd class="k">Esc</kbd>close</span></div>
+  </div>
+</div>
+<div class="cap" style="max-width:600px"><b>Attention</b> (<kbd>Super+A</kbd>): every window wanting attention, on any workspace, most recently marked first: urgent windows, ones the focus guard kept from taking focus, and ones a notification marked. <kbd>↵</kbd> goes there and clears its mark; a minimized one is restored. With none, the tab says so.</div>
+</div>
+</div>
+
+<h2>Quick actions (built in)</h2>
+<p class="note">Screenshot window · Screenshot screen · Screenshot region · Lock · Log out · Suspend · Restart · Shut down · Settings, and each of its pages · Do not disturb (toggle) · Keep awake (toggle) · Presenter mode (toggle) · Dark / light / automatic theme · Reload shell. A power action asks for confirmation only if unsaved-work inhibitors are active (<code>systemd-inhibit --list</code>).</p>
+
+</body>
+</html>
