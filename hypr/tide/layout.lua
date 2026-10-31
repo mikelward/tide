@@ -265,8 +265,6 @@ local function recalculate(ctx)
         return
     end
     local st = state_for(id, ctx.area)
-    -- Where the tiles are, for a drag on a split edge to find them.
-    st.area, st.n = copy(ctx.area), n
     -- A window whose address can't be read (it's going away) is left out
     -- of the order, so it leaves no hole for the helpers to trip on, and
     -- takes a place after the rest.
@@ -508,20 +506,16 @@ local function truthy(v)
 end
 
 -- Whether something above the tiles takes a press at (x, y): a floating
--- window, with the ring outside it where Hyprland starts its own border
--- resize, or a top or overlay layer (a notification, the switcher); the
--- shell's popovers are popups of a layer, which set_popups_open covers. If the
--- windows or layers can't be read, the answer is yes, so the click goes
--- where it would have without tide.
-local function covered(x, y)
+-- window of `windows`, with the ring outside it where Hyprland starts its
+-- own border resize, or a top or overlay layer (a notification, the
+-- switcher); the shell's popovers are popups of a layer, which
+-- set_popups_open covers. If the layers can't be read, the answer is yes,
+-- so the click goes where it would have without tide.
+local function covered(windows, x, y)
     local ring = 0
     if truthy(config_value("general:resize_on_border")) then
         ring = (tonumber(config_value("general:border_size")) or 0)
             + (tonumber(config_value("general:extend_border_grab_area")) or 0)
-    end
-    local ok, windows = pcall(hl.get_windows)
-    if not ok or type(windows) ~= "table" then
-        return true
     end
     for _, w in ipairs(windows) do
         local at, size = field(w, "at"), field(w, "size")
@@ -548,34 +542,23 @@ local function covered(x, y)
     return false
 end
 
--- Whether workspace `id`'s cached tiles (st.area, st.n) are still there:
--- every window its last recalculate laid out is still a tiled window on it.
--- Hyprland calls no recalculate for a workspace its last tiled windows leave,
--- so without this an emptied workspace would keep an invisible edge that
--- takes presses and drags a master that isn't there. If the windows can't
--- be read, the answer is no, so the click goes where it would have without
--- tide.
-local function tiles_current(id, st)
-    if #st.order == 0 then
-        return false
-    end
-    local ok, windows = pcall(hl.get_windows)
-    if not ok or type(windows) ~= "table" then
-        return false
-    end
-    local here = {}
+-- The boxes of workspace `id`'s tiles as `windows` has them now: its
+-- mapped, tiled windows, less those hidden behind another in a group. `at`
+-- and `size` are where Hyprland is putting each, not where an animation
+-- has got to, and with no gaps or borders they're the boxes the layout
+-- placed. Reading them on every press, rather than keeping what the last
+-- recalculate placed, leaves nothing to go stale: Hyprland calls no
+-- recalculate for a workspace its last tiled windows leave.
+local function tiles(windows, id)
+    local boxes = {}
     for _, w in ipairs(windows) do
-        local address = field(w, "address")
-        if address and not field(w, "floating") and field(field(w, "workspace"), "id") == id then
-            here[address] = true
+        local at, size = field(w, "at"), field(w, "size")
+        if field(w, "mapped") and not field(w, "hidden") and not field(w, "floating")
+            and field(field(w, "workspace"), "id") == id and at and size then
+            boxes[#boxes + 1] = { x = at.x, y = at.y, w = size.x, h = size.y }
         end
     end
-    for _, address in ipairs(st.order) do
-        if not here[address] then
-            return false
-        end
-    end
-    return true
+    return boxes
 end
 
 local function stop_drag()
@@ -634,21 +617,28 @@ function M.drag_press()
     local ws = field(mon, "active_workspace")
     local id = field(ws, "id")
     local st = id ~= nil and workspaces[id]
-    if not st or not st.area or field(ws, "has_fullscreen") then
+    if not st or field(ws, "has_fullscreen") then
         return PASS
     end
-    if not tiles_current(id, st) then
-        -- Stale, so dropped: the next recalculate with windows sets it again.
-        st.area, st.n = nil, nil
+    -- One read of the windows, for where the edge is and what's above it.
+    -- If they can't be read, the click goes where it would without tide.
+    local ok_win, windows = pcall(hl.get_windows)
+    if not ok_win or type(windows) ~= "table" then
+        return PASS
+    end
+    local boxes = tiles(windows, id)
+    local area = geometry.bounds(boxes)
+    if not area then
         return PASS
     end
     local o = st.opts[st.mode]
-    local edge = geometry.edge_at(geometry.split_edges(st.mode, st.area, st.n, o), st.area, pos.x, pos.y, grab)
-    if not edge or covered(pos.x, pos.y) then
+    local edge = geometry.edge_at(geometry.split_edges(st.mode, area, #boxes, o), area, pos.x, pos.y, grab)
+    if not edge or covered(windows, pos.x, pos.y) then
         return PASS
     end
     -- The edge keeps its offset from the pointer, so it doesn't jump to it.
-    drag = { ws = id, mode = st.mode, edge = edge, area = copy(st.area), offset = pos.x - edge.x, mfact = o.mfact }
+    -- The area is the press's: an mfact change moves the edge, not the area.
+    drag = { ws = id, mode = st.mode, edge = edge, area = area, offset = pos.x - edge.x, mfact = o.mfact }
     if drag_timer then
         drag_timer:set_enabled(true)
     else

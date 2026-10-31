@@ -1427,6 +1427,10 @@ through `drag_press` / `drag_release` in `layout.lua` and a 16 ms
   popover or notification over the edge still reaches it; the drag ends
   when the button comes up with `Shift` or `Super` pressed meanwhile; a
   click on a bar popover (the clocks, say) over the edge reaches it.
+- Also check that the press finds the edge from the windows as they are:
+  after moving a workspace to another monitor, with a group's tabs on the
+  master, and on a workspace whose last tiled window has just closed,
+  where a press on the old edge reaches the app.
 - The split follows the pointer live during a drag, through the timer,
   as confirmed (2026-10-31). That reverses the earlier call against
   polling the cursor: the timer runs only during a drag, and the press it

@@ -264,6 +264,22 @@ function M.contains(box, x, y, pad)
     return x >= box.x - pad and x < box.x + box.w + pad and y >= box.y - pad and y < box.y + box.h + pad
 end
 
+-- The smallest box holding every box of `boxes`, or nil if there are none.
+-- The tiles of two or more windows cover the work area exactly, so theirs
+-- is the area they were laid out in.
+function M.bounds(boxes)
+    local x0, y0, x1, y1
+    for _, b in ipairs(boxes) do
+        x0 = x0 and math.min(x0, b.x) or b.x
+        y0 = y0 and math.min(y0, b.y) or b.y
+        x1 = x1 and math.max(x1, b.x + b.w) or b.x + b.w
+        y1 = y1 and math.max(y1, b.y + b.h) or b.y + b.h
+    end
+    if x0 then
+        return { x = x0, y = y0, w = x1 - x0, h = y1 - y0 }
+    end
+end
+
 -- Boxes for `n` windows in `mode`. A lone window follows the single-window
 -- rule in every mode.
 function M.arrange(mode, area, n, o, single_rules)

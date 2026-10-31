@@ -1012,10 +1012,16 @@ with new keys in **bold**:
     notification or other top or overlay layer, the press reaches the app
     as usual. So does one on a monitor that isn't focused, under a
     fullscreen or maximized window, or with a special workspace shown.
-  - The layout keeps where the tiles were from its last layout, and a
-    press checks that those windows are still tiled on that workspace.
-    Hyprland doesn't lay out a workspace its last tiled windows leave, so
-    without that check an emptied workspace would keep an invisible edge.
+  - Each press finds the edge from the windows as they are then: the
+    workspace's mapped, tiled windows that aren't hidden in a group, where
+    Hyprland is putting them (`at` and `size`). Their count picks the
+    edges, and the box around them is the work area the drag maps to
+    `mfact`.
+  - The layout keeps no copy of where it put the tiles. Hyprland doesn't
+    lay out a workspace its last tiled windows leave, so a copy would keep
+    an invisible edge there.
+  - The same read of the windows finds a floating window over the edge.
+    If the windows can't be read, the press passes on.
   - While any of the bar's popovers or menus is open, every press passes
     on. Each is an `xdg_popup` of the bar, and Hyprland 0.56.2's Lua sees
     only a layer's own surface, so the shell tells the layout
