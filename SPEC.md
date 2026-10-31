@@ -464,10 +464,16 @@ flowchart TD
 - **One `exec-once`.** Hyprland's config starts nothing but
   `uwsm finalize`, and a test in `conf` asserts it.
 - **Autostart is an allowlist.** XDG autostart entries run in tide only
-  if they are on its list: the tray applets the bar relies on until the shell
-  draws their icons (`nm-applet`, `blueman`), plus any desktop IDs in
+  if they are on its list: `nm-applet`, plus any desktop IDs in
   `~/.config/tide/autostart`. Everything else is skipped in tide
   and still runs under KDE. `doctor` reports any that ran anyway.
+  - `nm-applet` stays for NetworkManager's secret agent, which asks for a
+    VPN's password, until tide has its own. Its autostart entry uses the
+    X11 tray icon, which tide doesn't show, so the bar's network icon
+    (§7.4) is the only one.
+  - `blueman` isn't on the list: the bar draws Bluetooth. blueman-manager,
+    which pairs a device (§7.4), starts blueman's applet, the pairing
+    agent, over D-Bus while it's open.
   - One prefix drop-in, `app-.service.d/tide-autostart.conf`, reaches
     every `app-*@autostart.service`, so an entry a package adds later is
     covered without a per-entry file. Its `ExecCondition=` asks
@@ -583,8 +589,8 @@ the packaged waybar and swaync units. nm-applet's autostart entry skips
 KDE, GNOME, Budgie and COSMIC, which have applets of their own. blueman's
 skips none, so its applet would start beside Plasma's Bluetooth. `setup`
 puts a copy of blueman's entry in `~/.config/autostart`, which hides the
-package's, adding those four to its `NotShowIn`. tide still starts it, by
-the same desktop ID.
+package's, adding those four to its `NotShowIn`. tide skips it too,
+unless the user adds it to the allowlist (§5.4).
 
 ## 6. Windows and layouts
 

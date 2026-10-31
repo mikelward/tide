@@ -123,8 +123,9 @@ drop-in, `app-.service.d/tide-autostart.conf`, that reaches every
 autostart unit; in the tide session it skips each entry that
 `tide autostart-allowed` doesn't name, so other desktops' daemons and
 tray icons stay out, while Plasma runs them all as before. The list is
-`nm-applet` and `blueman` for now; add desktop IDs, one per line, to
-`~/.config/tide/autostart` to allow more.
+`nm-applet`, kept for its NetworkManager secret agent until tide has its
+own; add desktop IDs, one per line, to `~/.config/tide/autostart` to
+allow more.
 
 ## Mocks
 

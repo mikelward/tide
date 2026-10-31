@@ -105,10 +105,10 @@
 #     exits 0 if UNIT's desktop entry is on the autostart allowlist, 1,
 #     which skips the unit, if it isn't, and 3 if it can't tell (an
 #     unreadable list), which the drop-in turns into a failed unit. The
-#     file holds one desktop ID per line; lines starting with # are comments,
-#     so an ID that itself starts with # is written escaped, as \x23ID. The allowlist is the tray applets the
-#     bar still relies on, plus the desktop IDs, one per line, in
-#     ${XDG_CONFIG_HOME:-~/.config}/tide/autostart.
+#     allowlist is nm-applet, plus the desktop IDs in
+#     ${XDG_CONFIG_HOME:-~/.config}/tide/autostart. That file holds one
+#     desktop ID per line; lines starting with # are comments, so an ID
+#     that itself starts with # is written escaped, as \x23ID.
 #
 #   tide brightness STEP
 #
@@ -817,9 +817,12 @@ running() {
     return 1
 }
 
-# Until the shell draws them itself (M3), the network and Bluetooth tray
-# icons come from these applets' own autostart entries.
-autostart_default="nm-applet blueman"
+# nm-applet is NetworkManager's secret agent, which asks for a VPN's
+# password, until tide has its own (TODO.md). The bar draws the network
+# icon, and nm-applet's autostart entry draws none in tide, since it uses
+# the X11 tray icon. blueman isn't here: the bar draws Bluetooth, and
+# blueman-manager starts its applet, the pairing agent, over D-Bus.
+autostart_default="nm-applet"
 
 autostart_allowed() {
     test $# -eq 1 || usage
