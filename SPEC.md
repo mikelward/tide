@@ -556,6 +556,14 @@ desktop-specific, and it installs no global D-Bus activation files. Logging
 into Plasma is therefore unaffected. The reverse direction is the autostart
 allowlist above.
 
+What scripts' `setup` installs for tide stays out of Plasma too. It masks
+the packaged waybar and swaync units. nm-applet's autostart entry skips
+KDE, GNOME, Budgie and COSMIC, which have applets of their own. blueman's
+skips none, so its applet would start beside Plasma's Bluetooth. `setup`
+puts a copy of blueman's entry in `~/.config/autostart`, which hides the
+package's, adding those four to its `NotShowIn`. tide still starts it, by
+the same desktop ID.
+
 ## 6. Windows and layouts
 
 See [`layouts.png`](docs/mocks/layouts.png).
@@ -4130,3 +4138,13 @@ Checked 2026-09-29, for §21.1:
   [`server.c`](https://github.com/swaywm/sway/blob/1652c54b73f67df17b7b4ab0b0f7048204aa8104/sway/server.c)
   (at 1652c54, 2026-09-29)
   (`ext_foreign_toplevel_list_v1`, `ext_image_copy_capture_manager_v1`)
+
+Checked 2026-10-31, for §5.5's blueman applet:
+
+- blueman:
+  [`data/blueman.desktop.in`](https://github.com/blueman-project/blueman/blob/ec7c9d20c3a15c80854aa9f4f10a36f381894618/data/blueman.desktop.in)
+  (at ec7c9d2, 2026-10-21), installed to `/etc/xdg/autostart`, with no
+  `OnlyShowIn` or `NotShowIn`.
+- network-manager-applet:
+  [`nm-applet.desktop.in`](https://github.com/GNOME/network-manager-applet/blob/57f6d32928bd6baed3d856f0f959e02abdcd324b/nm-applet.desktop.in)
+  (at 57f6d32, 2026-10-11), with `NotShowIn=KDE;GNOME;Budgie;COSMIC;`.
