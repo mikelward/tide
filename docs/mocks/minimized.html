@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: minimized windows</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .screen { width: 1500px; height: 420px; border-radius: 6px; box-shadow: 0 0 0 1px #2a2a30; }
+  .screen .bar { position: absolute; left: 0; right: 0; top: 0; }
+  .tiles { top: var(--bar-h); }
+  .t-term, .t-code { font-size: 12.5px; }
+  .t-web .page { padding: 22px 34px; }
+  .t-web .page h3 { font-size: 20px; }
+  .opt { margin-bottom: 30px; }
+  .opt h2 { margin-top: 0; }
+  .verdict { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 10px; max-width: 1500px; }
+  .verdict div { font-size: 12px; color: #9a9aa6; line-height: 1.5; }
+  .verdict b { color: #e6e6ec; display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }
+
+  /* A: full-width bottom bar */
+  .minbar { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: var(--bar-bg); color: var(--fg);
+            display: flex; align-items: center; gap: 4px; padding: 0 8px; border-top: 1px solid var(--line); }
+  .minbar .lbl { color: var(--fg-dim); font-size: 12px; margin-right: 6px; display: flex; align-items: center; gap: 4px; }
+  .mtab { height: 22px; display: flex; align-items: center; gap: 7px; padding: 0 10px 0 6px; border-radius: 6px; background: var(--surface); font-size: 12px; max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mtab.hover { background: var(--surface-2); }
+
+  /* B: floating chip */
+  .chip { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; height: 32px; padding: 0 12px 0 8px; border-radius: 16px;
+          background: var(--bar-bg); color: var(--fg); box-shadow: var(--shadow); display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; }
+  .chip .ms { font-size: 17px; color: var(--fg-dim); }
+  .pop { position: absolute; background: var(--surface); color: var(--fg); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; width: 320px; }
+  .pop .hd { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-dim); padding: 6px 8px 4px; }
+  .pop .row { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 12.5px; }
+  .pop .row.sel { background: var(--accent-bg); color: #fff; }
+  .pop .row .ttl { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pop .row .k { color: var(--fg-faint); font-size: 11px; }
+  .pop .row.sel .k { color: rgba(255,255,255,.7); }
+
+  /* C: floating icons, bottom-right */
+  .dock { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 6px; padding: 5px; border-radius: 12px;
+          background: var(--bar-bg); box-shadow: var(--shadow); }
+  .dock .appicon.lg { width: 28px; height: 28px; }
+  .tip { position: absolute; background: var(--surface-3); color: var(--fg); font-size: 12px; padding: 5px 9px; border-radius: 7px; white-space: nowrap; box-shadow: var(--shadow); }
+
+  /* D: top-bar indicator */
+  .sicon.mincount { gap: 3px; background: var(--surface); }
+
+  /* E: in the workspace chip */
+  .ws .appicon.min { background: transparent !important; box-shadow: inset 0 0 0 1.5px currentColor !important; opacity: .75; }
+  .ws .mingap { width: 1px; height: 12px; background: rgba(255,255,255,.45); margin: 0 1px; align-self: center; }
+  .narrow .bar-title { display: none; }
+  .bar-left > *, .ws .apps { flex: none; }
+</style>
+</head>
+<body class="sheet" data-width="1564" data-scale="2">
+
+<h1>Minimized windows: five options</h1>
+<p class="lede">The same desktop each time: workspace <b>re</b>, a terminal and a browser tiled, and two windows minimized from it (Chat and Mail). Each option is what shows while this workspace has minimized windows. A workspace with none shows nothing. In every option, the switcher&rsquo;s Windows tab also lists the minimized windows, and Enter restores one.</p>
+
+<!-- shared bar -->
+<template id="bar">
+  <div class="bar">
+    <div class="bar-left">
+      <div class="ws occupied"><span class="n">in</span><span class="apps"><span class="appicon app-mail"><i class="ms">mail</i></span><span class="appicon app-cal"><i class="ms">calendar_month</i></span><span class="appicon app-music"><i class="ms">music_note</i></span></span></div>
+      <div class="ws active"><span class="n">re</span><span class="apps SLOT"><span class="appicon app-term"><i class="ms">terminal</i></span><span class="appicon app-web"><i class="ms">public</i></span></span></div>
+      <div class="ws occupied"><span class="n">oc</span><span class="apps"><span class="appicon app-code"><i class="ms">code</i></span></span></div>
+      <div class="ws empty"><span class="n">me</span></div>
+      <span class="layout-sym">[]=</span>
+    </div>
+    <span class="bar-title">SPEC.md — tide - Google Chrome</span>
+    <div class="bar-right">
+      <span class="RSLOT"></span>
+      <span class="sicon"><i class="ms fill">wifi</i></span>
+      <span class="sicon"><i class="ms fill">volume_up</i>64%</span>
+      <span class="sicon"><i class="ms fill">battery_5_bar</i>82%</span>
+      <span class="sicon"><i class="ms">power_settings_new</i></span>
+      <span class="sep"></span>
+      <div class="clocks"><span class="clock local"><span class="tz">Oct 31</span><span class="t">19:41</span></span></div>
+    </div>
+  </div>
+</template>
+
+<template id="tiles">
+  <div class="win inactive t-term" style="left:0;top:0;width:600px;height:HPX">
+    <div><span class="p">user@host1</span> <span class="h">~/tide</span> $ make test</div>
+    <div class="m">ok 412 layout_test.lua</div>
+    <div class="m">ok 96 switcher_test.mjs</div>
+    <div class="m">ok 58 workspacenames_test.mjs</div>
+    <div><span class="p">user@host1</span> <span class="h">~/tide</span> $ <span class="cur">&nbsp;</span></div>
+  </div>
+  <div class="win t-web" style="left:600px;top:0;width:900px;height:HPX">
+    <div class="tabs"><div class="tab on"><i class="ms" style="font-size:14px">description</i>SPEC.md — tide</div></div>
+    <div class="omni"><i class="ms">arrow_back</i><div class="url">github.com/mikelward/tide/blob/main/SPEC.md</div></div>
+    <div class="page"><h3>§6.7 Minimized windows</h3><div class="bars"><span style="width:92%"></span><span style="width:84%"></span><span style="width:88%"></span><span style="width:60%"></span><span style="width:90%"></span><span style="width:76%"></span></div></div>
+  </div>
+</template>
+
+<div class="opt">
+  <h2>A · Full-width bar along the bottom (the to-do as written)</h2>
+  <div class="screen theme-dark" id="a"></div>
+  <div class="verdict">
+    <div><b>Shows</b>Every minimized title at a glance, as a taskbar does.</div>
+    <div><b>Costs</b>A 30&nbsp;px strip on every monitor, which the tiles shrink to make room for. They re-tile when the first window is minimized and again when the last is restored.</div>
+    <div><b>Doable</b>Yes on both. On tide it's a second layer-shell bar; on tilemo, an <code>hs.canvas</code> strip plus a smaller tiling area.</div>
+  </div>
+</div>
+
+<div class="opt">
+  <h2>B · Floating chip, bottom center</h2>
+  <div class="row">
+    <div class="screen theme-dark narrow" id="b" style="width:740px"></div>
+    <div class="screen theme-dark narrow" id="b2" style="width:740px"></div>
+  </div>
+  <p class="cap">Left: at rest, the minimized apps' icons and a count. Right: clicked, or hovered for half a second, it opens upward into the list. A click on a row restores that window.</p>
+  <div class="verdict">
+    <div><b>Shows</b>That something is minimized, and which apps, at 32&nbsp;px tall and about 140&nbsp;px wide.</div>
+    <div><b>Costs</b>It floats over the bottom of whichever tile is under it, with no re-tile. It could step aside while the pointer is near it, or sit in the bottom-right instead.</div>
+    <div><b>Doable</b>Yes. On tide it's a small layer-shell surface with no exclusive zone. On tilemo it's an <code>hs.canvas</code> at a floating level that takes clicks.</div>
+  </div>
+</div>
+
+<div class="opt">
+  <h2>C · Floating icons, bottom-right corner</h2>
+  <div class="screen theme-dark" id="c"></div>
+  <p class="cap">One icon per minimized window, like a small tray; hovering one shows its title (shown here over Mail).</p>
+  <div class="verdict">
+    <div><b>Shows</b>Each window as its own target, with one click to restore.</div>
+    <div><b>Costs</b>About as small as B, but two windows of one app look alike until you hover, and it grows wide with many windows.</div>
+    <div><b>Doable</b>Yes, the same way as B.</div>
+  </div>
+</div>
+
+<div class="opt">
+  <h2>D · An icon in the top bar</h2>
+  <div class="screen theme-dark" id="d"></div>
+  <p class="cap">A status icon with the count, beside the others on the right. A click opens the list as a popover from the bar.</p>
+  <div class="verdict">
+    <div><b>Shows</b>Only a count. It's the quietest option and covers nothing.</div>
+    <div><b>Costs</b>It's easy to forget a window is down there, and it sits far from where you minimized it.</div>
+    <div><b>Doable</b>Yes, trivially. It's one more icon in tide's bar and in tilemo's.</div>
+  </div>
+</div>
+
+<div class="opt">
+  <h2>E · In the workspace's own chip</h2>
+  <div class="screen theme-dark" id="e"></div>
+  <p class="cap">The bar already shows each workspace's app icons. Minimized ones show hollow and faded after the rest, and a click on one restores it. A click on the chip still switches to the workspace.</p>
+  <div class="verdict">
+    <div><b>Shows</b>Minimized windows on every workspace, not just this one, with no new UI.</div>
+    <div><b>Costs</b>It's subtle, and widens the chip a little. Telling two windows of one app apart needs a hover.</div>
+    <div><b>Doable</b>Yes. It's a change to the existing bar on both.</div>
+  </div>
+</div>
+
+<p class="note"><b>Suggestion:</b> E, plus B's popover for the list. It costs no screen space and covers nothing, and it puts the cue where you already look for what's on a workspace. B is the pick if E is too subtle in practice. All five are easy to change later; only A changes the tiling.</p>
+
+<script>
+  const barT = document.getElementById('bar').innerHTML;
+  const tilesT = document.getElementById('tiles').innerHTML;
+  const H = 420, BAR = 36;
+  function screen(id, { slot = '', rslot = '', bottom = 0, extra = '', w } = {}) {
+    const el = document.getElementById(id);
+    const tilesH = H - BAR - bottom;
+    let tiles = tilesT.replaceAll('HPX', tilesH + 'px');
+    if (w) tiles = tiles.replace('width:600px', `width:${Math.round(w*0.4)}px`)
+                        .replace('left:600px', `left:${Math.round(w*0.4)}px`)
+                        .replace('width:900px', `width:${w - Math.round(w*0.4)}px`);
+    el.innerHTML = barT.replace('<span class="RSLOT"></span>', rslot)
+                       .replace('</i></span></span></div>\n      <div class="ws occupied"><span class="n">oc', '</i></span>' + slot + '</span></div>\n      <div class="ws occupied"><span class="n">oc')
+      + `<div class="tiles" style="height:${tilesH}px">${tiles}</div>` + extra;
+  }
+  const chatI = '<span class="appicon app-chat"><i class="ms">chat</i></span>';
+  const mailI = '<span class="appicon app-mail"><i class="ms">mail</i></span>';
+  const list = (x, y) => `<div class="pop" style="${x};${y}">
+      <div class="hd">Minimized on re</div>
+      <div class="row sel">${chatI}<span class="ttl">#tide-dev — Chat</span><span class="k">Enter</span></div>
+      <div class="row">${mailI}<span class="ttl">Re: workspace names — Mail</span></div></div>`;
+
+  screen('a', { bottom: 30, extra: `<div class="minbar"><span class="lbl"><i class="ms">minimize</i>Minimized</span>
+     <div class="mtab hover">${chatI}#tide-dev — Chat</div><div class="mtab">${mailI}Re: workspace names — Mail</div></div>` });
+
+  const chip = `<div class="chip">${chatI}${mailI}<span>2 minimized</span><i class="ms">expand_less</i></div>`;
+  screen('b', { w: 740, extra: chip });
+  screen('b2', { w: 740, extra: chip + list('left:210px', 'bottom:52px') });
+
+  screen('c', { extra: `<div class="dock"><span class="appicon lg app-chat"><i class="ms">chat</i></span><span class="appicon lg app-mail"><i class="ms">mail</i></span></div>
+     <div class="tip" style="right:12px;bottom:56px">Re: workspace names — Mail</div>` });
+
+  screen('d', { rslot: '<span class="sicon mincount"><i class="ms">tab_unselected</i>2</span>',
+                extra: list('right:250px', `top:${BAR + 6}px`) });
+
+  screen('e', { slot: '<span class="mingap"></span><span class="appicon app-chat min"><i class="ms">chat</i></span><span class="appicon app-mail min"><i class="ms">mail</i></span>' });
+</script>
+</body>
+</html>
