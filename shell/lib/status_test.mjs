@@ -1,9 +1,14 @@
 // Tests for status.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
     batteryView, volumeIcon, volumeText, scrolledVolume, formatDuration, batteryStatus, profileChoices, degradedText,
+    PERCENT_ROOM,
 } from "./status.mjs";
+import { formatPercent } from "./sysmon.mjs";
 
 test("the battery shows its percentage and level icon", () => {
     assert.deepEqual(batteryView({ present: true, percentage: 0.82, state: 2 }),
@@ -94,4 +99,32 @@ test("the volume reads as a percentage", () => {
     assert.equal(volumeText(0), "0%");
     assert.equal(volumeText(1.3), "130%");
     assert.equal(volumeText(undefined), "");
+});
+
+// The bar's % readings are drawn in tabular figures, so every digit is as
+// wide as every other, and a reading takes the room of as many characters
+// as it has.
+const readings = [
+    ["volume", n => volumeText(n / 100)],
+    ["CPU", n => formatPercent(n / 100)],
+];
+
+test("the bar holds room for every reading below 100%, and no more", () => {
+    assert.match(PERCENT_ROOM, /^[0-9]+%$/);
+    for (const [name, text] of readings) {
+        const below = Array.from({ length: 100 }, (_, n) => text(n).length);
+        assert.equal(Math.max(...below), PERCENT_ROOM.length, `${name}: the widest reading below 100% fills the room`);
+        assert.ok(text(100).length > PERCENT_ROOM.length, `${name}: 100% takes a digit more`);
+    }
+});
+
+test("the volume's and the CPU's % each hold that room", () => {
+    const qml = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "StatusIcons.qml"), "utf8");
+    // Each reserves its room with a TextMetrics whose text is the room.
+    const re = /TextMetrics \{[^}]*?text: ([^\n]+)/g;
+    const rooms = [];
+    for (let m = re.exec(qml); m !== null; m = re.exec(qml)) {
+        rooms.push(m[1].trim());
+    }
+    assert.deepEqual(rooms, ["Status.PERCENT_ROOM", "Status.PERCENT_ROOM"]);
 });

@@ -262,10 +262,8 @@ Row {
             }
         }
 
-        // Wide enough for two digits, as almost every level is, so the icons
-        // after it don't shift as it changes; reserving "100%" left a
-        // digit's gap before the battery. Left-aligned so the spare room
-        // falls before the next icon, not between this one and its %.
+        // Held as wide as Status.PERCENT_ROOM, left-aligned so the spare
+        // room falls before the next icon, not between this one and its %.
         Text {
             id: volumeText
 
@@ -282,7 +280,7 @@ Row {
                 id: volumeWidth
 
                 font: volumeText.font
-                text: "00%"
+                text: Status.PERCENT_ROOM
             }
         }
 
@@ -377,7 +375,7 @@ Row {
             }
         }
 
-        // Wide and aligned as the volume's %.
+        // Held as wide as the volume's %, and aligned the same way.
         Text {
             id: cpuText
 
@@ -394,7 +392,7 @@ Row {
                 id: cpuWidth
 
                 font: cpuText.font
-                text: "100%"
+                text: Status.PERCENT_ROOM
             }
         }
     }
