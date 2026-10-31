@@ -59,12 +59,13 @@
 <p class="note"><b>Start at login</b>: the commands the shell runs once a session, through <code>tide launch --background --unless-running</code>, so none takes focus and one running already isn't started again. The arrows move a command and the bin takes it out; one typed at the foot is added with Enter, and one with a quote, backslash or <code>$</code> is refused, saying why. A change takes effect at the next login.</p>
 
 <p class="note"><b>Notifications</b>: Do not disturb now, on a schedule (from and to a quarter hour a step, and the days a window starts on), and whether critical alerts break through it. The schedule turns Do not disturb on as a window starts and off as it ends, unless you changed it meanwhile. Below, the muted apps and sites: the bin unmutes one, and one typed at the foot is muted with Enter.</p>
+<p class="note"><b>Clipboard</b>: whether the history behind Super+C keeps new copies, how many (− and + step through 25 to 1,000), and Clear history, which says how it went.</p>
 <script>
 const PAGES = [
   ['Idle', 'bedtime'], ['Sound', 'volume_up'], ['Network', 'wifi'], ['Bluetooth', 'bluetooth'],
   ['Mouse', 'mouse'], ['Touchpad', 'touchpad_mouse'], ['Keyboard', 'keyboard'], ['Clocks', 'schedule'],
   ['Keys', 'keyboard_command_key'], ['Layouts', 'view_column'], ['Appearance', 'contrast'],
-  ['Displays', 'desktop_windows'], ['Start at login', 'play_arrow'], ['Notifications', 'notifications'],
+  ['Displays', 'desktop_windows'], ['Start at login', 'play_arrow'], ['Notifications', 'notifications'], ['Clipboard', 'content_paste'],
 ];
 const btn = (icon, dim) => `<span class="btn${dim ? ' dim' : ''}"><i class="ms">${icon}</i></span>`;
 const list = (cmds) => cmds.map((c, i) => `<div class="item"><span class="cmd">${c}</span>${btn('arrow_upward', i === 0)}${btn('arrow_downward', i === cmds.length - 1)}${btn('delete')}</div>`).join('');
@@ -77,6 +78,9 @@ const panels = [
   ['Notifications',
    'Do not disturb holds popups; they still go to the notification center. On a schedule, it turns on as the time comes, and off as it ends unless you changed it meanwhile; a window ending earlier than it starts runs into the next day. A muted app or site never pops up and never asks for attention: an app ID, such as org.gnome.Nautilus, or site:chat.google.com.',
    '<div class="srow"><span class="l">Do not disturb</span><span class="sw">Off</span></div><div class="srow"><span class="l">On a schedule: 22:00 to 07:00, mon, tue, wed, thu, fri</span><span class="sw on">On</span></div><div class="srow"><span class="l">Critical alerts break through</span><span class="sw on">On</span></div><div class="srow"><span class="l">From</span><span class="step"><span class="btn"><i class="ms">remove</i></span><span class="v">22:00</span><span class="btn"><i class="ms">add</i></span></span></div><div class="srow"><span class="l">To</span><span class="step"><span class="btn"><i class="ms">remove</i></span><span class="v">07:00</span><span class="btn"><i class="ms">add</i></span></span></div><div class="srow"><span class="l">Days</span><span class="days"><span class="on">M</span><span class="on">T</span><span class="on">W</span><span class="on">T</span><span class="on">F</span><span class="">S</span><span class="">S</span></span></div><div class="head">MUTED</div><div class="item"><span class="cmd" style="font-family:var(--font-ui)">org.example.Noisy</span><span class="btn"><i class="ms">delete</i></span></div><div class="item"><span class="cmd" style="font-family:var(--font-ui)">site:chat.example.com</span><span class="btn"><i class="ms">delete</i></span></div><div class="field">Mute an app ID or site:HOST</div>'],
+  ['Clipboard',
+   'What you copy is kept for the picker on Super+C, the newest first, apart from passwords a password manager marks. Off, new copies aren\u2019t kept; what\u2019s kept stays until it\u2019s cleared. A smaller number trims the history at the next copy.',
+   '<div class="srow"><span class="l">History: Keeps the newest 200 copies</span><span class="sw on">On</span></div><div class="srow"><span class="l">Copies to keep</span><span class="step"><span class="btn"><i class="ms">remove</i></span><span class="v">200</span><span class="btn"><i class="ms">add</i></span></span></div><div class="item" style="gap:10px"><i class="ms" style="font-size:16px;color:var(--fg-dim)">clear_all</i><span class="cmd" style="font-family:var(--font-ui)">Clear history</span></div><div class="about" style="padding-top:4px;font-size:12px">The history is empty.</div>'],
 ];
 const root = document.getElementById('panels');
 for (const [page, about, body] of panels) {
