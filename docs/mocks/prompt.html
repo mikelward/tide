@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: name prompt</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .stage {
+    width: 560px;
+    height: 400px;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(400px 260px at 20% 25%, #123338, transparent 70%),
+      radial-gradient(500px 320px at 85% 80%, #2b1c3f, transparent 70%),
+      #16213a;
+    box-shadow: 0 0 0 1px #2a2a30;
+  }
+  .stage::before { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.35); }
+  /* As NamePrompt.qml draws it: 480 wide, 56 px from the top. */
+  .prompt { position: absolute; left: 40px; top: 56px; width: 480px; padding: 10px; display: flex; flex-direction: column; gap: 8px; border-radius: 12px; }
+  .head { font-size: 12px; font-weight: 600; color: var(--fg-dim); }
+  .field { height: 42px; border-radius: 10px; background: var(--surface-2); display: flex; align-items: center; padding: 0 12px; font-size: 16px; color: var(--fg); }
+  .field .sel { background: var(--accent-bg); color: #fff; }
+  .field .caret { width: 2px; height: 20px; background: var(--accent); margin-left: 1px; }
+  .field .ph { color: var(--fg-faint); }
+  .refusal { font-size: 12px; color: var(--urgent); }
+  .rowp { height: 36px; border-radius: 8px; display: flex; align-items: center; padding: 0 10px; font-size: 14px; color: var(--fg); }
+  .rowp.cur { background: var(--accent-bg); color: #fff; }
+  .hl { color: var(--accent); }
+  .rowp.cur .hl { color: #fff; }
+</style>
+</head>
+<body class="sheet" data-width="1240" data-scale="2">
+
+<h1>Name prompt</h1>
+<p class="lede">One prompt for naming a workspace (SPEC.md §6.5): a new window on home asks where it goes, a launch from home asks before it starts, <kbd>Super+Return</kbd> goes to a workspace and <kbd>Super+Shift+Return</kbd> moves the focused window to one. The first row is the typed name as a new workspace when none has it, then the workspaces that match, scored as the switcher scores. <b>Enter</b> takes the selected row, making the workspace if it's new; <b>Esc</b> closes a new window from home, cancels a launch, and otherwise leaves things as they were. A workspace spans every monitor, so a window moved there stays on its own monitor.</p>
+
+<div class="row">
+<div>
+<div class="stage theme-dark">
+  <div class="prompt card">
+    <div class="head">This window goes to the workspace named</div>
+    <div class="field"><span class="sel">PR-12</span><span class="caret"></span></div>
+    <div class="rowp cur">New workspace&nbsp;<b>PR-12</b></div>
+  </div>
+</div>
+<div class="cap" style="max-width:550px"><b>A new window on home.</b> The text starts as the window's short name, selected, so typing replaces it, and it follows the title until you type. Enter makes <b>PR-12</b> and the window goes there, focused; Esc closes the window, politely.</div>
+</div>
+
+<div>
+<div class="stage theme-dark">
+  <div class="prompt card">
+    <div class="head">Move this window to the workspace named</div>
+    <div class="field">do<span class="caret"></span></div>
+    <div class="rowp cur">New workspace&nbsp;<b>do</b></div>
+    <div class="rowp"><span class="hl">do</span>cs</div>
+    <div class="rowp"><span class="hl">d</span>esign&nbsp;<span class="hl">o</span>ps</div>
+  </div>
+</div>
+<div class="cap" style="max-width:550px"><b>Moving a window</b> (<kbd>Super+Shift+Return</kbd>). Typing filters the workspaces, its matched letters in the accent; <kbd>↓</kbd> picks <b>docs</b>. A name typed in any case uses the workspace that has it, so <b>RE</b> is the standing <b>re</b>.</div>
+</div>
+</div>
+
+<div class="row" style="margin-top:22px">
+<div>
+<div class="stage theme-dark">
+  <div class="prompt card">
+    <div class="head">Go to the workspace named</div>
+    <div class="field"><span class="caret" style="margin-left:0"></span><span class="ph">&nbsp;Name a workspace</span></div>
+    <div class="rowp cur">in</div>
+    <div class="rowp">re</div>
+    <div class="rowp">oc</div>
+    <div class="rowp">me</div>
+    <div class="rowp">PR-12</div>
+  </div>
+</div>
+<div class="cap" style="max-width:550px"><b>Going to a workspace</b> (<kbd>Super+Return</kbd>). With nothing typed, every workspace in the bar's order, home included, since nothing moves there. A new name goes to a new, empty workspace, which goes again once you leave it empty.</div>
+</div>
+
+<div>
+<div class="stage theme-dark">
+  <div class="prompt card">
+    <div class="head">This window goes to the workspace named</div>
+    <div class="field">in<span class="caret"></span></div>
+    <div class="refusal">in is home, which holds only its own apps</div>
+  </div>
+</div>
+<div class="cap" style="max-width:550px"><b>Home refused.</b> A window that isn't one of home's apps can't go home, so the prompt offers no row and says why. A name can't hold quotes, backslashes, <code>@</code> or control characters, which can't be typed.</div>
+</div>
+</div>
+
+</body>
+</html>

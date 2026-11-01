@@ -1749,10 +1749,6 @@ or workspace goes there.
 - **The tap of `Super`** opens the switcher on Workspaces (its `tide:launcher`
   global shortcut does), once the pinned Hyprland passes SPEC.md §8.2's
   three tap checks; until then `conf` binds no tap.
-- **Redo the mocks.** `bar.png` and `desktop.png` show numbered
-  workspaces. Redraw the bar's workspaces by name with the standing ones,
-  home first, and the name prompt, then `make mocks`. `switcher.png` has
-  the switcher's five tabs.
 - **Browser tabs (M9).** tileco on Linux lists tabs with `chrome.tabs`,
   and `tide-tabs` hands them to the shell (SPEC.md §8.3).
   - [x] An open native-messaging port keeps a Manifest V3 service worker

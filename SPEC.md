@@ -117,10 +117,11 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 
 | | |
 |---|---|
-| **Desktop**: 3440×1440, three-column layout, focused master in the middle, the rest dimmed. Workspace 4 is urgent; the bar is still numbered (TODO.md). [`desktop.png`](docs/mocks/desktop.png) | ![desktop](docs/mocks/desktop.png) |
-| **Bar**: dark and light, every workspace and status state, the clock rules. Its workspaces are still numbered, and are to be redrawn by name (TODO.md). [`bar.png`](docs/mocks/bar.png) | ![bar](docs/mocks/bar.png) |
+| **Desktop**: 3440×1440, three-column layout, focused master in the middle, the rest dimmed. The bar shows the workspaces by name, and `me` is urgent. [`desktop.png`](docs/mocks/desktop.png) | ![desktop](docs/mocks/desktop.png) |
+| **Bar**: dark and light, every workspace and status state, the clock rules. [`bar.png`](docs/mocks/bar.png) | ![bar](docs/mocks/bar.png) |
 | **Layouts**: tile, three-column, two columns + stack, monocle, the single-window rule, and how three-column fills up. [`layouts.png`](docs/mocks/layouts.png) | ![layouts](docs/mocks/layouts.png) |
 | **Switcher**: its five tabs, Apps (the launcher), Workspaces, Windows, Attention and Actions. [`switcher.png`](docs/mocks/switcher.png) | ![switcher](docs/mocks/switcher.png) |
+| **Name prompt**: a new window on home, moving a window, going to a workspace, and home refused (§6.5). [`prompt.png`](docs/mocks/prompt.png) | ![name prompt](docs/mocks/prompt.png) |
 | **Notifications**: popups, OSD, the notification center while sharing. [`notifications.png`](docs/mocks/notifications.png) | ![notifications](docs/mocks/notifications.png) |
 | **Clocks popover**: zones, working-hours strips, DST warning, calendar. [`clocks.png`](docs/mocks/clocks.png) | ![clocks](docs/mocks/clocks.png) |
 | **Settings**: the sidebar grouped under Hardware, Windows and General, Keyboard with its shortcuts, and the newer pages: Start at login, Notifications, Clipboard, Power and Workspaces. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
