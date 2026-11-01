@@ -1,7 +1,8 @@
 // Tests for mic.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MIC_TYPES, captureLinks, captureRows, captureStreams, isInputStream, isMicSource, isMonitor, liveCaptures } from "./mic.mjs";
+import { MIC_TYPES, captureLinks, captureRows, captureStreams, isInputStream, isMicSource, isMonitor, liveCaptures, liveSources, pillView, sourcesMuted } from "./mic.mjs";
+import { micPill } from "./osd.mjs";
 
 const ACTIVE = 4;
 const PAUSED = 3;
@@ -109,4 +110,35 @@ test("each app capturing gets a row saying whether it's muted", () => {
         ["Unknown", false, "audio-input-microphone-symbolic", false],
     ]);
     assert.equal(rows[0].node.id, call.id);
+});
+
+test("the mic pill is slashed while the mic is muted, as the OSD's icon is", () => {
+    assert.equal(pillView({ muted: true, count: 1 }).icon, micPill({ muted: true }).icon);
+    assert.equal(pillView({ muted: false, count: 1 }).icon, micPill({ muted: false }).icon);
+    assert.notEqual(pillView({ muted: true, count: 1 }).icon, pillView({ muted: false, count: 1 }).icon);
+});
+
+test("the mic pill's hover text says on or off in the OSD's words, and how many apps record", () => {
+    assert.equal(pillView({ muted: false, count: 1 }).tip, "Mic on, 1 app recording");
+    assert.equal(pillView({ muted: true, count: 2 }).tip, "Mic off, 2 apps recording");
+});
+
+test("the mics feeding a recording are the live links' sources, once each, not a meter's", () => {
+    const headset = { id: 8, type: AUDIO_SOURCE };
+    const links = [
+        { source: mic, target: call, state: ACTIVE },
+        { source: mic, target: recorder, state: ACTIVE },
+        { source: headset, target: meter, state: ACTIVE },
+        { source: headset, target: call, state: PAUSED },
+    ];
+    assert.deepEqual(liveSources(links, ACTIVE), [mic]);
+});
+
+test("the recordings hear silence only when every mic feeding them is muted", () => {
+    const muted = { ready: true, audio: { muted: true } };
+    const open = { ready: true, audio: { muted: false } };
+    assert.equal(sourcesMuted([muted]), true);
+    assert.equal(sourcesMuted([muted, open]), false, "a headset still heard while the default mic is muted");
+    assert.equal(sourcesMuted([{ ready: false, audio: { muted: true } }]), false, "unbound, its mute isn't known");
+    assert.equal(sourcesMuted([]), false, "nothing recording");
 });

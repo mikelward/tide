@@ -10,6 +10,8 @@
 // "Stream/Input/Audio", an app recording, is Audio | Source | Stream
 // (src/services/pipewire/node.cpp). Neither has the Sink flag, so a
 // sink's monitor, which is the sink node itself, is neither.
+import { micPill } from "./osd.mjs";
+
 export const MIC_TYPES = Object.freeze({
     source: 0b01001,
     inStream: 0b01101,
@@ -72,4 +74,29 @@ export function captureRows(captures, label) {
             ready,
         };
     });
+}
+
+// The mics feeding a recording now, once each: the sources of the live
+// links into streams that aren't meters. The shell binds them too, since
+// a node's mute is only valid while bound.
+export function liveSources(links, ACTIVE) {
+    return [...new Set(links.filter(g => g.state === ACTIVE && !isMonitor(g.target)).map(g => g.source))];
+}
+
+// Whether the recordings hear silence (SPEC.md §12): every mic feeding one
+// is bound and muted. Any other, such as a USB headset an app picked while
+// the default mic is muted, is still heard, so this is false, and so it is
+// with nothing recording.
+export function sourcesMuted(sources) {
+    return sources.length > 0 && sources.every(s => Boolean(s?.ready && s.audio?.muted));
+}
+
+// The mic pill (SPEC.md §7.4, §12) while `count` apps record: the OSD's
+// mic icon, slashed while the mic is muted, since they then record
+// silence; and its hover text, in the OSD's words, "Mic on" or "Mic off",
+// then how many apps are recording.
+export function pillView({ muted, count }) {
+    const pill = micPill({ muted });
+    const apps = count === 1 ? "1 app recording" : `${count} apps recording`;
+    return { icon: pill.icon, tip: `${pill.label}, ${apps}` };
 }
