@@ -16,8 +16,11 @@ single-window rule: 80% wide and centered from aspect 2.1, 60% from 3.2,
 and full width below that. See SPEC.md §6 for the design.
 
 - `geometry.lua` is the pure window geometry, with no Hyprland API.
+- `direction.lua` is the pure rule for left and right between windows and
+  monitors, also with no Hyprland API.
 - `layout.lua` registers the layout and provides helpers for keybinds.
-- `layout_test.lua` tests both, `layout.lua` against a stub of `hl`.
+- `layout_test.lua` tests `geometry.lua` and `layout.lua`, the latter
+  against a stub of `hl`; `direction_test.lua` tests `direction.lua`.
 
 ## Using it
 
@@ -43,10 +46,24 @@ hl.bind("SUPER + J", function() qs.focus(1) end)
 hl.bind("SUPER + K", function() qs.focus(-1) end)
 hl.bind("SUPER + SHIFT + J", function() qs.move(1) end)
 hl.bind("SUPER + SHIFT + K", function() qs.move(-1) end)
+-- Left and right, going on to the next monitor at the edge (SPEC.md §6.6).
+hl.bind("SUPER + Left", function() qs.focus_side(-1) end)
+hl.bind("SUPER + Right", function() qs.focus_side(1) end)
+hl.bind("SUPER + SHIFT + Left", function() qs.move_side(-1) end)
+hl.bind("SUPER + SHIFT + Right", function() qs.move_side(1) end)
 -- Drag the master/stack edge with no key held (SPEC.md §6.6).
 hl.bind("mouse:272", qs.drag_press)
 hl.bind("mouse:272", qs.drag_release, { release = true, non_consuming = true, ignore_mods = true, locked = true })
 ```
+
+`focus_side` focuses the window to the left or right of the focused one,
+and at a monitor's edge the nearest window on the next monitor that way,
+or that monitor itself if it shows none. `move_side` moves the focused
+tiled window the same way: a swap on its monitor, or onto the next one at
+the edge, where it lands at the edge it came in by. Past the last monitor,
+both do nothing. Hyprland's own `movefocus` wraps around the monitor there,
+and its `movewindow` under a Lua layout swaps in Hyprland's window order and
+never leaves the monitor, so these don't use them.
 
 `drag_press` takes a press within `resize_grab` pixels (4 by default) of a
 split edge and passes any other on to the window, returning

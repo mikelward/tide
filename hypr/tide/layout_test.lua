@@ -278,11 +278,14 @@ local function stub_hl()
             return { kind = "layout", arg = m }
         end,
         focus = function(t)
-            return { kind = "focus", arg = t.window }
+            return { kind = "focus", arg = t.window, monitor = t.monitor }
         end,
         window = {
             swap = function(t)
                 return { kind = "swap", arg = t.target }
+            end,
+            move = function(t)
+                return { kind = "move", monitor = t.monitor, follow = t.follow }
             end,
         },
     }
@@ -327,6 +330,21 @@ local function stub_hl()
             all[#all + 1] = w
         end
         return all
+    end
+    -- Every monitor, for Super+Left and Right: { name, x, y, width,
+    -- height, scale, transform, focused, ws, special, has_fullscreen }.
+    h.monitors = {}
+    h.get_monitors = function()
+        local out = {}
+        for _, m in ipairs(h.monitors) do
+            out[#out + 1] = {
+                name = m.name, x = m.x, y = m.y, width = m.width, height = m.height,
+                scale = m.scale or 1, transform = m.transform or 0, focused = m.focused or false,
+                active_workspace = m.ws and { id = m.ws, has_fullscreen = m.has_fullscreen or false },
+                active_special_workspace = m.special and { id = m.special },
+            }
+        end
+        return out
     end
     h.get_layers = function()
         return h.layers
@@ -1403,6 +1421,165 @@ test("dragging either side of threecol's centered master grows it both ways", fu
     local t = relayout(layout, UW, 1, 3)
     eq(t[1].placed.w, 2064, "60% of 3440, centered")
     eq(t[1].placed.x, 688, "both sides moved")
+end)
+
+-- Super+Left and Right ------------------------------------------------------
+
+-- Two 1920x1080 monitors side by side, A showing workspace 1 and B
+-- workspace 2, each below a 34 px bar.
+local HD_B = { x = 1920, y = 34, w = 1920, h = 1046 }
+local function two_monitors()
+    local qs, layout = fresh()
+    hl.monitors = {
+        { name = "A", x = 0, y = 0, width = 1920, height = 1080, ws = 1, focused = true },
+        { name = "B", x = 1920, y = 0, width = 1920, height = 1080, ws = 2 },
+    }
+    return qs, layout
+end
+
+local function last()
+    return hl.dispatched[#hl.dispatched]
+end
+
+test("Super+Left and Right focus the window that way, then the next monitor's", function()
+    local qs, layout = two_monitors()
+    lay(layout, HD, 1, { 1, 2, 3 })
+    lay(layout, HD_B, 2, { 4, 5 })
+    hl.active_window = "0x101"
+    qs.focus_side(1)
+    eq(last().arg, "address:0x102", "the master's right is the stack's top")
+    hl.active_window = "0x103"
+    qs.focus_side(1)
+    eq(last().arg, "address:0x104", "the stack's right is B's master")
+    hl.active_window = "0x104"
+    qs.focus_side(-1)
+    eq(last().arg, "address:0x102", "B's master's left is a window at A's right edge")
+    local n = #hl.dispatched
+    hl.active_window = "0x105"
+    qs.focus_side(1)
+    eq(#hl.dispatched, n, "past the last monitor, nothing")
+    hl.active_window = "0x101"
+    qs.focus_side(-1)
+    eq(#hl.dispatched, n, "nor before the first")
+end)
+
+test("a monitor that way showing no windows, or a fullscreen one, takes focus itself", function()
+    local qs, layout = two_monitors()
+    lay(layout, HD, 1, { 1, 2 })
+    hl.active_window = "0x102"
+    qs.focus_side(1)
+    eq(last().kind, "focus", "a focus")
+    eq(last().monitor, "B", "monitor B")
+    eq(last().arg, nil, "no window")
+    lay(layout, HD_B, 2, { 3 })
+    hl.monitors[2].has_fullscreen = true
+    qs.focus_side(1)
+    eq(last().monitor, "B", "the fullscreen window's monitor, not a tile behind it")
+end)
+
+test("with no window focused, Super+Right goes from the focused monitor", function()
+    local qs, layout = two_monitors()
+    lay(layout, HD_B, 2, { 4, 5 })
+    hl.active_window = nil
+    qs.focus_side(1)
+    eq(last().arg, "address:0x104", "B's leftmost window")
+end)
+
+test("a scaled monitor's size is in layout coordinates", function()
+    local qs, layout = fresh()
+    -- A 2880x1800 panel at 2x is 1440 wide, so B starts at 1440.
+    hl.monitors = {
+        { name = "A", x = 0, y = 0, width = 2880, height = 1800, scale = 2, ws = 1, focused = true },
+        { name = "B", x = 1440, y = 0, width = 1920, height = 1080, ws = 2 },
+    }
+    lay(layout, { x = 0, y = 34, w = 1440, h = 866 }, 1, { 1 })
+    lay(layout, { x = 1440, y = 34, w = 1920, h = 1046 }, 2, { 2 })
+    hl.active_window = "0x101"
+    qs.focus_side(1)
+    eq(last().arg, "address:0x102", "B is to the right")
+end)
+
+test("Super+Shift+Left and Right swap on the monitor, stopping past the last", function()
+    local qs, layout = two_monitors()
+    lay(layout, HD, 1, { 1, 2, 3 })
+    hl.active_window = "0x103"
+    qs.move_side(-1)
+    eq(last().kind, "swap", "a swap")
+    eq(last().arg, "address:0x101", "with the master")
+    local n = #hl.dispatched
+    hl.active_window = "0x101"
+    qs.move_side(-1)
+    eq(#hl.dispatched, n, "nothing left of the first monitor")
+end)
+
+test("at the edge the window goes onto the next monitor, landing at the edge it came in by", function()
+    local qs, layout = two_monitors()
+    lay(layout, HD, 1, { 1, 2, 3 })
+    lay(layout, HD_B, 2, { 4, 5 })
+    hl.active_window = "0x103"
+    qs.move_side(1)
+    eq(last().kind, "move", "a move")
+    eq(last().monitor, "B", "to B")
+    eq(last().follow, true, "keeping focus")
+    -- Hyprland relayouts both workspaces, B's with the window at the end.
+    lay(layout, HD, 1, { 1, 2 })
+    local t = lay(layout, HD_B, 2, { 4, 5, 3 })
+    eq(order_of(qs, 2), "0x103 0x104 0x105", "the master, on B's left")
+    eq(t[3].placed.x, 1920, "at B's left edge")
+end)
+
+test("moving left onto a monitor lands in its stack at the height it left", function()
+    local qs, layout = two_monitors()
+    hl.monitors[1].focused, hl.monitors[2].focused = false, true
+    lay(layout, HD, 1, { 1, 2, 3 })
+    lay(layout, HD_B, 2, { 4, 5 })
+    hl.active_window = "0x104"
+    qs.move_side(-1)
+    eq(last().monitor, "A", "to A")
+    lay(layout, HD_B, 2, { 5 })
+    lay(layout, HD, 1, { 1, 2, 3, 4 })
+    -- B's master was full height, so it ties every stack place on height,
+    -- and the first of them is the top.
+    eq(order_of(qs, 1), "0x101 0x104 0x102 0x103", "the top of A's stack, on its right")
+end)
+
+test("a moved window that lands elsewhere goes where new windows go", function()
+    local qs, layout = two_monitors()
+    lay(layout, HD, 1, { 1, 2 })
+    lay(layout, HD_B, 2, { 4 })
+    hl.active_window = "0x102"
+    qs.move_side(1)
+    -- It arrived on workspace 3 instead, and later B's gets a new window.
+    lay(layout, HD, 3, { 2 })
+    lay(layout, HD_B, 2, { 4, 2 })
+    eq(order_of(qs, 2), "0x104 0x102", "the end of the stack, as new_window says")
+end)
+
+test("a floating window doesn't move with Super+Shift+Left and Right", function()
+    local qs, layout = two_monitors()
+    lay(layout, HD, 1, { 1 })
+    hl.windows = { { address = "0x1ff", workspace = { id = 1 }, mapped = true, floating = true,
+        at = { x = 1500, y = 100 }, size = { x = 300, y = 300 } } }
+    lay(layout, HD_B, 2, { 4 })
+    hl.active_window = "0x1ff"
+    local n = #hl.dispatched
+    qs.move_side(1)
+    eq(#hl.dispatched, n, "nothing")
+    qs.focus_side(1)
+    eq(last().arg, "address:0x104", "but focus goes on from it")
+end)
+
+test("Hyprland's monitors or windows that can't be read do nothing", function()
+    local qs, layout = two_monitors()
+    lay(layout, HD, 1, { 1, 2 })
+    hl.active_window = "0x101"
+    hl.get_monitors = function()
+        error("going away")
+    end
+    local n = #hl.dispatched
+    qs.focus_side(1)
+    qs.move_side(1)
+    eq(#hl.dispatched, n, "nothing")
 end)
 
 print(string.format("%d passed, %d failed", passed, failures))

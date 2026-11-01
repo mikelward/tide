@@ -439,7 +439,7 @@ export function barWorkspaces({ monitor, monitors, workspaces, windows, marks = 
 // the one with ID `current`, in the bar's order (`list`, from
 // barWorkspaces or workspaceOrder): one step per notch, toward the next
 // for a positive count and the previous for a negative one, stopping at
-// either end as Super+Left/Right do. null means stay: no whole notch,
+// either end as Super+PgUp/PgDn do. null means stay: no whole notch,
 // already at the end, or on a workspace the bar doesn't list (a special
 // one), which has no neighbors.
 export function scrollTarget(list, current, notches) {

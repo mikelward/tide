@@ -281,6 +281,7 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
     >"$tmp/install.log" 2>&1; then
     for f in .config/hypr/tide/layout.lua \
              .config/hypr/tide/geometry.lua \
+             .config/hypr/tide/direction.lua \
              .config/hypr/tide/focus.lua \
              .config/systemd/user/tide.service \
              .config/systemd/user/tide-lock.service \

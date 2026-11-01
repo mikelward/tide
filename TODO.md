@@ -7,6 +7,36 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **On the next monitor, Super+Left and Right pick a window at the edge you
+  come in by** (2026-11-01), then tilemo's rule (most shared height,
+  nearest center, first in order) among those. tilemo's rule alone, over
+  all that monitor's windows, can skip past the nearer stack to a taller
+  master on the far side, which isn't the "nearest window" asked for.
+  The alternative is tilemo's rule as is. Reversible: `direction.at_edge`
+  in `hypr/tide/direction.lua`; tilemo may want the same change.
+- **Super+Left and Right are the layout's, not Hyprland's `movefocus`**
+  (2026-11-01), so focus and move share one rule and nothing wraps past
+  the last monitor (`movefocus` wraps to the far side of the same monitor
+  unless `general:no_focus_fallback` is set). `movewindow` couldn't be used
+  for moving: under a Lua layout it swaps in Hyprland's order and never
+  leaves the monitor. The alternative for focus is `movefocus` with
+  `no_focus_fallback = true` and `binds:focus_preferred_method = 1`.
+  Reversible: conf's binds.
+- **A moved window lands in the place nearest the edge it came in by**
+  (2026-11-01), sharing the most height with where it was, then the first:
+  moving right onto a monitor in tile makes it the master; moving left puts
+  it in the stack. tilemo lands it next to the picked window on that side,
+  which in tide's layouts would shuffle the others between sides.
+  Reversible: `direction.landing`.
+- **Super+Shift+Left and Right do nothing for a floating window**
+  (2026-11-01), as in tilemo, which moves tiles alone; focus still goes on
+  from one. The alternative is Hyprland's own floating `movewindow`, which
+  nudges it. Reversible: `move_side`.
+- **A monitor showing a fullscreen window offers no windows to Super+Left
+  and Right** (2026-11-01): the tiles behind it are skipped, and focus goes
+  to that monitor, so the fullscreen window. Reversible: `sides()` in
+  `layout.lua`.
+
 - **The Actions tab comes last, with no key** (2026-11-01), after
   Attention, so the tabs you open by key stay where they were; `Tab` and
   `Shift+Tab` reach it. Settings pages ("Mouse settings") stay on Apps,
@@ -1639,16 +1669,19 @@ or workspace goes there.
 - **Redesign workspaces across several monitors** (SPEC.md §21), a
   follow-up to M8, which is built for one monitor; extra monitors keep
   Hyprland's per-monitor model meanwhile. The direction: a workspace spans
-  every display, with a layout of its own on each. Moving between displays
-  is to be designed; the candidate is `Super+Left`/`Right` focusing the
-  window to the left or right, going on at a display's edge to the nearest
-  window on the next display that way (rightmost to the leftmost on the
-  display to the right), and `Super+Shift+Left`/`Right` moving the window
-  the same way. If that edge behavior is doable, those keys replace
-  previous/next workspace and move to previous/next workspace, and
-  `Super+PgUp`/`PgDn` keep previous/next workspace. Check first whether the
-  edge behavior can be built in the Lua layout, and decide what a second
-  display shows before anything is on it.
+  every display, with a layout of its own on each. The keys between
+  displays are decided and built (SPEC.md §6.6, §21): `Super+Left`/`Right`
+  and `Super+Shift+Left`/`Right` in the Lua layout, `Super+Shift+PgUp`/`PgDn`
+  for moving the window to the previous / next workspace. Still to decide:
+  what a second display shows before anything is on it.
+- **Check the left and right keys live on Hyprland 0.56.2** (SPEC.md §6.6).
+  Tested only against a stub `hl`: on two monitors side by side,
+  `Super+Left`/`Right` walk the windows and cross at the edge, stop past
+  the last monitor, and focus an empty monitor; `Super+Shift+Left`/`Right`
+  swap on a monitor and, at the edge, move the window onto the next one at
+  the edge it came in by, keeping focus; a scaled or rotated monitor's box
+  is right; `Super+Shift+PgUp`/`PgDn` move the window to the previous /
+  next workspace and follow it.
 - **Check muting live** (SPEC.md §9, *Muted apps*). Tested only against
   stubs: `Ctrl+M` and the row's button on the Windows and Attention tabs
   write `workspaces.local.json` and the row says "muted"; a muted app's
