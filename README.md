@@ -19,8 +19,8 @@ The mocks are in [`docs/mocks/`](docs/mocks/).
 runs both installs below, and enables `tide.service`. It leaves the display
 manager as it is, with tide as one more session. By hand, it's:
 
-    make install                       # builds tide-grant, tide-tz, tide-greetd and tide-agent (needs Go 1.22+); layout, user units, portal config under ~/.config
-    sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant, tide-tz, tide-greetd, tide-agent and tide-sysmon under /usr/local
+    make install                       # builds tide-grant, tide-tz, tide-greetd, tide-agent and tide-tabs (needs Go 1.22+); layout, user units, portal config under ~/.config
+    sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant, tide-tz, tide-greetd, tide-agent, tide-tabs and tide-sysmon under /usr/local
     systemctl --user daemon-reload
     systemctl --user enable tide.service tide-clipboard.service
 

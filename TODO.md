@@ -7,6 +7,20 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **`tide-tabs` is one binary with two ends** (2026-11-01): the host Chrome
+  starts and `tide-tabs serve`, the shell's child, meeting on
+  `$XDG_RUNTIME_DIR/tide/tabs.sock`. Chrome starts the host, so the shell
+  can't own its pipe as it owns `tide-agent`'s; the relay keeps the
+  shell's side the same shape as `tide-agent`'s and needs no socket support
+  from Quickshell. The alternative is Quickshell's own socket server.
+  Reversible: `cmd/tide-tabs` and the shell's side.
+- **The host keeps the port open while the shell is away** (2026-11-01),
+  trying the socket from 250 ms doubling to 5 s, rather than exiting so the
+  extension restarts it: no process churn, and the worker stays up.
+  Reversible: `dialLoop`.
+- **Each browser's tabs go whole on every change** (2026-11-01), not as
+  diffs, so a reconnect needs no catching up. Reversible: the protocol, in
+  tileco and here.
 - [ ] **Keyboard's shortcuts sit below its settings, under a Shortcuts
   heading,** on the one scrolling page (SPEC.md §16). The alternative was a
   second view on the page, Settings and Shortcuts, switched by ‹ and › or a
@@ -1648,29 +1662,24 @@ or workspace goes there.
   workspaces. Redraw the bar's workspaces by name with the standing ones,
   home first, and the name prompt, then `make mocks`. `switcher.png` has
   the switcher's four tabs.
-- **Browser tabs (M9).** A Chrome extension listing tabs with
-  `chrome.tabs` and a native-messaging host handing them to the shell
-  (SPEC.md §8.3), installed by `setup`. First check whether an open
-  native-messaging port keeps a Manifest V3 service worker running on the
-  pinned Chrome.
-  - [ ] **Brave too**, since home uses Brave and work uses Chrome
-    (`browser1` picks per machine). The same unpacked extension loads in
-    Brave; only the native-messaging host manifest's directory differs
-    (`~/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts/` beside
-    Chrome's `~/.config/google-chrome/NativeMessagingHosts/`). `setup`
-    installs the manifest for each browser it finds.
-  - [ ] **Share the extension with tileco**, which already reads tabs with
-    `chrome.tabs` for its Tabs scope: one extension, with the native
-    messaging part only where a host is installed, rather than two to
-    keep in step. Later, if ever: start unpacked from this repository
-    (SPEC.md §8.3). In tileco both permissions would be optional, asked
-    for only on Linux, since ChromeOS needs no host, and tileco's
-    single purpose for the store would have to cover feeding tide's
-    switcher. Check first that `nativeMessaging` may be optional.
-  - [ ] Ways in, cheapest first, to decide before building: the extension
-    above (the plan); Chrome's DevTools port, ruled out in §8.3 since any
-    local process could drive the browser; window titles alone, which
-    name only each window's active tab, as a fallback with no extension.
+- **Browser tabs (M9).** tileco on Linux lists tabs with `chrome.tabs`,
+  and `tide-tabs` hands them to the shell (SPEC.md §8.3).
+  - [x] An open native-messaging port keeps a Manifest V3 service worker
+    running: Chrome 105+, and checked on Chromium 153.0.8010.12 with the
+    real host (still running after 70 s idle). Recheck on the Chrome the
+    machines run, since none is pinned.
+  - [x] **Share the extension with tileco**: tileco is the extension, with
+    `tabs` and `nativeMessaging` optional, asked for only on Linux.
+    `nativeMessaging` may be optional (SPEC.md §8.3). tileco's store
+    listing's single purpose is the maintainer's call (tileco's TODO.md).
+  - [x] `tide-tabs`: the host and the shell's relay, `cmd/tide-tabs`.
+  - [ ] **Brave too**: `setup` installs the host manifest in
+    `~/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts/` beside
+    Chrome's `~/.config/google-chrome/NativeMessagingHosts/` (scripts).
+  - [ ] The shell's side: the relay as the shell's child, the Windows tab's
+    tab rows under their windows, Enter, and the "not listed" line.
+  - [ ] On a live session: Chrome and Brave both connected, a shell
+    restart, and Enter on a tab in a window on another workspace.
 
 ## Later: our own window manager on river (SPEC.md §21.2)
 
