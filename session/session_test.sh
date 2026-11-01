@@ -312,6 +312,8 @@ if make -s install-session DESTDIR="$tmp/root" PREFIX=/usr >"$tmp/session.log" 2
         test -x "$tmp/root/usr/bin/tide"
     check "make install-session installs tide-grant" \
         test -x "$tmp/root/usr/bin/tide-grant"
+    check "make install-session installs tide-tabs, the browser tabs' host" \
+        test -x "$tmp/root/usr/bin/tide-tabs"
     check "make install-session installs the unit's shell" \
         test -x "$tmp/root/usr/bin/tide-shell"
     check "make install-session installs the session entry" \
