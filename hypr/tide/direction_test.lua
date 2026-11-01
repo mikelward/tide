@@ -122,5 +122,48 @@ test("in monocle every place ties, so the first", function()
     eq(direction.landing({}, 1, box(0, 0, 10, 10)), nil, "none with no places")
 end)
 
+test("the next monitor is the one that way, by the same rule", function()
+    local m = pair()
+    eq(direction.next_monitor(m[1], m, 1).name, "B", "right of A")
+    eq(direction.next_monitor(m[2], m, -1).name, "A", "left of B")
+    eq(direction.next_monitor(m[2], m, 1), nil, "none past the last")
+end)
+
+-- A float moving from a 1920x1046 work area to one half its size, below
+-- the same 34 px bar.
+local FROM, TO = box(0, 34, 1920, 1046), box(1920, 34, 960, 523)
+
+test("a float in the top left lands in the top left", function()
+    local b = direction.place(box(96, 86, 400, 300), FROM, TO)
+    eq(b.x, 1968, "x: its offset, a twentieth across, scaled")
+    eq(b.y, 60, "y: a twentieth down, scaled")
+    eq(b.w, 400, "its width")
+    eq(b.h, 300, "its height")
+end)
+
+test("a float in the bottom right lands in the bottom right", function()
+    local b = direction.place(box(1420, 680, 500, 400), FROM, TO)
+    eq(b.x + b.w, TO.x + TO.w, "at the right edge, held inside")
+    eq(b.y + b.h, TO.y + TO.h, "at the bottom edge, held inside")
+    eq(b.w, 500, "its width")
+    eq(b.h, 400, "its height")
+    -- Onto a monitor the same size, it's the same spot.
+    local same = direction.place(box(1420, 680, 500, 400), FROM, box(1920, 34, 1920, 1046))
+    eq(same.x, 3340, "the same offset")
+    eq(same.y, 680, "the same height")
+end)
+
+test("a float too big for the next monitor shrinks to fit inside it", function()
+    local b = direction.place(box(100, 100, 1200, 600), FROM, TO)
+    eq(b.w, 960, "as wide as the work area")
+    eq(b.h, 523, "as tall")
+    eq(b.x, 1920, "at its left")
+    eq(b.y, 34, "at its top")
+    local wide = direction.place(box(800, 100, 1200, 300), FROM, TO)
+    eq(wide.w, 960, "only the side too big shrinks")
+    eq(wide.h, 300, "the other keeps its size")
+    eq(wide.y, 34 + math.floor(66 / 1046 * 523 + 0.5), "and its relative spot")
+end)
+
 print(string.format("%d passed, %d failed", passed, failures))
 os.exit(failures == 0 and 0 or 1)

@@ -285,7 +285,10 @@ local function stub_hl()
                 return { kind = "swap", arg = t.target }
             end,
             move = function(t)
-                return { kind = "move", monitor = t.monitor, follow = t.follow }
+                return { kind = "move", monitor = t.monitor, follow = t.follow, x = t.x, y = t.y, window = t.window }
+            end,
+            resize = function(t)
+                return { kind = "resize", x = t.x, y = t.y, window = t.window }
             end,
         },
     }
@@ -332,7 +335,8 @@ local function stub_hl()
         return all
     end
     -- Every monitor, for Super+Left and Right: { name, x, y, width,
-    -- height, scale, transform, focused, ws, special, has_fullscreen }.
+    -- height, scale, transform, focused, ws, special, has_fullscreen,
+    -- reserved }.
     h.monitors = {}
     h.get_monitors = function()
         local out = {}
@@ -342,6 +346,7 @@ local function stub_hl()
                 scale = m.scale or 1, transform = m.transform or 0, focused = m.focused or false,
                 active_workspace = m.ws and { id = m.ws, has_fullscreen = m.has_fullscreen or false },
                 active_special_workspace = m.special and { id = m.special },
+                reserved = m.reserved,
             }
         end
         return out
@@ -1555,18 +1560,95 @@ test("a moved window that lands elsewhere goes where new windows go", function()
     eq(order_of(qs, 2), "0x104 0x102", "the end of the stack, as new_window says")
 end)
 
-test("a floating window doesn't move with Super+Shift+Left and Right", function()
-    local qs, layout = two_monitors()
+-- A floating window on A, focused, with B showing workspace 2. Both
+-- monitors reserve 34 px for the bar.
+local function float_on_a(qs, layout, at, size)
+    for _, m in ipairs(hl.monitors) do
+        m.reserved = { top = 34, right = 0, bottom = 0, left = 0 }
+    end
     lay(layout, HD, 1, { 1 })
     hl.windows = { { address = "0x1ff", workspace = { id = 1 }, mapped = true, floating = true,
-        at = { x = 1500, y = 100 }, size = { x = 300, y = 300 } } }
+        at = at, size = size } }
     lay(layout, HD_B, 2, { 4 })
     hl.active_window = "0x1ff"
+end
+
+-- The floating moves since dispatch `n`: the monitor move, any resize,
+-- and the move to its place.
+local function float_moves(n)
+    local out = {}
+    for i = n + 1, #hl.dispatched do
+        out[#out + 1] = hl.dispatched[i]
+    end
+    return out
+end
+
+test("a floating window goes onto the next monitor at the same spot, keeping focus", function()
+    local qs, layout = two_monitors()
+    float_on_a(qs, layout, { x = 96, y = 86 }, { x = 400, y = 300 })
+    local n = #hl.dispatched
+    qs.move_side(1)
+    local d = float_moves(n)
+    eq(#d, 2, "a monitor move and a move, no resize")
+    eq(d[1].kind, "move", "a move")
+    eq(d[1].monitor, "B", "to B")
+    eq(d[1].follow, true, "keeping focus")
+    eq(d[1].window, "address:0x1ff", "the float")
+    eq(d[2].x, 2016, "the same spot across B")
+    eq(d[2].y, 86, "and down it")
+    eq(d[2].window, "address:0x1ff", "the float")
+    eq(d[2].monitor, nil, "a move to a place, not a monitor")
+    n = #hl.dispatched
+    hl.active_window = "0x1ff"
+    hl.windows[1].at = { x = 0, y = 34 }
+    qs.move_side(-1)
+    eq(#hl.dispatched, n, "nothing left of the first monitor")
+    qs.focus_side(1)
+    eq(last().arg, "address:0x101", "focus still goes on from it")
+end)
+
+test("a floating window keeps its relative spot on a smaller monitor", function()
+    local qs, layout = two_monitors()
+    -- B is half A's size, below the same bar.
+    hl.monitors[2].width, hl.monitors[2].height = 960, 557
+    float_on_a(qs, layout, { x = 96, y = 86 }, { x = 400, y = 300 })
+    local n = #hl.dispatched
+    qs.move_side(1)
+    local d = float_moves(n)
+    eq(d[#d].x, 1968, "top left: a twentieth across B")
+    eq(d[#d].y, 60, "and a twentieth down")
+    hl.monitors[1].focused, hl.monitors[2].focused = true, false
+    float_on_a(qs, layout, { x = 1420, y = 680 }, { x = 500, y = 400 })
+    n = #hl.dispatched
+    qs.move_side(1)
+    d = float_moves(n)
+    eq(#d, 2, "it fits, so no resize")
+    eq(d[2].x, 1920 + 960 - 500, "bottom right: held at B's right edge")
+    eq(d[2].y, 557 - 400, "and its bottom")
+end)
+
+test("a floating window too big for the next monitor shrinks to fit inside it", function()
+    local qs, layout = two_monitors()
+    hl.monitors[2].width, hl.monitors[2].height = 960, 557
+    float_on_a(qs, layout, { x = 100, y = 100 }, { x = 1200, y = 600 })
+    local n = #hl.dispatched
+    qs.move_side(1)
+    local d = float_moves(n)
+    eq(#d, 3, "a monitor move, a resize and a move")
+    eq(d[2].kind, "resize", "the resize before the move")
+    eq(d[2].x, 960, "B's work area wide")
+    eq(d[2].y, 523, "and tall")
+    eq(d[3].x, 1920, "at its left")
+    eq(d[3].y, 34, "below the bar")
+end)
+
+test("a floating window doesn't go to a monitor showing no workspace", function()
+    local qs, layout = two_monitors()
+    float_on_a(qs, layout, { x = 96, y = 86 }, { x = 400, y = 300 })
+    hl.monitors[2].ws = nil
     local n = #hl.dispatched
     qs.move_side(1)
     eq(#hl.dispatched, n, "nothing")
-    qs.focus_side(1)
-    eq(last().arg, "address:0x104", "but focus goes on from it")
 end)
 
 test("Hyprland's monitors or windows that can't be read do nothing", function()

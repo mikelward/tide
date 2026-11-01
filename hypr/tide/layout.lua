@@ -518,6 +518,21 @@ local function monitor_box(m)
     return { x = x, y = y, w = w / scale, h = h / scale }
 end
 
+-- A monitor's work area, where a floating window goes: its box less what
+-- the bar and other layers reserve, as Hyprland's floating work area is
+-- (conf sets no gaps).
+local function work_area(m, box)
+    local r = field(m, "reserved") or {}
+    local top, right = tonumber(r.top) or 0, tonumber(r.right) or 0
+    local bottom, left = tonumber(r.bottom) or 0, tonumber(r.left) or 0
+    return {
+        x = box.x + left,
+        y = box.y + top,
+        w = math.max(1, box.w - left - right),
+        h = math.max(1, box.h - top - bottom),
+    }
+end
+
 -- The monitors as direction.find takes them, with the tiles each shows in
 -- layout order, plus the focused one's name and the focused window: nil if
 -- Hyprland can't be read. A monitor showing a fullscreen window offers no
@@ -568,7 +583,7 @@ local function sides()
             -- A window moved to a monitor goes to its active workspace,
             -- whatever special one shows over it.
             local active = field(field(m, "active_workspace"), "id")
-            list[#list + 1] = { name = name, box = box, ws = id, active = active, tiles = tiles }
+            list[#list + 1] = { name = name, box = box, area = work_area(m, box), ws = id, active = active, tiles = tiles }
             if field(m, "focused") then
                 focused = list[#list]
             end
@@ -614,15 +629,39 @@ function M.focus_side(d)
     end
 end
 
--- Super+Shift+Left / Super+Shift+Right: move the focused tiled window the
--- same way. On its monitor it swaps with the window focus_side would pick;
+-- A floating window goes onto the next monitor that way, still floating,
+-- at the same relative spot in its work area and its size, shrunk only to
+-- fit (direction.place), and keeps focus. Past the last monitor, nothing.
+-- Hyprland's monitor move keeps its offset from the monitor's corner, and
+-- its resize keeps its center, so the resize comes before the move.
+local function move_float(d, list, here, mine)
+    local mon = direction.next_monitor(here, list, d)
+    if not mon or mon.active == nil then
+        return
+    end
+    local to = direction.place(mine.box, here.area, mon.area)
+    local w = selector(mine.address)
+    hl.dispatch(hl.dsp.window.move({ monitor = mon.name, follow = true, window = w }))
+    if to.w ~= mine.box.w or to.h ~= mine.box.h then
+        hl.dispatch(hl.dsp.window.resize({ x = to.w, y = to.h, window = w }))
+    end
+    hl.dispatch(hl.dsp.window.move({ x = to.x, y = to.y, window = w }))
+end
+
+-- Super+Shift+Left / Super+Shift+Right: move the focused window the same
+-- way. On its monitor a tile swaps with the window focus_side would pick;
 -- at the edge it goes onto the next monitor, joining the workspace there
--- at the edge it came in by, and keeps focus. Past the last monitor, or for
--- a floating window, nothing.
+-- at the edge it came in by, and keeps focus. A floating window goes
+-- straight to the next monitor (move_float). Past the last monitor,
+-- nothing.
 function M.move_side(d)
     arriving = nil
     local list, here, mine = sides()
-    if not list or not mine or not mine.box or mine.floating or mine.ws == nil then
+    if not list or not mine or not mine.box or mine.ws == nil then
+        return
+    end
+    if mine.floating then
+        move_float(d, list, here, mine)
         return
     end
     local tile, mon = direction.find(mine.box, here.name, list, d)

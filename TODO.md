@@ -28,10 +28,12 @@ once you have agreed with it or reversed it.
   it in the stack. tilemo lands it next to the picked window on that side,
   which in tide's layouts would shuffle the others between sides.
   Reversible: `direction.landing`.
-- **Super+Shift+Left and Right do nothing for a floating window**
-  (2026-11-01), as in tilemo, which moves tiles alone; focus still goes on
-  from one. The alternative is Hyprland's own floating `movewindow`, which
-  nudges it. Reversible: `move_side`.
+- **The work area a float is placed in is the monitor less what layers
+  reserve** (2026-11-01), when Super+Shift+Left and Right move a floating
+  window onto the next monitor at the same relative spot, shrunk only to
+  fit (SPEC.md §6.6). Hyprland's floating work area also takes off
+  `float_gaps` (or `gaps_out`), which conf sets to 0. The alternative is
+  to read those gaps too. Reversible: `work_area` in `layout.lua`.
 - **A monitor showing a fullscreen window offers no windows to Super+Left
   and Right** (2026-11-01): the tiles behind it are skipped, and focus goes
   to that monitor, so the fullscreen window. Reversible: `sides()` in
