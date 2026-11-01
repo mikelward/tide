@@ -1346,7 +1346,7 @@ with new keys in **bold**:
 | **`Super+Shift+1…9`** | send the focused window to the Nth workspace in the bar's order, staying where you are |
 | **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
 | **`Super+Left`** / **`Right`** | focus the window to the left / right of the focused one; at a monitor's edge, the nearest window on the next monitor that way, or that monitor itself if it shows none; past the last monitor, nothing (as in tilemo; the rule is below) |
-| **`Super+Shift+Left`** / **`Right`** | move the focused window the same way: on its monitor it swaps with the window that way; at the edge it goes onto the next monitor, joining the workspace showing there at the edge it came in by, and keeps focus; past the last monitor, or for a floating window, nothing |
+| **`Super+Shift+Left`** / **`Right`** | move the focused window the same way: on its monitor it swaps with the window that way; at the edge it goes onto the next monitor, joining the workspace showing there at the edge it came in by, and keeps focus. A floating window goes straight onto the next monitor that way, still floating, at the same relative spot and its size (the rule is below), and keeps focus. Past the last monitor, nothing |
 | `Super+PgUp` / `PgDn` | previous / next workspace in the bar's order, stopping at either end (as in GNOME) |
 | **`Super+Shift+PgUp`** / **`PgDn`** | move the window to the previous / next workspace in the bar's order, and follow it |
 | `Super+J` / `K`, `Super+Shift+J` / `K` | focus / move down and up the stack |
@@ -1379,13 +1379,31 @@ come in by, compared against the focused window. A moved window lands in the
 place in that workspace's layout nearest that edge, sharing the most height
 with where it was.
 
+A floating window moved onto the next monitor keeps its place and size as
+far as it can (`direction.place`):
+- It keeps its relative spot. Its top-left corner's offset in the old
+  monitor's work area, as a share of that area's width and height, gives
+  the offset in the new one. One near the top left lands near the top left.
+- It keeps its size, unless it is wider or taller than the new work area.
+  Then it shrinks to that width or height, and no further.
+- It is then moved just enough to be wholly inside the new work area. One
+  in the bottom-right corner stays at that corner on a smaller monitor.
+
+The work area is the monitor less what the bar and other layers reserve.
+Hyprland's monitor move keeps the window's offset from the monitor's
+corner, so the layout follows it with a resize, where the size changes,
+and then a move to the place. The resize comes first because Hyprland's
+floating resize keeps the window's center.
+
 Hyprland 0.56's own dispatchers don't do this. At the last monitor's edge,
 `movefocus` wraps around to the far side of the same monitor. Under a Lua
 layout, `movewindow` swaps the window with its neighbor in Hyprland's own
 window order, which isn't the layout's, and never leaves the monitor
-(`CLuaTiledAlgorithm::moveTargetInDirection`). So the keys call the layout's
-`focus_side` and `move_side`; without the tide layout, conf binds the
-built-in dispatchers instead.
+(`CLuaTiledAlgorithm::moveTargetInDirection`). For a floating window it only
+pushes it against the edge of its own monitor's work area
+(`CDefaultFloatingAlgorithm::moveTargetInDirection`). So the keys call the
+layout's `focus_side` and `move_side`; without the tide layout, conf binds
+the built-in dispatchers instead, with a monitor move for a floating window.
 
 - **Dragging the master/stack edge.** A plain left-press within 4 px
   either side of the edge between the masters and the stack starts a

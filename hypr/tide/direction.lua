@@ -1,6 +1,7 @@
 -- Left and right between windows and monitors (SPEC.md §6.6): which window
 -- Super+Left and Right select, where Super+Shift+Left and Right move the
--- window, and where a moved window lands on the next monitor. Pure geometry
+-- window, and where a moved window lands on the next monitor, tiled or
+-- floating. Pure geometry
 -- on { x, y, w, h } boxes, with no Hyprland API, so it tests in plain Lua
 -- with made-up monitors. tilemo's direction.lua is the same rule.
 --
@@ -73,6 +74,19 @@ function M.at_edge(items, d)
     return out
 end
 
+-- Of `monitors`, the next one past monitor `cur` going `d`, by the rule
+-- against `cur`'s box, or nil with none that way.
+function M.next_monitor(cur, monitors, d)
+    local others = {}
+    for _, m in ipairs(monitors) do
+        if m.name ~= cur.name then
+            others[#others + 1] = { box = m.box, monitor = m }
+        end
+    end
+    local next_one = M.pick(cur.box, others, d)
+    return next_one and next_one.monitor
+end
+
 -- Where Super+Left or Right goes from `box` on monitor `here`. `monitors`
 -- is every monitor, each { name, box, tiles }, its tiles each { address,
 -- box }, in layout order. Returns the tile picked and its monitor: on this
@@ -93,17 +107,10 @@ function M.find(box, here, monitors, d)
     if hit then
         return hit, cur
     end
-    local others = {}
-    for _, m in ipairs(monitors) do
-        if m.name ~= here then
-            others[#others + 1] = { box = m.box, monitor = m }
-        end
-    end
-    local next_one = M.pick(cur.box, others, d)
-    if not next_one then
+    local m = M.next_monitor(cur, monitors, d)
+    if not m then
         return nil
     end
-    local m = next_one.monitor
     -- The nearest window there is one at the edge you come in by. That
     -- monitor is the side test, so a tile there whose center is back past
     -- `box`'s still counts.
@@ -126,6 +133,21 @@ function M.landing(slots, d, from)
         end
     end
     return best
+end
+
+-- Where a floating window at `box` in work area `from` goes in work area
+-- `to`: at the same relative spot, its offset in `from` scaled to `to`;
+-- at its size, shrunk only where it's bigger than `to`; then moved just
+-- enough to be inside `to`.
+function M.place(box, from, to)
+    local w, h = math.min(box.w, to.w), math.min(box.h, to.h)
+    local fx = from.w > 0 and (box.x - from.x) / from.w or 0
+    local fy = from.h > 0 and (box.y - from.y) / from.h or 0
+    local x = math.floor(to.x + fx * to.w + 0.5)
+    local y = math.floor(to.y + fy * to.h + 0.5)
+    x = math.max(to.x, math.min(x, to.x + to.w - w))
+    y = math.max(to.y, math.min(y, to.y + to.h - h))
+    return { x = x, y = y, w = w, h = h }
 end
 
 return M
