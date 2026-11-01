@@ -1719,7 +1719,7 @@ See [`bar.png`](docs/mocks/bar.png).
 
 | Icon | Shows | Click | Scroll / other |
 |---|---|---|---|
-| **Presenting** (accent) | presenter mode is on (§10) | turns presenter mode off | — |
+| **Presenting** (accent) | presenter mode is on (§10) | turns presenter mode off | hover: "Presenting: Do not disturb and keep awake", as tilemo's |
 | Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen, window or area), and the app reading it; stop it from the app | — |
 | Privacy: mic (orange) | any app is capturing the microphone; the mic slashed while every mic being recorded from is muted (`Super+Shift+M` mutes them all), so a headset an app picked still shows live | per-app list with mute | hover: "Mic on" or "Mic off", as the OSD says, and how many apps are recording |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
