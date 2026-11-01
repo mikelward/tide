@@ -67,6 +67,7 @@
 <p class="note"><b>Clipboard</b>: whether the history behind Super+C keeps new copies, how many (− and + step through 25 to 1,000), and Clear history, which says how it went.</p>
 <p class="note"><b>Power</b>: the battery as the bar's popover shows it, the power profile when power-profiles-daemon is there (the page says so when it isn't), and what closing the lid does with no other monitor: Suspend, logind's own; Lock; or Do nothing, which hold logind's lid switch.</p>
 <p class="note"><b>Workspaces</b>: the standing workspaces (the first is home), home's apps and the name patterns, each a list with a bin per entry, arrows where order counts, and a field to add one, refused with the reason when the files wouldn't take it.</p>
+<p class="note"><b>Floating</b>: the rules that float a window, each a class and, optionally, a title pattern, with arrows, a bin and two fields to add one. Below, Floating now: the floating windows no rule covers, one per class. Always float, or Super+Alt+F for the focused window, fills the fields with its class and exact title, the title selected to trim; Enter or Add adds it. The second shows a pattern the shell and Hyprland would read differently refused, saying why.</p>
 <script>
 // The sidebar: a group's heading (a string), then its pages.
 const PAGES = [
@@ -74,7 +75,7 @@ const PAGES = [
   ['Displays', 'desktop_windows'], ['Sound', 'volume_up'], ['Network', 'wifi'], ['Bluetooth', 'bluetooth'],
   ['Mouse', 'mouse'], ['Touchpad', 'touchpad_mouse'], ['Keyboard', 'keyboard'], ['Power', 'battery_5_bar'],
   'WINDOWS',
-  ['Layouts', 'view_column'], ['Workspaces', 'grid_view'],
+  ['Layouts', 'view_column'], ['Workspaces', 'grid_view'], ['Floating', 'filter_none'],
   'GENERAL',
   ['Appearance', 'contrast'], ['Notifications', 'notifications'], ['Clipboard', 'content_paste'], ['Clocks', 'schedule'],
   ['Idle', 'bedtime'], ['Start at login', 'play_arrow'],
@@ -105,6 +106,18 @@ const panels = [
   ['Workspaces',
    'Standing workspaces are always on the bar, in this order; the first is home, made at login, where only home\u2019s apps go. Home\u2019s apps start there at login: a program, such as gmail, or a web address, opened as a Chrome app window. A window class or a site goes there without starting. A name pattern is a regular expression tried against a new window\u2019s title, in order: its first capture group names the window\u2019s workspace.',
    '<div class="head">STANDING WORKSPACES</div><div class="item"><span class="cmd" style="font-family:var(--font-ui)">in <span style="color:var(--fg-dim)">· home</span></span><span class="btn dim"><i class="ms">arrow_upward</i></span><span class="btn"><i class="ms">arrow_downward</i></span><span class="btn"><i class="ms">delete</i></span></div><div class="item"><span class="cmd" style="font-family:var(--font-ui)">re</span><span class="btn"><i class="ms">arrow_upward</i></span><span class="btn"><i class="ms">arrow_downward</i></span><span class="btn"><i class="ms">delete</i></span></div><div class="item"><span class="cmd" style="font-family:var(--font-ui)">oc</span><span class="btn"><i class="ms">arrow_upward</i></span><span class="btn"><i class="ms">arrow_downward</i></span><span class="btn"><i class="ms">delete</i></span></div><div class="item"><span class="cmd" style="font-family:var(--font-ui)">me</span><span class="btn"><i class="ms">arrow_upward</i></span><span class="btn dim"><i class="ms">arrow_downward</i></span><span class="btn"><i class="ms">delete</i></span></div><div class="field">Add a workspace, such as docs</div><div class="head">HOME\u2019S APPS</div><div class="item"><span class="cmd" style="font-family:var(--font-ui)">gmail</span><span class="btn"><i class="ms">delete</i></span></div><div class="item"><span class="cmd" style="font-family:var(--font-ui)">google-chat</span><span class="btn"><i class="ms">delete</i></span></div><div class="item"><span class="cmd" style="font-family:var(--font-ui)">google-calendar</span><span class="btn"><i class="ms">delete</i></span></div><div class="field">Add a program or web address, such as gmail</div><div class="head">NAME PATTERNS</div><div class="item"><span class="cmd">\\b([A-Z]+-[0-9]+)\\b</span><span class="btn dim"><i class="ms">arrow_upward</i></span><span class="btn dim"><i class="ms">arrow_downward</i></span><span class="btn"><i class="ms">delete</i></span></div><div class="field">Add a pattern</div>'],
+  ['Floating',
+   'Windows of these classes open floating, as dialogs do; a title pattern, a regular expression found anywhere in the title, narrows a rule to some of an app’s windows. Floating now lists the windows you’ve floated that no rule covers: Always float fills in a rule for one, its class and exact title, to trim and add with Enter. Super+Alt+F opens this page filled in for the focused window. A window already open floats as its rule is added; taking a rule out leaves open windows as they are.',
+   '<div class="head">ALWAYS FLOAT</div>' + list(['org.example.Calculator', 'org.example.Browser titled /^Library$/']) +
+   '<div style="display:flex;align-items:center"><div class="field typing" style="flex:1;box-shadow:none">org.example.Player</div><div class="field typing" style="flex:1"><span style="background:var(--accent-bg);color:var(--accent-fg);border-radius:2px">^Track 1\\.ogg$</span></div><span class="sw" style="width:auto;padding:0 8px;margin-right:6px;background:transparent;box-shadow:inset 0 0 0 1px var(--surface-2)">Add</span></div>' +
+   '<div class="head">FLOATING NOW</div>' +
+   '<div class="item"><span class="cmd" style="font-family:var(--font-ui)">org.example.Player · Track 1.ogg</span><span class="sw" style="width:auto;padding:0 8px;background:transparent;box-shadow:inset 0 0 0 1px var(--surface-2)">Always float</span></div>' +
+   '<div class="item"><span class="cmd" style="font-family:var(--font-ui)">org.example.Notes · Scratch</span><span class="sw" style="width:auto;padding:0 8px;background:transparent;box-shadow:inset 0 0 0 1px var(--surface-2)">Always float</span></div>'],
+  ['Floating',
+   '',
+   '<div class="head">ALWAYS FLOAT</div>' + list(['org.example.Calculator', 'org.example.Browser titled /^Library$/']) +
+   '<div style="display:flex;align-items:center"><div class="field typing" style="flex:1;box-shadow:none">org.example.Mail</div><div class="field typing" style="flex:1">(?=Compose)</div><span class="sw" style="width:auto;padding:0 8px;margin-right:6px;background:transparent;box-shadow:inset 0 0 0 1px var(--surface-2)">Add</span></div>' +
+   '<div class="refused">title &quot;(?=Compose)&quot; uses a lookahead or lookbehind, which Hyprland’s patterns don’t have; not changing the floating rules</div>'],
 ];
 const root = document.getElementById('panels');
 for (const [page, about, body] of panels) {

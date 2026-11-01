@@ -102,6 +102,8 @@ ShellRoot {
         KeysData.list();
         LayoutsData.load();
         WorkspacesData.load();
+        // The floating rules, applied from the start.
+        FloatingData.load();
         OutputsData.load();
         OutputsData.listMonitors();
         // Start at login's commands, once a session.

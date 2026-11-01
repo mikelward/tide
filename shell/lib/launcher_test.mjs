@@ -429,6 +429,7 @@ test("each settings page, and each section that opens on its own, is found by it
         power: ["power settings", "battery", "power profile", "lid"],
         layouts: ["layouts", "tiling"],
         workspaces: ["workspaces settings", "home workspace", "name patterns"],
+        floating: ["floating", "window rules", "dialogs"],
         appearance: ["appearance", "wallpaper"],
         notifications: ["notifications", "quiet hours", "muted apps"],
         clipboard: ["clipboard settings", "copy history", "paste history"],

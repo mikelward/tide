@@ -9,6 +9,7 @@ import "lib/appearance.mjs" as Appearance
 import "lib/audio.mjs" as Audio
 import "lib/clipboard.mjs" as Clip
 import "lib/dnd.mjs" as Dnd
+import "lib/floating.mjs" as FloatRules
 import "lib/idle.mjs" as Idle
 import "lib/input.mjs" as Input
 import "lib/layouts.mjs" as Layouts
@@ -31,8 +32,8 @@ PanelWindow {
     property int page: 0
     readonly property var current: Settings.PAGES[page]
     // The section of the page to scroll to, by its id (settings.mjs's
-    // SECTIONS), or "": set as one opens, and cleared by another page or a
-    // flick.
+    // SECTIONS, or floating-add for the Floating page's fields), or "": set
+    // as one opens, and cleared by another page or a flick.
     property string section: ""
 
     // Another page starts at its top.
@@ -290,6 +291,19 @@ PanelWindow {
         function removeWorkspaceItem(key: string, item: string): string {
             return WorkspacesData.removeItem(key, undefined, item);
         }
+        // Adds, moves (a step later) or takes out one of the Floating page's
+        // rules, by its class and title pattern ("" for none), as it does:
+        // `qs -c tide ipc call settings addFloating org.gnome.Calculator ""`.
+        // Each answers why not, or "".
+        function addFloating(cls: string, title: string): string {
+            return FloatingData.add(cls, title);
+        }
+        function moveFloating(cls: string, title: string, step: int): string {
+            return FloatingData.move(undefined, { class: cls, title: title }, step);
+        }
+        function removeFloating(cls: string, title: string): string {
+            return FloatingData.remove(undefined, { class: cls, title: title });
+        }
     }
 
     Connections {
@@ -470,6 +484,12 @@ PanelWindow {
                 function scrolled() {
                     if (root.section === "keys" && keyList.visible) {
                         contentY = Math.max(0, Math.min(keyList.y, contentHeight - height));
+                    }
+                    // The Floating page's fields, filled in by Always float
+                    // or Super+Alt+F, kept in view below the rules.
+                    if (root.section === "floating-add" && floatingPage.visible) {
+                        const bottom = floatingPage.y + floatAddRow.y + floatAddRow.height + 40;
+                        contentY = Math.max(0, Math.min(bottom - height, contentHeight - height));
                     }
                 }
 
@@ -2965,6 +2985,373 @@ PanelWindow {
                             wrapMode: Text.Wrap
                             textFormat: Text.PlainText
                             text: workspacesPage.refused
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Floating: the rules, each a class and maybe a title
+                    // pattern, which the arrows move and the bin takes out,
+                    // one typed at the foot added; then the floating
+                    // windows no rule covers, each with Always float
+                    // (SPEC.md §6.4, §16).
+                    Column {
+                        id: floatingPage
+
+                        property string refused: ""
+                        // Which rule covers the window the fields were
+                        // filled for already, or "".
+                        property string note: ""
+
+                        function changed(error) {
+                            refused = error;
+                            root.report(error);
+                        }
+
+                        function addTyped() {
+                            const error = FloatingData.add(newFloatClass.text, newFloatTitle.text);
+                            floatingPage.changed(error);
+                            if (error === "") {
+                                floatingPage.clearTyped();
+                            }
+                        }
+
+                        function clearTyped() {
+                            newFloatClass.text = "";
+                            newFloatTitle.text = "";
+                            note = "";
+                            keys.forceActiveFocus();
+                        }
+
+                        // Always float and Super+Alt+F fill the fields, and
+                        // the title, selected, takes the keys, to trim or
+                        // clear; Enter adds the rule. After the panel has
+                        // opened, which takes the keys itself.
+                        Connections {
+                            target: FloatingData
+
+                            function onPrefillChanged() {
+                                const p = FloatingData.prefill;
+                                if (!p) {
+                                    return;
+                                }
+                                newFloatClass.text = p.class;
+                                newFloatTitle.text = p.title;
+                                floatingPage.note = p.note;
+                                floatingPage.refused = "";
+                                Qt.callLater(() => {
+                                    root.section = "floating-add";
+                                    pageFlick.scrolled();
+                                    newFloatTitle.forceActiveFocus();
+                                    newFloatTitle.selectAll();
+                                });
+                            }
+                        }
+
+                        onVisibleChanged: {
+                            refused = "";
+                            if (visible) {
+                                // The client list's floating flags, fresh.
+                                Hyprland.refreshToplevels();
+                            }
+                        }
+                        visible: root.current.id === "floating"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        Heading {
+                            text: "ALWAYS FLOAT"
+                        }
+
+                        Repeater {
+                            model: FloatingData.rules
+
+                            Item {
+                                id: floatRule
+
+                                required property var modelData
+                                required property int index
+
+                                width: floatingPage.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.right: floatButtons.left
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    textFormat: Text.PlainText
+                                    text: FloatRules.describe(floatRule.modelData)
+                                    color: Theme.fg
+                                    font.family: Theme.monoFont
+                                    font.pixelSize: 13
+                                }
+
+                                Row {
+                                    id: floatButtons
+
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    StepButton {
+                                        name: "go-up-symbolic"
+                                        value: floatRule.index
+                                        next: Math.max(0, floatRule.index - 1)
+                                        onActivated: floatingPage.changed(FloatingData.move(floatRule.index, floatRule.modelData, -1))
+                                    }
+
+                                    StepButton {
+                                        name: "go-down-symbolic"
+                                        value: floatRule.index
+                                        next: Math.min(FloatingData.rules.length - 1, floatRule.index + 1)
+                                        onActivated: floatingPage.changed(FloatingData.move(floatRule.index, floatRule.modelData, 1))
+                                    }
+
+                                    StepButton {
+                                        name: "edit-delete-symbolic"
+                                        value: 0
+                                        next: 1
+                                        onActivated: floatingPage.changed(FloatingData.remove(floatRule.index, floatRule.modelData))
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            visible: FloatingData.rules.length === 0
+                            x: 10
+                            width: floatingPage.width - 20
+                            topPadding: 4
+                            bottomPadding: 4
+                            text: "No rules of your own: dialogs float, and the rest tile."
+                            color: Theme.fgDim
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                        }
+
+                        // A class and, optionally, a title pattern: Enter
+                        // in either adds the rule, and one refused stays to
+                        // be fixed.
+                        Item {
+                            id: floatAddRow
+
+                            onYChanged: pageFlick.scrolled()
+                            width: floatingPage.width
+                            implicitHeight: 32
+
+                            Rectangle {
+                                id: floatClassField
+
+                                anchors.left: parent.left
+                                anchors.leftMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: (parent.width - addFloat.width - 24) / 2
+                                height: 26
+                                radius: 6
+                                color: Theme.surface2
+                                border.width: newFloatClass.activeFocus ? 1 : 0
+                                border.color: Theme.accent
+
+                                TextInput {
+                                    id: newFloatClass
+
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    anchors.rightMargin: 8
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    clip: true
+                                    color: Theme.fg
+                                    font.family: Theme.monoFont
+                                    font.pixelSize: 13
+                                    onAccepted: floatingPage.addTyped()
+                                    KeyNavigation.tab: newFloatTitle
+                                    Keys.onEscapePressed: floatingPage.clearTyped()
+
+                                    Text {
+                                        visible: newFloatClass.text === "" && !newFloatClass.activeFocus
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "A class, such as org.gnome.Calculator"
+                                        color: Theme.fgFaint
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                anchors.left: floatClassField.right
+                                anchors.leftMargin: 6
+                                anchors.right: addFloat.left
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: 26
+                                radius: 6
+                                color: Theme.surface2
+                                border.width: newFloatTitle.activeFocus ? 1 : 0
+                                border.color: Theme.accent
+
+                                TextInput {
+                                    id: newFloatTitle
+
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    anchors.rightMargin: 8
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    clip: true
+                                    color: Theme.fg
+                                    font.family: Theme.monoFont
+                                    font.pixelSize: 13
+                                    onAccepted: floatingPage.addTyped()
+                                    Keys.onEscapePressed: floatingPage.clearTyped()
+
+                                    Text {
+                                        visible: newFloatTitle.text === "" && !newFloatTitle.activeFocus
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Its title, optional, such as ^Library$"
+                                        color: Theme.fgFaint
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                id: addFloat
+
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: addFloatLabel.implicitWidth + 16
+                                height: 26
+                                radius: 7
+                                color: addFloatHover.hovered ? Theme.surface2 : "transparent"
+                                border.width: 1
+                                border.color: Theme.surface2
+
+                                Text {
+                                    id: addFloatLabel
+
+                                    anchors.centerIn: parent
+                                    text: "Add"
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                }
+
+                                HoverHandler {
+                                    id: addFloatHover
+                                }
+
+                                TapHandler {
+                                    onTapped: floatingPage.addTyped()
+                                }
+                            }
+                        }
+
+                        // Which rule already covers the window filled in.
+                        Text {
+                            visible: floatingPage.note !== ""
+                            x: 10
+                            width: floatingPage.width - 20
+                            topPadding: 2
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: floatingPage.note
+                            color: Theme.fgDim
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+
+                        Heading {
+                            text: "FLOATING NOW"
+                        }
+
+                        Repeater {
+                            model: FloatingData.unruled
+
+                            Item {
+                                id: floatingWindow
+
+                                required property var modelData
+
+                                width: floatingPage.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.right: alwaysFloat.left
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    textFormat: Text.PlainText
+                                    text: floatingWindow.modelData.title === "" ? floatingWindow.modelData.class : `${floatingWindow.modelData.class} · ${floatingWindow.modelData.title}`
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Rectangle {
+                                    id: alwaysFloat
+
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: alwaysFloatLabel.implicitWidth + 16
+                                    height: 26
+                                    radius: 7
+                                    color: alwaysFloatHover.hovered ? Theme.surface2 : "transparent"
+                                    border.width: 1
+                                    border.color: Theme.surface2
+
+                                    Text {
+                                        id: alwaysFloatLabel
+
+                                        anchors.centerIn: parent
+                                        text: "Always float"
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 12
+                                    }
+
+                                    HoverHandler {
+                                        id: alwaysFloatHover
+                                    }
+
+                                    TapHandler {
+                                        onTapped: floatingPage.changed(FloatingData.prefillFor(floatingWindow.modelData))
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            visible: FloatingData.unruled.length === 0
+                            x: 10
+                            width: floatingPage.width - 20
+                            topPadding: 4
+                            bottomPadding: 4
+                            wrapMode: Text.Wrap
+                            text: "No window floats that a rule doesn't cover. Float one with Super+Shift+F to add a rule for it here."
+                            color: Theme.fgDim
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                        }
+
+                        Text {
+                            visible: floatingPage.refused !== ""
+                            x: 10
+                            width: floatingPage.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: floatingPage.refused
                             color: Theme.danger
                             font.family: Theme.font
                             font.pixelSize: 12
