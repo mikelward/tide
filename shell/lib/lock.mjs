@@ -356,11 +356,14 @@ export function layoutBadge(name) {
     return (inner ? inner[1].trim() : text).toUpperCase();
 }
 
-// The main keyboard's layout from `hyprctl devices -j` (Hyprland 0.56):
-// {keyboards: [{name, active_keymap, main}]}. The main one, else the first.
-// Its description ("English (Dvorak)"), or null when there's no keyboard or
-// the text isn't that JSON.
-export function mainKeymap(text) {
+// The main keyboard from `hyprctl devices -j` (Hyprland 0.56):
+// {keyboards: [{name, layout, active_layout_index, active_keymap, main}]}.
+// The main one, else the first: {keymap, index, count}, `keymap` its
+// layout's description ("English (Dvorak)"), `index` which of its layouts
+// is active, null when Hyprland says none, and `count` how many it has
+// (`layout` is XKB's list, "us,de"). null when there's no keyboard or the
+// text isn't that JSON.
+export function mainKeyboard(text) {
     let devices;
     try {
         devices = JSON.parse(text);
@@ -370,7 +373,41 @@ export function mainKeymap(text) {
     const keyboards = Array.isArray(devices?.keyboards) ? devices.keyboards : [];
     const keyboard = keyboards.find((k) => k && k.main === true) || keyboards[0];
     if (!keyboard || typeof keyboard.active_keymap !== "string") return null;
-    return keyboard.active_keymap;
+    const layouts = typeof keyboard.layout === "string" ? keyboard.layout.split(",").filter((l) => l.trim() !== "") : [];
+    return {
+        keymap: keyboard.active_keymap,
+        index: Number.isInteger(keyboard.active_layout_index) ? keyboard.active_layout_index : null,
+        count: Math.max(1, layouts.length),
+    };
+}
+
+// Just its layout's description, or null, for the lock's badge.
+export function mainKeymap(text) {
+    return mainKeyboard(text)?.keymap ?? null;
+}
+
+// The bar's layout label (SPEC.md §7.4), as tilemo's: up to three
+// letters of the badge's name, so "English (US)" is US, "English
+// (Dvorak)" DVO and "German" GER.
+export function layoutLabel(name) {
+    return layoutBadge(name).replace(/[^A-Z0-9]/g, "").slice(0, 3);
+}
+
+// Whether the layout read has settled: no read running and none due, so
+// what it holds is no older than the last refresh. The bar's layout click
+// refreshes, then switches only once it has (KeyboardData).
+export function layoutSettled(state) {
+    return !state.querying;
+}
+
+// The layout after the active one, wrapping, as Super+Alt+Space picks it
+// (SPEC.md §16): an index for `hyprctl switchxkblayout all`, or null when
+// there's nothing to switch to or the active one isn't known.
+export function nextLayout({ index, count }) {
+    if (!Number.isInteger(index) || !Number.isInteger(count) || count < 2) {
+        return null;
+    }
+    return (index + 1) % count;
 }
 
 // Which layout the badge shows. Only `hyprctl devices -j` says which
@@ -383,17 +420,24 @@ export function mainKeymap(text) {
 //   keymap     the main keyboard's layout, "" while unknown
 //   querying   a read is running
 //   again      a refresh arrived while it ran
-export const LAYOUT_INITIAL = Object.freeze({ keymap: "", querying: false, again: false });
+//   index      which of its layouts is active, null while unknown
+//   count      how many layouts it has, 0 while unknown
+export const LAYOUT_INITIAL = Object.freeze({ keymap: "", index: null, count: 0, querying: false, again: false });
 
 // Events: {type: "refresh"} (the lock starts, Hyprland reports a layout
-// switch, or a password fails) and {type: "answer", keymap} (mainKeymap's
-// result, null when the read failed, which hides the badge rather than
-// keep a layout that may be stale). Returns {state, query}: `query` asks
-// the QML to start a read.
+// switch, or a password fails) and {type: "answer", keymap, index, count}
+// (mainKeyboard's result, keymap null when the read failed, which hides
+// the badge rather than keep a layout that may be stale). Returns {state,
+// query}: `query` asks the QML to start a read.
 export function layoutNext(state, event) {
-    return readNext("layout", state, event, (answer) => ({
-        keymap: typeof answer.keymap === "string" ? answer.keymap : "",
-    }));
+    return readNext("layout", state, event, (answer) => {
+        const known = typeof answer.keymap === "string";
+        return {
+            keymap: known ? answer.keymap : "",
+            index: known && Number.isInteger(answer.index) ? answer.index : null,
+            count: known && Number.isInteger(answer.count) ? answer.count : 0,
+        };
+    });
 }
 
 // The read layoutNext and keyboardsNext share: one at a time, and one more

@@ -9,7 +9,9 @@ import "lib/lock.mjs" as Lock
 // switch Hyprland reports, and again on refresh(), which the lock and the
 // greeter call when a password fails, since that is when the badge matters
 // and the main keyboard may have changed with no event (an unplug).
-// Unknown, the badge is hidden rather than guessed.
+// Unknown, the badge is hidden rather than guessed. The bar's layout label
+// (KeyboardData) reads it too, with the main keyboard's layout count and
+// which is active.
 Scope {
     id: root
 
@@ -50,12 +52,12 @@ Scope {
 
         stdout: StdioCollector {
             onStreamFinished: {
-                const keymap = Lock.mainKeymap(text);
-                if (keymap === null) {
+                const keyboard = Lock.mainKeyboard(text);
+                if (keyboard === null) {
                     console.warn(`${root.name}: hyprctl devices gave no keyboard; the layout badge stays hidden`);
                 }
                 devices.answered = true;
-                root.layoutEvent({ type: "answer", keymap: keymap });
+                root.layoutEvent(Object.assign({ type: "answer", keymap: null }, keyboard));
             }
         }
         onStarted: started = true
