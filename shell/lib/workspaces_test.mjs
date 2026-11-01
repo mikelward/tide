@@ -564,3 +564,60 @@ test("muting clears the marks it had", () => {
     marks = updateMarks(marks, { type: "notified", id: 1, app: "Slack", windows: [win("a", 3, "Slack")], visible: new Set([2]) });
     assert.deepEqual(updateMarks(marks, { type: "muted", muted: ["slack"], windows: [win("a", 3, "Slack")] }), NO_MARKS);
 });
+
+// Two monitors, the workspaces spanning both (SPEC.md §6.5, Monitors):
+// eDP-1 is main, so DP-2's parts are NAME@DP-2.
+function spanning() {
+    return {
+        monitors: [{ name: "eDP-1", workspace: -1340 }, { name: "DP-2", workspace: -1341 }],
+        workspaces: [
+            { id: -1338, name: "in" },
+            { id: -1339, name: "in@DP-2" },
+            { id: -1340, name: "re" },
+            { id: -1341, name: "re@DP-2" },
+            { id: -1342, name: "docs@DP-2" },
+        ],
+        windows: [
+            { address: "a", workspace: -1340, workspaceName: "re", app: "kitty", urgent: false, fullscreen: 0 },
+            { address: "b", workspace: -1341, workspaceName: "re@DP-2", app: "chrome", urgent: false, fullscreen: 0 },
+            { address: "c", workspace: -1342, workspaceName: "docs@DP-2", app: "chrome", urgent: false, fullscreen: 0 },
+        ],
+    };
+}
+
+test("a workspace spanning monitors is one entry, with every part's ID", () => {
+    const order = workspaceOrder(spanning().workspaces, ["in", "re"]);
+    assert.deepEqual(order.map((w) => [w.name, w.id, w.ids]), [
+        ["in", -1338, [-1338, -1339]],
+        ["re", -1340, [-1340, -1341]],
+        ["docs", -1342, [-1342]],
+    ]);
+});
+
+test("each monitor's bar marks the workspace whose part it shows as current, with no outline", () => {
+    const s = spanning();
+    for (const monitor of ["eDP-1", "DP-2"]) {
+        const bar = barWorkspaces({ monitor, ...s, standing: ["in", "re"] });
+        assert.deepEqual(bar.map((w) => [w.name, w.state]), [["in", "empty"], ["re", "current"], ["docs", "occupied"]], monitor);
+        const re = bar.find((w) => w.name === "re");
+        assert.equal(re.count, 2, "both parts' windows count");
+    }
+});
+
+test("scrolling steps from the workspace whose part a monitor shows", () => {
+    const s = spanning();
+    const bar = barWorkspaces({ monitor: "DP-2", ...s, standing: ["in", "re"] });
+    assert.equal(scrollTarget(bar, -1341, 1), "docs");
+    assert.equal(scrollTarget(bar, -1341, -1), "in");
+});
+
+test("a main part made again doesn't move its workspace on the bar", () => {
+    // alpha was made before beta, and kept windows on DP-2 only; going
+    // back to it made its main part again, newer than beta.
+    const order = workspaceOrder([
+        { id: -1340, name: "alpha@DP-2" },
+        { id: -1342, name: "beta" },
+        { id: -1344, name: "alpha" },
+    ], []);
+    assert.deepEqual(order.map((w) => [w.name, w.id]), [["alpha", -1344], ["beta", -1342]]);
+});

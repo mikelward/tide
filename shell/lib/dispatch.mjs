@@ -42,9 +42,20 @@ function luaString(s) {
 // Go to the workspace named `name`, which Hyprland makes if no workspace
 // has that name (SPEC.md §6.5): how the bar reaches every workspace, a
 // numbered one included, since a negative ID would read as a step.
+//
+// Under the Lua config it goes through conf's conf_workspaces.go, which
+// shows the workspace on every monitor at once (§6.5, Monitors), as the
+// workspace keys do. A Lua function is a dispatcher too
+// (Internal::pushDispatcherFunction), so a config without go() gets
+// Hyprland's own switch, on the focused monitor.
 export function focusWorkspaceName(name, lua) {
     const n = workspaceName(name);
-    return lua ? `hl.dsp.focus({ workspace = ${luaString("name:" + n)} })` : `workspace name:${n}`;
+    if (!lua) {
+        return `workspace name:${n}`;
+    }
+    return "function() if type(conf_workspaces) == \"table\" and type(conf_workspaces.go) == \"function\" then "
+        + `conf_workspaces.go(${luaString(n)}) `
+        + `else hl.dispatch(hl.dsp.focus({ workspace = ${luaString("name:" + n)} })) end end`;
 }
 
 // Name workspace `id` `name`: the shell undoing a rename of home (§6.5).

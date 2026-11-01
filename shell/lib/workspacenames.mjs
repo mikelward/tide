@@ -21,11 +21,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
     muted: Object.freeze([]),
 });
 
-// What a workspace's name can't hold: quotes, backslashes and control
+// What a workspace's name can't hold: quotes, backslashes, `@` and control
 // characters. A name goes into Hyprland's `name:` selectors, Lua strings,
 // JSON over IPC, a FIFO and the shell's command lines; with none of these
-// in it, no quoting can go wrong anywhere it goes.
-export const UNSAFE = /["'`\\\u0000-\u001f\u007f]/;
+// in it, no quoting can go wrong anywhere it goes. `@` marks a monitor's
+// part of a workspace (span.mjs, SPEC.md §6.5, Monitors).
+export const UNSAFE = /["'`\\@\u0000-\u001f\u007f]/;
 
 // A name as typed, made one: trimmed, and refused if it's empty, runs over
 // more than one line, holds an UNSAFE character or is longer than
@@ -39,7 +40,7 @@ export function checkName(text) {
         return { error: "a workspace's name is one line" };
     }
     if (UNSAFE.test(name)) {
-        return { error: "a workspace's name can't have quotes, backslashes or control characters" };
+        return { error: "a workspace's name can't have quotes, backslashes, @ or control characters" };
     }
     if ([...name].length > MAX_NAME) {
         return { error: `a workspace's name is at most ${MAX_NAME} characters` };

@@ -151,10 +151,10 @@ check "--workspace asks the guard to take the window to that workspace" \
     contains "$(cat "$log")" ', { workspace = "PR-12, login (2)" })'
 check "and sets TIDE_WORKSPACE from it, not the focused workspace" test "$(cat "$log.env")" = PR12login2
 check "and doesn't read the focused workspace" not_contains "$(cat "$log")" "activeworkspace"
-for bad in 'team "x"' "it's" 'a`b' 'a\b' "$(printf 'a\tb')"; do
+for bad in 'team "x"' "it's" 'a`b' 'a\b' "$(printf 'a\tb')" 're@DP-2'; do
     run "$qs" launch --workspace "$bad" app
-    check "--workspace refuses a name with a quote, backslash or control character: $bad" test $? -eq 2
-    check "and says why: $bad" contains "$(cat "$tmp/err")" "can't have quotes, backslashes or control characters"
+    check "--workspace refuses a name with a quote, backslash, @ or control character: $bad" test $? -eq 2
+    check "and says why: $bad" contains "$(cat "$tmp/err")" "can't have quotes, backslashes, @ or control characters"
 done
 run FAKE_WORKSPACE='{
     "id": -1340,

@@ -5,6 +5,7 @@
 import { normalizeAppId, sameName } from "./workspacenames.mjs";
 import { isMinimizedFrom, minimizedFrom } from "./minimized.mjs";
 import { noteMuted, windowMuted } from "./mute.mjs";
+import { workspaceOf } from "./span.mjs";
 
 // Icons shown per workspace before the rest collapse into "+n".
 export const MAX_ICONS = 5;
@@ -350,11 +351,39 @@ function icons(windows, marked) {
 // is their falling IDs, and any numbered one (a second monitor's, before
 // anything names it) after them by number. `workspaces` is Hyprland's,
 // [{id, name}]; special workspaces aren't on the bar. Each is
-// {id, name, standing, home}, id being null for a standing one that isn't
-// made yet. A standing name matches a workspace's without case, as one
-// typed at the prompt does, so `In` made by hand is still home's place.
+// {id, ids, name, standing, home}, id being null for a standing one that
+// isn't made yet. A standing name matches a workspace's without case, as
+// one typed at the prompt does, so `In` made by hand is still home's place.
+//
+// A workspace spanning several monitors has a Hyprland workspace for each
+// monitor's part, NAME@OUT on all but the main one (span.mjs, SPEC.md
+// §6.5, Monitors). The bar lists it once: `ids` are all its parts' IDs,
+// and `id` is the main part's, or the part made first (the highest ID)
+// while it has none. It takes its place in the order from its oldest part
+// (the highest ID), so a main part made again when you go back, with a
+// newer ID, doesn't move it.
 export function workspaceOrder(workspaces, standing) {
-    const real = workspaces.filter((w) => Number.isInteger(w.id) && !String(w.name ?? "").startsWith("special:"));
+    const byName = new Map();
+    for (const w of workspaces) {
+        const raw = String(w.name ?? "");
+        if (!Number.isInteger(w.id) || raw.startsWith("special:")) {
+            continue;
+        }
+        const name = workspaceOf(raw);
+        const main = raw === name;
+        const ws = byName.get(name);
+        if (!ws) {
+            byName.set(name, { id: w.id, ids: [w.id], name, main, order: w.id });
+            continue;
+        }
+        ws.ids.push(w.id);
+        ws.order = Math.max(ws.order, w.id);
+        if ((main && !ws.main) || (main === ws.main && w.id > ws.id)) {
+            ws.id = w.id;
+            ws.main = main;
+        }
+    }
+    const real = [...byName.values()];
     const taken = new Set();
     const out = [];
     standing.forEach((name, i) => {
@@ -363,13 +392,19 @@ export function workspaceOrder(workspaces, standing) {
         if (found) {
             taken.add(found.id);
         }
-        out.push({ id: found ? found.id : null, name: found ? found.name : name, standing: true, home: i === 0 });
+        out.push({
+            id: found ? found.id : null,
+            ids: found ? found.ids : [],
+            name: found ? found.name : name,
+            standing: true,
+            home: i === 0,
+        });
     });
     const rest = real.filter((w) => !taken.has(w.id));
-    const named = rest.filter((w) => w.id < 0).sort((a, b) => b.id - a.id);
-    const numbered = rest.filter((w) => w.id > 0).sort((a, b) => a.id - b.id);
+    const named = rest.filter((w) => w.order < 0).sort((a, b) => b.order - a.order);
+    const numbered = rest.filter((w) => w.order > 0).sort((a, b) => a.order - b.order);
     for (const w of named.concat(numbered)) {
-        out.push({ id: w.id, name: String(w.name ?? w.id), standing: false, home: false });
+        out.push({ id: w.id, ids: w.ids, name: String(w.name || w.id), standing: false, home: false });
     }
     return out;
 }
@@ -384,12 +419,13 @@ export function barName(name) {
 // What one monitor's bar shows: every workspace in workspaceOrder's order,
 // each as
 //
-//   {id, name, label, standing, home, state, urgent, big, count, app,
+//   {id, ids, name, label, standing, home, state, urgent, big, count, app,
 //    icons: [{address, app, marked, restoreTo}], more}
 //
-// where label is the name as the bar shows it (barName); state is
-// "current" (this monitor's workspace), "elsewhere" (shown on another
-// monitor), "occupied" or "empty", which a standing workspace not made yet
+// where ids are its parts' IDs (workspaceOrder); label is the name as the
+// bar shows it (barName); state is "current" (this monitor's workspace, or
+// its part of one spanning monitors), "elsewhere" (shown on another monitor
+// only, as when workspaces don't span them), "occupied" or "empty", which a standing workspace not made yet
 // always is; urgent is any marked window on it; big is a maximized or
 // fullscreen window on it (§6.3); count is how many windows it has, and
 // app the first one's app, for the switcher's Workspaces tab; and icons
@@ -410,18 +446,19 @@ export function barWorkspaces({ monitor, monitors, workspaces, windows, marks = 
     const elsewhere = new Set(monitors.filter((m) => m.name !== monitor).map((m) => m.workspace));
     const marked = markedWindows({ windows, marks, muted });
     return workspaceOrder(workspaces, standing).map((ws) => {
-        const here = ws.id === null ? [] : windows.filter((w) => w.workspace === ws.id);
+        const here = windows.filter((w) => ws.ids.includes(w.workspace));
         // Its minimized windows are on a special workspace, but one wanting
         // attention still shows here (§6.7), made or not.
         const minimized = windows.filter((w) => isMinimizedFrom(w.workspaceName, ws.name));
         let state = here.length > 0 ? "occupied" : "empty";
-        if (ws.id !== null && ws.id === current) {
+        if (ws.ids.includes(current)) {
             state = "current";
-        } else if (ws.id !== null && elsewhere.has(ws.id)) {
+        } else if (ws.ids.some((id) => elsewhere.has(id))) {
             state = "elsewhere";
         }
         return Object.assign({
             id: ws.id,
+            ids: ws.ids,
             name: ws.name,
             label: barName(ws.name),
             standing: ws.standing,
@@ -444,7 +481,7 @@ export function barWorkspaces({ monitor, monitors, workspaces, windows, marks = 
 // one), which has no neighbors.
 export function scrollTarget(list, current, notches) {
     const steps = Math.trunc(notches);
-    const i = list.findIndex((w) => w.id !== null && w.id === current);
+    const i = list.findIndex((w) => (w.ids ?? (w.id === null ? [] : [w.id])).includes(current));
     if (i < 0 || !steps) {
         return null;
     }

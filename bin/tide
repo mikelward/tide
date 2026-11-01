@@ -620,24 +620,26 @@ launch() {
                 fi
                 # As the shell's names are (workspacenames.mjs's UNSAFE):
                 # with no quotes, backslashes or control characters, a name
-                # needs no quoting anywhere it goes.
+                # needs no quoting anywhere it goes, and `@` marks a
+                # monitor's part of a workspace.
                 case "$ws" in
-                    *[\"\'\`\\]*) unsafe=yes ;;
+                    *[\"\'\`\\@]*) unsafe=yes ;;
                     *) unsafe=no ;;
                 esac
                 if test "$unsafe" = yes || test "$(printf '%s' "$ws" | LC_ALL=C tr -d '\001-\037\177')" != "$ws"; then
-                    echo "$prog launch: --workspace's name can't have quotes, backslashes or control characters: $ws" >&2
+                    echo "$prog launch: --workspace's name can't have quotes, backslashes, @ or control characters: $ws" >&2
                     exit 2
                 fi
                 # As the shell's names are (workspacenames.mjs's UNSAFE):
                 # with no quotes, backslashes or control characters, a name
-                # needs no quoting anywhere it goes.
+                # needs no quoting anywhere it goes, and `@` marks a
+                # monitor's part of a workspace.
                 case "$ws" in
-                    *[\"\'\`\\]*) unsafe=yes ;;
+                    *[\"\'\`\\@]*) unsafe=yes ;;
                     *) unsafe=no ;;
                 esac
                 if test "$unsafe" = yes || test "$(printf '%s' "$ws" | LC_ALL=C tr -d '\001-\037\177')" != "$ws"; then
-                    echo "$prog launch: --workspace's name can't have quotes, backslashes or control characters: $ws" >&2
+                    echo "$prog launch: --workspace's name can't have quotes, backslashes, @ or control characters: $ws" >&2
                     exit 2
                 fi
                 opts=", { workspace = $(lua_string "$ws") }"
