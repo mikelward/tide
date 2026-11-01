@@ -301,6 +301,26 @@ local function focus_on_workspace(w, workspace)
     end
 end
 
+-- Takes w to tide's workspace named `name`, as focus_on_workspace does,
+-- through conf's conf_workspaces.move when there is one: it puts the window
+-- in that workspace's part on its own monitor and switches every monitor
+-- there, focusing it (SPEC.md §6.5, Monitors). Without it, Hyprland's own
+-- `name:` move.
+local function focus_on_named(w, name)
+    local conf = rawget(_G, "conf_workspaces")
+    local address = field(w, "address")
+    if not (address and type(conf) == "table" and type(conf.move) == "function") then
+        focus_on_workspace(w, "name:" .. name)
+        return
+    end
+    focusing = true
+    local ok, err = pcall(conf.move, address, name, true)
+    focusing = false
+    if not ok then
+        error(err, 0)
+    end
+end
+
 -- The workspace a minimized window came from (SPEC.md §6.7): the shell
 -- minimizes a window to `special:minimized:NAME`, so NAME, or nil for a
 -- window that isn't minimized.
@@ -436,7 +456,7 @@ function M.on_open(w)
     -- you are in (a second terminal from a terminal, or a script's window).
     local g = take_grant(w) or take_grant_by_ancestry(w)
     if g and g.workspace then
-        focus_on_workspace(w, "name:" .. g.workspace)
+        focus_on_named(w, g.workspace)
     elseif g then
         focus(w)
     elseif same_app_as_active(w) or portal_dialog_for_active(w) or prompt_you_asked_for(w) then

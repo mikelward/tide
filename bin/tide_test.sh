@@ -208,6 +208,12 @@ run FAKE_WORKSPACE='{
     "monitor": "eDP-1"
 }' "$qs" workspace
 check "and home's" test "$(cat "$tmp/out")" = in
+run FAKE_WORKSPACE='{
+    "id": -1341,
+    "name": "PR-12 login@DP-2",
+    "monitor": "DP-2"
+}' "$qs" workspace
+check "a monitor's part is its workspace's name" test "$(cat "$tmp/out")" = PR12login
 run FAKE_WORKSPACE_STATUS=1 FAKE_WORKSPACE='oops' "$qs" workspace
 check "tide workspace fails when it can't ask" test $? -eq 1
 check "and says why" contains "$(cat "$tmp/err")" "tide workspace: couldn't read the focused workspace: oops"
@@ -257,6 +263,13 @@ check "and starts the app itself" contains "$(cat "$log")" "uwsm app -- $fake/ap
 check "with that workspace as TIDE_WORKSPACE" test "$(cat "$log.env")" = docs
 check "in the caller's environment" test "$(cat "$log.caller")" = kept
 check "and leaves no FIFO behind" test -z "$(ls "$tmp/prompt-runtime")"
+: > "$log"
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_WORKSPACE='{
+    "id": -1342,
+    "name": "PR-12 login@DP-2",
+    "monitor": "DP-2"
+}' "$qs" launch app
+check "a launch from home's part on another monitor asks too" contains "$(cat "$log")" "qs -c tide ipc call prompt launch"
 run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_ANSWER=cancel "$qs" launch app
 check "Esc at the prompt exits 0" test $? -eq 0
 check "and launches nothing" not_contains "$(cat "$log")" "uwsm app"

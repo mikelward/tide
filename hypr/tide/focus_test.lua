@@ -605,6 +605,23 @@ test("a grant on a named workspace takes its window there, made if new, focused"
     eq(d[2].args.follow, true, "and focus follows")
 end)
 
+test("with conf's move, a named workspace's window goes to its part on its own monitor", function()
+    local m = load()
+    local moved = {}
+    _G.conf_workspaces = { move = function(...) table.insert(moved, { ... }) end }
+    focused(window("kitty"), FFM)
+    m.grant("firefox", nil, nil, { workspace = "docs" })
+    local firefox = window("firefox")
+    local d = fire("window.open", firefox)
+    _G.conf_workspaces = nil
+    eq(#d, 0, "no dispatch of the guard's own")
+    eq(#moved, 1, "conf moves it")
+    eq(moved[1][1], firefox.address, "that window")
+    eq(moved[1][2], "docs", "to the workspace named")
+    eq(moved[1][3], true, "and follows it")
+    eq(#m.grants(), 0, "the grant is used up")
+end)
+
 test("a key press before a named workspace's window opens leaves it where you are", function()
     local m = load()
     focused(window("kitty"), FFM)

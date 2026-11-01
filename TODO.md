@@ -1701,17 +1701,11 @@ or workspace goes there.
   1. **Built:** the model, `hypr/tide/span.lua`, with `span_test.lua`.
   2. `conf`: the workspace keys, `Super+Home`, `Super+Tab` and `Super+End`
      call the switch, and its history counts a workspace once.
-  3. The shell, in two PRs:
-     - **Built:** names refuse `@`, in the shell, the prompt and
-       `tide launch`; the bar and the switcher's Workspaces tab list a
-       workspace once, its parts' windows together (`span.mjs`,
-       `workspaceOrder`'s `ids`); and the bar, the switcher and the
-       prompt's go switch through conf's `conf_workspaces.go`, every
-       monitor at once.
-     - The name prompt's move, minimizing and restoring, grants
-       (`tide launch --workspace`), `TIDE_WORKSPACE` and `tide workspace`
-       read a part as its workspace, and a move goes to the part on the
-       window's monitor.
+  3. **Built:** the shell. Names refuse `@`; the bar, the switcher, the
+     prompt, minimizing, `TIDE_WORKSPACE` and `tide workspace` read a part
+     as its workspace; switches go through `conf_workspaces.go`, and the
+     prompt's move and named launches through `conf_workspaces.move`
+     (mikelward/conf#463), into the part on the window's monitor.
   4. The monitor handoff: on `monitorremovedv2` and `monitoraddedv2`, move
      the windows as the model says.
 - **Check the left and right keys live on Hyprland 0.56.2** (SPEC.md §6.6).

@@ -3,7 +3,7 @@
 // into the plain objects these take, and maps app IDs to icons.
 
 import { normalizeAppId, sameName } from "./workspacenames.mjs";
-import { isMinimizedFrom, minimizedFrom } from "./minimized.mjs";
+import { isMinimizedFromWorkspace, minimizedFrom } from "./minimized.mjs";
 import { noteMuted, windowMuted } from "./mute.mjs";
 import { workspaceOf } from "./span.mjs";
 
@@ -449,7 +449,7 @@ export function barWorkspaces({ monitor, monitors, workspaces, windows, marks = 
         const here = windows.filter((w) => ws.ids.includes(w.workspace));
         // Its minimized windows are on a special workspace, but one wanting
         // attention still shows here (§6.7), made or not.
-        const minimized = windows.filter((w) => isMinimizedFrom(w.workspaceName, ws.name));
+        const minimized = windows.filter((w) => isMinimizedFromWorkspace(w.workspaceName, ws.name));
         let state = here.length > 0 ? "occupied" : "empty";
         if (ws.ids.includes(current)) {
             state = "current";

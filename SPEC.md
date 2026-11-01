@@ -1347,9 +1347,17 @@ monitor has its own part of it, with its own windows and layout.
   - The model is `hypr/tide/span.lua`, plain Lua with tests: the parts'
     names, the rules, a switch's order, and where each window goes after
     a monitor change.
-  - The bar, the switcher, the prompt, minimizing and grants (§14.3) read
-    a part as its workspace: `NAME@OUT` is `NAME`. A grant's `name:NAME`
-    goes to the focused monitor's part.
+  - The bar, the switcher, the prompt, minimizing, `TIDE_WORKSPACE` and
+    `tide workspace` read a part as its workspace: `NAME@OUT` is `NAME`
+    (`shell/lib/span.mjs`, `bin/tide`). Each monitor's tray shows what was
+    minimized from its own part, and the bar counts it toward the
+    workspace.
+  - The bar, the switcher and the prompt switch through `conf`'s
+    `conf_workspaces.go(name)`, as the keys do. The prompt's move and a
+    launch on a named workspace (a grant, §14.3) go through
+    `conf_workspaces.move(address, name, follow)`, which puts the window
+    in the workspace's part on its own monitor. Without them, under an
+    older `conf`, each is Hyprland's own `name:` dispatch.
 - **A monitor going away**, as when the lid closes with a display
   attached or a cable is pulled: Hyprland moves its workspaces to another
   monitor, where only one can show. So tide moves the windows of each of
