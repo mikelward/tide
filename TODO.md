@@ -1695,19 +1695,29 @@ switcher key opens its tab, Tab moves between them, Enter on a window
 or workspace goes there.
 
 - **A workspace spans every monitor** (SPEC.md §6.5, decided
-  2026-11-01): each monitor has its own part, and an empty part shows the
-  wallpaper and the bar. The keys between monitors are built (§6.6). A PR
-  each:
-  1. **Built:** the model, `hypr/tide/span.lua`, with `span_test.lua`.
-  2. `conf`: the workspace keys, `Super+Home`, `Super+Tab` and `Super+End`
-     call the switch, and its history counts a workspace once.
-  3. **Built:** the shell. Names refuse `@`; the bar, the switcher, the
-     prompt, minimizing, `TIDE_WORKSPACE` and `tide workspace` read a part
-     as its workspace; switches go through `conf_workspaces.go`, and the
-     prompt's move and named launches through `conf_workspaces.move`
-     (mikelward/conf#463), into the part on the window's monitor.
-  4. The monitor handoff: on `monitorremovedv2` and `monitoraddedv2`, move
-     the windows as the model says.
+  2026-11-01). **Built**, tested against stubs only: the model
+  (`hypr/tide/span.lua`); `conf`'s keys switching every monitor's part
+  together, `conf_workspaces.go` and `.move` (mikelward/conf#462, #463);
+  the shell reading `NAME@OUT` as `NAME` (#291, #292); and the monitor
+  handoff in `conf` (mikelward/conf#464). **Check on a live session**
+  with two monitors:
+  - a workspace key, a click on the bar and the switcher show the
+    workspace on both monitors at once, focus and the pointer staying put,
+    and a second monitor with nothing on it shows the wallpaper and its
+    bar;
+  - a new workspace's parts are made each on its own monitor, never two on
+    one, the plain one included;
+  - the bar lists each workspace once on both monitors, and scrolling,
+    `Super+PgUp`/`PgDn` and `Super+1…9` step through the same order;
+  - the name prompt's move and a launch on a named workspace keep the
+    window on its monitor;
+  - unplugging the second monitor moves its windows to the main one, and
+    plugging it back moves them back; closing and opening the lid does the
+    same the other way round; Hyprland's `monitor.removed` and
+    `monitor.added` fire after it has moved the workspaces, as its source
+    says;
+  - a window dragged to the other monitor with the mouse is noted there
+    only if Hyprland fires `window.move_to_workspace` for it.
 - **Check the left and right keys live on Hyprland 0.56.2** (SPEC.md §6.6).
   Tested only against a stub `hl`: on two monitors side by side,
   `Super+Left`/`Right` walk the windows and cross at the edge, stop past

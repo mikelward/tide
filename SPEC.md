@@ -1361,13 +1361,19 @@ monitor has its own part of it, with its own windows and layout.
 - **A monitor going away**, as when the lid closes with a display
   attached or a cable is pulled: Hyprland moves its workspaces to another
   monitor, where only one can show. So tide moves the windows of each of
-  its parts into that workspace's part on the main monitor, or the first
-  one left, and remembers each window's monitor. When that monitor comes
-  back, they go back to its part, each in its old place in the layout.
-  Hyprland itself moves a returning monitor's workspaces back
-  (`CMonitor::onConnect`); tide then puts every window where its own
-  monitor says. The windows' monitors are kept by connector, for the
-  session.
+  its parts into that workspace's part on the main monitor. When that
+  monitor comes back, they go back to its part, where the layout places
+  each as it arrives. Hyprland itself moves a returning monitor's
+  workspaces back (`CMonitor::onConnect`); tide then puts every window
+  where its own monitor says.
+  - A window's monitor is noted as it opens and each time it moves to a
+    workspace, from the part it's in, by connector, for the session. The
+    handoff's own moves don't count, and Hyprland moving whole workspaces
+    moves no window.
+  - It's `conf`'s, on Hyprland's `monitor.removed` and `monitor.added`,
+    which fire after Hyprland has moved the workspaces, and after the
+    lid's own handler has moved the panel's back. `span.handoff` says
+    which window goes where.
 - Closing the laptop lid with an external display attached disables the
   internal panel and moves its workspaces over. With no external display,
   logind suspends.
