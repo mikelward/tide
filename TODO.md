@@ -1721,3 +1721,26 @@ entry before it's copied, so a paste needs no tidying afterward. Ideas so far:
 
 Each would be an action on the highlighted row, with a single-modifier key.
 The same actions would suit tilemo's picker on the Mac.
+
+## More matchers for float rules
+
+A float rule (SPEC.md §16, the Floating page) matches a window's class and,
+optionally, its title. Consider more of what Hyprland's window rules can
+match, each once a real window needs it, and check it against Hyprland
+0.56's source first:
+
+- **The class and title a window opened with.** Terminals, editors and
+  Chrome app windows change their title as they run, and some apps rename
+  their class after mapping; the first one is steadier to match.
+- **XWayland or native,** for old X11 apps that open at odd sizes or call
+  themselves dialogs.
+- **Content type** (video, game, photo), which an app sets through the
+  content-type protocol. Few do yet.
+- **xdg tag,** a stable name an app gives one of its windows, such as
+  `preferences`, through the xdg-toplevel-tag protocol. Rarely set yet, but
+  the right hook for an app's settings window.
+- **Tags** are labels a config gives windows, not something apps set; tide
+  sets none, so they'd matter only once something does.
+
+Size, aspect ratio and parent aren't matchable: Hyprland's rules set a
+size but don't match one, and it already floats windows with a parent.
