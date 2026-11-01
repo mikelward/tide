@@ -34,8 +34,9 @@
 local here = debug and debug.getinfo(1, "S").source:match("^@(.*/)")
     or (os.getenv("HOME") or "") .. "/.config/hypr/tide/"
 local geometry = dofile(here .. "geometry.lua")
+local direction = dofile(here .. "direction.lua")
 
-local M = { geometry = geometry }
+local M = { geometry = geometry, direction = direction }
 
 M.defaults = {
     -- Work-area aspect ratio (width / height) at and above which a new
@@ -102,6 +103,11 @@ end
 
 local config = copy(M.defaults)
 local workspaces = {}
+-- The window Super+Shift+Left or Right is moving onto another monitor, as
+-- { address, ws, d, from }: where it lands in that workspace's order
+-- (direction.landing) once its relayout sees it. Set by move_side, taken by
+-- the next relayout of `ws` that has the window new to it.
+local arriving
 
 local function index_of(list, value)
     for i, v in ipairs(list) do
@@ -219,7 +225,8 @@ end
 -- (its swap and move dispatchers each make one, and each relayouts), and
 -- with each new window where `new_window` says. A change that's more than
 -- one swap takes Hyprland's order for the windows it already had.
-local function follow(st, now)
+-- `place_new`, if given, says where a new window goes instead, or nil.
+local function follow(st, now, place_new)
     local here, before = set_of(now), set_of(st.seen)
     local order = only(st.order, here)
     local was, is = only(st.seen, here), only(now, before)
@@ -239,8 +246,13 @@ local function follow(st, now)
     local at
     for _, address in ipairs(now) do
         if not before[address] then
-            at = at and at + 1 or insert_at(st, order)
-            table.insert(order, at, address)
+            local landing = place_new and place_new(order, address)
+            if landing then
+                table.insert(order, landing, address)
+            else
+                at = at and at + 1 or insert_at(st, order)
+                table.insert(order, at, address)
+            end
         end
     end
     return order
@@ -278,7 +290,22 @@ local function recalculate(ctx)
     -- The first relayout of a workspace, after a config load too, takes
     -- Hyprland's order as it is.
     local master = st.order[1]
-    st.order = st.seen and follow(st, now) or now
+    -- A window Super+Shift+Left or Right moved here lands at the edge it
+    -- came in by. Seen anywhere else first, it went elsewhere, and later
+    -- goes where new windows go.
+    if arriving and arriving.ws ~= id and index_of(now, arriving.address) then
+        arriving = nil
+    end
+    local function place_new(order, address)
+        local a = arriving
+        if not a or a.address ~= address or a.ws ~= id then
+            return nil
+        end
+        arriving = nil
+        local slots = geometry.arrange(st.mode, ctx.area, #order + 1, st.opts[st.mode], config.single)
+        return direction.landing(slots, a.d, a.from)
+    end
+    st.order = st.seen and follow(st, now, place_new) or now
     st.seen = now
     -- Whatever made another window the master (Alt+Tab, a new window
     -- placed as the master, Super+Shift+K), the one it took over from is
@@ -463,6 +490,151 @@ function M.move(delta)
         return
     end
     hl.dispatch(hl.dsp.window.swap({ target = selector(order[j]) }))
+end
+
+-- A window's box, from Hyprland's `at` and `size`, or nil.
+local function box_of(w)
+    local at, size = field(w, "at"), field(w, "size")
+    if at and size and at.x and size.x then
+        return { x = at.x, y = at.y, w = size.x, h = size.y }
+    end
+end
+
+-- A monitor's box in layout coordinates: Hyprland gives its position in
+-- those but its size in pixels, before scale and rotation.
+local function monitor_box(m)
+    local x, y, w, h = field(m, "x"), field(m, "y"), field(m, "width"), field(m, "height")
+    if not (x and y and w and h) then
+        return nil
+    end
+    local scale = tonumber(field(m, "scale")) or 1
+    if scale <= 0 then
+        scale = 1
+    end
+    -- Transforms 1, 3, 5 and 7 turn the output a quarter, swapping its sides.
+    if (tonumber(field(m, "transform")) or 0) % 2 == 1 then
+        w, h = h, w
+    end
+    return { x = x, y = y, w = w / scale, h = h / scale }
+end
+
+-- The monitors as direction.find takes them, with the tiles each shows in
+-- layout order, plus the focused one's name and the focused window: nil if
+-- Hyprland can't be read. A monitor showing a fullscreen window offers no
+-- tiles, since they're behind it.
+local function sides()
+    local ok_mon, mons = pcall(hl.get_monitors)
+    local ok_win, wins = pcall(hl.get_windows)
+    if not (ok_mon and type(mons) == "table" and ok_win and type(wins) == "table") then
+        return nil
+    end
+    local me = active_address()
+    local by_ws, mine = {}, nil
+    for _, w in ipairs(wins) do
+        local address, ws, box = field(w, "address"), field(field(w, "workspace"), "id"), box_of(w)
+        if address == me then
+            mine = { address = address, ws = ws, box = box, floating = field(w, "floating") }
+        end
+        if field(w, "mapped") and not field(w, "hidden") and not field(w, "floating") and ws ~= nil and box then
+            by_ws[ws] = by_ws[ws] or {}
+            by_ws[ws][address] = box
+        end
+    end
+    local list, focused = {}, nil
+    for _, m in ipairs(mons) do
+        local name, box = field(m, "name"), monitor_box(m)
+        local ws = field(m, "active_special_workspace") or field(m, "active_workspace")
+        local id = field(ws, "id")
+        if name and box then
+            local tiles = {}
+            if id ~= nil and not field(ws, "has_fullscreen") then
+                local boxes = by_ws[id] or {}
+                -- Layout order, then any the layout hasn't placed yet.
+                local listed = {}
+                for _, address in ipairs(M.order(id)) do
+                    if boxes[address] then
+                        tiles[#tiles + 1] = { address = address, box = boxes[address] }
+                        listed[address] = true
+                    end
+                end
+                for _, w in ipairs(wins) do
+                    local address = field(w, "address")
+                    if address and boxes[address] and not listed[address] then
+                        tiles[#tiles + 1] = { address = address, box = boxes[address] }
+                        listed[address] = true
+                    end
+                end
+            end
+            -- A window moved to a monitor goes to its active workspace,
+            -- whatever special one shows over it.
+            local active = field(field(m, "active_workspace"), "id")
+            list[#list + 1] = { name = name, box = box, ws = id, active = active, tiles = tiles }
+            if field(m, "focused") then
+                focused = list[#list]
+            end
+        end
+    end
+    -- The focused window's monitor is the one showing its workspace.
+    local here = focused
+    if mine and mine.ws ~= nil then
+        for _, m in ipairs(list) do
+            if m.ws == mine.ws then
+                here = m
+            end
+        end
+    end
+    if not here then
+        return nil
+    end
+    local from_tiles = {}
+    for _, t in ipairs(here.tiles) do
+        if not mine or t.address ~= mine.address then
+            from_tiles[#from_tiles + 1] = t
+        end
+    end
+    here.tiles = from_tiles
+    return list, here, mine
+end
+
+-- Super+Left / Super+Right (d = -1 / 1): focus the window that way, going
+-- on at the monitor's edge to the nearest window on the next monitor that
+-- way, or to that monitor itself if it shows none. Past the last monitor,
+-- nothing.
+function M.focus_side(d)
+    local list, here, mine = sides()
+    if not list then
+        return
+    end
+    local from = mine and mine.box or here.box
+    local tile, mon = direction.find(from, here.name, list, d)
+    if tile then
+        hl.dispatch(hl.dsp.focus({ window = selector(tile.address) }))
+    elseif mon then
+        hl.dispatch(hl.dsp.focus({ monitor = mon.name }))
+    end
+end
+
+-- Super+Shift+Left / Super+Shift+Right: move the focused tiled window the
+-- same way. On its monitor it swaps with the window focus_side would pick;
+-- at the edge it goes onto the next monitor, joining the workspace there
+-- at the edge it came in by, and keeps focus. Past the last monitor, or for
+-- a floating window, nothing.
+function M.move_side(d)
+    arriving = nil
+    local list, here, mine = sides()
+    if not list or not mine or not mine.box or mine.floating or mine.ws == nil then
+        return
+    end
+    local tile, mon = direction.find(mine.box, here.name, list, d)
+    if not mon then
+        return
+    end
+    if mon == here then
+        hl.dispatch(hl.dsp.window.swap({ target = selector(tile.address) }))
+    elseif mon.active ~= nil then
+        arriving = { address = mine.address, ws = mon.active, d = d, from = mine.box }
+        hl.dispatch(hl.dsp.window.move({ monitor = mon.name, follow = true }))
+    end
 end
 
 -- Dragging a split edge with the pointer, no modifier held (SPEC.md §6.6).
@@ -900,7 +1072,7 @@ function M.setup(opts)
     end
     workspaces = {}
     -- A config load forgets the shell's popovers until it says again.
-    drag, drag_timer, popups_open = nil, nil, false
+    drag, drag_timer, popups_open, arriving = nil, nil, false, nil
     hl.layout.register("tide", {
         recalculate = recalculate,
         layout_msg = layout_msg,

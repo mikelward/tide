@@ -1345,8 +1345,10 @@ with new keys in **bold**:
 | **`Super+1…9`** | go to the Nth workspace in the bar's order, so `Super+1` is home, as `Super+Home` is; past the last workspace, nothing |
 | **`Super+Shift+1…9`** | send the focused window to the Nth workspace in the bar's order, staying where you are |
 | **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
-| `Super+Left` / `Right`, **`Super+PgUp`** / **`PgDn`** | previous / next workspace in the bar's order, stopping at either end (as in KDE and on the Mac; PgUp/PgDn as in GNOME) |
-| `Super+Shift+Left` / `Right` | move window to the previous / next workspace in the bar's order |
+| **`Super+Left`** / **`Right`** | focus the window to the left / right of the focused one; at a monitor's edge, the nearest window on the next monitor that way, or that monitor itself if it shows none; past the last monitor, nothing (as in tilemo; the rule is below) |
+| **`Super+Shift+Left`** / **`Right`** | move the focused window the same way: on its monitor it swaps with the window that way; at the edge it goes onto the next monitor, joining the workspace showing there at the edge it came in by, and keeps focus; past the last monitor, or for a floating window, nothing |
+| `Super+PgUp` / `PgDn` | previous / next workspace in the bar's order, stopping at either end (as in GNOME) |
+| **`Super+Shift+PgUp`** / **`PgDn`** | move the window to the previous / next workspace in the bar's order, and follow it |
 | `Super+J` / `K`, `Super+Shift+J` / `K` | focus / move down and up the stack |
 | `Super+Return` | go to a workspace: the name prompt (§6.5), listing the existing names; type to filter them or to name a new one, and Enter goes there, making the workspace if it's new. It moves no window, so it works with none focused |
 | **`Super+Shift+Return`** | move the focused window to a workspace: the same prompt, and Enter moves it there, making the workspace if it's new; with no window focused, nothing |
@@ -1367,6 +1369,23 @@ with new keys in **bold**:
 | `Print` / **`Alt+Print`** / `Shift+Print`, `Super+Print` | screenshot screen / window / region |
 | **`XF86AudioMicMute`**, **`Super+Shift+M`** | toggle microphone mute (system-wide) |
 | media, brightness, volume keys | as today, with OSD |
+
+Left and right use one rule, tilemo's, in the layout's `direction.lua`
+(§20). Of the windows or monitors whose center is on that side, it takes
+the one sharing the most height with where you are, then the one whose
+center is nearest, then the first in layout order. The next monitor is
+compared against the current monitor. A window on it is one at the edge you
+come in by, compared against the focused window. A moved window lands in the
+place in that workspace's layout nearest that edge, sharing the most height
+with where it was.
+
+Hyprland 0.56's own dispatchers don't do this. At the last monitor's edge,
+`movefocus` wraps around to the far side of the same monitor. Under a Lua
+layout, `movewindow` swaps the window with its neighbor in Hyprland's own
+window order, which isn't the layout's, and never leaves the monitor
+(`CLuaTiledAlgorithm::moveTargetInDirection`). So the keys call the layout's
+`focus_side` and `move_side`; without the tide layout, conf binds the
+built-in dispatchers instead.
 
 - **Dragging the master/stack edge.** A plain left-press within 4 px
   either side of the edge between the masters and the stack starts a
@@ -4290,6 +4309,11 @@ are what "done" means.
   trap is a named test.
 - **Lua layout geometry** runs against a stub `ctx` with ultrawide, 16:9,
   and 32:9 areas and 1–6 windows.
+- **Left and right** (§6.6). `direction_test.lua` runs the rule on
+  made-up monitors: side by side, a laptop panel with two stacked on its
+  right, an empty one, and none past the last. `layout_test.lua` runs
+  `focus_side` and `move_side` against a stub `hl` with two monitors,
+  including a scaled one, a fullscreen one, and where a moved window lands.
 - **Session.** A `conf` test asserts the Hyprland config's only `exec-once`
   is `uwsm finalize`. `doctor` has its own tests over recorded `busctl` and
   `systemctl` output, and `tide-sysmon` runs over a fake `/proc` and
@@ -4319,18 +4343,15 @@ in `TODO.md`.
   workspace of its own (§6.5), which is to be rethought. The direction:
   - A workspace spans every display, and each display has a layout of its
     own within it.
-  - Moving between displays is to be designed. The candidate:
-    `Super+Left`/`Right` focuses the window to the left or right of the
-    focused one, and at a display's edge goes on to the nearest window on
-    the next display that way: from the rightmost window to the leftmost
-    on the display to the right. `Super+Shift+Left`/`Right` moves the
-    window the same way.
-  - If that edge behavior can be built, those keys replace today's
-    previous and next workspace (`Super+Left`/`Right`) and move to the
-    previous and next workspace (`Super+Shift+Left`/`Right`).
-    `Super+PgUp`/`PgDn` keep previous and next workspace (§6.6).
-  - Still to check: whether the edge behavior is doable in Hyprland's
-    Lua layout, and what a second display shows before anything is on it
+  - **Decided:** moving between displays uses tilemo's keys (§6.6,
+    mikelward/tilemo#90). `Super+Left`/`Right` focuses the window to the
+    left or right, going on at a display's edge to the nearest window on
+    the next display that way. `Super+Shift+Left`/`Right` moves the window
+    the same way. `Super+PgUp`/`PgDn` stay previous and next workspace, and
+    moving the window to the previous and next workspace moves to
+    `Super+Shift+PgUp`/`PgDn`. The edge behavior is built in the Lua
+    layout, so the keys work under today's per-display workspaces too.
+  - Still to decide: what a second display shows before anything is on it
     (today Hyprland gives it a numbered workspace).
 - **More workspaces than the bar's left side holds.** The bar cuts names at
   16 characters, but has no rule yet for when they still don't fit.
