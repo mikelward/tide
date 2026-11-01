@@ -1721,7 +1721,7 @@ See [`bar.png`](docs/mocks/bar.png).
 |---|---|---|---|
 | **Presenting** (accent) | presenter mode is on (§10) | turns presenter mode off | — |
 | Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen, window or area), and the app reading it; stop it from the app | — |
-| Privacy: mic (orange) | any app is capturing the microphone | per-app list with mute | — |
+| Privacy: mic (orange) | any app is capturing the microphone; the mic slashed while every mic being recorded from is muted (`Super+Shift+M` mutes them all), so a headset an app picked still shows live | per-app list with mute | hover: "Mic on" or "Mic off", as the OSD says, and how many apps are recording |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
 | Keep awake: a cup of coffee | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off; the OSD says which | hover: what it's doing, in the OSD's words |
 | Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | hover: "Bluetooth on" or "off" |
