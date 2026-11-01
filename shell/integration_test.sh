@@ -525,10 +525,12 @@ load() {
     _load_from=$(runs) || exit 1
     # No NetworkManager runs here, so the shell's network agent (SPEC.md
     # §5.6) is off: tide-agent would only fail to start, and say so in a
-    # notification the notification checks would count.
+    # notification the notification checks would count. tide-tabs isn't
+    # built here either, so the browser tabs' relay (§8.3) is off too, and
+    # wouldn't warn that it couldn't start.
     # shellcheck disable=SC2086 # $load_env is none, or one or more settings
     env -i PATH="$tmp/helpers:$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
-        ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} TIDE_AGENT=0 \
+        ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} TIDE_AGENT=0 TIDE_TABS=0 \
         LANG=C.UTF-8 TZ=America/New_York QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
         HYPRLAND_INSTANCE_SIGNATURE="$hypr_signature" QS_DISABLE_FILE_WATCHER=1 \
         ${load_env:-} "$qs_path" "$@" >"$log" 2>&1 &

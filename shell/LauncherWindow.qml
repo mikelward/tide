@@ -10,6 +10,7 @@ import "lib/dispatch.mjs" as Dispatch
 import "lib/mute.mjs" as Mute
 import "lib/session.mjs" as Session
 import "lib/switcher.mjs" as Switcher
+import "lib/tabs.mjs" as Tabs
 import "lib/workspaces.mjs" as Workspaces
 
 // The switcher (SPEC.md §8.1), whose first tab is the launcher (§8.2):
@@ -97,7 +98,7 @@ PanelWindow {
         muted: WorkspacesData.muted
     }) : []
     readonly property var rows: root.tab === "workspaces" ? Switcher.workspaceRows(root.workspaceList, root.query)
-        : root.tab === "windows" ? Switcher.windowRows(root.allWindows, root.query, WorkspacesData.muted)
+        : root.tab === "windows" ? Switcher.windowRows(root.allWindows, root.query, WorkspacesData.muted, Tabs.tabRows(TabsData.browsers, root.allWindows))
         : root.tab === "attention" ? Switcher.attentionRows(root.allWindows, MarkData.marks, root.query, WorkspacesData.muted)
         : root.appRows
     // Frecency is read as of the opening, so the order doesn't shift while
@@ -222,6 +223,18 @@ PanelWindow {
             Hyprland.dispatch(row.item.restoreTo
                 ? Dispatch.moveWindowToWorkspace(row.item.address, row.item.restoreTo, Hyprland.usingLua)
                 : Dispatch.focusWindow(row.item.address, Hyprland.usingLua));
+            return;
+        }
+        // A browser tab: its browser brings it up, then its window takes
+        // focus, which the browser can't give itself on Wayland (§8.3).
+        if (row.item.kind === "tab") {
+            close();
+            TabsData.activate(row.item);
+            if (row.item.address) {
+                Hyprland.dispatch(row.item.restoreTo
+                    ? Dispatch.moveWindowToWorkspace(row.item.address, row.item.restoreTo, Hyprland.usingLua)
+                    : Dispatch.focusWindow(row.item.address, Hyprland.usingLua));
+            }
             return;
         }
         if (row.item.kind === "confirm") {
@@ -648,6 +661,20 @@ PanelWindow {
                 font.pixelSize: 13
             }
 
+            // Why no browser tabs are listed, when they aren't (§8.3).
+            Text {
+                visible: root.tab === "windows" && root.query === "" && text !== ""
+                width: parent.width
+                leftPadding: 10
+                topPadding: 6
+                bottomPadding: 6
+                textFormat: Text.PlainText
+                text: TabsData.enabled ? Tabs.tabsNote(TabsData.running, TabsData.browsers) : ""
+                color: Theme.fgDim
+                font.family: Theme.font
+                font.pixelSize: 13
+            }
+
             ListView {
                 id: list
 
@@ -779,7 +806,7 @@ PanelWindow {
                             // An entry may name its icon by path rather than by theme name.
                             source: row.modelData.item.kind === "quick" || row.modelData.item.kind === "confirm" ? ""
                                 // A workspace's or window's icon is its app's, by class.
-                                : row.modelData.item.kind === "workspace" || row.modelData.item.kind === "window"
+                                : row.modelData.item.kind === "workspace" || row.modelData.item.kind === "window" || row.modelData.item.kind === "tab"
                                     ? Quickshell.iconPath(DesktopEntries.heuristicLookup(row.modelData.item.icon)?.icon ?? row.modelData.item.icon, "application-x-executable")
                                 : Notes.iconFile(row.modelData.item.icon) ?? Quickshell.iconPath(row.modelData.item.icon, "application-x-executable")
                         }

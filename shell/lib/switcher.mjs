@@ -171,9 +171,17 @@ function byFocus(windows) {
 }
 
 // The Windows tab: every window on any workspace, the one used last
-// first. Typing filters by title and app name.
-export function windowRows(windows, query, muted = []) {
-    return filtered(byFocus(windows).map((w) => windowRow(w, muted)), query, (r) => [r.item.name, r.item.sub]);
+// first, each browser window's tabs under it (SPEC.md §8.3; `tabs`, from
+// tabs.mjs's tabRows), and tabs whose window wasn't found last. Typing
+// filters by title and app name, and a tab by its title, browser and site.
+export function windowRows(windows, query, muted = [], tabs = {}) {
+    const rows = [];
+    for (const w of byFocus(windows)) {
+        rows.push(windowRow(w, muted));
+        rows.push(...(tabs[w.address] ?? []));
+    }
+    rows.push(...(tabs[""] ?? []));
+    return filtered(rows, query, (r) => [r.item.name, r.item.sub]);
 }
 
 // The Attention tab: every marked window (SPEC.md §14.4), the most
