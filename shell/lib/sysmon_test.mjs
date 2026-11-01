@@ -200,7 +200,7 @@ test("percentages and sizes read short", () => {
 
 test("the bar's reading turns amber when hot or memory is nearly full, red when throttling", () => {
     const mem = { used: 1, total: 10 };
-    assert.deepEqual(barView({ cpu: 0.23, temp: 50000, sensor: null, throttled: false, memory: mem }), { text: "23%", tone: "normal" });
+    assert.deepEqual(barView({ cpu: 0.23, temp: 50000, sensor: null, throttled: false, memory: mem }), { text: "23%", tone: "normal", tip: "CPU 23%" });
     assert.equal(barView({ cpu: 0.2, temp: 88000, sensor: null, throttled: false, memory: mem }).tone, "warn");
     assert.equal(barView({ cpu: 0.2, temp: null, sensor: null, throttled: false, memory: { used: 9, total: 10 } }).tone, "warn");
     assert.equal(barView({ cpu: 0.2, temp: 50000, sensor: null, throttled: true, memory: mem }).tone, "danger");
@@ -318,4 +318,13 @@ test("the throttling line speaks only for packages it could read", () => {
     assert.equal(throttleKnown({ "/p0": quiet, "/p1": quiet }, ["/p0", "/p1"], 2000, 2), true);
     // No counters, no line.
     assert.equal(throttleKnown({}, [], 0), false);
+});
+
+test("the CPU's hover text says why it's colored", () => {
+    const mem = { used: 1, total: 10 };
+    const tip = (fields) => barView({ cpu: 0.2, temp: 50000, sensor: null, throttled: false, memory: mem, ...fields }).tip;
+    assert.equal(tip({}), "CPU 20%");
+    assert.equal(tip({ throttled: true }), "CPU 20%, throttling");
+    assert.equal(tip({ temp: 88000 }), "CPU 20%, hot");
+    assert.equal(tip({ memory: { used: 9, total: 10 } }), "CPU 20%, memory nearly full");
 });

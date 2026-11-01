@@ -1,7 +1,7 @@
 // Tests for bluetooth.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { audioIcons, bluetoothIcon, deviceName, deviceStatus, pairedDevices, shouldConnect } from "./bluetooth.mjs";
+import { audioIcons, bluetoothIcon, bluetoothTip, deviceName, deviceStatus, pairedDevices, shouldConnect } from "./bluetooth.mjs";
 
 const dev = (fields) => ({ name: "", deviceName: "", address: "00:11:22:33:44:55", icon: "", state: 0, paired: true, bonded: false, batteryAvailable: false, battery: 0, ...fields });
 
@@ -86,4 +86,10 @@ test("clicking connects a disconnected device and disconnects a connected one", 
     assert.equal(shouldConnect(dev({ state: 2 })), true);
     assert.equal(shouldConnect(dev({ state: 1 })), false);
     assert.equal(shouldConnect(dev({ state: 3 })), false);
+});
+
+test("the Bluetooth icon's hover text says on or off, as tilemo's", () => {
+    assert.equal(bluetoothTip({ state: 1 }), "Bluetooth on");
+    assert.equal(bluetoothTip({ state: 0 }), "Bluetooth off");
+    assert.equal(bluetoothTip(null), "Bluetooth off");
 });

@@ -37,6 +37,43 @@ export function batteryView({ present, percentage, state }) {
     };
 }
 
+// Seconds as tilemo writes a battery's time, "h:mm".
+function hoursMinutes(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const m = minutes % 60;
+    return `${Math.floor(minutes / 60)}:${m < 10 ? "0" : ""}${m}`;
+}
+
+// The battery's hover text (SPEC.md §7.4), as tilemo's: its %, then
+// charged, charging and how long until full, or how long it has left.
+// `toFull` and `toEmpty` are UPower's estimates in seconds, 0 when it has
+// none. "" with no battery.
+export function batteryTip({ present, percentage, state, toFull = 0, toEmpty = 0 }) {
+    if (!present || !Number.isFinite(percentage)) {
+        return "";
+    }
+    const tip = `Battery ${Math.round(Math.min(1, Math.max(0, percentage)) * 100)}%`;
+    if (state === FULLY_CHARGED) {
+        return `${tip}, charged`;
+    }
+    if (state === CHARGING || state === PENDING_CHARGE) {
+        return toFull > 0 ? `${tip}, charging, full in ${hoursMinutes(toFull)}` : `${tip}, charging`;
+    }
+    return toEmpty > 0 ? `${tip}, ${hoursMinutes(toEmpty)} left` : tip;
+}
+
+// The volume's hover text, in tilemo's words.
+export function volumeTip({ muted }) {
+    return muted ? "Sound muted" : "Sound";
+}
+
+// The bell's hover text (SPEC.md §7.4, §9): Do not disturb when it's on,
+// and whether something arrived since the center was last open.
+export function bellTip({ dnd, unread }) {
+    const what = dnd ? "Do not disturb" : "Notifications";
+    return unread ? `${what}, new since you last looked` : what;
+}
+
 // What the volume icon shows for the default output: muted, or a level by
 // thirds. No output (`volume` not a number) shows it muted.
 export function volumeIcon({ muted, volume }) {

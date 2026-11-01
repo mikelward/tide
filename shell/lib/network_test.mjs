@@ -1,7 +1,7 @@
 // Tests for network.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { WIFI, WIRED, signalIcon, connectedWifi, networkIcon, wifiStatus, wifiList, trackOpen, shouldScan, NO_PROMPT, prompt } from "./network.mjs";
+import { WIFI, WIRED, signalIcon, connectedWifi, networkIcon, networkTip, wifiStatus, wifiList, trackOpen, shouldScan, NO_PROMPT, prompt } from "./network.mjs";
 
 const net = (name, fields = {}) => ({ name, connected: false, known: false, state: 4, signalStrength: 0.5, ...fields });
 const wifi = (networks, fields = {}) => ({ type: WIFI, connected: networks.some(n => n.connected), networks, ...fields });
@@ -121,4 +121,17 @@ test("Wi-Fi going off, however it happens, cancels the prompt", () => {
 
 test("an unknown prompt event is an error", () => {
     assert.throws(() => prompt(NO_PROMPT, { type: "scan" }), /unknown prompt event: scan/);
+});
+
+test("the network's hover text names the network, as tilemo's, then the internet and the VPN", () => {
+    const home = net("home", { connected: true, signalStrength: 0.9 });
+    const tip = (devices, fields = {}) => networkTip({ devices, wifiEnabled: true, connectivity: 4, ...fields });
+    assert.equal(tip([wifi([home])]), "home");
+    assert.equal(tip([wired(true), wifi([home])]), "Wired network", "a cable wins, as on the icon");
+    assert.equal(tip([wifi([net("off")])], { wifiEnabled: false }), "Wi-Fi off");
+    assert.equal(tip([wifi([net("off")])]), "No network");
+    assert.equal(tip([wifi([home])], { connectivity: 2 }), "home, sign in to reach the internet");
+    assert.equal(tip([wired(true)], { connectivity: 3 }), "Wired network, no internet");
+    assert.equal(tip([wifi([home])], { vpn: "on" }), "home, VPN on");
+    assert.equal(tip([wifi([home])], { vpn: "connecting" }), "home, VPN connecting");
 });

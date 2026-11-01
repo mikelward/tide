@@ -1724,14 +1724,20 @@ See [`bar.png`](docs/mocks/bar.png).
 | Privacy: mic (orange) | any app is capturing the microphone | per-app list with mute | — |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
 | Keep awake: a cup of coffee | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off; the OSD says which | hover: what it's doing, in the OSD's words |
-| Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | — |
+| Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | hover: "Bluetooth on" or "off" |
 | Bluetooth audio | one icon per connected headphones, headset or speakers, beside Bluetooth | the Bluetooth popover | hover: its name and battery |
-| Network | Wi-Fi strength / wired / VPN lock / offline | network list, with a network's password asked for in place; VPNs; *settings* opens `nm-connection-editor` | — |
-| Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5% |
-| Battery | % and charging, red below 15% | power profile (performance / balanced / saver), time left | — |
-| System monitor | CPU %; amber when the CPU is hot or memory is 90% full, red while it throttles or is critically hot | a readout of CPU, memory and temperature, then tabs: **CPU** (the default: temperature, clock, thermal throttling, the five processes using the most CPU) and **Memory** (memory, swap, the five using the most) | — |
-| Notifications | dot when unread; a slashed bell for DND, Adwaita's `notifications-disabled-symbolic` | notification center | middle-click toggles DND |
-| Session | — | lock, log out, suspend, restart, shut down | — |
+| Network | Wi-Fi strength / wired / VPN lock / offline | network list, with a network's password asked for in place; VPNs; *settings* opens `nm-connection-editor` | hover: the network's name, then no internet and the VPN |
+| Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5%; hover: "Sound" or "Sound muted" |
+| Battery | % and charging, red below 15% | power profile (performance / balanced / saver), time left | hover: %, then charged, charging and when it's full, or the time left |
+| System monitor | CPU %; amber when the CPU is hot or memory is 90% full, red while it throttles or is critically hot | a readout of CPU, memory and temperature, then tabs: **CPU** (the default: temperature, clock, thermal throttling, the five processes using the most CPU) and **Memory** (memory, swap, the five using the most) | hover: CPU %, then throttling, hot or memory nearly full |
+| Notifications | dot when unread; a slashed bell for DND, Adwaita's `notifications-disabled-symbolic` | notification center | middle-click toggles DND; hover: Notifications or Do not disturb, and whether something's new |
+| Session | — | lock, log out, suspend, restart, shut down | hover: what it's for |
+
+**Hover text.** Every status icon says what it shows when the pointer
+is over its click target, % included, in one line under it, as tilemo's
+bar does and in tilemo's words where it has the same icon. It stays away
+while a popover or the notification center is open, so it never covers
+one. It's one component, `BarTip`, so they all look alike.
 
 **Spacing.**
 
