@@ -6,10 +6,10 @@ import Quickshell.Io
 import "lib/keys.mjs" as Keys
 import "lib/launch.mjs" as Run
 
-// The key bindings Hyprland has now, for the settings panel's Keys page
-// (SPEC.md §16), from `hyprctl binds -j` (shell/lib/keys.mjs): listed as
-// the shell starts, and again as the page shows, since a config reload
-// can change them.
+// The key bindings Hyprland has now, for the settings panel's keyboard
+// shortcuts (SPEC.md §16), from `hyprctl binds -j` (shell/lib/keys.mjs):
+// listed as the shell starts, and again as the Keyboard page shows them,
+// since a config reload can change them.
 Singleton {
     id: root
 

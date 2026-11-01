@@ -21,25 +21,39 @@ import "lib/workspacepage.mjs" as WsPage
 // The settings panel (SPEC.md §16), centered on the focused monitor over a
 // dimmed backdrop, as the launcher is: the pages down the side, the one
 // chosen beside them, and at its foot the app that does the rest, if any.
+// The pages are grouped under headings, which can't be chosen.
 // The launcher's Settings action or `qs -c tide ipc call settings toggle`
 // opens and closes it; Escape or a click on the backdrop closes it. Up and
-// Down change the page, and Enter opens its app.
+// Down change the page, past the headings, and Enter opens its app.
 PanelWindow {
     id: root
 
     property int page: 0
     readonly property var current: Settings.PAGES[page]
+    // The section of the page to scroll to, by its id (settings.mjs's
+    // SECTIONS), or "": set as one opens, and cleared by another page or a
+    // flick.
+    property string section: ""
 
-    // Opens on page `id` (settings.mjs's), or on the first with none; one
-    // already open moves to it. Answers why not, or "".
+    // Another page starts at its top.
+    onPageChanged: {
+        section = "";
+        pageFlick.contentY = 0;
+    }
+    onSectionChanged: pageFlick.scrolled()
+
+    // Opens on page `id`, or at section `id`, or on the first page with
+    // none (settings.mjs's); one already open moves there. Answers why
+    // not, or "".
     function open(id) {
-        const at = id ? Settings.pageIndex(id) : 0;
-        if (at < 0) {
-            return `no ${id} page; the pages are ${Settings.PAGES.map(p => p.id).join(", ")}`;
+        const to = id ? Settings.opened(id) : { index: 0, section: "" };
+        if (to === null) {
+            return `no ${id} page; the pages are ${[...Settings.PAGES, ...Settings.SECTIONS].map(p => p.id).join(", ")}`;
         }
         if (visible) {
             if (id) {
-                page = at;
+                page = to.index;
+                section = to.section;
             }
             return "";
         }
@@ -47,7 +61,8 @@ PanelWindow {
         if (focused) {
             screen = focused;
         }
-        page = at;
+        page = to.index;
+        section = to.section;
         visible = true;
         keys.forceActiveFocus();
         return "";
@@ -107,7 +122,9 @@ PanelWindow {
             root.open("");
         }
         // Opens on one page, as the launcher's "Mouse settings" does: `qs
-        // -c tide ipc call settings openPage mouse`. Answers why not, or "".
+        // -c tide ipc call settings openPage mouse`, or at a section of
+        // one, as `openPage keys` opens Keyboard at its shortcuts. Answers
+        // why not, or "".
         function openPage(page: string): string {
             return root.open(page);
         }
@@ -345,7 +362,7 @@ PanelWindow {
         x: Math.round((parent.width - width) / 2)
         y: Math.round((parent.height - height) / 3)
         width: 640
-        // Tall enough for every page in the sidebar.
+        // Tall enough for every page and heading in the sidebar.
         height: Math.max(440, sidebar.implicitHeight + 12)
         radius: 12
         color: Theme.surface
@@ -380,18 +397,35 @@ PanelWindow {
             width: 180
             spacing: 2
 
+            // Each group's heading, then its pages.
             Repeater {
-                model: Settings.PAGES
+                model: Settings.sidebarRows()
 
-                MenuRow {
+                Item {
+                    id: sideRow
+
                     required property var modelData
-                    required property int index
 
                     width: sidebar.width
-                    icon: modelData.icon
-                    label: modelData.label
-                    highlighted: index === root.page
-                    onClicked: root.page = index
+                    implicitHeight: modelData.heading !== "" ? groupHeading.implicitHeight : pageRow.implicitHeight
+
+                    Heading {
+                        id: groupHeading
+
+                        visible: sideRow.modelData.heading !== ""
+                        text: sideRow.modelData.heading.toUpperCase()
+                    }
+
+                    MenuRow {
+                        id: pageRow
+
+                        visible: sideRow.modelData.heading === ""
+                        width: sidebar.width
+                        icon: sideRow.modelData.page >= 0 ? Settings.PAGES[sideRow.modelData.page].icon : ""
+                        label: sideRow.modelData.page >= 0 ? Settings.PAGES[sideRow.modelData.page].label : ""
+                        highlighted: sideRow.modelData.page === root.page
+                        onClicked: root.page = sideRow.modelData.page
+                    }
                 }
             }
         }
@@ -429,6 +463,20 @@ PanelWindow {
             }
 
             Flickable {
+                id: pageFlick
+
+                // At root.section's top, once it's laid out and as it
+                // grows, as far as the page scrolls.
+                function scrolled() {
+                    if (root.section === "keys" && keyList.visible) {
+                        contentY = Math.max(0, Math.min(keyList.y, contentHeight - height));
+                    }
+                }
+
+                onContentHeightChanged: scrolled()
+                onHeightChanged: scrolled()
+                onMovementStarted: root.section = ""
+
                 anchors.top: title.bottom
                 anchors.bottom: advancedRow.top
                 anchors.bottomMargin: 6
@@ -1176,20 +1224,39 @@ PanelWindow {
                         }
                     }
 
-                    // Keys: each binding's keys and what it does, listed
-                    // again as the page shows.
+                    // Keyboard's shortcuts: each binding's keys and what it
+                    // does, below the keyboard's settings, listed again as
+                    // they show.
                     Column {
                         id: keyList
 
                         onVisibleChanged: {
                             if (visible) {
                                 KeysData.list();
+                                pageFlick.scrolled();
                             }
                         }
-                        visible: root.current.id === "keys"
+                        onYChanged: pageFlick.scrolled()
+                        visible: root.current.id === "keyboard"
                         width: parent.width
                         topPadding: 6
                         spacing: 2
+
+                        Heading {
+                            text: "SHORTCUTS"
+                        }
+
+                        Text {
+                            width: keyList.width
+                            leftPadding: 10
+                            rightPadding: 10
+                            bottomPadding: 4
+                            wrapMode: Text.WordWrap
+                            text: Settings.section("keys").about
+                            color: Theme.fgDim
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                        }
 
                         Repeater {
                             model: KeysData.binds

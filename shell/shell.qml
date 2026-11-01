@@ -93,7 +93,7 @@ ShellRoot {
     // written from the start (IdleData, InputData), not when the settings
     // panel first shows them.
     // The mice and touchpads are listed then too, and again as a Mouse or
-    // Touchpad page shows; so are the key bindings, for the Keys page.
+    // Touchpad page shows; so are the key bindings, for the Keyboard page's shortcuts.
     // The layout hears that no popover is open (PopupsData).
     Component.onCompleted: {
         IdleData.load();

@@ -1,6 +1,6 @@
-// The settings panel's Keys page (SPEC.md §16): the key bindings Hyprland
-// has now, read from `hyprctl binds -j`, as pure functions the QML binds
-// to.
+// The settings panel's keyboard shortcuts (SPEC.md §16): the key
+// bindings Hyprland has now, read from `hyprctl binds -j`, as pure
+// functions the QML binds to.
 //
 // That needs Hyprland 0.56.2, tide's pin: 0.56.0's JSON gives each value
 // one field late from has_description on (src/debug/HyprCtl.cpp's
