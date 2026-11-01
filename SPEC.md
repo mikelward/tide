@@ -1065,9 +1065,10 @@ in how long they last and what stays visible:
   home, a launch from home, `Super+Return` and `Super+Shift+Return` all
   open.
 - A name is one line of text, trimmed, at most 32 characters, with no
-  quotes (`"`, `'`, `` ` ``), backslashes or control characters. A name
+  quotes (`"`, `'`, `` ` ``), backslashes, `@` or control characters. A name
   goes into Hyprland's selectors, Lua, JSON and the shell's command lines,
-  and without those it needs quoting in none of them. A standing name
+  and without those it needs quoting in none of them. `@` marks a
+  monitor's part of a workspace (Monitors, below). A standing name
   that has one is an error at load naming it, and the prompt won't take
   one as you type; a short name drops them. Matching a
   name you type against the existing ones and the standing ones ignores
@@ -1304,19 +1305,52 @@ in how long they last and what stays visible:
 - `conf`'s shpool and tmux startup would name its session from it. That's
   `conf`'s work, not done yet (TODO.md).
 
-**Monitors.** Named workspaces are built for one monitor. How they work
-across several is to be redesigned (§21).
+**Monitors.** A workspace spans every monitor, as in tilemo, and each
+monitor has its own part of it, with its own windows and layout.
 
-- Until then, extra monitors behave as they did with numbered
-  workspaces: Hyprland's native model and dwm's.
-  - There is one bar per monitor. Each monitor shows one workspace at a
-    time, from one shared pool.
-  - A new workspace opens on the focused monitor.
-  - The bar on every monitor lists them all. A workspace visible on
-    *another* monitor gets the accent outline.
-  - Hyprland gives each monitor a workspace as it connects, and only the
-    first gets home. A second monitor gets a numbered workspace, which the
-    bar lists after the named ones until something else is shown there.
+- **Switching** shows that workspace on every monitor at once. Every
+  workspace key, the bar, the switcher and the name prompt switch them all
+  together. Focus stays on the monitor it was on.
+- **An empty part** shows the wallpaper and that monitor's bar, nothing
+  else. A second monitor no window has been put on yet looks like that.
+- **There is one bar per monitor**, and each shows the same workspaces in
+  the same order, with the current one marked on all of them. No
+  workspace is shown elsewhere, so the bar has no accent outline for one.
+- **A new window** opens in the focused monitor's part, as now.
+  `Super+Shift+Left`/`Right` (§6.6) moves it into the next monitor's part
+  of the same workspace. Moving it to another workspace keeps its monitor.
+- **The name prompt and the switcher** list each workspace once.
+  `TIDE_WORKSPACE` and `tide workspace` give its name, never a part's.
+- **Minimizing** (§6.7) is per part: each monitor's tray shows what was
+  minimized from the part it shows, and a restore puts the window back on
+  its monitor.
+- **How, on Hyprland.** A Hyprland workspace is on one monitor, so each
+  part is a Hyprland workspace of its own (checked in 0.56.2's source).
+  - The main monitor's part has the workspace's own name, so one monitor
+    works exactly as before. Each other monitor's part is named `NAME@OUT`,
+    where `OUT` is that monitor's connector, such as `DP-2`. That's why a
+    name can't hold `@` (above).
+  - The main monitor is the one showing the parts with plain names. At
+    login it's the first monitor, which `conf` gives home.
+  - A switch focuses each other monitor in turn and shows its part there
+    (`hl.focus({ monitor })`, then `hl.focus({ workspace })`, which makes
+    the part on the focused monitor if it doesn't exist), then comes back
+    to the monitor that had focus, with `cursor:no_warps` held for the
+    switch. A part that's empty and not shown is destroyed as any empty
+    workspace is, so empty parts cost nothing.
+  - The bar, the switcher, the prompt, minimizing and grants (§14.3) read
+    a part as its workspace: `NAME@OUT` is `NAME`. A grant's `name:NAME`
+    goes to the focused monitor's part.
+- **A monitor going away**, as when the lid closes with a display
+  attached or a cable is pulled: Hyprland moves its workspaces to another
+  monitor, where only one can show. So tide moves the windows of each of
+  its parts into that workspace's part on the main monitor, or the first
+  one left, and remembers each window's monitor. When that monitor comes
+  back, they go back to its part, each in its old place in the layout.
+  Hyprland itself moves a returning monitor's workspaces back
+  (`CMonitor::onConnect`); tide then puts every window where its own
+  monitor says. The windows' monitors are kept by connector, for the
+  session.
 - Closing the laptop lid with an external display attached disables the
   internal panel and moves its workspaces over. With no external display,
   logind suspends.
@@ -1635,7 +1669,7 @@ See [`bar.png`](docs/mocks/bar.png).
 |---|---|
 | current | accent fill |
 | occupied | surface fill |
-| shown on another monitor | accent outline |
+| shown on another monitor | accent outline, until a workspace spans every monitor (§6.5) |
 | empty (only a standing one stays on the bar empty, made or not) | no fill, its name faint |
 | urgent | amber fill and ring, a dot, and the icon of each window that wants attention, ringed |
 
@@ -4373,20 +4407,12 @@ are what "done" means.
 Named workspaces (§6.5) leave these open. Deferred work, with its notes, is
 in `TODO.md`.
 
-- **Workspaces across several monitors.** Today each monitor shows one
-  workspace of its own (§6.5), which is to be rethought. The direction:
-  - A workspace spans every display, and each display has a layout of its
-    own within it.
-  - **Decided:** moving between displays uses tilemo's keys (§6.6,
-    mikelward/tilemo#90). `Super+Left`/`Right` focuses the window to the
-    left or right, going on at a display's edge to the nearest window on
-    the next display that way. `Super+Shift+Left`/`Right` moves the window
-    the same way. `Super+PgUp`/`PgDn` stay previous and next workspace, and
-    moving the window to the previous and next workspace moves to
-    `Super+Shift+PgUp`/`PgDn`. The edge behavior is built in the Lua
-    layout, so the keys work under today's per-display workspaces too.
-  - Still to decide: what a second display shows before anything is on it
-    (today Hyprland gives it a numbered workspace).
+- **Workspaces across several monitors.** **Decided** (2026-11-01): a
+  workspace spans every monitor, each with its own part, and a part with
+  nothing on it shows the wallpaper and the bar (§6.5). Moving between
+  monitors uses tilemo's keys (§6.6, mikelward/tilemo#90). Until it's
+  built, extra monitors keep Hyprland's model: each shows one workspace
+  from a shared pool, and a second monitor gets a numbered one.
 - **More workspaces than the bar's left side holds.** The bar cuts names at
   16 characters, but has no rule yet for when they still don't fit.
 
@@ -4685,7 +4711,7 @@ input activity, capture exclusion),** before any switch:
 
 Decided in review of this spec:
 
-- **Monitors:** each monitor shows its own workspace (§6.5).
+- **Monitors:** a workspace spans every monitor (§6.5).
 - **Named workspaces:** the standing ones first, home (`in`) first of
   them, holding mail, chat, calendar and music; a window opened on home
   asks for a workspace, and Esc closes it;

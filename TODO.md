@@ -796,6 +796,20 @@ once you have agreed with it or reversed it.
   left of the privacy pills, so it reads as something you turned on, not a
   warning. Moving it is one anchor in `shell/Bar.qml`.
 
+- **Each monitor's part of a workspace is a Hyprland workspace named
+  `NAME@OUT`** (2026-11-01), `OUT` being its connector, with the main
+  monitor's part keeping the plain name so one monitor works as before
+  (SPEC.md §6.5). So a name can't hold `@`. The alternatives are a
+  separator nobody types, or every part suffixed, home included, which
+  changes conf's home rule. Reversible until parts exist on a live
+  session.
+- **A switch focuses each other monitor in turn to show its part**
+  (2026-11-01), with `cursor:no_warps` held, since Hyprland 0.56.2 makes a
+  new named workspace on the focused monitor and has no dispatcher that
+  shows one on another monitor without focusing it. The alternative is a
+  `hl.workspace_rule` binding each part to its monitor, added as the part
+  is first made. Reversible: the switch function.
+
 ## Transitional shell (M2)
 
 `tide.service` runs `bin/tide-shell`, not `qs -c tide`,
@@ -1672,14 +1686,22 @@ says; a launch from home asks first, and Esc launches nothing; each
 switcher key opens its tab, Tab moves between them, Enter on a window
 or workspace goes there.
 
-- **Redesign workspaces across several monitors** (SPEC.md §21), a
-  follow-up to M8, which is built for one monitor; extra monitors keep
-  Hyprland's per-monitor model meanwhile. The direction: a workspace spans
-  every display, with a layout of its own on each. The keys between
-  displays are decided and built (SPEC.md §6.6, §21): `Super+Left`/`Right`
-  and `Super+Shift+Left`/`Right` in the Lua layout, `Super+Shift+PgUp`/`PgDn`
-  for moving the window to the previous / next workspace. Still to decide:
-  what a second display shows before anything is on it.
+- **A workspace spans every monitor** (SPEC.md §6.5, decided
+  2026-11-01): each monitor has its own part, and an empty part shows the
+  wallpaper and the bar. The keys between monitors are built (§6.6). A PR
+  each:
+  1. The model, in `hypr/tide`, plain Lua with tests: a part's Hyprland
+     name from a workspace and a monitor and back; the switch's
+     dispatches for every monitor; and, after a monitor goes or comes
+     back, which window goes to which part, from each window's remembered
+     monitor.
+  2. `conf`: the workspace keys, `Super+Home`, `Super+Tab` and `Super+End`
+     call the switch, and its history counts a workspace once.
+  3. The shell: the bar, the switcher, the prompt, `TIDE_WORKSPACE`,
+     minimizing and grants read `NAME@OUT` as `NAME`; names refuse `@`;
+     the bar drops the accent outline.
+  4. The monitor handoff: on `monitorremovedv2` and `monitoraddedv2`, move
+     the windows as the model says.
 - **Check the left and right keys live on Hyprland 0.56.2** (SPEC.md §6.6).
   Tested only against a stub `hl`: on two monitors side by side,
   `Super+Left`/`Right` walk the windows and cross at the edge, stop past
