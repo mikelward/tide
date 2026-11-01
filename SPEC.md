@@ -1678,7 +1678,7 @@ See [`bar.png`](docs/mocks/bar.png).
 |---|---|
 | current | accent fill |
 | occupied | surface fill |
-| shown on another monitor | accent outline, until a workspace spans every monitor (§6.5) |
+| shown on another monitor only | accent outline, which a workspace spanning every monitor never needs (§6.5) |
 | empty (only a standing one stays on the bar empty, made or not) | no fill, its name faint |
 | urgent | amber fill and ring, a dot, and the icon of each window that wants attention, ringed |
 

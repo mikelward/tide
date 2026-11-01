@@ -26,10 +26,14 @@ test("maximize toggles Hyprland's fullscreen state 1", () => {
 });
 
 test("a workspace is reached by name, quoted for Lua", () => {
-    assert.equal(focusWorkspaceName("in", true), 'hl.dsp.focus({ workspace = "name:in" })');
-    assert.equal(focusWorkspaceName('PR-12 "x", y\\z', true), 'hl.dsp.focus({ workspace = "name:PR-12 \\"x\\", y\\\\z" })');
+    // Under Lua, through conf's go(), which switches every monitor, or
+    // Hyprland's own switch without it.
+    const viaConf = (lit, sel) => 'function() if type(conf_workspaces) == "table" and type(conf_workspaces.go) == "function" then '
+        + `conf_workspaces.go(${lit}) else hl.dispatch(hl.dsp.focus({ workspace = ${sel} })) end end`;
+    assert.equal(focusWorkspaceName("in", true), viaConf('"in"', '"name:in"'));
+    assert.equal(focusWorkspaceName('PR-12 "x", y\\z', true), viaConf('"PR-12 \\"x\\", y\\\\z"', '"name:PR-12 \\"x\\", y\\\\z"'));
     assert.equal(focusWorkspaceName("PR-12 login", false), "workspace name:PR-12 login");
-    assert.equal(focusWorkspaceName("2", true), 'hl.dsp.focus({ workspace = "name:2" })');
+    assert.equal(focusWorkspaceName("2", true), viaConf('"2"', '"name:2"'));
 });
 
 test("home is renamed back by its ID", () => {

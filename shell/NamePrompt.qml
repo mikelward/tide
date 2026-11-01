@@ -171,7 +171,7 @@ PanelWindow {
                     // Qt matches it as PCRE, which has no \u escape, so the
                     // control characters are \x: with \u, nothing could be.
                     validator: RegularExpressionValidator {
-                        regularExpression: /[^"'`\\\x00-\x1f\x7f]*/
+                        regularExpression: /[^"'`\\@\x00-\x1f\x7f]*/
                     }
                     onTextChanged: {
                         if (!root.settingText) {

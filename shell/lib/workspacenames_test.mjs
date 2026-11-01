@@ -22,9 +22,9 @@ test("a name is one line, trimmed, at most 32 characters", () => {
     assert.match(checkName("a\nb").error, /one line/);
 });
 
-test("a name can't hold quotes, backslashes or control characters", () => {
-    for (const bad of ['team "x"', "it's", "a`b", "a\\b", "a\tb", "a\u007fb"]) {
-        assert.match(checkName(bad).error, /can't have quotes, backslashes or control characters/, bad);
+test("a name can't hold quotes, backslashes, @ or control characters", () => {
+    for (const bad of ['team "x"', "it's", "a`b", "a\\b", "a\tb", "a\u007fb", "re@DP-2"]) {
+        assert.match(checkName(bad).error, /can't have quotes, backslashes, @ or control characters/, bad);
     }
     assert.deepEqual(checkName("PR-12, login (2) — draft"), { name: "PR-12, login (2) — draft" });
     // A configured one is an error at load naming it.
@@ -32,6 +32,7 @@ test("a name can't hold quotes, backslashes or control characters", () => {
     assert.match(errors[0], /standing: "team \\"x\\"": a workspace's name can't have quotes/);
     // A short name drops them, so the prompt never starts with one.
     assert.equal(cleanTitle('Say "hi" to `it` \\ now - Google Chrome', "Google Chrome"), "Say hi to it now");
+    assert.equal(cleanTitle("mail@example.com - Google Chrome", "Google Chrome"), "mailexample.com");
     assert.equal(shortName('Re: "PR-12"', "", checkPatterns(['"(PR-[0-9]+)"']).patterns), "PR-12");
 });
 
