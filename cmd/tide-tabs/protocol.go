@@ -58,7 +58,7 @@ func writeFrame(w io.Writer, v any) error {
 	return err
 }
 
-// What the extension sends (tileco's src/tabsbridge.js): every normal
+// What the extension sends (connector/bridge.js, and tileco's src/tabsbridge.js): every normal
 // window of one browser, and its tabs. Only these fields go on, so nothing
 // else the extension or another local process puts in reaches the shell.
 type tab struct {

@@ -115,6 +115,6 @@ test("Enter asks the tab's own browser", () => {
 
 test("the tab says why no browser tabs are listed", () => {
     assert.match(tabsNote(false, {}), /tide-tabs isn't running/);
-    assert.match(tabsNote(true, {}), /no browser has tileco connected/);
+    assert.match(tabsNote(true, {}), /no browser has the tide connector or tileco/);
     assert.equal(tabsNote(true, applied({}, CHROME)), "");
 });

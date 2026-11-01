@@ -1,0 +1,23 @@
+:root {
+  color-scheme: light dark;
+  font: 13px/1.4 system-ui, sans-serif;
+}
+body {
+  width: 18rem;
+  margin: 0.75rem 1rem;
+}
+h1 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+#state {
+  font-weight: 600;
+  margin: 0;
+}
+#detail {
+  margin: 0.25rem 0 0;
+  opacity: 0.8;
+}
+#detail:empty {
+  display: none;
+}

@@ -1,7 +1,7 @@
 // Browser tabs in the switcher's Windows tab (SPEC.md §8.3), as pure
 // functions TabsData.qml and the switcher bind to. `tide-tabs serve`, the
 // shell's child, sends one line per browser each time its tabs change;
-// tileco, the extension, is what reads them.
+// the tide connector (connector/) or tileco, the extension, reads them.
 
 import { minimizedFrom } from "./minimized.mjs";
 
@@ -155,7 +155,7 @@ export function tabsNote(running, browsers) {
         return "Browser tabs aren't listed: tide-tabs isn't running";
     }
     if (Object.keys(browsers).length === 0) {
-        return "Browser tabs aren't listed: no browser has tileco connected";
+        return "Browser tabs aren't listed: no browser has the tide connector or tileco";
     }
     return "";
 }
