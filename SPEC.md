@@ -1332,12 +1332,21 @@ monitor has its own part of it, with its own windows and layout.
     name can't hold `@` (above).
   - The main monitor is the one showing the parts with plain names. At
     login it's the first monitor, which `conf` gives home.
-  - A switch focuses each other monitor in turn and shows its part there
-    (`hl.focus({ monitor })`, then `hl.focus({ workspace })`, which makes
-    the part on the focused monitor if it doesn't exist), then comes back
-    to the monitor that had focus, with `cursor:no_warps` held for the
-    switch. A part that's empty and not shown is destroyed as any empty
-    workspace is, so empty parts cost nothing.
+  - Each part, the main one's included, has a workspace rule binding it
+    to its monitor, added before it's first used, so Hyprland makes it
+    there whichever monitor has focus and whatever dispatch makes it
+    (`CWorkspaceStateTracker::create` honors a rule's monitor). The main
+    part needs one too: a switch has just focused another monitor when it
+    shows the main part.
+  - A switch shows each other monitor's part first, then the focused
+    monitor's. Showing a workspace on another monitor focuses that monitor,
+    so the last one shown keeps focus where it was. `conf` sets
+    `cursor:no_warps`, so the pointer stays put.
+  - A part that's empty and not shown is destroyed as any empty workspace
+    is, so empty parts cost nothing.
+  - The model is `hypr/tide/span.lua`, plain Lua with tests: the parts'
+    names, the rules, a switch's order, and where each window goes after
+    a monitor change.
   - The bar, the switcher, the prompt, minimizing and grants (§14.3) read
     a part as its workspace: `NAME@OUT` is `NAME`. A grant's `name:NAME`
     goes to the focused monitor's part.
@@ -4382,6 +4391,10 @@ are what "done" means.
   right, an empty one, and none past the last. `layout_test.lua` runs
   `focus_side` and `move_side` against a stub `hl` with two monitors,
   including a scaled one, a fullscreen one, and where a moved window lands.
+- **Workspaces across monitors** (§6.5). `span_test.lua` runs the model
+  on made-up monitors: the parts' names both ways, a switch's order, a
+  display unplugged and plugged back, the lid closed and opened, and a
+  window moved to another monitor on purpose.
 - **Session.** A `conf` test asserts the Hyprland config's only `exec-once`
   is `uwsm finalize`. `doctor` has its own tests over recorded `busctl` and
   `systemctl` output, and `tide-sysmon` runs over a fake `/proc` and

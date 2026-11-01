@@ -18,13 +18,17 @@ and full width below that. See SPEC.md §6 for the design.
 - `geometry.lua` is the pure window geometry, with no Hyprland API.
 - `direction.lua` is the pure rule for left and right between windows and
   monitors, also with no Hyprland API.
+- `span.lua` is the pure model of a workspace spanning every monitor
+  (SPEC.md §6.5): each monitor's part's name, what a switch shows, and
+  where windows go when a monitor goes and comes back.
 - `layout.lua` registers the layout and provides helpers for keybinds.
 - `layout_test.lua` tests `geometry.lua` and `layout.lua`, the latter
-  against a stub of `hl`; `direction_test.lua` tests `direction.lua`.
+  against a stub of `hl`; `direction_test.lua` tests `direction.lua`,
+  and `span_test.lua` tests `span.lua`.
 
 ## Using it
 
-`make install` copies the two modules to `~/.config/hypr/tide/`. Then,
+`make install` copies the modules to `~/.config/hypr/tide/`. Then,
 in `hyprland.lua`:
 
 ```lua

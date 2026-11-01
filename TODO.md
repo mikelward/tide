@@ -803,12 +803,20 @@ once you have agreed with it or reversed it.
   separator nobody types, or every part suffixed, home included, which
   changes conf's home rule. Reversible until parts exist on a live
   session.
-- **A switch focuses each other monitor in turn to show its part**
-  (2026-11-01), with `cursor:no_warps` held, since Hyprland 0.56.2 makes a
-  new named workspace on the focused monitor and has no dispatcher that
-  shows one on another monitor without focusing it. The alternative is a
-  `hl.workspace_rule` binding each part to its monitor, added as the part
-  is first made. Reversible: the switch function.
+- **A part is made on its monitor by a workspace rule** (2026-11-01):
+  `hl.workspace_rule({ workspace = "name:PART", monitor = OUT })`, the
+  main part's included,
+  added before the part is first used, since Hyprland 0.56.2 makes a new
+  named workspace on the focused monitor unless a rule binds it. A switch
+  then shows each other monitor's part, the focused monitor's last. The
+  rules pile up for the session, one per part ever used. The alternative
+  is focusing each monitor before showing its part. Reversible:
+  `span.rules` and its caller.
+- **A window's monitor is noted the first time tide sees it**
+  (2026-11-01), from the part it's in, and changed only by a move to
+  another monitor on purpose (`span.moved`). A window first seen in a part
+  whose monitor is gone isn't noted, and goes to the main monitor.
+  Reversible: `span.note`.
 
 ## Transitional shell (M2)
 
@@ -1690,11 +1698,7 @@ or workspace goes there.
   2026-11-01): each monitor has its own part, and an empty part shows the
   wallpaper and the bar. The keys between monitors are built (§6.6). A PR
   each:
-  1. The model, in `hypr/tide`, plain Lua with tests: a part's Hyprland
-     name from a workspace and a monitor and back; the switch's
-     dispatches for every monitor; and, after a monitor goes or comes
-     back, which window goes to which part, from each window's remembered
-     monitor.
+  1. **Built:** the model, `hypr/tide/span.lua`, with `span_test.lua`.
   2. `conf`: the workspace keys, `Super+Home`, `Super+Tab` and `Super+End`
      call the switch, and its history counts a workspace once.
   3. The shell: the bar, the switcher, the prompt, `TIDE_WORKSPACE`,

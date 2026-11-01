@@ -282,6 +282,7 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
     for f in .config/hypr/tide/layout.lua \
              .config/hypr/tide/geometry.lua \
              .config/hypr/tide/direction.lua \
+             .config/hypr/tide/span.lua \
              .config/hypr/tide/focus.lua \
              .config/systemd/user/tide.service \
              .config/systemd/user/tide-lock.service \
