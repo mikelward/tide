@@ -60,7 +60,9 @@ PanelWindow {
         micHolds: MicData.live && !KeepAwakeData.asked && !PresenterData.on,
         presenting: PresenterData.on
     }))
-    readonly property var appRows: root.asking !== "" ? Search.confirmRows(root.asking) : Search.search(root.items, root.query, LauncherData.frecency, root.openedAt)
+    readonly property var appRows: root.asking !== "" ? Search.confirmRows(root.asking)
+        : root.tab === "actions" ? Search.actionRows(root.items, root.query)
+        : Search.search(root.items, root.query, LauncherData.frecency, root.openedAt)
     // Every window, as the Windows and Attention tabs list them.
     readonly property var allWindows: Hyprland.toplevels.values.map(t => {
         const address = Workspaces.normalizeAddress(t.address);
