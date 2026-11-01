@@ -34,10 +34,9 @@ once you have agreed with it or reversed it.
   fit (SPEC.md §6.6). Hyprland's floating work area also takes off
   `float_gaps` (or `gaps_out`), which conf sets to 0. The alternative is
   to read those gaps too. Reversible: `work_area` in `layout.lua`.
-- **A monitor showing a fullscreen window offers no windows to Super+Left
-  and Right** (2026-11-01): the tiles behind it are skipped, and focus goes
-  to that monitor, so the fullscreen window. Reversible: `sides()` in
-  `layout.lua`.
+- **Super+Left and Right onto a monitor showing a fullscreen window focus
+  the fullscreen window** (2026-11-01), and skip the tiles hidden behind
+  it. Reversible: `sides()` in `layout.lua`.
 
 - **The Actions tab comes last, with no key** (2026-11-01), after
   Attention, so the tabs you open by key stay where they were; `Tab` and
