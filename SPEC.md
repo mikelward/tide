@@ -1818,8 +1818,8 @@ See [`switcher.png`](docs/mocks/switcher.png).
   - **Windows:** every window on any workspace, each with its icon,
     title and workspace. Enter goes to it, switching workspace. A
     minimized window is listed under the workspace it came from, marked
-    minimized, and Enter restores it (§6.7). Browser tabs join it later
-    (§8.3).
+    minimized, and Enter restores it (§6.7). Each browser window's tabs
+    are listed under it (§8.3).
   - **Attention:** every window wanting attention (§14.4), on any
     workspace, most recent first. Enter goes there, which clears its
     mark. With none, the tab says so.
@@ -2012,6 +2012,27 @@ See [`switcher.png`](docs/mocks/switcher.png).
 - **Each tab goes under its window by the window's title,** which is its
   active tab's, as tilemo places tabs (tilemo §9). Two windows showing
   the same title can't be told apart; their tabs go under the first.
+- **In the Windows tab** (`shell/TabsData.qml`, `shell/lib/tabs.mjs`):
+  - A window's title matches when it is its active tab's title, then
+    " - " and parts that include the browser's name, as Chrome and Brave
+    title their windows ("Docs - Google Chrome", with a profile's name
+    beside it in some versions). Another app's "Docs - kitty" doesn't
+    match. A title that's just the tab's matches only a browser's window,
+    by its class. Each toplevel is taken once, so two same-titled windows
+    find two toplevels when there are two.
+  - A tab in a minimized browser window brings the window back to the
+    workspace it came from (§6.7), as the window's own row does.
+  - Each tab is a row under its window: its title, then "tab", the
+    browser, "showing" for the active one, and the site's host. Its icon
+    is its window's app. Tabs whose window wasn't found go last.
+  - Typing matches a tab's title, browser and host, as it does windows.
+  - Enter closes the switcher, asks that browser to bring the tab up, and
+    focuses its window, which a browser can't do for itself on Wayland.
+  - With no browser connected, the tab says "Browser tabs aren't listed",
+    and why: `tide-tabs` isn't running, or no browser has tileco
+    connected. `TIDE_TABS=0` in the session's environment turns it off.
+  - The relay restarts with the polkit agent's backoff (5 s, doubling to
+    a minute), as `tide-agent` does.
 - **It's only for Linux.** tileco reads tabs itself on chromeOS (tileco
   §9.4), and tilemo asks Chrome, Brave and Safari through AppleScript
   (tilemo §9). Neither needs a host.

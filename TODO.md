@@ -18,6 +18,13 @@ once you have agreed with it or reversed it.
   trying the socket from 250 ms doubling to 5 s, rather than exiting so the
   extension restarts it: no process churn, and the worker stays up.
   Reversible: `dialLoop`.
+- **A tab row says "tab · BROWSER · showing · HOST"** (2026-11-01), with its
+  window's app icon, since favicons would need site access. Tabs whose
+  window no toplevel's title matches are listed last rather than dropped.
+  Reversible: `tabRows` in `shell/lib/tabs.mjs`.
+- **The "not listed" line shows only on the Windows tab with an empty
+  query** (2026-11-01), so it never pushes a match down. Reversible: its
+  `visible` in `LauncherWindow.qml`.
 - **Each browser's tabs go whole on every change** (2026-11-01), not as
   diffs, so a reconnect needs no catching up. Reversible: the protocol, in
   tileco and here.
@@ -1676,7 +1683,7 @@ or workspace goes there.
   - [ ] **Brave too**: `setup` installs the host manifest in
     `~/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts/` beside
     Chrome's `~/.config/google-chrome/NativeMessagingHosts/` (scripts).
-  - [ ] The shell's side: the relay as the shell's child, the Windows tab's
+  - [x] The shell's side: the relay as the shell's child, the Windows tab's
     tab rows under their windows, Enter, and the "not listed" line.
   - [ ] On a live session: Chrome and Brave both connected, a shell
     restart, and Enter on a tab in a window on another workspace.
