@@ -215,6 +215,16 @@ export function statusText(state) {
     return state.checking ? "Checking" : state.message;
 }
 
+// Where the face's middle column starts (SPEC.md §10), so nothing on it
+// moves as messages come and go. The line under the field always keeps
+// room for one line (lineHeight), empty or not; the column is centered as
+// if that's all it ever holds, so a longer message grows down past the
+// field rather than moving it up.
+export function faceTop(areaHeight, columnHeight, statusHeight, lineHeight) {
+    const beyond = Math.max(0, statusHeight - lineHeight);
+    return Math.round((areaHeight - (columnHeight - beyond)) / 2);
+}
+
 // How long a `tide idle-lock` flag counts (seconds): longer than logind
 // and systemd take to start the lock, short enough that a flag left by an
 // idle lock that never happened can't turn a later Super+L into the

@@ -2504,6 +2504,12 @@ talk, a demo, or a meeting room's screen.
   one, and Enter then is held until that check fails. "Checking" and PAM's
   messages show under the field. A wrong password clears the field; it
   doesn't shake.
+- **Nothing on the face moves** (maintainer, 2026-11-01), on the lock and
+  the greeter. The line under the field keeps room for one line, empty or
+  not, so "Checking" and PAM's messages appear without shifting anything.
+  A message longer than a line grows downward, past the field, never
+  moving it. The greeter's session and user chips keep their row while
+  the sessions and users load.
 - **The field shows where keys go** (maintainer, 2026-10-31), on the lock
   and the greeter. A face that has the keyboard focus, with a keyboard
   plugged in, gives its field an accent border and a caret. The caret
