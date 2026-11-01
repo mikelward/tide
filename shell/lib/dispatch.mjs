@@ -101,6 +101,25 @@ export function moveWindowToWorkspace(address, name, lua) {
         : `movetoworkspace name:${n},${w}`;
 }
 
+// Move the window at `address` to tide's workspace named `name`, made if
+// it's new, and follow it there, focused: the name prompt's Enter (SPEC.md
+// §6.5). Under the Lua config it goes through conf's
+// conf_workspaces.move, which puts it in the workspace's part on the
+// window's own monitor and switches every monitor there (§6.5, Monitors);
+// a config without move() gets moveWindowToWorkspace's plain move. A
+// minimized window's restore names a part exactly, so it uses
+// moveWindowToWorkspace.
+export function moveWindowToNamed(address, name, lua) {
+    const w = windowAddress(address);
+    const n = workspaceName(name);
+    if (!lua) {
+        return moveWindowToWorkspace(address, name, lua);
+    }
+    return "function() if type(conf_workspaces) == \"table\" and type(conf_workspaces.move) == \"function\" then "
+        + `conf_workspaces.move(${luaString(w.slice("address:".length))}, ${luaString(n)}, true) `
+        + `else hl.dispatch(${moveWindowToWorkspace(address, name, lua)}) end end`;
+}
+
 // Move the window at `address` to the workspace named `name` without
 // following it or focusing it: a home app's window that opened before the
 // rule sending it home was in (SPEC.md §6.5).

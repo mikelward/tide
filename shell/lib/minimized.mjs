@@ -5,6 +5,7 @@
 // it back from Hyprland.
 
 import { sameName } from "./workspacenames.mjs";
+import { workspaceOf } from "./span.mjs";
 
 // The start of a minimize workspace's name; the rest is the workspace the
 // window came from.
@@ -30,6 +31,14 @@ export function minimizedFrom(workspaceName) {
 export function isMinimizedFrom(workspaceName, name) {
     const from = minimizedFrom(workspaceName);
     return from !== null && sameName(from, name);
+}
+
+// The same, with any monitor's part of workspace `name` counting as it
+// (span.mjs, SPEC.md §6.5, Monitors): whether the bar shows the window
+// with workspace `name`. A tray (trayWindows) shows only its own part's.
+export function isMinimizedFromWorkspace(workspaceName, name) {
+    const from = minimizedFrom(workspaceName);
+    return from !== null && sameName(workspaceOf(from), name);
 }
 
 // What Super+Z does with the focused window, `active` being

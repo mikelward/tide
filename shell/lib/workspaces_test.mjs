@@ -621,3 +621,12 @@ test("a main part made again doesn't move its workspace on the bar", () => {
     ], []);
     assert.deepEqual(order.map((w) => [w.name, w.id]), [["alpha", -1344], ["beta", -1342]]);
 });
+
+test("a window minimized from a monitor's part shows on its workspace's chip", () => {
+    const s = spanning();
+    s.windows.push({ address: "m", workspace: -98, workspaceName: "special:minimized:re@DP-2", app: "mail", urgent: true, fullscreen: 0 });
+    const bar = barWorkspaces({ monitor: "eDP-1", ...s, standing: ["in", "re"] });
+    const re = bar.find((w) => w.name === "re");
+    assert.equal(re.urgent, true);
+    assert.deepEqual(re.icons.map((i) => [i.address, i.restoreTo]), [["m", "re@DP-2"]]);
+});

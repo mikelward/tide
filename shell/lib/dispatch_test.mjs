@@ -1,7 +1,7 @@
 // Tests for dispatch.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, closeWindow, minimizeWindow, sendWindowTo, floatWindow } from "./dispatch.mjs";
+import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, moveWindowToNamed, closeWindow, minimizeWindow, sendWindowTo, floatWindow } from "./dispatch.mjs";
 
 test("a Lua config gets hl.dsp calls", () => {
     assert.equal(focusWorkspace(3, true), "hl.dsp.focus({ workspace = 3 })");
@@ -81,4 +81,14 @@ test("floating a window a new rule covers enables floating, by its address, in e
     assert.equal(floatWindow("55AA01", true), 'hl.dsp.window.float({ action = "enable", window = "address:0x55aa01" })');
     assert.equal(floatWindow("0x55aa01", false), "setfloating address:0x55aa01");
     assert.throws(() => floatWindow("not-hex", true), /not a window address/);
+});
+
+test("the name prompt's move goes through conf's move, which keeps the window's monitor", () => {
+    assert.equal(moveWindowToNamed("55AA01", "docs", true),
+        'function() if type(conf_workspaces) == "table" and type(conf_workspaces.move) == "function" then '
+        + 'conf_workspaces.move("0x55aa01", "docs", true) '
+        + 'else hl.dispatch(hl.dsp.window.move({ workspace = "name:docs", follow = true, window = "address:0x55aa01" })) end end');
+    assert.equal(moveWindowToNamed("0x55aa01", "docs", false), "movetoworkspace name:docs,address:0x55aa01");
+    assert.throws(() => moveWindowToNamed("x) os.exit(", "docs", true), /not a window address/);
+    assert.throws(() => moveWindowToNamed("55aa01", "a\nb", true), /not a workspace name/);
 });

@@ -115,7 +115,7 @@ Singleton {
         } else if (a.go !== undefined) {
             Hyprland.dispatch(Dispatch.focusWorkspaceName(a.go, Hyprland.usingLua));
         } else {
-            Hyprland.dispatch(Dispatch.moveWindowToWorkspace(a.move, a.name, Hyprland.usingLua));
+            Hyprland.dispatch(Dispatch.moveWindowToNamed(a.move, a.name, Hyprland.usingLua));
         }
     }
 

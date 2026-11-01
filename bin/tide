@@ -389,7 +389,9 @@ sanitized() {
 # having said why, when it can't be read; $1 names the subcommand for the
 # message. Hyprland prints each field on a line of its own, escaping only
 # `"`, `\` and control characters; those escapes are undone, so a name made
-# outside tide (`hyprctl`) with a quote in it compares as it is.
+# outside tide (`hyprctl`) with a quote in it compares as it is. A
+# monitor's part of a workspace, NAME@OUT, is NAME (SPEC.md §6.5,
+# Monitors; shell/lib/span.mjs).
 focused_workspace() {
     if ! command -v hyprctl >/dev/null 2>&1; then
         echo "$prog $1: no hyprctl, so couldn't read the focused workspace" >&2
@@ -405,6 +407,10 @@ focused_workspace() {
         echo "$prog $1: couldn't read the focused workspace's name from: $out" >&2
         return 1
     fi
+    case $name in
+        special:*) ;;
+        ?*@?*) name=${name%@*} ;;
+    esac
     printf '%s\n' "$name"
 }
 
