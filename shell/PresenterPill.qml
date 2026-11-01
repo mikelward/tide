@@ -1,9 +1,11 @@
 import QtQuick
 import "lib/barclick.mjs" as Click
+import "lib/presenter.mjs" as Presenter
 
 // The Presenting pill (SPEC.md §7.4): shown while presenter mode is on
 // (PresenterData), in the accent color, so it reads as something you
-// turned on rather than a warning. A click turns presenter mode off.
+// turned on rather than a warning. A click turns presenter mode off;
+// hovering says what it's holding, as tilemo's does.
 Rectangle {
     id: root
 
@@ -18,6 +20,8 @@ Rectangle {
 
     // First, so its hover goes over the pill's fill and under its content.
     BarHit {
+        id: hit
+
         reach: root.reach
         behind: false
 
@@ -47,6 +51,12 @@ Rectangle {
             font.pixelSize: 12
             font.weight: Font.DemiBold
         }
+    }
+
+    BarTip {
+        item: root
+        shown: hit.hovered
+        text: Presenter.pillTip(NotificationData.enabled)
     }
 
 }

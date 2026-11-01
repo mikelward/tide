@@ -56,3 +56,10 @@ export function keepAwakeToggled(state, dndAvailable = true) {
     }
     return frozen(false, dndAvailable ? true : part(state, "dnd"), false);
 }
+
+// The Presenting pill's hover text (SPEC.md §7.4), as tilemo's: what
+// presenter mode is holding. Without the shell as the notification server
+// there's no Do not disturb, so it's keep awake alone, as the OSD says.
+export function pillTip(dndAvailable) {
+    return dndAvailable ? "Presenting: Do not disturb and keep awake" : "Presenting: keep awake only";
+}

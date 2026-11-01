@@ -1,7 +1,7 @@
 // Tests for presenter.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { OFF, effective, presenterToggled, dndSet, keepAwakeToggled } from "./presenter.mjs";
+import { OFF, effective, presenterToggled, dndSet, keepAwakeToggled, pillTip } from "./presenter.mjs";
 
 const state = (presenting, dnd, keepAwake) => ({ presenting, dnd, keepAwake });
 
@@ -63,4 +63,9 @@ test("without the shell's Do not disturb, ending it by keep awake leaves Do not 
 test("a missing state reads as off", () => {
     assert.deepEqual(effective(undefined), { dnd: false, keepAwake: false });
     assert.deepEqual(presenterToggled(undefined), state(true, false, false));
+});
+
+test("the Presenting pill's hover text says what it holds, as tilemo's", () => {
+    assert.equal(pillTip(true), "Presenting: Do not disturb and keep awake");
+    assert.equal(pillTip(false), "Presenting: keep awake only", "no notification server, no Do not disturb");
 });
