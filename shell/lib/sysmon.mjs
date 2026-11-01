@@ -343,12 +343,19 @@ export function formatBytes(bytes) {
 }
 
 // What the bar shows: CPU %, and its color, "danger" while throttling or
-// critically hot, "warn" when hot or memory is nearly full, else "normal".
+// critically hot, "warn" when hot or memory is nearly full, else "normal";
+// and its hover text, which says why when it isn't normal.
 export function barView({ cpu, temp, sensor, throttled, memory }) {
     const level = tempLevel(temp, sensor);
     const full = memory && memory.total > 0 && memory.used / memory.total >= MEMORY_HIGH;
     const tone = throttled || level === "critical" ? "danger" : level === "hot" || full ? "warn" : "normal";
-    return { text: formatPercent(cpu), tone };
+    const text = formatPercent(cpu);
+    const tip = [text ? `CPU ${text}` : "CPU"]
+        .concat(throttled ? ["throttling"] : [])
+        .concat(level === "critical" ? ["very hot"] : level === "hot" ? ["hot"] : [])
+        .concat(full ? ["memory nearly full"] : [])
+        .join(", ");
+    return { text, tone, tip };
 }
 
 // `tide-sysmon sample`'s output as its @stat, @freq and @procs sections'

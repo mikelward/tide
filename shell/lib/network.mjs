@@ -51,6 +51,34 @@ export function networkIcon({ devices, wifiEnabled, connectivity }) {
     return { visible: true, icon: hasWifi && !wifiEnabled ? "network-wireless-disabled-symbolic" : "network-offline-symbolic" };
 }
 
+// The network icon's hover text (SPEC.md §7.4), in tilemo's words: the
+// Wi-Fi network's name, "Wired network", "Wi-Fi off" or "No network";
+// then whether it can't reach the internet, and the VPN, "on" or
+// "connecting" (vpn.mjs's lock).
+export function networkTip({ devices, wifiEnabled, connectivity, vpn = "" }) {
+    const noRoute = connectivity === PORTAL || connectivity === LIMITED;
+    const wifi = connectedWifi(devices);
+    let tip;
+    if (devices.some((d) => d.type === WIRED && d.connected)) {
+        tip = "Wired network";
+    } else if (wifi) {
+        tip = wifi.name || "Wi-Fi";
+    } else {
+        tip = devices.some((d) => d.type === WIFI) && !wifiEnabled ? "Wi-Fi off" : "No network";
+        return tip;
+    }
+    const parts = [tip];
+    if (noRoute) {
+        parts.push(connectivity === PORTAL ? "sign in to reach the internet" : "no internet");
+    }
+    if (vpn === "on") {
+        parts.push("VPN on");
+    } else if (vpn === "connecting") {
+        parts.push("VPN connecting");
+    }
+    return parts.join(", ");
+}
+
 // A Wi-Fi network's line in the popover.
 export function wifiStatus(network) {
     if (network.state === CONNECTING) {

@@ -21,6 +21,11 @@ export function bluetoothIcon(adapter) {
     return { visible: true, icon: "bluetooth-active-symbolic", on: isOn(adapter) };
 }
 
+// The Bluetooth icon's hover text, as tilemo's (SPEC.md §7.4).
+export function bluetoothTip(adapter) {
+    return adapter && isOn(adapter) ? "Bluetooth on" : "Bluetooth off";
+}
+
 function isOn(adapter) {
     return adapter.state === ADAPTER_ENABLED || adapter.state === ADAPTER_ENABLING;
 }

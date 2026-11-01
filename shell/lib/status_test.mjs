@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
     batteryView, volumeIcon, volumeText, scrolledVolume, formatDuration, batteryStatus, profileChoices, degradedText,
-    PERCENT_ROOM,
+    PERCENT_ROOM, batteryTip, volumeTip, bellTip,
 } from "./status.mjs";
 import { formatPercent } from "./sysmon.mjs";
 
@@ -127,4 +127,26 @@ test("the volume's and the CPU's % each hold that room", () => {
         rooms.push(m[1].trim());
     }
     assert.deepEqual(rooms, ["Status.PERCENT_ROOM", "Status.PERCENT_ROOM"]);
+});
+
+test("the battery's hover text says its %, and charging, charged or time left, as tilemo's", () => {
+    const b = (fields) => batteryTip({ present: true, percentage: 0.82, state: 2, ...fields });
+    assert.equal(b({}), "Battery 82%");
+    assert.equal(b({ toEmpty: 2 * 3600 + 5 * 60 }), "Battery 82%, 2:05 left");
+    assert.equal(b({ state: 1 }), "Battery 82%, charging");
+    assert.equal(b({ state: 1, toFull: 40 * 60 }), "Battery 82%, charging, full in 0:40");
+    assert.equal(b({ state: 5 }), "Battery 82%, charging", "pending charge is charging");
+    assert.equal(b({ state: 4, percentage: 1 }), "Battery 100%, charged");
+    assert.equal(batteryTip({ present: false, percentage: 0.5, state: 2 }), "", "no battery, no text");
+});
+
+test("the volume's hover text is tilemo's", () => {
+    assert.equal(volumeTip({ muted: false }), "Sound");
+    assert.equal(volumeTip({ muted: true }), "Sound muted");
+});
+
+test("the bell's hover text says Do not disturb, and whether something's new", () => {
+    assert.equal(bellTip({ dnd: false, unread: false }), "Notifications");
+    assert.equal(bellTip({ dnd: true, unread: false }), "Do not disturb");
+    assert.equal(bellTip({ dnd: false, unread: true }), "Notifications, new since you last looked");
 });

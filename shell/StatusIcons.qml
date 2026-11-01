@@ -10,7 +10,8 @@ import "lib/keepawake.mjs" as KeepAwake
 import "lib/network.mjs" as Net
 import "lib/status.mjs" as Status
 
-// The status icons before the clocks (SPEC.md §7.4). So far: keep awake;
+// The status icons before the clocks (SPEC.md §7.4), each with hover text
+// (BarTip) in tilemo's words where tilemo has the same icon. So far: keep awake;
 // Bluetooth, then one for each connected audio device; network; volume and its %, which scrolls by 5%; battery, red
 // below 15%; and the system monitor's CPU %, each with its popover; the
 // notification center's bell; and the session menu.
@@ -65,6 +66,8 @@ Row {
         color: KeepAwakeData.on ? Theme.accent : Theme.fgFaint
 
         BarHit {
+            id: keepAwakeHit
+
             reach: root.reachOf(keepAwake)
 
             TapHandler {
@@ -72,38 +75,10 @@ Row {
             }
         }
 
-        // A HoverHandler takes no clicks, so the tap still lands.
-        HoverHandler {
-            id: keepAwakeHover
-        }
-
-        PopupWindow {
-            visible: keepAwakeHover.hovered
-            anchor.item: keepAwake
-            anchor.edges: Edges.Bottom
-            anchor.gravity: Edges.Bottom
-            anchor.margins.bottom: -8
-            color: "transparent"
-            implicitWidth: keepAwakeTip.implicitWidth + 18
-            implicitHeight: keepAwakeTip.implicitHeight + 10
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 7
-                color: Theme.surface2
-                border.color: Theme.edge
-
-                Text {
-                    id: keepAwakeTip
-
-                    anchors.centerIn: parent
-                    textFormat: Text.PlainText
-                    text: KeepAwake.sign(KeepAwakeData.state)
-                    color: Theme.fg
-                    font.family: Theme.font
-                    font.pixelSize: 12
-                }
-            }
+        BarTip {
+            item: keepAwake
+            shown: keepAwakeHit.hovered
+            text: KeepAwake.sign(KeepAwakeData.state)
         }
     }
 
@@ -122,11 +97,19 @@ Row {
         color: view.on ? Theme.fg : Theme.fgFaint
 
         BarHit {
+            id: bluetoothHit
+
             reach: root.reachOf(bluetooth)
 
             TapHandler {
                 onTapped: bluetoothPopover.toggle(parent)
             }
+        }
+
+        BarTip {
+            item: bluetooth
+            shown: bluetoothHit.hovered
+            text: Bt.bluetoothTip(bluetooth.adapter)
         }
 
         BluetoothPopover {
@@ -151,6 +134,8 @@ Row {
             name: modelData.icon
 
             BarHit {
+                id: audioHit
+
                 reach: root.reachOf(audioDevice)
 
                 TapHandler {
@@ -158,40 +143,10 @@ Row {
                 }
             }
 
-            // A HoverHandler takes no clicks, so the tap still lands. It
-            // covers the icon alone, so the name shows only over it.
-            HoverHandler {
-                id: audioHover
-            }
-
-            PopupWindow {
-                visible: audioHover.hovered
-                anchor.item: audioDevice
-                anchor.edges: Edges.Bottom
-                anchor.gravity: Edges.Bottom
-                anchor.margins.bottom: -8
-                color: "transparent"
-                implicitWidth: audioTip.implicitWidth + 18
-                implicitHeight: audioTip.implicitHeight + 10
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 7
-                    color: Theme.surface2
-                    border.color: Theme.edge
-
-                    Text {
-                        id: audioTip
-
-                        anchors.centerIn: parent
-                        // A device's name is whatever it or you set: plain text.
-                        textFormat: Text.PlainText
-                        text: audioDevice.modelData.tooltip
-                        color: Theme.fg
-                        font.family: Theme.font
-                        font.pixelSize: 12
-                    }
-                }
+            BarTip {
+                item: audioDevice
+                shown: audioHit.hovered
+                text: audioDevice.modelData.tooltip
             }
         }
     }
@@ -238,11 +193,24 @@ Row {
         }
 
         BarHit {
+            id: networkHit
+
             reach: root.reachOf(network)
 
             TapHandler {
                 onTapped: networkPopover.toggle(parent)
             }
+        }
+
+        BarTip {
+            item: network
+            shown: networkHit.hovered
+            text: Net.networkTip({
+                devices: network.devices,
+                wifiEnabled: Networking.wifiEnabled,
+                connectivity: Networking.connectivity,
+                vpn: NetworkData.lock,
+            })
         }
 
         NetworkPopover {
@@ -273,6 +241,8 @@ Row {
             // takes no room (BarHit.qml). Scrolling over it changes the
             // volume too.
             BarHit {
+                id: volumeHit
+
                 span: volume
                 reach: root.reachOf(volume)
 
@@ -327,6 +297,12 @@ Row {
 
             icon: volume
         }
+
+        BarTip {
+            item: volume
+            shown: volumeHit.hovered
+            text: Status.volumeTip({ muted: root.sink?.audio?.muted ?? true })
+        }
     }
 
     Row {
@@ -349,6 +325,18 @@ Row {
             icon: battery
         }
 
+        BarTip {
+            item: battery
+            shown: batteryHit.hovered
+            text: Status.batteryTip({
+                present: root.battery?.isPresent ?? false,
+                percentage: root.battery?.percentage,
+                state: root.battery?.state,
+                toFull: root.battery?.timeToFull ?? 0,
+                toEmpty: root.battery?.timeToEmpty ?? 0,
+            })
+        }
+
         SymbolicIcon {
             anchors.verticalCenter: parent.verticalCenter
             name: battery.view.icon || "battery-missing-symbolic"
@@ -357,6 +345,8 @@ Row {
             // In here, not the Row itself, which would cull a target that
             // takes no room (BarHit.qml).
             BarHit {
+                id: batteryHit
+
                 span: battery
                 reach: root.reachOf(battery)
 
@@ -394,6 +384,12 @@ Row {
             icon: sysmon
         }
 
+        BarTip {
+            item: sysmon
+            shown: sysmonHit.hovered
+            text: SysmonData.view.tip ?? ""
+        }
+
         SymbolicIcon {
             anchors.verticalCenter: parent.verticalCenter
             file: "cpu-symbolic.svg"
@@ -402,6 +398,8 @@ Row {
             // In here, not the Row itself, which would cull a target that
             // takes no room (BarHit.qml).
             BarHit {
+                id: sysmonHit
+
                 span: sysmon
                 reach: root.reachOf(sysmon)
 
@@ -471,6 +469,12 @@ Row {
                 onTapped: NotificationData.setDnd(!NotificationData.dnd)
             }
         }
+
+        BarTip {
+            item: bell
+            shown: bellHit.hovered
+            text: Status.bellTip({ dnd: NotificationData.dnd, unread: HistoryData.unread })
+        }
     }
 
     SymbolicIcon {
@@ -480,11 +484,19 @@ Row {
         name: "system-shutdown-symbolic"
 
         BarHit {
+            id: sessionHit
+
             reach: root.reachOf(session)
 
             TapHandler {
                 onTapped: sessionMenu.toggle(parent)
             }
+        }
+
+        BarTip {
+            item: session
+            shown: sessionHit.hovered
+            text: "Lock, log out or power off"
         }
 
         SessionMenu {
