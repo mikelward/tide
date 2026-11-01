@@ -1730,7 +1730,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5% |
 | Battery | % and charging, red below 15% | power profile (performance / balanced / saver), time left | — |
 | System monitor | CPU %; amber when the CPU is hot or memory is 90% full, red while it throttles or is critically hot | a readout of CPU, memory and temperature, then tabs: **CPU** (the default: temperature, clock, thermal throttling, the five processes using the most CPU) and **Memory** (memory, swap, the five using the most) | — |
-| Notifications | dot when unread, a bell with *z* for DND | notification center | middle-click toggles DND |
+| Notifications | dot when unread; a slashed bell for DND, Adwaita's `notifications-disabled-symbolic` | notification center | middle-click toggles DND |
 | Session | — | lock, log out, suspend, restart, shut down | — |
 
 **Spacing.**
