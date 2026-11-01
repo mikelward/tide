@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- tide's logo, two waves (tide's shell/icons/tide-symbolic.svg), in white on tide's accent blue. -->
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="#3584e4"/>
+  <g transform="translate(12.54 8.75) scale(6.5)" fill="none" stroke="#ffffff" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0"/>
+    <path d="M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/>
+  </g>
+</svg>

@@ -9,7 +9,7 @@ import "lib/polkit.mjs" as Polkit
 // The browsers' tabs for the switcher's Windows tab (SPEC.md §8.3), on
 // unless TIDE_TABS=0. It starts `tide-tabs serve`, the relay each browser's
 // host connects to, and talks to it over its stdin and stdout as
-// AgentData.qml does tide-agent. tileco, in the browser, sends the tabs;
+// AgentData.qml does tide-agent. The tide connector or tileco, in the browser, sends the tabs;
 // this keeps each browser's latest list and asks for a tab on Enter.
 Singleton {
     id: root

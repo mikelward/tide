@@ -2016,32 +2016,45 @@ See [`switcher.png`](docs/mocks/switcher.png).
 - **Nothing on Linux lists a browser's tabs from outside it.** Chrome's
   windows are toplevels; its tabs aren't, and no Wayland or D-Bus
   interface names them.
-- So it needs a browser extension, and the extension is **tileco**
-  (mikelward/tileco, tileco §14.6). tileco tiles only on chromeOS; on Linux
-  it reads the tabs with the `chrome.tabs` API and hands them to the shell
-  through native messaging, a host program Chrome starts that talks over
-  stdio. Enter on a tab asks the extension to activate it, then the shell
-  focuses its window.
-  - One extension, not two to keep in step: tileco already read tabs for
-    its own launcher.
+- So it needs a browser extension: the **tide connector**, in
+  `connector/`, or tileco (mikelward/tileco, tileco §14.6), which does the
+  same on Linux. Either reads the tabs with the `chrome.tabs` API and hands
+  them to the shell through native messaging, a host program Chrome starts
+  that talks over stdio. Enter on a tab asks the extension to activate it,
+  then the shell focuses its window.
+  - The connector is an extension of its own, for a store listing with one
+    purpose. tileco tiles on chromeOS and lists tabs on Linux, two purposes
+    on a listing about tiling; the connector only lists tabs. Which one
+    Linux uses is still open.
   - Chrome's remote debugging port would list tabs with no extension, but
     lets any local process drive the browser, so it isn't used.
   - Firefox has the same extension and native-messaging shape, later.
-- **Permissions: two, both optional, and no site access.**
+- **The connector's permissions: three, and no site access.** tileco asks
+  for the first two as optional ones, only on Linux.
   - `tabs`, for each tab's title and URL; without it `chrome.tabs`
     leaves both out. Chrome warns "Read your browsing history".
   - `nativeMessaging`, for the host. Chrome warns "Communicate with
     cooperating native applications".
-  - tileco asks for both only on Linux, from one Allow on its settings.
-    Chromium lets both be optional: neither is marked
-    `kFlagCannotBeOptional` (`chrome_api_permissions.cc`,
-    `extensions_api_permissions.cc`, `main` on 2026-11-01).
-  - Activating a tab and raising its window need neither. Favicons would
-    need site access, so a tab's row shows its browser's icon.
+  - `storage`, with no warning, for the status its popup shows.
+  - All three are required: the connector does nothing else, so there's
+    nothing to use before allowing them.
+  - Activating a tab and raising its window need none of them. Favicons
+    would need site access, so a tab's row shows its browser's icon.
+- **The connector** (`connector/`, Manifest V3, JavaScript):
+  - `bridge.js` connects, sends the tabs, and brings a tab up when asked.
+    It is a copy of tileco's `src/tabsbridge.js`, whose tests came with it.
+  - `background.js` asks the platform once per worker. Off Linux it does
+    nothing. On Linux it connects at startup and on every window and tab
+    event.
+  - The toolbar popup says whether it's connected, waiting for tide's
+    shell, or missing its host, and what to do.
+  - `make connector-zip` packages it for the Chrome Web Store, its version
+    the commit count, as tileco's is. `connector/README.md` has the store
+    listing.
 - **`tide-tabs`** (`cmd/tide-tabs`, Go) has two ends, which meet on
   `$XDG_RUNTIME_DIR/tide/tabs.sock`, in a directory only you can enter.
   - **The host**, `io.github.mikelward.tide.tabs`: Chrome or Brave starts
-    it for tileco, with tileco's origin. It reads and writes Chrome's
+    it for the connector or tileco, with that extension's origin. It reads and writes Chrome's
     frames (a 4-byte length in the machine's byte order, then JSON), and
     passes them on as lines over the socket, keeping only the fields below.
   - **The relay**, `tide-tabs serve`: the shell starts it, as it does
@@ -2081,26 +2094,29 @@ See [`switcher.png`](docs/mocks/switcher.png).
   - Enter closes the switcher, asks that browser to bring the tab up, and
     focuses its window, which a browser can't do for itself on Wayland.
   - With no browser connected, the tab says "Browser tabs aren't listed",
-    and why: `tide-tabs` isn't running, or no browser has tileco
-    connected. `TIDE_TABS=0` in the session's environment turns it off.
+    and why: `tide-tabs` isn't running, or no browser has the tide
+    connector or tileco connected. `TIDE_TABS=0` in the session's environment turns it off.
   - The relay restarts with the polkit agent's backoff (5 s, doubling to
     a minute), as `tide-agent` does.
 - **It's only for Linux.** tileco reads tabs itself on chromeOS (tileco
   §9.4), and tilemo asks Chrome, Brave and Safari through AppleScript
   (tilemo §9). Neither needs a host.
-- **Installing:** tileco from the Chrome Web Store, or unpacked from a
-  checkout for Chrome and Brave, which load the same extension; developer
-  mode has to stay on for unpacked. `setup` installs the host's manifest
-  for each browser it finds, allowing the store's ID and the checkout's.
-- **Cost:** nothing to run. Publishing tileco costs only what it already
-  does; its store listing has to say the Linux tab list (tileco
-  PUBLISHING.md).
+- **Installing:** the tide connector unpacked from `connector/` in a
+  checkout, for Chrome and Brave, which load the same extension; developer
+  mode has to stay on for unpacked. Or tileco, from the Chrome Web Store or
+  a checkout. `setup` installs the host's manifest for each browser it
+  finds, allowing each extension's IDs.
+- **Cost:** nothing to run. Publishing the connector would be a second
+  Chrome Web Store item to keep: its listing, its icons, and a review for
+  each release.
 - **Reliability:**
   - It's one more piece per browser profile, installed by `setup`, and it
     can break when Chrome changes its extension rules.
   - An open native-messaging port keeps a Manifest V3 service worker
     running from Chrome 105. On Chromium 153.0.8010.12 with the real host
-    the worker was still running after 70 s idle (tileco §14.6).
+    the worker was still running after 70 s idle (tileco §14.6). The
+    connector, loaded in Chromium 153 with the real host, connected, sent
+    its tabs, and brought one up when the relay asked (2026-11-01).
   - The host keeps trying the socket, from 250 ms doubling to 5 s, so a
     shell restart lists the tabs again within a second or so; the
     extension retries a host that's missing or stopped, from 1 s doubling
@@ -4165,9 +4181,9 @@ light/dark switch.
 
 | Repo | Gets |
 |---|---|
-| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. `make install`. |
+| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. The tide connector, the browser extension in `connector/` (§8.3). `make install`. |
 | **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces and home's apps), the `persistent` workspace rule for home, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
-| **tileco** | The browser extension the Windows tab's browser tabs come from (§8.3). It tiles only on chromeOS. |
+| **tileco** | Tiling on chromeOS. On Linux it can list the browser's tabs in the Windows tab, as tide's own connector does (§8.3). |
 | **scripts** | `setup`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, cliphist, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `tide-tabs`'s host manifest for Chrome and Brave (§8.3). `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |
 | **dwl** (exploration) | The tide fork of dwl that §21.1 is exploring, on upstream's history, under dwl's GPL-3.0-or-later license: the layouts, dimming and IPC it would add. Nothing else depends on it until §21.1's next steps are done and §3.1 is rewritten around it. |

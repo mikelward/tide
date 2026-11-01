@@ -22,6 +22,9 @@
 #                         config template) under $(PREFIX), and the lock's
 #                         PAM service in /etc/pam.d (root; see README.md;
 #                         run `make build` as yourself first)
+#   make connector-zip    package the tide connector, the browser extension
+#                         that lists tabs in the switcher, for the Chrome Web
+#                         Store, into build/ (connector/README.md)
 #   make mocks            re-render the design mocks (docs/mocks/*.html -> *.png)
 #   make palette          regenerate shell/lib/palette.mjs from
 #                         theme/palette.json (SPEC.md §15)
@@ -59,7 +62,7 @@ QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test test-fast test-selftest build install install-shell install-session mocks palette chars unicode
+.PHONY: test test-fast test-selftest build install install-shell install-session mocks palette chars unicode connector-zip unshallow-check
 test: test-fast test-selftest
 
 # The integration test's self-tests run the whole integration test against
@@ -90,6 +93,7 @@ test-fast:
 	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/minimized_test.mjs shell/lib/mute_test.mjs shell/lib/workspacenames_test.mjs shell/lib/switcher_test.mjs shell/lib/tabs_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/settings_test.mjs shell/lib/steps_test.mjs shell/lib/idle_test.mjs shell/lib/writes_test.mjs shell/lib/input_test.mjs shell/lib/keys_test.mjs shell/lib/outputs_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/sysmon_test.mjs shell/lib/keepawake_test.mjs shell/lib/presenter_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs shell/lib/vpn_test.mjs shell/lib/mic_test.mjs shell/lib/fuzzy_test.mjs shell/lib/frecency_test.mjs shell/lib/launcher_test.mjs shell/lib/lock_test.mjs shell/lib/greeter_test.mjs shell/lib/greetd_test.mjs shell/lib/unplug_test.mjs shell/lib/polkit_test.mjs shell/lib/agent_test.mjs shell/lib/sharepicker_test.mjs shell/lib/picker_test.mjs shell/lib/startup_test.mjs shell/lib/barclick_test.mjs shell/lib/barhit_test.mjs shell/lib/dnd_test.mjs shell/lib/clipboard_test.mjs shell/lib/power_test.mjs shell/lib/workspacepage_test.mjs shell/lib/floating_test.mjs shell/lib/unicode_test.mjs shell/lib/popups_test.mjs shell/lib/persist_test.mjs
 # theme/ is build-time Node, not loaded by the shell, so runs unguarded.
 	$(NODE) --test theme/palette_test.mjs
+	$(NODE) --test connector/bridge_test.js
 	$(NODE) --test shell/chars/generate_test.mjs
 	$(NODE) theme/generate.mjs --check
 	$(GO) vet ./...
@@ -177,6 +181,24 @@ install-session:
 	@# PAM reads /etc/pam.d, whatever PREFIX is.
 	install -d "$(DESTDIR)/etc/pam.d"
 	install -m 644 pam/tide-lock "$(DESTDIR)/etc/pam.d/tide-lock"
+
+# The tide connector's Chrome Web Store upload: manifest.json at the top, and
+# nothing only development needs. Its version is the number of commits, so
+# each commit on main is a higher version than the last, as the store
+# requires; a shallow clone would count too few.
+CONNECTOR_FILES = manifest.json background.js bridge.js popup.html popup.css popup.js \
+	icons/tide-16.png icons/tide-32.png icons/tide-48.png icons/tide-128.png
+unshallow-check:
+	@if test "$$(git rev-parse --is-shallow-repository)" != false; then \
+		echo "the history is shallow, so the commit count is wrong; run git fetch --unshallow" >&2; exit 1; fi
+connector-zip: unshallow-check
+	rm -rf build/connector && install -d build/connector/icons
+	cd connector && cp $(filter-out icons/%,$(CONNECTOR_FILES)) ../build/connector/ && cp $(filter icons/%,$(CONNECTOR_FILES)) ../build/connector/icons/
+	$(NODE) -e 'const fs = require("fs"); const f = process.argv[1]; const m = JSON.parse(fs.readFileSync(f)); m.version = process.argv[2]; fs.writeFileSync(f, JSON.stringify(m, null, 2) + "\n");' build/connector/manifest.json "$$(git rev-list --count HEAD)"
+	rm -f build/tide-connector.zip
+	cd build/connector && zip -qrX ../tide-connector.zip .
+	rm -rf build/connector
+	@echo build/tide-connector.zip
 
 # Needs Node and Playwright with Chromium. A global Playwright install is
 # found through NODE_PATH; a project-local one works without it.

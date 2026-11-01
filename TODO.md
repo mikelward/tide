@@ -45,6 +45,11 @@ once you have agreed with it or reversed it.
   or on Actions. A query on Apps still finds the actions. Reversible:
   `switcher.mjs`'s `TABS` and `launcher.mjs`'s `actionRows`.
 
+- **The tide connector is its own extension** (2026-11-01), in
+  `connector/`, beside tileco's Linux mode: a fallback in case the store
+  won't list tileco while it does both tiling on chromeOS and tabs on
+  Linux. Its icon is tileco's waves for now, and it's named "tide
+  connector". Reversible: `connector/`.
 - **`tide-tabs` is one binary with two ends** (2026-11-01): the host Chrome
   starts and `tide-tabs serve`, the shell's child, meeting on
   `$XDG_RUNTIME_DIR/tide/tabs.sock`. Chrome starts the host, so the shell
@@ -1716,10 +1721,17 @@ or workspace goes there.
     running: Chrome 105+, and checked on Chromium 153.0.8010.12 with the
     real host (still running after 70 s idle). Recheck on the Chrome the
     machines run, since none is pinned.
-  - [x] **Share the extension with tileco**: tileco is the extension, with
-    `tabs` and `nativeMessaging` optional, asked for only on Linux.
-    `nativeMessaging` may be optional (SPEC.md §8.3). tileco's store
-    listing's single purpose is the maintainer's call (tileco's TODO.md).
+  - [x] **The tide connector**, the extension in `connector/` (SPEC.md
+    §8.3), a single-purpose alternative to tileco's Linux tab list.
+  - [ ] **`setup` allows the connector**: its checkout's ID in the host
+    manifest, beside tileco's (scripts). Until then it loads, but its
+    popup says `tide-tabs` doesn't know it.
+  - [ ] **Publish the connector**, if tileco can't keep its Linux tab
+    list: a new Chrome Web Store item from `make connector-zip`
+    (`connector/README.md`), then its ID in `setup`'s host manifest.
+  - [ ] **Release artifacts for the connector**, if it goes ahead: a CI job
+    on `main` that runs `make connector-zip` and keeps the ZIP for the
+    store upload.
   - [x] `tide-tabs`: the host and the shell's relay, `cmd/tide-tabs`.
   - [ ] **Brave too**: `setup` installs the host manifest in
     `~/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts/` beside

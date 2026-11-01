@@ -37,6 +37,10 @@ which keep the clipboard history the picker on `Super+C` lists (SPEC.md
 jq and python3 are free distro packages that run locally, with no network
 calls; without one, the doctor reports the check it skipped.
 
+For your browser tabs in the switcher, add tileco (mikelward/tileco) or
+the tide connector to Chrome or Brave. The connector loads unpacked from
+`connector/` (`connector/README.md`).
+
 Then pick **tide** at the display manager. It runs Hyprland through
 uwsm as `tide-hyprland`, which gives the session its own systemd
 target, so tide's units never start in a plain Hyprland or Plasma
