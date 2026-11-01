@@ -75,6 +75,7 @@ test-fast:
 	@test -n "$(LUA)" || { echo "make test: no lua5.5, lua5.4 or lua on PATH" >&2; exit 1; }
 	$(LUA) hypr/tide/layout_test.lua
 	$(LUA) hypr/tide/direction_test.lua
+	$(LUA) hypr/tide/span_test.lua
 	$(LUA) hypr/tide/focus_test.lua
 	$(LUA) greeter/hyprland_test.lua
 	sh session/session_test.sh
@@ -135,7 +136,7 @@ build/tide-tabs: go.mod $(wildcard cmd/tide-tabs/*.go)
 # session's target, is `setup`'s job (scripts repo).
 install: build install-shell
 	install -d "$(HYPR_DIR)"
-	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/layout.lua hypr/tide/focus.lua "$(HYPR_DIR)/"
+	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/span.lua hypr/tide/layout.lua hypr/tide/focus.lua "$(HYPR_DIR)/"
 	install -d "$(SYSTEMD_USER_DIR)/hypridle.service.d" "$(SYSTEMD_USER_DIR)/app-.service.d"
 	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service systemd/user/tide-clipboard.service systemd/user/tide-lid-inhibit.service "$(SYSTEMD_USER_DIR)/"
 	install -m 644 systemd/user/hypridle.service.d/tide.conf "$(SYSTEMD_USER_DIR)/hypridle.service.d/"
