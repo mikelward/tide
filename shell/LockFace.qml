@@ -352,7 +352,10 @@ Item {
             Column {
                 id: middle
 
-                anchors.centerIn: parent
+                // Centered as if the line under the field held one line,
+                // so a message coming, going or wrapping never moves it.
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: Lock.faceTop(parent.height, height, statusLine.height, statusMetrics.height)
                 spacing: 12
                 width: 320
 
@@ -465,12 +468,16 @@ Item {
                 }
 
                 // "Checking", PAM's message, or the failure, under the field.
+                // It keeps a line's room when empty, so one appearing moves
+                // nothing.
                 Text {
+                    id: statusLine
+
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: parent.width
+                    height: Math.max(implicitHeight, statusMetrics.height)
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
-                    visible: text !== ""
                     // PAM's and greetd's words: never markup.
                     textFormat: Text.PlainText
                     text: face.status
@@ -478,13 +485,22 @@ Item {
                     font.family: "Inter"
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
+
+                    FontMetrics {
+                        id: statusMetrics
+
+                        font: statusLine.font
+                    }
                 }
 
                 // The greeter's pickers: the session, and another user when
-                // there's more than one. Each opens its list under it.
+                // there's more than one. Each opens its list under it. The
+                // row keeps a chip's height while the sessions and users
+                // load, so their chips appearing moves nothing.
                 Row {
                     anchors.horizontalCenter: parent.horizontalCenter
                     visible: face.login
+                    height: 28
                     spacing: 8
 
                     LockButton {

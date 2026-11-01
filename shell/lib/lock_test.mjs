@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, mainKeymap, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText } from "./lock.mjs";
+import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, mainKeymap, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText, faceTop } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -569,4 +569,19 @@ test("the caret shows at once, blinks, then holds still", () => {
     assert.equal(caretBlinks(CARET_BLINK_TICKS), false);
     assert.equal(caretShown(CARET_BLINK_TICKS), true);
     assert.equal(caretShown(CARET_BLINK_TICKS + 1), true);
+});
+
+test("a message under the field never moves the face", () => {
+    // A 1000 px face, a column of 400 px with the line under the field at
+    // its one-line room of 16 px, empty or holding "Checking".
+    const resting = faceTop(1000, 400, 16, 16);
+    assert.equal(resting, 300);
+    // PAM's message wraps to three lines: 32 px more column, all of it
+    // below the field.
+    assert.equal(faceTop(1000, 432, 48, 16), resting);
+});
+
+test("a face of any height centers the column at rest", () => {
+    assert.equal(faceTop(1081, 400, 16, 16), 341);
+    assert.equal(faceTop(1000, 400, 15.5, 16), 300);
 });
