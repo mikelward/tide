@@ -3003,6 +3003,9 @@ PanelWindow {
                         // Which rule covers the window the fields were
                         // filled for already, or "".
                         property string note: ""
+                        // What else the window filled in for has
+                        // (Rules.windowDetails), or none.
+                        property var details: []
 
                         function changed(error) {
                             refused = error;
@@ -3021,6 +3024,7 @@ PanelWindow {
                             newFloatClass.text = "";
                             newFloatTitle.text = "";
                             note = "";
+                            details = [];
                             keys.forceActiveFocus();
                         }
 
@@ -3039,6 +3043,7 @@ PanelWindow {
                                 newFloatClass.text = p.class;
                                 newFloatTitle.text = p.title;
                                 floatingPage.note = p.note;
+                                floatingPage.details = p.details ?? [];
                                 floatingPage.refused = "";
                                 Qt.callLater(() => {
                                     root.section = "floating-add";
@@ -3266,6 +3271,79 @@ PanelWindow {
                             color: Theme.fgDim
                             font.family: Theme.font
                             font.pixelSize: 12
+                        }
+
+                        // More about this window: what else Hyprland says
+                        // of the window filled in for, read-only, closed
+                        // until opened, as it was left for the session.
+                        Item {
+                            visible: floatingPage.details.length > 0
+                            width: floatingPage.width
+                            implicitHeight: 28
+
+                            Row {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 6
+
+                                SymbolicIcon {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    name: FloatingData.detailsOpen ? "pan-down-symbolic" : "pan-end-symbolic"
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "More about this window"
+                                    color: Theme.fgDim
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                }
+                            }
+
+                            TapHandler {
+                                onTapped: FloatingData.detailsOpen = !FloatingData.detailsOpen
+                            }
+                        }
+
+                        Repeater {
+                            model: FloatingData.detailsOpen ? floatingPage.details : []
+
+                            Item {
+                                id: detailRow
+
+                                required property var modelData
+
+                                width: floatingPage.width
+                                implicitHeight: 22
+
+                                Text {
+                                    id: detailLabel
+
+                                    x: 32
+                                    width: 130
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    text: detailRow.modelData.label
+                                    color: Theme.fgDim
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                }
+
+                                Text {
+                                    anchors.left: detailLabel.right
+                                    anchors.leftMargin: 8
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    textFormat: Text.PlainText
+                                    text: detailRow.modelData.value
+                                    color: Theme.fg
+                                    font.family: Theme.monoFont
+                                    font.pixelSize: 12
+                                }
+                            }
                         }
 
                         Heading {

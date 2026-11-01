@@ -172,6 +172,9 @@ Singleton {
     // fill from the next for the same window. Always float and Super+Alt+F
     // set it (Rules.prefilled); nothing is added until you add it.
     property var prefill: null
+    // Whether the page shows More about this window open: closed at first,
+    // and as you left it for as long as the shell runs.
+    property bool detailsOpen: false
 
     // Fills the page's fields for `window` ({class, title}): "" or why not.
     function prefillFor(window) {
@@ -179,7 +182,7 @@ Singleton {
         if (p.error) {
             return p.error;
         }
-        root.prefill = { class: p.class, title: p.title, note: p.note, serial: (root.prefill?.serial ?? 0) + 1 };
+        root.prefill = { class: p.class, title: p.title, note: p.note, details: p.details, serial: (root.prefill?.serial ?? 0) + 1 };
         return "";
     }
 
