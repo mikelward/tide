@@ -119,3 +119,10 @@ export function minimizeWindow(address, name, lua) {
         ? `hl.dsp.window.move({ workspace = ${luaString(target)}, follow = false, window = ${luaString(w)} })`
         : `movetoworkspacesilent ${target},${w}`;
 }
+
+// Float the window at `address`, leaving one floating already as it is: a
+// window a new floating rule covers that opened before it (SPEC.md §6.4).
+export function floatWindow(address, lua) {
+    const w = windowAddress(address);
+    return lua ? `hl.dsp.window.float({ action = "enable", window = ${luaString(w)} })` : `setfloating ${w}`;
+}

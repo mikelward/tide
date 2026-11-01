@@ -1006,6 +1006,15 @@ in how long they last and what stays visible:
   - So those 8 px take clicks from whatever is below them.
 - **Any window can be floated** with `Super+Shift+F` / `Super+Insert`.
   Floating windows remember their size and position per app for the session.
+- **Your own rules** float more: the Floating settings page (§16), in
+  `floating.json` and `floating.local.json`. Each rule names a window class
+  and, optionally, a pattern for its title.
+  - They add to the dialog rules above, which always stand.
+  - A new rule floats every matching window, the ones already open too,
+    but not one you tiled by hand under a rule that already covered it.
+  - A window floated by hand can become a rule. The page's *Floating now*
+    lists it, and `Super+Alt+F` opens the page for the focused window.
+    Either fills in a rule for you to trim and add.
 - **Picture-in-picture** floats and is pinned, visible on every workspace, in
   the bottom-right corner of its monitor.
 - **Floating windows are left out of tiling.** They never take a tile, and
@@ -1338,6 +1347,7 @@ with new keys in **bold**:
 | ``Super+` ``, **`Super+O`** | toggle monocle (`O` as in one window, and the key tileco uses on ChromeOS, where Chrome can't bind a backtick) |
 | **`Super+Up`** / **`Super+Shift+Up`** / **`Super+Down`** | maximize / fullscreen / restore the current window |
 | `Super+Shift+F`, `Super+Insert` | toggle floating |
+| **`Super+Alt+F`** | open the Floating settings (§16) with a rule filled in for the focused window, its class and exact title, the title selected to trim; Enter adds it, Esc doesn't |
 | **`Super`+middle-click** | toggle maximize on the window under the pointer |
 | **drag the master/stack edge** | resize the master (`mfact`), as `Super+\` / `Super+/` do, following the pointer; no key held (below) |
 | **drag a floating window's edge or corner** | resize it, no key held (§6.4) |
@@ -3329,6 +3339,7 @@ tide's own, and links out for the rest:
 | **Windows** | |
 | Layouts | default layout per aspect ratio, `mfact`, master count, the rule for new windows |
 | Workspaces | the standing workspaces, home first; the apps that live on home; and the patterns that name a workspace from a window's title (§6.5) |
+| Floating | the rules that float a window by its class and title, and the floating windows no rule covers yet (§6.4) |
 | **General** | |
 | Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
 | Notifications | Do not disturb on a schedule, whether critical alerts break through, and the muted apps and sites (§9) |
@@ -3737,6 +3748,110 @@ stays hand-written.
     without it the page says so. The busctl listing runs only as the page
     shows.
 
+- **Floating** lists the rules that float a window (§6.4), in
+  `floating.json` and `floating.local.json` (`rules`).
+  - A rule is `{"class": "org.gnome.Calculator"}`, with an optional
+    `title`. The class is the window's, ignoring case, as text, not a
+    pattern. The title is a regular expression found anywhere in the title.
+  - `conf` installs no `floating.json`, so a machine's rules are its own,
+    in `floating.local.json`. A list replaces the shared one whole (§16.1).
+  - A rule with no class, a key other than these two, a title that
+    doesn't compile, or one listed already is an error at load naming
+    `rules` and the entry. So is a list of more than 64. The last good
+    rules stay.
+  - A title pattern runs in two engines: JavaScript's on the page, with
+    the `u` flag, and RE2's in Hyprland. The shell translates it once into
+    each one's spelling of the same meaning, writes RE2's to the file, and
+    matches with JavaScript's.
+  - `\w` is Unicode's letters, marks and numbers, and `_`. `\d` is its
+    decimal digits, so `٣` is one and `²` isn't. `\s` is JavaScript's
+    whitespace, the no-break and wide spaces and the BOM included. Their
+    capitals are the rest.
+    - RE2 spells them `\p{L}\p{M}\p{N}_` and `\p{Nd}`. Qt's JavaScript
+      parses `\p{…}` but has no tables for it (Qt 6.10's
+      `stubs/yarr/YarrUnicodeProperties.cpp`), so the shell lists them as
+      ranges in `shell/lib/unicode.mjs`.
+    - Those ranges come from Unicode 16.0.0's `UnicodeData.txt`, pinned by
+      its SHA-256 (`make unicode UNICODE_DATA=…`), so every host makes the
+      same module. The tests check the module, not the host's tables.
+    - RE2 has its own Unicode version, so the two can differ on
+      characters added since the older one.
+  - `\b` and `\B` are an ASCII word boundary in both, unlike `\w`. So in
+    `café`, `caf\b` matches, since `é` isn't an ASCII word character, and
+    `café\b` doesn't. `^caf\w$` matches it.
+  - `.` is anything but a newline in both. JavaScript's would also stop
+    at `\r` and the line separators, so it's written `[^\n]`.
+  - Also taken: literals, `^`, `$`, `|`, groups and `(?:…)`, the repeats
+    and their lazy forms with counts up to 1,000 (RE2's limit), and
+    classes. So are the syntax characters' escapes, `\n \t \r \f \v`
+    and `\xHH`.
+  - Anything else is refused, naming it. That covers a lookaround, a named
+    group, a backreference, `[:alpha:]`, `\W` inside a class, and an
+    escape the `u` flag refuses, such as `\q` or `\!`.
+  - The shell writes them to `~/.config/hypr/tide-floating.lua` and runs
+    `hyprctl eval 'conf_floating.reload()'`, as it starts too.
+  - Each rule is Hyprland's whole-text match: the class as `(?i)` and the
+    class quoted, the title as `[^\n]*(?:PATTERN)[^\n]*`, or `.*` for
+    none.
+  - `conf` makes a window rule for each, `float = true`, named
+    `tide-float-N`. Hyprland 0.56.2 can't drop a rule. Adding one by a name
+    it has merges into that one (`hlWindowRule`): each match given replaces
+    the old, a match not given stays, and each effect is added again. So
+    `conf` gives both matches every time and `float` only the first time,
+    and turns off the names a shorter list no longer needs.
+  - A new rule applies to every matching window, the ones already open
+    included. That's the design, chosen over rules for new windows only.
+  - Hyprland floats a window by a rule only as it opens: `float` is a
+    static effect. So once a change applies, the shell floats the tiled
+    windows open now that the new rules cover and nothing covered before,
+    with `hl.dsp.window.float({ action = "enable" })`.
+    - "Before" counts `conf`'s own dialog rules as well as the old list. A
+      window tiled by hand under any rule stays tiled, so a broader rule
+      doesn't re-float a tiled Save As.
+    - Windows on every workspace and monitor are floated, minimized ones
+      included.
+    - A fullscreen or maximized window is left as it is, as is a pinned
+      one, which floats already.
+    - A list only reordered, the same rules applied again, or a rule taken
+      out floats nothing. Taking one out tiles nothing either.
+  - The shell records the rules it last swept in
+    `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/tide-floating-swept.json`.
+    A shell that restarts after applying a change, but before sweeping it,
+    sweeps from the record. A new Hyprland, at the next login, has no
+    record: every window then met the rules in effect as it opened.
+  - The page shows the rules, with arrows that move one and a bin that
+    takes it out. A class and a title typed at the foot are added with
+    Enter. A change names a rule by its place, class and title, so a hand
+    edit that has moved it since is refused, not built on.
+  - *Floating now* lists the floating windows no rule covers, one per
+    class: `floating` and `class` from Hyprland's client list, the title
+    from Quickshell's toplevel, which follows `windowtitlev2` as the
+    client list Quickshell keeps doesn't. Applying a rule and Super+Alt+F
+    read a window the same way.
+    `conf`'s own dialog rules count. A window with no class can't be
+    named, so it isn't listed.
+  - *Always float* adds nothing yet. It fills the fields at the foot with
+    the window's class and a pattern for its exact title: the title with
+    its syntax characters escaped (`.` as `\.`), between `^` and `$`.
+    - The title field takes the keys with its text selected, to trim, or
+      clear for the whole class.
+    - Enter or *Add* adds the rule. Esc clears the fields.
+    - When a rule covers the window already, the page names it under the
+      fields.
+  - `Super+Alt+F` runs `qs -c tide ipc call floating remember`. It opens
+    the panel on the Floating page with the fields filled for the focused
+    window, as *Always float* fills them.
+    - A focused window with no class, or none at all, is a notification
+      saying so, since a key has nowhere else to show it.
+    - Once you add the rule, a tiled window it covers floats, as any new
+      rule's does.
+  - Over IPC, `addFloating CLASS TITLE`, `moveFloating CLASS TITLE STEP`
+    and `removeFloating CLASS TITLE` do what the page does, a TITLE of ""
+    for none.
+  - **Cost and reliability:** nothing to pay, and nothing new to run. The
+    page reads the client list Quickshell already keeps; an apply is one
+    `hyprctl eval` per change.
+
 - **It opens like the launcher:** centered on the focused monitor over a
   dimmed backdrop, from the launcher's Settings action or
   `qs -c tide ipc call settings toggle`. A page's own action in the
@@ -3765,7 +3880,7 @@ sway's `config.local`:
 - **Shared defaults.** Every tide config file
   `~/.config/tide/<name>.json` (`clocks`, `idle`, `layouts`,
   `appearance`, `outputs`, `workspaces`, `startup`, `notifications`,
-  `clipboard`, `power`)
+  `clipboard`, `power`, `floating`)
   holds the shared defaults and is installed from `conf`.
 - **Per-machine overrides.** An optional **`<name>.local.json`** beside it
   is read last. It is machine-specific and never committed.

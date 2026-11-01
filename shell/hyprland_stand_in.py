@@ -228,12 +228,12 @@ FOCUS_LUA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hypr
 
 
 # conf's hyprland.lua's calls InputData.qml, OutputsData.qml,
-# AppearanceData.qml and WorkspacesData.qml make, applying tide's mouse,
-# touchpad, display, dim and workspace settings, and layout.lua's LayoutsData.qml makes, applying the Layouts
+# AppearanceData.qml, WorkspacesData.qml and FloatingData.qml make, applying tide's mouse,
+# touchpad, display, dim, workspace and floating settings, and layout.lua's LayoutsData.qml makes, applying the Layouts
 # page's, and PopupsData.qml, saying whether a popover is open: neither
 # config is loaded here, so they're taken as defined.
 CONF_CALLS = ["conf_input.reload()", "conf_outputs.reload()", "conf_appearance.reload()", "conf_workspaces.reload()",
-              "tide_layout.reload()", "tide_layout.set_popups_open(true)", "tide_layout.set_popups_open(false)"]
+              "conf_floating.reload()", "tide_layout.reload()", "tide_layout.set_popups_open(true)", "tide_layout.set_popups_open(false)"]
 
 
 def guard_call(code):

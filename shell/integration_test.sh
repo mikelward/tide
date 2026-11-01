@@ -1211,6 +1211,35 @@ written_settings() {
             exit 1
             ;;
     esac
+    # The Floating page: a rule added over a hand edit, in
+    # floating.local.json and the file conf reads as the call answers, and
+    # a title pattern Hyprland would read differently refused.
+    printf '{\n  "rules": [\n    {\n      "class": "org.example.Hand"\n    }\n  ]\n}\n' >"$floating_local" || exit 1
+    ipc call settings addFloating org.gnome.Calculator '^Calculator$' >/dev/null || exit 1
+    _want='{
+  "rules": [
+    {
+      "class": "org.example.Hand"
+    },
+    {
+      "class": "org.gnome.Calculator",
+      "title": "^Calculator$"
+    }
+  ]
+}'
+    if test "$(cat "$floating_local")" != "$_want" ||
+        ! grep -qxF '        { class = "(?i)org\\.gnome\\.Calculator", title = "[^\\n]*(?:^Calculator$)[^\\n]*" },' "$floating_conf"; then
+        echo "FAIL: the Floating page should add org.gnome.Calculator titled ^Calculator$, keeping the hand-edited rule, in $floating_local and $floating_conf as it answers; they have: $(cat "$floating_local" "$floating_conf" 2>&1)" >&2
+        exit 1
+    fi
+    _refused=$(ipc call settings addFloating firefox 'a(?=b)') || exit 1
+    case "$_refused" in
+        *"uses a lookahead or lookbehind"*) ;;
+        *)
+            echo "FAIL: the Floating page should refuse a title pattern with a lookahead, saying why; it answered: $_refused" >&2
+            exit 1
+            ;;
+    esac
     settle
 }
 
@@ -1728,7 +1757,7 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # dark, the VPNs, hypridle's timings, the mouse, touchpad and keyboard
 # settings, the list of mice and touchpads, the key bindings, the layout
 # settings, whether a popover is open, the monitors and their settings, the
-# dim strength, or home and its apps' rules.
+# dim strength, home and its apps' rules, or the floating rules.
 # The lock and the greeter only ask for the keyboards, for their layout
 # badges.
 shell_runs='tide-tz
@@ -1751,6 +1780,7 @@ hyprctl monitors all -j
 hyprctl eval conf_outputs.reload()
 hyprctl eval conf_appearance.reload()
 hyprctl eval conf_workspaces.reload()
+hyprctl eval conf_floating.reload()
 systemctl --user stop tide-lid-inhibit.service'
 load_runs=$shell_runs
 idle_conf=$tmp/home/.config/hypr/tide-idle.conf
@@ -1775,12 +1805,14 @@ clipboard_conf=$tmp/home/.config/hypr/tide-clipboard.conf
 power_local=$tmp/home/.config/tide/power.local.json
 power_conf=$tmp/home/.config/hypr/tide-power.lua
 workspaces_conf=$tmp/home/.config/hypr/tide-workspaces.lua
+floating_local=$tmp/home/.config/tide/floating.local.json
+floating_conf=$tmp/home/.config/hypr/tide-floating.lua
 after_load=shell_loaded
 load shell "the shell" -c tide
 after_load=
 # Gone again, so the next shell starts from the defaults, writes them, and
 # restarts hypridle and reapplies the devices, too.
-rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" "$layouts_conf" "$layouts_local" "$appearance_local" "$appearance_conf" "$outputs_conf" "$outputs_local" "$workspaces_conf" || exit 1
+rm "$idle_conf" "$idle_suspend_conf" "$idle_local" "$input_conf" "$input_local" "$clocks_local" "$layouts_conf" "$layouts_local" "$appearance_local" "$appearance_conf" "$outputs_conf" "$outputs_local" "$workspaces_conf" "$floating_conf" || exit 1
 echo "ok: the shell writes hypridle's timings, and a new one, and restarts it each time"
 echo "ok: the shell writes the mouse, touchpad and keyboard settings, and new ones, and applies them each time"
 echo "ok: the shell changes the clocks as the Clocks page asks, and looks them up"
