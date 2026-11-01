@@ -1332,7 +1332,7 @@ with new keys in **bold**:
 | `Super+Space` | the switcher, on its Apps tab: the launcher |
 | **`Super+Tab`** | flip between home and the workspace you last used: from any other workspace it goes to home, and from home back to the last other one, so presses toggle |
 | **`Super+A`** | the switcher, on its Attention tab: every window wanting attention, on any workspace, most recent first; Enter goes there |
-| **`Super+Alt+Space`** | next keyboard layout, once there are two, on every keyboard (§16) |
+| **`Super+Alt+Space`** | next keyboard layout, once there are two, on every keyboard (§16), as a click on the bar's layout label does |
 | `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `Shift+C` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
 | **`Super+C`** | the picker, on its Clipboard tab: what you've copied, and emoji and symbols by name (§8.4); C for clipboard and characters. It was Google Calendar, which has no key now; the launcher finds it |
 | **`Super+V`** | a terminal on the VM, `Super+W`'s twin: the `terminal_on_vm` helper, with the host from `~/.vm` |
@@ -1543,7 +1543,8 @@ See [`bar.png`](docs/mocks/bar.png).
   target runs out to the bar's left edge, so the corner opens it.
 - **Right:** the Presenting pill while presenter mode is on (§10), privacy
   pills (screen shared, mic live), third-party tray icons,
-  then the built-in status icons: keep-awake, Bluetooth and its audio
+  then the built-in status icons: the keyboard layout (once there are
+  two), keep-awake, Bluetooth and its audio
   devices, network,
   volume %, battery %, CPU %, notifications, session. The four clocks come
   last.
@@ -1723,6 +1724,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen, window or area), and the app reading it; stop it from the app | — |
 | Privacy: mic (orange) | any app is capturing the microphone; the mic slashed while every mic being recorded from is muted (`Super+Shift+M` mutes them all), so a headset an app picked still shows live | per-app list with mute | hover: "Mic on" or "Mic off", as the OSD says, and how many apps are recording |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
+| Keyboard layout | up to three letters of the main keyboard's layout (US, DVO, GER), as tilemo's; only once there are two layouts | the next layout, as `Super+Alt+Space` (§16) | hover: the layout's full name |
 | Keep awake: a cup of coffee | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off; the OSD says which | hover: what it's doing, in the OSD's words |
 | Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | hover: "Bluetooth on" or "off" |
 | Bluetooth audio | one icon per connected headphones, headset or speakers, beside Bluetooth | the Bluetooth popover | hover: its name and battery |
@@ -3481,7 +3483,10 @@ stays hand-written.
     a switch would stay out of step.
   - Hyprland 0.56.2's Lua has no dispatcher or query for layouts, so
     `conf`'s `next-layout.sh` reads `hyprctl devices -j` and runs
-    `hyprctl switchxkblayout all` with the layout's index.
+    `hyprctl switchxkblayout all` with the layout's index. A click on the
+    bar's layout label (§7.4) does the same from the shell: it reads the
+    main keyboard afresh first, since Hyprland can make another keyboard
+    main with no event, and switches once that answer is in.
   - `Super+Space` would be GNOME's key, but it's the launcher.
   - `hyprland.local.lua` still wins, for a single device or an input
     option it sets.

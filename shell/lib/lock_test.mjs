@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, mainKeymap, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText, faceTop } from "./lock.mjs";
+import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText, faceTop } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -584,4 +584,55 @@ test("a message under the field never moves the face", () => {
 test("a face of any height centers the column at rest", () => {
     assert.equal(faceTop(1081, 400, 16, 16), 341);
     assert.equal(faceTop(1000, 400, 15.5, 16), 300);
+});
+
+test("the main keyboard says how many layouts it has and which is active", () => {
+    const devices = JSON.stringify({
+        keyboards: [
+            { name: "power-button", layout: "us", active_layout_index: 0, active_keymap: "English (US)", main: false },
+            { name: "kb", layout: "us,de", active_layout_index: 1, active_keymap: "German", main: true },
+        ],
+    });
+    assert.deepEqual(mainKeyboard(devices), { keymap: "German", index: 1, count: 2 });
+    assert.deepEqual(mainKeyboard(JSON.stringify({ keyboards: [{ active_keymap: "English (US)", layout: "us" }] })), { keymap: "English (US)", index: null, count: 1 });
+    assert.equal(mainKeyboard("not json"), null);
+});
+
+test("the bar's layout label is up to three letters of the badge, as tilemo's", () => {
+    assert.equal(layoutLabel("English (US)"), "US");
+    assert.equal(layoutLabel("English (Dvorak)"), "DVO");
+    assert.equal(layoutLabel("German"), "GER");
+    assert.equal(layoutLabel(""), "");
+});
+
+test("the next layout wraps, and there's none with one layout or an unknown one", () => {
+    assert.equal(nextLayout({ index: 0, count: 2 }), 1);
+    assert.equal(nextLayout({ index: 1, count: 2 }), 0);
+    assert.equal(nextLayout({ index: 0, count: 1 }), null);
+    assert.equal(nextLayout({ index: null, count: 2 }), null);
+});
+
+test("a read keeps the layout count and index, and a failed one forgets them", () => {
+    const read = layout(LAYOUT_INITIAL, { type: "refresh" }, { type: "answer", keymap: "German", index: 1, count: 2 });
+    assert.equal(read.state.count, 2);
+    assert.equal(read.state.index, 1);
+    const failed = layout(read.state, { type: "refresh" }, { type: "answer", keymap: null });
+    assert.equal(failed.state.count, 0);
+    assert.equal(failed.state.index, null);
+});
+
+test("a layout click switches only once a fresh read has settled, never on an older answer", () => {
+    // Settled on an old keyboard's answer; the click refreshes.
+    let r = layoutNext(LAYOUT_INITIAL, { type: "refresh" });
+    r = layoutNext(r.state, { type: "answer", keymap: "English (US)", index: 0, count: 2 });
+    assert.equal(layoutSettled(r.state), true);
+    r = layoutNext(r.state, { type: "refresh" });
+    assert.equal(layoutSettled(r.state), false, "the click's read is running");
+    // Another refresh arrives meanwhile: the first answer may be stale.
+    r = layoutNext(r.state, { type: "refresh" });
+    r = layoutNext(r.state, { type: "answer", keymap: "English (US)", index: 0, count: 2 });
+    assert.equal(layoutSettled(r.state), false, "a reread is due");
+    r = layoutNext(r.state, { type: "answer", keymap: "German", index: 1, count: 2 });
+    assert.equal(layoutSettled(r.state), true);
+    assert.equal(nextLayout(r.state), 0, "the main keyboard now, at index 1, goes on to 0");
 });

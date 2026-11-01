@@ -11,7 +11,8 @@ import "lib/network.mjs" as Net
 import "lib/status.mjs" as Status
 
 // The status icons before the clocks (SPEC.md §7.4), each with hover text
-// (BarTip) in tilemo's words where tilemo has the same icon. So far: keep awake;
+// (BarTip) in tilemo's words where tilemo has the same icon. So far: the
+// keyboard layout, once there are two; keep awake;
 // Bluetooth, then one for each connected audio device; network; volume and its %, which scrolls by 5%; battery, red
 // below 15%; and the system monitor's CPU %, each with its popover; the
 // notification center's bell; and the session menu.
@@ -52,6 +53,37 @@ Row {
     // Volume and mute are only live on a bound node.
     PwObjectTracker {
         objects: [root.sink]
+    }
+
+    // The keyboard layout, as tilemo's input source: up to three letters,
+    // only once there are two layouts. A click goes to the next, as
+    // Super+Alt+Space does; hovering names it in full.
+    Text {
+        id: layout
+
+        anchors.verticalCenter: parent.verticalCenter
+        visible: KeyboardData.count > 1 && KeyboardData.label !== ""
+        text: KeyboardData.label
+        color: Theme.fg
+        font.family: Theme.font
+        font.pixelSize: 12
+        font.weight: Font.DemiBold
+
+        BarHit {
+            id: layoutHit
+
+            reach: root.reachOf(layout)
+
+            TapHandler {
+                onTapped: KeyboardData.next()
+            }
+        }
+
+        BarTip {
+            item: layout
+            shown: layoutHit.hovered
+            text: KeyboardData.keymap
+        }
     }
 
     // Keep awake: a cup of coffee, always here, faint while off and in the
