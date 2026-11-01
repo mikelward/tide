@@ -3,6 +3,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     CLASSES,
+    NO_ASKS,
+    askAnswered,
+    askCommand,
+    askFloat,
+    askOutcome,
+    declinedPath,
+    declinedRead,
+    declinedText,
+    floatedEvent,
     checkRule,
     checkTitle,
     covers,
@@ -283,4 +292,48 @@ test("what the u flag or RE2 can't take the same way is refused, naming it", () 
     assert.match(checkTitle("a]").error, /doesn't compile/, "a lone ] is literal in RE2, an error under the u flag");
     assert.match(checkTitle("[abc").error, /a class with no \]/);
     assert.deepEqual(checkTitle("[a\\-z]"), { title: "[a\\-z]" }, "\\- in a class");
+});
+
+test("only conf's float keys' tide-floated event asks, by the window's address", () => {
+    assert.equal(floatedEvent("custom", "tide-floated>>0x55AA01"), "55aa01");
+    assert.equal(floatedEvent("custom", "tide-attention>>0x55aa01"), null);
+    assert.equal(floatedEvent("changefloatingmode", "55aa01,1"), null, "a Super+drag floats a tiled window for the drag alone, and a sweep floats without the keys");
+});
+
+test("a window floated by the keys is asked about once a session, unless a rule covers it or it has no class", () => {
+    const player = { class: "org.example.Player", title: "Track 1.ogg" };
+    let r = askFloat(NO_ASKS, [], player);
+    assert.deepEqual(r.ask, player);
+    assert.deepEqual(r.state.pending, ["org.example.player"]);
+    assert.equal(askFloat(r.state, [], { class: "ORG.EXAMPLE.PLAYER", title: "x" }).ask, null, "not twice at once");
+    const answered = askAnswered(r.state, player.class, "dismissed");
+    assert.deepEqual(answered, { declined: ["org.example.player"], pending: [] });
+    assert.equal(askFloat(answered, [], player).ask, null, "Not now, a close or an expiry: not again this session");
+    assert.equal(askFloat(askAnswered(r.state, player.class, "failed"), [], player).ask !== null, true, "one that couldn't be shown can be asked again");
+    assert.equal(askFloat(NO_ASKS, [{ class: "org.example.Player" }], player).ask, null, "a rule covers it");
+    assert.equal(askFloat(NO_ASKS, [], { class: "firefox", title: "Save As" }).ask, null, "conf's own rules cover it");
+    assert.equal(askFloat(NO_ASKS, [], { class: "", title: "x" }).ask, null, "no class to name");
+    assert.equal(askFloat(NO_ASKS, [], null).ask, null);
+});
+
+test("the question offers Always float and Edit rule…, and reads back which", () => {
+    const cmd = askCommand({ class: "org.example.<Player>", title: "a & b" });
+    assert.deepEqual(cmd.slice(0, 6), ["notify-send", "--app-name=tide", "--icon=window-restore-symbolic", "--action=always=Always float", "--action=edit=Edit rule…", "--wait"]);
+    assert.equal(cmd[6], "Always float org.example.&lt;Player&gt;?");
+    assert.match(cmd[7], /a &amp; b/);
+    assert.equal(askOutcome(true, 0, "always\n"), "always");
+    assert.equal(askOutcome(true, 0, "edit\n"), "edit");
+    assert.equal(askOutcome(true, 0, ""), "dismissed");
+    assert.equal(askOutcome(false, 0, ""), "failed");
+    assert.equal(askOutcome(true, 1, "always"), "failed");
+});
+
+test("the declined classes are kept for the Hyprland session, beside its runtime files", () => {
+    assert.equal(declinedPath("/run/user/1000", "sig1"), "/run/user/1000/hypr/sig1/tide-floating-declined.json");
+    assert.equal(declinedPath("", "sig1"), "");
+    const state = { declined: ["org.example.player"], pending: ["x"] };
+    assert.deepEqual(declinedRead(declinedText(state)), { declined: ["org.example.player"], warning: "" });
+    assert.deepEqual(declinedRead(null), { declined: [], warning: "" });
+    assert.match(declinedRead("{").warning, /doesn't read/);
+    assert.match(declinedRead('{"declined": [1]}').warning, /doesn't read/);
 });

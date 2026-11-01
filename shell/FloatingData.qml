@@ -8,6 +8,7 @@ import "lib/dispatch.mjs" as Dispatch
 import "lib/floating.mjs" as Rules
 import "lib/launch.mjs" as Run
 import "lib/report.mjs" as Report
+import "lib/workspaces.mjs" as Ws
 import "lib/writes.mjs" as Writes
 
 // Which windows float (SPEC.md §6.4, §16), from floating.json and
@@ -202,6 +203,125 @@ Singleton {
         root.load();
         root.report();
         return root.saveFailure;
+    }
+
+    // Asking to always float a window floated by the keys (SPEC.md §6.4):
+    // the classes asked about, and where the declined ones are kept for
+    // the Hyprland session (Rules.askFloat).
+    property var asks: Rules.NO_ASKS
+    property bool asksRead: false
+    readonly property string declinedPath: Rules.declinedPath(Quickshell.env("XDG_RUNTIME_DIR") || "", Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || "")
+
+    // conf's float keys left the window at `address` floating: ask, unless
+    // a rule covers it or its class was asked about this session.
+    function floatedByKeys(address) {
+        if (!root.asksRead) {
+            root.asksRead = true;
+            const text = root.declinedPath === "" ? null : declined.readNow();
+            if (declined.broken !== "") {
+                console.warn(`tide: ${declined.broken}; asking about every class again`);
+            }
+            const r = Rules.declinedRead(text);
+            if (r.warning !== "") {
+                console.warn(`tide: ${r.warning}`);
+            }
+            root.asks = Object.assign({}, root.asks, { declined: r.declined });
+        }
+        const toplevel = Hyprland.toplevels.values.find(t => Ws.normalizeAddress(t.address) === address);
+        const r = Rules.askFloat(root.asks, root.rules, Rules.windowOf(toplevel));
+        root.asks = r.state;
+        if (r.ask !== null) {
+            asker.createObject(root, { window: r.ask }).running = true;
+        }
+    }
+
+    function askAnswered(window, outcome) {
+        root.asks = Rules.askAnswered(root.asks, window.class, outcome);
+        if (outcome === "always") {
+            const error = root.add(window.class, "");
+            if (error !== "") {
+                Launcher.run(Report.notifyCommand(`${window.class} not added to the floating rules`, error), ok => {
+                    if (!ok) {
+                        console.warn(`tide: couldn't say why ${window.class} wasn't added to the floating rules: ${error}`);
+                    }
+                });
+            }
+        } else if (outcome === "edit") {
+            const error = root.prefillFor(window);
+            if (error === "") {
+                SettingsData.open("floating");
+            } else {
+                console.warn(`tide: couldn't fill in a floating rule for ${window.class}: ${error}`);
+            }
+        } else if (outcome === "failed") {
+            // The tracker has logged why; it can be asked again.
+            return;
+        }
+        if (root.declinedPath === "") {
+            console.warn("tide: no XDG_RUNTIME_DIR or HYPRLAND_INSTANCE_SIGNATURE, so a restarted shell may ask about floating again");
+            return;
+        }
+        const error = declined.writeNow(Rules.declinedText(root.asks));
+        if (error !== "") {
+            // Costs only asking again after a shell restart.
+            console.warn(`tide: ${error}; a restarted shell may ask about ${window.class} again`);
+        }
+    }
+
+    Connections {
+        target: Hyprland
+
+        function onRawEvent(event) {
+            const address = Rules.floatedEvent(event.name, event.data);
+            if (address !== null) {
+                root.floatedByKeys(address);
+            }
+        }
+    }
+
+    // The classes not to ask about again this Hyprland session.
+    SettingsFile {
+        id: declined
+
+        path: root.declinedPath
+    }
+
+    // The question, through notify-send --wait, tracked as every command the
+    // shell runs is (shell/lib/launch.mjs), waiting for its stdout too.
+    Component {
+        id: asker
+
+        Process {
+            id: ask
+
+            property var window
+            property var tracker: null
+
+            function handle(event) {
+                if (tracker.on(event)) {
+                    destroy();
+                }
+            }
+
+            Component.onCompleted: tracker = Run.track(command, (ok, errors, output) => root.askAnswered(ask.window, ok ? Rules.askOutcome(true, 0, output) : "failed"), {
+                warn: m => console.warn(m),
+                log: m => console.log(m)
+            }, true)
+            command: Rules.askCommand(ask.window)
+            stdout: StdioCollector {
+                onStreamFinished: ask.handle({ type: "stdout", text: text })
+            }
+            stderr: StdioCollector {
+                onStreamFinished: ask.handle({ type: "stderr", text: text })
+            }
+            onStarted: handle({ type: "started" })
+            onRunningChanged: {
+                if (!running) {
+                    handle({ type: "stopped" });
+                }
+            }
+            onExited: (exitCode, status) => handle({ type: "exited", code: exitCode })
+        }
     }
 
     // `qs -c tide ipc call floating remember`, which conf binds to

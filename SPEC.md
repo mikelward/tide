@@ -1015,6 +1015,16 @@ in how long they last and what stays visible:
   - A window floated by hand can become a rule. The page's *Floating now*
     lists it, and `Super+Alt+F` opens the page for the focused window.
     Either fills in a rule for you to trim and add.
+  - Floating a window with `Super+Shift+F` or `Super+Insert`, when no rule
+    covers it (`conf`'s own included), asks once: a notification, *Always
+    float CLASS?*, with **Always float**, which adds the class's rule at
+    once, and **Edit rule…**, which opens the page filled in for it.
+    - Closing it, or letting it expire, is Not now. Its class isn't asked
+      about again until Hyprland restarts, at the next login, whatever the
+      answer.
+    - Only the keys ask. A window that floats on its own (a dialog, a
+      rule, picture-in-picture), one the shell floats as a rule applies,
+      and one a `Super`+drag floats for the drag alone never do.
 - **Picture-in-picture** floats and is pinned, visible on every workspace, in
   the bottom-right corner of its monitor.
 - **Floating windows are left out of tiling.** They never take a tile, and
@@ -3845,6 +3855,20 @@ stays hand-written.
       saying so, since a key has nowhere else to show it.
     - Once you add the rule, a tiled window it covers floats, as any new
       rule's does.
+  - The question after floating by the keys (§6.4) comes from `conf`.
+    Its float keys run a Lua function that toggles floating. When that
+    leaves the window floating, it posts `custom>>tide-floated>>ADDRESS`
+    (`hl.dsp.event`).
+    - Hyprland 0.56.2's own `changefloatingmode` can't stand in. A
+      `Super`+drag floats a tiled window as it starts and tiles it again as
+      it ends (`DragController`), and the shell's own sweep sends it too.
+    - The shell asks through `notify-send --wait` with two actions, as the
+      network prompt does (§5.6). *Always float* goes through the page's
+      add, *Edit rule…* through `Super+Alt+F`'s fill-in.
+    - The classes not to ask about are kept in
+      `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/tide-floating-declined.json`,
+      so a restarted shell doesn't ask again, and the next login starts
+      with none.
   - Over IPC, `addFloating CLASS TITLE`, `moveFloating CLASS TITLE STEP`
     and `removeFloating CLASS TITLE` do what the page does, a TITLE of ""
     for none.
