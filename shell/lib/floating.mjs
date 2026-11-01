@@ -620,3 +620,99 @@ export function prefilled(rules, window) {
             : `${cls} floats already, by rule ${covering.index + 1}, ${describe(rules[covering.index])}`;
     return { class: cls, title: literalTitle(window.title), note };
 }
+
+// Asking to always float a window you floated by hand (SPEC.md §6.4):
+// conf's Super+Shift+F and Super+Insert say so as
+// custom>>tide-floated>>ADDRESS when the toggle leaves the window floating.
+// Nothing else does: a Super+drag floats a tiled window only while it's
+// dragged, and the shell's own sweep, a rule and a dialog float one without
+// the keys. The address, normalized, or null for any other event.
+export function floatedEvent(name, data) {
+    if (name !== "custom" || !String(data).startsWith("tide-floated>>")) {
+        return null;
+    }
+    return normalizeAddress(String(data).slice("tide-floated>>".length));
+}
+
+// Which classes have been asked about: `declined`, lowercase, not asked
+// again until Hyprland restarts (the next login), and `pending`, being
+// asked now.
+export const NO_ASKS = Object.freeze({ declined: Object.freeze([]), pending: Object.freeze([]) });
+
+// Whether to ask about `window` ({class, title}), floated by the keys:
+// {state, ask}, `ask` the window or null. Not for a window with no class,
+// one a rule covers, conf's own included, or a class asked about this
+// session or now.
+export function askFloat(state, rules, window) {
+    const cls = String(window?.class ?? "").trim();
+    if (cls === "" || coveringRule(rules, cls, window.title ?? "") !== null) {
+        return { state, ask: null };
+    }
+    const key = cls.toLowerCase();
+    if (state.declined.includes(key) || state.pending.includes(key)) {
+        return { state, ask: null };
+    }
+    return { state: Object.assign({}, state, { pending: state.pending.concat([key]) }), ask: { class: cls, title: String(window.title ?? "") } };
+}
+
+// The question for `window`, as notify-send runs it: Always float adds the
+// class's rule at once; Edit rule… opens the Floating page filled in.
+export function askCommand(window) {
+    const markup = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return [
+        "notify-send",
+        "--app-name=tide",
+        "--icon=window-restore-symbolic",
+        "--action=always=Always float",
+        "--action=edit=Edit rule…",
+        "--wait",
+        markup(`Always float ${window.class}?`),
+        markup(`New ${window.class} windows would open floating. Edit rule… to narrow it to a title, such as “${window.title}”.`),
+    ];
+}
+
+// What became of the question, from notify-send --wait: "always", "edit",
+// "dismissed" (closed, expired, or Not now), or "failed" (not shown).
+export function askOutcome(started, code, output) {
+    if (!started || code !== 0) {
+        return "failed";
+    }
+    const lines = String(output ?? "").split("\n").map(l => l.trim());
+    return lines.indexOf("always") >= 0 ? "always" : lines.indexOf("edit") >= 0 ? "edit" : "dismissed";
+}
+
+// The question for `cls` is answered: it isn't asked again this session,
+// whatever the answer, except one that couldn't be shown.
+export function askAnswered(state, cls, outcome) {
+    const key = String(cls).toLowerCase();
+    const pending = state.pending.filter(c => c !== key);
+    const declined = outcome === "failed" || state.declined.includes(key) ? state.declined : state.declined.concat([key]);
+    return { declined, pending };
+}
+
+// The record of the classes declined, beside Hyprland's own runtime files,
+// so a restarted shell doesn't ask again, and a new Hyprland, at the next
+// login, starts with none: its path, its text, and the classes it holds
+// (none for no record, or one that doesn't read, with a warning).
+export function declinedPath(runtimeDir, instance) {
+    return runtimeDir && instance ? `${runtimeDir}/hypr/${instance}/tide-floating-declined.json` : "";
+}
+
+export function declinedText(state) {
+    return JSON.stringify({ declined: state.declined }) + "\n";
+}
+
+export function declinedRead(text) {
+    if (text === null || text === undefined) {
+        return { declined: [], warning: "" };
+    }
+    try {
+        const value = JSON.parse(text);
+        if (Array.isArray(value?.declined) && value.declined.every(c => typeof c === "string")) {
+            return { declined: value.declined.map(c => c.toLowerCase()), warning: "" };
+        }
+    } catch (e) {
+        // Said below, with what's wrong.
+    }
+    return { declined: [], warning: "the record of the classes not to ask about floating doesn't read; asking about every one again" };
+}
