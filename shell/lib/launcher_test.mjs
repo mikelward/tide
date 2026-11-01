@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initial, record } from "./frecency.mjs";
 import { PAGES, SECTIONS } from "./settings.mjs";
-import { SHOW_IN_SCRIPT, blockedHeading, confirmRows, desktopNames, highlighted, grantIds, launchCommand, launcherItems, moved, otherDesktopSettings, parseShowIn, shownIn, nextSection, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
+import { SHOW_IN_SCRIPT, actionRows, blockedHeading, confirmRows, desktopNames, highlighted, grantIds, launchCommand, launcherItems, moved, otherDesktopSettings, parseShowIn, shownIn, nextSection, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
 
 // Array.prototype.at and Object.fromEntries, which the shell's engine lacks
 // (qtjs_env_test.mjs).
@@ -585,7 +585,7 @@ test("a quick action wins a tie with an app, so scr and Enter is a screenshot", 
     assert.ok(search(all, "scr").some(r => r.item.id === "org.gnome.Screenshot"));
 });
 
-test("the empty query comes in sections: recent apps, the rest, then actions", () => {
+test("the empty query comes in sections: recent apps, then the rest, Tide Settings among them", () => {
     const now = 1e12;
     const used = record(initial(), "app:kitty", now);
     const rows = search(items.concat(quickActions()), "", used, now);
@@ -594,9 +594,41 @@ test("the empty query comes in sections: recent apps, the rest, then actions", (
         ["google-chrome", "Apps"],
         ["htop", "Apps"],
     ]);
-    assert.equal(last(rows).section, "Actions");
+    // Tide Settings is an app here, by name, and the actions are the
+    // Actions tab's; the settings pages wait for a query.
+    assert.deepEqual(rows.filter(r => r.item.kind === "quick").map(r => [r.item.name, r.section]), [["Tide Settings", "Apps"]]);
+    assert.equal(rows.every(r => r.section !== "Actions"), true);
     // With nothing used yet there's no Recent section.
     assert.equal(search(items, "").some(r => r.section === "Recent"), false);
+});
+
+test("a query on Apps still finds the actions and each settings page", () => {
+    const all = items.concat(quickActions());
+    assert.equal(search(all, "log out")[0].item.id, "logout");
+    assert.equal(search(all, "mouse settings")[0].item.id, "settings-mouse");
+    assert.equal(search(all, "mouse settings")[0].item.sub, "Tide Settings");
+    assert.equal(search(all, "tide settings")[0].item.id, "settings");
+});
+
+test("the Actions tab lists every action, but no settings, in its own order", () => {
+    const all = items.concat(quickActions({ notifications: true }));
+    const rows = actionRows(all, "");
+    const ids = rows.map(r => r.item.id);
+    assert.deepEqual(ids, quickActions({ notifications: true }).filter(q => !q.settings).map(q => q.id));
+    for (const id of ["lock", "logout", "suspend", "reboot", "poweroff", "keep-awake", "presenter", "dnd", "dark-style", "reload", "screenshot-window"]) {
+        assert.ok(ids.includes(id), id);
+    }
+    assert.equal(rows.some(r => r.item.kind !== "quick" || r.item.settings), false);
+    assert.equal(rows.every(r => r.section === ""), true);
+});
+
+test("typing on the Actions tab filters it, best first, and finds no apps", () => {
+    const all = items.concat(quickActions());
+    const rows = actionRows(all, "shut");
+    assert.equal(rows[0].item.id, "poweroff");
+    assert.equal(rows.some(r => r.item.kind !== "quick"), false);
+    assert.deepEqual(actionRows(all, "mouse settings"), []);
+    assert.ok(rows[0].positions.length > 0);
 });
 
 test("a query puts its best match first, then actions, then apps", () => {

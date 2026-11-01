@@ -6,8 +6,8 @@ import {
 } from "./switcher.mjs";
 import { NO_MARKS, updateMarks, barWorkspaces } from "./workspaces.mjs";
 
-test("four tabs, in the spec's order, each named", () => {
-    assert.deepEqual([...TABS], ["apps", "workspaces", "windows", "attention"]);
+test("five tabs, in the spec's order, each named", () => {
+    assert.deepEqual([...TABS], ["apps", "workspaces", "windows", "attention", "actions"]);
     for (const t of TABS) {
         assert.ok(TAB_NAMES[t] && PLACEHOLDERS[t], t);
     }
@@ -15,8 +15,9 @@ test("four tabs, in the spec's order, each named", () => {
 
 test("Tab and Shift+Tab move between tabs, and wrap", () => {
     assert.equal(movedTab("apps", 1), "workspaces");
-    assert.equal(movedTab("attention", 1), "apps");
-    assert.equal(movedTab("apps", -1), "attention");
+    assert.equal(movedTab("attention", 1), "actions");
+    assert.equal(movedTab("actions", 1), "apps");
+    assert.equal(movedTab("apps", -1), "actions");
     assert.equal(movedTab("windows", -1), "workspaces");
 });
 
@@ -33,6 +34,8 @@ test("the footer names only the keys that work on the tab, Tab as next tab", () 
     assert.equal(said("workspaces", "↵"), "go");
     assert.deepEqual(keys("windows"), ["↑↓", "↵", "Ctrl+M", "Tab", "Esc"]);
     assert.deepEqual(keys("attention"), ["↑↓", "↵", "Ctrl+M", "Tab", "Esc"]);
+    assert.deepEqual(keys("actions"), ["↑↓", "↵", "Tab", "Esc"]);
+    assert.equal(said("actions", "↵"), "run");
 });
 
 test("each key opens its own tab, and the same key again closes it", () => {

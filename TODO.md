@@ -7,6 +7,13 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **The Actions tab comes last, with no key** (2026-11-01), after
+  Attention, so the tabs you open by key stay where they were; `Tab` and
+  `Shift+Tab` reach it. Settings pages ("Mouse settings") stay on Apps,
+  found by a query, under "Tide Settings", not listed on the empty query
+  or on Actions. A query on Apps still finds the actions. Reversible:
+  `switcher.mjs`'s `TABS` and `launcher.mjs`'s `actionRows`.
+
 - **`tide-tabs` is one binary with two ends** (2026-11-01): the host Chrome
   starts and `tide-tabs serve`, the shell's child, meeting on
   `$XDG_RUNTIME_DIR/tide/tabs.sock`. Chrome starts the host, so the shell
@@ -1668,7 +1675,7 @@ or workspace goes there.
 - **Redo the mocks.** `bar.png` and `desktop.png` show numbered
   workspaces. Redraw the bar's workspaces by name with the standing ones,
   home first, and the name prompt, then `make mocks`. `switcher.png` has
-  the switcher's four tabs.
+  the switcher's five tabs.
 - **Browser tabs (M9).** tileco on Linux lists tabs with `chrome.tabs`,
   and `tide-tabs` hands them to the shell (SPEC.md §8.3).
   - [x] An open native-messaging port keeps a Manifest V3 service worker

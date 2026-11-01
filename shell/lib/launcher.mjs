@@ -197,11 +197,12 @@ export function launcherItems(entries, desktop = {}) {
 // the bell is: under swaync it would hold nothing. Dark style says whether
 // it's on and until when (`state.dark`, `state.darkUntil` as "HH:MM", or ""
 // when it doesn't change on its own); running it flips it until then
-// (SPEC.md §15). Settings opens the settings panel (§16), and each of its
-// pages has a row of its own ("Mouse settings"), which opens the panel on
-// that page, as each section that opens on its own does ("Keyboard
-// shortcuts"). Those are found by a query only (`queryOnly`), so the empty
-// query's Actions don't list a dozen of them.
+// (SPEC.md §15). Tide Settings opens the settings panel (§16), and each of
+// its pages has a row of its own ("Mouse settings"), which opens the panel
+// on that page, as each section that opens on its own does ("Keyboard
+// shortcuts"). The settings rows (`settings`) are listed among the apps,
+// not the actions; the pages' are found by a query only (`queryOnly`), so
+// the empty query doesn't list a dozen of them.
 export function quickActions(state = {}) {
     const quick = (id, name, sub, icon, keywords, hint = "") => ({
         kind: "quick",
@@ -229,9 +230,9 @@ export function quickActions(state = {}) {
         quick("suspend", session.suspend.label, "Session", session.suspend.icon, ["sleep"]),
         quick("reboot", session.reboot.label, "Session", session.reboot.icon, ["reboot"]),
         quick("poweroff", session.poweroff.label, "Session", session.poweroff.icon, ["power off", "halt"]),
-        quick("settings", "Settings", "Sound, network, mouse, keyboard and more", "preferences-system-symbolic", ["preferences", "control panel"]),
-        ...PAGES.map(p => Object.assign(quick(`settings-${p.id}`, `${p.label} settings`, "Settings", p.icon, p.keywords), { queryOnly: true })),
-        ...SECTIONS.map(s => Object.assign(quick(`settings-${s.id}`, s.label, "Settings", s.icon, s.keywords), { queryOnly: true })),
+        Object.assign(quick("settings", "Tide Settings", "Sound, network, mouse, keyboard and more", "preferences-system-symbolic", ["settings", "preferences", "control panel"]), { settings: true }),
+        ...PAGES.map(p => Object.assign(quick(`settings-${p.id}`, `${p.label} settings`, "Tide Settings", p.icon, p.keywords), { settings: true, queryOnly: true })),
+        ...SECTIONS.map(s => Object.assign(quick(`settings-${s.id}`, s.label, "Tide Settings", s.icon, s.keywords), { settings: true, queryOnly: true })),
         state.notifications ? quick("dnd", "Do not disturb", onOff(state.dnd), "notifications-disabled-symbolic", ["dnd", "notifications", "quiet"]) : null,
         quick("dark-style", "Dark style", onOff(state.dark) + (state.darkUntil ? ` until ${state.darkUntil}` : ""), "night-light-symbolic", ["theme", "light", "night", "appearance", "mode"]),
         quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), KEEP_AWAKE_ICON, ["caffeine", "coffee", "idle", "inhibit"], "Super+S"),
@@ -406,7 +407,8 @@ function shape(item, positions) {
 // read at `now`. Rows come in sections (§8), which Tab steps through:
 //   - An empty query lists the apps you've used ("Recent", most used
 //     first), then the other apps ("Apps", by name), without their desktop
-//     actions, then the quick actions ("Actions") in their own order.
+//     actions. Tide Settings is one of the apps; the other quick actions
+//     are the Actions tab's (actionRows).
 //   - A query puts its top hit first ("Best match"), then the other quick
 //     actions ("Actions"), then the apps and their desktop actions
 //     ("Apps"), each in rank order. Rank is by match score; equal scores go
@@ -417,12 +419,11 @@ function shape(item, positions) {
 export function search(items, query, frecency = {}, now = 0) {
     const usage = item => used(frecency[`${item.kind}:${item.id}`], now);
     if (query.trim() === "") {
-        const apps = items.filter(i => i.kind === "app").map(item => ({ item, used: usage(item) }));
+        const apps = items
+            .filter(i => i.kind === "app" || (i.kind === "quick" && i.settings && !i.queryOnly))
+            .map(item => ({ item, used: usage(item) }));
         apps.sort((a, b) => b.used - a.used || byName(a.item, b.item));
-        const quick = items.filter(i => i.kind === "quick" && !i.queryOnly);
-        return apps
-            .map(a => ({ item: a.item, positions: [], section: a.used > 0 ? "Recent" : "Apps" }))
-            .concat(quick.map(item => ({ item, positions: [], section: "Actions" })));
+        return apps.map(a => ({ item: a.item, positions: [], section: a.used > 0 ? "Recent" : "Apps" }));
     }
     const rows = [];
     for (const item of items) {
@@ -447,6 +448,18 @@ export function search(items, query, frecency = {}, now = 0) {
         .map(row("Best match"))
         .concat(rest.filter(r => r.item.kind === "quick").map(row("Actions")))
         .concat(rest.filter(r => r.item.kind !== "quick").map(row("Apps")));
+}
+
+// The Actions tab's rows (SPEC.md §8.1): the quick actions but the
+// settings rows, in their own order for an empty query, and for a query
+// the best first, ranked as search ranks them. No sections: the tab is
+// one list.
+export function actionRows(items, query) {
+    const actions = items.filter(i => i.kind === "quick" && !i.settings);
+    const rows = query.trim() === ""
+        ? actions.filter(i => !i.queryOnly).map(item => ({ item, positions: [] }))
+        : search(actions, query);
+    return rows.map(({ item, positions }) => ({ item, positions, section: "" }));
 }
 
 // Whether the row at `index` starts a section, so gets its heading.

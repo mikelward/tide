@@ -120,7 +120,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Desktop**: 3440×1440, three-column layout, focused master in the middle, the rest dimmed. Workspace 4 is urgent; the bar is still numbered (TODO.md). [`desktop.png`](docs/mocks/desktop.png) | ![desktop](docs/mocks/desktop.png) |
 | **Bar**: dark and light, every workspace and status state, the clock rules. Its workspaces are still numbered, and are to be redrawn by name (TODO.md). [`bar.png`](docs/mocks/bar.png) | ![bar](docs/mocks/bar.png) |
 | **Layouts**: tile, three-column, two columns + stack, monocle, the single-window rule, and how three-column fills up. [`layouts.png`](docs/mocks/layouts.png) | ![layouts](docs/mocks/layouts.png) |
-| **Switcher**: its four tabs, Apps (the launcher), Workspaces, Windows and Attention. [`switcher.png`](docs/mocks/switcher.png) | ![switcher](docs/mocks/switcher.png) |
+| **Switcher**: its five tabs, Apps (the launcher), Workspaces, Windows, Attention and Actions. [`switcher.png`](docs/mocks/switcher.png) | ![switcher](docs/mocks/switcher.png) |
 | **Notifications**: popups, OSD, the notification center while sharing. [`notifications.png`](docs/mocks/notifications.png) | ![notifications](docs/mocks/notifications.png) |
 | **Clocks popover**: zones, working-hours strips, DST warning, calendar. [`clocks.png`](docs/mocks/clocks.png) | ![clocks](docs/mocks/clocks.png) |
 | **Settings**: the sidebar grouped under Hardware, Windows and General, Keyboard with its shortcuts, and the newer pages: Start at login, Notifications, Clipboard, Power and Workspaces. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
@@ -286,7 +286,7 @@ gives the greeter the same layout badge as the lock.
 | R15 | Fuzzy search of `.desktop` apps | `DesktopEntries` + our scorer | shell |
 | R16 | Quick actions | a built-in action list | shell |
 | R16a | Named workspaces, with standing ones and home (`in` by default) first | Hyprland's `name:` workspaces, home kept by a `persistent` workspace rule; the shell's name prompt (§6.5) | native + shell |
-| R16b | One switcher: apps, workspaces, windows, attention | one shell overlay with four tabs (§8) | shell |
+| R16b | One switcher: apps, workspaces, windows, attention, actions | one shell overlay with five tabs (§8) | shell |
 | R17 | Screenshots | `screenshot` script (grim, including `grim -T` for a window; slurp; wl-copy); region picked on one frozen `grim` capture, then cropped from it, after the MVP (§13) | scripts + shell |
 | R18 | Notifications | `NotificationServer`; the shell owns the name | shell |
 | R19 | Screensaver, idle, lock | §10 | shell + hypridle |
@@ -1817,7 +1817,7 @@ See [`switcher.png`](docs/mocks/switcher.png).
 
 ### 8.1 One switcher with tabs
 
-- **One overlay, four tabs**, in this order:
+- **One overlay, five tabs**, in this order:
   - **Apps:** the launcher (§8.2).
   - **Workspaces:** every workspace in the bar's order, each with its
     name and app icons, the current one marked. Enter goes there. The
@@ -1831,6 +1831,12 @@ See [`switcher.png`](docs/mocks/switcher.png).
   - **Attention:** every window wanting attention (§14.4), on any
     workspace, most recent first. Enter goes there, which clears its
     mark. With none, the tab says so.
+  - **Actions:** every quick action (§8.2) but the settings rows, in
+    their own order: screenshots, lock, log out, suspend, restart, shut
+    down, do not disturb, dark style, keep awake, presenter mode, clear
+    clipboard history, reload shell. Enter runs one, as on Apps; a power
+    action asks there when something blocks it. It has no key of its own:
+    `Tab` and `Shift+Tab` reach it.
 - **Each key opens it on its own tab:** a tap of `Super` on Workspaces, `Super+Space` on Apps, `Super+A` on Attention (§6.6).
   The same key again, or `Esc`, closes it; another tab's key moves to
   that tab.
@@ -1849,7 +1855,7 @@ See [`switcher.png`](docs/mocks/switcher.png).
   physical key on a Mac.
 - **The footer** names only the keys that work on the tab you're on:
   `Ctrl+↵` and `PgDn` on Apps, `Ctrl+M` on Windows and Attention, and
-  `Tab` for the next tab on all four. Hints that don't fit on one line
+  `Tab` for the next tab on all five. Hints that don't fit on one line
   wrap onto a second.
 - It's drawn like the launcher was, and takes the keyboard the same way
   (below, and §14.2).
@@ -1917,8 +1923,9 @@ See [`switcher.png`](docs/mocks/switcher.png).
   - Only then does frecency break the tie: how often and how recently you
     ran each row, kept in `$XDG_STATE_HOME/tide/launcher.json`. It never
     lifts a row over a better match, nor an app over a quick action.
-  - An empty query lists the apps, most used first, then by name, and then
-    the quick actions.
+  - An empty query lists the apps, most used first, then by name, Tide
+    Settings among them. The other quick actions are the Actions tab's
+    (§8.1); a query still finds them here.
   - The top hit is preselected, so `Super`, `s c r`, `Enter` is a window
     screenshot.
 - **Keys.**
@@ -1940,17 +1947,17 @@ See [`switcher.png`](docs/mocks/switcher.png).
   - `PgDn` jumps to the next section, `PgUp` back. `Tab` and `Shift+Tab`
     did, before they moved between the switcher's tabs.
 - **Sections.**
-  - Empty query: the apps you've used (Recent), the other apps, then the
-    quick actions.
+  - Empty query: the apps you've used (Recent), then the other apps.
   - A query: the top hit (Best match), then the other quick actions, then
     the apps and their desktop actions, each in rank order.
 - **Quick actions:**
   - Screenshot window / screen / region.
   - Lock, log out, suspend, restart, shut down.
-  - Settings, and one for each of its pages ("Mouse settings"), which
-    opens the panel on that page (§16). A page's is found by its name and
-    what it covers ("left-handed", "wifi", "time zone"), so it's listed
-    only for a query, not among the empty query's actions.
+  - Tide Settings, and one for each of its pages ("Mouse settings"),
+    which opens the panel on that page (§16). They're listed as apps, not
+    on the Actions tab. Tide Settings is one of the empty query's apps; a
+    page's row is found by its name and what it covers ("left-handed",
+    "wifi", "time zone"), so it's listed only for a query.
   - Do not disturb, keep awake, presenter mode, and dark style. Dark style shows whether
     it's on and until when, and flips light and dark until the schedule's
     next change (§15).
@@ -2076,7 +2083,7 @@ See [`picker.png`](docs/mocks/picker.png).
     `e acute`, `shrug`.
 - **It's its own overlay, not two more switcher tabs.** The switcher
   takes you somewhere; the picker puts something on the clipboard. Kept
-  apart, the switcher's `Tab` still cycles four tabs.
+  apart, the switcher's `Tab` cycles only its own tabs.
 - It's drawn like the switcher (§8.1), on the focused monitor, and takes
   the keyboard the same way (§14.2).
 - **Keys.** All single-modifier, like the rest of tide's.
@@ -3401,7 +3408,7 @@ to be focused.
 
 ## 16. Settings
 
-"Settings" opens a small tide panel. It covers only what is
+"Tide Settings" opens a small tide panel. It covers only what is
 tide's own, and links out for the rest:
 
 | Page | Contents |

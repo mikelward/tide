@@ -1,4 +1,4 @@
-// The switcher (SPEC.md §8.1): one overlay with four tabs, the launcher
+// The switcher (SPEC.md §8.1): one overlay with five tabs, the launcher
 // being the first, as pure functions the QML binds to. Each tab's rows have
 // the launcher's shape ({item: {kind, id, name, sub, icon}, positions,
 // section}), so one list draws them all.
@@ -9,29 +9,32 @@ import { minimizedFrom } from "./minimized.mjs";
 import { windowEntry, windowMuted } from "./mute.mjs";
 
 // The tabs, in order.
-export const TABS = Object.freeze(["apps", "workspaces", "windows", "attention"]);
+export const TABS = Object.freeze(["apps", "workspaces", "windows", "attention", "actions"]);
 
 export const TAB_NAMES = Object.freeze({
     apps: "Apps",
     workspaces: "Workspaces",
     windows: "Windows",
     attention: "Attention",
+    actions: "Actions",
 });
 
 // What each tab's empty field says.
 export const PLACEHOLDERS = Object.freeze({
-    apps: "Search apps and actions",
+    apps: "Search apps and settings",
     workspaces: "Go to a workspace",
     windows: "Go to a window",
     attention: "Go to a window that wants attention",
+    actions: "Run an action",
 });
 
 // The footer's key hints on `tab`, as [key, what it does]. Ctrl+Enter
 // (§8.2) and PgDn's sections are the Apps tab's alone, Ctrl+M (§9) the
-// Windows and Attention tabs'; Enter goes on the tabs that list places.
+// Windows and Attention tabs'; Enter runs on Apps and Actions and goes on
+// the tabs that list places.
 export function footerKeys(tab) {
     const apps = tab === "apps";
-    return [["↑↓", "select"], ["↵", apps ? "run" : "go"]]
+    return [["↑↓", "select"], ["↵", apps || tab === "actions" ? "run" : "go"]]
         .concat(apps ? [["Ctrl+↵", "new workspace"], ["PgDn", "next section"]] : [])
         .concat(tab === "windows" || tab === "attention" ? [["Ctrl+M", "mute"]] : [])
         .concat([["Tab", "next tab"], ["Esc", "close"]]);
