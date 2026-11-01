@@ -33,6 +33,7 @@ import {
     translateTitle,
     sweptRules,
     sweptText,
+    windowDetails,
     windowOf,
     withRule,
 } from "./floating.mjs";
@@ -147,7 +148,7 @@ test("Floating now lists floating windows no rule covers, one per class, leaving
         { address: "0x5", class: "pavucontrol", title: "Volume Control", floating: true },
         { address: "0x6", class: "", title: "", floating: true },
     ];
-    assert.deepEqual(floatingNow(windows, [calc]), [{ class: "kitty", title: "htop", address: "0x1" }]);
+    assert.deepEqual(floatingNow(windows, [calc]), [{ class: "kitty", title: "htop", address: "0x1", details: [] }]);
 });
 
 test("a new rule floats the tiled windows it covers that the old rules didn't", () => {
@@ -164,7 +165,7 @@ test("a new rule floats the tiled windows it covers that the old rules didn't", 
 });
 
 test("Always float and Super+Alt+F fill the fields with the window's class and its exact title, adding nothing", () => {
-    assert.deepEqual(prefilled([], { class: "kitty", title: "htop" }), { class: "kitty", title: "^htop$", note: "" });
+    assert.deepEqual(prefilled([], { class: "kitty", title: "htop" }), { class: "kitty", title: "^htop$", note: "", details: [] });
     assert.match(prefilled([], null).error, /no window is focused/);
     assert.match(prefilled([], { class: "", title: "x" }).error, /no class/);
     assert.equal(prefilled([], { class: "pavucontrol", title: "Volume Control" }).note, "pavucontrol floats already, by conf's own rules");
@@ -189,12 +190,12 @@ test("a window's title is the toplevel's live one, not its client-list snapshot'
     // Renamed since the last refresh: Quickshell updates title from
     // windowtitlev2, and the shell refreshes the snapshot on no title event.
     const renamed = { address: "55AA01", title: "Library", wayland: null, lastIpcObject: { class: "firefox", title: "Mozilla Firefox", floating: false } };
-    assert.deepEqual(windowOf(renamed), { address: "55aa01", class: "firefox", title: "Library", floating: false, fullscreen: 0 });
+    assert.deepEqual(windowOf(renamed), { address: "55aa01", class: "firefox", title: "Library", floating: false, fullscreen: 0, details: [] });
     assert.deepEqual(newlyCovered([windowOf(renamed)], [], [library]), ["55aa01"], "a rule for its new title floats it");
     const stale = { address: "0x2", title: "Mozilla Firefox", lastIpcObject: { class: "firefox", title: "Library", floating: false } };
     assert.deepEqual(newlyCovered([windowOf(stale)], [], [library]), [], "nor does its old title float it");
     assert.deepEqual(floatingNow([windowOf({ address: "0x3", title: "now", lastIpcObject: { class: "kitty", title: "then", floating: true } })], []),
-        [{ class: "kitty", title: "now", address: "3" }]);
+        [{ class: "kitty", title: "now", address: "3", details: [] }]);
     assert.match(prefilled([library], windowOf(renamed)).note, /by rule 1/, "Super+Alt+F sees the live title too");
     assert.equal(windowOf({ address: "0x4", title: "", lastIpcObject: { class: "a", title: "first", floating: true } }).title, "first", "before any title event, the snapshot's");
     assert.equal(windowOf({ address: "0x5", title: "t", wayland: { appId: "org.example.App" } }).class, "org.example.App", "no snapshot yet: the app ID");
@@ -303,7 +304,9 @@ test("only conf's float keys' tide-floated event asks, by the window's address",
 test("a window floated by the keys is asked about once a session, unless a rule covers it or it has no class", () => {
     const player = { class: "org.example.Player", title: "Track 1.ogg" };
     let r = askFloat(NO_ASKS, [], player);
-    assert.deepEqual(r.ask, player);
+    assert.deepEqual(r.ask, Object.assign({ details: [] }, player));
+    assert.deepEqual(askFloat(NO_ASKS, [], Object.assign({ details: [{ label: "Initial title", value: "x" }] }, player)).ask.details,
+        [{ label: "Initial title", value: "x" }], "Edit rule… shows them too");
     assert.deepEqual(r.state.pending, ["org.example.player"]);
     assert.equal(askFloat(r.state, [], { class: "ORG.EXAMPLE.PLAYER", title: "x" }).ask, null, "not twice at once");
     const answered = askAnswered(r.state, player.class, "dismissed");
@@ -336,4 +339,31 @@ test("the declined classes are kept for the Hyprland session, beside its runtime
     assert.deepEqual(declinedRead(null), { declined: [], warning: "" });
     assert.match(declinedRead("{").warning, /doesn't read/);
     assert.match(declinedRead('{"declined": [1]}').warning, /doesn't read/);
+});
+
+test("More about this window lists what else the client list says, plainly, leaving out what's empty", () => {
+    const ipc = {
+        class: "org.example.App", title: "t", initialClass: "org.example.App", initialTitle: "Loading…",
+        xwayland: true, contentType: "video", xdgTag: "", xdgDescription: "Main window", tags: ["work", "media*"],
+        pid: 1000, floating: true,
+    };
+    assert.deepEqual(windowDetails(ipc), [
+        { label: "Initial class", value: "org.example.App" },
+        { label: "Initial title", value: "Loading…" },
+        { label: "XWayland", value: "yes, an X11 app" },
+        { label: "Content type", value: "video" },
+        { label: "XDG description", value: "Main window" },
+        { label: "Tags", value: "work, media*" },
+    ]);
+    assert.deepEqual(windowDetails({ xwayland: false, contentType: "none", tags: [], initialTitle: "  " }), [], "a Wayland window with nothing more to say");
+    assert.deepEqual(windowDetails(undefined), []);
+});
+
+test("the details go with the window into Floating now and the filled-in rule", () => {
+    const toplevel = { address: "0x1", title: "t", lastIpcObject: { class: "kitty", title: "t", floating: true, initialTitle: "zsh" } };
+    const w = windowOf(toplevel);
+    assert.deepEqual(w.details, [{ label: "Initial title", value: "zsh" }]);
+    assert.deepEqual(floatingNow([w], [])[0].details, w.details);
+    assert.deepEqual(prefilled([], w).details, w.details);
+    assert.deepEqual(prefilled([], { class: "kitty", title: "t" }).details, [], "none known");
 });

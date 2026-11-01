@@ -3848,6 +3848,14 @@ stays hand-written.
     - Enter or *Add* adds the rule. Esc clears the fields.
     - When a rule covers the window already, the page names it under the
       fields.
+    - *More about this window*, under the fields, lists what else
+      Hyprland 0.56.2's client list says of it, read-only. That's its
+      initial class and title, XWayland, content type, XDG tag and
+      description, and tags, each only when it says something.
+      - Nothing matches on these yet. They show when a window would need
+        one (TODO.md, *More matchers for float rules*).
+      - The section starts closed, and stays as you leave it for as long
+        as the shell runs.
   - `Super+Alt+F` runs `qs -c tide ipc call floating remember`. It opens
     the panel on the Floating page with the fields filled for the focused
     window, as *Always float* fills them.

@@ -492,7 +492,36 @@ export function windowOf(toplevel) {
         title: toplevel.title || ipc.title || "",
         floating: ipc.floating === true,
         fullscreen: Number(ipc.fullscreen ?? 0),
+        details: windowDetails(ipc),
     };
+}
+
+// What else Hyprland 0.56.2's client list says of a window that a rule
+// might one day match on (its HyprCtl getWindowData), for the page to show
+// under a filled-in rule: [{label, value}], in this order, leaving out
+// what it doesn't give or gives empty. Nothing matches on these yet.
+export function windowDetails(ipc) {
+    const out = [];
+    const text = (label, value) => {
+        const v = typeof value === "string" ? value.trim() : "";
+        if (v !== "") {
+            out.push({ label, value: v });
+        }
+    };
+    text("Initial class", ipc?.initialClass);
+    text("Initial title", ipc?.initialTitle);
+    if (ipc?.xwayland === true) {
+        out.push({ label: "XWayland", value: "yes, an X11 app" });
+    }
+    if (ipc?.contentType !== "none") {
+        text("Content type", ipc?.contentType);
+    }
+    text("XDG tag", ipc?.xdgTag);
+    text("XDG description", ipc?.xdgDescription);
+    if (Array.isArray(ipc?.tags)) {
+        text("Tags", ipc.tags.filter(t => typeof t === "string" && t !== "").join(", "));
+    }
+    return out;
 }
 
 // Whether `rule` covers a window with class `cls` and title `title`.
@@ -543,7 +572,7 @@ export function floatingNow(windows, rules) {
         if (out.some(o => o.class.toLowerCase() === cls.toLowerCase())) {
             continue;
         }
-        out.push({ class: cls, title: String(w.title ?? ""), address: w.address });
+        out.push({ class: cls, title: String(w.title ?? ""), address: w.address, details: w.details ?? [] });
     }
     return out;
 }
@@ -603,9 +632,10 @@ export function literalTitle(title) {
 }
 
 // What Always float and Super+Alt+F put in the page's fields for `window`
-// ({class, title} or null), for you to trim and add with Enter: {class,
-// title, note}, the note saying which rule covers it already, or "", or
-// {error} for a window no rule could name.
+// ({class, title, details} or null), for you to trim and add with Enter:
+// {class, title, note, details}, the note saying which rule covers it
+// already, or "", and the details shown below (windowDetails), or {error}
+// for a window no rule could name.
 export function prefilled(rules, window) {
     if (!window) {
         return { error: "no window is focused" };
@@ -618,7 +648,7 @@ export function prefilled(rules, window) {
     const note = covering === null ? ""
         : covering.builtIn ? `${cls} floats already, by conf's own rules`
             : `${cls} floats already, by rule ${covering.index + 1}, ${describe(rules[covering.index])}`;
-    return { class: cls, title: literalTitle(window.title), note };
+    return { class: cls, title: literalTitle(window.title), note, details: window.details ?? [] };
 }
 
 // Asking to always float a window you floated by hand (SPEC.md §6.4):
@@ -652,7 +682,7 @@ export function askFloat(state, rules, window) {
     if (state.declined.includes(key) || state.pending.includes(key)) {
         return { state, ask: null };
     }
-    return { state: Object.assign({}, state, { pending: state.pending.concat([key]) }), ask: { class: cls, title: String(window.title ?? "") } };
+    return { state: Object.assign({}, state, { pending: state.pending.concat([key]) }), ask: { class: cls, title: String(window.title ?? ""), details: window.details ?? [] } };
 }
 
 // The question for `window`, as notify-send runs it: Always float adds the
