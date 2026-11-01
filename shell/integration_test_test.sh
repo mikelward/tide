@@ -11,7 +11,7 @@
 # notification server that records what it's sent or doesn't, a launcher
 # that runs the app typed or doesn't, a name prompt that goes to the
 # workspace typed or doesn't, a settings panel that opens the
-# Network page's app or doesn't, a lock that can't read its
+# Network page's app or doesn't, and opens Keyboard for keys or doesn't, a lock that can't read its
 # keyboards, or unlocks or doesn't, and a greeter that logs in or doesn't.
 # The stand-in Hyprland, hyprctl, tide-sysmon, gsettings, nmcli and greetd
 # are the integration test's own, and the stand-in gsettings and nmcli answer as
@@ -120,6 +120,9 @@ if test "\$1" = ipc; then
     case "\$*" in
         # The first opening, then the second, each marked.
         *"call launcher open"*) if test -e "\$XDG_RUNTIME_DIR/launcher-open"; then : >"\$XDG_RUNTIME_DIR/launcher-reopen"; else : >"\$XDG_RUNTIME_DIR/launcher-open"; fi ;;
+        # Keys' old page id, which opens Keyboard at its shortcuts, or
+        # another page with DIR/keys-elsewhere.
+        *"call settings openPage keys"*) if test -e "\$(dirname "\$0")/keys-elsewhere"; then echo idle; else echo keyboard; fi >"\$XDG_RUNTIME_DIR/settings-page" ;;
         *"call settings open"*) : >"\$XDG_RUNTIME_DIR/settings-open" ;;
         # The page the settings panel shows, once the launcher has opened it
         # on one, until it closes.
@@ -728,6 +731,7 @@ check "and the launcher's Mouse settings opens the Mouse page" contains "$out" "
 check "having typed mouse and Enter" test "$(sed -n 2p "$tmp/clean/typed")" = mouse
 check "and a settings panel that opens the Network page's app passes" contains "$out" "ok: the settings panel changes page with the arrows and opens the page's app"
 check "having pressed Down twice and Enter" test "$(sed -n 3p "$tmp/clean/typed")" = "-k Down -k Down -k Return"
+check "and openPage keys shows Keyboard" contains "$out" "ok: the settings panel's openPage keys opens its Keyboard page"
 check "and a picker that copies the character named passes" contains "$out" "ok: the picker finds a character by name and copies it"
 check "having typed its name and Enter" test "$(sed -n 4p "$tmp/clean/typed")" = "e acute"
 check "and a share picker that answers the window chosen passes" contains "$out" "ok: the share picker answers tide-share-picker's pipe with the window chosen"
@@ -798,6 +802,14 @@ stubs "$tmp/settings-unfocused" "exit 0" "$loaded" ":" "$ran; $mouse_shown; $set
 run "$tmp/settings-unfocused"
 check "a settings panel that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the settings panel didn't take the keyboard in 2 s"
+}
+
+case_105() {
+stubs "$tmp/keys-elsewhere" "exit 0" "$loaded"
+: >"$tmp/keys-elsewhere/keys-elsewhere" || exit 1
+run "$tmp/keys-elsewhere"
+check "a settings panel whose openPage keys shows another page fails" test "$code" -ne 0
+check "and says which" contains "$out" "\`openPage keys\` should show the settings panel's Keyboard page; it shows \"idle\""
 }
 
 case_15() {

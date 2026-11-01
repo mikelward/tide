@@ -123,7 +123,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Switcher**: its four tabs, Apps (the launcher), Workspaces, Windows and Attention. [`switcher.png`](docs/mocks/switcher.png) | ![switcher](docs/mocks/switcher.png) |
 | **Notifications**: popups, OSD, the notification center while sharing. [`notifications.png`](docs/mocks/notifications.png) | ![notifications](docs/mocks/notifications.png) |
 | **Clocks popover**: zones, working-hours strips, DST warning, calendar. [`clocks.png`](docs/mocks/clocks.png) | ![clocks](docs/mocks/clocks.png) |
-| **Settings**: the panel's newer pages: Start at login, Notifications, Clipboard, Power and Workspaces. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
+| **Settings**: the sidebar grouped under Hardware, Windows and General, Keyboard with its shortcuts, and the newer pages: Start at login, Notifications, Clipboard, Power and Workspaces. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
 | **System monitor popover**: the CPU and Memory tabs, and throttling. [`sysmon.png`](docs/mocks/sysmon.png) | ![system monitor](docs/mocks/sysmon.png) |
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
 | **Screen-share picker**: screens, windows, 16:9 area. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
@@ -3318,22 +3318,24 @@ tide's own, and links out for the rest:
 
 | Page | Contents |
 |---|---|
-| Idle | the four timings, suspend on AC (off by default) |
+| **Hardware** | |
+| Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
 | Sound | output and input devices; *advanced* opens `pavucontrol` |
 | Network, Bluetooth | *advanced* opens `nm-connection-editor` / `blueman-manager` |
 | Mouse | for every mouse, or one by name: speed, scroll speed, natural scrolling, left-handed |
 | Touchpad | for every touchpad, or one by name: the same, plus tap to click and off while typing |
-| Keyboard | for every keyboard, or one by name: layouts and their variants, repeat delay and rate |
-| Clocks | the system's time zone; zones, order, labels, 24 h, dedupe-local |
-| Keys | a read-only list of the current bindings, generated from the config |
+| Keyboard | for every keyboard, or one by name: layouts and their variants, repeat delay and rate; below them, its shortcuts, a read-only list of the current bindings, generated from the config |
+| Power | the battery, the power profile, and what closing the lid does |
+| **Windows** | |
 | Layouts | default layout per aspect ratio, `mfact`, master count, the rule for new windows |
-| Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
-| Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
 | Workspaces | the standing workspaces, home first; the apps that live on home; and the patterns that name a workspace from a window's title (§6.5) |
-| Start at login | the commands the session runs once as it starts |
+| **General** | |
+| Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
 | Notifications | Do not disturb on a schedule, whether critical alerts break through, and the muted apps and sites (§9) |
 | Clipboard | the history on or off, how many copies it keeps, and Clear history (§8.4) |
-| Power | the battery, the power profile, and what closing the lid does |
+| Clocks | the system's time zone; zones, order, labels, 24 h, dedupe-local |
+| Idle | the four timings, suspend on AC (off by default) |
+| Start at login | the commands the session runs once as it starts |
 
 Hyprland-side settings are applied live through `hyprctl eval` and
 persisted in a generated Lua include, so the hand-written Hyprland config
@@ -3436,8 +3438,13 @@ stays hand-written.
     or off (§7.3). A click writes it to `clocks.local.json`, keeping the
     file's list, and the bar changes at once, with no lookup.
 
-- **Keys** lists the bindings Hyprland has now, from `hyprctl binds -j`,
-  as the shell starts and again as the page shows.
+- **Keyboard's shortcuts** list the bindings Hyprland has now, from
+  `hyprctl binds -j`, as the shell starts and again as the Keyboard page
+  shows, below its settings under a Shortcuts heading.
+  - They were a Keys page of their own. Keyboard has them now, as macOS's
+    Keyboard settings have its shortcuts.
+  - `openPage keys`, and the launcher's Keyboard shortcuts, open Keyboard
+    scrolled to them; `shownPage` says `keyboard`.
   - That needs Hyprland 0.56.2, the pinned version. 0.56.0 gives each
     value one field late from `has_description` on, so its JSON doesn't
     parse, and the page says so.
@@ -3736,8 +3743,16 @@ stays hand-written.
   launcher, or `qs -c tide ipc call settings openPage mouse`, opens it on
   that page, or moves an open one there.
 - Escape or a click on the backdrop closes it.
-- The pages run down its side in this table's order. Up and Down change
-  the page.
+- The pages run down its side in this table's order, under its groups'
+  headings: Hardware, Windows and General (the maintainer's grouping,
+  2026-11-01).
+  - Hardware is the machine and what's plugged into it, Windows is how
+    windows are placed, and General is the rest.
+  - A heading can't be chosen. Up and Down change the page, passing over
+    the headings, and stop at the first and last pages.
+  - The groups and each page's group are data in `settings.mjs`, so a new
+    page names its group. Floating's joins Windows, after Workspaces.
+  - The card is tall enough for every page and heading.
 - A page's link out sits at its foot, and Enter opens it. A page with
   nothing of its own yet is only that link, with a line saying what the
   bar already does.

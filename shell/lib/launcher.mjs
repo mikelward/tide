@@ -5,7 +5,7 @@
 import { score as used } from "./frecency.mjs";
 import { match } from "./fuzzy.mjs";
 import { ACTIONS as SESSION, actionCommand } from "./session.mjs";
-import { PAGES } from "./settings.mjs";
+import { PAGES, SECTIONS } from "./settings.mjs";
 import { ICON as KEEP_AWAKE_ICON } from "./keepawake.mjs";
 
 // A match outside the name (generic name, keywords, the command) still
@@ -199,7 +199,8 @@ export function launcherItems(entries, desktop = {}) {
 // when it doesn't change on its own); running it flips it until then
 // (SPEC.md §15). Settings opens the settings panel (§16), and each of its
 // pages has a row of its own ("Mouse settings"), which opens the panel on
-// that page. Those are found by a query only (`queryOnly`), so the empty
+// that page, as each section that opens on its own does ("Keyboard
+// shortcuts"). Those are found by a query only (`queryOnly`), so the empty
 // query's Actions don't list a dozen of them.
 export function quickActions(state = {}) {
     const quick = (id, name, sub, icon, keywords, hint = "") => ({
@@ -230,6 +231,7 @@ export function quickActions(state = {}) {
         quick("poweroff", session.poweroff.label, "Session", session.poweroff.icon, ["power off", "halt"]),
         quick("settings", "Settings", "Sound, network, mouse, keyboard and more", "preferences-system-symbolic", ["preferences", "control panel"]),
         ...PAGES.map(p => Object.assign(quick(`settings-${p.id}`, `${p.label} settings`, "Settings", p.icon, p.keywords), { queryOnly: true })),
+        ...SECTIONS.map(s => Object.assign(quick(`settings-${s.id}`, s.label, "Settings", s.icon, s.keywords), { queryOnly: true })),
         state.notifications ? quick("dnd", "Do not disturb", onOff(state.dnd), "notifications-disabled-symbolic", ["dnd", "notifications", "quiet"]) : null,
         quick("dark-style", "Dark style", onOff(state.dark) + (state.darkUntil ? ` until ${state.darkUntil}` : ""), "night-light-symbolic", ["theme", "light", "night", "appearance", "mode"]),
         quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), KEEP_AWAKE_ICON, ["caffeine", "coffee", "idle", "inhibit"], "Super+S"),
@@ -301,7 +303,7 @@ export function quickCommand(id, context = {}) {
         return { shell: "settings", page: "" };
     default:
         // A page's row opens the panel on that page.
-        if (id.startsWith("settings-") && PAGES.some(p => `settings-${p.id}` === id)) {
+        if (id.startsWith("settings-") && [...PAGES, ...SECTIONS].some(p => `settings-${p.id}` === id)) {
             return { shell: "settings", page: id.slice("settings-".length) };
         }
         throw new Error(`unknown quick action: ${id}`);

@@ -6,7 +6,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initial, record } from "./frecency.mjs";
-import { PAGES } from "./settings.mjs";
+import { PAGES, SECTIONS } from "./settings.mjs";
 import { SHOW_IN_SCRIPT, blockedHeading, confirmRows, desktopNames, highlighted, grantIds, launchCommand, launcherItems, moved, otherDesktopSettings, parseShowIn, shownIn, nextSection, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
 
 // Array.prototype.at and Object.fromEntries, which the shell's engine lacks
@@ -344,6 +344,7 @@ test("the quick actions are the screenshots, the session, settings, the toggles,
         "lock", "logout", "suspend", "reboot", "poweroff",
         "settings",
         ...PAGES.map(p => `settings-${p.id}`),
+        ...SECTIONS.map(s => `settings-${s.id}`),
         "dnd", "dark-style", "keep-awake", "presenter", "clear-clipboard", "reload",
     ]);
     // Every one has something to run.
@@ -415,27 +416,28 @@ test("settings is found by its name, and opens the panel on its first page", () 
 
 // "mouse" and Enter found nothing to run, so did nothing: only Sound,
 // Network and Bluetooth were among Settings' words, and it opened on Idle.
-test("each settings page is found by its name and what it covers, and opens the panel on it", () => {
+test("each settings page, and each section that opens on its own, is found by its name and what it covers, and opens the panel on it", () => {
     const pages = {
-        idle: ["idle", "idle settings"],
+        displays: ["displays", "monitors", "scale"],
         sound: ["sound", "audio", "volume"],
         network: ["network", "wifi", "vpn"],
         bluetooth: ["bluetooth"],
         mouse: ["mouse", "mouse settings", "left-handed", "pointer"],
         touchpad: ["touchpad", "trackpad", "pointing stick", "tap to click"],
-        keyboard: ["keyboard", "xkb", "repeat"],
-        clocks: ["clocks", "time zone", "timezone"],
-        keys: ["keys", "shortcuts", "bindings"],
+        // "keys" finds Keyboard, whose page has the shortcuts too.
+        keyboard: ["keyboard", "keys", "xkb", "repeat"],
+        power: ["power settings", "battery", "power profile", "lid"],
         layouts: ["layouts", "tiling"],
+        workspaces: ["workspaces settings", "home workspace", "name patterns"],
         appearance: ["appearance", "wallpaper"],
-        displays: ["displays", "monitors", "scale"],
-        startup: ["start at login", "startup", "autostart"],
         notifications: ["notifications", "quiet hours", "muted apps"],
         clipboard: ["clipboard settings", "copy history", "paste history"],
-        power: ["power settings", "battery", "power profile", "lid"],
-        workspaces: ["workspaces settings", "home workspace", "name patterns"],
+        clocks: ["clocks", "time zone", "timezone"],
+        idle: ["idle", "idle settings"],
+        startup: ["start at login", "startup", "autostart"],
+        keys: ["shortcuts", "keyboard shortcuts", "bindings", "hotkeys"],
     };
-    assert.deepEqual(Object.keys(pages), PAGES.map(p => p.id));
+    assert.deepEqual(Object.keys(pages), [...PAGES, ...SECTIONS].map(p => p.id));
     for (const [id, queries] of Object.entries(pages)) {
         for (const query of queries) {
             const top = search(quickActions({ notifications: true }), query)[0]?.item;

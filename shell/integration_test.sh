@@ -26,7 +26,7 @@
 # sensor files; a stand-in hyprctl, answering from the stand-in
 # Hyprland's fixtures, for the bar's title, the lock's layout badge and
 # the focus guard's calls, conf's conf_input.reload() and
-# conf_appearance.reload() and the Keys page's bindings; stand-in
+# conf_appearance.reload() and the Keyboard page's shortcuts; stand-in
 # gsettings and nmcli, for light and dark and the VPNs, whose monitors
 # report nothing; the real `tide keyboards` over one stand-in keyboard,
 # and a stand-in udevadm whose monitor reports no device coming or going,
@@ -1270,8 +1270,9 @@ focused() {
 # accent folding runs in Qt's engine. A better match that says
 # OnlyShowIn=GNOME must be left out. Then "mouse" and Enter must open the
 # settings panel on its Mouse page. Then it opens the settings panel and
-# expects Down twice, past Idle and Sound, and Enter to open the Network
-# page's app, then the picker's Characters tab to copy é, and checks the
+# expects Down twice, past Displays and Sound, and Enter to open the Network
+# page's app, and `openPage keys` to show Keyboard, where the shortcuts
+# are. Then the picker's Characters tab to copy é, and checks the
 # share picker (share) and Super+Return's name prompt (prompt). A stand-in tide on
 # the shell's PATH keeps each command rather than running it. Its log is
 # $tmp/launch.qs.log.
@@ -1393,6 +1394,18 @@ launch() {
         echo "FAIL: the settings panel's Network page should run \`tide launch -- nm-connection-editor\`; it ran \`tide $_launched\`" >&2
         exit 1
     fi
+    # Keys was a page of its own; its id opens Keyboard, at its shortcuts.
+    _page=$(ipc call settings openPage keys) || exit 1
+    if test -n "$_page"; then
+        echo "FAIL: \`openPage keys\` should open the settings panel at Keyboard's shortcuts; it says \"$_page\"" >&2
+        exit 1
+    fi
+    _page=$(ipc call settings shownPage) || exit 1
+    if test "$_page" != keyboard; then
+        echo "FAIL: \`openPage keys\` should show the settings panel's Keyboard page; it shows \"$_page\"" >&2
+        exit 1
+    fi
+    ipc call settings close >/dev/null || exit 1
     # The picker (SPEC.md §8.4): its Characters tab reads the installed
     # character list, and "e acute" and Enter copy é, through a stand-in
     # wl-copy that keeps its arguments.
@@ -1429,6 +1442,7 @@ launch() {
     echo "ok: the launcher finds an app by a query without its accent, and runs it, not a better match for GNOME"
     echo "ok: the launcher's Mouse settings opens the settings panel on its Mouse page"
     echo "ok: the settings panel changes page with the arrows and opens the page's app"
+    echo "ok: the settings panel's openPage keys opens its Keyboard page"
     echo "ok: the picker finds a character by name and copies it"
 }
 

@@ -27,6 +27,10 @@
   .side .p { height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 7px; }
   .side .p .ms { font-size: 16px; color: var(--fg-dim); }
   .side .p.on { background: var(--surface-2); }
+  .side .g { padding: 8px 10px 2px; color: var(--fg-dim); font-size: 11px; font-weight: 700; letter-spacing: .5px; }
+  .bind { height: 26px; display: flex; align-items: center; padding: 0 10px; gap: 10px; }
+  .bind .k { width: 170px; font-weight: 600; }
+  .bind .d { flex: 1; color: var(--fg-dim); }
   .page { flex: 1; padding: 6px; display: flex; flex-direction: column; }
   .page h3 { margin: 0; padding: 6px 10px; font-size: 20px; font-weight: 700; }
   .about { padding: 0 10px 6px; color: var(--fg-dim); line-height: 1.35; }
@@ -53,9 +57,10 @@
 <body class="sheet" data-width="1100" data-scale="2">
 
 <h1>Settings</h1>
-<p class="lede">The settings panel's newer pages, over the dimmed desktop as it opens. The sidebar lists every page in the panel's order; the card grows to fit them.</p>
+<p class="lede">The settings panel's newer pages, over the dimmed desktop as it opens. The sidebar lists every page in the panel's order, grouped under Hardware, Windows and General, whose headings can't be chosen; the card grows to fit them.</p>
 
 <div class="panels" id="panels"></div>
+<p class="note"><b>Keyboard</b>: the keyboards' settings, then their shortcuts below a Shortcuts heading, which <code>openPage keys</code> and the launcher's Keyboard shortcuts scroll to. Keys was a page of its own.</p>
 <p class="note"><b>Start at login</b>: the commands the shell runs once a session, through <code>tide launch --background --unless-running</code>, so none takes focus and one running already isn't started again. The arrows move a command and the bin takes it out; one typed at the foot is added with Enter, and one with a quote, backslash or <code>$</code> is refused, saying why. A change takes effect at the next login.</p>
 
 <p class="note"><b>Notifications</b>: Do not disturb now, on a schedule (from and to a quarter hour a step, and the days a window starts on), and whether critical alerts break through it. The schedule turns Do not disturb on as a window starts and off as it ends, unless you changed it meanwhile. Below, the muted apps and sites: the bin unmutes one, and one typed at the foot is muted with Enter.</p>
@@ -63,15 +68,26 @@
 <p class="note"><b>Power</b>: the battery as the bar's popover shows it, the power profile when power-profiles-daemon is there (the page says so when it isn't), and what closing the lid does with no other monitor: Suspend, logind's own; Lock; or Do nothing, which hold logind's lid switch.</p>
 <p class="note"><b>Workspaces</b>: the standing workspaces (the first is home), home's apps and the name patterns, each a list with a bin per entry, arrows where order counts, and a field to add one, refused with the reason when the files wouldn't take it.</p>
 <script>
+// The sidebar: a group's heading (a string), then its pages.
 const PAGES = [
-  ['Idle', 'bedtime'], ['Sound', 'volume_up'], ['Network', 'wifi'], ['Bluetooth', 'bluetooth'],
-  ['Mouse', 'mouse'], ['Touchpad', 'touchpad_mouse'], ['Keyboard', 'keyboard'], ['Clocks', 'schedule'],
-  ['Keys', 'keyboard_command_key'], ['Layouts', 'view_column'], ['Appearance', 'contrast'],
-  ['Displays', 'desktop_windows'], ['Start at login', 'play_arrow'], ['Notifications', 'notifications'], ['Clipboard', 'content_paste'], ['Power', 'battery_5_bar'], ['Workspaces', 'grid_view'],
+  'HARDWARE',
+  ['Displays', 'desktop_windows'], ['Sound', 'volume_up'], ['Network', 'wifi'], ['Bluetooth', 'bluetooth'],
+  ['Mouse', 'mouse'], ['Touchpad', 'touchpad_mouse'], ['Keyboard', 'keyboard'], ['Power', 'battery_5_bar'],
+  'WINDOWS',
+  ['Layouts', 'view_column'], ['Workspaces', 'grid_view'],
+  'GENERAL',
+  ['Appearance', 'contrast'], ['Notifications', 'notifications'], ['Clipboard', 'content_paste'], ['Clocks', 'schedule'],
+  ['Idle', 'bedtime'], ['Start at login', 'play_arrow'],
 ];
+const binds = (rows) => rows.map(([k, d]) => `<div class="bind"><span class="k">${k}</span><span class="d">${d}</span></div>`).join('');
 const btn = (icon, dim) => `<span class="btn${dim ? ' dim' : ''}"><i class="ms">${icon}</i></span>`;
 const list = (cmds) => cmds.map((c, i) => `<div class="item"><span class="cmd">${c}</span>${btn('arrow_upward', i === 0)}${btn('arrow_downward', i === cmds.length - 1)}${btn('delete')}</div>`).join('');
 const panels = [
+  ['Keyboard',
+   'For every keyboard. A layout is XKB\u2019s name for it, such as us, or us,de for two; a variant is one such as dvorak, or none. One set in hyprland.local.lua still wins.',
+   '<div class="srow"><span class="l">Layout</span><span class="field" style="width:150px;margin:0;color:var(--fg)">us</span></div><div class="srow"><span class="l">Variant</span><span class="field" style="width:150px;margin:0">none</span></div><div class="srow"><span class="l">Repeat delay</span><span class="step"><span class="btn"><i class="ms">remove</i></span><span class="v">600 ms</span><span class="btn"><i class="ms">add</i></span></span></div><div class="srow"><span class="l">Repeat rate</span><span class="step"><span class="btn"><i class="ms">remove</i></span><span class="v">25/s</span><span class="btn"><i class="ms">add</i></span></span></div>' +
+   '<div class="head">SHORTCUTS</div><div class="about" style="padding-top:2px">The key bindings Hyprland has now, from conf\u2019s hyprland.lua and hyprland.local.lua, in their order. What one does is its description in hl.bind.</div>' +
+   binds([['Super+Space', 'Launcher'], ['Super+Return', 'Go to a workspace by name'], ['Super+C', 'Clipboard history'], ['Super+L', 'Lock'], ['Super+S', 'Keep awake']])],
   ['Start at login',
    'Commands started once as you log in, one after another in this order, without taking focus: each is a program and its arguments, such as google-calendar, and one already running isn’t started again. A home app’s window goes to home. A change takes effect at the next login. The list is this machine’s own once changed.',
    list(['google-calendar', 'google-chat']) +
@@ -92,7 +108,7 @@ const panels = [
 ];
 const root = document.getElementById('panels');
 for (const [page, about, body] of panels) {
-  const side = PAGES.map(([label, icon]) => `<div class="p${label === page ? ' on' : ''}"><i class="ms">${icon}</i>${label}</div>`).join('');
+  const side = PAGES.map((row) => typeof row === 'string' ? `<div class="g">${row}</div>` : `<div class="p${row[0] === page ? ' on' : ''}"><i class="ms">${row[1]}</i>${row[0]}</div>`).join('');
   root.insertAdjacentHTML('beforeend', `<div class="stage theme-dark"><div class="backdrop"></div>
     <div class="panel"><div class="side">${side}</div>
     <div class="page"><h3>${page}</h3><div class="about">${about}</div>${body}</div></div></div>`);

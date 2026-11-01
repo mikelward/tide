@@ -7,6 +7,25 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- [ ] **Keyboard's shortcuts sit below its settings, under a Shortcuts
+  heading,** on the one scrolling page (SPEC.md §16). The alternative was a
+  second view on the page, Settings and Shortcuts, switched by ‹ and › or a
+  pair of tabs; the panel has no tabs, and ‹ and › already choose a
+  keyboard there. `openPage keys` and the launcher's Keyboard shortcuts
+  scroll to the heading. Making it a view is the `keyList` column in
+  `shell/SettingsWindow.qml` and `SECTIONS` in `shell/lib/settings.mjs`.
+- [ ] **The sidebar's group headings look like a page's own headings**:
+  small, bold, dimmed capitals (the panel's `Heading`), with no rule or
+  extra gap between groups. The alternative was a divider line between
+  groups, or the label in sentence case. It's the sidebar's Repeater in
+  `shell/SettingsWindow.qml`.
+- [ ] **"keys" in the launcher finds Keyboard settings, not Keyboard
+  shortcuts.** The name match ("Keyboard settings", shorter) wins over the
+  keyword. Both open the Keyboard page; only the second scrolls to the
+  shortcuts. The alternative was naming the row "Keys and shortcuts" or
+  "Keys settings", which wins "keys" but reads worse. It's `SECTIONS`'
+  label in `shell/lib/settings.mjs`.
+
 - [ ] **`tide-agent` is started by the shell, not a systemd unit** (SPEC.md
   §5.6): it lives as long as something can show its prompts, and talks to
   the shell over its stdin and stdout, like `tide-greetd`. The alternative
@@ -105,10 +124,6 @@ once you have agreed with it or reversed it.
   change waits for the next login; there's no Run now. The alternative is
   a Run now button, or running a command as it's added. Either is an
   addition.
-- [ ] **New pages go at the end of the sidebar**, after Displays, so the
-  card grows to fit them rather than scrolling. The alternative is
-  grouping them (Start at login beside Idle, say). Reversible by
-  reordering `PAGES`.
 - [ ] **Do not disturb's schedule turns your own toggle on and off at the
   window's edges**, rather than holding it on for the whole window. So the
   bell can end it early, and one you turned on yourself outlives the
@@ -330,16 +345,6 @@ once you have agreed with it or reversed it.
   change; `input.json` holds the same names either way. It's `kind: "layout"`
   and `"variant"` in `shell/lib/input.mjs`.
 
-- [ ] **The settings pages run Idle, Sound, Network, Bluetooth, then the
-  input devices.** That's the order you asked for; PR 155 had put Mouse and
-  Touchpad after Idle. It's `PAGES` in `shell/lib/settings.mjs`, and §16's
-  table, which the sidebar follows.
-
-- [ ] **The Clocks page comes last, after Keyboard.** §16's table had it
-  before Idle; it went after the pages you ordered, so their order and
-  CI's count of Down presses to the Network page stay as they are. Moving
-  it is a line in `PAGES` in `shell/lib/settings.mjs` and the table row.
-
 - [ ] **`clocks.json` may be an object, its list under `clocks`, for the
   24 h and dedupe-local switches.** A bare list is still read as before,
   and the page keeps one a list until a switch is set. The alternative was
@@ -374,10 +379,6 @@ once you have agreed with it or reversed it.
   of `timedatectl list-timezones`, which the panel has no widget for. It's
   the time zone row in `shell/SettingsWindow.qml` and `setSystemZone` in
   `shell/ClockData.qml`.
-
-- [ ] **The Layouts page comes after Keys.** §16's table had it third;
-  new pages go after the ones you ordered. Moving it is a line in `PAGES`
-  in `shell/lib/settings.mjs` and the table row.
 
 - [ ] **A layout change resets every workspace's `mfact` and master
   count.** `tide_layout.reload()` gives each workspace the new values and
@@ -451,15 +452,6 @@ once you have agreed with it or reversed it.
   wallpaper for it would be a greetd setting. It's `show` in
   `shell/WallpaperData.qml` and the wallpaper reader in `shell/lock.qml`.
 
-- [ ] **The Appearance page comes after Layouts.** §16's table had it first;
-  new pages go after the ones you ordered, so their order and CI's count
-  of Down presses to the Network page stay as they are. Moving it is a
-  line in `PAGES` in `shell/lib/settings.mjs` and the table row.
-
-- [ ] **The Displays page comes after Appearance.** §16's table had it second;
-  new pages go after the ones you ordered. Moving it is a line in `PAGES`
-  in `shell/lib/settings.mjs` and the table row.
-
 - [ ] **A monitor's place is one of Hyprland's automatic ones.** The
   Displays page offers automatic, right, left, above and below; an exact
   position is nwg-displays'. The alternative is a drag-to-arrange map,
@@ -489,8 +481,8 @@ once you have agreed with it or reversed it.
   page would change; `clocks.local.json` holds the same either way. It's
   `withClock` and `cityLabel` in `shell/lib/clocks.mjs`.
 
-- [ ] **The Keys page lists a binding turned off with `set_enabled(false)`
-  as if it were on.** Hyprland 0.56.2's `hyprctl binds -j` lists every
+- [ ] **Keyboard's shortcuts list a binding turned off with
+  `set_enabled(false)` as if it were on.** Hyprland 0.56.2's `hyprctl binds -j` lists every
   binding and has no enabled field, and `conf` turns none off. The
   alternative is reading the bindings through `hyprctl eval` from Lua,
   whose binding objects know `is_enabled()`, which needs `conf` to define
