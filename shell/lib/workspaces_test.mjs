@@ -664,3 +664,46 @@ test("a window minimized from a monitor's part shows on its workspace's chip", (
     assert.equal(re.urgent, true);
     assert.deepEqual(re.icons.map((i) => [i.address, i.restoreTo]), [["m", "re@DP-2"]]);
 });
+
+test("a mark made after an unmute stands, though one made before the mute never comes back", () => {
+    const windows = [win("a", 3, "Slack")];
+    let marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: "Slack", windows, visible: new Set([2]) });
+    marks = updateMarks(marks, { type: "muted", muted: ["slack"], windows });
+    marks = updateMarks(marks, { type: "muted", muted: [], windows });
+    unmarked(marks, windows);
+    marks = updateMarks(marks, { type: "notified", id: 2, app: "Slack", windows, visible: new Set([2]) });
+    assert.deepEqual(shown(marks, windows), ["a"]);
+    // The old one updated is news too, and marks again.
+    marks = updateMarks(marks, { type: "dismissed", id: 2 });
+    marks = updateMarks(marks, { type: "notified", id: 1, app: "Slack", windows, visible: new Set([2]) });
+    assert.deepEqual(order(marks, windows), ["a"]);
+});
+
+test("a notification updated after its window was focused marks it again", () => {
+    let marks = updateMarks(notified(), { type: "focused", address: "n2" });
+    unmarked(marks);
+    marks = notified(marks);
+    assert.deepEqual(shown(marks), ["n2", "n3"]);
+});
+
+test("an app's activation keeps its notifications' app-wide marks cleared, however many activations follow", () => {
+    let marks = updateMarks(notified(), activatedEvent("n2", nautilus));
+    for (let i = 0; i < 60; i++) {
+        marks = updateMarks(marks, activatedEvent("k", nautilus));
+    }
+    unmarked(marks);
+});
+
+test("a focus that attended to a notification keeps all its marks cleared when that window closes", () => {
+    let marks = updateMarks(notified(), { type: "focused", address: "n2" });
+    marks = updateMarks(marks, { type: "closed", address: "n2" });
+    unmarked(marks, nautilus.filter((w) => w.address !== "n2"));
+});
+
+test("an update re-marking the focused window doesn't bring back the others' cleared marks", () => {
+    let marks = updateMarks(notified(), { type: "focused", address: "n2" });
+    // Updated while n2 is hidden and n3 is on screen: only n2 is marked again.
+    marks = updateMarks(marks, { type: "notified", id: 1, app: "nautilus", windows: nautilus, visible: new Set([2, 6]) });
+    assert.deepEqual(shown(marks), ["n2"]);
+    assert.deepEqual(order(marks), ["n2"]);
+});

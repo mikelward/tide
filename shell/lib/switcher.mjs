@@ -194,7 +194,7 @@ export function windowRows(windows, query, muted = [], tabs = {}) {
 // muted app's windows are never marked (`muted`).
 export function attentionRows(windows, marks, query, muted = []) {
     const marked = markedWindows({ windows, marks, muted });
-    const order = attentionOrder(marks).slice().reverse().filter((a) => marked.has(a));
+    const order = attentionOrder(marks, windows, muted).slice().reverse().filter((a) => marked.has(a));
     const listed = new Set(order);
     const rest = byFocus(windows).filter((w) => marked.has(w.address) && !listed.has(w.address)).map((w) => w.address);
     const at = {};
