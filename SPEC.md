@@ -4571,6 +4571,51 @@ sources, then a test session on wlroots 0.19/0.20:
    model, focus and activation). That list becomes the fork's acceptance
    test.
 
+**Steps 1 and 2, from the sources** (checked 2026-11-02, under Sources).
+Nothing ran: Chrome, a dwl session and Quickshell on dwl are still
+untested.
+
+- **Window share: covered.** xdg-desktop-portal-wlr 0.8.5 shares one window
+  when the compositor offers `ext-foreign-toplevel-list-v1`,
+  `ext-image-copy-capture-v1` and both capture-source managers, output and
+  toplevel. dwl 0.9 already creates all four. wlroots 0.19, Ubuntu 26.04's,
+  has no toplevel source, so the fork needs 0.20. dwl leaves a window's
+  popup menus out of its capture, where sway adds them.
+- **The picker: an adapter.** With `chooser_type = dmenu`, xdpw runs
+  `chooser_cmd`, writes one line per source to its stdin (`Monitor: <name>
+  <description>`, `Window: <title> (<identifier>)`), and takes back one of
+  those lines. Nothing back means cancel. Which kinds arrive says whether the
+  app asked for screens or windows, which xdph never tells the picker. A
+  window's key becomes wlroots' identifier, 32 hex digits, so the fork's IPC
+  must publish it for every window. xdpw waits for the chooser in its only
+  loop, so a share already live may stall while the dialog is open
+  (inferred, untested).
+- **16:9 slice: missing.** xdpw shares a whole output or a window, nothing
+  smaller, and `ext-image-capture-source-v1` defines only output and
+  toplevel sources. A slice needs one of three things, all untried:
+  - a virtual output covering the slice, which every client sees and the bar
+    and the fork's monitors must skip;
+  - a pseudo-window over the slice, which the fork captures through
+    wlroots 0.20's scene-node source and lists as a window;
+  - an xdpw patch that sends a `Region:` answer through wlr-screencopy's
+    region capture, which dwl offers: a second fork to keep.
+
+  The first two can also change which output wlroots counts a window in the
+  slice as being on, for its frame timing and preferred scale.
+- **Restore flag: missing.** xdpw grants a restore token only from its own
+  `XDPW_PERSIST_MODE` environment variable, for every app at once, and
+  writes restore data only for monitors, so a window share never gets one.
+  Asking per share needs an xdpw patch (its own TODO). Until then tide
+  leaves the variable unset, which never persists.
+- **`grim -T`: covered.** grim 1.5.0 finds the window whose identifier
+  matches `-T` in the toplevel list and captures it through the toplevel
+  source, both of which dwl 0.9 offers. dwl's only IPC, its status lines,
+  doesn't print the identifier, so the fork adds it.
+
+So the deciding question splits. Window sharing and window screenshots work
+on dwl 0.9 as it stands. The 16:9 slice and the restore flag each need code
+of our own, in the fork or in a patched xdpw.
+
 ### 21.2 A possible later iteration: our own window manager on river
 
 A later tide may own its window management without owning a compositor:
@@ -4975,6 +5020,39 @@ Checked 2026-09-29, for §21.1:
   [`server.c`](https://github.com/swaywm/sway/blob/1652c54b73f67df17b7b4ab0b0f7048204aa8104/sway/server.c)
   (at 1652c54, 2026-09-29)
   (`ext_foreign_toplevel_list_v1`, `ext_image_copy_capture_manager_v1`)
+
+Checked 2026-11-02, for §21.1's steps 1 and 2:
+
+- xdg-desktop-portal-wlr 0.8.5 (`308eb5a`):
+  [`chooser.c`](https://github.com/emersion/xdg-desktop-portal-wlr/blob/v0.8.5/src/screencast/chooser.c)
+  (the dmenu lines, matched exactly; waited on with `waitpid`),
+  [`screencast.c`](https://github.com/emersion/xdg-desktop-portal-wlr/blob/v0.8.5/src/screencast/screencast.c)
+  (`XDPW_PERSIST_MODE` beside "TODO: Chooser option to confirm the persist
+  mode"; restore data only for an output),
+  [`wlr_screencast.c`](https://github.com/emersion/xdg-desktop-portal-wlr/blob/v0.8.5/src/screencast/wlr_screencast.c)
+  (the four globals window sharing binds),
+  [`screencast_common.h`](https://github.com/emersion/xdg-desktop-portal-wlr/blob/v0.8.5/include/screencast_common.h)
+  (a target is an output or a toplevel)
+- `ext-image-capture-source-v1`, wayland-protocols 1.50:
+  [XML](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/1.50/staging/ext-image-capture-source/ext-image-capture-source-v1.xml)
+  (output and foreign-toplevel source managers only)
+- xdg-desktop-portal 1.22.1:
+  [`xdp-session-persistence.c`](https://github.com/flatpak/xdg-desktop-portal/blob/1.22.1/src/xdp-session-persistence.c)
+  (a token only when the backend returns restore data)
+- wlroots: [0.19.3](https://gitlab.freedesktop.org/wlroots/wlroots/-/tree/0.19.3/include/wlr/types)
+  has no foreign-toplevel image capture source;
+  [0.20.2's `wlr_ext_image_capture_source_v1.h`](https://gitlab.freedesktop.org/wlroots/wlroots/-/blob/0.20.2/include/wlr/types/wlr_ext_image_capture_source_v1.h)
+  adds it and the scene-node source
+- dwl 0.9 (`98bea2c`): [`dwl.c`](https://codeberg.org/dwl/dwl/src/tag/v0.9/dwl.c)
+  (creates the toplevel list, copy-capture and both source managers; a
+  capture scene per client; `printstatus` without the identifier)
+- grim 1.5.0 (`b7a9985`):
+  [`main.c`](https://gitlab.freedesktop.org/emersion/grim/-/blob/v1.5.0/main.c)
+  (`-T` matches the handle's `identifier`, then captures through the
+  toplevel source)
+- sway 1.12 (`8886939`), for comparison:
+  [`xdg_shell.c`](https://github.com/swaywm/sway/blob/1.12/sway/desktop/xdg_shell.c)
+  (popups added to a window's capture scene)
 
 Checked 2026-10-31, for §8.2's other desktops' settings apps:
 
