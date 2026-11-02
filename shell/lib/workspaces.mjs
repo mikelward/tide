@@ -23,6 +23,8 @@ export const BAR_NAME = 16;
 //
 //   {clock,
 //    guard: {address: at},          windows the focus guard kept from focus
+//    unread: {address: at},         windows whose title's unread count rose
+//    counts: {address: n},          each window's title count as last seen
 //    notes: {id: {app, sender, marks: {address: {at, direct, sender}},
 //                 attended, activated}},
 //    focused: {address: at},        when each window was last focused
@@ -42,6 +44,8 @@ export const BAR_NAME = 16;
 export const NO_MARKS = Object.freeze({
     clock: 0,
     guard: Object.freeze({}),
+    unread: Object.freeze({}),
+    counts: Object.freeze({}),
     notes: Object.freeze({}),
     focused: Object.freeze({}),
     mutedAt: Object.freeze({}),
@@ -66,6 +70,11 @@ export const NO_MARKS = Object.freeze({
 //       over that one's marks, as a replacement under the same ID would.
 //   {type: "guarded", address, app, muted}   the focus guard kept a new
 //       window from focus; a muted app's (`app` its class) isn't marked.
+//   {type: "titled", address, title, app, workspace, visible, muted}  the
+//       window's title changed: its unread count rising ("Chat (3)",
+//       titleCount) marks it, as tilemo does, if its workspace isn't on
+//       screen (`visible`) and its app isn't muted, until it's focused.
+//       The first title seen for a window only sets its count.
 //   {type: "activated", app}     urgent>>ADDRESS: the app's own activation
 //       replaces its app-wide marks (activatedEvent).
 //
@@ -138,6 +147,18 @@ export function updateMarks(marks, event) {
             next.guard = Object.assign({}, marks.guard, { [event.address]: now });
         }
         break;
+    case "titled": {
+        const n = titleCount(event.title);
+        // The first title seen for a window only sets its count: a shell
+        // that (re)started doesn't know what it was before, so it marks
+        // only what rises from there.
+        const before = marks.counts[event.address];
+        next.counts = Object.assign({}, marks.counts, { [event.address]: n });
+        if (before !== undefined && n > before && !windowMuted(event.app, event.muted) && !event.visible.has(event.workspace)) {
+            next.unread = Object.assign({}, marks.unread, { [event.address]: now });
+        }
+        break;
+    }
     case "activated":
         next.notes = fromEntries(Object.entries(marks.notes).map(([id, note]) =>
             [id, anyApp(note.app, event.app) ? Object.assign({}, note, { activated: now }) : note]));
@@ -167,6 +188,8 @@ export function updateMarks(marks, event) {
         break;
     case "closed":
         next.guard = withoutKey(marks.guard, event.address);
+        next.unread = withoutKey(marks.unread, event.address);
+        next.counts = withoutKey(marks.counts, event.address);
         next.focused = withoutKey(marks.focused, event.address);
         next.notes = fromEntries(Object.entries(marks.notes).map(([id, note]) =>
             [id, Object.assign({}, note, { marks: withoutKey(note.marks, event.address) })]));
@@ -224,7 +247,9 @@ export function standingMarks(marks, windows, muted = []) {
     };
     const open = (address) => address in app && !windowMuted(app[address], muted);
     const windowMutedSince = (address) => mutedSince(marks, (list) => windowMuted(app[address], list));
-    for (const [address, at] of Object.entries(marks.guard)) {
+    // The guard's marks and the title counts' are each the window's own,
+    // which a focus on it clears.
+    for (const [address, at] of [...Object.entries(marks.guard), ...Object.entries(marks.unread ?? {})]) {
         if (open(address) && (marks.focused[address] ?? 0) < at && windowMutedSince(address) < at) {
             keep(address, at);
         }
@@ -237,6 +262,14 @@ export function standingMarks(marks, windows, muted = []) {
         }
     }
     return standing;
+}
+
+// The unread count a window's title shows: the number in its first
+// parentheses, as in "Chat (3)" or "(3) Inbox", else 0. tilemo reads titles
+// the same way (its attention.lua).
+export function titleCount(title) {
+    const m = String(title ?? "").match(/\((\d+)\)/);
+    return m ? Number(m[1]) : 0;
 }
 
 // Whether `app` matches any of `apps`, an app or a list of them (sameApp):
@@ -344,6 +377,12 @@ export function markEvent(name, data) {
     } else if (name === "urgent") {
         type = "urgent";
         raw = data;
+    } else if (name === "windowtitlev2") {
+        // ADDRESS,TITLE, and a title may hold a comma.
+        const text = String(data ?? "");
+        const comma = text.indexOf(",");
+        const address = comma < 0 ? null : normalizeAddress(text.slice(0, comma));
+        return address === null ? null : { type: "titled", address, title: text.slice(comma + 1) };
     } else {
         return null;
     }

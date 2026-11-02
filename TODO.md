@@ -7,6 +7,14 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **The first title tide sees for a window only sets its unread count**
+  (2026-11-02), so a title count marks a window only when it rises from
+  one seen before (SPEC.md §14.4). A shell that starts or restarts can't
+  know a count it didn't see, and treating it as 0 marked a window whose
+  count fell. The cost: a window that opens off screen with a count in
+  its very first title isn't marked. The alternative is reading every
+  window's title as the shell starts and counting from those.
+  Reversible: the `titled` case in `updateMarks`.
 - **On the next monitor, Super+Left and Right pick a window at the edge you
   come in by** (2026-11-01), then tilemo's rule (most shared height,
   nearest center, first in order) among those. tilemo's rule alone, over
