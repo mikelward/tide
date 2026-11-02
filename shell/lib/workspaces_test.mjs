@@ -664,3 +664,85 @@ test("a window minimized from a monitor's part shows on its workspace's chip", (
     assert.equal(re.urgent, true);
     assert.deepEqual(re.icons.map((i) => [i.address, i.restoreTo]), [["m", "re@DP-2"]]);
 });
+
+test("a mark made after an unmute stands, though one made before the mute never comes back", () => {
+    const windows = [win("a", 3, "Slack")];
+    let marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: "Slack", windows, visible: new Set([2]) });
+    marks = updateMarks(marks, { type: "muted", muted: ["slack"], windows });
+    marks = updateMarks(marks, { type: "muted", muted: [], windows });
+    unmarked(marks, windows);
+    marks = updateMarks(marks, { type: "notified", id: 2, app: "Slack", windows, visible: new Set([2]) });
+    assert.deepEqual(shown(marks, windows), ["a"]);
+    // The old one updated is news too, and marks again.
+    marks = updateMarks(marks, { type: "dismissed", id: 2 });
+    marks = updateMarks(marks, { type: "notified", id: 1, app: "Slack", windows, visible: new Set([2]) });
+    assert.deepEqual(order(marks, windows), ["a"]);
+});
+
+test("a notification updated after its window was focused marks it again", () => {
+    let marks = updateMarks(notified(), { type: "focused", address: "n2" });
+    unmarked(marks);
+    marks = notified(marks);
+    assert.deepEqual(shown(marks), ["n2", "n3"]);
+});
+
+test("an app's activation keeps its notifications' app-wide marks cleared, however many activations follow", () => {
+    let marks = updateMarks(notified(), activatedEvent("n2", nautilus));
+    for (let i = 0; i < 60; i++) {
+        marks = updateMarks(marks, activatedEvent("k", nautilus));
+    }
+    unmarked(marks);
+});
+
+test("a focus that attended to a notification keeps all its marks cleared when that window closes", () => {
+    let marks = updateMarks(notified(), { type: "focused", address: "n2" });
+    marks = updateMarks(marks, { type: "closed", address: "n2" });
+    unmarked(marks, nautilus.filter((w) => w.address !== "n2"));
+});
+
+test("an update re-marking the focused window doesn't bring back the others' cleared marks", () => {
+    let marks = updateMarks(notified(), { type: "focused", address: "n2" });
+    // Updated while n2 is hidden and n3 is on screen: only n2 is marked again.
+    marks = updateMarks(marks, { type: "notified", id: 1, app: "nautilus", windows: nautilus, visible: new Set([2, 6]) });
+    assert.deepEqual(shown(marks), ["n2"]);
+    assert.deepEqual(order(marks), ["n2"]);
+});
+
+test("focusing a window whose mark muting cleared leaves the notification's other marks", () => {
+    const windows = [win("chat", 3, "chrome-chat.google.com__-Default"), win("mail", 4, "chrome-mail.google.com__-Default")];
+    let marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: windows.map((w) => w.app), windows, visible: new Set([2]),
+        sender: noteOf("google-chrome", "", "google.com") });
+    const muted = ["site:chat.google.com"];
+    marks = updateMarks(marks, { type: "muted", muted, windows });
+    marks = updateMarks(marks, { type: "focused", address: "chat", app: windows[0].app });
+    assert.deepEqual(shown(marks, windows, muted), ["mail"]);
+    assert.deepEqual(order(marks, windows, muted), ["mail"]);
+});
+
+test("a notification with nothing left to mark is forgotten, so the marks don't grow", () => {
+    let marks = NO_MARKS;
+    for (let id = 1; id <= 200; id++) {
+        marks = updateMarks(marks, { type: "notified", id, app: "nautilus", windows: nautilus, visible: new Set([2]) });
+        marks = updateMarks(marks, { type: "focused", address: "n2", app: "nautilus" });
+    }
+    assert.equal(Object.keys(marks.notes).length, 0, "attended to");
+    marks = updateMarks(marks, { type: "notified", id: 300, app: "nautilus", windows: nautilus, visible: new Set([2]) });
+    marks = updateMarks(marks, { type: "closed", address: "n2" });
+    marks = updateMarks(marks, { type: "closed", address: "n3" });
+    assert.equal(Object.keys(marks.notes).length, 0, "its windows closed");
+    marks = updateMarks(marks, { type: "notified", id: 301, app: "nautilus", windows: nautilus, visible: new Set([2]) });
+    marks = updateMarks(marks, activatedEvent("n1", nautilus));
+    assert.equal(Object.keys(marks.notes).length, 0, "its app activated");
+});
+
+test("a mark muting its sender cleared stays cleared when the notification's sender changes", () => {
+    const windows = [win("chrome", 3, "google-chrome")];
+    let marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: ["google-chrome"], windows, visible: new Set([2]),
+        sender: noteOf("google-chrome", "Google Chrome", "chat.google.com") });
+    marks = updateMarks(marks, { type: "muted", muted: ["site:chat.google.com"], windows });
+    // Updated to come from Mail, while its window is on screen.
+    marks = updateMarks(marks, { type: "notified", id: 1, app: ["google-chrome"], windows, visible: new Set([3]),
+        sender: noteOf("google-chrome", "Google Chrome", "mail.google.com"), muted: ["site:chat.google.com"] });
+    unmarked(marks, windows, ["site:chat.google.com"]);
+    unmarked(updateMarks(marks, { type: "muted", muted: [], windows }), windows);
+});
