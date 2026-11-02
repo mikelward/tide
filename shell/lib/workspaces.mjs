@@ -12,22 +12,39 @@ export const MAX_ICONS = 5;
 // The most of a name the bar shows before an ellipsis (§7.2).
 export const BAR_NAME = 16;
 
-// Attention marks (§14.4), kept as events arrive. A snapshot can't say
-// which came first or what was on screen when a notification arrived, so
-// the QML feeds Hyprland's and the notification daemon's events through
-// updateMarks and hands the result to barWorkspaces. The state is
+// Attention marks (§14.4). A snapshot can't say which came first or what
+// was on screen when a notification arrived, so the QML feeds Hyprland's
+// and the notification daemon's events through updateMarks. It records
+// only what can't be worked out later, each fact stamped by one clock
+// (`clock`, larger is later); which marks stand is worked out from those
+// facts, the windows open now and the muted list, whenever any of them
+// changes (standingMarks). No event has to find and clear marks another
+// one made. The state is
 //
-//   {guard: [address], guardAt, notes: {id: {app, wide: [address], direct: [address], at}}}
+//   {clock,
+//    guard: {address: at},          windows the focus guard kept from focus
+//    notes: {id: {app, sender, marks: {address: {at, direct}},
+//                 attended, activated}},
+//    focused: {address: at},        when each window was last focused
+//    mutedAt: {entry: at},          when each muted entry was last added
+//    muted: [entry]}                the muted list as last heard
 //
-// where `guard` holds the windows the focus guard kept from focus, and
-// `notes` each notification's marks by its ID, so dismissing one clears
-// exactly what it marked. A note's `wide` windows came from marking its
-// whole app and `direct` ones from naming the window; only the app's own
-// activation tells them apart. `guardAt` and each note's `at` say when each
-// window was last marked ({address: n}, larger is later, one clock for
-// both), so the Attention tab's order comes from the marks still standing
-// (attentionOrder). Hyprland's own urgent flag lives on the window.
-export const NO_MARKS = Object.freeze({ guard: Object.freeze([]), guardAt: Object.freeze({}), notes: Object.freeze({}) });
+// A note's marks are the windows a notification marked: `direct` when it
+// named the window, else app-wide, which only the app's own activation
+// tells apart. Its `attended` is when a window it marked was last focused
+// while its mark stood, which attends to the whole notification as it
+// stood then, and `activated` when its app last activated itself. Both are
+// kept on the note, so neither a window closing nor a later mark on it
+// can bring an attended mark back. Hyprland's own urgent flag lives on the
+// window.
+export const NO_MARKS = Object.freeze({
+    clock: 0,
+    guard: Object.freeze({}),
+    notes: Object.freeze({}),
+    focused: Object.freeze({}),
+    mutedAt: Object.freeze({}),
+    muted: Object.freeze([]),
+});
 
 // The marks after one event, without changing `marks`. Events:
 //
@@ -39,7 +56,7 @@ export const NO_MARKS = Object.freeze({ guard: Object.freeze([]), guardAt: Objec
 //       naming its window: marked only if that window's workspace isn't on
 //       screen, like an app-wide mark.
 //   Either may carry `sender`, what the notification is muted by
-//       (mute.mjs's noteOf), which the note keeps for the "muted" event.
+//       (mute.mjs's noteOf), which the note keeps.
 //   Either may carry `muted`, the muted list: a muted app's window is never
 //       a target, so no mark on it is ever recorded (SPEC.md §9, Muted apps).
 //   Either may name `replaces`, the ID of a notification it took the place
@@ -55,11 +72,11 @@ export const NO_MARKS = Object.freeze({ guard: Object.freeze([]), guardAt: Objec
 // classes by sameApp.
 //   {type: "focused", address}   the window was attended to: the guard's
 //       mark on it clears, and so does every notification's that covered it.
-//   {type: "muted", muted, windows}   the muted list changed: the marks of
-//       every notification whose `sender` is now muted go, and every mark
-//       on a muted app's window, in one pass.
+//   {type: "muted", muted, windows}   the muted list changed: marks made
+//       before an entry was added never stand again, even once it's
+//       removed, whether on a muted app's window or from a muted sender.
 //   {type: "dismissed", id}      the notification was dismissed.
-//   {type: "closed", address}    the window is gone.
+//   {type: "closed", address}    the window is gone: its facts go.
 //   {type: "guardReset"}         the focus guard's state was rebuilt (a
 //       Hyprland config reload runs focus.lua afresh): its marks go, and
 //       the shell asks it to announce what still waits.
@@ -72,117 +89,129 @@ function fromEntries(pairs) {
     return out;
 }
 
+function withoutKey(obj, key) {
+    const out = Object.assign({}, obj);
+    delete out[key];
+    return out;
+}
+
 export function updateMarks(marks, event) {
-    let guard = marks.guard;
-    let guardAt = marks.guardAt ?? {};
-    const notes = {};
-    // Later than any mark standing now.
-    const now = 1 + Math.max(0, ...Object.values(guardAt),
-        ...[].concat(...Object.values(marks.notes).map((n) => Object.values(n.at ?? {}))));
-    const put = (id, note) => {
-        if (note.wide.length + note.direct.length > 0) {
-            notes[id] = note;
-        }
-    };
-    const covers = (note, address) => note.wide.includes(address) || note.direct.includes(address);
-    const without = (list, address) => list.filter((a) => a !== address);
+    const now = (marks.clock ?? 0) + 1;
+    const next = Object.assign({}, NO_MARKS, marks, { clock: now });
     switch (event.type) {
     case "notified": {
-        Object.assign(notes, marks.notes);
-        // A muted app's window is never a target, so it never holds a
-        // mark to come back when it's unmuted (SPEC.md §9, Muted apps).
-        const windows = event.windows.filter((w) => !windowMuted(w.app, event.muted));
-        // It keeps what it marked before, under the app it names now.
-        const note = Object.assign({ wide: [], direct: [], at: {} }, notes[event.id] ?? notes[event.replaces], { app: event.app },
-            event.sender !== undefined ? { sender: event.sender } : {});
-        delete notes[event.id];
-        delete notes[event.replaces];
+        const old = marks.notes[event.id] ?? marks.notes[event.replaces];
+        const notes = withoutKey(withoutKey(marks.notes, event.id), event.replaces);
+        next.notes = notes;
         // A muted sender marks nothing, and an update that makes one muted
         // (its site changed to a muted one) drops what it marked before.
         if (event.sender !== undefined && noteMuted(event.sender, event.muted)) {
             break;
         }
-        const stamped = (addresses) => Object.assign({}, note.at, fromEntries(addresses.map((a) => [a, now])));
-        if (event.address !== undefined) {
-            const named = windows.find((w) => w.address === event.address);
-            const hidden = named !== undefined && !event.visible.has(named.workspace);
-            put(event.id, hidden
-                ? Object.assign({}, note, { direct: [...new Set([...note.direct, event.address])], at: stamped([event.address]) })
-                : note);
-        } else {
-            const hidden = windows
-                .filter((w) => anyApp(event.app, w.app) && !event.visible.has(w.workspace))
-                .map((w) => w.address);
-            put(event.id, Object.assign({}, note, { wide: [...new Set([...note.wide, ...hidden])], at: stamped(hidden) }));
+        // A muted app's window is never a target, so it never holds a
+        // mark to come back when it's unmuted (SPEC.md §9, Muted apps).
+        const windows = event.windows.filter((w) => !windowMuted(w.app, event.muted));
+        const hidden = event.address !== undefined
+            ? windows.filter((w) => w.address === event.address && !event.visible.has(w.workspace))
+            : windows.filter((w) => anyApp(event.app, w.app) && !event.visible.has(w.workspace));
+        const kept = Object.assign({}, old?.marks ?? {});
+        for (const w of hidden) {
+            // A window once named stays named, so the app's activation
+            // keeps its mark.
+            kept[w.address] = { at: now, direct: event.address !== undefined || kept[w.address]?.direct === true };
         }
+        // It keeps what it marked before, under the app it names now, and
+        // what was attended to.
+        const sender = event.sender !== undefined ? event.sender : old?.sender;
+        notes[event.id] = Object.assign({ app: event.app, marks: kept, attended: old?.attended ?? 0, activated: old?.activated ?? 0 },
+            sender !== undefined ? { sender } : {});
         break;
     }
     case "guarded":
-        Object.assign(notes, marks.notes);
-        if (windowMuted(event.app, event.muted)) {
-            break;
+        if (!windowMuted(event.app, event.muted)) {
+            // Announced again, it's the newest.
+            next.guard = Object.assign({}, marks.guard, { [event.address]: now });
         }
-        // Announced again, it's the newest.
-        guard = [...without(guard, event.address), event.address];
-        guardAt = Object.assign({}, guardAt, { [event.address]: now });
         break;
     case "activated":
-        for (const [id, note] of Object.entries(marks.notes)) {
-            put(id, anyApp(note.app, event.app) ? Object.assign({}, note, { wide: [] }) : note);
-        }
+        next.notes = fromEntries(Object.entries(marks.notes).map(([id, note]) =>
+            [id, anyApp(note.app, event.app) ? Object.assign({}, note, { activated: now }) : note]));
         break;
-    case "muted":
-        // The muted list changed: in one pass, every mark from a notification
-        // whose sender or site is now muted goes, whichever windows it
-        // marked (a site's notification with no --app window open marks
-        // plain browser windows), and so does every mark on a muted app's
-        // window. Other notifications' marks stay.
-        {
-            const mutedWindow = new Set(event.windows.filter((w) => windowMuted(w.app, event.muted)).map((w) => w.address));
-            guard = guard.filter((a) => !mutedWindow.has(a));
-            for (const [id, note] of Object.entries(marks.notes)) {
-                if (note.sender !== undefined && noteMuted(note.sender, event.muted)) {
-                    continue;
-                }
-                const at = Object.assign({}, note.at ?? {});
-                for (const a of mutedWindow) {
-                    delete at[a];
-                }
-                put(id, Object.assign({}, note, {
-                    wide: note.wide.filter((a) => !mutedWindow.has(a)),
-                    direct: note.direct.filter((a) => !mutedWindow.has(a)),
-                    at,
-                }));
-            }
-        }
+    case "muted": {
+        const added = event.muted.filter((e) => !marks.muted.includes(e));
+        next.mutedAt = Object.assign({}, marks.mutedAt, fromEntries(added.map((e) => [e, now])));
+        next.muted = [...event.muted];
         break;
+    }
     case "focused":
-        guard = without(guard, event.address);
-        for (const [id, note] of Object.entries(marks.notes)) {
-            if (!covers(note, event.address)) {
-                notes[id] = note;
-            }
-        }
+        next.focused = Object.assign({}, marks.focused, { [event.address]: now });
+        // Each notification whose mark on it stands is attended to.
+        next.notes = fromEntries(Object.entries(marks.notes).map(([id, note]) =>
+            [id, noteMarkStands(note, note.marks[event.address]) ? Object.assign({}, note, { attended: now }) : note]));
         break;
     case "dismissed":
-        Object.assign(notes, marks.notes);
-        delete notes[event.id];
+        next.notes = withoutKey(marks.notes, event.id);
         break;
     case "guardReset":
-        Object.assign(notes, marks.notes);
-        guard = [];
+        next.guard = {};
         break;
     case "closed":
-        guard = without(guard, event.address);
-        for (const [id, note] of Object.entries(marks.notes)) {
-            put(id, Object.assign({}, note, { wide: without(note.wide, event.address), direct: without(note.direct, event.address) }));
-        }
+        next.guard = withoutKey(marks.guard, event.address);
+        next.focused = withoutKey(marks.focused, event.address);
+        next.notes = fromEntries(Object.entries(marks.notes).map(([id, note]) =>
+            [id, Object.assign({}, note, { marks: withoutKey(note.marks, event.address) })]));
         break;
     default:
         throw new Error(`unknown mark event ${event.type}`);
     }
-    guardAt = fromEntries(guard.map((a) => [a, guardAt[a] ?? 0]));
-    return { guard, guardAt, notes };
+    return next;
+}
+
+// Whether a note's mark `m` still stands for its own sake: made after the
+// note was attended to and, if app-wide, after its app's last activation.
+function noteMarkStands(note, m) {
+    return m !== undefined && m.at > (note.attended ?? 0) && (m.direct || m.at > (note.activated ?? 0));
+}
+
+// Every mark standing now, by window: {address: at}, the latest standing
+// mark's time. A window's mark stands while the window is open (`windows`)
+// and its app isn't muted, and only if it was made after:
+//   - for the guard's, the window was last focused, and for a
+//     notification's, the notification was attended to;
+//   - for an app-wide mark, the app's own last activation;
+//   - each muted entry covering the window's app, or the notification's
+//     sender, was last added, so unmuting brings no mark back.
+export function standingMarks(marks, windows, muted = []) {
+    const app = {};
+    for (const w of windows) {
+        app[w.address] = w.app;
+    }
+    // When an entry covering this was last added, or 0.
+    const mutedSince = (covers) => Math.max(0, ...Object.entries(marks.mutedAt ?? {})
+        .filter(([e]) => covers([e])).map(([, at]) => at));
+    const standing = {};
+    const keep = (address, at) => {
+        standing[address] = Math.max(standing[address] ?? 0, at);
+    };
+    const open = (address) => address in app && !windowMuted(app[address], muted);
+    const windowMutedSince = (address) => mutedSince((list) => windowMuted(app[address], list));
+    for (const [address, at] of Object.entries(marks.guard)) {
+        if (open(address) && (marks.focused[address] ?? 0) < at && windowMutedSince(address) < at) {
+            keep(address, at);
+        }
+    }
+    for (const note of Object.values(marks.notes)) {
+        if (note.sender !== undefined && noteMuted(note.sender, muted)) {
+            continue;
+        }
+        const senderSince = note.sender !== undefined ? mutedSince((list) => noteMuted(note.sender, list)) : 0;
+        for (const [address, m] of Object.entries(note.marks)) {
+            if (open(address) && noteMarkStands(note, m) && m.at > senderSince && m.at > windowMutedSince(address)) {
+                keep(address, m.at);
+            }
+        }
+    }
+    return standing;
 }
 
 // Whether `app` matches any of `apps`, an app or a list of them (sameApp):
@@ -302,35 +331,23 @@ export function markEvent(name, data) {
 // notifications', each placed by its latest mark still standing. So
 // dismissing a newer notification puts a window back where an older mark
 // had it, and a guard hearing the whole list at once, after a reload,
-// orders it as it was marked.
-export function attentionOrder(marks) {
-    const latest = new Map();
-    const mark = (address, at) => latest.set(address, Math.max(latest.get(address) ?? 0, at ?? 0));
-    for (const address of marks.guard) {
-        mark(address, marks.guardAt?.[address]);
-    }
-    for (const note of Object.values(marks.notes)) {
-        for (const address of [...note.wide, ...note.direct]) {
-            mark(address, note.at?.[address]);
-        }
-    }
-    return [...latest.keys()].sort((a, b) => latest.get(a) - latest.get(b));
+// orders it as it was marked. `windows` are the windows open now and
+// `muted` the muted list (standingMarks).
+export function attentionOrder(marks, windows, muted = []) {
+    const standing = standingMarks(marks, windows, muted);
+    return Object.keys(standing).sort((a, b) => standing[a] - standing[b]);
 }
 
-// Which windows are marked: Hyprland's urgent flag, plus `marks`, but
-// never a muted app's (`muted`, SPEC.md §9, Muted apps). `marks` holds none
-// of those, since updateMarks never records one; the urgent flag is
-// Hyprland's, so it's left out here.
+// Which windows are marked: Hyprland's urgent flag, plus `marks`' standing
+// ones, but never a muted app's (`muted`, SPEC.md §9, Muted apps).
 export function markedWindows({ windows, marks = NO_MARKS, muted = [] }) {
-    const marked = new Set([].concat(marks.guard, ...Object.values(marks.notes).map((n) => n.wide.concat(n.direct))));
+    const marked = new Set(Object.keys(standingMarks(marks, windows, muted)));
     for (const w of windows) {
-        if (w.urgent === true) {
+        if (w.urgent === true && !windowMuted(w.app, muted)) {
             marked.add(w.address);
         }
     }
-    // A mark for a window that has since closed isn't on the bar.
-    const open = new Set(windows.filter((w) => !windowMuted(w.app, muted)).map((w) => w.address));
-    return new Set([...marked].filter((a) => open.has(a)));
+    return marked;
 }
 
 // The icons one workspace shows (§7.2): only its windows wanting

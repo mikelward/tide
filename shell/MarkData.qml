@@ -8,7 +8,9 @@ import "lib/launch.mjs" as Run
 import "lib/workspaces.mjs" as Ws
 
 // The bar's attention marks (SPEC.md §14.4), one set for every monitor's
-// bar, kept as events arrive (shell/lib/workspaces.mjs):
+// bar. Events are recorded as they arrive, and which marks stand is worked
+// out from them, the windows and the muted list whenever any changes
+// (shell/lib/workspaces.mjs's updateMarks and standingMarks):
 //   - The focus guard's: a window it kept from focus marks its workspace
 //     until the window is focused or closes. Whenever the guard's state may
 //     have been rebuilt, the shell drops these and asks it to announce what
@@ -39,13 +41,13 @@ Singleton {
 
     // Muted apps' windows are never marked (SPEC.md §9, Muted apps): their
     // marks clear as they're muted, and Ws.updateMarks records no new one,
-    // the guard's or a notification's. Hyprland's own urgent flag isn't a
-    // mark, so Ws.markedWindows leaves it out.
+    // the guard's or a notification's. Hyprland's own urgent flag on a
+    // muted app's window is left out too (Ws.markedWindows).
     readonly property var muted: WorkspacesData.muted
 
-    // By notification, not only by window: a site's notification with no
-    // --app window open marked plain browser windows, which muting the site
-    // must clear too (Ws.updateMarks's "muted").
+    // Each change is recorded, so a mark made before an entry was added
+    // never stands again, even once it's removed: a muted window's, and a
+    // muted site's notification's on plain browser windows.
     onMutedChanged: {
         root.marks = Ws.updateMarks(root.marks, { type: "muted", muted: root.muted, windows: root.windows });
     }
@@ -109,7 +111,7 @@ Singleton {
     property var pushed: null
     property bool pushing: false
     property int guardGeneration: 0
-    readonly property string noted: JSON.stringify(Ws.attentionOrder(root.marks))
+    readonly property string noted: JSON.stringify(Ws.attentionOrder(root.marks, root.windows, root.muted))
 
     onNotedChanged: root.push()
 
