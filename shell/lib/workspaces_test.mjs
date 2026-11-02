@@ -228,7 +228,19 @@ test("a maximized or fullscreen window marks its workspace big", () => {
 const nautilus = [win("n1", 2, "nautilus"), win("n2", 4, "nautilus"), win("n3", 6, "nautilus"), win("k", 7, "kitty")];
 const notified = (marks = NO_MARKS, visible = new Set([2])) =>
     updateMarks(marks, { type: "notified", id: 1, app: "nautilus", windows: nautilus, visible });
-const marked = (marks, windows = nautilus) => [...markedWindows({ windows, marks })].sort();
+
+// The marks tests read the marks only as the shell does, so they hold
+// whatever the marks are kept as (TODO.md, "Recompute attention marks"):
+// `shown` is the windows the bar and the Attention tab mark, sorted, and
+// `order` the order the focus guard and the Attention tab hear.
+const shown = (marks, windows = nautilus, muted = []) => [...markedWindows({ windows, marks, muted })].sort();
+const order = (marks, windows = nautilus, muted = []) => attentionOrder(marks, windows, muted);
+const marked = shown;
+// No mark at all: none shown, and none for the guard to hear.
+const unmarked = (marks, windows = nautilus, muted = []) => {
+    assert.deepEqual(shown(marks, windows, muted), []);
+    assert.deepEqual(order(marks, windows, muted), []);
+};
 
 test("an app mark covers the app's windows that weren't visible", () => {
     const bar = barWorkspaces({ ...one, windows: nautilus, marks: notified() });
@@ -246,14 +258,14 @@ test("an app mark keeps the windows it marked when their workspace comes on scre
 });
 
 test("focusing a marked window clears the marks that covered it", () => {
-    assert.deepEqual(updateMarks(notified(), { type: "focused", address: "n2" }), NO_MARKS);
+    unmarked(updateMarks(notified(), { type: "focused", address: "n2" }));
     // Focusing a window the mark didn't cover leaves it.
     assert.deepEqual(marked(updateMarks(notified(), { type: "focused", address: "n1" })), ["n2", "n3"]);
 });
 
 test("the app's activation replaces its app-wide mark, whatever came first", () => {
     const activated = updateMarks(notified(), { type: "activated", app: "nautilus" });
-    assert.deepEqual(activated, NO_MARKS);
+    unmarked(activated);
     // A notification after an activation marks the app again, though the
     // activated window is still flagged urgent.
     const windows = nautilus.map((w) => (w.address === "n3" ? { ...w, urgent: true } : w));
@@ -265,7 +277,7 @@ test("the app's activation replaces its app-wide mark, whatever came first", () 
 });
 
 test("dismissing a notification clears just its marks", () => {
-    assert.deepEqual(updateMarks(notified(), { type: "dismissed", id: 1 }), NO_MARKS);
+    unmarked(updateMarks(notified(), { type: "dismissed", id: 1 }));
     // One naming its window, while the guard marked the same window too.
     const windows = [win("c", 6, "chrome"), win("d", 7, "chrome")];
     const seen = new Set([2]);
@@ -275,14 +287,18 @@ test("dismissing a notification clears just its marks", () => {
     assert.deepEqual(marked(updateMarks(marks, { type: "dismissed", id: 5 }), windows), ["c"]);
     const gone = updateMarks(marks, { type: "dismissed", id: 4 });
     assert.deepEqual(marked(gone, windows), ["c", "d"]);
-    assert.deepEqual(gone.guard, ["c"]);
+    // c keeps the guard's mark, which a focus clears.
+    assert.deepEqual(marked(updateMarks(gone, { type: "dismissed", id: 5 }), windows), ["c"]);
+    assert.deepEqual(marked(updateMarks(gone, { type: "focused", address: "c" }), windows), ["d"]);
 });
 
 test("a replacement notification keeps what it marked", () => {
     // Workspace 4 comes on screen, then the notification is replaced.
     const replaced = updateMarks(notified(), { type: "notified", id: 1, app: "nautilus", windows: nautilus, visible: new Set([4]) });
-    // n2 stays marked, and n1, hidden now, joins it.
-    assert.deepEqual(replaced.notes[1].wide, ["n2", "n3", "n1"]);
+    // n2 stays marked, and n1, hidden now, joins it, as the newest.
+    assert.deepEqual(order(replaced), ["n2", "n3", "n1"]);
+    // All under the one notification.
+    unmarked(updateMarks(replaced, { type: "dismissed", id: 1 }));
 });
 
 test("a replacement that changes form keeps each mark's kind", () => {
@@ -298,12 +314,11 @@ test("a replacement that changes form keeps each mark's kind", () => {
 });
 
 test("a notification naming a window on screen marks nothing", () => {
-    const marks = updateMarks(NO_MARKS, { type: "notified", id: 6, app: "nautilus", address: "n1", windows: nautilus, visible: new Set([2]) });
-    assert.deepEqual(marks, NO_MARKS);
+    unmarked(updateMarks(NO_MARKS, { type: "notified", id: 6, app: "nautilus", address: "n1", windows: nautilus, visible: new Set([2]) }));
 });
 
 test("an app mark with nothing hidden marks nothing", () => {
-    assert.deepEqual(notified(NO_MARKS, new Set([2, 4, 6])), NO_MARKS);
+    unmarked(notified(NO_MARKS, new Set([2, 4, 6])));
 });
 
 test("the guard's mark is by window, and a focus clears it", () => {
@@ -311,21 +326,25 @@ test("the guard's mark is by window, and a focus clears it", () => {
     const windows = [win("a", 5, "kitty"), win("b", 5, "kitty")];
     const bar = barWorkspaces({ ...one, windows, marks });
     assert.deepEqual(bar[4].icons.map((i) => i.address), ["b"]);
-    assert.deepEqual(updateMarks(marks, { type: "focused", address: "b" }), NO_MARKS);
+    unmarked(updateMarks(marks, { type: "focused", address: "b" }), windows);
 });
 
 test("a closed window leaves the marks", () => {
     const marks = updateMarks(updateMarks(notified(), { type: "guarded", address: "n2" }), { type: "closed", address: "n2" });
-    assert.deepEqual(marks.guard, []);
-    assert.deepEqual(marks.notes[1].wide, ["n3"]);
-    assert.deepEqual(updateMarks(marks, { type: "closed", address: "n3" }), NO_MARKS);
+    const open = nautilus.filter((w) => w.address !== "n2");
+    // Neither the guard's mark nor the notification's is left on it, for
+    // the bar or for the guard.
+    assert.deepEqual(shown(marks, open), ["n3"]);
+    assert.deepEqual(order(marks, open), ["n3"]);
+    unmarked(updateMarks(marks, { type: "closed", address: "n3" }), open.filter((w) => w.address !== "n3"));
 });
 
 test("updateMarks leaves its input alone and rejects unknown events", () => {
     const marks = notified();
     updateMarks(marks, { type: "focused", address: "n2" });
     updateMarks(marks, { type: "closed", address: "n2" });
-    assert.deepEqual(marks.notes[1].wide, ["n2", "n3"]);
+    assert.deepEqual(shown(marks), ["n2", "n3"]);
+    assert.deepEqual(order(marks), ["n2", "n3"]);
     assert.throws(() => updateMarks(marks, { type: "bogus" }), /unknown mark event bogus/);
 });
 
@@ -389,7 +408,7 @@ test("a notification marks the app's windows whatever case or form its ID takes"
     const marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: "nautilus", windows, visible: new Set([2]) });
     assert.deepEqual(marked(marks, windows), ["n1"]);
     // And the app's activation, by its window's class, replaces the mark.
-    assert.deepEqual(updateMarks(marks, activatedEvent("n1", windows)), NO_MARKS);
+    unmarked(updateMarks(marks, activatedEvent("n1", windows)), windows);
 });
 
 test("a notification naming several apps marks each one's windows", () => {
@@ -398,7 +417,7 @@ test("a notification naming several apps marks each one's windows", () => {
     const marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: ["chrome-calendar.google.com__-Default", "chrome-calendar.google.com__-Profile_1"], windows, visible: new Set([2]) });
     assert.deepEqual(marked(marks, windows).sort(), ["d", "p"]);
     // Either one's activation replaces the app-wide marks.
-    assert.deepEqual(updateMarks(marks, activatedEvent("p", windows)), NO_MARKS);
+    unmarked(updateMarks(marks, activatedEvent("p", windows)), windows);
 });
 
 test("the workspaces on screen are each monitor's open special one, or else its active one", () => {
@@ -421,10 +440,11 @@ test("an urgent event names its window, and the app comes from the window list",
 test("a notification that takes another's place under a new ID takes over its marks", () => {
     // Workspace 4 comes on screen, then a new ID replaces notification 1.
     const marks = updateMarks(notified(), { type: "notified", id: 7, replaces: 1, app: "nautilus", windows: nautilus, visible: new Set([4]) });
-    assert.deepEqual(Object.keys(marks.notes), ["7"]);
     assert.deepEqual(marked(marks), ["n1", "n2", "n3"]);
-    // So dismissing the new one clears them all.
-    assert.deepEqual(updateMarks(marks, { type: "dismissed", id: 7 }), NO_MARKS);
+    // The old ID holds none of them now, and dismissing the new one clears
+    // them all.
+    assert.deepEqual(marked(updateMarks(marks, { type: "dismissed", id: 1 })), ["n1", "n2", "n3"]);
+    unmarked(updateMarks(marks, { type: "dismissed", id: 7 }));
 });
 
 test("an update that names the app differently is matched by its new name", () => {
@@ -434,26 +454,27 @@ test("an update that names the app differently is matched by its new name", () =
     marks = updateMarks(marks, { type: "notified", id: 1, app: "org.example.chat", windows, visible: new Set([2]) });
     assert.deepEqual(marked(marks, windows), ["a", "b"]);
     // The app it names now activating replaces the app-wide marks.
-    assert.deepEqual(updateMarks(marks, activatedEvent("b", windows)), NO_MARKS);
+    unmarked(updateMarks(marks, activatedEvent("b", windows)), windows);
 });
 
 test("the focus guard hears every marked window, oldest mark first", () => {
-    const marks = updateMarks(notified(), { type: "notified", id: 2, app: "kitty", windows: nautilus, visible: new Set([2]) });
-    assert.deepEqual(attentionOrder(marks), ["n2", "n3", "k"]);
+    const windows = [...nautilus, win("x", 8, "firefox")];
+    const marks = updateMarks(notified(), { type: "notified", id: 2, app: "kitty", windows, visible: new Set([2]) });
+    assert.deepEqual(order(marks, windows), ["n2", "n3", "k"]);
     // The guard's marks share the clock.
     const held = updateMarks(marks, { type: "guarded", address: "x" });
-    assert.deepEqual(attentionOrder(held), ["n2", "n3", "k", "x"]);
+    assert.deepEqual(order(held, windows), ["n2", "n3", "k", "x"]);
     // A notification marking a window again makes it the newest.
-    const again = updateMarks(held, { type: "notified", id: 3, app: "nautilus", address: "n2", windows: nautilus, visible: new Set([2]) });
-    assert.deepEqual(attentionOrder(again), ["n3", "k", "x", "n2"]);
+    const again = updateMarks(held, { type: "notified", id: 3, app: "nautilus", address: "n2", windows, visible: new Set([2]) });
+    assert.deepEqual(order(again, windows), ["n3", "k", "x", "n2"]);
     // A cleared mark leaves the order.
-    assert.deepEqual(attentionOrder(updateMarks(again, { type: "dismissed", id: 2 })), ["n3", "x", "n2"]);
+    assert.deepEqual(order(updateMarks(again, { type: "dismissed", id: 2 }), windows), ["n3", "x", "n2"]);
     // Dismissing the newer of two notes on a window puts it back where the
     // older one had it, before the guard's later mark too.
-    assert.deepEqual(attentionOrder(updateMarks(again, { type: "dismissed", id: 3 })), ["n2", "n3", "k", "x"]);
+    assert.deepEqual(order(updateMarks(again, { type: "dismissed", id: 3 }), windows), ["n2", "n3", "k", "x"]);
     // The guard announcing a window again makes it the newest.
-    assert.deepEqual(attentionOrder(updateMarks(again, { type: "guarded", address: "x" })), ["n3", "k", "n2", "x"]);
-    assert.deepEqual(attentionOrder(NO_MARKS), []);
+    assert.deepEqual(order(updateMarks(again, { type: "guarded", address: "x" }), windows), ["n3", "k", "n2", "x"]);
+    assert.deepEqual(order(NO_MARKS, windows), []);
 });
 test("focus order follows focus events, newest first, without repeats", () => {
     let order = withFocus([], "a1");
@@ -500,9 +521,10 @@ test("muting one window's site clears only its marks, not a shared notification'
     const windows = [win("chat", 3, "chrome-chat.google.com__-Default"), win("mail", 4, "chrome-mail.google.com__-Default")];
     let marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: windows.map((w) => w.app), windows, visible: new Set([2]) });
     assert.deepEqual([...markedWindows({ windows, marks })].sort(), ["chat", "mail"]);
-    marks = updateMarks(marks, { type: "muted", muted: ["site:chat.google.com"], windows });
-    assert.deepEqual([...markedWindows({ windows, marks })], ["mail"], "Mail keeps its mark");
-    assert.deepEqual(Object.keys(marks.notes[1].at), ["mail"]);
+    const muted = ["site:chat.google.com"];
+    marks = updateMarks(marks, { type: "muted", muted, windows });
+    assert.deepEqual(shown(marks, windows, muted), ["mail"], "Mail keeps its mark");
+    assert.deepEqual(order(marks, windows, muted), ["mail"]);
 });
 
 test("a muted window never holds a notification's or the guard's mark, so unmuting brings none back", () => {
@@ -512,12 +534,14 @@ test("a muted window never holds a notification's or the guard's mark, so unmuti
     let marks = updateMarks(NO_MARKS, { type: "notified", id: 1, app: windows.map((w) => w.app), windows, visible: new Set([2]), muted });
     marks = updateMarks(marks, { type: "notified", id: 2, app: "x", address: "chat", windows, visible: new Set([2]), muted });
     marks = updateMarks(marks, { type: "guarded", address: "chat", app: windows[0].app, muted });
-    assert.deepEqual(marks.notes[1].wide, ["mail"]);
-    assert.equal(marks.notes[2], undefined, "naming the muted window marks nothing");
-    assert.deepEqual(marks.guard, []);
-    // Unmuted, Chat has no mark to come back.
-    assert.deepEqual([...markedWindows({ windows, marks })], ["mail"]);
-    assert.deepEqual(attentionOrder(marks), ["mail"]);
+    assert.deepEqual(shown(marks, windows, muted), ["mail"]);
+    // Unmuted, Chat has no mark to come back, the guard's or either
+    // notification's.
+    marks = updateMarks(marks, { type: "muted", muted: [], windows });
+    assert.deepEqual(shown(marks, windows), ["mail"]);
+    assert.deepEqual(order(marks, windows), ["mail"]);
+    // And dismissing the one that reached Mail leaves nothing.
+    unmarked(updateMarks(marks, { type: "dismissed", id: 1 }), windows);
 });
 
 test("muting a site clears its notification's marks on plain browser windows, and keeps others'", () => {
@@ -530,8 +554,12 @@ test("muting a site clears its notification's marks on plain browser windows, an
         sender: noteOf("", "Slack", "") });
     assert.deepEqual([...markedWindows({ windows, marks })].sort(), ["chrome", "slack"]);
     marks = updateMarks(marks, { type: "muted", muted: ["site:chat.google.com"], windows });
-    assert.equal(marks.notes[1], undefined, "the site's notification's marks go");
-    assert.deepEqual([...markedWindows({ windows, marks })], ["slack"], "another notification's mark stays");
+    assert.deepEqual(shown(marks, windows, ["site:chat.google.com"]), ["slack"], "another notification's mark stays");
+    // The site's notification's marks are gone, not hidden: unmuting
+    // brings none back.
+    marks = updateMarks(marks, { type: "muted", muted: [], windows });
+    assert.deepEqual(shown(marks, windows), ["slack"]);
+    assert.deepEqual(order(marks, windows), ["slack"]);
 });
 
 test("muting an app clears its windows' marks from any notification, and the guard's", () => {
@@ -540,8 +568,11 @@ test("muting an app clears its windows' marks from any notification, and the gua
         sender: noteOf("google-chrome", "", "google.com") });
     marks = updateMarks(marks, { type: "guarded", address: "chat", app: windows[0].app });
     marks = updateMarks(marks, { type: "muted", muted: ["site:chat.google.com"], windows });
-    assert.deepEqual(marks.guard, []);
-    assert.deepEqual(marks.notes[1].wide, ["mail"], "google.com isn't muted, so Mail keeps its mark");
+    assert.deepEqual(shown(marks, windows, ["site:chat.google.com"]), ["mail"], "google.com isn't muted, so Mail keeps its mark");
+    // Chat's marks, the guard's and the notification's, are gone for good.
+    marks = updateMarks(marks, { type: "muted", muted: [], windows });
+    assert.deepEqual(shown(marks, windows), ["mail"]);
+    assert.deepEqual(order(marks, windows), ["mail"]);
 });
 
 test("an update that moves a notification to a muted site drops its marks", () => {
@@ -551,18 +582,21 @@ test("an update that moves a notification to a muted site drops its marks", () =
         sender: noteOf("google-chrome", "", "mail.google.com") });
     marks = updateMarks(marks, { type: "notified", id: 2, app: "Slack", windows, visible: new Set([2]), muted,
         sender: noteOf("", "Slack", "") });
-    assert.deepEqual(marks.notes[1].wide, ["mail"]);
+    assert.deepEqual(shown(marks, windows, muted), ["mail", "slack"]);
     // The same notification, updated to come from the muted site.
     marks = updateMarks(marks, { type: "notified", id: 1, app: [windows[0].app], windows, visible: new Set([2]), muted,
         sender: noteOf("google-chrome", "", "chat.google.com") });
-    assert.equal(marks.notes[1], undefined, "its marks go");
-    assert.deepEqual([...markedWindows({ windows, marks })], ["slack"], "another notification's stay");
+    assert.deepEqual(shown(marks, windows, muted), ["slack"], "its marks go, another notification's stay");
+    assert.deepEqual(order(marks, windows, muted), ["slack"]);
 });
 
-test("muting clears the marks it had", () => {
+test("muting clears the marks it had, so unmuting brings none back", () => {
+    const windows = [win("a", 3, "Slack")];
     let marks = updateMarks(NO_MARKS, { type: "guarded", address: "a" });
-    marks = updateMarks(marks, { type: "notified", id: 1, app: "Slack", windows: [win("a", 3, "Slack")], visible: new Set([2]) });
-    assert.deepEqual(updateMarks(marks, { type: "muted", muted: ["slack"], windows: [win("a", 3, "Slack")] }), NO_MARKS);
+    marks = updateMarks(marks, { type: "notified", id: 1, app: "Slack", windows, visible: new Set([2]) });
+    marks = updateMarks(marks, { type: "muted", muted: ["slack"], windows });
+    unmarked(marks, windows, ["slack"]);
+    unmarked(updateMarks(marks, { type: "muted", muted: [], windows }), windows);
 });
 
 // Two monitors, the workspaces spanning both (SPEC.md §6.5, Monitors):

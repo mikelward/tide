@@ -922,6 +922,9 @@ tested where it can be without a live session.
   - which marks were attended to (focused, dismissed).
   Two facts still have to be kept as they happen: whether a window was off
   screen when the notification arrived, and that a mark was attended to.
+  **Done:** the mark tests in `workspaces_test.mjs` read the marks only as
+  the shell does, through `markedWindows` and `attentionOrder` (their
+  `shown` and `order` helpers), so they hold across the rewrite.
   Size: a pure function replacing `updateMarks`'s storage (about 150
   lines), with `MarkData` and `NotificationData` rewired to feed it
   (about 100), and the mark tests in `workspaces_test.mjs` ported (about
