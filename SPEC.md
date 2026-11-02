@@ -4464,12 +4464,14 @@ Hyprland stays the baseline M1 accepted.
 
 Hyprland 0.56 stays the plan (§3.1). Getting it onto Ubuntu 26.04,
 though, means building it from source, since Ubuntu ships 0.53.3. That takes
-GCC 15 (0.56 is C++26) and nine pinned projects: `wayland-protocols`, seven
-hyprwm libraries and tools, and Hyprland itself. Debian 13 looks worse (GCC
-14 and xkbcommon 1.7, against 0.56's GCC 15 and xkbcommon 1.11), but that is
-not yet re-checked against Debian's package pages. Hyprland also changes and
-regresses often. The alternative
-under consideration is **a tide fork of dwl**, the dwm-style wlroots
+GCC 16 (0.56 is C++26, and uses libstdc++ 16's `std::ranges::starts_with`)
+and ten pinned projects: `wayland-protocols`, seven hyprwm libraries and
+tools, re2 and Hyprland itself. re2 joined on 2026-11-02, when Debian
+testing's libre2, built against an older abseil than its headers, stopped
+Hyprland linking. Debian 13 looks worse (GCC 14 and xkbcommon 1.7, against
+0.56's GCC 16 and xkbcommon 1.11), but that is not yet re-checked against
+Debian's package pages. Hyprland also changes and regresses often. The
+alternative under consideration is **a tide fork of dwl**, the dwm-style wlroots
 compositor (about 3,400 lines of C), built on a wlroots version we pin and
 build ourselves.
 
@@ -4495,7 +4497,13 @@ such as `centeredmaster`, scenefx, and what niri, sway and KWin can do beyond
   run the same way on every distro (Debian, Ubuntu, Fedora). No C++26, no
   hyprwm chain. A fork of dwl ties each dwl release to one wlroots version,
   and Ubuntu 26.04 ships wlroots 0.19.2 while dwl 0.9 needs 0.20, so the
-  distro's wlroots can't be relied on.
+  distro's wlroots can't be relied on. Its packages meet every minimum
+  wlroots 0.20.2 names, though (wayland 1.24.0, wayland-protocols 1.47,
+  libdrm 2.4.131, xkbcommon 1.13.1, pixman 0.46.4, libinput 1.31.1, libseat
+  0.9.2, libdisplay-info 0.3.0, meson 1.10.1), so the one pin builds from
+  them with the default GCC. Where a distro falls short, wlroots carries
+  Meson wraps for wayland, wayland-protocols, libdrm, xkbcommon, pixman,
+  seatd, libdisplay-info and libliftoff, which build that piece too.
 - **Layouts in C.** dwm's layouts are the model for §6.1. Tile and monocle
   are built in, and three-column is dwm's `centeredmaster`. Our layouts live
   in their own file, included from `config.h`, without touching `dwl.c`.
@@ -4562,14 +4570,20 @@ sources, then a test session on wlroots 0.19/0.20:
 2. Check that a dwl build exposing the toplevel and `ext-image-copy-capture`
    protocols takes `grim -T` screenshots of the focused window, found through
    the fork's IPC, which is §13's whole Alt+Print flow.
-3. Re-check the Debian 13 toolchain above.
+3. Re-check the Debian 13 toolchain above. Ubuntu 26.04's side is done
+   (under **Build**); Debian's package indexes weren't reachable from the
+   2026-11-02 check, so Debian 13 and testing are still open.
 4. List everything the spec needs from the compositor, with the fork's
    replacement for each and a check for it. That covers every Hyprland
    contract (`hyprctl` commands, IPC events, Quickshell Hyprland calls, Lua
    hooks) and every Wayland protocol and behavior the design relies on
    (layer-shell panels, session lock and its crash recovery, the workspace
    model, focus and activation). That list becomes the fork's acceptance
-   test.
+   test. It is [`docs/compositor.md`](docs/compositor.md), and on
+   2026-11-02 each row was checked against dwl 0.9's source: of 39 rows, 5
+   already work, 21 work in part and 13 not at all. The biggest new work is
+   the IPC with its Quickshell module, the focus guard, a shared workspace
+   pool in place of dwl's per-monitor tags, and runtime config with reload.
 
 **Steps 1 and 2, from the sources** (checked 2026-11-02, under Sources).
 Nothing ran: Chrome, a dwl session and Quickshell on dwl are still
@@ -4615,6 +4629,10 @@ untested.
 So the deciding question splits. Window sharing and window screenshots work
 on dwl 0.9 as it stands. The 16:9 slice and the restore flag each need code
 of our own, in the fork or in a patched xdpw.
+
+**Decided** (2026-11-02): a window share is enough for Meet, so a fork drops
+the 16:9 slice, and the deciding question passes for dwl. Until xdpw asks
+per share, every share prompts, since the restore flag has nothing to set.
 
 ### 21.2 A possible later iteration: our own window manager on river
 
@@ -5021,7 +5039,7 @@ Checked 2026-09-29, for §21.1:
   (at 1652c54, 2026-09-29)
   (`ext_foreign_toplevel_list_v1`, `ext_image_copy_capture_manager_v1`)
 
-Checked 2026-11-02, for §21.1's steps 1 and 2:
+Checked 2026-11-02, for §21.1's next steps:
 
 - xdg-desktop-portal-wlr 0.8.5 (`308eb5a`):
   [`chooser.c`](https://github.com/emersion/xdg-desktop-portal-wlr/blob/v0.8.5/src/screencast/chooser.c)
@@ -5053,6 +5071,18 @@ Checked 2026-11-02, for §21.1's steps 1 and 2:
 - sway 1.12 (`8886939`), for comparison:
   [`xdg_shell.c`](https://github.com/swaywm/sway/blob/1.12/sway/desktop/xdg_shell.c)
   (popups added to a window's capture scene)
+- wlroots 0.20.2's minimums:
+  [`meson.build`](https://gitlab.freedesktop.org/wlroots/wlroots/-/blob/0.20.2/meson.build)
+  (wayland, libdrm, xkbcommon, pixman),
+  [`protocol/meson.build`](https://gitlab.freedesktop.org/wlroots/wlroots/-/blob/0.20.2/protocol/meson.build)
+  (wayland-protocols 1.47), the backends' `meson.build` files (libinput,
+  libseat, libdisplay-info), and
+  [`subprojects/`](https://gitlab.freedesktop.org/wlroots/wlroots/-/tree/0.20.2/subprojects)
+  (the Meson wraps)
+- Ubuntu 26.04's versions of those, from the `resolute` main and universe
+  `Packages` indexes on archive.ubuntu.com
+- setup-tide's tenth pin, re2:
+  [mikelward/scripts#353](https://github.com/mikelward/scripts/pull/353)
 
 Checked 2026-10-31, for §8.2's other desktops' settings apps:
 
