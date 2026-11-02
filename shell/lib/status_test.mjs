@@ -23,9 +23,10 @@ test("a charging battery says so", () => {
     assert.equal(batteryView({ present: true, percentage: 1, state: 4 }).icon, "battery-level-100-charged-symbolic");
 });
 
-test("the battery is red below 15% unless it's charging", () => {
-    assert.equal(batteryView({ present: true, percentage: 0.14, state: 2 }).low, true);
-    assert.equal(batteryView({ present: true, percentage: 0.15, state: 2 }).low, false);
+test("the battery is red at 20% and below unless it's charging", () => {
+    assert.equal(batteryView({ present: true, percentage: 0.2, state: 2 }).low, true);
+    assert.equal(batteryView({ present: true, percentage: 0.15, state: 2 }).low, true);
+    assert.equal(batteryView({ present: true, percentage: 0.21, state: 2 }).low, false);
     assert.equal(batteryView({ present: true, percentage: 0.09, state: 1 }).low, false);
 });
 

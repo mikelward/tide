@@ -2,8 +2,9 @@
 // QML binds to. Icons are the desktop icon theme's symbolic names, which
 // Adwaita has; the QML tints them to the bar's palette.
 
-// Below this charge the battery shows red, unless it's charging.
-export const LOW_BATTERY = 0.15;
+// At or below this charge the battery shows red, unless it's charging, as
+// tilemo's does.
+export const LOW_BATTERY = 0.2;
 // One scroll notch over the volume icon changes it by this much.
 export const VOLUME_STEP = 0.05;
 // The room the bar holds for a % beside an icon (the volume's, the CPU's):
@@ -33,7 +34,7 @@ export function batteryView({ present, percentage, state }) {
         visible: true,
         text: `${pct}%`,
         icon,
-        low: !charging && state !== FULLY_CHARGED && percentage < LOW_BATTERY,
+        low: !charging && state !== FULLY_CHARGED && percentage <= LOW_BATTERY,
     };
 }
 

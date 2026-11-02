@@ -14,7 +14,7 @@ import "lib/status.mjs" as Status
 // (BarTip) in tilemo's words where tilemo has the same icon. So far: the
 // keyboard layout, once there are two; keep awake;
 // Bluetooth, then one for each connected audio device; network; volume and its %, which scrolls by 5%; battery, red
-// below 15%; and the system monitor's CPU %, each with its popover; the
+// at 20% and below; and the system monitor's CPU %, each with its popover; the
 // notification center's bell; and the session menu.
 // The tray is shell/Tray.qml, to their left. The other icons come later;
 // TODO.md lists them.
