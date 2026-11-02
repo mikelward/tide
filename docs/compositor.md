@@ -14,8 +14,9 @@ A check is the headline test, not the whole bar: a row passes only when
 everything its source says still holds on the fork.
 
 The "Today" column was read from this repository and `mikelward/conf`'s
-`config/hypr` on 2026-10-05. The "Fork" column is a proposal, not built or
-checked: dwl 0.9 on wlroots 0.20 has none of it unless the row says so.
+`config/hypr` on 2026-10-05. The "Fork" column is a proposal, not built.
+What dwl 0.9 on wlroots 0.20 already does for each row, checked against its
+source, is in [dwl 0.9 against this list](#dwl-09-against-this-list).
 
 ## The biggest items
 
@@ -31,9 +32,9 @@ Most rows are small. These four are not, and decide the size of a port:
    `Quickshell.Hyprland`, which talks Hyprland's IPC. A fork needs a
    Quickshell module for its own IPC: no standard protocol says which
    workspace a window is on, so standard ones alone can't drive the bar.
-4. **Capture** (§12, §13): window and region sharing through
-   xdg-desktop-portal-hyprland, and `grim -T` window screenshots. §21.1
-   calls this the deciding question.
+4. **Capture** (§12, §13): window sharing and `grim -T` window
+   screenshots. §21.1 called this the deciding question. dwl 0.9 passes it
+   for windows, and a fork drops the 16:9 slice (decided 2026-11-02).
 
 ## Session (§5, §11)
 
@@ -86,7 +87,7 @@ Most rows are small. These four are not, and decide the size of a port:
 
 | Requirement | Today | Fork | Check |
 |---|---|---|---|
-| §12: share a window, a monitor or a 16:9 region in Meet, through tide's picker with live thumbnails | xdg-desktop-portal-hyprland with `tide-share-picker`; `tide-portals.conf` names `hyprland;gtk`; Quickshell's `ScreencopyView` | xdg-desktop-portal-wlr plus an adapter, with region sharing built; `wlr;gtk` in the portals config. xdpw 0.8.4 takes persistence only from the process-wide `XDPW_PERSIST_MODE` and restores only monitors, so the picker's "reuse the choice" checkbox needs xdpw patched or replaced. The portal costs nothing, but if it's missing Meet's share fails with no picker, so `setup` installs it and doctor checks it | §21.1 step 1; the picker shows live outputs; ticking "reuse the choice" restores a window share and a monitor share, and leaving it unticked restores neither; a file chooser and OpenURI still work through GTK |
+| §12: share a window or a monitor in Meet, through tide's picker with live thumbnails; on Hyprland, a 16:9 region too | xdg-desktop-portal-hyprland with `tide-share-picker`; `tide-portals.conf` names `hyprland;gtk`; Quickshell's `ScreencopyView` | xdg-desktop-portal-wlr plus an adapter (its `dmenu` chooser), and no region: a fork drops the 16:9 slice; `wlr;gtk` in the portals config. xdpw 0.8.5 takes persistence only from the process-wide `XDPW_PERSIST_MODE` and restores only monitors, so the picker's "reuse the choice" checkbox needs xdpw patched or replaced. The portal costs nothing, but if it's missing Meet's share fails with no picker, so `setup` installs it and doctor checks it | §21.1 step 1; the picker shows live outputs; ticking "reuse the choice" restores a window share and a monitor share, and leaving it unticked restores neither; a file chooser and OpenURI still work through GTK |
 | §12, §9: the Sharing pill shows during a share and not for a screenshot; popups are held for a screen or region share but not a window share | `ShareData.qml` watches PipeWire's `xdph-streaming-*` nodes and pairs each new one with the picker's recorded choice; the `screencast` event, not read yet, is kept as a prompt to re-check | The detector taught xdg-desktop-portal-wlr's `xdpw-stream-*` names (0.8.4's `pipewire_screencast.c`), paired with the picker's choice the same way, and a capture-started event if the fork has one | The pill shows for a Meet share and not for a `grim` shot; a window share holds no popups, and a screen or region share does |
 | §12: the notifications and the launcher show black to the far end of a share | `no_screen_share` on `tide-notifications`, `tide-launcher` and `tide-share-picker`, in `conf`'s `hyprland.lua` | Both namespaces excluded from capture | A popup, the center or the launcher during a share shows black to the far end |
 | §13: window, screen and region screenshots; `Alt+Print` captures the focused window, falling back to its geometry if `grim -T` fails | ext-foreign-toplevel-list and ext-image-copy-capture; wlr-screencopy; `hyprctl activewindow -j` (`stableId`, `at`, `size`) | wlroots has the protocols, and dwl must expose them (§21.1 step 2); a focused-window query giving the identifier and geometry | Each screenshot captures; with `grim -T` made to fail, `Alt+Print` falls back to `grim -g` |
@@ -103,3 +104,75 @@ Most rows are small. These four are not, and decide the size of a port:
 | §14.3: a grant lapses once you type or click elsewhere; a stale one expires; a grant matches a window from a child process | `input.keyboard.key` (mouse buttons aren't exposed yet); `hl.timer`; `hl.get_windows()` with `pid`, and `/proc` ancestry | Key and pointer-button hooks, a timer, and a window list with pids, in C | A slow window opens unfocused after you type, or after you click inside the window you're already in; a stale grant expires; `nautilus .` from a terminal takes focus |
 | §14.3, §14.4: refused windows are marked on the bar, `Super+Tab` cycles them, and the marks survive a shell restart; with no shell running, a refused window is still announced | `tide-cycle` and `tide-attention` events; `announce_waiting()` and `set_order()`; `hl.notification.create` | Guard events and the same calls over IPC; a compositor-side notification for when no shell runs | `Super+Tab` cycles marks; marks match the guard after a restart; with the shell stopped, a refused window is announced |
 | §6.4, §14.1: X11 apps run, their dialogs float over their parent, and their window types are honored | Xwayland | Built with Xwayland, mapping `WM_TRANSIENT_FOR` and window types onto the same float and parent rules | An X11 app runs and its dialog floats over its parent |
+
+## dwl 0.9 against this list
+
+Checked 2026-11-02 by reading dwl 0.9 (`98bea2c`) on wlroots 0.20.2
+(`d783533`), with sway 1.12 (`8886939`) as the model for missing pieces.
+Nothing was built or run. Line numbers are `dwl.c`'s unless a file is named.
+Size is the fork's own C: **S** under 50 lines, **M** 50 to 300, **L** over
+300.
+
+Of the 39 rows, 5 already work, 21 work in part and 13 not at all. Five
+rows need nothing from the compositor, 19 are S, 9 are M and 6 are L.
+
+| Row | dwl 0.9 | What dwl does | The fork builds |
+|---|---|---|---|
+| §5.3 uwsm | part | Sets `WAYLAND_DISPLAY` and `DISPLAY` only; `-s` runs a startup command (2410–2427) | A wrapper and session entry, `uwsm finalize` through `-s` (—) |
+| §5.4 autostart | yes | uwsm reads `XDG_CURRENT_DESKTOP`, not the compositor | `tide` entries (—) |
+| §5.4 doctor queries | no | No layer or config-error query | Both queries (S) |
+| §5.4 IPC variable | no | No socket at all | A socket and its variable (S, with the IPC) |
+| §11 XKB and the badge | part | One compiled `xkb_rule_names` for every keyboard (`config.def.h` 52–58); no layout-change report | Runtime XKB, a keymap query and a layout event (S) |
+| conf per-mouse settings | no | libinput settings are global constants (`config.def.h` 63–104); no scroll factor | Per-device rules and a scroll factor (M) |
+| §6.1 layouts | part | Tile and monocle, per monitor; a new window goes to the list head, so it becomes master (1910) | Attach at the tail (S); three-column, two columns + stack, per-workspace layout, messages and an event (M) |
+| §6.2 dimming | no | Border colors only | A scene rectangle per window, with the exceptions (S) |
+| §6.3 three states | part | Monocle and fullscreen; maximize requests ignored by design (1946–1962) | A maximize state that ends on a focus change (M) |
+| §6.3 fullscreen on open | part | Wayland works: a request before map is applied at map (2508, 2574). X11's `_NET_WM_STATE` isn't read at map (inferred) | Hold the request until the grant; read X11's state at map (S) |
+| §6.4 dialogs | part | A window with a parent or a fixed size floats on the parent's monitor (1929–1931, `client.h` 256), but at its own origin, not centered; no cap, follow, modal or remembered size | Center, cap, follow, modal, a PiP rule, size memory (M) |
+| §6.5 workspace pool and lid | no | Tags are per monitor (`VISIBLEON`, 83); no ext-workspace; switch devices are a TODO (1707) | A shared pool replacing tags (L); ext-workspace (S); the lid (S) |
+| §6.6 bindings | part | Compiled `keys[]` and `buttons[]`, on press only; all off while locked (1761); no submaps | Runtime config with reload (L); locked and release binds, submaps (S); master-split drag (S) |
+| §16 outputs | part | Monitor rules set scale, transform and position at plug-in; always the preferred mode; wlr-output-management applies but nothing persists | Runtime output rules with mode and width, reapplied on hotplug, and an editor adapter (M) |
+| §17 fractional scale | part | fractional-scale-v1 and viewporter (2682–2684); X11 apps blur, as on sway | Unscaled Xwayland with scaled X11 buffers (L, no sway model) |
+| §7.1 focused title | part | The status lines name each monitor's top title and the selected monitor; no wlr-foreign-toplevel-management | A focused-window query or that protocol (S) |
+| §7.1 tiling below the bar | yes | Exclusive zones shrink the window area (611–631) | — |
+| §7.2 workspace chips | no | Per-monitor tag bitmasks only (2287) | Event stream, window list, go-to commands (L, the IPC) |
+| §7 focused output | part | The status names the selected monitor; `wl_output` has the rest | Output query (S) |
+| §7.1 rotated monitor | part | Transform is in `wl_output` | Part of the output query (S) |
+| §8 tap Super | no | Bindings fire on press only | Tap tracking and an IPC event (S) |
+| §8, §9 keep the keyboard | part | An exclusive top or overlay layer keeps it when a window maps or the pointer crosses (1547–1556, 636–651). An on-demand layer, a notification's reply field, loses it to a mapping window or a crossing (2577, 2230) | Hold on-demand focus and block those enters (S) |
+| §8 `Ctrl+Enter` | no | No grants, no empty-workspace move | On top of the guard and the pool (S) |
+| §8 screenshot target | part | Every window has an ext-foreign-toplevel handle (1913), but nothing publishes its identifier | Window query: identifier, geometry, output (S) |
+| §9 outside click | no | No `hyprland_focus_grab_v1` | The protocol (M) or a click event (S) |
+| §10 lock restore | part | A crashed lock client leaves the session locked, and a new client may take the lock (1386–1400, 1840–1848), as in sway. Nothing drops a dead lock; while it's gone, pointer events may reach hidden windows (inferred) | A command that drops a dead lock; no pointer delivery while locked (S) |
+| §10 idle | yes | ext-idle-notify; idle-inhibit counts visible inhibitors only (772–788); output power for `wlopm` | A per-window inhibitor rule, if M5 needs it (S) |
+| §12 share | yes | Window and monitor sources (2676–2678, 2736–2738) | — |
+| §12 Sharing pill | part | wlroots' capture manager has a `new_session` signal, unused | Capture start and stop events (S) |
+| §12 hide from capture | no | Output capture copies the composited output | An output source rendered from a scene without those namespaces, and screencopy dropped or matched (L, no sway model) |
+| §13 screenshots | part | The protocols are there | Focused-window query (S) |
+| §13 clipboard | yes | wl-data-device, wlr- and ext-data-control (2674, 2679, 2680) | — |
+| §14.1 guard | no | Every new window is focused (1911, 2577) | The guard (L) |
+| §14.1 polkit | no | No record of the last input; pids are known | Last key and click, and a pid query (S) |
+| §14.1 activation | part | xdg-activation marks urgent and never focuses (3153–3166); X11 `_NET_ACTIVE_WINDOW` bypasses that | X11 onto the urgent path (S) |
+| §14.2 rules | part | A window's tags come from the focused monitor at map, not launch; focus follows real motion and never warps; close focuses the most recent window | Launch-workspace tracking (M); focus under the pointer on close (S) |
+| §14.3 grant lapses | no | Key, button and timer hooks exist | Part of the guard (M) |
+| §14.3 marks and cycle | part | A per-window urgent flag and bitmask | Attention list, cycle, events, a fallback notification (M) |
+| §6.4 X11 | part | Only built with `-DXWAYLAND`; `WM_TRANSIENT_FOR` sets the parent and dialog-like types float (`client.h` 199–253) | Turn it on; dialog placement as for Wayland (S) |
+
+**Where dwl's design fights tide's:**
+
+- **Per-monitor tags against a shared pool with per-workspace layouts
+  (hard).** Tags run through `VISIBLEON`, `setmon`, `focustop`, `arrange`,
+  `view`, `tag`, `tagmon`, `closemon` and `printstatus`. A fork replaces the
+  model rather than patching it, which also makes upstream dwl patches harder
+  to carry.
+- **Compiled-in config against reload without a restart (medium).** Every
+  tunable is a `static const` in `config.h`; moving them to a runtime file is
+  mechanical, but every upstream change to `config.def.h` conflicts.
+- **Focus on map against the guard (medium).** About 15 call sites focus
+  `focustop(selmon)`, so a refused window has to be kept out of the focus
+  order, not just left unfocused once.
+
+**The biggest new work**, in order: the IPC and its Quickshell module; the
+focus guard; the shared workspace pool; runtime config with reload. Hiding
+the shell from capture and sharp X11 at fractional scale are L too, but each
+stands alone.
