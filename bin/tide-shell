@@ -16,6 +16,9 @@
 #   - the first polkit agent found on this system, unless the Quickshell
 #     shell is the agent (TIDE_POLKIT=1, SPEC.md §5.2).
 #
+# A bar that falls back to waybar because qs is too old says so in a
+# notification once swaync is up, as well as in the journal.
+#
 # All of them run in this unit's cgroup, so they stop with the session. The
 # unit is Type=notify: this reports ready once both D-Bus names are owned, so
 # no app starts before them, and only by processes in this unit, so a stale
@@ -116,6 +119,7 @@ quickshell_ok() {
     fi
     version_at_least "$version" "$min_quickshell" && return 0
     qs_old="qs ($qs_path) is Quickshell $version, and tide's shell needs $min_quickshell or newer"
+    qs_old_version=$version
     return 1
 }
 
@@ -214,6 +218,7 @@ case "${TIDE_BAR:-}" in
         elif ! quickshell_ok; then
             log "$qs_old, so the bar is waybar; \`tide doctor\` says how to fix it"
             bar=waybar
+            bar_notice="qs is Quickshell $qs_old_version, and tide needs $min_quickshell or newer. Run setup, then log in again; \`tide doctor\` says more."
         else
             bar=quickshell
         fi
@@ -430,6 +435,19 @@ done
 if ! systemd-notify --ready; then
     log "systemd-notify --ready failed"
     exit 1
+fi
+
+# A bar that fell back says so where it's seen, not only in this log
+# (SPEC.md §1, principle 6). It's sent once swaync owns the notification
+# name (the wait above), so there's a server to show it. It's critical, so
+# it stays until it's dismissed. Failing to show it doesn't stop the
+# session, but is logged.
+if test -n "${bar_notice:-}"; then
+    if ! command -v notify-send >/dev/null 2>&1; then
+        log "notify-send isn't installed, so only this log says the bar is waybar"
+    elif ! out=$(notify-send --urgency=critical --app-name=tide "tide's bar couldn't start" "$bar_notice" 2>&1); then
+        log "couldn't show that the bar is waybar (notify-send: $(printf '%s\n' "$out" | tail -n 1))"
+    fi
 fi
 
 if test "$wallpaper_pending" = yes; then
