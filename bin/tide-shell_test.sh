@@ -162,6 +162,20 @@ echo "${FAKE_UNIT:-tide.service}" > "$FAKE_OWNED/org.kde.StatusNotifierWatcher"
 echo $$ >> "$FAKE_PIDS"
 exec sleep 600 >/dev/null 2>&1
 FAKE
+# notify-send logs its arguments, or fails with $FAKE_NOTIFY_SEND_ERR; it's in
+# its own directory so a run can leave it off the PATH.
+notify=$tmp/notify-bin
+mkdir "$notify"
+cat > "$notify/notify-send" <<'FAKE'
+#!/bin/sh
+if test -n "$FAKE_NOTIFY_SEND_ERR"; then
+    echo "$FAKE_NOTIFY_SEND_ERR" >&2
+    exit 1
+fi
+printf 'notify-send' >> "$FAKE_LOG"
+printf ' [%s]' "$@" >> "$FAKE_LOG"
+printf '\n' >> "$FAKE_LOG"
+FAKE
 mkdir -p "$tmp/config/quickshell/tide"
 : > "$tmp/config/quickshell/tide/shell.qml"
 cat > "$tmp/input-setup" <<'FAKE'
@@ -170,7 +184,7 @@ printf 'input-setup\n' >> "$FAKE_LOG"
 exit "${FAKE_INPUT_STATUS:-0}"
 FAKE
 : > "$tmp/wallpaper.jpg"
-chmod +x "$fake"/* "$swww"/* "$swaybg"/* "$qs"/* "$tmp/theme-daemon" "$tmp/agent" "$tmp/input-setup"
+chmod +x "$fake"/* "$swww"/* "$swaybg"/* "$qs"/* "$notify"/* "$tmp/theme-daemon" "$tmp/agent" "$tmp/input-setup"
 
 both="org.freedesktop.Notifications org.kde.StatusNotifierWatcher"
 
@@ -530,6 +544,31 @@ check "an old Quickshell's bar is waybar" contains "$log" "theme-daemon bar=wayb
 check "an old Quickshell runs no shell" test -z "$(grep '^qs -c tide' "$tmp/log")"
 check "an old Quickshell is named, with what the shell needs" \
     contains "$(cat "$tmp/err")" "qs ($qs/qs) is Quickshell 0.2.1, and tide's shell needs 0.3 or newer, so the bar is waybar"
+# It says so on screen too, once swaync is up to show it.
+notice="notify-send [--urgency=critical] [--app-name=tide] [tide's bar couldn't start] [qs is Quickshell 0.2.1, and tide needs 0.3 or newer. Run setup, then log in again; \`tide doctor\` says more.]"
+run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
+check "an old Quickshell's fallback is a notification too" test "$(grep '^notify-send' "$tmp/log")" = "$notice"
+check "sent once the notification server is up" \
+    test "$(sed -n -e 's/^\(systemd-notify --ready\)$/\1/p' -e 's/^\(notify-send\) .*/\1/p' "$tmp/log" | tr '\n' ' ')" = "systemd-notify --ready notify-send "
+check "a notification sent says nothing in the log" \
+    test -z "$(grep "couldn't show\|notify-send isn't" "$tmp/err")"
+run FAKE_NAMES="org.kde.StatusNotifierWatcher" PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
+check "no notification server, no notification" test -z "$(grep '^notify-send' "$tmp/log")"
+run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021" \
+    FAKE_NOTIFY_SEND_ERR="GDBus.Error: no reply"
+check "a notification that fails doesn't stop the session" contains "$(cat "$tmp/log")" "systemd-notify --ready"
+check "a notification that fails is logged" \
+    contains "$(cat "$tmp/err")" "couldn't show that the bar is waybar (notify-send: GDBus.Error: no reply)"
+if ! command -v notify-send >/dev/null 2>&1; then
+    run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
+    check "no notify-send is logged" \
+        contains "$(cat "$tmp/err")" "notify-send isn't installed, so only this log says the bar is waybar"
+fi
+# A bar chosen as waybar, or one with no qs at all, is no fallback to report.
+run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR=waybar FAKE_QS_VERSION="$qs_021"
+check "TIDE_BAR=waybar sends no notification" test -z "$(grep '^notify-send' "$tmp/log")"
+run FAKE_NAMES="$both" PATH="$fake:$swww:$notify:$PATH" TIDE_BAR=
+check "no qs sends no notification" test -z "$(grep '^notify-send' "$tmp/log")"
 run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell FAKE_QS_VERSION="$qs_021"
 check "TIDE_BAR=quickshell with an old Quickshell fails, not to be retried" test "$status" -eq 78
 check "TIDE_BAR=quickshell with an old Quickshell is reported" \

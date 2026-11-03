@@ -362,7 +362,9 @@ work". The old setup shows how it fought itself:
 It runs the Quickshell bar (`qs -c tide`) when Quickshell 0.3 or newer
 and the shell are installed, and waybar otherwise (`TIDE_BAR` picks). An
 older `qs` can't load the bar (§3.2), so the shell logs its version and
-runs waybar, and `doctor` reports it. It
+runs waybar, and `doctor` reports it. Once swaync owns the notification
+name, the shell also sends a critical notification: "tide's bar couldn't
+start", with the version and the fix. If it can't send it, it logs why. It
 starts `conf`'s theme daemon, which runs swaync, and waybar when that's the
 bar, and the first polkit agent it finds. It reports ready once swaync
 owns `org.freedesktop.Notifications` and the bar's tray owns
