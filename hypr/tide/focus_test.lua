@@ -31,7 +31,7 @@ local S -- what the stub recorded
 local now
 
 local function load(opts)
-    S = { rules = {}, handlers = {}, dispatched = {}, notified = {}, active = nil, timers = {}, windows = {} }
+    S = { rules = {}, handlers = {}, dispatched = {}, notified = {}, active = nil, timers = {}, windows = {}, workspace = 1 }
     now = 1000
     _G.tide_focus = nil
     _G.hl = {
@@ -39,6 +39,7 @@ local function load(opts)
         on = function(ev, fn) S.handlers[ev] = fn end,
         dispatch = function(d) table.insert(S.dispatched, d) end,
         get_active_window = function() return S.active end,
+        get_active_workspace = function() return { id = S.workspace } end,
         get_windows = function() return S.windows end,
         timer = function(fn, opts) table.insert(S.timers, { fn = fn, opts = opts }) end,
         notification = {
@@ -574,6 +575,41 @@ test("focus coming back to the window you were in doesn't cancel", function()
     -- The launcher closing: Hyprland refocuses the last window.
     focused(kitty, FFM)
     eq(#m.grants(), 1, "grants")
+end)
+
+test("the launcher closing on an empty workspace doesn't cancel, so the launch takes focus", function()
+    for _, reason in ipairs({ FFM, KEYBIND, CLICK, WORKSPACE }) do
+        local m = load()
+        focused(window("kitty"), FFM)
+        -- Super+Home to an empty home: focus on nothing, which is moving on.
+        S.workspace = 2
+        focused(nil, WORKSPACE)
+        m.grant("firefox")
+        -- The launcher closes, and Hyprland refocuses nothing again.
+        focused(nil, reason)
+        eq(#m.grants(), 1, "reason " .. reason)
+        local ff = window("firefox")
+        eq(is_focus(fire("window.open", ff)[1], ff), true, "focused, reason " .. reason)
+    end
+end)
+
+test("going from one empty workspace to another still cancels", function()
+    local m = load()
+    S.workspace = 2
+    focused(nil, WORKSPACE)
+    m.grant("firefox")
+    -- A click or the wheel on the bar, which no key press cancels.
+    S.workspace = 3
+    focused(nil, CLICK)
+    eq(#m.grants(), 0, "grants")
+end)
+
+test("leaving a window for an empty workspace still cancels", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("firefox")
+    focused(nil, WORKSPACE)
+    eq(#m.grants(), 0, "grants")
 end)
 
 test("the guard's own focusing doesn't cancel other grants", function()

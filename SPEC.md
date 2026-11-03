@@ -3128,7 +3128,9 @@ this spec.
     window, then again after moving it across two.
 - **When the launcher closes**, focus goes to the app you launched once its
   window appears, and back to the window you were in if you dismissed the
-  launcher. That window is also "the window before the launcher" that
+  launcher. On an empty workspace there's no window to go back to, and
+  focus staying on nothing there isn't moving on, so the launched app
+  still takes focus. Going on to another workspace, empty or not, is. That window is also "the window before the launcher" that
   screenshot-window uses (§13).
 - **Focus follows the mouse**, as today (`follow_mouse 1`,
   `mouse_refocus false`). Focus changes when the pointer crosses into
