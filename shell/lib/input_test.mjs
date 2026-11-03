@@ -2,13 +2,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    LADDERS, SECTIONS, connectedDevices, deviceKind, deviceSection, listedDevices, deviceSettingError, deviceShown, formatValue, hasOwn, inputLua, isText, loadInput,
+    ACCEL_STEP, LADDERS, SECTIONS, accelCurve, accelPoints, connectedDevices, deviceKind, deviceSection, listedDevices, deviceSettingError, deviceShown, formatValue, hasOwn, inputLua, isText, loadInput,
     pairError, parseInput, parseValue, settingError, shown, stepped, targetLabel, targets, withDeviceSetting, withSetting, withoutDevice,
 } from "./input.mjs";
 
 test("mice and touchpads have their own settings, in Hyprland's option names", () => {
     assert.deepEqual(SECTIONS.mouse.map(s => [s.key, s.option]), [
-        ["speed", "sensitivity"], ["scrollSpeed", "scroll_factor"], ["naturalScroll", "natural_scroll"], ["leftHanded", "left_handed"],
+        ["speed", "sensitivity"], ["acceleration", "accel_profile"], ["scrollSpeed", "scroll_factor"], ["naturalScroll", "natural_scroll"],
+        ["leftHanded", "left_handed"],
     ]);
     assert.deepEqual(SECTIONS.touchpad.map(s => s.key), [
         "speed", "scrollSpeed", "naturalScroll", "leftHanded", "tapToClick", "disableWhileTyping",
@@ -136,6 +137,71 @@ test("only what's set reaches hyprland.lua, in Hyprland's option names", () => {
     assert.ok(text.includes("    touchpad = { scroll_factor = 0.75, tap_to_click = false },\n"), text);
     const keys = inputLua({ keyboard: { repeatRate: 40, layout: "us,de", variant: "" } });
     assert.ok(keys.includes('    keyboard = { kb_layout = "us,de", kb_variant = "", repeat_rate = 40 },\n'), keys);
+});
+
+// A mouse's speed out, in units a ms, at `v` in, from the curve's points.
+function out(points, v) {
+    return points[Math.round(v / ACCEL_STEP)];
+}
+
+test("acceleration 1 is libinput's adaptive curve for a mouse, at each speed", () => {
+    // libinput's filter-mouse.c at speed 1: factor 1 from 0.07 units a ms
+    // to the threshold, 0.2, then up 1.85 a unit a ms to a cap of 3.5.
+    const points = accelPoints(1, 1);
+    assert.equal(points.length, 41);
+    assert.equal(points[0], 0);
+    assert.equal(out(points, 0.05), 0.04, "slow moves slow down, as libinput's do");
+    assert.equal(out(points, 0.15), 0.15);
+    assert.equal(out(points, 1), 2.48);
+    assert.equal(out(points, 2), 7, "capped at 3.5 times");
+    // At speed 0: the threshold 0.4, up 1.1, a cap of 2.
+    assert.equal(out(accelPoints(1, 0), 1), 1.66);
+    assert.equal(out(accelPoints(1, 0), 2), 4);
+});
+
+test("acceleration scales the rise above the threshold and the cap", () => {
+    assert.equal(out(accelPoints(2, 1), 1), 3.96, "twice the rise");
+    assert.equal(out(accelPoints(2, 1), 2), 12, "twice as far above 1: a cap of 6");
+    assert.equal(out(accelPoints(3, -1), 1), 0.5, "libinput's slowest keeps its slowdown, whatever the amount");
+});
+
+test("acceleration off is libinput's flat profile, the same gain at every speed, with the speed as sensitivity", () => {
+    assert.equal(accelCurve(0, 1), "flat");
+    assert.equal(accelCurve(0, -0.5), "flat");
+    const text = inputLua({ mouse: { acceleration: 0, speed: 0.5 } });
+    assert.ok(text.includes('    mouse = { sensitivity = 0.5, accel_profile = "flat" },\n'), text);
+});
+
+test("an acceleration is a custom curve, in Hyprland's accel_profile spelling", () => {
+    assert.equal(accelCurve(1, 1), `custom ${ACCEL_STEP} ${accelPoints(1, 1).join(" ")}`);
+    assert.match(accelCurve(0.5, -0.25), /^custom 0\.05 0 [0-9. ]+$/);
+});
+
+test("a mouse's acceleration is 0 to 4 on its own ladder, with 1 conf's adaptive curve", () => {
+    assert.equal(shown({}, "mouse", "acceleration"), 1);
+    assert.equal(settingError("mouse", "acceleration", 0), "");
+    assert.equal(settingError("mouse", "acceleration", 4), "");
+    assert.match(settingError("mouse", "acceleration", 4.5), /^mouse\.acceleration must be from 0 to 4/);
+    assert.match(settingError("mouse", "acceleration", -1), /^mouse\.acceleration must be from 0 to 4/);
+    assert.match(settingError("touchpad", "acceleration", 1), /^unknown setting "touchpad\.acceleration"/);
+    assert.equal(stepped("accel", 1, 1), 1.5);
+    assert.equal(stepped("accel", 0, -1), 0);
+    assert.equal(formatValue("accel", 0), "Off");
+    assert.equal(formatValue("accel", 1.5), "1.5×");
+});
+
+test("a mouse's acceleration is written as its curve, at the speed that applies", () => {
+    const text = inputLua({ mouse: { acceleration: 2, speed: 0.5 } });
+    assert.ok(text.includes(`    mouse = { sensitivity = 0.5, accel_profile = "${accelCurve(2, 0.5)}" },\n`), text);
+    const unset = inputLua({ mouse: { acceleration: 2 } });
+    assert.ok(unset.includes(`accel_profile = "${accelCurve(2, 1)}"`), "conf's speed, 1, until one is set");
+    const dev = inputLua({ mouse: { acceleration: 2 }, devices: { "logitech-mx": { speed: -0.5 } } });
+    assert.ok(dev.includes(`        ["logitech-mx"] = { sensitivity = -0.5, accel_profile = "${accelCurve(2, -0.5)}" },\n`),
+        "a curve ignores sensitivity, so a mouse with its own speed gets its own curve");
+    const own = inputLua({ devices: { "logitech-mx": { acceleration: 0.5 } } });
+    assert.ok(own.includes(`        ["logitech-mx"] = { accel_profile = "${accelCurve(0.5, 1)}" },\n`), own);
+    const plain = inputLua({ devices: { "logitech-mx": { speed: -0.5 } } });
+    assert.ok(plain.includes('        ["logitech-mx"] = { sensitivity = -0.5 },\n'), "no acceleration set, so conf's adaptive curve stays");
 });
 
 test("setting one keeps the rest of the local file, in the page's order", () => {
