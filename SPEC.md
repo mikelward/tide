@@ -121,7 +121,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Bar**: dark and light, every workspace and status state, the clock rules. [`bar.png`](docs/mocks/bar.png) | ![bar](docs/mocks/bar.png) |
 | **Layouts**: tile, three-column, two columns + stack, monocle, the single-window rule, and how three-column fills up. [`layouts.png`](docs/mocks/layouts.png) | ![layouts](docs/mocks/layouts.png) |
 | **Switcher**: its five tabs, Apps (the launcher), Workspaces, Windows, Attention and Actions. [`switcher.png`](docs/mocks/switcher.png) | ![switcher](docs/mocks/switcher.png) |
-| **Name prompt**: a new window on home, moving a window, going to a workspace, and home refused (§6.5). [`prompt.png`](docs/mocks/prompt.png) | ![name prompt](docs/mocks/prompt.png) |
+| **Name prompt**: a new window on home, moving a window, going to a workspace, and a window kept on home (§6.5). [`prompt.png`](docs/mocks/prompt.png) | ![name prompt](docs/mocks/prompt.png) |
 | **Notifications**: popups, OSD, the notification center while sharing. [`notifications.png`](docs/mocks/notifications.png) | ![notifications](docs/mocks/notifications.png) |
 | **Clocks popover**: zones, working-hours strips, DST warning, calendar. [`clocks.png`](docs/mocks/clocks.png) | ![clocks](docs/mocks/clocks.png) |
 | **Settings**: the sidebar grouped under Hardware, Windows and General, Keyboard with its shortcuts, and the newer pages: Start at login, Notifications, Clipboard, Power and Workspaces. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
@@ -1167,10 +1167,11 @@ in how long they last and what stays visible:
   - Their windows always open on home, by a window rule that sends them
     there without switching. One you launched takes focus there and the
     view follows; any other opens unfocused and marked (§14.1).
-- Its windows are only those apps'. The name prompt never offers home for
-  another app's window, and a name typed as home's is refused.
-- A window of a home app can still be moved out with
-  `Super+Shift+Return`.
+- Home isn't kept for those apps. Any window can be moved there with
+  `Super+Shift+Return`, a new window on home can stay there, and a launch
+  can open there: the name prompt offers home to all of them (below).
+  So a home app you closed can be opened again elsewhere and moved back.
+- A window of a home app can be moved out with `Super+Shift+Return`.
 - `Super+Home` goes to home, and `Super+Tab` flips between home and the
   last other workspace you used (§6.6).
   - It's a Lua binding in `conf` that keeps the workspaces other than
@@ -1202,12 +1203,13 @@ in how long they last and what stays visible:
   so typing replaces it. Until you type, it follows the window's title,
   since a browser often sets the title after the window maps.
 - **The rows** below the text are the typed name, first, when no
-  workspace has it yet, then the workspaces (standing ones included) that
-  match it, scored as the launcher scores. The top row is selected, so
-  Enter on a new name makes it, and `↓` picks an existing one.
+  workspace has it yet, then the workspaces (standing ones and home
+  included) that match it, scored as the launcher scores. The top row is
+  selected, so Enter on a new name makes it, and `↓` picks an existing one.
   A name that's an existing one, in any case, puts that one first instead.
 - **Enter** makes the workspace, or uses the one already of that name,
-  moves the window there, and focus follows.
+  moves the window there, and focus follows. Enter on home keeps the
+  window there, and it doesn't ask again.
 - **Esc** closes the window, politely, as `Super+Backspace` does.
   - A click on the backdrop does nothing, so a stray click can't close a
     window.
@@ -1220,7 +1222,6 @@ in how long they last and what stays visible:
   - Enter on an existing name goes there. Enter on a new name goes to a
     new, empty workspace of that name, which goes again once you leave it
     empty.
-  - Home is offered, since nothing moves there.
   - Esc stays where you are.
   - A second press while it's open asks nothing more.
 - **`Super+Shift+Return`** opens the prompt for the focused window, on any
@@ -1232,6 +1233,13 @@ in how long they last and what stays visible:
   `TIDE_WORKSPACE` (below), and its first window goes to that workspace
   through the launch's grant (§14.3). Esc there cancels the launch, and
   nothing opens. A home app launches straight away.
+  - Enter on home launches there. The window opens on home, so it would
+    ask as a new window on home does. The shell notes the launch's
+    classes instead, as it answers, and the first window of one of them
+    that would ask in the next 15 s keeps home without asking. That's the
+    grant's 10 s (§14.3), from `tide launch` making it after the answer,
+    with time to start. A launch granting `*` covers any window. One
+    that opens later asks, as any other would.
   - `tide launch` reads the focused workspace. On home, it asks the shell
     (`qs -c tide ipc call prompt launch`), naming the classes the app's
     window may have, found as its grant finds them (§14.3), and a FIFO in

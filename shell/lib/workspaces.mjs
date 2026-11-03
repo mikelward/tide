@@ -2,7 +2,7 @@
 // QML binds to. The QML turns Quickshell.Hyprland's monitors and toplevels
 // into the plain objects these take, and maps app IDs to icons.
 
-import { normalizeAppId, sameName } from "./workspacenames.mjs";
+import { normalizeAppId, promptWanted, sameName } from "./workspacenames.mjs";
 import { isMinimizedFromWorkspace, minimizedFrom } from "./minimized.mjs";
 import { noteMuted, windowMuted } from "./mute.mjs";
 import { workspaceOf } from "./span.mjs";
@@ -609,4 +609,51 @@ export function homeIdAfter(id, event, home) {
 // which the shell undoes: home can't be renamed (§6.5).
 export function homeRenamed(id, event, home) {
     return event !== null && event.type === "renamed" && id !== null && event.id === id && event.name !== home;
+}
+
+// Launches the name prompt sent home (SPEC.md §6.5), so the window each
+// opens there, through its grant, doesn't ask again: newest first, each
+// {apps, at}, `apps` the classes its window may have (`*` for any, as the
+// focus guard's grant reads it) and `at` the answer's time in seconds. One
+// is good for HOME_LAUNCH_SECONDS: the guard's grant holds 10 s from
+// `tide launch` making it, after the answer, and a window that opens
+// later opens where you are, like any other.
+export const HOME_LAUNCH_SECONDS = 15;
+export const NO_HOME_LAUNCHES = Object.freeze([]);
+
+function liveLaunches(launches, now) {
+    return launches.filter((l) => now - l.at >= 0 && now - l.at <= HOME_LAUNCH_SECONDS);
+}
+
+// A launch answered home at `now`.
+export function homeLaunched(launches, apps, now) {
+    const list = Array.isArray(apps) && apps.length > 0 ? apps.slice() : ["*"];
+    return [{ apps: list, at: now }].concat(liveLaunches(launches, now)).slice(0, 20);
+}
+
+// A window of class `cls` that would ask on home, at `now`: {launches,
+// launched}, launched saying it's the window of a launch sent home, which
+// that launch is then done with, so it keeps home without asking.
+export function homeLaunchWindow(launches, cls, now) {
+    const live = liveLaunches(launches, now);
+    // The oldest first, as a grant goes to the first window it matches.
+    for (let i = live.length - 1; i >= 0; i--) {
+        if (live[i].apps.some((a) => a === "*" || sameApp(a, cls))) {
+            return { launches: live.filter((_, j) => j !== i), launched: true };
+        }
+    }
+    return { launches: live, launched: false };
+}
+
+// Whether the window Hyprland describes as `client`, just first focused,
+// asks for a workspace (SPEC.md §6.5): {ask, launches}. It asks when
+// promptWanted says so, unless it's the window of a launch sent home
+// (homeLaunchWindow), which keeps home without asking, since Esc there
+// would close it.
+export function windowPrompt(client, { home, inApps, resolved = {}, launches, now }) {
+    if (!promptWanted(client, home, inApps, resolved)) {
+        return { ask: false, launches };
+    }
+    const w = homeLaunchWindow(launches, client.class, now);
+    return { ask: !w.launched, launches: w.launches };
 }

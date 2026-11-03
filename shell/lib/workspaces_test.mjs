@@ -6,8 +6,9 @@ import {
     MAX_ICONS, BAR_NAME, NO_MARKS, updateMarks, markedWindows, barWorkspaces, scrollTarget,
     workspaceOrder, barName, workspaceEvent, homeIdAfter, homeRenamed,
     normalizeAddress, markEvent, sameApp, visibleWorkspaces, activatedEvent, attentionOrder, titleCount,
-    withFocus, withoutWindow, focusRank,
+    withFocus, withoutWindow, focusRank, HOME_LAUNCH_SECONDS, NO_HOME_LAUNCHES, homeLaunched, homeLaunchWindow, windowPrompt,
 } from "./workspaces.mjs";
+import { NO_PROMPTS, NO_WINDOWS, promptQueued, promptDone, promptAnswer, promptRows, promptChoice, windowOpened, windowFocused, windowAnswered, clientAt } from "./workspacenames.mjs";
 
 const win = (address, workspace, app, extra = {}) =>
     ({ address, workspace, app, urgent: false, fullscreen: 0, ...extra });
@@ -806,4 +807,56 @@ test("the first title seen for a window only sets its count, so a restarted shel
     // Rising from what was seen is news.
     marks = updateMarks(marks, ev("Chat (6)"));
     assert.deepEqual(shown(marks, windows), ["c"]);
+});
+
+test("a launch sent home keeps its window there without asking again, once", () => {
+    let l = homeLaunched(NO_HOME_LAUNCHES, ["org.gnome.Nautilus"], 100);
+    // Another app's window on home still asks.
+    let w = homeLaunchWindow(l, "kitty", 101);
+    assert.equal(w.launched, false);
+    l = w.launches;
+    // Its own window, matched as the focus guard matches, doesn't.
+    w = homeLaunchWindow(l, "nautilus", 102);
+    assert.equal(w.launched, true);
+    // A second window of the same app asks, as any other would.
+    assert.equal(homeLaunchWindow(w.launches, "nautilus", 103).launched, false);
+});
+
+test("a launch sent home names any app with *, or with no IDs, and lapses", () => {
+    assert.equal(homeLaunchWindow(homeLaunched(NO_HOME_LAUNCHES, ["*"], 0), "kitty", 1).launched, true);
+    assert.equal(homeLaunchWindow(homeLaunched(NO_HOME_LAUNCHES, undefined, 0), "kitty", 1).launched, true);
+    const l = homeLaunched(NO_HOME_LAUNCHES, ["kitty"], 0);
+    assert.equal(homeLaunchWindow(l, "kitty", HOME_LAUNCH_SECONDS).launched, true);
+    const late = homeLaunchWindow(l, "kitty", HOME_LAUNCH_SECONDS + 1);
+    assert.equal(late.launched, false, "a window opening after the grant lapsed asks");
+    assert.deepEqual(late.launches, [], "and the launch is forgotten");
+});
+
+test("a launch from home answered home opens there, and its window doesn't ask again", () => {
+    // tide launch from home asks, naming the classes its window may have.
+    let prompts = promptQueued(NO_PROMPTS, { kind: "launch", answer: "/run/tide-prompt.x", apps: ["kitty"] });
+    const launch = prompts.queue[0];
+    // You type home's name, and Enter takes it, as PromptData.answer does.
+    const name = promptChoice({ rows: promptRows({ names: ["in", "re"], typed: "in" }), selected: 0, typed: "in" }).name;
+    assert.equal(name, "in");
+    prompts = promptDone(prompts, launch.id);
+    const launches = homeLaunched(NO_HOME_LAUNCHES, launch.apps, 1000);
+    assert.deepEqual(promptAnswer(launch, name), { reply: "workspace in", answer: "/run/tide-prompt.x" });
+    // Its window opens on home and is focused through the grant.
+    const windows = windowOpened(NO_WINDOWS, "a1");
+    const focused = windowFocused(windows, "a1");
+    assert.equal(focused.lookup, true);
+    const answered = windowAnswered(focused.state, "a1");
+    assert.equal(answered.live, true);
+    const clients = [{ address: "0xa1", class: "kitty", title: "kitty", workspace: { name: "in" }, floating: false }];
+    const client = clientAt(clients, "a1");
+    const opts = { home: "in", inApps: ["gmail"], launches, now: 1002 };
+    const judged = windowPrompt(client, opts);
+    assert.equal(judged.ask, false, "no name prompt, whose Esc would close it");
+    assert.deepEqual(prompts.queue, []);
+    // Without the launch sent home, the same window asks, as any new one does.
+    assert.equal(windowPrompt(client, Object.assign({}, opts, { launches: NO_HOME_LAUNCHES })).ask, true);
+    // And a second kitty window afterwards asks too.
+    const again = { address: "0xa2", class: "kitty", title: "kitty", workspace: { name: "in" }, floating: false };
+    assert.equal(windowPrompt(again, Object.assign({}, opts, { launches: judged.launches })).ask, true);
 });

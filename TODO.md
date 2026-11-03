@@ -7,6 +7,16 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **A launch sent home keeps its window there for 15 s** (2026-11-03):
+  its window opens on home and would ask again, so the shell notes the
+  launch's classes as it answers home, and their first window that would
+  ask within 15 s doesn't (SPEC.md §6.5). That's the grant's 10 s, plus
+  time for `tide launch` to start. The cost: a launch granting `*` (a
+  terminal) lets any one window opening on home in that time skip the
+  prompt. The alternative is the focus guard tagging the windows it
+  places, which the shell would read from `hyprctl clients`.
+  Reversible: `HOME_LAUNCH_SECONDS` and `homeLaunchWindow`.
+
 - **The first title tide sees for a window only sets its unread count**
   (2026-11-02), so a title count marks a window only when it rises from
   one seen before (SPEC.md §14.4). A shell that starts or restarts can't

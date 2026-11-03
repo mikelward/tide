@@ -256,7 +256,7 @@ chmod +x "$fake/qs"
 run XDG_RUNTIME_DIR="$tmp/prompt-runtime" CALLER_SETTING=kept "$qs" launch --app org.example.Editor -- "$fake/app" one
 check "a launch from home asks the name prompt" contains "$(cat "$log")" "qs -c tide ipc call prompt launch"
 check "it says which apps, and where to answer" \
-    python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); assert r["apps"] == ["org.example.Editor"], r; assert r["answer"].startswith(sys.argv[2] + "/tide-prompt."), r' "$log.request" "$tmp/prompt-runtime"
+    python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); assert r["apps"] == ["org.example.Editor"], r; assert r["grants"] == ["org.example.Editor"], r; assert r["answer"].startswith(sys.argv[2] + "/tide-prompt."), r' "$log.request" "$tmp/prompt-runtime"
 check "then grants the window a move to the workspace chosen" \
     contains "$(cat "$log")" 'tide_focus.grant("org.example.Editor", nil, nil, { workspace = "docs" })'
 check "and starts the app itself" contains "$(cat "$log")" "uwsm app -- $fake/app one"
@@ -285,6 +285,8 @@ run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_PROGRAM=google-chat FAKE_CLASSES=
 check "with --app '*', it names the program past wrappers and its classes" \
     python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); assert r["apps"] == ["google-chat", "chrome-chat.google.com__-Default"], r' "$log.request"
 check "and still grants any app's window" contains "$(cat "$log")" 'tide_focus.grant("*", nil, nil, { workspace = "docs" })'
+check "and tells the prompt the grant is any window's, so a window sent home is matched past the wrapper" \
+    python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); assert r["grants"] == ["*"], r' "$log.request"
 run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_ANSWER=gibberish "$qs" launch app
 check "an answer it can't read launches nothing" not_contains "$(cat "$log")" "uwsm app"
 check "and says so" contains "$(cat "$tmp/err")" "no answer from the name prompt (gibberish)"

@@ -305,33 +305,39 @@ test("a window first focused on home asks for a name, unless it shouldn't", () =
 const names = ["in", "re", "oc", "me", "PR-12", "docs"];
 
 test("the prompt offers the typed name first, then the matching workspaces", () => {
-    const rows = promptRows({ names, typed: "do", home: "in" });
+    const rows = promptRows({ names, typed: "do" });
     assert.deepEqual(rows.map((r) => [r.name, r.isNew]), [["do", true], ["docs", false]]);
-    // An empty prompt lists every workspace but home.
-    assert.deepEqual(promptRows({ names, typed: "", home: "in" }).map((r) => r.name), ["re", "oc", "me", "PR-12", "docs"]);
+    // An empty prompt lists every workspace, home included.
+    assert.deepEqual(promptRows({ names, typed: "" }).map((r) => r.name), ["in", "re", "oc", "me", "PR-12", "docs"]);
 });
 
 test("a typed name that's a workspace's, in any case, offers that one first", () => {
-    const rows = promptRows({ names, typed: "RE", home: "in" });
+    const rows = promptRows({ names, typed: "RE" });
     assert.equal(rows[0].name, "re");
     assert.equal(rows[0].isNew, false);
     assert.ok(!rows.some((r) => r.isNew));
-    assert.deepEqual(promptChoice({ rows, selected: 0, typed: "RE", home: "in" }), { name: "re" });
+    assert.deepEqual(promptChoice({ rows, selected: 0, typed: "RE" }), { name: "re" });
 });
 
-test("home isn't offered for another app's window, and typing its name is refused", () => {
-    const rows = promptRows({ names, typed: "IN", home: "in" });
-    assert.ok(!rows.some((r) => r.name.toLowerCase() === "in"));
-    assert.match(promptChoice({ rows: [], selected: 0, typed: "IN", home: "in" }).error, /in is home/);
-    // A home app's window may go back home.
-    assert.equal(promptRows({ names, typed: "in", home: "in", allowHome: true })[0].name, "in");
+test("home is offered for any window or launch, and Enter on it goes home", () => {
+    const rows = promptRows({ names, typed: "IN" });
+    assert.deepEqual(rows[0], { name: "in", isNew: false, positions: [0, 1] });
+    assert.ok(!rows.some((r) => r.isNew), "home isn't made anew");
+    const home = promptChoice({ rows, selected: 0, typed: "IN" }).name;
+    assert.equal(home, "in");
+    // A new window on home stays there; a moved one goes there.
+    assert.deepEqual(promptAnswer({ kind: "window", address: "0x5", id: 1 }, home), { move: "0x5", name: "in" });
+    assert.deepEqual(promptAnswer({ kind: "move", address: "0x6", id: 2 }, home), { move: "0x6", name: "in" });
+    // A launch opens there.
+    assert.deepEqual(promptAnswer({ kind: "launch", answer: "/run/f", apps: ["kitty"], id: 3 }, home), { reply: "workspace in", answer: "/run/f" });
+    assert.deepEqual(promptAnswer({ kind: "launch", argv: ["kitty"], cwd: "/", apps: ["kitty"], id: 4 }, home), { launch: ["kitty"], cwd: "/", name: "in" });
 });
 
 test("Enter takes the selected row, and says why when there's none", () => {
-    const rows = promptRows({ names, typed: "docs", home: "in" });
-    assert.deepEqual(promptChoice({ rows, selected: 0, typed: "docs", home: "in" }), { name: "docs" });
-    assert.match(promptChoice({ rows: [], selected: -1, typed: "  ", home: "in" }).error, /needs a name/);
-    assert.match(promptChoice({ rows: [], selected: -1, typed: "x".repeat(33), home: "in" }).error, /at most 32/);
+    const rows = promptRows({ names, typed: "docs" });
+    assert.deepEqual(promptChoice({ rows, selected: 0, typed: "docs" }), { name: "docs" });
+    assert.match(promptChoice({ rows: [], selected: -1, typed: "  " }).error, /needs a name/);
+    assert.match(promptChoice({ rows: [], selected: -1, typed: "x".repeat(33) }).error, /at most 32/);
 });
 
 test("prompts wait their turn, and one coming doesn't answer the one shown", () => {
@@ -350,21 +356,21 @@ test("prompts wait their turn, and one coming doesn't answer the one shown", () 
 
 test("Super+Return asks with no window at all, and Enter goes there, moving nothing", () => {
     // No address: nothing about it depends on a focused window.
-    const s = promptQueued(NO_PROMPTS, { kind: "go", allowHome: true });
+    const s = promptQueued(NO_PROMPTS, { kind: "go" });
     const go = s.queue[0];
     assert.equal(go.address, undefined);
     assert.equal(promptHeading(go.kind), "Go to the workspace named");
     // An existing name, and a new one, which Hyprland makes on going there.
-    const rows = promptRows({ names, typed: "notes", home: "in", allowHome: go.allowHome });
+    const rows = promptRows({ names, typed: "notes" });
     assert.deepEqual(rows[0], { name: "notes", isNew: true, positions: [] });
-    assert.deepEqual(promptAnswer(go, promptChoice({ rows, selected: 0, typed: "notes", home: "in" }).name), { go: "notes" });
+    assert.deepEqual(promptAnswer(go, promptChoice({ rows, selected: 0, typed: "notes" }).name), { go: "notes" });
     assert.deepEqual(promptAnswer(go, "docs"), { go: "docs" });
-    // Home is a place to go, so it's offered.
-    assert.equal(promptRows({ names, typed: "in", home: "in", allowHome: go.allowHome })[0].name, "in");
+    // Home is a place to go too.
+    assert.deepEqual(promptAnswer(go, promptRows({ names, typed: "in" })[0].name), { go: "in" });
     // Esc stays where you are.
     assert.deepEqual(promptCancel(go), {});
     // A second press while it's up is the same question.
-    assert.deepEqual(promptQueued(s, { kind: "go", allowHome: true }), s);
+    assert.deepEqual(promptQueued(s, { kind: "go" }), s);
     // A window closing doesn't take it away.
     assert.deepEqual(promptWindowGone(s, "0x1"), s);
 });
