@@ -85,9 +85,10 @@ func ownerPID(conn *dbus.Conn, owner string) uint32 {
 	return pid
 }
 
-// The lock (SPEC.md §10) runs as tide-lock.service, so the session is
-// locked while that unit is anything but inactive or failed.
-const lockUnit = "tide-lock.service"
+// The lock (SPEC.md §10) runs as tide-lock.service, or, when that can't
+// run, as tide-lock-fallback.service (hyprlock). The session is locked
+// while either is anything but inactive or failed.
+var lockUnits = []string{"tide-lock.service", "tide-lock-fallback.service"}
 
 func lockedState(active string) bool {
 	switch active {
@@ -100,7 +101,7 @@ func lockedState(active string) bool {
 // watchLock calls changed with whether the session is locked, then on each
 // change, from systemd's user manager.
 func watchLock(conn *dbus.Conn, sigs *signals, changed func(bool)) error {
-	// The unit's changes count only from systemd itself: a peer can send
+	// The units' changes count only from systemd itself: a peer can send
 	// any signal straight to this connection, and a forged "locked" would
 	// turn every request away.
 	var systemd string
@@ -114,29 +115,48 @@ func watchLock(conn *dbus.Conn, sigs *signals, changed func(bool)) error {
 			return fmt.Errorf("couldn't subscribe to systemd's unit changes: %w", err)
 		}
 	}
-	var path dbus.ObjectPath
-	if err := manager.Call("org.freedesktop.systemd1.Manager.LoadUnit", 0, lockUnit).Store(&path); err != nil {
-		return fmt.Errorf("couldn't find %s: %w", lockUnit, err)
-	}
-	if err := conn.AddMatchSignal(
-		dbus.WithMatchObjectPath(path),
-		dbus.WithMatchInterface("org.freedesktop.DBus.Properties"),
-		dbus.WithMatchMember("PropertiesChanged"),
-	); err != nil {
-		return fmt.Errorf("couldn't watch %s: %w", lockUnit, err)
-	}
+	// Each unit's state, by its object path.
 	var mu sync.Mutex
+	states := map[dbus.ObjectPath]bool{}
 	last := false
-	report := func(active string) {
+	report := func(path dbus.ObjectPath, active string) {
 		mu.Lock()
 		defer mu.Unlock()
-		if l := lockedState(active); l != last {
+		states[path] = lockedState(active)
+		l := false
+		for _, locked := range states {
+			l = l || locked
+		}
+		if l != last {
 			last = l
 			changed(l)
 		}
 	}
+	var paths []dbus.ObjectPath
+	for _, unit := range lockUnits {
+		var path dbus.ObjectPath
+		if err := manager.Call("org.freedesktop.systemd1.Manager.LoadUnit", 0, unit).Store(&path); err != nil {
+			return fmt.Errorf("couldn't find %s: %w", unit, err)
+		}
+		if err := conn.AddMatchSignal(
+			dbus.WithMatchObjectPath(path),
+			dbus.WithMatchInterface("org.freedesktop.DBus.Properties"),
+			dbus.WithMatchMember("PropertiesChanged"),
+		); err != nil {
+			return fmt.Errorf("couldn't watch %s: %w", unit, err)
+		}
+		paths = append(paths, path)
+	}
+	watched := func(path dbus.ObjectPath) bool {
+		for _, p := range paths {
+			if p == path {
+				return true
+			}
+		}
+		return false
+	}
 	sigs.on("org.freedesktop.DBus.Properties.PropertiesChanged", func(sig *dbus.Signal) {
-		if sig.Sender != systemd || sig.Path != path || len(sig.Body) < 2 {
+		if sig.Sender != systemd || !watched(sig.Path) || len(sig.Body) < 2 {
 			return
 		}
 		if iface, _ := sig.Body[0].(string); iface != "org.freedesktop.systemd1.Unit" {
@@ -145,14 +165,16 @@ func watchLock(conn *dbus.Conn, sigs *signals, changed func(bool)) error {
 		props, _ := sig.Body[1].(map[string]dbus.Variant)
 		if v, ok := props["ActiveState"]; ok {
 			s, _ := v.Value().(string)
-			report(s)
+			report(sig.Path, s)
 		}
 	})
-	v, err := conn.Object("org.freedesktop.systemd1", path).GetProperty("org.freedesktop.systemd1.Unit.ActiveState")
-	if err != nil {
-		return fmt.Errorf("couldn't read whether %s runs: %w", lockUnit, err)
+	for i, path := range paths {
+		v, err := conn.Object("org.freedesktop.systemd1", path).GetProperty("org.freedesktop.systemd1.Unit.ActiveState")
+		if err != nil {
+			return fmt.Errorf("couldn't read whether %s runs: %w", lockUnits[i], err)
+		}
+		s, _ := v.Value().(string)
+		report(path, s)
 	}
-	s, _ := v.Value().(string)
-	report(s)
 	return nil
 }

@@ -213,16 +213,20 @@ func (k *fakeKeyring) values() map[string]string {
 	return out
 }
 
-// fakeSystemd is the user manager, with tide-lock.service.
+// fakeSystemd is the user manager, with tide-lock.service and its
+// fallback.
 type fakeSystemd struct {
-	conn  *dbus.Conn
-	mu    sync.Mutex
-	state string
+	conn   *dbus.Conn
+	mu     sync.Mutex
+	states map[dbus.ObjectPath]string
 	// The agent's session connection, which subscribes.
 	subscriber string
 }
 
-const lockPath = dbus.ObjectPath("/org/freedesktop/systemd1/unit/tide_2dlock_2eservice")
+const (
+	lockPath     = dbus.ObjectPath("/org/freedesktop/systemd1/unit/tide_2dlock_2eservice")
+	fallbackPath = dbus.ObjectPath("/org/freedesktop/systemd1/unit/tide_2dlock_2dfallback_2eservice")
+)
 
 func (f *fakeSystemd) Subscribe(sender dbus.Sender) *dbus.Error {
 	f.mu.Lock()
@@ -232,17 +236,32 @@ func (f *fakeSystemd) Subscribe(sender dbus.Sender) *dbus.Error {
 }
 
 func (f *fakeSystemd) LoadUnit(name string) (dbus.ObjectPath, *dbus.Error) {
-	if name != lockUnit {
-		return "", dbus.NewError("org.freedesktop.systemd1.NoSuchUnit", nil)
+	switch name {
+	case "tide-lock.service":
+		return lockPath, nil
+	case "tide-lock-fallback.service":
+		return fallbackPath, nil
 	}
-	return lockPath, nil
+	return "", dbus.NewError("org.freedesktop.systemd1.NoSuchUnit", nil)
 }
 
-func (f *fakeSystemd) set(state string) {
+func (f *fakeSystemd) get(path dbus.ObjectPath) string {
 	f.mu.Lock()
-	f.state = state
+	defer f.mu.Unlock()
+	if s, ok := f.states[path]; ok {
+		return s
+	}
+	return "inactive"
+}
+
+// set changes tide-lock.service's state, and setUnit any unit's.
+func (f *fakeSystemd) set(state string) { f.setUnit(lockPath, state) }
+
+func (f *fakeSystemd) setUnit(path dbus.ObjectPath, state string) {
+	f.mu.Lock()
+	f.states[path] = state
 	f.mu.Unlock()
-	f.conn.Emit(lockPath, "org.freedesktop.DBus.Properties.PropertiesChanged", "org.freedesktop.systemd1.Unit",
+	f.conn.Emit(path, "org.freedesktop.DBus.Properties.PropertiesChanged", "org.freedesktop.systemd1.Unit",
 		map[string]dbus.Variant{"ActiveState": dbus.MakeVariant(state)}, []string{})
 }
 
@@ -297,15 +316,16 @@ func newWorld(t *testing.T, timeout time.Duration, btTimeout ...time.Duration) *
 	own(t, kc, secretsName)
 
 	sc := connect(t, w.addr)
-	w.systemd = &fakeSystemd{conn: sc, state: "inactive"}
+	w.systemd = &fakeSystemd{conn: sc, states: map[dbus.ObjectPath]string{}}
 	sc.Export(w.systemd, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager")
-	sc.ExportMethodTable(map[string]any{
-		"Get": func(iface, prop string) (dbus.Variant, *dbus.Error) {
-			w.systemd.mu.Lock()
-			defer w.systemd.mu.Unlock()
-			return dbus.MakeVariant(w.systemd.state), nil
-		},
-	}, lockPath, "org.freedesktop.DBus.Properties")
+	for _, path := range []dbus.ObjectPath{lockPath, fallbackPath} {
+		path := path
+		sc.ExportMethodTable(map[string]any{
+			"Get": func(iface, prop string) (dbus.Variant, *dbus.Error) {
+				return dbus.MakeVariant(w.systemd.get(path)), nil
+			},
+		}, path, "org.freedesktop.DBus.Properties")
+	}
 	own(t, sc, "org.freedesktop.systemd1")
 
 	w.bluez = connect(t, w.addr)
@@ -551,6 +571,30 @@ func TestLockedRequestsAreMissed(t *testing.T) {
 	if c, _ := m["connection"].(map[string]any); c["uuid"] != "u-1" {
 		t.Errorf("missed %v", m)
 	}
+	w.systemd.set("inactive")
+	if m := w.expect("lock"); m["locked"] != false {
+		t.Errorf("unlock %v", m)
+	}
+}
+
+// While hyprlock holds the lock for a tide-lock that couldn't run, the
+// session is still locked: requests are missed, not queued behind it.
+func TestFallbackLockCounts(t *testing.T) {
+	w := newWorld(t, defaultTimeout)
+	w.systemd.set("failed")
+	w.systemd.setUnit(fallbackPath, "active")
+	if m := w.expect("lock"); m["locked"] != true {
+		t.Fatalf("lock %v", m)
+	}
+	r := w.result(w.getSecrets(w.nm, psk(0), "802-11-wireless-security", nil, flagAllowInteraction))
+	if errName(r.err) != errNoSecrets {
+		t.Errorf("err = %v", r.err)
+	}
+	w.expect("missed")
+	// tide-lock holding the lock again keeps it locked, and unlocking
+	// there unlocks.
+	w.systemd.set("active")
+	w.systemd.setUnit(fallbackPath, "inactive")
 	w.systemd.set("inactive")
 	if m := w.expect("lock"); m["locked"] != false {
 		t.Errorf("unlock %v", m)

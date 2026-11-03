@@ -32,6 +32,7 @@ wrapper=bin/tide-hyprland
 portals=xdg-desktop-portal/tide-portals.conf
 autostart=systemd/user/app-.service.d/tide-autostart.conf
 lock=systemd/user/tide-lock.service
+lockfallback=systemd/user/tide-lock-fallback.service
 clipboard=systemd/user/tide-clipboard.service
 lidinhibit=systemd/user/tide-lid-inhibit.service
 
@@ -183,12 +184,53 @@ done
 # --- tide-lock.service ----------------------------------------------------------
 # The lock (SPEC.md §10) runs the shell's lock.qml with the file watcher off,
 # and only a crash restarts it: an unlock is a clean exit.
-check "the lock runs lock.qml from the installed shell" \
-    has_line "$lock" "ExecStart=qs -p %h/.config/quickshell/tide/lock.qml"
+check "the lock runs tide-lock, which runs lock.qml from the installed shell" \
+    has_line "$lock" "ExecStart=tide-lock"
 check "the lock's file watcher is off" \
     has_line "$lock" "Environment=QS_DISABLE_FILE_WATCHER=1"
 check "only a crash restarts the lock" \
     has_line "$lock" "Restart=on-failure"
+# A lock that fails still locks the session, with hyprlock: at once for a
+# lock that can't start, and once a crash loop's restarts run out.
+check "a failed lock starts the fallback" \
+    has_line "$lock" "OnFailure=tide-lock-fallback.service"
+check "a lock that can't start isn't restarted" \
+    has_line "$lock" "RestartPreventExitStatus=78"
+check "tide-lock exits with the status the unit doesn't restart" \
+    has_line bin/tide-lock "EX_CONFIG=78"
+check "a crash loop's restarts run out within 10 s" \
+    has_line "$lock" "StartLimitIntervalSec=10"
+check "and at the fifth start" has_line "$lock" "StartLimitBurst=5"
+# A crash that's restarted mustn't also start hyprlock, which would race
+# the restarted lock for the session.
+check "a restarted lock skips the fallback" has_line "$lock" "RestartMode=direct"
+check "the fallback is hyprlock" has_line "$lockfallback" "ExecStart=hyprlock"
+check "the fallback stops with the session" \
+    has_line "$lockfallback" "PartOf=graphical-session.target"
+check "a crashed fallback takes the lock back" has_line "$lockfallback" "Restart=on-failure"
+check "nothing but the lock's failure starts the fallback" \
+    lacks_line_matching "$lockfallback" "^(\[Install\]|WantedBy=)"
+check "the fallback has no fallback of its own" \
+    lacks_line_matching "$lockfallback" "^OnFailure="
+# The fallback's notice, as systemd would run it, with a fake notify-send
+# that records its arguments, one per line, and exits $FAKE_NOTIFY_STATUS.
+fallback_notice=$(sed -n "s/^ExecStartPost=\/bin\/sh -c '\(.*\)'\$/\1/p" "$lockfallback")
+mkdir -p "$tmp/notice-bin"
+cat > "$tmp/notice-bin/notify-send" <<FAKE
+#!/bin/sh
+printf '%s\n' "\$@" > "$tmp/notice"
+exit "\${FAKE_NOTIFY_STATUS:-0}"
+FAKE
+chmod +x "$tmp/notice-bin/notify-send"
+notice_err=$(PATH="$tmp/notice-bin:$PATH" sh -c "$fallback_notice" 2>&1)
+check "the fallback's notice runs: $notice_err" test "$?" -eq 0
+check "the fallback says the lock fell back, and where to look" \
+    test "$(cat "$tmp/notice")" = "$(printf '%s\n' --urgency=critical --app-name=tide "The tide lock failed" "hyprlock locked the session instead. Run tide doctor to see why.")"
+notice_err=$(FAKE_NOTIFY_STATUS=1 PATH="$tmp/notice-bin:$PATH" sh -c "$fallback_notice" 2>&1)
+check "a notice that fails never stops the fallback" test "$?" -eq 0
+check "and is logged" test "$notice_err" = "tide-lock-fallback: notify-send failed, so only the journal says the lock fell back"
+check "make install installs the fallback's unit" \
+    grep -q 'systemd/user/tide-lock-fallback.service' Makefile
 check "the lock's PAM service checks the password like a login" \
     has_line pam/tide-lock "auth include login"
 check "the lock asks PAM for its own service" \
@@ -240,9 +282,10 @@ if command -v systemd-analyze >/dev/null 2>&1; then
     printf '[Unit]\nDescription=agent\n[Service]\nExecStart=%s\n' "$tmp/stub" \
         > "$tmp/units/$agent_unit"
     cp "$autostart" "$tmp/units/app-.service.d/"
-    sed "s|^ExecStart=qs .*\$|ExecStart=$tmp/stub|" "$lock" > "$tmp/units/tide-lock.service"
+    sed "s|^ExecStart=tide-lock\$|ExecStart=$tmp/stub|" "$lock" > "$tmp/units/tide-lock.service"
+    sed "s|^ExecStart=hyprlock\$|ExecStart=$tmp/stub|" "$lockfallback" > "$tmp/units/tide-lock-fallback.service"
     sed "s|^ExecStart=wl-paste .*\$|ExecStart=$tmp/stub|" "$clipboard" > "$tmp/units/tide-clipboard.service"
-    for u in tide.service tide-lock.service tide-clipboard.service hypridle.service "$agent_unit"; do
+    for u in tide.service tide-lock.service tide-lock-fallback.service tide-clipboard.service hypridle.service "$agent_unit"; do
         out=$(cd "$tmp/units" && XDG_RUNTIME_DIR="$tmp/run" \
             systemd-analyze verify --user --man=no "$u" 2>&1)
         status=$?
@@ -286,6 +329,7 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
              .config/hypr/tide/focus.lua \
              .config/systemd/user/tide.service \
              .config/systemd/user/tide-lock.service \
+             .config/systemd/user/tide-lock-fallback.service \
              .config/quickshell/tide/lock.qml \
              .config/quickshell/tide/LockSurface.qml \
              .config/quickshell/tide/LockFace.qml \
@@ -318,6 +362,8 @@ if make -s install-session DESTDIR="$tmp/root" PREFIX=/usr >"$tmp/session.log" 2
         test -x "$tmp/root/usr/bin/tide-tabs"
     check "make install-session installs the unit's shell" \
         test -x "$tmp/root/usr/bin/tide-shell"
+    check "make install-session installs what the lock's unit runs" \
+        test -x "$tmp/root/usr/bin/tide-lock"
     check "make install-session installs the session entry" \
         test -f "$tmp/root/usr/share/wayland-sessions/tide.desktop"
     check "make install-session installs the lock's PAM service in /etc/pam.d" \

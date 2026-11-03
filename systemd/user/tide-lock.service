@@ -7,16 +7,34 @@ Description=tide lock screen
 Documentation=https://github.com/mikelward/tide
 PartOf=graphical-session.target
 After=graphical-session.target
+# A lock that fails still locks the session, with hyprlock. This unit
+# fails only once it won't be restarted: at once for a lock that can't
+# start (tide-lock exits 78), or once the restarts below run out. An
+# unlock is a clean exit, and a stop at logout is too, so neither starts it.
+OnFailure=tide-lock-fallback.service
+# The restarts run out at the fifth start in 10 s. These are systemd's
+# defaults, written here because the fallback depends on them.
+StartLimitIntervalSec=10
+StartLimitBurst=5
 
 [Service]
 Type=simple
 # A live lock never reloads because the shell's files were edited.
 Environment=QS_DISABLE_FILE_WATCHER=1
-ExecStart=qs -p %h/.config/quickshell/tide/lock.qml
+# Runs `qs -p %h/.config/quickshell/tide/lock.qml` once it knows qs can.
+ExecStart=tide-lock
 # If the lock dies, the compositor keeps the session locked; restarting
 # takes the lock back (Hyprland's misc:allow_session_lock_restore), and the
 # password unlocks it as usual. An unlock is a clean exit, which this
 # doesn't restart.
 Restart=on-failure
 RestartSec=0
+# Straight back to starting, without passing through failed, so a crash
+# that's restarted doesn't start the fallback too, racing this lock for
+# the session; OnFailure= waits until the restarts run out. systemd 254
+# and later; an older one ignores it.
+RestartMode=direct
+# A lock that can't start (no qs, an old one, no lock.qml) can't be fixed
+# by retrying, so it fails at once, to the fallback.
+RestartPreventExitStatus=78
 Slice=session-graphical.slice

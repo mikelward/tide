@@ -20,13 +20,14 @@ runs both installs below, and enables `tide.service`. It leaves the display
 manager as it is, with tide as one more session. By hand, it's:
 
     make install                       # builds tide-grant, tide-tz, tide-greetd, tide-agent and tide-tabs (needs Go 1.22+); layout, user units, portal config under ~/.config
-    sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant, tide-tz, tide-greetd, tide-agent, tide-tabs and tide-sysmon under /usr/local
+    sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant, tide-tz, tide-greetd, tide-agent, tide-tabs, tide-sysmon and tide-lock under /usr/local
     systemctl --user daemon-reload
     systemctl --user enable tide.service tide-clipboard.service
 
 By hand, also install what the session runs: Hyprland 0.56 or later,
 Quickshell 0.3 (`qs`, which draws the bar; without it `tide-shell`
-falls back to waybar), hypridle, uwsm, waybar, swaync, a polkit agent, swww
+falls back to waybar), hypridle, hyprlock
+(the lock's fallback, when tide's lock can't run), uwsm, waybar, swaync, a polkit agent, swww
 or swaybg (for waybar's bar; the Quickshell shell draws its own wallpaper),
 notify-send (libnotify), which the shell reports a bad settings
 file with, jq, which `tide doctor` reads Hyprland's JSON with, python3,
@@ -131,7 +132,8 @@ wrong process or that D-Bus could start a rival for, daemons running twice
 or rivals to an owner, the portal
 config, Hyprland's config errors, autostart entries that run in
 tide without being on its allowlist, and a lock that couldn't work: its
-unit, `lock.qml` or PAM file missing, or the last lock failed, and
+unit, `lock.qml` or PAM file missing, or the last lock failed; its
+hyprlock fallback missing or failed; and
 cliphist missing or `tide-clipboard.service` stopped. It exits 1
 if it found a problem.
 

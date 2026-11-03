@@ -1,0 +1,61 @@
+#!/bin/sh
+#
+# tide-lock: what tide-lock.service runs (SPEC.md §10). It runs the lock,
+# `qs -p lock.qml`, once it knows qs can load it.
+#
+# A lock that can't start fails at once, by name, and exits EX_CONFIG
+# (78). The unit doesn't restart on that (RestartPreventExitStatus=78), so
+# it fails right away, and its OnFailure= starts hyprlock instead
+# (tide-lock-fallback.service). It fails that way when:
+#   - qs (Quickshell) isn't installed;
+#   - lock.qml isn't installed;
+#   - qs is older than 0.3. 0.3.0 added what the lock's QML uses, and an
+#     older qs (Debian's 0.2.1) fails to load it, so the session never
+#     locked.
+# A version it can't read is logged and let through, as tide-shell does,
+# so a new format can't cost the lock. If that qs can't load lock.qml, it
+# exits non-zero, and the unit's restarts run out to the same fallback.
+
+prog=${0##*/}
+# Where `make install` puts the lock.
+lock_qml=$HOME/.config/quickshell/tide/lock.qml
+# tide-shell and tide-doctor check the same.
+min_quickshell=0.3
+EX_CONFIG=78
+
+log() {
+    echo "$prog: $*" >&2
+}
+
+# True when version $1 is at least $2, comparing dot-separated numbers.
+version_at_least() {
+    awk -v a="$1" -v b="$2" 'BEGIN {
+        n = split(a, x, "."); m = split(b, y, ".")
+        for (i = 1; i <= (n > m ? n : m); i++)
+            if (x[i] + 0 != y[i] + 0) exit !(x[i] + 0 > y[i] + 0)
+    }'
+}
+
+if ! qs_path=$(command -v qs); then
+    log "qs (Quickshell) isn't installed, so the lock is hyprlock's; \`tide doctor\` says how to fix it"
+    exit $EX_CONFIG
+fi
+if ! test -f "$lock_qml"; then
+    log "there's no lock at $lock_qml, so the lock is hyprlock's; run \`make install\` in tide"
+    exit $EX_CONFIG
+fi
+# 0.2 prints its version as "quickshell 0.2.1, revision ...", 0.3 as
+# "Quickshell 0.3.1 (revision ...)".
+if ! out=$(qs --version 2>&1); then
+    log "couldn't tell which Quickshell $qs_path is (qs --version: $(printf '%s\n' "$out" | tail -n 1)); running its lock anyway"
+else
+    version=$(printf '%s\n' "$out" | sed -n 's/^[Qq]uickshell \([0-9][0-9]*\.[0-9][0-9.]*\).*/\1/p' | head -n 1)
+    if test -z "$version"; then
+        log "couldn't tell which Quickshell $qs_path is (qs --version printed '$(printf '%s\n' "$out" | head -n 1)'); running its lock anyway"
+    elif ! version_at_least "$version" "$min_quickshell"; then
+        log "qs ($qs_path) is Quickshell $version, and tide's lock needs $min_quickshell or newer, so the lock is hyprlock's; \`tide doctor\` says how to fix it"
+        exit $EX_CONFIG
+    fi
+fi
+
+exec qs -p "$lock_qml"

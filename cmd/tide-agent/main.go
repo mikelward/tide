@@ -22,7 +22,8 @@
 //	{"type": "status", "state": "registered" | "standing-aside" (with
 //	 "pid", nm-applet's) | "waiting" (for NetworkManager) |
 //	 "unregistered" (with "message")}
-//	{"type": "lock", "locked": bool}       tide-lock.service started or stopped
+//	{"type": "lock", "locked": bool}       the lock started or stopped:
+//	                                       tide-lock.service or its fallback
 //	{"type": "missed", "connection": {...}} a request declined while locked,
 //	                                       or that nobody answered in time
 //	{"type": "bt-status", "state": ...}    the same, for BlueZ's pairing
