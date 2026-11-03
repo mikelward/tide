@@ -3586,7 +3586,8 @@ tide's own, and links out for the rest:
 | **Hardware** | |
 | Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
 | Sound | output and input devices; *advanced* opens `pavucontrol` |
-| Network, Bluetooth | *advanced* opens `nm-connection-editor` / `blueman-manager` |
+| Network | *advanced* opens `nm-connection-editor` |
+| Bluetooth | *advanced* opens `blueman-manager` |
 | Mouse | for every mouse, or one by name: speed, scroll speed, natural scrolling, left-handed |
 | Touchpad | for every touchpad, or one by name: the same, plus tap to click and off while typing |
 | Keyboard | for every keyboard, or one by name: layouts and their variants, repeat delay and rate; below them, its shortcuts, a read-only list of the current bindings, generated from the config |
