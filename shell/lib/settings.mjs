@@ -102,7 +102,7 @@ export const PAGES = Object.freeze([
         label: "Workspaces",
         icon: "view-grid-symbolic",
         keywords: ["home workspace", "standing workspaces", "name patterns"],
-        about: "Standing workspaces are always on the bar, in this order; the first is home, made at login, where only home's apps go. Home's apps start there at login: a program, such as gmail, or a web address, opened as a Chrome app window. A window class or a site goes there without starting. A name pattern is a regular expression tried against a new window's title, in order: its first capture group names the window's workspace.",
+        about: "Standing workspaces are always on the bar, in this order; the first is home, made at login, where home's apps always open. Home's apps start there at login: a program, such as gmail, or a web address, opened as a Chrome app window. A window class or a site goes there without starting. A name pattern is a regular expression tried against a new window's title, in order: its first capture group names the window's workspace.",
         advanced: null,
     },
     {

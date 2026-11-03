@@ -599,18 +599,16 @@ export function promptWanted(client, home, inApps, resolved = {}) {
 // The name prompt's rows for what's typed: first the typed name itself,
 // when no workspace has it yet ({name, isNew: true}), then the workspaces
 // in `names` (the bar's order) that match it, best first, each {name,
-// isNew: false, positions}. Home is offered only when `allowHome` (a home
-// app's window), and a typed name that is home's otherwise gets no row.
-export function promptRows({ names, typed, home, allowHome = false }) {
+// isNew: false, positions}. Home is one of them, for any window or launch.
+export function promptRows({ names, typed }) {
     const t = String(typed ?? "").trim();
-    const offered = names.filter((n) => allowHome || !sameName(n, home));
     const rows = [];
-    const existing = matchName(offered, t);
-    if (t !== "" && existing === null && (allowHome || !sameName(t, home)) && !checkName(t).error) {
+    const existing = matchName(names, t);
+    if (t !== "" && existing === null && !checkName(t).error) {
         rows.push({ name: t, isNew: true, positions: [] });
     }
     const scored = [];
-    offered.forEach((n, i) => {
+    names.forEach((n, i) => {
         const m = match(t, n);
         if (m) {
             scored.push({ name: n, isNew: false, positions: m.positions, score: m.score, exact: sameName(n, t), i });
@@ -625,7 +623,7 @@ export function promptRows({ names, typed, home, allowHome = false }) {
 
 // What Enter on row `selected` does: {name} to go to, or {error} saying
 // why nothing can. With no row, it's why the typed name won't do.
-export function promptChoice({ rows, selected, typed, home, allowHome = false }) {
+export function promptChoice({ rows, selected, typed }) {
     const row = rows[selected];
     if (row) {
         return { name: row.name };
@@ -633,9 +631,6 @@ export function promptChoice({ rows, selected, typed, home, allowHome = false })
     const checked = checkName(typed);
     if (checked.error) {
         return checked;
-    }
-    if (!allowHome && sameName(checked.name, home)) {
-        return { error: `${home} is home, which holds only its own apps` };
     }
     return { error: "nothing matches" };
 }

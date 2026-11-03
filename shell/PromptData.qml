@@ -13,7 +13,8 @@ import "lib/workspaces.mjs" as Ws
 //   - a new window on home, as it's first focused, unless it's a dialog, a
 //     status popup or one of home's apps (Names.promptWanted). One that
 //     takes focus as it opens asks at once; one the focus guard left
-//     waiting asks when you go to it;
+//     waiting asks when you go to it. One a launch sent home opens
+//     there and doesn't ask again (Ws.windowPrompt);
 //   - Super+Return, for a workspace to go to, moving no window, so it
 //     asks with no window focused too (`qs -c tide ipc call prompt go`);
 //   - Super+Shift+Return, for the focused window (`qs -c tide ipc call
@@ -22,7 +23,8 @@ import "lib/workspaces.mjs" as Ws
 //     anything (`ipc call prompt launch JSON`), waiting for the answer on
 //     a FIFO so it starts the app itself, in its caller's environment; and
 //     the launcher's Ctrl+Enter, which the shell launches.
-// A request that arrives while another is shown waits; one replacing
+// Every one offers home: any window may go there, and any launch open
+// there. A request that arrives while another is shown waits; one replacing
 // another is never taken as the first one's Esc.
 Singleton {
     id: root
@@ -38,52 +40,49 @@ Singleton {
     // (Names.windowOpened): the first focus asks Hyprland about one, and an
     // answer that comes after it closed is dropped (Names.windowAnswered).
     property var windows: Names.NO_WINDOWS
+    // Launches answered home (Ws.homeLaunched), so their windows, which
+    // open on home, don't ask again.
+    property var homeLaunches: Ws.NO_HOME_LAUNCHES
 
     function ask(request) {
         root.state = Names.promptQueued(root.state, request);
     }
 
-    // A window's class, from Hyprland's client list or its app ID.
-    function classOf(address) {
-        const t = Hyprland.toplevels.values.find(w => Ws.normalizeAddress(w.address) === address);
-        return t ? (t.lastIpcObject?.class || t.wayland?.appId || "") : "";
-    }
-
     // Super+Return: a workspace to go to, from wherever you are, an empty
-    // one included. Home is offered, since nothing moves there.
+    // one included.
     function askGo() {
-        root.ask({ kind: "go", allowHome: true });
+        root.ask({ kind: "go" });
     }
 
-    // Super+Shift+Return: the focused window, wherever it is. With none
-    // there's nothing to move, so it only says so in the log.
+    // Super+Shift+Return: the focused window, wherever it is, to any
+    // workspace, home included. With none there's nothing to move, so it
+    // only says so in the log.
     function askMove() {
         const address = Ws.normalizeAddress(Hyprland.activeToplevel?.address);
         if (address === null) {
             console.log("tide: Super+Shift+Return with no window focused; nothing to move");
             return;
         }
-        root.ask({ kind: "move", address: address, allowHome: Names.isHomeApp(root.classOf(address), root.inApps, WorkspacesData.resolved) });
+        root.ask({ kind: "move", address: address });
     }
 
     // The launcher's Ctrl+Enter: `argv` is what follows `tide launch`, run
-    // in `cwd`, and `apps` the IDs it grants. It always asks, and home is
-    // offered to one of home's apps.
+    // in `cwd`, and `apps` the IDs it grants. It always asks.
     function askLaunch(argv, cwd, apps) {
-        const homeApp = apps.some(id => Names.isHomeApp(id, root.inApps, WorkspacesData.resolved));
-        root.ask({ kind: "launch", argv: argv, cwd: cwd, allowHome: homeApp });
+        root.ask({ kind: "launch", argv: argv, cwd: cwd, apps: apps });
     }
 
     // `tide launch` from home, waiting on the FIFO at `answer`, for an app
     // whose window may have any of the classes `apps` (resolved there past
-    // wrappers and desktop entries). One of home's apps is answered home at
+    // wrappers and desktop entries), granted to windows of `grants` (`*`
+    // for any, as a terminal's). One of home's apps is answered home at
     // once, as SPEC.md §6.5 says.
-    function askAnswer(answer, apps) {
+    function askAnswer(answer, apps, grants) {
         if (apps.some(id => Names.isHomeApp(id, root.inApps, WorkspacesData.resolved))) {
             root.reply(answer, `workspace ${root.home}`);
             return;
         }
-        root.ask({ kind: "launch", answer: answer, allowHome: false });
+        root.ask({ kind: "launch", answer: answer, apps: apps, grants: grants });
     }
 
     // Tells a waiting `tide launch` its answer: "workspace NAME" or
@@ -107,6 +106,9 @@ Singleton {
             return;
         }
         root.state = Names.promptDone(root.state, r.id);
+        if (r.kind === "launch" && Names.sameName(name, root.home)) {
+            root.homeLaunches = Ws.homeLaunched(root.homeLaunches, r.grants ?? r.apps, Date.now() / 1000);
+        }
         const a = Names.promptAnswer(r, name);
         if (a.reply !== undefined) {
             root.reply(a.answer, a.reply);
@@ -139,8 +141,8 @@ Singleton {
     IpcHandler {
         target: "prompt"
 
-        // `request` is JSON: {"apps": [...], "answer": FIFO}, from `tide
-        // launch`, which waits on the FIFO for "workspace NAME" or
+        // `request` is JSON: {"apps": [...], "grants": [...], "answer":
+        // FIFO}, from `tide launch`, which waits on the FIFO for "workspace NAME" or
         // "cancel". A malformed one is refused, so tide launch starts the
         // app where you are and says why.
         function launch(request: string): string {
@@ -151,10 +153,11 @@ Singleton {
                 return `refused: not JSON: ${e.message}`;
             }
             if (!r || typeof r.answer !== "string" || !r.answer.startsWith("/")
-                || !Array.isArray(r.apps) || !r.apps.every(a => typeof a === "string")) {
-                return "refused: expected {\"apps\": [IDs], \"answer\": \"/path/to/fifo\"}";
+                || !Array.isArray(r.apps) || !r.apps.every(a => typeof a === "string")
+                || (r.grants !== undefined && !(Array.isArray(r.grants) && r.grants.every(a => typeof a === "string")))) {
+                return "refused: expected {\"apps\": [IDs], \"grants\": [IDs], \"answer\": \"/path/to/fifo\"}";
             }
-            root.askAnswer(r.answer, r.apps);
+            root.askAnswer(r.answer, r.apps, r.grants);
             return "asked";
         }
         function go(): void {
@@ -206,8 +209,17 @@ Singleton {
                     root.windows = answered.state;
                     // Closed while Hyprland answered: nothing to ask about.
                     const client = answered.live ? Names.clientAt(clients, run.address) : null;
-                    if (Names.promptWanted(client, root.home, root.inApps, WorkspacesData.resolved)) {
-                        root.ask({ kind: "window", address: run.address, allowHome: false });
+                    // A launch you sent home stays there, without asking.
+                    const judged = Ws.windowPrompt(client, {
+                        home: root.home,
+                        inApps: root.inApps,
+                        resolved: WorkspacesData.resolved,
+                        launches: root.homeLaunches,
+                        now: Date.now() / 1000
+                    });
+                    root.homeLaunches = judged.launches;
+                    if (judged.ask) {
+                        root.ask({ kind: "window", address: run.address });
                     }
                 }
             }

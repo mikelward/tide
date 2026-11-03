@@ -15,8 +15,8 @@ import "lib/workspaces.mjs" as Ws
 //     replaces it, and follows the window's title until you type.
 //     With no window, as for Super+Return or a launch, it starts empty.
 //   - The rows are the typed name, when it's new, then the workspaces that
-//     match it. Home is offered only to one of home's apps, and to
-//     Super+Return, which moves nothing.
+//     match it, home among them: any window may go there, and any
+//     launch open there.
 //   - Enter goes to the selected row's workspace, made if it's new; Esc is
 //     PromptData.cancel's.
 PanelWindow {
@@ -46,16 +46,12 @@ PanelWindow {
     })), WorkspacesData.standing).map(w => w.name)
     readonly property var rows: Names.promptRows({
         names: root.names,
-        typed: field.text,
-        home: PromptData.home,
-        allowHome: root.request?.allowHome ?? false
+        typed: field.text
     })
     readonly property string refusal: root.rows.length > 0 ? "" : Names.promptChoice({
         rows: root.rows,
         selected: root.selected,
-        typed: field.text,
-        home: PromptData.home,
-        allowHome: root.request?.allowHome ?? false
+        typed: field.text
     }).error ?? ""
 
     function setText(text) {
@@ -69,9 +65,7 @@ PanelWindow {
         const choice = Names.promptChoice({
             rows: root.rows,
             selected: root.selected,
-            typed: field.text,
-            home: PromptData.home,
-            allowHome: root.request?.allowHome ?? false
+            typed: field.text
         });
         if (choice.name !== undefined) {
             PromptData.answer(choice.name);

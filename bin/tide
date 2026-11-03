@@ -450,6 +450,18 @@ EOF2
     printf '%s' "$out"
 }
 
+# The IDs the focus guard's grant matches, as JSON, which tell the shell
+# which window a launch it sends home is: `*` when --app '*' grants any
+# window, so a terminal's window is matched, not xdg-terminal-exec;
+# otherwise the IDs launch_apps_json gives.
+launch_grants_json() {
+    if test "$wildcard" = yes; then
+        printf '"*"'
+        return 0
+    fi
+    launch_apps_json "$@"
+}
+
 # `tide app-classes`: command_classes, for the shell, which matches home's
 # apps' windows by them (SPEC.md §6.5).
 app_classes() {
@@ -500,7 +512,8 @@ ask_workspace() {
         return 0
     fi
     apps=$(launch_apps_json "$@")
-    if ! reply=$(qs -c tide ipc call prompt launch "{\"apps\": [$apps], \"answer\": $(json_string "$answer_fifo")}" 2>&1) ||
+    grants=$(launch_grants_json "$@")
+    if ! reply=$(qs -c tide ipc call prompt launch "{\"apps\": [$apps], \"grants\": [$grants], \"answer\": $(json_string "$answer_fifo")}" 2>&1) ||
         test "$reply" != asked; then
         rm -f "$answer_fifo"
         echo "$prog launch: the shell's name prompt couldn't be asked for a workspace (${reply:-no answer}), so launching on $focused" >&2
