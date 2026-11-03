@@ -12,12 +12,16 @@ import { jsonError } from "./clocks.mjs";
 // option it's written as, its kind, and what's shown while it isn't set
 // (conf's config, as tide found it).
 const SPEED = Object.freeze({ key: "speed", label: "Speed", option: "sensitivity", kind: "speed", shown: 1 });
+// A mouse's acceleration: how much faster a fast move goes than libinput's
+// adaptive curve makes it, 1 being that curve, as conf's config has it.
+const ACCEL = Object.freeze({ key: "acceleration", label: "Acceleration", option: "accel_profile", kind: "accel", shown: 1 });
 const NATURAL = { key: "naturalScroll", label: "Natural scrolling", option: "natural_scroll", kind: "toggle" };
 const LEFT = { key: "leftHanded", label: "Left-handed", option: "left_handed", kind: "toggle" };
 
 export const SECTIONS = Object.freeze({
     mouse: Object.freeze([
         SPEED,
+        ACCEL,
         Object.freeze({ key: "scrollSpeed", label: "Scroll speed", option: "scroll_factor", kind: "scroll", shown: 3 }),
         Object.freeze(Object.assign({}, NATURAL, { shown: false })),
         Object.freeze(Object.assign({}, LEFT, { shown: true })),
@@ -47,11 +51,13 @@ export function isText(kind) {
     return TEXT_KINDS.includes(kind);
 }
 
-// What − and + step through: Hyprland's sensitivity runs from -1 to 1, a
+// What − and + step through: Hyprland's sensitivity runs from -1 to 1, an
+// acceleration from 0, flat, through 1, libinput's adaptive curve, a
 // scroll factor multiplies the device's own, a key repeats after a delay
 // in milliseconds, then a rate a second.
 export const LADDERS = Object.freeze({
     speed: Object.freeze([-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1]),
+    accel: Object.freeze([0, 0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4]),
     scroll: Object.freeze([0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 5]),
     delay: Object.freeze([150, 200, 250, 300, 400, 500, 600, 800, 1000]),
     rate: Object.freeze([10, 15, 20, 25, 30, 40, 50, 60]),
@@ -150,6 +156,9 @@ export function settingError(section, key, value) {
     }
     if (s.kind === "speed" && (value < -1 || value > 1)) {
         return `${section}.${key} must be from -1 to 1`;
+    }
+    if (s.kind === "accel" && (value < 0 || value > 4)) {
+        return `${section}.${key} must be from 0 to 4`;
     }
     if (s.kind === "scroll" && (value <= 0 || value > 10)) {
         return `${section}.${key} must be above 0 and at most 10`;
@@ -421,8 +430,60 @@ export function shown(input, section, key) {
     return set === undefined ? setting(section, key).shown : set;
 }
 
+// A mouse's acceleration as libinput's custom curve, or its flat profile
+// for 0, which Hyprland takes
+// as accel_profile = "custom <step> <points>": the speed out at each step
+// of speed in, in device units a ms, straight between points and on past
+// the last at its slope (libinput's filter-custom.c). It's libinput's
+// adaptive curve for a mouse (filter-mouse.c) with the rise above its
+// threshold, and its cap, times `amount`: factor 1 from 0.07 units a ms to
+// the threshold, then up to the cap, both set by the speed, `speed`, as
+// libinput sets them. A curve ignores sensitivity, so the speed is in it.
+// The adaptive curve's units are normalized to 1000 dpi and a curve's are
+// the device's, the same for a mouse libinput doesn't know the dpi of.
+// 41 points to 2 units a ms: past the cap by then at any speed, and within
+// libinput's 64.
+export const ACCEL_STEP = 0.05;
+const ACCEL_POINTS = 41;
+
+function accelFactor(v, amount, speed) {
+    const threshold = Math.max(0.2, 0.4 - 0.25 * speed);
+    const incline = 1.1 + 0.75 * speed;
+    const most = 2 + 1.5 * speed;
+    // Below 1, libinput's slowest speeds slow every move, whatever the amount.
+    const cap = most < 1 ? most : 1 + amount * (most - 1);
+    let factor;
+    if (v < 0.07) {
+        factor = 10 * v + 0.3;
+    } else if (v < threshold) {
+        factor = 1;
+    } else {
+        factor = 1 + amount * incline * (v - threshold);
+    }
+    return Math.min(cap, factor);
+}
+
+export function accelPoints(amount, speed) {
+    const points = [];
+    for (let i = 0; i < ACCEL_POINTS; i++) {
+        const v = i * ACCEL_STEP;
+        points.push(Math.round(v * accelFactor(v, amount, speed) * 10000) / 10000);
+    }
+    return points;
+}
+
+// Off is libinput's own flat profile: the same gain at every speed, with
+// sensitivity setting it, where a curve would keep the slowdown below 0.07.
+export function accelCurve(amount, speed) {
+    if (amount === 0) {
+        return "flat";
+    }
+    return `custom ${ACCEL_STEP} ${accelPoints(amount, speed).join(" ")}`;
+}
+
 // A setting as Lua: a name quoted, which settingError has kept to letters,
-// digits, -, _ and commas, so it needs no escapes.
+// digits, -, _ and commas, or a curve of digits, dots and spaces, so it
+// needs no escapes.
 function luaValue(value) {
     return typeof value === "string" ? `"${value}"` : String(value);
 }
@@ -440,7 +501,9 @@ export function inputLua(input) {
         const set = input[section] || {};
         const fields = SECTIONS[section]
             .filter(s => set[s.key] !== undefined)
-            .map(s => `${s.option} = ${luaValue(set[s.key])}`);
+            .map(s => s.kind === "accel"
+                ? `${s.option} = ${luaValue(accelCurve(set[s.key], shown(input, section, "speed")))}`
+                : `${s.option} = ${luaValue(set[s.key])}`);
         lines.push(`    ${section} = {${fields.length > 0 ? ` ${fields.join(", ")} ` : ""}},`);
     }
     // Only when there are some, so a conf from before devices doesn't
@@ -450,9 +513,17 @@ export function inputLua(input) {
         lines.push("    devices = {");
         for (const name of devices) {
             const set = input.devices[name];
+            const kind = deviceKind(name);
+            // A curve ignores sensitivity, so a mouse with its own speed or
+            // acceleration gets its own curve, from both as they apply to it.
+            const amount = set.acceleration !== undefined ? set.acceleration : (input[kind] || {}).acceleration;
+            const curve = setting(kind, "acceleration") && amount !== undefined
+                && (set.acceleration !== undefined || set.speed !== undefined);
             const fields = deviceSettings(name)
-                .filter(s => set[s.key] !== undefined)
-                .map(s => `${s.option} = ${luaValue(set[s.key])}`);
+                .filter(s => set[s.key] !== undefined || (s.kind === "accel" && curve))
+                .map(s => s.kind === "accel"
+                    ? `${s.option} = ${luaValue(accelCurve(amount, set.speed !== undefined ? set.speed : shown(input, kind, "speed")))}`
+                    : `${s.option} = ${luaValue(set[s.key])}`);
             lines.push(`        ["${name}"] = { ${fields.join(", ")} },`);
         }
         lines.push("    },");
@@ -618,11 +689,14 @@ export function stepped(kind, value, step) {
     return down.length === 0 ? value : down[down.length - 1];
 }
 
-// A value as the page shows it: a speed as -1 to +1, a scroll speed as a
-// multiple, a repeat delay in milliseconds and its rate a second.
+// A value as the page shows it: a speed as -1 to +1, an acceleration as a
+// multiple of libinput's or Off, a scroll speed as a multiple, a repeat delay in milliseconds and its rate a second.
 export function formatValue(kind, value) {
     if (kind === "speed") {
         return (value > 0 ? "+" : value < 0 ? "−" : "") + Math.abs(value).toFixed(2);
+    }
+    if (kind === "accel") {
+        return value === 0 ? "Off" : `${value}×`;
     }
     if (kind === "scroll") {
         return `${value}×`;

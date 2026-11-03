@@ -3591,8 +3591,8 @@ tide's own, and links out for the rest:
 | Sound | output and input devices; *advanced* opens `pavucontrol` |
 | Network | *advanced* opens `nm-connection-editor` |
 | Bluetooth | *advanced* opens `blueman-manager` |
-| Mouse | for every mouse, or one by name: speed, scroll speed, natural scrolling, left-handed |
-| Touchpad | for every touchpad, or one by name: the same, plus tap to click and off while typing |
+| Mouse | for every mouse, or one by name: speed, acceleration, scroll speed, natural scrolling, left-handed |
+| Touchpad | for every touchpad, or one by name: the mouse's but acceleration, plus tap to click and off while typing |
 | Keyboard | for every keyboard, or one by name: layouts and their variants, repeat delay and rate; below them, its shortcuts, a read-only list of the current bindings, generated from the config |
 | Power | the battery, the power profile, and what closing the lid does |
 | **Windows** | |
@@ -3652,6 +3652,33 @@ stays hand-written.
     a keyboard back on its first layout.
   - Only what's set reaches Hyprland. The rest stays as `conf`'s config
     has it, and the pages show those values until they're changed.
+  - A mouse's **acceleration** is an amount from 0 to 4, stepped 0, ¼, ½,
+    ¾, 1, 1½, 2, 2½, 3, 4. 1 is libinput's adaptive curve, which `conf`
+    sets; 0, Off, is libinput's `flat` profile, the same gain at every
+    speed, with the speed as sensitivity; 2 doubles how fast a fast move speeds up, and how
+    far.
+    - Hyprland takes it as a curve, `accel_profile = "custom <step>
+      <points>"` (Hyprland's `CInputManager::setPointerConfigs`): the
+      speed out at each step of speed in, which libinput joins with
+      straight lines and carries on past the last point at its slope
+      (`filter-custom.c`).
+    - The curve is libinput's adaptive one for a mouse
+      (`filter-mouse.c`), with the rise and the cap above factor 1 times
+      the amount. It's factor 1 from 0.07 units a ms to a threshold, then
+      a straight rise to a cap; the speed sets all three, as libinput
+      does. Below 1, libinput's slowest speeds slow every move; that's
+      kept whatever the amount.
+    - 41 points 0.05 units a ms apart, to 2: past the cap at any speed,
+      and within libinput's 64.
+    - A curve ignores sensitivity, so the speed is built into it. A mouse
+      with its own speed, or its own acceleration, gets its own curve.
+      With no acceleration set, the speed is sensitivity on `conf`'s
+      adaptive curve, as before.
+    - libinput's adaptive curve works in units normalized to 1000 dpi
+      and a curve in the device's own. They match for a mouse libinput
+      doesn't know the dpi of, which is most.
+    - Touchpads accelerate by a different libinput curve, so they don't
+      get one yet.
   - A keyboard layout and its variant are typed, as XKB's names (`us`, or
     `us,de` for two; `dvorak`, or none), and set with Enter. There's one
     variant, or one for each layout, a keyboard's own paired with every
