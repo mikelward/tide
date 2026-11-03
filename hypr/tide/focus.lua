@@ -538,21 +538,34 @@ function M.announce_waiting()
     end
 end
 
+-- The workspace showing on the focused monitor, by id, or nil if
+-- Hyprland can't say.
+local function active_workspace_id()
+    local ok, ws = pcall(hl.get_active_workspace)
+    return ok and field(ws, "id") or nil
+end
+
 function M.on_active(w, reason)
     reason = reason or 0
     -- Focus on nothing (an empty workspace, the last window closed) means no
     -- app is "the one you're in" until something is focused again.
     local before = state.active
+    local before_workspace = state.workspace
     state.active = w and active_record(w) or nil
+    state.workspace = active_workspace_id()
     local address = state.active and state.active.address
     if address then
         forget(address) -- however you got there, it isn't waiting now
     end
     -- Focus coming back to the window you were already in (the launcher
-    -- closing) isn't moving on, and the guard's own focusing is flagged
-    -- while it dispatches. Anything else is: the pointer, a key binding, a
-    -- click, a workspace switch, and focus passing on after a window closes.
-    local returned = address ~= nil and before ~= nil and before.address == address
+    -- closing) isn't moving on, nor is it staying on nothing on the same
+    -- workspace (the launcher closing on an empty one), and the guard's own
+    -- focusing is flagged while it dispatches. Anything else is: the
+    -- pointer, a key binding, a click, a workspace switch (to an empty one
+    -- too, by a click or the wheel on the bar), and focus passing on after a
+    -- window closes.
+    local returned = (address ~= nil and before ~= nil and before.address == address)
+        or (address == nil and before == nil and state.workspace ~= nil and state.workspace == before_workspace)
     if focusing or returned or reason == REASON_NEW_WINDOW then
         return
     end
@@ -847,6 +860,7 @@ function M.setup(opts)
     state.last_key = nil
     state.grants = {}
     state.active = nil
+    state.workspace = active_workspace_id()
     state.waiting = {}
     state.shell_order = nil
     local w = hl.get_active_window()
