@@ -544,6 +544,30 @@ export function wallpaperCandidates(settings, dark, home, env = "") {
     return out;
 }
 
+// The command that asks for a wallpaper, `label`'s (SPEC.md §16): tide-pick,
+// the desktop portal's file chooser, offering images, and opening where
+// `setting`'s file is, when one is set.
+export function pickCommand(label, setting, home) {
+    const command = ["tide-pick", "--images", "--title", label];
+    const full = typeof setting === "string" && setting !== "" ? expandHome(setting, home) : "";
+    const folder = full.slice(0, full.lastIndexOf("/"));
+    if (folder !== "") {
+        command.push("--folder", folder);
+    }
+    return command;
+}
+
+// The setting for the file tide-pick chose, from what it printed, `text`:
+// a file under `home` as from ~/, so it reads the same on another machine
+// sharing appearance.json; "" for none, as when the chooser was cancelled.
+export function pickedWallpaper(text, home) {
+    const path = String(text ?? "").replace(/\n$/, "");
+    if (!path.startsWith("/") || /[\n\r]/.test(path)) {
+        return "";
+    }
+    return home !== "" && path.startsWith(`${home}/`) ? `~/${path.slice(home.length + 1)}` : path;
+}
+
 // The command that prints the first of `paths` that's a regular file it
 // can read, or exits 1 with none: so a directory, which `test -r` alone
 // passes, isn't taken for a picture.
