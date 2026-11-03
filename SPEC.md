@@ -1207,6 +1207,9 @@ in how long they last and what stays visible:
   included) that match it, scored as the launcher scores. The top row is
   selected, so Enter on a new name makes it, and `↓` picks an existing one.
   A name that's an existing one, in any case, puts that one first instead.
+  Until you type, the window's short name isn't a filter: it comes first,
+  and every workspace follows in the bar's order, so `↓` reaches any of
+  them.
 - **Enter** makes the workspace, or uses the one already of that name,
   moves the window there, and focus follows. Enter on home keeps the
   window there, and it doesn't ask again.

@@ -600,12 +600,27 @@ export function promptWanted(client, home, inApps, resolved = {}) {
 // when no workspace has it yet ({name, isNew: true}), then the workspaces
 // in `names` (the bar's order) that match it, best first, each {name,
 // isNew: false, positions}. Home is one of them, for any window or launch.
-export function promptRows({ names, typed }) {
+// `suggested` says the text is still the one the prompt started with, the
+// window's short name: that comes first, as a new name or the workspace
+// that has it, and every other workspace follows in the bar's order, since
+// you haven't typed anything to filter them by.
+export function promptRows({ names, typed, suggested = false }) {
     const t = String(typed ?? "").trim();
     const rows = [];
     const existing = matchName(names, t);
     if (t !== "" && existing === null && !checkName(t).error) {
         rows.push({ name: t, isNew: true, positions: [] });
+    }
+    if (suggested && t !== "") {
+        if (existing !== null) {
+            rows.push({ name: existing, isNew: false, positions: match(t, existing)?.positions ?? [] });
+        }
+        for (const n of names) {
+            if (n !== existing) {
+                rows.push({ name: n, isNew: false, positions: [] });
+            }
+        }
+        return rows;
     }
     const scored = [];
     names.forEach((n, i) => {

@@ -311,6 +311,19 @@ test("the prompt offers the typed name first, then the matching workspaces", () 
     assert.deepEqual(promptRows({ names, typed: "" }).map((r) => r.name), ["in", "re", "oc", "me", "PR-12", "docs"]);
 });
 
+test("until you type, the window's short name comes first and every workspace follows", () => {
+    // A new name: it, then the workspaces in the bar's order.
+    assert.deepEqual(promptRows({ names, typed: "ABC-123", suggested: true }).map((r) => [r.name, r.isNew]),
+        [["ABC-123", true], ["in", false], ["re", false], ["oc", false], ["me", false], ["PR-12", false], ["docs", false]]);
+    // A workspace's name: that workspace first, then the rest, once each.
+    assert.deepEqual(promptRows({ names, typed: "docs", suggested: true }).map((r) => r.name),
+        ["docs", "in", "re", "oc", "me", "PR-12"]);
+    // Typed, it filters as before.
+    assert.deepEqual(promptRows({ names, typed: "ABC-123" }).map((r) => r.name), ["ABC-123"]);
+    // No suggestion: every workspace, as an empty prompt always lists.
+    assert.deepEqual(promptRows({ names, typed: "", suggested: true }).map((r) => r.name), ["in", "re", "oc", "me", "PR-12", "docs"]);
+});
+
 test("a typed name that's a workspace's, in any case, offers that one first", () => {
     const rows = promptRows({ names, typed: "RE" });
     assert.equal(rows[0].name, "re");
