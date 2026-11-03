@@ -3807,6 +3807,25 @@ stays hand-written.
   - The light and dark wallpapers (§15) are a file's path each, typed
     and set with Enter as the location is: absolute, or from `~/`. Empty
     is the default, `conf`'s images.
+  - **Each has a choose button,** which opens the desktop's file chooser,
+    offering images: `tide-pick` (`cmd/tide-pick`) asks the portal's
+    FileChooser (`OpenFile`), which `xdg-desktop-portal-gtk` serves with
+    GTK's dialog, as every app's file chooser is (§2).
+    - It opens where the wallpaper set now is, if one is.
+    - The panel closes first, since the chooser is a window and the panel
+      is over every window. It opens again on Appearance once the chooser
+      answers.
+    - The file chosen is set as a typed path is: one in your home folder
+      from `~/`, so it reads the same on another machine that shares
+      `appearance.json`. A cancel changes nothing.
+    - One that can't ask, such as with no portal running, says why on the
+      page.
+    - `tide-pick` prints the path and exits 0, prints nothing for a cancel,
+      and exits 2 with what went wrong. It listens for every request's
+      answer before asking, so a portal older than `handle_token`, which
+      names its own path, can't answer first.
+    - **Cost and reliability:** nothing new to install, since the portal is
+      tide's file chooser already; one D-Bus call a choice.
 
 - **Displays** sets each monitor's scale and where it goes beside the
   others, in `outputs.json` and `outputs.local.json`.

@@ -12,6 +12,7 @@ import "lib/dnd.mjs" as Dnd
 import "lib/floating.mjs" as FloatRules
 import "lib/idle.mjs" as Idle
 import "lib/input.mjs" as Input
+import "lib/launch.mjs" as Run
 import "lib/layouts.mjs" as Layouts
 import "lib/outputs.mjs" as Outputs
 import "lib/power.mjs" as Power
@@ -85,6 +86,38 @@ PanelWindow {
     function report(error) {
         if (error !== "") {
             console.warn(`tide: ${error}`);
+        }
+    }
+
+    // The wallpaper chooser running, or null (pickWallpaper).
+    property var picking: null
+
+    // A wallpaper's choose button: the desktop portal's file chooser
+    // (tide-pick), offering images, for setting `key`, `label`'s. The panel
+    // closes first, so the chooser opens over the desktop, not under it,
+    // and comes back on Appearance once it answers, with the file set.
+    function pickWallpaper(key, label) {
+        if (picking !== null) {
+            return;
+        }
+        const command = Appearance.pickCommand(label, AppearanceData.settings[key] ?? "", Quickshell.env("HOME") ?? "");
+        close();
+        picking = picker.createObject(root, { key: key, command: command });
+        picking.running = true;
+    }
+
+    // What tide-pick answered for `key`: the file chosen, nothing for a
+    // cancel, or why it couldn't ask, shown as a refused change is.
+    function picked(key, ok, errors, output) {
+        picking = null;
+        open("appearance");
+        if (!ok) {
+            appearance.refused = `couldn't open the file chooser: ${errors.trim() || "tide-pick didn't start"}`;
+            return;
+        }
+        const value = Appearance.pickedWallpaper(output, Quickshell.env("HOME") ?? "");
+        if (value !== "") {
+            appearance.set(key, value);
         }
     }
 
@@ -361,6 +394,43 @@ PanelWindow {
         TapHandler {
             enabled: button.moves
             onTapped: button.activated()
+        }
+    }
+
+    // tide-pick, tracked as every command the shell runs is
+    // (shell/lib/launch.mjs), waiting for its stdout too.
+    Component {
+        id: picker
+
+        Process {
+            id: pick
+
+            property string key
+            property var tracker: null
+
+            function handle(event) {
+                if (tracker.on(event)) {
+                    destroy();
+                }
+            }
+
+            Component.onCompleted: tracker = Run.track(command, (ok, errors, output) => root.picked(pick.key, ok, errors, output), {
+                warn: m => console.warn(m),
+                log: m => console.log(m)
+            }, true)
+            stdout: StdioCollector {
+                onStreamFinished: pick.handle({ type: "stdout", text: text })
+            }
+            stderr: StdioCollector {
+                onStreamFinished: pick.handle({ type: "stderr", text: text })
+            }
+            onStarted: handle({ type: "started" })
+            onRunningChanged: {
+                if (!running) {
+                    handle({ type: "stopped" });
+                }
+            }
+            onExited: (exitCode, status) => handle({ type: "exited", code: exitCode })
         }
     }
 
@@ -1797,7 +1867,8 @@ PanelWindow {
                         }
 
                         // The wallpapers, light and dark (§15): a file's
-                        // path, typed and set with Enter as the location is.
+                        // path, chosen in the desktop's file chooser, or
+                        // typed and set with Enter as the location is.
                         // Empty is the default, conf's images.
                         Repeater {
                             model: [{ key: "lightWallpaper", label: "Light wallpaper" }, { key: "darkWallpaper", label: "Dark wallpaper" }]
@@ -1824,7 +1895,33 @@ PanelWindow {
                                     font.pixelSize: 13
                                 }
 
+                                // Opens the file chooser, for an image.
                                 Rectangle {
+                                    anchors.right: wallpaperField.left
+                                    anchors.rightMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 26
+                                    height: 26
+                                    radius: 7
+                                    color: chooseHover.hovered ? Theme.surface2 : "transparent"
+
+                                    SymbolicIcon {
+                                        anchors.centerIn: parent
+                                        name: "document-open-symbolic"
+                                    }
+
+                                    HoverHandler {
+                                        id: chooseHover
+                                    }
+
+                                    TapHandler {
+                                        onTapped: root.pickWallpaper(wallpaper.modelData.key, wallpaper.modelData.label)
+                                    }
+                                }
+
+                                Rectangle {
+                                    id: wallpaperField
+
                                     anchors.right: parent.right
                                     anchors.rightMargin: 6
                                     anchors.verticalCenter: parent.verticalCenter

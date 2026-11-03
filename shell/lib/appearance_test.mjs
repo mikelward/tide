@@ -9,7 +9,7 @@ import {
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
-    expandHome, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
+    expandHome, pickCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
 } from "./appearance.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -600,4 +600,31 @@ test("a flip reads back from JSON as it was", () => {
         assert.deepEqual(flip(s, noon + MIN, kept(o)), flip(s, noon + MIN, o));
     }
     assert.equal(kept(null), null);
+});
+
+test("a wallpaper's chooser offers images, opening where its file is", () => {
+    const home = "/home/u";
+    assert.deepEqual(pickCommand("Light wallpaper", "~/Pictures/day.jpg", home),
+        ["tide-pick", "--images", "--title", "Light wallpaper", "--folder", "/home/u/Pictures"]);
+    assert.deepEqual(pickCommand("Dark wallpaper", "/srv/night.png", home),
+        ["tide-pick", "--images", "--title", "Dark wallpaper", "--folder", "/srv"]);
+    // The default, or none set, opens where the chooser likes.
+    assert.deepEqual(pickCommand("Dark wallpaper", "", home), ["tide-pick", "--images", "--title", "Dark wallpaper"]);
+    assert.deepEqual(pickCommand("Dark wallpaper", undefined, home), ["tide-pick", "--images", "--title", "Dark wallpaper"]);
+});
+
+test("the chosen file is the setting, from ~/ when it's home's", () => {
+    const home = "/home/u";
+    assert.equal(pickedWallpaper("/home/u/Pictures/Day one.jpg\n", home), "~/Pictures/Day one.jpg");
+    assert.equal(pickedWallpaper("/srv/night.png\n", home), "/srv/night.png");
+    // Not /home/uv, which only starts like home.
+    assert.equal(pickedWallpaper("/home/uv/a.png\n", home), "/home/uv/a.png");
+    // Cancelled, the chooser printed nothing; anything else isn't a path.
+    assert.equal(pickedWallpaper("", home), "");
+    assert.equal(pickedWallpaper("a.png\n", home), "");
+    assert.equal(pickedWallpaper("/a\n/b\n", home), "");
+    // As the page's field would set it.
+    for (const v of ["~/Pictures/Day one.jpg", "/srv/night.png"]) {
+        assert.equal(withSetting("{}", "lightWallpaper", v).error, undefined, v);
+    }
 });

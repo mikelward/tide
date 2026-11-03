@@ -116,7 +116,7 @@ chars:
 	$(NODE) shell/chars/generate.mjs "$(EMOJI_TEST)" "$(UNICODE_DATA)" > shell/chars/chars.tsv.tmp || { rm -f shell/chars/chars.tsv.tmp; exit 1; }
 	mv shell/chars/chars.tsv.tmp shell/chars/chars.tsv
 
-build: build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs
+build: build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick
 
 build/tide-grant: go.mod go.sum $(wildcard cmd/tide-grant/*.go)
 	$(GO) build -o $@ ./cmd/tide-grant
@@ -132,6 +132,9 @@ build/tide-agent: go.mod go.sum $(wildcard cmd/tide-agent/*.go)
 
 build/tide-tabs: go.mod $(wildcard cmd/tide-tabs/*.go)
 	$(GO) build -o $@ ./cmd/tide-tabs
+
+build/tide-pick: go.mod go.sum $(wildcard cmd/tide-pick/*.go)
+	$(GO) build -o $@ ./cmd/tide-pick
 
 # Copies only. Enabling tide.service, which hangs it off the tide
 # session's target, is `setup`'s job (scripts repo).
@@ -168,11 +171,11 @@ install-shell:
 # Root has no Go module cache to build with, so install-session only copies
 # the Go commands that `make build` (or `make install`) left in build/.
 install-session:
-	@for cmd in tide-grant tide-tz tide-greetd tide-agent tide-tabs; do \
+	@for cmd in tide-grant tide-tz tide-greetd tide-agent tide-tabs tide-pick; do \
 		test -x build/$$cmd || { echo "make install-session: no build/$$cmd; run make build first, as yourself" >&2; exit 1; }; \
 	done
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
-	install -m 755 bin/tide bin/tide-clipboard bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs "$(DESTDIR)$(PREFIX)/bin/"
+	install -m 755 bin/tide bin/tide-clipboard bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick "$(DESTDIR)$(PREFIX)/bin/"
 	install -m 644 session/tide.desktop "$(DESTDIR)$(PREFIX)/share/wayland-sessions/"
 	@# The greeter runs as greetd's own user, which can't read anyone's
 	@# ~/.config, so it gets a copy of the shell of its own. tide-greeter
