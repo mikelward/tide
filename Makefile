@@ -81,6 +81,7 @@ test-fast:
 	sh session/session_test.sh
 	sh bin/tide_test.sh
 	sh bin/tide-clipboard_test.sh
+	sh bin/tide-lock_test.sh
 	sh bin/tide-shell_test.sh
 	sh bin/tide-doctor_test.sh
 	sh bin/tide-sysmon_test.sh
@@ -138,7 +139,7 @@ install: build install-shell
 	install -d "$(HYPR_DIR)"
 	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/span.lua hypr/tide/layout.lua hypr/tide/focus.lua "$(HYPR_DIR)/"
 	install -d "$(SYSTEMD_USER_DIR)/hypridle.service.d" "$(SYSTEMD_USER_DIR)/app-.service.d"
-	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service systemd/user/tide-clipboard.service systemd/user/tide-lid-inhibit.service "$(SYSTEMD_USER_DIR)/"
+	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service systemd/user/tide-lock-fallback.service systemd/user/tide-clipboard.service systemd/user/tide-lid-inhibit.service "$(SYSTEMD_USER_DIR)/"
 	install -m 644 systemd/user/hypridle.service.d/tide.conf "$(SYSTEMD_USER_DIR)/hypridle.service.d/"
 	install -m 644 systemd/user/app-.service.d/tide-autostart.conf "$(SYSTEMD_USER_DIR)/app-.service.d/"
 	@# rmdir only removes a directory this emptied.
@@ -171,7 +172,7 @@ install-session:
 		test -x build/$$cmd || { echo "make install-session: no build/$$cmd; run make build first, as yourself" >&2; exit 1; }; \
 	done
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
-	install -m 755 bin/tide bin/tide-clipboard bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-share-picker bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs "$(DESTDIR)$(PREFIX)/bin/"
+	install -m 755 bin/tide bin/tide-clipboard bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs "$(DESTDIR)$(PREFIX)/bin/"
 	install -m 644 session/tide.desktop "$(DESTDIR)$(PREFIX)/share/wayland-sessions/"
 	@# The greeter runs as greetd's own user, which can't read anyone's
 	@# ~/.config, so it gets a copy of the shell of its own. tide-greeter

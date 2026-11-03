@@ -293,13 +293,14 @@ bus_conf() {
 
 # run ENV...: runs the doctor in a tide session unless ENV says
 # otherwise, with the given fakes' answers. Any command that's there, sh,
-# stands in for cliphist.
+# stands in for cliphist, tide-lock and hyprlock.
 run() {
     env PATH="$fake:$tmp/qs-bin:$PATH" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" \
         XDG_CURRENT_DESKTOP=tide:Hyprland XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" HOME="$tmp/home" \
         XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_HOME="$tmp/no-data-home" XDG_DATA_DIRS="$tmp/share" \
         XDG_RUNTIME_DIR="$tmp/runtime" TIDE_DATADIR="$tmp/datadir" TIDE_SYSCONFDIR="$tmp/sysconf" TIDE_SYSFS="$tmp/sys" \
         FAKE_PROCS="hypridle swaync waybar hyprpolkitagent nm-applet" FAKE_PID_hypridle=101 TIDE_CLIPHIST=sh \
+        TIDE_LOCK_PROGRAM=sh TIDE_HYPRLOCK=sh \
         "$@" sh "$doctor" > "$tmp/out" 2> "$tmp/err"
     status=$?
     out=$(cat "$tmp/out")
@@ -395,12 +396,42 @@ fi # root reads it anyway
 chmod 644 "$tmp/sysconf/pam.d/tide-lock"
 healthy
 
+# The lock's fallback (§10): hyprlock, from tide-lock.service's OnFailure=,
+# so a lock that fails still locks the session.
+run TIDE_LOCK_PROGRAM=no-such-tide-lock
+check "no tide-lock is a problem" test "$status" -eq 1
+check "no tide-lock is named, with the fix" \
+    contains "$out" "no-such-tide-lock isn't installed, so every lock is the fallback's, hyprlock: run \`make build\`, then \`sudo make install-session PREFIX=/usr\`, in the tide checkout"
+run TIDE_HYPRLOCK=no-such-hyprlock
+check "no hyprlock is a problem" test "$status" -eq 1
+check "no hyprlock is named, with the fix" \
+    contains "$out" "no-such-hyprlock isn't installed, so a lock that fails leaves the session unlocked: install the hyprlock package (scripts' \`setup\` does)"
+run FAKE_LOADSTATE="tide-lock-fallback.service=not-found"
+check "an uninstalled fallback unit is a problem" test "$status" -eq 1
+check "an uninstalled fallback unit is named, with the fix" \
+    contains "$out" "tide-lock-fallback.service isn't installed, so a lock that fails leaves the session unlocked: run \`make install\` in the tide checkout, then \`systemctl --user daemon-reload\`"
+run FAKE_LOADSTATE="tide-lock-fallback.service=masked"
+check "a masked fallback unit is named, with the fix" \
+    contains "$out" "tide-lock-fallback.service is masked, so a lock that fails leaves the session unlocked: \`systemctl --user unmask tide-lock-fallback.service\`"
+run FAKE_LOADSTATE="tide-lock-fallback.service=bad-setting"
+check "a fallback unit that won't load says where to look" \
+    contains "$out" "tide-lock-fallback.service is bad-setting, so a lock that fails may leave the session unlocked: \`systemctl --user status tide-lock-fallback.service\` says why"
+run FAKE_LOADSTATE_FAILS="Failed to connect to bus"
+check "a fallback unit systemd can't be asked about is reported" \
+    contains "$out" "couldn't check that tide-lock-fallback.service is installed (Failed to connect to bus), so whether a failed lock still locks the session isn't known"
+run FAKE_INACTIVE="tide-lock-fallback.service=failed"
+check "a failed fallback is a problem" test "$status" -eq 1
+check "a failed fallback says where to look" \
+    contains "$out" "the fallback lock failed too (tide-lock-fallback.service is failed), so the session may not have locked: \`journalctl --user -u tide-lock-fallback.service\` says why"
+run FAKE_INACTIVE="tide-lock-fallback.service=inactive"
+check "an unused fallback is no problem" test "$out" = "No problems found."
+
 # A Quickshell older than 0.3 can't load tide's shell (Debian's 0.2.1),
 # so tide-shell runs waybar, and says so only in its log.
 run FAKE_QS_VERSION="quickshell 0.2.1, revision 0000000, distributed by: Debian"
 check "an old Quickshell is a problem" test "$status" -eq 1
 check "an old Quickshell is named, with the fix" \
-    contains "$out" "qs ($tmp/qs-bin/qs) is Quickshell 0.2.1, and tide's shell needs 0.3 or newer, so the bar is waybar: install a newer Quickshell (on Debian and Ubuntu, \`setup\` builds one), then \`systemctl --user restart tide.service\`"
+    contains "$out" "qs ($tmp/qs-bin/qs) is Quickshell 0.2.1, and tide's shell needs 0.3 or newer, so the bar is waybar and the lock is hyprlock: install a newer Quickshell (on Debian and Ubuntu, \`setup\` builds one), then \`systemctl --user restart tide.service\`"
 run FAKE_QS_VERSION="Quickshell 0.3.0 (revision 0000000, distributed by Ubuntu)"
 check "Quickshell 0.3.0 is no problem" test "$out" = "No problems found."
 run FAKE_QS_VERSION="Quickshell nightly"

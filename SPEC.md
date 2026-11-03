@@ -232,8 +232,8 @@ else in this spec changes.
   source build against the distro's Qt.
 - **Version.** The shell needs Quickshell 0.3 or newer: 0.3.0 added
   `IdleInhibitor`, `IdleMonitor` and `Quickshell.Networking`, and an older
-  `qs` can't load a file that names one, so there's no bar at all. Debian's
-  package is 0.2.1 (its `qs --version`, 2026-10-06), so `setup` builds
+  `qs` can't load a file that names one, so there's no bar at all, and no
+  lock. Debian's package is 0.2.1 (its `qs --version`, 2026-10-06), so `setup` builds
   there, as it does where there's no package.
 - **Memory** is unmeasured; M2 measures it and sets a budget.
 
@@ -342,7 +342,7 @@ work". The old setup shows how it fought itself:
 | Notifications (`org.freedesktop.Notifications`) | tide | `tide.service`, before any app | dunst/mako/swaync: not installed; `doctor` flags any activatable one |
 | Tray host (`org.kde.StatusNotifierWatcher`) | tide | `tide.service`, before any app | `nm-applet`, `blueman-applet`, `xembedsniproxy` not run |
 | Polkit agent | tide (`Quickshell.Services.Polkit`) | `tide.service` | polkit-gnome/-kde agents not run |
-| Lock screen | `tide-lock`, a separate Quickshell process with the same QML (`WlSessionLock` + PAM service `tide-lock`) | hypridle's `lock_cmd`, on logind's `Lock` signal → `tide-lock.service` | hyprlock not installed |
+| Lock screen | `tide-lock`, a separate Quickshell process with the same QML (`WlSessionLock` + PAM service `tide-lock`) | hypridle's `lock_cmd`, on logind's `Lock` signal → `tide-lock.service` | hyprlock runs only as the lock's fallback (§10) |
 | Idle timeline, `org.freedesktop.ScreenSaver`, logind lock and sleep bridge | hypridle (§10) | `hypridle.service` | swayidle not run; the shell does not time idle |
 | Screen-share picker | tide, via xdph `custom_picker_binary` | xdph, on demand | `hyprland-share-picker` |
 | Portals | `xdg-desktop-portal` + `-hyprland` + `-gtk` | D-Bus activation | `-kde`, `-gnome`, `-wlr` never selected: `tide-portals.conf` names `hyprland;gtk` |
@@ -557,7 +557,9 @@ flowchart TD
     `lock.qml`, and the `tide-lock` PAM file, readable by the user, without
     which PAM falls back to its `other` service; and whether the last lock
     failed. A broken lock otherwise shows only when the session should
-    lock;
+    lock. Its fallback too: the `tide-lock` command, hyprlock and
+    `tide-lock-fallback.service` installed, and whether the fallback
+    failed;
   - the home workspace (§6.5): there, and kept by `conf`'s `persistent`
     rule, with the shell's `tide-workspaces.lua` naming it;
   - the network agent (§5.6): `tide-agent` registered, or what holds
@@ -781,8 +783,10 @@ SERVICE`, `-i` when it may ask, `-r` for new secrets, and each hint as
   tried it, so a request is never left where nothing shows it.
 - **While locked**, the shell shows nothing: the lock is a process of its
   own (principle 2, §1), and a prompt under it can't be seen. The helper
-  watches `tide-lock.service` and tells the shell when it starts and stops.
-  A request that needs typing while it runs is declined at once, and the
+  watches `tide-lock.service` and its fallback, hyprlock's
+  `tide-lock-fallback.service` (§10), and tells the shell when the lock
+  starts and stops. Either one running is locked. A request that needs
+  typing while the lock runs is declined at once, and the
   shell is told it was missed. One already showing or waiting when the
   lock starts is declined and kept the same way: the shell looks at every
   outstanding request again after each change (the lock, a popover
@@ -2678,6 +2682,37 @@ talk, a demo, or a meeting room's screen.
     Quickshell's default `login`.
   - Its file watcher is off (`QS_DISABLE_FILE_WATCHER`), so editing the
     shell never reloads a live lock.
+  - The unit runs `tide-lock`, which runs `qs -p .../lock.qml`.
+- **A lock that can't run still locks** (maintainer, 2026-11-03). An old
+  `qs` once left Super+L, idle and suspend doing nothing at all, and the
+  session unlocked. Now the session falls back to hyprlock.
+  - `tide-lock.service` has `OnFailure=tide-lock-fallback.service`, which
+    runs `hyprlock`. `make install` installs both units, and `setup`
+    installs hyprlock.
+  - `tide-lock` fails at once when the lock can't start: no `qs`, a `qs`
+    older than 0.3 (§3.2), or no `lock.qml`. It says why in the journal
+    and exits 78. The unit doesn't restart on 78
+    (`RestartPreventExitStatus`), so it fails, and hyprlock locks at once.
+    A `qs` version it can't read is let through.
+  - A lock that crashes is restarted, as below. A crash loop ends at the
+    fifth start in 10 s (`StartLimitBurst=5`, `StartLimitIntervalSec=10`).
+    The unit then fails, and hyprlock takes the lock. A restart goes
+    straight back to starting (`RestartMode=direct`), so it doesn't fail
+    the unit, and a crash that's restarted doesn't start hyprlock too, to
+    race the restarted lock. That needs systemd 254 or later. An older one
+    ignores the setting, so each crash also starts hyprlock. A `qs` that can't
+    load `lock.qml` exits non-zero (Quickshell's `rootwrapper.cpp`), so it
+    ends the same way.
+  - An unlock is a clean exit, and so is a stop at logout. Neither
+    fails the unit, so neither starts hyprlock.
+  - The fallback says so: a critical notification, "The tide lock
+    failed", waiting under the lock. `tide doctor` names the failed unit
+    and why.
+  - hyprlock has its own face and PAM config, not tide's. It's a way to
+    stay locked, not a second lock to design. It reads `conf`'s
+    `hyprlock.conf`, or else the one its package installs under
+    `/etc/xdg/hypr`. With neither, it exits 1 (hyprlock's `main.cpp`), and
+    `tide doctor` names the failed fallback.
 - **Every keystroke shows at once** (maintainer, 2026-10-05). Each key
   changes the field on the next frame, with no animation: a dot per
   character, and past 20 a count, so the next key is still visible. Keys
@@ -2746,7 +2781,8 @@ talk, a demo, or a meeting room's screen.
     "lockscreen dead" screen).
   - `misc:allow_session_lock_restore` lets systemd's restart of
     `tide-lock.service` take the lock back. You then unlock with your
-    password as usual.
+    password as usual. Once the restarts run out, it lets hyprlock take
+    the lock (above).
   - `loginctl unlock-session` is **not** a way out. It changes only logind's
     state; ext-session-lock requires the compositor to stay locked after its
     client dies.
@@ -4252,7 +4288,7 @@ light/dark switch.
 
 | Repo | Gets |
 |---|---|
-| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service`, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. The tide connector, the browser extension in `connector/` (§8.3). `make install`. |
+| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service` and its fallback, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. The tide connector, the browser extension in `connector/` (§8.3). `make install`. |
 | **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces and home's apps), the `persistent` workspace rule for home, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **tileco** | Tiling on chromeOS. On Linux it can list the browser's tabs in the Windows tab, as tide's own connector does (§8.3). |
 | **scripts** | `setup`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, cliphist, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `tide-tabs`'s host manifest for Chrome and Brave (§8.3). `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |

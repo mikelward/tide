@@ -10,6 +10,8 @@
 #   - the session's units are running;
 #   - the lock's unit, QML and PAM file are installed, and the last lock
 #     didn't fail;
+#   - tide-lock and the lock's hyprlock fallback are installed, and the
+#     fallback didn't fail;
 #   - cliphist is installed and tide-clipboard.service runs;
 #   - qs, where it's installed, is a Quickshell that loads tide's shell;
 #   - each D-Bus name in §5.2 is owned by the unit that should own it, and
@@ -78,6 +80,33 @@ if ! test -e "$lock_pam"; then
 elif ! test -r "$lock_pam"; then
     problem "couldn't read $lock_pam, which the lock reads as you to check the password, so it may never unlock: \`sudo chmod 644 $lock_pam\`"
 fi
+# The unit runs tide-lock, which `make install-session` installs. When
+# the lock can't run, the unit's OnFailure= starts
+# tide-lock-fallback.service, which is hyprlock, so the session still
+# locks; without it, a lock that fails leaves the session unlocked.
+# $TIDE_LOCK_PROGRAM and $TIDE_HYPRLOCK stand in for tide-lock and hyprlock
+# in the tests.
+lock_program=${TIDE_LOCK_PROGRAM:-tide-lock}
+if ! command -v "$lock_program" >/dev/null 2>&1; then
+    problem "$lock_program isn't installed, so every lock is the fallback's, hyprlock: run \`make build\`, then \`sudo make install-session PREFIX=/usr\`, in the tide checkout"
+fi
+if ! state=$(systemctl --user show -p LoadState --value tide-lock-fallback.service 2>&1); then
+    problem "couldn't check that tide-lock-fallback.service is installed ($state), so whether a failed lock still locks the session isn't known"
+else
+    case "$state" in
+        loaded) ;;
+        not-found) problem "tide-lock-fallback.service isn't installed, so a lock that fails leaves the session unlocked: run \`make install\` in the tide checkout, then \`systemctl --user daemon-reload\`" ;;
+        masked) problem "tide-lock-fallback.service is masked, so a lock that fails leaves the session unlocked: \`systemctl --user unmask tide-lock-fallback.service\`" ;;
+        *) problem "tide-lock-fallback.service is ${state:-not loaded}, so a lock that fails may leave the session unlocked: \`systemctl --user status tide-lock-fallback.service\` says why" ;;
+    esac
+fi
+hyprlock=${TIDE_HYPRLOCK:-hyprlock}
+if ! command -v "$hyprlock" >/dev/null 2>&1; then
+    problem "$hyprlock isn't installed, so a lock that fails leaves the session unlocked: install the hyprlock package (scripts' \`setup\` does)"
+fi
+if test "$(systemctl --user is-active tide-lock-fallback.service 2>&1)" = failed; then
+    problem "the fallback lock failed too (tide-lock-fallback.service is failed), so the session may not have locked: \`journalctl --user -u tide-lock-fallback.service\` says why, and \`systemctl --user reset-failed tide-lock-fallback.service\` clears it once that's fixed"
+fi
 
 # The clipboard history behind Super+C (§8.4): tide-clipboard.service
 # hands each copy to cliphist. Without either, the picker's Clipboard tab
@@ -93,7 +122,7 @@ if test "$state" != active; then
 fi
 
 # Quickshell. tide-shell runs waybar when qs is too old for tide's shell,
-# and says so only in its log. Without qs, waybar is M2's bar and no
+# and tide-lock leaves the lock to hyprlock. Without qs, waybar is M2's bar and no
 # problem. 0.3.0 added IdleInhibitor, IdleMonitor and
 # Quickshell.Networking; tide-shell and scripts' setup-tide check the same.
 min_quickshell=0.3
@@ -115,7 +144,7 @@ if qs_path=$(command -v qs); then
         if test -z "$qs_version"; then
             problem "couldn't tell which Quickshell $qs_path is (qs --version printed '$(printf '%s\n' "$qs_out" | head -n 1)'), so the version check is skipped"
         elif ! version_at_least "$qs_version" "$min_quickshell"; then
-            problem "qs ($qs_path) is Quickshell $qs_version, and tide's shell needs $min_quickshell or newer, so the bar is waybar: install a newer Quickshell (on Debian and Ubuntu, \`setup\` builds one), then \`systemctl --user restart tide.service\`"
+            problem "qs ($qs_path) is Quickshell $qs_version, and tide's shell needs $min_quickshell or newer, so the bar is waybar and the lock is hyprlock: install a newer Quickshell (on Debian and Ubuntu, \`setup\` builds one), then \`systemctl --user restart tide.service\`"
         fi
     fi
 fi

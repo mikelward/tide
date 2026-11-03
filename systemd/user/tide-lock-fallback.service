@@ -1,0 +1,24 @@
+# The session lock's fallback (SPEC.md §10): hyprlock, which
+# tide-lock.service's OnFailure= starts when that lock can't run, so the
+# session still locks. Nothing else starts it. hyprlock takes over a lock
+# a crashed tide-lock left (Hyprland's misc:allow_session_lock_restore),
+# or locks a session tide-lock never locked. It exits 0 once the password
+# is accepted.
+[Unit]
+Description=tide lock screen fallback (hyprlock)
+Documentation=https://github.com/mikelward/tide
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=hyprlock
+# A lock that fell back says so (SPEC.md §1, principle 6): a critical
+# notification, which waits under the lock until it's dismissed. Failing to
+# send it is logged, and never stops the lock.
+ExecStartPost=/bin/sh -c 'notify-send --urgency=critical --app-name=tide "The tide lock failed" "hyprlock locked the session instead. Run tide doctor to see why." || echo "tide-lock-fallback: notify-send failed, so only the journal says the lock fell back" >&2'
+# As tide-lock: a crash leaves the session locked, and a restart takes the
+# lock back. systemd's default start limit ends a crash loop.
+Restart=on-failure
+RestartSec=0
+Slice=session-graphical.slice

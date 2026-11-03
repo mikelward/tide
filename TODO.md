@@ -1376,9 +1376,16 @@ Hyprland yet. Still to do:
 - `conf` locks the tide session with tide-lock (mikelward/conf#384,
   #385): hypridle's `lock_cmd` starts `tide-lock.service`, its 5-minute
   listener runs `tide idle-lock`, `Super+L` runs `loginctl lock-session`,
-  and `misc:allow_session_lock_restore` is on. hyprlock stays only for a
-  plain Hyprland login. On a real session, check all three paths reach
-  tide-lock, and before sleep too.
+  and `misc:allow_session_lock_restore` is on. hyprlock stays for a
+  plain Hyprland login, and as tide-lock's fallback (SPEC.md §10). On a
+  real session, check all three paths reach tide-lock, and before sleep
+  too.
+- On a real session, check the lock's fallback (SPEC.md §10): with `qs`
+  hidden from the user manager's `PATH`, Super+L locks with hyprlock at
+  once, and the notification waits under it; `kill -SEGV` on a live
+  tide-lock five times inside 10 s ends with hyprlock holding the lock; an
+  unlock and a logout start no hyprlock. Only stubs and `systemd-analyze
+  verify` have tested it.
 - On a real session, check the screensaver: an idle lock opens on it, the
   first pointer report doesn't wake it but a move does, and the first key
   lands in the field.

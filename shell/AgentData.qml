@@ -22,7 +22,8 @@ Singleton {
     // until it sends one, and its BlueZ pairing agent's.
     property var status: null
     property var btStatus: null
-    // Whether tide-lock.service runs, from tide-agent.
+    // Whether the lock runs, tide-lock.service or its fallback, from
+    // tide-agent.
     property bool locked: false
     // Requests declined while locked, offered once the lock goes.
     property var missed: []
