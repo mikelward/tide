@@ -4468,12 +4468,12 @@ GCC 16 (0.56 is C++26, and uses libstdc++ 16's `std::ranges::starts_with`)
 and ten pinned projects: `wayland-protocols`, seven hyprwm libraries and
 tools, re2 and Hyprland itself. re2 joined on 2026-11-02, when Debian
 testing's libre2, built against an older abseil than its headers, stopped
-Hyprland linking. Debian 13 looks worse (GCC 14 and xkbcommon 1.7, against
-0.56's GCC 16 and xkbcommon 1.11), but that is not yet re-checked against
-Debian's package pages. Hyprland also changes and regresses often. The
-alternative under consideration is **a tide fork of dwl**, the dwm-style wlroots
-compositor (about 3,400 lines of C), built on a wlroots version we pin and
-build ourselves.
+Hyprland linking. Debian 13 can't build it at all (GCC 14, xkbcommon 1.7 and
+no Lua 5.5, against 0.56's GCC 16, xkbcommon 1.11 and Lua 5.5). Debian
+testing has packaged Hyprland 0.56.2 since 2026-08-11. Hyprland also changes
+and regresses often. The alternative under consideration is **a tide fork of
+dwl**, the dwm-style wlroots compositor (about 3,400 lines of C), built on a
+wlroots version we pin and build ourselves.
 
 The fork lives in its own repository,
 [mikelward/dwl](https://github.com/mikelward/dwl): upstream dwl's history
@@ -4570,9 +4570,8 @@ sources, then a test session on wlroots 0.19/0.20:
 2. Check that a dwl build exposing the toplevel and `ext-image-copy-capture`
    protocols takes `grim -T` screenshots of the focused window, found through
    the fork's IPC, which is §13's whole Alt+Print flow.
-3. Re-check the Debian 13 toolchain above. Ubuntu 26.04's side is done
-   (under **Build**); Debian's package indexes weren't reachable from the
-   2026-11-02 check, so Debian 13 and testing are still open.
+3. Re-check the Debian 13 toolchain above. Done for Ubuntu 26.04 (under
+   **Build**) and for Debian 13 and testing (below).
 4. List everything the spec needs from the compositor, with the fork's
    replacement for each and a check for it. That covers every Hyprland
    contract (`hyprctl` commands, IPC events, Quickshell Hyprland calls, Lua
@@ -4634,6 +4633,56 @@ of our own, in the fork or in a patched xdpw.
 the 16:9 slice, and the deciding question passes for dwl. Until xdpw asks
 per share, every share prompts, since the restore flag has nothing to set.
 
+**Step 3, Debian** (checked 2026-11-03, under Sources):
+
+- **Debian 13** can't build Hyprland 0.56 (above). For a dwl fork, its
+  packages fall short of five wlroots 0.20.2 minimums: wayland 1.23.1
+  (needs 1.24.0), wayland-protocols 1.44 (1.47), libdrm 2.4.124 (2.4.129),
+  xkbcommon 1.7.0 (1.8.0) and pixman 0.44.0 (0.46.0). wlroots carries a Meson
+  wrap for each, so it still builds, with GCC 14. Its xdg-desktop-portal-wlr
+  0.7.1 can't share a window and its grim 1.4.0 has no `-T`, so both would be
+  built too.
+- **Debian testing** packages wlroots 0.20.2, xdg-desktop-portal-wlr 0.8.4
+  and grim 1.5.0, so a fork there builds only itself.
+
+**What an alternative may build on** (decided 2026-11-03): each piece must
+have been in Debian testing for six months, or have an open-source license
+GitHub recognizes. Licenses were checked with GitHub's API and with
+licensee 10.1.0, the detector GitHub runs, locally.
+
+- **dwl's dependencies qualify by mid-December.** wlroots lives on
+  freedesktop's GitLab and reached testing on 2026-06-08 (0.20.0), so 0.20
+  qualifies from 2026-12-08. grim 1.5.0, for `grim -T`, qualifies from
+  2026-12-05. xdg-desktop-portal-wlr's window sharing (0.8.1, in testing
+  since 2026-01-16) already does.
+- **The fork itself needs a license GitHub recognizes, and dwl's isn't.**
+  GitHub reports NOASSERTION for dwl and for mikelward/dwl. dwl's `LICENSE`
+  starts with dwl's own header before the GPL text, so it matches no
+  license, and `LICENSE.dwm` and `LICENSE.tinywl` match none either.
+- **A fork can fix that.** With `LICENSE` holding only the GPL-3.0 text, and
+  dwl's header and the dwm, sway and tinywl notices moved to `NOTICE`, a name
+  licensee doesn't read, licensee reports GPL-3.0 with 100% confidence. The
+  notices still ship: MIT asks that they be included, not where. That is a
+  reading, not legal advice.
+- **MangoWC fails, and a fork of it inherits a gap.** Its `LICENSE` has the
+  same kind of header, so GitHub reports NOASSERTION. On 2026-07-04
+  (`d8b1cbd`) it deleted `LICENSE.dwl`, `.dwm`, `.sway`, `.tinywl` and
+  `.wlroots`, while `LICENSE` and `src/common/util.c` still point to them.
+  A fork would have to restore them.
+- **river fails both ways** (§21.2): it isn't in Debian, and its Codeberg
+  repository carries four licenses, which licensee can't reduce to one.
+
+**MangoWC as the fork's base** (read 2026-11-03, not checked row by row). It
+is dwl grown to about 40,700 lines of C, against dwl 0.9's 4,700 with its
+headers. It already
+has an IPC (`mmsg`), runtime config, ext-workspace,
+wlr-foreign-toplevel-management, window capture, and many layouts,
+`center_tile` and `monocle` among them, and it draws with scenefx. That covers
+two of the four biggest pieces of new work in
+[`docs/compositor.md`](docs/compositor.md). But a fork would carry about
+nine times the code, follow a fast-moving upstream, and repair its licenses
+first, so dwl stays the proposed base.
+
 ### 21.2 A possible later iteration: our own window manager on river
 
 A later tide may own its window management without owning a compositor:
@@ -4646,9 +4695,12 @@ makes every policy decision. It waits until river exposes what tide needs
 - **One license.** river is GPL-3.0-only, but tide would only run it, as it
   runs Hyprland today. Its protocols are MIT, and the window manager is our
   own program in its own repository, so it can carry one Apache-2.0
-  `LICENSE`. A dwl fork can't: dwl ships GPL text plus MIT and CC0 notices
-  for dwm, sway and tinywl, which GitHub lists as several licenses rather
-  than one, and a fork has to keep them.
+  `LICENSE`. A dwl fork can't be Apache-2.0: it stays GPL-3.0, and it keeps
+  MIT and CC0 notices for dwm, sway and tinywl. Kept as license files, they
+  leave GitHub naming no license; moved to `NOTICE`, it names GPL-3.0
+  (§21.1). river itself fails §21.1's rule for what an alternative may
+  build on: it isn't in Debian, and licensee finds four licenses in its
+  repository (0BSD, CC-BY-SA-4.0, GPL-3.0-only and MIT), not one.
 - **No compositor to maintain.** Rendering, wlroots ports and the protocols
   are river's. We write the policy, so it's far less code than a compositor
   started from tinywl, the fallback if river stalls.
@@ -5083,6 +5135,36 @@ Checked 2026-11-02, for §21.1's next steps:
   `Packages` indexes on archive.ubuntu.com
 - setup-tide's tenth pin, re2:
   [mikelward/scripts#353](https://github.com/mikelward/scripts/pull/353)
+
+Checked 2026-11-03, for §21.1's step 3 and what an alternative may build on:
+
+- Debian package versions, from the `main/binary-amd64/Packages.xz` indexes
+  of [trixie](https://deb.debian.org/debian/dists/trixie/) and
+  [forky](https://deb.debian.org/debian/dists/forky/) (dated 2026-11-03)
+- Migration dates to testing, from the Debian tracker:
+  [hyprland](https://tracker.debian.org/pkg/hyprland) (0.56.2+ds-1 on
+  2026-08-11), [wlroots](https://tracker.debian.org/pkg/wlroots) (0.20.0-2
+  on 2026-06-08), [grim](https://tracker.debian.org/pkg/grim) (1.5.0+ds-1 on
+  2026-06-05) and
+  [xdg-desktop-portal-wlr](https://tracker.debian.org/pkg/xdg-desktop-portal-wlr)
+  (0.8.1-1 on 2026-01-16)
+- wlroots 0.20.2's pixman renderer:
+  [`render/pixman/meson.build`](https://gitlab.freedesktop.org/wlroots/wlroots/-/blob/0.20.2/render/pixman/meson.build)
+  (pixman 0.46.0), always built from
+  [`render/meson.build`](https://gitlab.freedesktop.org/wlroots/wlroots/-/blob/0.20.2/render/meson.build)
+- Each repository's license, from GitHub's search API (`license.spdx_id`):
+  `djpohly/dwl`, `mikelward/dwl` and `mangowm/mango`
+- [licensee](https://github.com/licensee/licensee) 10.1.0, run with
+  `detect --no-remote` on dwl 0.9, MangoWC at `9d1b0c2`, river at `65a9084`,
+  wlroots 0.20.2, sway 1.12, this repository, and a copy of dwl with its
+  notices moved to `NOTICE`
+- licensee's file names:
+  [`license_file.rb`](https://github.com/licensee/licensee/blob/main/lib/licensee/project_files/license_file.rb)
+  (`LICENSE`, `COPYING`, `OFL` and their variants; not `NOTICE`)
+- MangoWC: [`LICENSE`](https://github.com/mangowm/mango/blob/main/LICENSE),
+  [`src/common/util.c`](https://github.com/mangowm/mango/blob/main/src/common/util.c)
+  and [`d8b1cbd`](https://github.com/mangowm/mango/commit/d8b1cbd) ("Remove
+  the useless certificates")
 
 Checked 2026-10-31, for §8.2's other desktops' settings apps:
 
