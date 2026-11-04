@@ -2286,6 +2286,10 @@ See [`picker.png`](docs/mocks/picker.png).
 - **Without cliphist**, or with the unit not running, the Clipboard tab
   says so, naming what's missing, and `tide doctor` reports it (§5.4).
   The Characters tab still works.
+  - Before the first copy is kept there's no database, and cliphist's
+    `list` says "please store something first". `tide clipboard list`
+    reads that as an empty history while the unit runs. With the unit
+    stopped, it says so, with the command that starts it.
 
 **Never storing passwords.**
 

@@ -38,7 +38,13 @@ for last; do :; done
 case "$last" in
     store) cat > "$FAKE_DIR/stored" ;;
     delete) cat > "$FAKE_DIR/deleted" ;;
-    list) printf '2\tsecond\n1\tfirst\n' ;;
+    list)
+        if test -n "${FAKE_NO_DB:-}"; then
+            echo "opening db: please store something first" >&2
+            exit 1
+        fi
+        printf '2\tsecond\n1\tfirst\n'
+        ;;
     version)
         # 0.6.0 and later list their flags; 0.4.0 has no version command.
         case "${FAKE_CLIPHIST_VERSION:-0.7.0}" in
@@ -70,6 +76,14 @@ printf "wl-paste %s\n" "$*" >> "$FAKE_LOG"
 printf '%s\n' "${FAKE_TYPES-text/plain;charset=utf-8}"
 exit "${FAKE_WLPASTE_STATUS:-0}"
 FAKE
+# systemctl --user is-active prints $FAKE_UNIT_STATE, exiting 0 only when
+# it's active, as systemctl does.
+cat > "$fake/systemctl" <<'FAKE'
+#!/bin/sh
+printf "systemctl %s\n" "$*" >> "$FAKE_LOG"
+printf '%s\n' "${FAKE_UNIT_STATE:-active}"
+test "${FAKE_UNIT_STATE:-active}" = active
+FAKE
 cat > "$fake/wl-copy" <<'FAKE'
 #!/bin/sh
 printf "wl-copy %s\n" "$*" >> "$FAKE_LOG"
@@ -93,7 +107,7 @@ export PATH="$fake:$base" XDG_RUNTIME_DIR="$tmp"
 reset() {
     : > "$log"
     rm -f "$tmp/stored" "$tmp/deleted" "$tmp/copied"
-    unset FAKE_CLIPHIST_VERSION CLIPBOARD_STATE FAKE_TYPES FAKE_WLPASTE_STATUS FAKE_CLIPHIST_STATUS FAKE_WLCOPY_STATUS
+    unset FAKE_CLIPHIST_VERSION FAKE_NO_DB FAKE_UNIT_STATE CLIPBOARD_STATE FAKE_TYPES FAKE_WLPASTE_STATUS FAKE_CLIPHIST_STATUS FAKE_WLCOPY_STATUS
 }
 
 # --- store ---------------------------------------------------------------------
@@ -191,6 +205,27 @@ for v in 0.4.0 0.5.0; do
     check "cliphist $v lists anyway" test "$out" = "$(printf '2\tsecond\n1\tfirst')"
     check "without -preview-width, which cliphist $v lacks" test -z "$(grep -e '-preview-width' "$log")"
 done
+
+# cliphist refuses to list before its first store makes the database.
+reset
+FAKE_NO_DB=1
+export FAKE_NO_DB
+out=$("$cmd" list 2>&1)
+check "list before anything is stored exits 0" test $? -eq 0
+check "list before anything is stored prints nothing: $out" test -z "$out"
+reset
+FAKE_NO_DB=1 FAKE_UNIT_STATE=inactive
+export FAKE_NO_DB FAKE_UNIT_STATE
+out=$("$cmd" list 2>&1)
+check "list with no history and the unit stopped exits 1" test $? -eq 1
+check "list with the unit stopped says so, and how to start it: $out" contains "$out" "tide-clipboard.service is inactive, so nothing you copy is kept: systemctl --user enable --now tide-clipboard.service"
+check "list with the unit stopped doesn't pass on cliphist's words" test -n "${out##*please store*}"
+reset
+FAKE_CLIPHIST_STATUS=1
+export FAKE_CLIPHIST_STATUS
+out=$("$cmd" list 2>&1)
+check "a failed list exits 1" test $? -eq 1
+check "a failed list says why: $out" contains "$out" "cliphist broke"
 
 reset
 "$cmd" copy 41

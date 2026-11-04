@@ -23,6 +23,8 @@
 #     Prints the history, newest first, one `ID<TAB>preview` per line, as
 #     `cliphist list` does, each preview up to 1,000 characters where
 #     cliphist can (0.6.0 and later; 100 before). The picker reads it.
+#     Before anything is stored, it prints nothing, or, with
+#     tide-clipboard.service not running, says so and exits 1.
 #
 #   tide clipboard copy ID
 #
@@ -148,9 +150,26 @@ list() {
     # its flags; older ones refuse the flag (0.4.0 has no `version` either),
     # and list at 100.
     if cliphist version 2>&1 | grep -q '^preview-width'; then
-        exec cliphist -preview-width 1000 list
+        set -- -preview-width 1000
     fi
-    exec cliphist list
+    # Newer cliphists refuse to list before the first store makes
+    # the database: "opening db: please store something first". That's an
+    # empty history, unless the unit that stores isn't running (§8.4).
+    if err=$(cliphist "$@" list 2>&1 >&3); then
+        return 0
+    fi 3>&1
+    case "$err" in
+        *'please store something first'*)
+            state=$(systemctl --user is-active tide-clipboard.service 2>/dev/null)
+            case "$state" in
+                active | activating | reloading) return 0 ;;
+            esac
+            echo "$prog: tide-clipboard.service is ${state:-not running}, so nothing you copy is kept: systemctl --user enable --now tide-clipboard.service" >&2
+            exit 1
+            ;;
+    esac
+    printf '%s\n' "$err" >&2
+    exit 1
 }
 
 copy() {
