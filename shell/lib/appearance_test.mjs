@@ -806,20 +806,58 @@ test("the page previews what the shell draws now, or the other mode's candidates
         ["/home/user/day.jpg", "/home/user/.config/hypr/wallpaper-light.jpg", "/home/user/.config/hypr/wallpaper.jpg"]);
 });
 
-test("wallpaperPosition is one of the positions, for light and dark both", () => {
-    for (const p of POSITIONS) {
-        assert.deepEqual(parseAppearance(JSON.stringify({ wallpaperPosition: p })), { settings: { wallpaperPosition: p } });
+const ONE = '"fill", "fill-top", "fill-bottom", "fit", "stretch"';
+
+test("each mode's position is one of the positions, and wallpaperPosition is both modes'", () => {
+    for (const key of ["lightWallpaperPosition", "darkWallpaperPosition", "wallpaperPosition"]) {
+        for (const p of POSITIONS) {
+            assert.deepEqual(parseAppearance(JSON.stringify({ [key]: p })), { settings: { [key]: p } });
+        }
+        for (const bad of ["center", "", "FILL", 1, null]) {
+            assert.equal(parseAppearance(JSON.stringify({ [key]: bad })).error,
+                `${key} must be one of ${ONE}`, `${key} ${JSON.stringify(bad)}`);
+        }
     }
-    for (const bad of ["center", "", "FILL", 1, null]) {
-        assert.equal(parseAppearance(JSON.stringify({ wallpaperPosition: bad })).error,
-            'wallpaperPosition must be one of "fill", "fill-top", "fill-bottom", "fit"', JSON.stringify(bad));
+    const loaded = loadAppearance('{"darkWallpaperPosition": "middle"}', null);
+    assert.deepEqual(loaded.errors, [`appearance.json: darkWallpaperPosition must be one of ${ONE}`], "fails at load, naming it");
+    assert.equal(wallpaperPosition(DEFAULTS, false), "fill", "fill when unset, as before");
+    assert.equal(wallpaperPosition(DEFAULTS, true), "fill");
+    const own = loadAppearance('{"lightWallpaperPosition": "fit"}', '{"darkWallpaperPosition": "stretch"}').settings;
+    assert.equal(wallpaperPosition(own, false), "fit", "light's own");
+    assert.equal(wallpaperPosition(own, true), "stretch", "dark's own, from the local file");
+    const both = loadAppearance('{"wallpaperPosition": "fill-top", "darkWallpaperPosition": "fit"}', null).settings;
+    assert.equal(wallpaperPosition(both, false), "fill-top", "wallpaperPosition where a mode sets none");
+    assert.equal(wallpaperPosition(both, true), "fit", "a mode's own wins over wallpaperPosition");
+    assert.equal(wallpaperPosition(loadAppearance('{"lightWallpaperPosition": "fit"}', '{"lightWallpaperPosition": "fill-top"}').settings, false), "fill-top", "the local file's wins");
+    assert.deepEqual(JSON.parse(withSetting(null, "darkWallpaperPosition", "fill-bottom").text), { darkWallpaperPosition: "fill-bottom" });
+    assert.match(withSetting(null, "lightWallpaperPosition", "left").error, /lightWallpaperPosition must be one of/);
+});
+
+test("stretch fills the monitor with the whole picture, out of its shape", () => {
+    const f = wallpaperFrame(PICTURE, ULTRAWIDE, "stretch");
+    assert.deepEqual(f.frame, { x: 0, y: 0, width: 3840, height: 2400 }, "the monitor shows all of it");
+    assert.deepEqual(f.visible, { x: 0, y: 0, width: 3840, height: 2400 });
+    assert.deepEqual(f.trimmed, { top: 0, bottom: 0, left: 0, right: 0 });
+    assert.deepEqual(f.bars, { x: 0, y: 0 }, "no bars");
+    assert.deepEqual(f.shown, { width: 3440, height: 1440 }, "the monitor's size");
+    close(f.scale, 3440 / 3840, "across");
+    close(f.scaleY, 1440 / 2400, "and down, not the same");
+    assert.equal(framingCaption("DP-1", PICTURE, ULTRAWIDE, "stretch"), "DP-1, 3440×1440: stretches all of it to 3440×1440, 49% wider");
+    assert.equal(framingCaption("eDP-1", PICTURE, { width: 1440, height: 2560 }, "stretch"), "eDP-1, 1440×2560: stretches all of it to 1440×2560, 184% taller");
+    assert.equal(framingCaption("eDP-1", { width: 1920, height: 1200 }, { width: 2560, height: 1600 }, "stretch"), "eDP-1, 2560×1600: shows all of it, scaled to 2560×1600", "the monitor's shape: just scaled");
+    for (const p of ["fill", "fill-top", "fill-bottom", "fit"]) {
+        const g = wallpaperFrame(PICTURE, ULTRAWIDE, p);
+        assert.equal(g.scaleY, g.scale, `${p} keeps the picture's shape`);
     }
-    const loaded = loadAppearance('{"wallpaperPosition": "middle"}', null);
-    assert.deepEqual(loaded.errors, ['appearance.json: wallpaperPosition must be one of "fill", "fill-top", "fill-bottom", "fit"'], "fails at load, naming it");
-    assert.equal(wallpaperPosition(DEFAULTS), "fill", "fill when unset, as before");
-    assert.equal(wallpaperPosition(loadAppearance('{"wallpaperPosition": "fit"}', '{"wallpaperPosition": "fill-top"}').settings), "fill-top", "the local file's wins");
-    assert.deepEqual(JSON.parse(withSetting(null, "wallpaperPosition", "fill-bottom").text), { wallpaperPosition: "fill-bottom" });
-    assert.match(withSetting(null, "wallpaperPosition", "left").error, /wallpaperPosition must be one of/);
+});
+
+test("the preview of a stretch draws the whole picture in the monitor's shape", () => {
+    const l = previewLayout(PICTURE, ULTRAWIDE, "stretch", 240, 160);
+    close(l.width, 240, "the monitor is the wider");
+    close(l.height, 240 * 1440 / 3440, "the monitor's shape, not the picture's");
+    assert.deepEqual(l.image, { x: 0, y: 0, width: l.width, height: l.height }, "the picture fills it");
+    assert.deepEqual(l.frame, l.image);
+    assert.deepEqual(l.dims, [], "nothing trimmed, so nothing dimmed");
 });
 
 test("fill-top keeps the top of a tall picture and trims the bottom", () => {
@@ -878,17 +916,21 @@ test("the preview of a fit draws the monitor whole, the picture inside it", () =
 });
 
 test("the shell and the lock place a picture as wallpaperFrame says", () => {
-    assert.deepEqual(wallpaperPlacement("fill"), { fit: false, vertical: "center" });
-    assert.deepEqual(wallpaperPlacement("fill-top"), { fit: false, vertical: "top" });
-    assert.deepEqual(wallpaperPlacement("fill-bottom"), { fit: false, vertical: "bottom" });
-    assert.deepEqual(wallpaperPlacement("fit"), { fit: true, vertical: "center" });
+    assert.deepEqual(wallpaperPlacement("fill"), { fit: false, stretch: false, vertical: "center" });
+    assert.deepEqual(wallpaperPlacement("fill-top"), { fit: false, stretch: false, vertical: "top" });
+    assert.deepEqual(wallpaperPlacement("fill-bottom"), { fit: false, stretch: false, vertical: "bottom" });
+    assert.deepEqual(wallpaperPlacement("fit"), { fit: true, stretch: false, vertical: "center" });
+    assert.deepEqual(wallpaperPlacement("stretch"), { fit: false, stretch: true, vertical: "center" });
 });
 
-test("the page's ‹ and › step through the positions, stopping at either end", () => {
+test("the page's ‹ and › step through each mode's positions, stopping at either end", () => {
     assert.deepEqual(POSITION_CHOICES.map(c => c.position), POSITIONS);
-    assert.equal(positionAt({}), 0);
-    assert.equal(positionAt({ wallpaperPosition: "fit" }), 3);
+    assert.equal(POSITION_CHOICES[POSITION_CHOICES.length - 1].label, "Stretch to fill");
+    assert.equal(positionAt({}, false), 0);
+    assert.equal(positionAt({ lightWallpaperPosition: "fit" }, false), 3);
+    assert.equal(positionAt({ lightWallpaperPosition: "fit" }, true), 0, "dark's is its own");
+    assert.equal(positionAt({ wallpaperPosition: "stretch" }, true), 4, "wallpaperPosition where a mode sets none");
     assert.equal(steppedPositionAt(0, -1), 0);
     assert.equal(steppedPositionAt(0, 1), 1);
-    assert.equal(steppedPositionAt(3, 1), 3);
+    assert.equal(steppedPositionAt(4, 1), 4);
 });

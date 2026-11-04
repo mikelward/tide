@@ -592,16 +592,19 @@ once you have agreed with it or reversed it.
   wallpaper for it would be a greetd setting. It's `show` in
   `shell/WallpaperData.qml` and the wallpaper reader in `shell/lock.qml`.
 
-- [ ] **One `wallpaperPosition` for light and dark, and a wide picture
-  stays centered.** `fill-top` and `fill-bottom` choose which edge of a
-  tall picture stays; one wider than the monitor is trimmed equally at
-  both sides in every fill, rather than `fill-top` keeping its left. `fit`
-  fills its bars with `Theme.barBg`, since a wallpaper is a picture or a
-  color, never both. The record gains the position as a second line, and
-  a one-line record reads as `fill`. The alternatives are a position per
-  mode (`lightWallpaperPosition`), and a top-left anchor for `fill-top`.
-  It's `wallpaperFrame` and `wallpaperPlacement` in
-  `shell/lib/appearance.mjs`.
+- [ ] **A position per mode, and `wallpaperPosition` kept as both modes'**
+  (2026-11-04, asked for): `lightWallpaperPosition` and
+  `darkWallpaperPosition` place each picture, as they're different
+  pictures. `wallpaperPosition`, which shipped the same day, is still
+  taken where a mode sets none, so a file that has it keeps loading; the
+  page only writes the per-mode ones. `stretch` joins the positions.
+  `fill-top` and `fill-bottom` choose which edge of a tall picture stays;
+  one wider than the monitor is trimmed equally at both sides in every
+  fill, rather than `fill-top` keeping its left. `fit` fills its bars with
+  `Theme.barBg`, since a wallpaper is a picture or a color, never both. The
+  record gains the position as a second line, and a one-line record reads
+  as `fill`. It's `wallpaperPosition`, `wallpaperFrame` and
+  `wallpaperPlacement` in `shell/lib/appearance.mjs`.
 
 - [ ] **The Appearance page's preview loads the picture at its own size.**
   It needs the file's pixel size, which Qt's Image reports only for a
