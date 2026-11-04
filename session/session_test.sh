@@ -24,6 +24,8 @@ check() {
 }
 has_line() { grep -qxF -- "$2" "$1"; }
 lacks_line_matching() { ! grep -qE -- "$2" "$1"; }
+# not COMMAND...: succeeds when COMMAND fails.
+not() { ! "$@"; }
 
 unit=systemd/user/tide.service
 dropin=systemd/user/hypridle.service.d/tide.conf
@@ -319,6 +321,36 @@ git show "$(git rev-list -1 HEAD -- systemd/user/not-in-quickspace.conf)^:system
 for d in "$old_dropin" "$old_kept" "$old_custom"; do cp "$tmp/old-dropin.conf" "$d/quickspace.conf"; done
 touch "$old_kept/mine.conf"
 printf '[Service]\nEnvironment=MINE=1\n' > "$not_ours/quickspace.conf"
+# An install from before the rename from quickspace (2026-10-03) left its
+# files behind, as they shipped (651d5ec's drop-in, e36846f's unit, enabled).
+# The hypridle drop-in skipped hypridle in tide, so nothing locked.
+units="$home/.config/systemd/user"
+mkdir -p "$units/hypridle.service.d" "$units/app-.service.d" \
+    "$units/wayland-session@quickspace-hyprland.target.wants" "$home/.config/xdg-desktop-portal"
+cat > "$units/hypridle.service.d/quickspace.conf" <<'EOF'
+# hypridle counts as started only once it owns org.freedesktop.ScreenSaver:
+# Chrome uses the D-Bus inhibitor only if that name is already owned, so an
+# app started earlier would silently lose its inhibits (SPEC.md §5.4).
+[Service]
+ExecCondition=/bin/sh -c 'case ":$${XDG_CURRENT_DESKTOP}:" in *:quickspace:*) ;; *) exit 1 ;; esac'
+Type=dbus
+BusName=org.freedesktop.ScreenSaver
+TimeoutStartSec=10
+EOF
+cat > "$units/app-.service.d/quickspace-autostart.conf" <<'EOF'
+# XDG autostart is an allowlist in quickspace (SPEC.md §5.4). systemd's
+[Service]
+ExecCondition=/bin/sh -c 'case ":$${XDG_CURRENT_DESKTOP}:%n" in *:quickspace:*@autostart.service) quickspace autostart-allowed "%n"; s=$$?; test "$$s" -le 1 && exit "$$s"; echo "quickspace autostart-allowed failed ($$s) for %n" >&2; exit 255 ;; esac'
+EOF
+printf '# The quickspace shell: bar, launcher, notifications, tray watcher and polkit\n[Service]\nExecStart=quickspace-shell\n' \
+    > "$units/quickspace.service"
+ln -s ../quickspace.service "$units/wayland-session@quickspace-hyprland.target.wants/quickspace.service"
+printf '# Portal backends for XDG_CURRENT_DESKTOP=quickspace:Hyprland. xdg-desktop-portal\n[preferred]\ndefault=hyprland;gtk\n' \
+    > "$home/.config/xdg-desktop-portal/quickspace-portals.conf"
+# A drop-in of yours that happens to share the name stays.
+mine_dir="$tmp/mine-units"
+mkdir -p "$mine_dir/hypridle.service.d"
+printf '[Service]\nEnvironment=MINE=1\n' > "$mine_dir/hypridle.service.d/quickspace.conf"
 # The fake HOME would send Go to an empty module cache, and so the network.
 if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
     >"$tmp/install.log" 2>&1; then
@@ -349,6 +381,38 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
     check "make install keeps your own drop-in" test -f "$old_kept/mine.conf"
     check "make install removes an old drop-in installed under a custom POLKIT_AUTOSTART" test ! -e "$old_custom"
     check "make install keeps a quickspace.conf it didn't write" test -f "$not_ours/quickspace.conf"
+    check "make install removes quickspace's hypridle drop-in, which skipped hypridle in tide" \
+        test ! -e "$units/hypridle.service.d/quickspace.conf"
+    check "make install removes quickspace's autostart drop-in" \
+        test ! -e "$units/app-.service.d/quickspace-autostart.conf"
+    check "make install removes quickspace's shell unit" test ! -e "$units/quickspace.service"
+    check "and its enablement" test ! -e "$units/wayland-session@quickspace-hyprland.target.wants"
+    check "make install removes quickspace's portal config" \
+        test ! -e "$home/.config/xdg-desktop-portal/quickspace-portals.conf"
+    check "make install says what it removed" \
+        grep -qF "make install: removed $units/hypridle.service.d/quickspace.conf, left from quickspace" "$tmp/install.log"
+    # What the lock rests on: hypridle answers logind's Lock. systemd runs
+    # every ExecCondition in its drop-ins, so each must pass in tide, and
+    # fail elsewhere (Plasma keeps the ScreenSaver name).
+    conds=$(sed -n 's/^ExecCondition=//p' "$units"/hypridle.service.d/*.conf | sed 's/\$\$/$/g')
+    check "hypridle has an ExecCondition" test -n "$conds"
+    # Each ExecCondition is `/bin/sh -c '...'`; strip the quotes for sh -c.
+    conds=$(printf '%s\n' "$conds" | sed "s/^\/bin\/sh -c '\(.*\)'\$/\1/")
+    hypridle_runs() {
+        printf '%s\n' "$conds" | while IFS= read -r c; do
+            XDG_CURRENT_DESKTOP=$1 sh -c "$c" || exit 1
+        done
+    }
+    check "after make install over a quickspace install, hypridle runs in tide" hypridle_runs tide:Hyprland
+    check "and not under Plasma" not hypridle_runs KDE
+    # Run as an upgrade would, over a drop-in of yours by the same name.
+    if make -s install HOME="$home" SYSTEMD_USER_DIR="$mine_dir" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)" \
+        >"$tmp/install-mine.log" 2>&1; then
+        check "make install keeps a hypridle quickspace.conf it didn't write" \
+            test -f "$mine_dir/hypridle.service.d/quickspace.conf"
+    else
+        fail "make install over your own drop-in: $(cat "$tmp/install-mine.log")"
+    fi
 else
     fail "make install: $(cat "$tmp/install.log")"
 fi

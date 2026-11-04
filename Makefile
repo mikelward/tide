@@ -51,6 +51,17 @@ PREFIX ?= /usr/local
 # skipping their agent even if it were allowlisted, since systemd runs every
 # ExecCondition.
 OLD_AUTOSTART_DROPIN_MARK = \# A drop-in for another desktop's autostarted polkit agent
+# What the rename from quickspace (2026-10-03) left installed, each found by
+# the first line every version of it had, so a file of yours by that name
+# stays. hypridle's old drop-in is the one that matters: its ExecCondition
+# skips hypridle outside a quickspace session, and systemd runs every
+# ExecCondition, so beside tide.conf it skipped hypridle in tide too, and
+# nothing answered logind's Lock: no lock at all. The others do nothing in
+# tide, and go with it.
+OLD_HYPRIDLE_DROPIN_MARK = \# hypridle counts as started only once it owns org.freedesktop.ScreenSaver:
+OLD_AUTOSTART_ALLOWLIST_MARK = \# XDG autostart is an allowlist in quickspace
+OLD_SHELL_UNIT_MARK = \# The quickspace shell:
+OLD_PORTALS_MARK = \# Portal backends for XDG_CURRENT_DESKTOP=quickspace:Hyprland.
 GO ?= go
 # The shell's pure logic (shell/lib) is tested with node --test (SPEC.md §20).
 NODE ?= node
@@ -158,6 +169,24 @@ install: build install-shell
 		d=$${f%/*}; \
 		if test -z "$$(ls -A "$$d")"; then rmdir "$$d" || exit 1; fi; \
 	done
+	@# The quickspace leftovers (OLD_HYPRIDLE_DROPIN_MARK above), and the
+	@# old shell unit's enablement, once its unit is gone.
+	@remove_ours() { \
+		test -f "$$1" || return 0; \
+		case "$$(head -n 1 "$$1")" in "$$2"*) ;; *) return 0 ;; esac; \
+		rm -f "$$1" || return 1; \
+		echo "make install: removed $$1, left from quickspace"; \
+	}; \
+	remove_ours "$(SYSTEMD_USER_DIR)/hypridle.service.d/quickspace.conf" "$(OLD_HYPRIDLE_DROPIN_MARK)" \
+	&& remove_ours "$(SYSTEMD_USER_DIR)/app-.service.d/quickspace-autostart.conf" "$(OLD_AUTOSTART_ALLOWLIST_MARK)" \
+	&& remove_ours "$(SYSTEMD_USER_DIR)/quickspace.service" "$(OLD_SHELL_UNIT_MARK)" \
+	&& remove_ours "$(PORTAL_DIR)/quickspace-portals.conf" "$(OLD_PORTALS_MARK)" \
+	|| exit 1; \
+	wants="$(SYSTEMD_USER_DIR)/wayland-session@quickspace-hyprland.target.wants"; \
+	if test -L "$$wants/quickspace.service" && ! test -e "$$wants/quickspace.service"; then \
+		rm -f "$$wants/quickspace.service" || exit 1; \
+		if test -z "$$(ls -A "$$wants")"; then rmdir "$$wants" || exit 1; fi; \
+	fi
 	install -d "$(PORTAL_DIR)"
 	install -m 644 xdg-desktop-portal/tide-portals.conf "$(PORTAL_DIR)/"
 
