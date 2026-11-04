@@ -1,0 +1,11 @@
+[Desktop Entry]
+# Not for launching: KWin reads X-KDE-Wayland-Interfaces from the entry
+# whose Exec is a program's path, and offers that program only the
+# restricted interfaces it lists. tide-kwin-paste presses Ctrl+V through
+# org_kde_kwin_fake_input, for KDE's Win+V clipboard menu (SPEC.md §8.4).
+# `make install-session` fills in @BINDIR@.
+Type=Application
+Name=tide paste helper
+Exec=@BINDIR@/tide-kwin-paste
+NoDisplay=true
+X-KDE-Wayland-Interfaces=org_kde_kwin_fake_input

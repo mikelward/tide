@@ -2399,6 +2399,29 @@ See [`picker.png`](docs/mocks/picker.png).
     reads that as an empty history while the unit runs. With the unit
     stopped, it says so, with the command that starts it.
 
+**On KDE Plasma.** Plasma's own `Super+V` menu (Klipper) copies but
+doesn't paste, so `scripts`' `clipboard-menu` takes the key there: fuzzel
+lists Klipper's history, and the entry chosen goes back on the clipboard
+and is pasted by `tide-kwin-paste`.
+
+- **Why a helper.** Wayland has no common way for one program to press
+  keys in another's window. wtype's virtual-keyboard protocol is KWin's
+  on-screen keyboard's alone, and ydotool needs `/dev/uinput`. KWin's own
+  `org_kde_kwin_fake_input` does it.
+- **Version 6** (Plasma 6.5) takes keys by keysym, so KWin finds `v` in
+  the layout in use, Dvorak's as well as QWERTY's. Before 6.5 it says so
+  and doesn't paste.
+- **KWin's allow-list.** Plasma 6.5 to 6.7 offer fake-input only to a
+  program whose desktop entry, found by the path of its executable, lists
+  it in `X-KDE-Wayland-Interfaces` (`wayland_server.cpp`,
+  `utils/serviceutils.h`). So the helper is a Go program, not a script,
+  whose executable would be its interpreter's, and `make install-session`
+  installs `tide-kwin-paste.desktop` naming its path. Plasma 6.8 drops the
+  list for programs outside a sandbox.
+- **Ctrl+V everywhere,** kitty included (its `Ctrl+V` pastes in conf's
+  config): KWin has no D-Bus call for the focused window's class, so
+  there's no terminal list as on Hyprland.
+
 **Never storing passwords.**
 
 - Password managers mark a copied password with the
