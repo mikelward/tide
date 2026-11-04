@@ -1515,8 +1515,8 @@ with new keys in **bold**:
 | **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
 | **`Super+Left`** / **`Right`** | focus the window to the left / right of the focused one; at a monitor's edge, the nearest window on the next monitor that way, or that monitor itself if it shows none; past the last monitor, nothing (as in tilemo; the rule is below) |
 | **`Super+Shift+Left`** / **`Right`** | move the focused window the same way: on its monitor it swaps with the window that way; at the edge it goes onto the next monitor, joining the workspace showing there at the edge it came in by, and keeps focus. A floating window goes straight onto the next monitor that way, still floating, at the same relative spot and its size (the rule is below), and keeps focus. Past the last monitor, nothing |
-| `Super+PgUp` / `PgDn` | previous / next workspace in the bar's order, wrapping from the last to home and back |
-| **`Super+Shift+PgUp`** / **`PgDn`** | move the window to the previous / next workspace in the bar's order, wrapping as `Super+PgUp` does, and follow it |
+| `Super+PgUp` / `PgDn` | previous / next workspace in the bar's order that has a window, wrapping from the last to home and back. An empty one, standing or made, is passed over, and so is one whose only windows are minimized (§6.7): Hyprland has none on it. With no other that has a window, nothing |
+| **`Super+Shift+PgUp`** / **`PgDn`** | move the window to the previous / next workspace in the bar's order, empty or not, wrapping as `Super+PgUp` does, and follow it |
 | `Super+J` / `K`, `Super+Shift+J` / `K` | focus / move down and up the stack |
 | `Super+Return` | go to a workspace: the name prompt (§6.5), listing the existing names; type to filter them or to name a new one, and Enter goes there, making the workspace if it's new. It moves no window, so it works with none focused |
 | **`Super+Shift+Return`** | move the focused window to a workspace: the same prompt, and Enter moves it there, making the workspace if it's new; with no window focused, nothing |
@@ -1821,7 +1821,8 @@ See [`bar.png`](docs/mocks/bar.png).
 - **Click** one of its app icons to focus that window, going to its
   workspace, which clears its mark. A minimized one is restored (§6.7).
 - **Scroll** over the workspaces to move through them, in the bar's order,
-  stopping at either end (`Super+PgUp`/`PgDn` wrap round instead).
+  stopping at each, and at either end (`Super+PgUp`/`PgDn` pass over empty
+  ones and wrap round instead).
 - **Right-click** a workspace to change its layout.
 - The chips showed every window's icon before. They're quieter now, and
   the switcher's Workspaces and Windows tabs still show what's where
