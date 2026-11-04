@@ -10,6 +10,7 @@ import {
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
     expandHome, pickCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
+    wallpaperColor, lockColor, WALLPAPER_COLORS,
 } from "./appearance.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -578,13 +579,80 @@ test("a wallpaper the shell couldn't draw is passed over for the next", () => {
 test("the shell records the wallpaper it draws for the lock, which reads it back", () => {
     assert.equal(wallpaperRecord("/home/user/Pictures/day 1.jpg"), "/home/user/Pictures/day 1.jpg\n");
     assert.equal(wallpaperRecord(""), "\n", "none, as an empty line, which a missing file's FileView can still write");
-    assert.deepEqual(recordedWallpaper(wallpaperRecord("")), { path: "" });
-    assert.deepEqual(recordedWallpaper(wallpaperRecord("/home/user/Pictures/day 1.jpg")), { path: "/home/user/Pictures/day 1.jpg" });
-    assert.deepEqual(recordedWallpaper(""), { path: "" });
-    assert.deepEqual(recordedWallpaper("/srv/night.png"), { path: "/srv/night.png" }, "with no newline");
+    assert.deepEqual(recordedWallpaper(wallpaperRecord("")), { path: "", color: "" });
+    assert.deepEqual(recordedWallpaper(wallpaperRecord("/home/user/Pictures/day 1.jpg")), { path: "/home/user/Pictures/day 1.jpg", color: "" });
+    assert.deepEqual(recordedWallpaper(""), { path: "", color: "" });
+    assert.deepEqual(recordedWallpaper("/srv/night.png"), { path: "/srv/night.png", color: "" }, "with no newline");
     assert.match(recordedWallpaper("Pictures/day.jpg\n").error, /absolute path/);
     assert.equal(recordedWallpaper("Pictures/day.jpg\n").path, "");
     assert.match(recordedWallpaper("/a.jpg\n/b.jpg\n").error, /on a line of its own/);
+});
+
+test("a color wallpaper is recorded for the lock as its color, and old records still read", () => {
+    assert.equal(wallpaperRecord("#1a1d2e"), "#1a1d2e\n");
+    assert.deepEqual(recordedWallpaper(wallpaperRecord("#1a1d2e")), { path: "", color: "#1a1d2e" });
+    assert.deepEqual(recordedWallpaper("#ABC\n"), { path: "", color: "#aabbcc" });
+    // Written before colors: a path, or none, reads as it did.
+    assert.deepEqual(recordedWallpaper("/home/user/day.jpg\n"), { path: "/home/user/day.jpg", color: "" });
+    assert.deepEqual(recordedWallpaper("\n"), { path: "", color: "" });
+    for (const bad of ["#12345\n", "#1a1d2e\n/a.jpg\n", "red\n"]) {
+        const r = recordedWallpaper(bad);
+        assert.match(r.error, /absolute path or a color/, JSON.stringify(bad));
+        assert.equal(r.path, "");
+        assert.equal(r.color, "");
+    }
+});
+
+test("a wallpaper can be a color, #rrggbb or #rgb", () => {
+    assert.deepEqual(parseAppearance('{"lightWallpaper": "#ECECF0", "darkWallpaper": "#123"}').settings,
+        { lightWallpaper: "#ECECF0", darkWallpaper: "#123" });
+    for (const bad of ["#", "#12", "#1234", "#12345", "#1234567", "#1a1d2eff", "#ggg", "# 1a1d2e", "#1a1d2e\n"]) {
+        assert.match(parseAppearance(JSON.stringify({ darkWallpaper: bad })).error, /^darkWallpaper must be a color as #rrggbb or #rgb/, JSON.stringify(bad));
+    }
+    // Not a color, nor a path.
+    assert.match(parseAppearance('{"darkWallpaper": "red"}').error, /^darkWallpaper must be a file's path, such as "~\/Pictures\/day.jpg", a color/);
+    assert.equal(withSetting("{}", "darkWallpaper", "#1a1d2e").error, undefined, "as the page's swatch sets it");
+    assert.equal(wallpaperColor("#ECECF0"), "#ececf0");
+    assert.equal(wallpaperColor("#1aF"), "#11aaff");
+    assert.equal(wallpaperColor("~/day.jpg"), "");
+    assert.equal(wallpaperColor(""), "");
+    assert.equal(wallpaperColor(undefined), "");
+    assert.equal(wallpaperColor(5), "");
+});
+
+test("a color set for the mode wins, and the fallbacks are only for none", () => {
+    const home = "/home/user";
+    assert.deepEqual(wallpaperCandidates({ darkWallpaper: "#1A1D2E" }, true, home, "/srv/both.jpg"), ["#1a1d2e"]);
+    assert.deepEqual(wallpaperCandidates({ lightWallpaper: "#fff", darkWallpaper: "~/night.jpg" }, false, home), ["#ffffff"]);
+    // The other mode's color is no matter.
+    assert.deepEqual(wallpaperCandidates({ lightWallpaper: "#fff", darkWallpaper: "~/night.jpg" }, true, home), [
+        "/home/user/night.jpg",
+        "/home/user/.config/hypr/wallpaper-dark.jpg",
+        "/home/user/.config/hypr/wallpaper.jpg",
+    ]);
+    assert.deepEqual(wallpaperCandidates({ lightWallpaper: "#fff" }, true, home, "/srv/both.jpg"), [
+        "/srv/both.jpg",
+        "/home/user/.config/hypr/wallpaper-dark.jpg",
+        "/home/user/.config/hypr/wallpaper.jpg",
+    ]);
+});
+
+test("the lock darkens a color wallpaper as it does a picture", () => {
+    assert.equal(lockColor("#ececf0"), "#acacb0");
+    assert.equal(lockColor("#1a1d2e"), "#000000", "not below black");
+    assert.equal(lockColor("#FFF"), "#bfbfbf");
+    assert.equal(lockColor(""), "");
+    assert.equal(lockColor("/a.jpg"), "");
+});
+
+test("the page offers a handful of distinct colors, each a wallpaper", () => {
+    assert.ok(WALLPAPER_COLORS.length >= 6 && WALLPAPER_COLORS.length <= 8);
+    for (const c of WALLPAPER_COLORS) {
+        assert.equal(wallpaperColor(c.color), c.color, c.label);
+        assert.equal(withSetting("{}", "lightWallpaper", c.color).error, undefined, c.label);
+        assert.notEqual(c.label, "");
+    }
+    assert.equal(new Set(WALLPAPER_COLORS.map(c => c.color)).size, WALLPAPER_COLORS.length);
 });
 
 // The shell keeps a flip across a config reload as JSON text
@@ -611,6 +679,8 @@ test("a wallpaper's chooser offers images, opening where its file is", () => {
     // The default, or none set, opens where the chooser likes.
     assert.deepEqual(pickCommand("Dark wallpaper", "", home), ["tide-pick", "--images", "--title", "Dark wallpaper"]);
     assert.deepEqual(pickCommand("Dark wallpaper", undefined, home), ["tide-pick", "--images", "--title", "Dark wallpaper"]);
+    // Nor does a color, which has no folder.
+    assert.deepEqual(pickCommand("Dark wallpaper", "#1a1d2e", home), ["tide-pick", "--images", "--title", "Dark wallpaper"]);
 });
 
 test("the chosen file is the setting, from ~/ when it's home's", () => {

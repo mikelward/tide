@@ -9,6 +9,7 @@
 // time zone and its daylight saving changes.
 
 import { jsonError } from "./clocks.mjs";
+import { PALETTE } from "./palette.mjs";
 import { stepped } from "./steps.mjs";
 
 export const LOCAL = Object.freeze({
@@ -514,12 +515,59 @@ export function appearanceLua(settings) {
 }
 
 // What's wrong with a wallpaper setting, or "": a file's path, absolute or
-// from ~/, on one line, or "" for the default.
+// from ~/, on one line, a color, or "" for the default.
 function wallpaperError(key, v) {
+    if (typeof v === "string" && v.startsWith("#")) {
+        return wallpaperColor(v) === "" ? `${key} must be a color as #rrggbb or #rgb, such as "#1a1d2e"` : "";
+    }
     if (typeof v !== "string" || /[\n\r]/.test(v) || (v !== "" && !v.startsWith("/") && !v.startsWith("~/"))) {
-        return `${key} must be a file's path, such as "~/Pictures/day.jpg", or "" for the default`;
+        return `${key} must be a file's path, such as "~/Pictures/day.jpg", a color such as "#1a1d2e", or "" for the default`;
     }
     return "";
+}
+
+// A wallpaper that's a solid color (SPEC.md §15), `#rrggbb` or `#rgb` in
+// either case, as #rrggbb in lower case; "" for anything else, a file's
+// path say. A path never starts with #, so the two can't be confused.
+export function wallpaperColor(v) {
+    if (typeof v !== "string") {
+        return "";
+    }
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+        return v.toLowerCase();
+    }
+    if (/^#[0-9a-fA-F]{3}$/.test(v)) {
+        return "#" + v.slice(1).split("").map(c => c + c).join("").toLowerCase();
+    }
+    return "";
+}
+
+// The colors the Appearance page offers for a wallpaper (SPEC.md §16), from
+// tide's palette: dark backgrounds, then light ones. The two teal and
+// violet ones are the lock's own gradient (LockFace.qml).
+export const WALLPAPER_COLORS = Object.freeze([
+    { label: "Night", color: PALETTE.dark.stripNight },
+    { label: "Charcoal", color: PALETTE.dark.surface },
+    { label: "Teal", color: "#13303a" },
+    { label: "Violet", color: "#241a3a" },
+    { label: "Dusk", color: PALETTE.dark.stripDay },
+    { label: "Sky", color: PALETTE.light.stripDay },
+    { label: "Mist", color: PALETTE.light.stripNight },
+    { label: "Paper", color: PALETTE.light.surface2 },
+].map(c => Object.freeze(c)));
+
+// The lock's backdrop for a color wallpaper: `color` darkened as the
+// lock's MultiEffect darkens a picture (brightness -0.25, each channel a
+// quarter down), so the face's light text reads on a light color too.
+export const LOCK_DARKEN = 0.25;
+
+export function lockColor(color) {
+    const c = wallpaperColor(color);
+    if (c === "") {
+        return "";
+    }
+    const down = Math.round(LOCK_DARKEN * 255);
+    return "#" + [1, 3, 5].map(i => Math.max(0, parseInt(c.slice(i, i + 2), 16) - down).toString(16).padStart(2, "0")).join("");
 }
 
 // `path` with a leading ~/ as `home`.
@@ -530,10 +578,14 @@ export function expandHome(path, home) {
 // The wallpapers to try, in order, for light or `dark` (SPEC.md §15): the
 // one set for it, then $TIDE_WALLPAPER (`env`, "" when it's unset), then
 // conf's per-mode image and its one for both, as theme.sh and tide-shell
-// have them. The shell shows the first that can be read.
+// have them. The shell shows the first that can be read. A color set for
+// the mode is the only one: it can always be drawn.
 export function wallpaperCandidates(settings, dark, home, env = "") {
     const mode = dark ? "dark" : "light";
     const set = settings[`${mode}Wallpaper`] ?? "";
+    if (wallpaperColor(set) !== "") {
+        return [wallpaperColor(set)];
+    }
     const out = [];
     for (const path of [set, env, `~/.config/hypr/wallpaper-${mode}.jpg`, "~/.config/hypr/wallpaper.jpg"]) {
         const full = path === "" ? "" : expandHome(path, home);
@@ -546,10 +598,10 @@ export function wallpaperCandidates(settings, dark, home, env = "") {
 
 // The command that asks for a wallpaper, `label`'s (SPEC.md §16): tide-pick,
 // the desktop portal's file chooser, offering images, and opening where
-// `setting`'s file is, when one is set.
+// `setting`'s file is, when one is set (not a color).
 export function pickCommand(label, setting, home) {
     const command = ["tide-pick", "--images", "--title", label];
-    const full = typeof setting === "string" && setting !== "" ? expandHome(setting, home) : "";
+    const full = typeof setting === "string" && setting !== "" && wallpaperColor(setting) === "" ? expandHome(setting, home) : "";
     const folder = full.slice(0, full.lastIndexOf("/"));
     if (folder !== "") {
         command.push("--folder", folder);
@@ -581,26 +633,31 @@ export function drawableCandidates(candidates, undrawable) {
     return candidates.filter(c => !undrawable.includes(c));
 }
 
-// What the shell writes for the lock to draw, blurred (SPEC.md §15): the
-// wallpaper it draws now, `path`, on a line, or an empty line for none.
-// Never empty: Quickshell 0.3.1's FileView.setText skips text equal to what
-// it holds, and a file that doesn't exist holds "", so it could never be
-// written empty.
-export function wallpaperRecord(path) {
-    return `${path}\n`;
+// What the shell writes for the lock to draw (SPEC.md §15): the wallpaper
+// it draws now, on a line: a file's path, which the lock blurs, a color as
+// #rrggbb, or an empty line for none. Never empty: Quickshell 0.3.1's
+// FileView.setText skips text equal to what it holds, and a file that
+// doesn't exist holds "", so it could never be written empty.
+export function wallpaperRecord(wallpaper) {
+    return `${wallpaper}\n`;
 }
 
-// The wallpaper a record the shell wrote names: {path}, "" for none, or
-// {path: "", error} for one that isn't a file's absolute path on a line.
+// The wallpaper a record the shell wrote names: {path, color}, each "" but
+// the one it is, both "" for none, or both "" and an error for one that's
+// neither a file's absolute path nor a color on a line. A record from
+// before colors, a path or none, reads as it did.
 export function recordedWallpaper(text) {
-    const path = text.endsWith("\n") ? text.slice(0, -1) : text;
-    if (path === "") {
-        return { path: "" };
+    const line = text.endsWith("\n") ? text.slice(0, -1) : text;
+    if (line === "") {
+        return { path: "", color: "" };
     }
-    if (!path.startsWith("/") || /[\n\r\0]/.test(path)) {
-        return { path: "", error: "expected a file's absolute path, on a line of its own" };
+    if (wallpaperColor(line) !== "") {
+        return { path: "", color: wallpaperColor(line) };
     }
-    return { path };
+    if (!line.startsWith("/") || /[\n\r\0]/.test(line)) {
+        return { path: "", color: "", error: "expected a file's absolute path or a color, on a line of its own" };
+    }
+    return { path: line, color: "" };
 }
 
 // A file's path as a file: URL, each part escaped, so a name with a space,

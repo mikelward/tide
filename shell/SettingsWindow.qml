@@ -39,6 +39,7 @@ PanelWindow {
 
     // Another page starts at its top.
     onPageChanged: {
+        wallpaperColors.close();
         section = "";
         pageFlick.contentY = 0;
     }
@@ -71,6 +72,7 @@ PanelWindow {
     }
 
     function close() {
+        wallpaperColors.close();
         visible = false;
     }
 
@@ -237,8 +239,8 @@ PanelWindow {
         // Sets one of the Appearance page's settings, as it does: `qs -c
         // tide ipc call settings setAppearance mode dark`, a time
         // ("07:15"), a latitude or longitude, a dimStrength (0.1), or a
-        // lightWallpaper or darkWallpaper ("" for the default). Answers why
-        // not, or "".
+        // lightWallpaper or darkWallpaper, a file or a color such as
+        // "#1a1d2e" ("" for the default). Answers why not, or "".
         function setAppearance(key: string, value: string): string {
             if (key === "latitude" || key === "longitude") {
                 const c = Appearance.parseCoordinate(key, value);
@@ -1867,7 +1869,8 @@ PanelWindow {
                         }
 
                         // The wallpapers, light and dark (§15): a file's
-                        // path, chosen in the desktop's file chooser, or
+                        // path, chosen in the desktop's file chooser, or a
+                        // color, chosen from the swatch's; either can be
                         // typed and set with Enter as the location is.
                         // Empty is the default, conf's images.
                         Repeater {
@@ -1895,8 +1898,51 @@ PanelWindow {
                                     font.pixelSize: 13
                                 }
 
+                                // Opens the wallpaper colors: the color set,
+                                // or a neutral icon for an image or the
+                                // default.
+                                Rectangle {
+                                    id: swatch
+
+                                    readonly property string shows: Appearance.wallpaperColor(wallpaper.shown())
+
+                                    anchors.right: chooseButton.left
+                                    anchors.rightMargin: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 26
+                                    height: 26
+                                    radius: 7
+                                    color: swatchHover.hovered || wallpaperColors.key === wallpaper.modelData.key ? Theme.surface2 : "transparent"
+
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        visible: swatch.shows !== ""
+                                        width: 16
+                                        height: 16
+                                        radius: 4
+                                        color: swatch.shows === "" ? "transparent" : swatch.shows
+                                        border.color: Theme.edge
+                                    }
+
+                                    SymbolicIcon {
+                                        anchors.centerIn: parent
+                                        visible: swatch.shows === ""
+                                        name: "color-select-symbolic"
+                                    }
+
+                                    HoverHandler {
+                                        id: swatchHover
+                                    }
+
+                                    TapHandler {
+                                        onTapped: wallpaperColors.show(wallpaper.modelData.key, wallpaper.modelData.label, swatch)
+                                    }
+                                }
+
                                 // Opens the file chooser, for an image.
                                 Rectangle {
+                                    id: chooseButton
+
                                     anchors.right: wallpaperField.left
                                     anchors.rightMargin: 4
                                     anchors.verticalCenter: parent.verticalCenter
@@ -3612,6 +3658,162 @@ PanelWindow {
                 icon: "window-new-symbolic"
                 label: root.current.advanced?.label ?? ""
                 onClicked: root.advanced()
+            }
+        }
+
+        // Over the card while the wallpaper colors are open: a press
+        // anywhere else closes them, and goes no further.
+        MouseArea {
+            anchors.fill: parent
+            visible: wallpaperColors.visible
+            onPressed: {
+                wallpaperColors.close();
+                keys.forceActiveFocus();
+            }
+        }
+
+        // A wallpaper's colors (§16), under its swatch: tide's palette's
+        // backgrounds, dark then light, and a field for any #rrggbb, set
+        // with Enter. Choosing one sets it as the row's field would, and
+        // closes them; Escape closes them with nothing set.
+        Rectangle {
+            id: wallpaperColors
+
+            // The setting, lightWallpaper or darkWallpaper, or "" when shut.
+            property string key: ""
+            property string label: ""
+            readonly property string current: Appearance.wallpaperColor(AppearanceData.settings[key] ?? "")
+            // The color under the pointer, by its label.
+            property string hovered: ""
+
+            // Opens under `swatch`, or over it with no room below.
+            function show(key, label, swatch) {
+                const at = swatch.mapToItem(card, 0, 0);
+                wallpaperColors.key = key;
+                wallpaperColors.label = label;
+                x = Math.max(6, Math.min(at.x, card.width - width - 6));
+                y = at.y + swatch.height + 4 + height <= card.height - 6 ? at.y + swatch.height + 4 : Math.max(6, at.y - 4 - height);
+                hex.text = current;
+                hex.forceActiveFocus();
+            }
+
+            function close() {
+                key = "";
+                hovered = "";
+            }
+
+            function choose(value) {
+                const key = wallpaperColors.key;
+                close();
+                keys.forceActiveFocus();
+                appearance.set(key, value);
+            }
+
+            visible: key !== ""
+            width: colorColumn.implicitWidth + 24
+            height: colorColumn.implicitHeight + 24
+            radius: 12
+            color: Theme.surface
+            border.color: Theme.edge
+
+            // Takes its own presses, so they don't close it.
+            MouseArea {
+                anchors.fill: parent
+            }
+
+            Column {
+                id: colorColumn
+
+                x: 12
+                y: 12
+                spacing: 8
+
+                Text {
+                    width: colorGrid.width
+                    elide: Text.ElideRight
+                    text: wallpaperColors.hovered !== "" ? wallpaperColors.hovered : wallpaperColors.label
+                    color: Theme.fgDim
+                    font.family: Theme.font
+                    font.pixelSize: 12
+                }
+
+                Grid {
+                    id: colorGrid
+
+                    columns: 4
+                    spacing: 6
+
+                    Repeater {
+                        model: Appearance.WALLPAPER_COLORS
+
+                        Rectangle {
+                            id: choice
+
+                            required property var modelData
+                            readonly property bool chosen: modelData.color === wallpaperColors.current
+
+                            width: 32
+                            height: 32
+                            radius: 7
+                            color: modelData.color
+                            border.width: chosen || choiceHover.hovered ? 2 : 1
+                            border.color: chosen || choiceHover.hovered ? Theme.accent : Theme.edge
+                            Accessible.name: modelData.label
+
+                            HoverHandler {
+                                id: choiceHover
+
+                                onHoveredChanged: wallpaperColors.hovered = hovered ? choice.modelData.label : ""
+                            }
+
+                            TapHandler {
+                                onTapped: wallpaperColors.choose(choice.modelData.color)
+                            }
+                        }
+                    }
+                }
+
+                // Any color, as #rrggbb or #rgb; one that isn't is refused
+                // as the row's field's is.
+                Rectangle {
+                    width: colorGrid.width
+                    height: 26
+                    radius: 6
+                    color: Theme.surface2
+                    border.width: hex.activeFocus ? 1 : 0
+                    border.color: Theme.accent
+
+                    TextInput {
+                        id: hex
+
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        verticalAlignment: TextInput.AlignVCenter
+                        clip: true
+                        color: Theme.fg
+                        font.family: Theme.font
+                        font.pixelSize: 13
+                        font.features: ({ "tnum": 1 })
+                        onAccepted: {
+                            if (text.trim() !== "") {
+                                wallpaperColors.choose(text.trim());
+                            }
+                        }
+                        Keys.onEscapePressed: {
+                            wallpaperColors.close();
+                            keys.forceActiveFocus();
+                        }
+
+                        Text {
+                            visible: hex.text === ""
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "#rrggbb"
+                            color: Theme.fgFaint
+                            font: hex.font
+                        }
+                    }
+                }
             }
         }
     }

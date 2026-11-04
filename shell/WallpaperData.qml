@@ -7,19 +7,22 @@ import "lib/appearance.mjs" as Appearance
 
 // The wallpaper the shell draws (SPEC.md §15): the first of
 // Appearance.wallpaperCandidates that can be read, for light or dark as it
-// is now, looked for again whenever either changes. With none, the shell
-// draws no wallpaper.
+// is now, looked for again whenever either changes. A color set for the
+// mode is the only candidate, drawn as it is, with no lookup. With none,
+// the shell draws no wallpaper.
 //
-// The lock draws the same one, blurred, from the record this keeps in the
-// session's runtime directory: so the two agree without the lock working
-// out light or dark, or the settings, itself.
+// The lock draws the same one, a picture blurred, from the record this
+// keeps in the session's runtime directory: so the two agree without the
+// lock working out light or dark, or the settings, itself.
 Singleton {
     id: root
 
     readonly property string home: Quickshell.env("HOME") || ""
     readonly property var candidates: AppearanceData.loaded ? Appearance.wallpaperCandidates(AppearanceData.settings, AppearanceData.dark, root.home, Quickshell.env("TIDE_WALLPAPER") || "") : []
-    // The file to draw, or "" for none.
+    // The file to draw, or "" for none or a color.
     property string path: ""
+    // The color to fill with, as #rrggbb, or "" for none or a file.
+    property string color: ""
     // What the shell found it couldn't draw (Wallpaper.qml), a corrupt
     // image say, passed over for the next until the candidates change.
     property var undrawable: []
@@ -50,6 +53,10 @@ Singleton {
             root.show("");
             return;
         }
+        if (Appearance.wallpaperColor(root.drawable[0]) !== "") {
+            root.show(root.drawable[0]);
+            return;
+        }
         finder.createObject(root, {
             generation: root.generation,
             command: Appearance.findCommand(root.drawable)
@@ -69,16 +76,17 @@ Singleton {
         root.show("");
     }
 
-    // Draws `path`, or none, and records it for the lock: each time, not
-    // only on a change, so a shell restarted with none still clears the
-    // last shell's. One that can't be recorded is logged; the lock shows
-    // the last one recorded, or none.
-    function show(path) {
-        root.path = path;
+    // Draws `wallpaper`, a file or a color, or none, and records it for the
+    // lock: each time, not only on a change, so a shell restarted with none
+    // still clears the last shell's. One that can't be recorded is logged;
+    // the lock shows the last one recorded, or none.
+    function show(wallpaper) {
+        root.color = Appearance.wallpaperColor(wallpaper);
+        root.path = root.color === "" ? wallpaper : "";
         if (root.runtimeDir === "") {
             return;
         }
-        const text = Appearance.wallpaperRecord(path);
+        const text = Appearance.wallpaperRecord(wallpaper);
         if (record.readNow() === text) {
             return;
         }

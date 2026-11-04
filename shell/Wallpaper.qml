@@ -4,15 +4,16 @@ import Quickshell.Wayland
 import "lib/appearance.mjs" as Appearance
 
 // The wallpaper on one monitor (SPEC.md §15): on the background layer,
-// under everything, filling the monitor as swaybg's fill mode does. With no
-// wallpaper there's no window at all.
+// under everything, a picture filling the monitor as swaybg's fill mode
+// does, or a color filling it plainly. With no wallpaper there's no window
+// at all.
 PanelWindow {
     id: root
 
     required property var modelData
 
     screen: modelData
-    visible: WallpaperData.path !== ""
+    visible: WallpaperData.path !== "" || WallpaperData.color !== ""
     WlrLayershell.namespace: "tide-wallpaper"
     WlrLayershell.layer: WlrLayer.Background
     exclusionMode: ExclusionMode.Ignore
@@ -25,8 +26,8 @@ PanelWindow {
         left: true
         right: true
     }
-    // Under an image that hasn't loaded, or couldn't.
-    color: Theme.barBg
+    // A color wallpaper, or under an image that hasn't loaded, or couldn't.
+    color: WallpaperData.color !== "" ? WallpaperData.color : Theme.barBg
 
     Image {
         anchors.fill: parent
