@@ -76,13 +76,18 @@ list() {
         printf 'unlock\t-\t-\tUnlock Bitwarden\trbw asks for your master password\n'
         return 0
     fi
-    if ! logins=$(rbw list --fields id,name,user,folder 2>&1); then
+    # The type leaves out cards, notes and identities, which have no
+    # password or 2FA code; an rbw before 1.15 refuses it, so then every
+    # entry.
+    if ! logins=$(rbw list --fields id,name,user,folder,type 2>/dev/null) &&
+        ! logins=$(rbw list --fields id,name,user,folder 2>&1); then
         fail "rbw couldn't list the logins: $logins"
     fi
     # awk, not read: a tab is whitespace to IFS, so read would run an
     # empty user into the folder after it.
     printf '%s\n' "$logins" | awk -F '\t' '
         $1 == "" { next }
+        $5 != "" && $5 != "Login" { next }
         {
             id = $1; name = $2; user = $3; folder = $4
             gsub(/\n/, " ", name)

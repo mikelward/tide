@@ -26,7 +26,9 @@ mkdir "$fake"
 export FAKE_DIR="$tmp" XDG_CONFIG_HOME="$tmp/config" XDG_RUNTIME_DIR="$tmp"
 mkdir -p "$XDG_CONFIG_HOME/tide"
 
-# rbw: unlocked unless $FAKE_LOCKED; two logins, one without a user; get
+# rbw: unlocked unless $FAKE_LOCKED; three logins, a card and a note
+# (rbw 1.15's type field, which $FAKE_OLD_RBW refuses as an older rbw
+# does), one login without a user, one without a user; get
 # prints the field with a newline, as rbw does; code fails for the login
 # with no TOTP. Every call is logged.
 cat > "$fake/rbw" <<'FAKE'
@@ -35,7 +37,16 @@ printf 'rbw %s\n' "$*" >> "$FAKE_DIR/log"
 case "$1" in
     unlocked) test -z "${FAKE_LOCKED:-}" ;;
     unlock) echo unlocked >> "$FAKE_DIR/log" ;;
-    list) printf 'id-1\tgithub.com\tme@example.com\tweb\nid-2\twifi\t\t\nid-3\tbank\t\tmoney\n' ;;
+    list)
+        case "$3" in
+            *,type)
+                if test -n "${FAKE_OLD_RBW:-}"; then
+                    echo "error: unknown field type" >&2
+                    exit 1
+                fi
+                printf 'id-1\tgithub.com\tme@example.com\tweb\tLogin\nid-2\twifi\t\t\tLogin\nid-3\tbank\t\tmoney\tLogin\nid-4\tVisa\t\t\tCard\nid-5\tNotes\t\t\tNote\n' ;;
+            *) printf 'id-1\tgithub.com\tme@example.com\tweb\nid-2\twifi\t\t\nid-3\tbank\t\tmoney\nid-4\tVisa\t\t\nid-5\tNotes\t\t\n' ;;
+        esac ;;
     get)
         case "$3 $4" in
             "password id-1") echo 'hunter2' ;;
@@ -70,7 +81,7 @@ export PATH="$fake:$base"
 
 reset() {
     rm -f "$tmp/log" "$tmp/typed" "$XDG_CONFIG_HOME/tide/snippets.json" "$XDG_CONFIG_HOME/tide/snippets.local.json"
-    unset FAKE_LOCKED XDG_CURRENT_DESKTOP
+    unset FAKE_LOCKED FAKE_OLD_RBW XDG_CURRENT_DESKTOP
 }
 
 # --- list ----------------------------------------------------------------------
@@ -92,6 +103,15 @@ check "a login with a folder but no user keeps the folder as the folder, not the
 check "and has no username row" test -z "$(printf '%s\n' "$out" | grep "id-3	username")"
 check "list never asks rbw for a secret" test -z "$(grep -e 'rbw get' -e 'rbw code' "$tmp/log")"
 check "nor shows one" test -z "$(printf '%s' "$out" | grep -e hunter2 -e 555-0199x)"
+check "a card or note has no rows: it has no password or 2FA code" \
+    test -z "$(printf '%s\n' "$out" | grep -e id-4 -e id-5)"
+
+reset
+export FAKE_OLD_RBW=1
+out=$("$cmd" list 2>&1)
+check "an rbw before 1.15, without the type field, still lists" test $? -eq 0
+check "every login, through the listing without it" \
+    contains "$out" "$(printf 'login\tid-3\tpassword\tbank · password\tmoney')"
 
 reset
 FAKE_LOCKED=1
@@ -117,7 +137,16 @@ printf 'rbw %s\n' "$*" >> "$FAKE_DIR/log"
 case "$1" in
     unlocked) test -z "${FAKE_LOCKED:-}" ;;
     unlock) echo unlocked >> "$FAKE_DIR/log" ;;
-    list) printf 'id-1\tgithub.com\tme@example.com\tweb\nid-2\twifi\t\t\nid-3\tbank\t\tmoney\n' ;;
+    list)
+        case "$3" in
+            *,type)
+                if test -n "${FAKE_OLD_RBW:-}"; then
+                    echo "error: unknown field type" >&2
+                    exit 1
+                fi
+                printf 'id-1\tgithub.com\tme@example.com\tweb\tLogin\nid-2\twifi\t\t\tLogin\nid-3\tbank\t\tmoney\tLogin\nid-4\tVisa\t\t\tCard\nid-5\tNotes\t\t\tNote\n' ;;
+            *) printf 'id-1\tgithub.com\tme@example.com\tweb\nid-2\twifi\t\t\nid-3\tbank\t\tmoney\nid-4\tVisa\t\t\nid-5\tNotes\t\t\n' ;;
+        esac ;;
     get)
         case "$3 $4" in
             "password id-1") echo 'hunter2' ;;
