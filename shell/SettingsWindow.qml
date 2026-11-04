@@ -1890,137 +1890,178 @@ PanelWindow {
                         Repeater {
                             model: [{ key: "lightWallpaper", label: "Light wallpaper" }, { key: "darkWallpaper", label: "Dark wallpaper" }]
 
-                            Item {
+                            Column {
                                 id: wallpaper
 
                                 required property var modelData
+                                readonly property bool dark: modelData.key === "darkWallpaper"
+                                // The pictures to preview, in order, and
+                                // how many couldn't load.
+                                readonly property var candidates: Appearance.previewCandidates(appearance.settings, dark, AppearanceData.dark, WallpaperData.path, Quickshell.env("HOME") ?? "", Quickshell.env("TIDE_WALLPAPER") ?? "")
+                                property int tried: 0
+                                // Only while the page shows: the preview
+                                // holds the picture at its own size.
+                                readonly property string previewPath: root.visible && appearance.visible ? (candidates[tried] ?? "") : ""
 
                                 function shown() {
                                     return appearance.settings[modelData.key] ?? "";
                                 }
 
+                                onCandidatesChanged: tried = 0
                                 width: appearance.width
-                                implicitHeight: 32
 
-                                Text {
-                                    anchors.left: parent.left
-                                    anchors.leftMargin: 10
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: wallpaper.modelData.label
-                                    color: Theme.fg
-                                    font.family: Theme.font
-                                    font.pixelSize: 13
-                                }
+                                Item {
+                                    width: wallpaper.width
+                                    implicitHeight: 32
 
-                                // Opens the wallpaper colors: the color set,
-                                // or a neutral icon for an image or the
-                                // default.
-                                Rectangle {
-                                    id: swatch
-
-                                    readonly property string shows: Appearance.wallpaperColor(wallpaper.shown())
-
-                                    anchors.right: chooseButton.left
-                                    anchors.rightMargin: 4
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 26
-                                    height: 26
-                                    radius: 7
-                                    color: swatchHover.hovered || wallpaperColors.key === wallpaper.modelData.key ? Theme.surface2 : "transparent"
-
-                                    Rectangle {
-                                        anchors.centerIn: parent
-                                        visible: swatch.shows !== ""
-                                        width: 16
-                                        height: 16
-                                        radius: 4
-                                        color: swatch.shows === "" ? "transparent" : swatch.shows
-                                        border.color: Theme.edge
-                                    }
-
-                                    SymbolicIcon {
-                                        anchors.centerIn: parent
-                                        visible: swatch.shows === ""
-                                        name: "color-select-symbolic"
-                                    }
-
-                                    HoverHandler {
-                                        id: swatchHover
-                                    }
-
-                                    TapHandler {
-                                        onTapped: wallpaperColors.show(wallpaper.modelData.key, wallpaper.modelData.label, swatch)
-                                    }
-                                }
-
-                                // Opens the file chooser, for an image.
-                                Rectangle {
-                                    id: chooseButton
-
-                                    anchors.right: wallpaperField.left
-                                    anchors.rightMargin: 4
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 26
-                                    height: 26
-                                    radius: 7
-                                    color: chooseHover.hovered ? Theme.surface2 : "transparent"
-
-                                    SymbolicIcon {
-                                        anchors.centerIn: parent
-                                        name: "document-open-symbolic"
-                                    }
-
-                                    HoverHandler {
-                                        id: chooseHover
-                                    }
-
-                                    TapHandler {
-                                        onTapped: root.pickWallpaper(wallpaper.modelData.key, wallpaper.modelData.label)
-                                    }
-                                }
-
-                                Rectangle {
-                                    id: wallpaperField
-
-                                    anchors.right: parent.right
-                                    anchors.rightMargin: 6
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 220
-                                    height: 26
-                                    radius: 6
-                                    color: Theme.surface2
-                                    border.width: file.activeFocus ? 1 : 0
-                                    border.color: Theme.accent
-
-                                    TextInput {
-                                        id: file
-
-                                        anchors.fill: parent
-                                        anchors.leftMargin: 8
-                                        anchors.rightMargin: 8
-                                        verticalAlignment: TextInput.AlignVCenter
-                                        clip: true
-                                        text: wallpaper.shown()
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 10
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: wallpaper.modelData.label
                                         color: Theme.fg
                                         font.family: Theme.font
                                         font.pixelSize: 13
-                                        onAccepted: {
-                                            appearance.set(wallpaper.modelData.key, text.trim());
-                                            keys.forceActiveFocus();
-                                        }
-                                        Keys.onEscapePressed: keys.forceActiveFocus()
-                                        onActiveFocusChanged: {
-                                            if (!activeFocus) {
-                                                text = Qt.binding(() => wallpaper.shown());
-                                            }
+                                    }
+
+                                    // Opens the wallpaper colors: the color set,
+                                    // or a neutral icon for an image or the
+                                    // default.
+                                    Rectangle {
+                                        id: swatch
+
+                                        readonly property string shows: Appearance.wallpaperColor(wallpaper.shown())
+
+                                        anchors.right: chooseButton.left
+                                        anchors.rightMargin: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 26
+                                        height: 26
+                                        radius: 7
+                                        color: swatchHover.hovered || wallpaperColors.key === wallpaper.modelData.key ? Theme.surface2 : "transparent"
+
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            visible: swatch.shows !== ""
+                                            width: 16
+                                            height: 16
+                                            radius: 4
+                                            color: swatch.shows === "" ? "transparent" : swatch.shows
+                                            border.color: Theme.edge
                                         }
 
-                                        Text {
-                                            visible: file.text === "" && !file.activeFocus
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: "default"
-                                            color: Theme.fgFaint
-                                            font: file.font
+                                        SymbolicIcon {
+                                            anchors.centerIn: parent
+                                            visible: swatch.shows === ""
+                                            name: "color-select-symbolic"
+                                        }
+
+                                        HoverHandler {
+                                            id: swatchHover
+                                        }
+
+                                        TapHandler {
+                                            onTapped: wallpaperColors.show(wallpaper.modelData.key, wallpaper.modelData.label, swatch)
+                                        }
+                                    }
+
+                                    // Opens the file chooser, for an image.
+                                    Rectangle {
+                                        id: chooseButton
+
+                                        anchors.right: wallpaperField.left
+                                        anchors.rightMargin: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 26
+                                        height: 26
+                                        radius: 7
+                                        color: chooseHover.hovered ? Theme.surface2 : "transparent"
+
+                                        SymbolicIcon {
+                                            anchors.centerIn: parent
+                                            name: "document-open-symbolic"
+                                        }
+
+                                        HoverHandler {
+                                            id: chooseHover
+                                        }
+
+                                        TapHandler {
+                                            onTapped: root.pickWallpaper(wallpaper.modelData.key, wallpaper.modelData.label)
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        id: wallpaperField
+
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 6
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 220
+                                        height: 26
+                                        radius: 6
+                                        color: Theme.surface2
+                                        border.width: file.activeFocus ? 1 : 0
+                                        border.color: Theme.accent
+
+                                        TextInput {
+                                            id: file
+
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 8
+                                            anchors.rightMargin: 8
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            clip: true
+                                            text: wallpaper.shown()
+                                            color: Theme.fg
+                                            font.family: Theme.font
+                                            font.pixelSize: 13
+                                            onAccepted: {
+                                                appearance.set(wallpaper.modelData.key, text.trim());
+                                                keys.forceActiveFocus();
+                                            }
+                                            Keys.onEscapePressed: keys.forceActiveFocus()
+                                            onActiveFocusChanged: {
+                                                if (!activeFocus) {
+                                                    text = Qt.binding(() => wallpaper.shown());
+                                                }
+                                            }
+
+                                            Text {
+                                                visible: file.text === "" && !file.activeFocus
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: "default"
+                                                color: Theme.fgFaint
+                                                font: file.font
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // What each monitor shows of the picture
+                                // (§16): one preview per size of monitor.
+                                Flow {
+                                    x: 10
+                                    width: wallpaper.width - 16
+                                    visible: wallpaper.previewPath !== ""
+                                    spacing: 12
+                                    bottomPadding: 6
+
+                                    Repeater {
+                                        model: wallpaper.previewPath === "" ? [] : Appearance.previewScreens(Quickshell.screens)
+
+                                        WallpaperPreview {
+                                            required property var modelData
+
+                                            path: wallpaper.previewPath
+                                            screenName: modelData.name
+                                            screenWidth: modelData.width
+                                            screenHeight: modelData.height
+                                            onFailed: failedPath => {
+                                                if (failedPath === wallpaper.previewPath) {
+                                                    wallpaper.tried++;
+                                                }
+                                            }
                                         }
                                     }
                                 }

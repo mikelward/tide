@@ -3981,6 +3981,22 @@ stays hand-written.
       names its own path, can't answer first.
     - **Cost and reliability:** nothing new to install, since the portal is
       tide's file chooser already; one D-Bus call a choice.
+  - **Each picture has a preview** under its row, so a crop is no
+    surprise. A color, or no picture, has none.
+    - It's the whole picture, scaled to fit 240 by 160 px, with a frame
+      over it for the part a monitor shows. What the monitor trims is
+      dimmed.
+    - There's one preview for each size of monitor connected, labeled with
+      the monitors' names. Monitors of the same size share one.
+    - A line under it gives the numbers in the monitor's pixels, such as
+      `DP-1, 3440×1440: scaled to 3440×2150, trims 33% of its height (355
+      px top, 355 px bottom)`.
+    - The mode showing now previews the file the shell draws. The other
+      mode previews the first of its candidates (§15) that loads.
+    - The preview loads the file at its own size, to learn that size, and
+      only while the page shows.
+    - `Appearance.wallpaperFrame` does the geometry, as pure functions the
+      tests check; the QML only draws.
 
 - **Displays** sets each monitor's scale and where it goes beside the
   others, in `outputs.json` and `outputs.local.json`.

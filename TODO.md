@@ -576,6 +576,14 @@ once you have agreed with it or reversed it.
   wallpaper for it would be a greetd setting. It's `show` in
   `shell/WallpaperData.qml` and the wallpaper reader in `shell/lock.qml`.
 
+- [ ] **The Appearance page's preview loads the picture at its own size.**
+  It needs the file's pixel size, which Qt's Image reports only for a
+  decode with no `sourceSize`: about 37 MB for a 3840×2400 picture, while
+  the page shows. A decode at the preview's size would give only the
+  aspect ratio, off by a pixel in the caption. Monitors of one size share
+  a preview, and each size has one of its own, rather than every frame on
+  one picture. It's `WallpaperPreview.qml`.
+
 - [ ] **A monitor's place is one of Hyprland's automatic ones.** The
   Displays page offers automatic, right, left, above and below; an exact
   position is nwg-displays'. The alternative is a drag-to-arrange map,

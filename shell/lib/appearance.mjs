@@ -665,3 +665,135 @@ export function recordedWallpaper(text) {
 export function fileUrl(path) {
     return "file://" + path.split("/").map(encodeURIComponent).join("/");
 }
+
+// Where a picture lands on a monitor (SPEC.md §15), for the Appearance
+// page's preview (§16). `image` and `screen` are {width, height} in pixels;
+// `position` is how the picture is placed. "fill" scales it to cover the
+// monitor, centered, as swaybg's fill does, trimming what's left over.
+// Returns null until both sizes are known (an image still loading), or:
+// - scale: monitor pixels per picture pixel;
+// - shown: the picture's size on the monitor, {width, height};
+// - frame: the monitor's rectangle in the picture's pixels, {x, y, width,
+//   height};
+// - visible: the part of the picture the monitor shows, the same way;
+// - trimmed: the fraction of the picture's width or height cut off each
+//   side, {top, bottom, left, right}.
+export function wallpaperFrame(image, screen, position = "fill") {
+    if (!(image?.width > 0 && image?.height > 0 && screen?.width > 0 && screen?.height > 0)) {
+        return null;
+    }
+    if (position !== "fill") {
+        throw new Error(`unknown wallpaper position: ${position}`);
+    }
+    const scale = Math.max(screen.width / image.width, screen.height / image.height);
+    const width = screen.width / scale;
+    const height = screen.height / scale;
+    const frame = { x: (image.width - width) / 2, y: (image.height - height) / 2, width, height };
+    const x0 = Math.max(0, frame.x);
+    const y0 = Math.max(0, frame.y);
+    const x1 = Math.min(image.width, frame.x + frame.width);
+    const y1 = Math.min(image.height, frame.y + frame.height);
+    return {
+        scale,
+        shown: { width: image.width * scale, height: image.height * scale },
+        frame,
+        visible: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 },
+        trimmed: {
+            top: y0 / image.height,
+            bottom: (image.height - y1) / image.height,
+            left: x0 / image.width,
+            right: (image.width - x1) / image.width,
+        },
+    };
+}
+
+// One monitor's line under the preview: what it shows of the picture, in
+// the monitor's pixels. `name` is the monitor's, or several joined.
+export function framingCaption(name, image, screen, position = "fill") {
+    const f = wallpaperFrame(image, screen, position);
+    if (f === null) {
+        return "";
+    }
+    const size = `${name}, ${screen.width}×${screen.height}`;
+    const w = Math.round(f.shown.width);
+    const h = Math.round(f.shown.height);
+    const px = (fraction, whole) => Math.round(fraction * whole);
+    const parts = (a, aName, b, bName, whole) => [[a, aName], [b, bName]]
+        .filter(([v]) => px(v, whole) > 0).map(([v, side]) => `${px(v, whole)} px ${side}`).join(", ");
+    const t = f.trimmed;
+    if (px(t.top + t.bottom, h) > 0) {
+        return `${size}: scaled to ${w}×${h}, trims ${Math.round((t.top + t.bottom) * 100)}% of its height (${parts(t.top, "top", t.bottom, "bottom", h)})`;
+    }
+    if (px(t.left + t.right, w) > 0) {
+        return `${size}: scaled to ${w}×${h}, trims ${Math.round((t.left + t.right) * 100)}% of its width (${parts(t.left, "left", t.right, "right", w)})`;
+    }
+    return `${size}: shows all of it, scaled to ${w}×${h}`;
+}
+
+// The monitors a preview is drawn for, from Quickshell.screens' {name,
+// width, height, devicePixelRatio}: each size once, in pixels, with the
+// names of the monitors that have it, so two alike share one preview.
+export function previewScreens(screens) {
+    const out = [];
+    for (const s of screens) {
+        const width = Math.round(s.width * (s.devicePixelRatio || 1));
+        const height = Math.round(s.height * (s.devicePixelRatio || 1));
+        if (!(width > 0 && height > 0)) {
+            continue;
+        }
+        const same = out.find(o => o.width === width && o.height === height);
+        if (same) {
+            same.name = `${same.name}, ${s.name}`;
+        } else {
+            out.push({ name: String(s.name ?? ""), width, height });
+        }
+    }
+    return out;
+}
+
+// A preview's drawing, at most `maxWidth` by `maxHeight`: the picture and
+// the monitor's frame over it, and the parts of the picture outside the
+// frame, which are dimmed; each {x, y, width, height} in the preview's own
+// pixels. null while wallpaperFrame is.
+export function previewLayout(image, screen, position, maxWidth, maxHeight) {
+    const f = wallpaperFrame(image, screen, position);
+    if (f === null) {
+        return null;
+    }
+    const x0 = Math.min(0, f.frame.x);
+    const y0 = Math.min(0, f.frame.y);
+    const x1 = Math.max(image.width, f.frame.x + f.frame.width);
+    const y1 = Math.max(image.height, f.frame.y + f.frame.height);
+    const k = Math.min(maxWidth / (x1 - x0), maxHeight / (y1 - y0));
+    const rect = (x, y, width, height) => ({ x: (x - x0) * k, y: (y - y0) * k, width: width * k, height: height * k });
+    const v = f.visible;
+    const dims = [
+        rect(0, 0, image.width, v.y),
+        rect(0, v.y + v.height, image.width, image.height - v.y - v.height),
+        rect(0, v.y, v.x, v.height),
+        rect(v.x + v.width, v.y, image.width - v.x - v.width, v.height),
+    ].filter(r => r.width > 0.01 && r.height > 0.01);
+    return {
+        width: (x1 - x0) * k,
+        height: (y1 - y0) * k,
+        image: rect(0, 0, image.width, image.height),
+        frame: rect(f.frame.x, f.frame.y, f.frame.width, f.frame.height),
+        dims,
+    };
+}
+
+// The pictures the Appearance page may preview for light or `dark`, in
+// order, the next tried when one can't load. For the mode showing now
+// (`nowDark`), only `drawn`, the file the shell draws (WallpaperData), or
+// none for a color. For the other, its candidates, as the shell would look
+// for them (wallpaperCandidates). A color is never previewed.
+export function previewCandidates(settings, dark, nowDark, drawn, home, env = "") {
+    if (dark === nowDark) {
+        return drawn === "" ? [] : [drawn];
+    }
+    const set = settings[`${dark ? "dark" : "light"}Wallpaper`] ?? "";
+    if (wallpaperColor(set) !== "") {
+        return [];
+    }
+    return wallpaperCandidates(settings, dark, home, env);
+}
