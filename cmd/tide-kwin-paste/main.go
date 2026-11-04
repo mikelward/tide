@@ -3,6 +3,10 @@
 // --shift, through KWin's org_kde_kwin_fake_input.
 //
 //	tide-kwin-paste [--shift]
+//	tide-kwin-paste --type
+//
+// --type types stdin instead, key by key, as the picker's Fill tab does
+// for a snippet or a password (bin/tide-fill), up to 64 KiB.
 //
 // Wayland has no common way for one program to press keys in another's
 // window. Hyprland has its own (the picker's send_shortcut). wtype uses the
@@ -35,6 +39,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -58,6 +63,8 @@ const (
 	keyControlL = 0xffe3
 	keyShiftL   = 0xffe1
 	keyV        = 0x0076
+	keyReturn   = 0xff0d
+	keyTab      = 0xff09
 	pressed     = 1
 	released    = 0
 )
@@ -164,8 +171,60 @@ func (c *conn) roundtrip() ([]event, error) {
 	}
 }
 
-// paste presses Ctrl(+Shift)+V over rw, a connection to the compositor.
-func paste(rw io.ReadWriter, shift bool) error {
+// stroke is one key event: a keysym, pressed or released.
+type stroke struct{ sym, state uint32 }
+
+// pasteStrokes presses Ctrl(+Shift)+V, then lets go in turn.
+func pasteStrokes(shift bool) []stroke {
+	keys := []uint32{keyControlL}
+	if shift {
+		keys = append(keys, keyShiftL)
+	}
+	keys = append(keys, keyV)
+	var out []stroke
+	for _, k := range keys {
+		out = append(out, stroke{k, pressed})
+	}
+	for i := len(keys) - 1; i >= 0; i-- {
+		out = append(out, stroke{keys[i], released})
+	}
+	return out
+}
+
+// keysym is the X keysym that types r: Return and Tab for a newline and a
+// tab, Latin-1 as itself, and anything else as Unicode's 0x01000000 + r
+// (xkbcommon's keysyms.h). KWin types one its keymap lacks with a keymap
+// of its own for that key (fakeinputbackend.cpp).
+func keysym(r rune) uint32 {
+	switch {
+	case r == '\n':
+		return keyReturn
+	case r == '\t':
+		return keyTab
+	case r >= 0x20 && r <= 0x7e, r >= 0xa0 && r <= 0xff:
+		return uint32(r)
+	default:
+		return 0x01000000 + uint32(r)
+	}
+}
+
+// typeStrokes presses and lets go of each character of text in turn,
+// control characters but newline and tab left out.
+func typeStrokes(text string) []stroke {
+	var out []stroke
+	for _, r := range text {
+		if (r < 0x20 && r != '\n' && r != '\t') || r == 0x7f || r == utf8.RuneError {
+			continue
+		}
+		k := keysym(r)
+		out = append(out, stroke{k, pressed}, stroke{k, released})
+	}
+	return out
+}
+
+// press sends strokes over rw, a connection to the compositor, through
+// KWin's fake-input.
+func press(rw io.ReadWriter, strokes []stroke) error {
 	c := &conn{rw: rw, next: 1}
 	registry := c.newID()
 	if err := c.send(message(displayID, displayGetRegistry, u32(registry))); err != nil {
@@ -202,16 +261,8 @@ func paste(rw io.ReadWriter, shift bool) error {
 		message(registry, registryBind, u32(name), str(iface), u32(version, fake)),
 		message(fake, reqAuthenticate, str("Clipboard menu"), str("Paste what you chose")),
 	}
-	keys := []uint32{keyControlL}
-	if shift {
-		keys = append(keys, keyShiftL)
-	}
-	keys = append(keys, keyV)
-	for _, k := range keys {
-		reqs = append(reqs, message(fake, reqKeyboardKeysym, u32(k, pressed)))
-	}
-	for i := len(keys) - 1; i >= 0; i-- {
-		reqs = append(reqs, message(fake, reqKeyboardKeysym, u32(keys[i], released)))
+	for _, k := range strokes {
+		reqs = append(reqs, message(fake, reqKeyboardKeysym, u32(k.sym, k.state)))
 	}
 	if err := c.send(bytes.Join(reqs, nil)); err != nil {
 		return err
@@ -237,14 +288,32 @@ func socketPath(getenv func(string) string) (string, error) {
 	return filepath.Join(runtime, display), nil
 }
 
-func run(args []string, getenv func(string) string, stderr io.Writer) int {
-	if len(args) > 1 || (len(args) == 1 && args[0] != "--shift") {
-		fmt.Fprintln(stderr, "usage: tide-kwin-paste [--shift]")
-		return 2
-	}
+// maxType is the most --type reads: a snippet or a password, not a file.
+const maxType = 64 << 10
+
+func run(args []string, getenv func(string) string, stdin io.Reader, stderr io.Writer) int {
 	fail := func(err error) int {
 		fmt.Fprintf(stderr, "tide-kwin-paste: %s\n", strings.TrimSpace(err.Error()))
 		return 1
+	}
+	var strokes []stroke
+	switch {
+	case len(args) == 0:
+		strokes = pasteStrokes(false)
+	case len(args) == 1 && args[0] == "--shift":
+		strokes = pasteStrokes(true)
+	case len(args) == 1 && args[0] == "--type":
+		text, err := io.ReadAll(io.LimitReader(stdin, maxType+1))
+		if err != nil {
+			return fail(fmt.Errorf("couldn't read what to type: %w", err))
+		}
+		if len(text) > maxType {
+			return fail(fmt.Errorf("that's more than %d KiB to type", maxType>>10))
+		}
+		strokes = typeStrokes(string(text))
+	default:
+		fmt.Fprintln(stderr, "usage: tide-kwin-paste [--shift | --type]")
+		return 2
 	}
 	path, err := socketPath(getenv)
 	if err != nil {
@@ -255,12 +324,12 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 		return fail(fmt.Errorf("couldn't reach the Wayland compositor at %s: %w", path, err))
 	}
 	defer c.Close()
-	if err := paste(c, len(args) == 1); err != nil {
+	if err := press(c, strokes); err != nil {
 		return fail(err)
 	}
 	return 0
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Getenv, os.Stderr))
+	os.Exit(run(os.Args[1:], os.Getenv, os.Stdin, os.Stderr))
 }

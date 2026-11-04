@@ -300,6 +300,22 @@ once you have agreed with it or reversed it.
   something, and the switcher's `Tab` cycle stays at four. The
   alternative is Clipboard and Characters tabs in `LauncherWindow.qml`.
   It's reversible by moving the two tabs' rows into the switcher.
+- [ ] **The Fill tab lists a 2FA code row for every login,** since
+  `rbw list` can't say which have a TOTP secret, and asking `rbw get` for
+  each would make the tab slow. Choosing one with none says so. The
+  alternative is one `rbw get --raw` per login, cached. Reversible: one
+  `printf` in `bin/tide-fill`'s `list`.
+- [ ] **The Fill tab types, never pastes,** so a password never reaches
+  the clipboard or its history. The cost is wtype's typing speed, and a
+  site that blocks typed input. Reversible: `tide fill type` could
+  `wl-copy` with the password-manager hint instead.
+- [ ] **Fill is in the picker's Tab cycle,** after Characters, rather
+  than only on `Super+Shift+V`. Its rows are names, never secrets.
+  Reversible: TABS in `shell/lib/picker.mjs`.
+- [ ] **Snippets are an object of name to text** in
+  `~/.config/tide/snippets.json` and `.local.json`, as tide's other
+  settings, with no settings page yet. The alternative is a list with
+  tags. Reversible: `bin/tide-fill`'s `snippets`.
 - [ ] **Enter in the picker pastes with Ctrl+Shift+V into a terminal,**
   by window class (`TERMINALS` in `shell/lib/picker.mjs`), and Ctrl+V
   anywhere else. A terminal missing from the list gets Ctrl+V, which

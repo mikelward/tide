@@ -1502,6 +1502,7 @@ with new keys in **bold**:
 | **`Super+Alt+Space`** | next keyboard layout, once there are two, on every keyboard (§16), as a click on the bar's layout label does |
 | `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
 | **`Super+V`** | the picker, on its Clipboard tab: what you've copied, and emoji and symbols by name; Enter pastes (§8.4). V as in paste, as on Windows. Terminal on the VM, which it was, has no key now; the launcher finds it |
+| **`Super+Shift+V`** | the picker, on its Fill tab: your snippets and each Bitwarden login's username, password and 2FA code; Enter types it (§8.4) |
 | **`Super+C`** / **`Super+Shift+C`** | Google Chat / Google Calendar (`runenv google-chat`, `runenv google-calendar`) |
 | `Super+Backspace` | close window, unless it's pinned on its workspace (§6.5) |
 | **`Ctrl+W`** / **`Ctrl+Shift+W`** / **`Ctrl+Q`** / **`Alt+F4`** | the app's own, passed on to every window but one pinned on its workspace, which never sees them (§6.5) |
@@ -2298,11 +2299,14 @@ See [`switcher.png`](docs/mocks/switcher.png).
 
 See [`picker.png`](docs/mocks/picker.png).
 
-- **One overlay, two tabs**, on `Super+V`:
+- **One overlay, three tabs**, on `Super+V`, and on `Super+Shift+V` on
+  Fill:
   - **Clipboard:** what you've copied, newest first, one line each. An
     image shows as its format, size and dimensions.
   - **Characters:** emoji and symbols, found by name: `arrow`,
     `e acute`, `shrug`.
+  - **Fill:** your snippets (an address, a phone number) and Bitwarden's
+    logins, one row per field (below).
 - **It's its own overlay, not two more switcher tabs.** The switcher
   takes you somewhere; the picker puts something on the clipboard. Kept
   apart, the switcher's `Tab` cycles only its own tabs.
@@ -2399,10 +2403,38 @@ See [`picker.png`](docs/mocks/picker.png).
     reads that as an empty history while the unit runs. With the unit
     stopped, it says so, with the command that starts it.
 
+**The Fill tab.** Typing "street", "address" or "github" finds a snippet
+or a login's field; Enter types it into the window you were in.
+
+- **Rows** come from `tide fill list` (`bin/tide-fill`): the snippets,
+  then a row each for a login's username, password and 2FA code
+  ("github.com · password"), with its user and folder below. It prints
+  names, never a secret.
+- **Snippets** are `snippets.json` and `snippets.local.json` in
+  `~/.config/tide`, each an object of name to text:
+  `{"Home address": "1 Main St\nSpringfield"}`. The local file's name
+  wins, as for every settings file (§16.1). A file that isn't such an
+  object is said in the log and left out.
+- **Logins** come from `rbw`, the unofficial Bitwarden client, whose agent
+  keeps the vault unlocked between uses (an hour by default): `rbw list
+  --fields id,name,user,folder` for the rows, `rbw get --field` and `rbw
+  code` for the value. Without rbw there are just the snippets.
+- **Locked,** the tab shows one row, Unlock Bitwarden: rbw's pinentry
+  can't take the keyboard while the picker holds it (§14.2). Enter closes
+  the picker, runs `rbw unlock`, and opens the tab again once it's done.
+- **Typed, never pasted:** `tide fill type` hands the value to wtype's
+  stdin, so it's never in a command line, and never on the clipboard, so
+  no history keeps a password. On Plasma it types through
+  `tide-kwin-paste --type` instead, as below.
+- wtype types into whatever has the keyboard. The picker closes first,
+  and Hyprland gives the keyboard back before wtype, a process started
+  after, connects.
+
 **On KDE Plasma.** Plasma's own `Super+V` menu (Klipper) copies but
 doesn't paste, so `scripts`' `clipboard-menu` takes the key there: fuzzel
 lists Klipper's history, and the entry chosen goes back on the clipboard
-and is pasted by `tide-kwin-paste`.
+and is pasted by `tide-kwin-paste`. Its `--type` types stdin by keysym
+instead, for the Fill tab's values (scripts' `fill-menu` on KDE).
 
 - **Why a helper.** Wayland has no common way for one program to press
   keys in another's window. wtype's virtual-keyboard protocol is KWin's

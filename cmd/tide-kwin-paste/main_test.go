@@ -67,7 +67,7 @@ func (s *compositor) serve(rw io.ReadWriter) {
 			s.record("authenticate " + app)
 		case opcode == reqKeyboardKeysym:
 			k, st := binary.LittleEndian.Uint32(body), binary.LittleEndian.Uint32(body[4:])
-			names := map[uint32]string{keyControlL: "Control_L", keyShiftL: "Shift_L", keyV: "v"}
+			names := map[uint32]string{keyControlL: "Control_L", keyShiftL: "Shift_L", keyV: "v", keyReturn: "Return", 'h': "h", 'é': "eacute", 0x0100263a: "U263A"}
 			s.record(map[uint32]string{1: "press ", 0: "release "}[st] + names[k])
 		default:
 			s.record("other")
@@ -109,7 +109,7 @@ var kde = []global{{"wl_compositor", 6}, {iface, 6}, {"wl_seat", 9}}
 func TestCtrlVPastesByKeysym(t *testing.T) {
 	s := &compositor{globals: kde}
 	var stderr bytes.Buffer
-	if code := run(nil, listen(t, s), &stderr); code != 0 {
+	if code := run(nil, listen(t, s), nil, &stderr); code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr.String())
 	}
 	want := []string{"bind org_kde_kwin_fake_input v6", "authenticate Clipboard menu",
@@ -122,7 +122,7 @@ func TestCtrlVPastesByKeysym(t *testing.T) {
 func TestShiftPastesWithCtrlShiftV(t *testing.T) {
 	s := &compositor{globals: kde}
 	var stderr bytes.Buffer
-	if code := run([]string{"--shift"}, listen(t, s), &stderr); code != 0 {
+	if code := run([]string{"--shift"}, listen(t, s), nil, &stderr); code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr.String())
 	}
 	want := []string{"press Control_L", "press Shift_L", "press v", "release v", "release Shift_L", "release Control_L"}
@@ -148,7 +148,7 @@ func TestFailures(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var stderr bytes.Buffer
-			if code := run(nil, listen(t, tc.s), &stderr); code != 1 {
+			if code := run(nil, listen(t, tc.s), nil, &stderr); code != 1 {
 				t.Errorf("exit %d, want 1", code)
 			}
 			for _, w := range tc.wants {
@@ -167,18 +167,39 @@ func TestNoSession(t *testing.T) {
 	var stderr bytes.Buffer
 	dir := t.TempDir()
 	env := func(k string) string { return map[string]string{"XDG_RUNTIME_DIR": dir}[k] }
-	if code := run(nil, env, &stderr); code != 1 || !strings.Contains(stderr.String(), filepath.Join(dir, "wayland-0")) {
+	if code := run(nil, env, nil, &stderr); code != 1 || !strings.Contains(stderr.String(), filepath.Join(dir, "wayland-0")) {
 		t.Errorf("no compositor: exit %d, %q; want 1, naming the socket", code, stderr.String())
 	}
 	stderr.Reset()
-	if code := run(nil, func(string) string { return "" }, &stderr); code != 1 || !strings.Contains(stderr.String(), "XDG_RUNTIME_DIR") {
+	if code := run(nil, func(string) string { return "" }, nil, &stderr); code != 1 || !strings.Contains(stderr.String(), "XDG_RUNTIME_DIR") {
 		t.Errorf("no XDG_RUNTIME_DIR: exit %d, %q", code, stderr.String())
 	}
 }
 
 func TestUsage(t *testing.T) {
 	var stderr bytes.Buffer
-	if code := run([]string{"--ctrl"}, nil, &stderr); code != 2 || !strings.Contains(stderr.String(), "usage") {
+	if code := run([]string{"--ctrl"}, nil, nil, &stderr); code != 2 || !strings.Contains(stderr.String(), "usage") {
 		t.Errorf("exit %d, %q; want 2 and usage", code, stderr.String())
+	}
+}
+
+func TestTypeTypesStdinByKeysym(t *testing.T) {
+	s := &compositor{globals: kde}
+	var stderr bytes.Buffer
+	if code := run([]string{"--type"}, listen(t, s), strings.NewReader("hé\n\x07☺"), &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	want := []string{"press h", "release h", "press eacute", "release eacute", "press Return", "release Return",
+		"press U263A", "release U263A"}
+	if !reflect.DeepEqual(s.requests[2:], want) {
+		t.Errorf("keys %q, want %q: Latin-1 as itself, newline as Return, a bell left out, the rest as Unicode", s.requests[2:], want)
+	}
+}
+
+func TestTypeRefusesTooMuch(t *testing.T) {
+	var stderr bytes.Buffer
+	big := strings.NewReader(strings.Repeat("a", maxType+1))
+	if code := run([]string{"--type"}, func(string) string { return "" }, big, &stderr); code != 1 || !strings.Contains(stderr.String(), "64 KiB") {
+		t.Errorf("exit %d, %q; want 1 and the limit", code, stderr.String())
 	}
 }

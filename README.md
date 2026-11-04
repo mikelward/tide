@@ -35,7 +35,10 @@ file with, jq, which `tide doctor` reads Hyprland's JSON with, python3,
 which it reads the session bus's config with, and NetworkManager's nmcli,
 which the network menu lists VPNs with, and wl-clipboard and cliphist,
 which keep the clipboard history the picker on `Super+V` lists (SPEC.md
-§8.4). `setup-tide` installs them all.
+§8.4), and wtype, which types what the picker's Fill tab on
+`Super+Shift+V` chooses. `setup-tide` installs them all. For Bitwarden
+logins on the Fill tab, install rbw, the unofficial Bitwarden client, and
+run `rbw config set email` and `rbw login` once.
 jq and python3 are free distro packages that run locally, with no network
 calls; without one, the doctor reports the check it skipped.
 

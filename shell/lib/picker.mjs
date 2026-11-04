@@ -1,19 +1,22 @@
-// The picker on Super+V (SPEC.md §8.4): its two tabs, the clipboard
-// history as `tide clipboard list` prints it (cliphist's list), and the
-// character list in shell/chars/chars.tsv.
+// The picker on Super+V (SPEC.md §8.4): its three tabs, the clipboard
+// history as `tide clipboard list` prints it (cliphist's list), the
+// character list in shell/chars/chars.tsv, and the snippets and Bitwarden
+// logins `tide fill list` prints, on Super+Shift+V.
 
 import { match } from "./fuzzy.mjs";
 
-export const TABS = Object.freeze(["clipboard", "characters"]);
+export const TABS = Object.freeze(["clipboard", "characters", "fill"]);
 
 export const TAB_NAMES = Object.freeze({
     clipboard: "Clipboard",
     characters: "Characters",
+    fill: "Fill",
 });
 
 export const PLACEHOLDERS = Object.freeze({
     clipboard: "Search what you've copied",
     characters: "Search by name: arrow, e acute, shrug",
+    fill: "Search snippets and logins: address, github",
 });
 
 // The Characters tab lists at most this many rows, so a one-letter query
@@ -245,10 +248,104 @@ export function characterSub(c) {
     return cp ? `${c.group} · ${cp}` : c.group;
 }
 
+// The Fill tab's rows, from `tide fill list`: KIND, KEY, FIELD, LABEL and
+// DETAIL per line, tab-separated (bin/tide-fill). Returns {entries: [{kind,
+// key, field, name, sub}], errors}; a line that isn't that shape, or of a
+// kind it doesn't know, is left out and named.
+export function parseFill(text) {
+    const entries = [];
+    const errors = [];
+    const lines = String(text ?? "").split("\n");
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i] === "") {
+            continue;
+        }
+        const f = lines[i].split("\t");
+        const known = f.length === 5 && ["snippet", "login", "unlock"].includes(f[0]) && f[1] !== "" && f[3] !== "";
+        if (!known) {
+            errors.push(`line ${i + 1}: not "KIND<tab>KEY<tab>FIELD<tab>LABEL<tab>DETAIL"`);
+            continue;
+        }
+        entries.push({ kind: f[0], key: f[1], field: f[2], name: f[3], sub: f[4] });
+    }
+    return { entries, errors };
+}
+
+// The Fill tab's rows: in `tide fill list`'s order (snippets, then logins
+// by name), or, with a query, the fuzzy scorer over each label and its
+// detail (the user and folder), best first. The Unlock row stays first
+// whatever's typed, since the logins wait behind it.
+export function fillRows(entries, query, options = {}) {
+    const score = options.match ?? match;
+    const q = String(query ?? "").trim();
+    const rows = [];
+    entries.forEach((entry, order) => {
+        if (entry.kind === "unlock") {
+            rows.push({ item: entry, positions: [], score: Infinity, order });
+            return;
+        }
+        const m = score(q, `${entry.name} ${entry.sub}`.slice(0, FUZZY_CHARS));
+        if (m) {
+            rows.push({ item: entry, positions: m.positions.filter((p) => p < [...entry.name].length), score: m.score, order });
+        }
+    });
+    if (q !== "") {
+        rows.sort((a, b) => (b.score - a.score) || (a.order - b.order));
+    }
+    return rows;
+}
+
+// What Enter on a Fill row runs: `tide fill type` for a snippet or a
+// login's field, or `tide fill unlock`.
+export function fillCommand(item) {
+    if (item.kind === "unlock") {
+        return ["tide", "fill", "unlock"];
+    }
+    if (item.kind === "snippet") {
+        return ["tide", "fill", "type", "snippet", item.key];
+    }
+    return ["tide", "fill", "type", "login", item.key, item.field];
+}
+
+// Where a finished listing's rows go: "clipboard" or "fill", the tab
+// `what` lists, or null when a newer listing of that tab has started since
+// (`tokens` holds each tab's latest). One tab's listing never fills the
+// other's, whatever the counts.
+export function listingTarget(what, token, tokens) {
+    if (what !== "clipboard" && what !== "fill") {
+        return null;
+    }
+    return token === tokens[what] ? what : null;
+}
+
+// A Fill row's icon, by Adwaita's names.
+export function fillIcon(item) {
+    if (item.kind === "unlock") {
+        return "changes-allow-symbolic";
+    }
+    if (item.kind === "snippet") {
+        return "edit-paste-symbolic";
+    }
+    return { username: "avatar-default-symbolic", totp: "appointment-soon-symbolic" }[item.field] ?? "dialog-password-symbolic";
+}
+
+// The Fill tab's state after `tide fill list` finishes, as listedHistory.
+export function listedFill(failed, out, errors) {
+    if (failed) {
+        const first = String(errors ?? "").trim().split("\n")[0].replace(/^tide fill: /, "");
+        return { entries: [], error: first || "Couldn't list the snippets and logins", warnings: [] };
+    }
+    const parsed = parseFill(out);
+    // A snippets file it couldn't read is said on stderr, and the rest
+    // still lists: that's a warning, for the log.
+    const said = String(errors ?? "").trim().split("\n").filter((l) => l !== "");
+    return { entries: parsed.entries, error: "", warnings: parsed.errors.concat(said) };
+}
+
 // What the tab says when it has no rows.
 export function emptyText(tab, query, state = {}) {
     checkTab(tab);
-    if (tab === "clipboard" && state.error) {
+    if ((tab === "clipboard" || tab === "fill") && state.error) {
         return state.error;
     }
     if (String(query ?? "").trim() !== "") {
@@ -256,6 +353,9 @@ export function emptyText(tab, query, state = {}) {
     }
     if (tab === "clipboard") {
         return state.loading ? "" : "Nothing copied yet";
+    }
+    if (tab === "fill") {
+        return state.loading ? "" : "No snippets or logins: add snippets to ~/.config/tide/snippets.json, or install rbw for Bitwarden";
     }
     return state.error || "";
 }

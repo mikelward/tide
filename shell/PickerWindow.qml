@@ -9,7 +9,8 @@ import "lib/launch.mjs" as Run
 import "lib/launcher.mjs" as Search
 import "lib/picker.mjs" as Picker
 
-// The picker on Super+V (SPEC.md §8.4): a Clipboard tab, the history
+// The picker on Super+V (SPEC.md §8.4), and on Super+Shift+V on its Fill
+// tab, which types a snippet or a Bitwarden login's field: a Clipboard tab, the history
 // tide-clipboard.service keeps with cliphist, and a Characters tab, emoji
 // and symbols from shell/chars/chars.tsv found by name. Drawn like the
 // switcher, near the top of the focused monitor over a dimmed backdrop.
@@ -34,6 +35,14 @@ PanelWindow {
     // dropped.
     property int listing: 0
 
+    // The snippets and logins `tide fill list` printed, listed afresh each
+    // time the Fill tab shows: names only, never a secret.
+    property var fillEntries: []
+    property string fillError: ""
+    property bool fillLoading: false
+    // Counts Fill listings, as `listing` counts the history's.
+    property int fillListing: 0
+
     // The character list, read once, the first time the tab shows.
     property var chars: []
     property string charsError: ""
@@ -44,10 +53,12 @@ PanelWindow {
     // (FocusData.qml).
     property var pasteInto: null
 
-    readonly property var rows: root.tab === "clipboard" ? Picker.historyRows(root.history, root.query) : Picker.characterRows(root.chars, root.query)
+    readonly property var rows: root.tab === "clipboard" ? Picker.historyRows(root.history, root.query)
+        : root.tab === "fill" ? Picker.fillRows(root.fillEntries, root.query)
+        : Picker.characterRows(root.chars, root.query)
     readonly property string emptyText: Picker.emptyText(root.tab, root.query, {
-        loading: root.historyLoading,
-        error: root.tab === "clipboard" ? root.historyError : root.charsError
+        loading: root.tab === "fill" ? root.fillLoading : root.historyLoading,
+        error: root.tab === "clipboard" ? root.historyError : root.tab === "fill" ? root.fillError : root.charsError
     })
 
     onRowsChanged: {
@@ -68,6 +79,9 @@ PanelWindow {
         query = "";
         field.text = "";
         listHistory();
+        if (root.tab === "fill") {
+            listFill();
+        }
         visible = true;
         field.forceActiveFocus();
     }
@@ -97,12 +111,21 @@ PanelWindow {
         root.tab = tab;
         root.query = "";
         field.text = "";
+        if (tab === "fill" && visible) {
+            listFill();
+        }
     }
 
     function listHistory() {
         root.listing += 1;
         root.historyLoading = true;
         lister.createObject(root, { token: root.listing }).running = true;
+    }
+
+    function listFill() {
+        root.fillListing += 1;
+        root.fillLoading = true;
+        lister.createObject(root, { token: root.fillListing, what: "fill" }).running = true;
     }
 
     // Enter: the selection onto the clipboard, the picker away, and, once
@@ -116,6 +139,19 @@ PanelWindow {
         }
         const into = root.pasteInto;
         close();
+        // Fill types into the window that has the keyboard once the picker's
+        // surface is gone, through wtype (bin/tide-fill): nothing goes on
+        // the clipboard, so no history keeps a password. Unlock asks rbw
+        // for the master password, then opens the tab again.
+        if (root.tab === "fill") {
+            const command = Picker.fillCommand(row.item);
+            Launcher.run(command, ok => {
+                if (ok && row.item.kind === "unlock") {
+                    root.open("fill");
+                }
+            });
+            return;
+        }
         const paste = ok => {
             if (!ok || !into) {
                 return;
@@ -195,13 +231,15 @@ PanelWindow {
             id: run
 
             property int token: 0
+            // "clipboard" or "fill": which list it reads.
+            property string what: "clipboard"
             property var state: Run.initial()
             property string out: ""
             property bool outRead: false
             property string errors: ""
             property bool errorsRead: false
 
-            command: ["tide", "clipboard", "list"]
+            command: ["tide", what, "list"]
 
             function streamed() {
                 if (outRead && errorsRead) {
@@ -217,14 +255,21 @@ PanelWindow {
                 if (!state.done) {
                     return;
                 }
-                const r = Picker.listedHistory(state.report?.level === "warn", out, errors);
+                const fill = what === "fill";
+                const failed = state.report?.level === "warn";
+                const r = fill ? Picker.listedFill(failed, out, errors) : Picker.listedHistory(failed, out, errors);
                 if (r.error !== "") {
-                    console.warn(`tide: the picker's clipboard history: ${r.error}`);
+                    console.warn(`tide: the picker's ${fill ? "snippets and logins" : "clipboard history"}: ${r.error}`);
                 }
                 for (const w of r.warnings) {
-                    console.warn(`tide: tide clipboard list: ${w}`);
+                    console.warn(`tide: tide ${what} list: ${w}`);
                 }
-                if (token === root.listing) {
+                const target = Picker.listingTarget(what, token, { clipboard: root.listing, fill: root.fillListing });
+                if (target === "fill") {
+                    root.fillEntries = r.entries;
+                    root.fillError = r.error;
+                    root.fillLoading = false;
+                } else if (target === "clipboard") {
                     root.history = r.entries;
                     root.historyError = r.error;
                     root.historyLoading = false;
@@ -505,7 +550,7 @@ PanelWindow {
                             visible: !row.character
                             implicitWidth: 18
                             implicitHeight: 18
-                            name: row.character ? "" : row.modelData.item.kind === "image" ? "image-x-generic-symbolic" : row.modelData.item.kind === "link" ? "insert-link-symbolic" : "text-x-generic-symbolic"
+                            name: row.character ? "" : root.tab === "fill" ? Picker.fillIcon(row.modelData.item) : row.modelData.item.kind === "image" ? "image-x-generic-symbolic" : row.modelData.item.kind === "link" ? "insert-link-symbolic" : "text-x-generic-symbolic"
                             color: row.current ? "#ffffff" : Theme.fgDim
                         }
                     }
@@ -557,7 +602,9 @@ PanelWindow {
                 Repeater {
                     model: root.tab === "clipboard"
                         ? [["↑↓", "select"], ["↵", "paste"], ["Shift+Del", "forget"], ["Tab", "characters"], ["Esc", "close"]]
-                        : [["↑↓", "select"], ["↵", "paste"], ["Tab", "clipboard"], ["Esc", "close"]]
+                        : root.tab === "characters"
+                        ? [["↑↓", "select"], ["↵", "paste"], ["Tab", "fill"], ["Esc", "close"]]
+                        : [["↑↓", "select"], ["↵", "type"], ["Tab", "clipboard"], ["Esc", "close"]]
 
                     Text {
                         required property var modelData
