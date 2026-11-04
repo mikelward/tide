@@ -2426,8 +2426,10 @@ or a login's field; Enter types it into the window you were in.
   object is said in the log and left out.
 - **Logins** come from `rbw`, the unofficial Bitwarden client, whose agent
   keeps the vault unlocked between uses (an hour by default): `rbw list
-  --fields id,name,user,folder` for the rows, `rbw get --field` and `rbw
-  code` for the value. Without rbw there are just the snippets.
+  --fields id,name,user,folder,type` for the rows, `rbw get --field` and
+  `rbw code` for the value. Cards, notes and identities have no rows. An
+  rbw before 1.15 refuses `type`, so the listing goes again without it,
+  keeping every entry. Without rbw there are just the snippets.
 - **Locked,** the tab shows one row, Unlock Bitwarden: rbw's pinentry
   can't take the keyboard while the picker holds it (§14.2). Enter closes
   the picker, runs `rbw unlock`, and opens the tab again once it's done.
