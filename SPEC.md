@@ -264,7 +264,7 @@ gives the greeter the same layout badge as the lock.
 - **Type:** Inter for UI, Ubuntu Mono for code (decided; the pairings
   compared are in [`fonts.png`](docs/mocks/fonts.png)).
 - **Radii:** 10–16 px.
-- **Windows:** no gaps, no borders, inactive dim 0.07.
+- **Windows:** no gaps, no borders, inactive dim 0.12.
 - **Bar:** 36 px.
 
 ## 4. Requirements and how each is met
@@ -277,7 +277,7 @@ gives the greeter the same layout badge as the lock.
 | R4 | Lone window 80% on ultrawide, 100% otherwise | the layout reads the work area's aspect, in every mode | Lua |
 | R5 | Monocle, and maximize or fullscreen the current window | mode `monocle`; Hyprland `fullscreen` states 1 and 0 (§6.3) | Lua / native |
 | R6 | Layout per workspace | the layout keeps a mode per workspace | Lua |
-| R7 | Dim inactive; no borders, gaps | `decoration:dim_inactive`, `dim_strength 0.07`, `border_size 0`, gaps 0 | native |
+| R7 | Dim inactive; no borders, gaps | `decoration:dim_inactive`, `dim_strength 0.12`, `border_size 0`, gaps 0 | native |
 | R8 | One full-width bar, flush to the edges, all workspaces by name | Quickshell `PanelWindow` per monitor + `Quickshell.Hyprland` | shell |
 | R9 | Tray icons | `Quickshell.Services.SystemTray`; the shell is the SNI watcher | shell |
 | R10 | Network, volume, Bluetooth, power | `Networking`, `Pipewire`, `Bluetooth`, `UPower` | shell |
@@ -941,16 +941,15 @@ See [`layouts.png`](docs/mocks/layouts.png).
 
 ### 6.2 Focus cue: dim, nothing else
 
-- `dim_inactive` at **0.07**, with no borders and no gaps. Hyprland's dim
+- `dim_inactive` at **0.12**, with no borders and no gaps. Hyprland's dim
   looks stronger than KDE's dim-inactive effect at the same number: 0.15,
-  the KDE setup's strength, looked too heavy in the first real session.
+  the KDE setup's strength, looked too heavy in the first real session,
+  and 0.07 too faint to tell which window had the focus.
 - A workspace with one visible window never dims. With nothing to tell
   apart, a dimmed lone window just looks wrong.
 - Video, picture-in-picture and screen-share preview windows get a `nodim`
   window rule, so a call on the other monitor doesn't look washed out.
-- 0.07 is subtle on dark apps: a dark terminal next to a dark editor.
-  Strength is a setting, on the Appearance page (§16); if dark-on-dark
-  focus is hard to see, 0.1 is the first thing to try.
+- Strength is a setting, on the Appearance page (§16), a point at a time.
 
 ### 6.3 One window big: monocle, maximize, fullscreen
 
@@ -3998,7 +3997,7 @@ stays hand-written.
     it is.
   - − and + step the inactive dim's strength (§6.2) a point at a time,
     from none to 50%. It's `dimStrength` in the files, 0 to 1, and shows
-    `conf`'s 0.07 until it's set.
+    `conf`'s 0.12 until it's set.
   - The shell writes a dim that's set to `~/.config/hypr/tide-appearance.lua`,
     as Hyprland's `dim_strength`, and runs `hyprctl eval
     'conf_appearance.reload()'`, as the Layouts page does. With none set,

@@ -15,7 +15,7 @@
   --bar-h: 36px;
   --radius: 10px;
   --radius-lg: 16px;
-  --dim: 0.07; /* Hyprland decoration:dim_strength */
+  --dim: 0.12; /* Hyprland decoration:dim_strength */
 }
 
 .theme-dark {
