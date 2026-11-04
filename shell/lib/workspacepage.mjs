@@ -1,10 +1,13 @@
 // The Workspaces page (SPEC.md §6.5, §16): the standing workspaces, home's
 // apps and the name patterns, each a list in workspaces.json and
-// workspaces.local.json, changed as the page changes them. `muted` is the
+// workspaces.local.json, and each standing workspace's own settings
+// (workspaceSettings), changed as the page changes them. `muted` is the
 // Notifications page's (mute.mjs).
 
 import { jsonError } from "./clocks.mjs";
-import { loadWorkspaceSettings, parseWorkspaceSettings, sameName } from "./workspacenames.mjs";
+import {
+    loadWorkspaceSettings, parseWorkspaceSettings, sameName, workspaceSetting, workspaceSettingsOf,
+} from "./workspacenames.mjs";
 
 // The page's lists, in its order: which keep an order that matters (the
 // first standing workspace is home; patterns are tried in turn), and what
@@ -15,8 +18,82 @@ export const LISTS = Object.freeze([
     { key: "namePatterns", heading: "NAME PATTERNS", ordered: true, hint: "Add a pattern, such as \\b([A-Z]+-[0-9]+)\\b" },
 ]);
 
+// What each standing workspace's section says: its switch for askForName,
+// and its pinned apps' field.
+export const ASK_LABEL = "Open new windows on a new workspace";
+export const PINNED_LABEL = "Pinned apps";
+export const PINNED_HINT = "Pin a program or web address, such as gmail";
+
+// A standing workspace's section heading: its name, and home's mark.
+export function workspaceHeading(name, index) {
+    return index === 0 ? `${name} · home` : name;
+}
+
 function listOf(key) {
     return LISTS.find(l => l.key === key);
+}
+
+// The local file's object, or {error}.
+function localObject(localText) {
+    if (localText === null || localText === undefined || localText.trim() === "") {
+        return {};
+    }
+    try {
+        return JSON.parse(localText);
+    } catch (e) {
+        return { error: `workspaces.local.json: ${jsonError(localText)}` };
+    }
+}
+
+// workspaces.local.json's text with the settings of the workspace named
+// `name` as `change` makes them of the ones in effect ({askForName,
+// pinnedApps}, workspaceSetting's): {text, setting}, or {error}. As a list
+// does, the first change copies the workspaceSettings in effect into the
+// local file, since a local one replaces the shared one whole (§16.1): with
+// neither file setting it, that's home asking for a name, so turning on
+// another workspace's switch leaves home's on. An entry is found by its
+// name ignoring case, and keeps the case it has.
+export function editedWorkspace(sharedText, localText, name, change) {
+    const loaded = loadWorkspaceSettings(sharedText, localText);
+    if (loaded.errors.length > 0) {
+        return { error: loaded.errors[0] };
+    }
+    const current = workspaceSetting(loaded.settings, name);
+    const result = change({ askForName: current.askForName, pinnedApps: current.pinnedApps.slice() });
+    if (result.error) {
+        return { error: result.error };
+    }
+    const local = localObject(localText);
+    if (local.error) {
+        return local;
+    }
+    const all = Object.assign({}, workspaceSettingsOf(loaded.settings));
+    const key = Object.keys(all).find(k => sameName(k, name)) ?? name;
+    all[key] = { askForName: result.setting.askForName, pinnedApps: result.setting.pinnedApps };
+    const text = JSON.stringify(Object.assign({}, local, { workspaceSettings: all }), null, 2) + "\n";
+    const checked = parseWorkspaceSettings(text);
+    if (checked.error) {
+        return { error: checked.error };
+    }
+    return { text, setting: all[key] };
+}
+
+// A workspace's settings with askForName `on`.
+export function withAskForName(setting, on) {
+    return { setting: Object.assign({}, setting, { askForName: on === true }) };
+}
+
+// A workspace's settings with `raw` pinned, as withItem adds it.
+export function withPinned(setting, raw) {
+    const r = withItem(setting.pinnedApps, raw);
+    return r.error ? r : { setting: Object.assign({}, setting, { pinnedApps: r.list }) };
+}
+
+// A workspace's settings without the pinned app `item` at `index`, as
+// withoutItem takes it out.
+export function withoutPinned(setting, index, item) {
+    const r = withoutItem(setting.pinnedApps, index, item);
+    return r.error ? r : { setting: Object.assign({}, setting, { pinnedApps: r.list }) };
 }
 
 // workspaces.local.json's text with list `key` as `change` makes it of the

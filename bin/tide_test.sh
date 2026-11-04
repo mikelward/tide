@@ -324,6 +324,32 @@ check "--background with --app is refused" test "$?:$(cat "$log")" = "2:"
 check "and says why" contains "$(cat "$tmp/err")" "--background records no focus grant, so it takes no --workspace or --app"
 run "$qs" launch --background --workspace docs app
 check "--background with --workspace is refused" test $? -eq 2
+# Which workspaces ask is each one's askForName (SPEC.md §6.5), which the
+# shell writes as ask_for_name; the file above, from a shell before it,
+# names none, so home asked.
+printf '%s\n' 'return {' '    home = "PR-12 login",' '    in_apps = {},' '    ask_for_name = {' '        "re",' '    },' '    pinned = {},' '}' \
+    > "$tmp/run-config/hypr/tide-workspaces.lua"
+: > "$log"
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_WORKSPACE='{
+    "id": -1339,
+    "name": "RE",
+    "monitor": "eDP-1"
+}' "$qs" launch app
+check "a launch from a workspace whose askForName is on asks, ignoring case" contains "$(cat "$log")" "qs -c tide ipc call prompt launch"
+check "and goes where the prompt says" contains "$(cat "$log")" "workspace = \"docs\" })"
+: > "$log"
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" "$qs" launch app
+check "a launch from home, whose askForName is off, doesn't ask" not_contains "$(cat "$log")" "qs -c tide"
+check "and starts where you are" contains "$(cat "$log")" "uwsm app -- app"
+printf '%s\n' 'return {' '    home = "PR-12 login",' '    in_apps = {},' '    ask_for_name = {},' '    pinned = {},' '}' \
+    > "$tmp/run-config/hypr/tide-workspaces.lua"
+: > "$log"
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_WORKSPACE='{
+    "id": -1339,
+    "name": "re",
+    "monitor": "eDP-1"
+}' "$qs" launch app
+check "with no workspace asking, a launch from any doesn't" not_contains "$(cat "$log")" "qs -c tide"
 rm "$tmp/run-config/hypr/tide-workspaces.lua" "$fake/qs"
 run "$qs" launch app
 check "with no home named, a launch doesn't ask" not_contains "$(cat "$log")" "qs -c tide"

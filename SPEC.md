@@ -55,7 +55,8 @@ Contents:
 - **Named workspaces**, not numbered ones. The home workspace, **in** by
   default, holds mail, chat, calendar and music; a few standing ones are
   always listed; every other workspace is named for its work, and a window
-  that opens on home asks which (§6.5).
+  that opens on home asks which (§6.5). Home's mail, chat and calendar are
+  pinned there, so a close key leaves them open.
 - One full-width bar: every workspace on the left, by name, with
   **urgency** shown on the workspace that wants attention. The tray, network, volume, Bluetooth,
   power and notifications sit on the right, then four clocks:
@@ -1069,8 +1070,8 @@ in how long they last and what stays visible:
   ones, in the order they were made. An empty one is removed once you
   leave it.
 - Names come from you: the name prompt (below), which a new window on
-  home, a launch from home, `Super+Return` and `Super+Shift+Return` all
-  open.
+  a workspace that asks (home, by default), a launch from one,
+  `Super+Return` and `Super+Shift+Return` all open.
 - A name is one line of text, trimmed, at most 32 characters, with no
   quotes (`"`, `'`, `` ` ``), backslashes, `@` or control characters. A name
   goes into Hyprland's selectors, Lua, JSON and the shell's command lines,
@@ -1180,10 +1181,42 @@ in how long they last and what stays visible:
   - If that workspace has been removed since, a press from home does
     nothing.
 
-**A new window on home asks for a workspace.**
+**Each workspace's own settings.** `workspaces.json`'s
+`workspaceSettings` (§16) sets two things per workspace, by name:
 
-- When any other app's window opens on home, including a link a browser
-  opens as a new window, tide opens the name prompt for it.
+```json
+"workspaceSettings": {
+  "in": { "askForName": true, "pinnedApps": ["gmail", "google-chat", "google-calendar"] }
+}
+```
+
+- A name matches as names do elsewhere, ignoring case, and a monitor's
+  part (Monitors, below) is its workspace.
+- **`askForName`** says whether a new window there asks for a workspace
+  (below), and whether a launch from there does. The settings page calls
+  it "Open new windows on a new workspace".
+- **`pinnedApps`** lists the apps whose windows stay open there. Each entry
+  is as `inApps` has them: a program, a web address, a class or a site,
+  matched to windows the same way, through the same lookups.
+- Both are optional. A workspace it doesn't list, or a field it leaves
+  out, doesn't ask and pins nothing.
+- With no `workspaceSettings` in either file, it's
+  `{ HOME: { "askForName": true } }`, home by its name, so home asks, as it
+  always has, and nothing is pinned. Once either file has one, home asks
+  only if it says so.
+- A key that isn't a workspace's name (§6.5's rules, no space around it),
+  one named twice ignoring case, a field that isn't one of the two, an
+  `askForName` that isn't `true` or `false`, or a `pinnedApps` that isn't a
+  list of text, is an error at load naming it. The last good settings
+  stay.
+- tilemo reads the same key from the same file.
+
+**A new window on a workspace that asks goes to a workspace.**
+
+- When any other app's window opens on a workspace whose `askForName` is
+  on, home by default, including a link a browser opens as a new window,
+  tide opens the name prompt for it. A home app's window never asks: it
+  goes home by its rule, wherever you are.
   - This holds only for a window that would take focus anyway (§14.1): one
     you launched, or a new window from the app you're in. The prompt holds
     the keyboard, so a background app's window must not open one under
@@ -1195,8 +1228,9 @@ in how long they last and what stays visible:
   - How: the shell notes each window that opens (`openwindow`), and when
     one is first focused (`activewindowv2`) looks it up by its address in
     Hyprland's client list (`hyprctl clients -j`), since focus may have
-    moved on by then. It asks for a name if the window is on
-    home, tiled, has a class or a title, and isn't one of home's apps.
+    moved on by then. It asks for a name if the window is on a workspace
+    that asks, any monitor's part of it, is tiled, has a class or a title,
+    and isn't one of home's apps.
     So a window that takes focus as it opens asks at once, and one the
     focus guard left waiting asks when you go to it.
 - The prompt's text starts as the window's short name (below), selected,
@@ -1211,9 +1245,11 @@ in how long they last and what stays visible:
   and every workspace follows in the bar's order, so `↓` reaches any of
   them.
 - **Enter** makes the workspace, or uses the one already of that name,
-  moves the window there, and focus follows. Enter on home keeps the
-  window there, and it doesn't ask again.
+  moves the window there, and focus follows. Enter on the workspace it's
+  on keeps the window there, and it doesn't ask again.
 - **Esc** closes the window, politely, as `Super+Backspace` does.
+  - A window pinned where it is (below) stays open, and a notification
+    says it's pinned there.
   - A click on the backdrop does nothing, so a stray click can't close a
     window.
 - **One prompt at a time.** A prompt asked for while another is open waits
@@ -1231,22 +1267,30 @@ in how long they last and what stays visible:
   workspace. Enter moves it, and focus follows; Esc leaves it where it is.
   - With no window focused there's nothing to move, so it does nothing,
     and the shell's log says why.
-- **tide's own launches** from home (the launcher, app keys, `tide launch`)
-  prompt *before* launching, so the process starts with the right
+- **tide's own launches** from a workspace that asks (the launcher, app
+  keys, `tide launch`) prompt *before* launching, so the process starts
+  with the right
   `TIDE_WORKSPACE` (below), and its first window goes to that workspace
   through the launch's grant (§14.3). Esc there cancels the launch, and
   nothing opens. A home app launches straight away.
-  - Enter on home launches there. The window opens on home, so it would
-    ask as a new window on home does. The shell notes the launch's
-    classes instead, as it answers, and the first window of one of them
+  - A launch from a workspace that doesn't ask, home included once its
+    `askForName` is off, launches where you are, with no prompt.
+  - Enter on a workspace that asks, home say, launches there. The window
+    opens there, so it would ask as a new window there does. The shell
+    notes the launch's classes instead, as it answers, and the first window
+    of one of them
     that would ask in the next 15 s keeps home without asking. That's the
     grant's 10 s (§14.3), from `tide launch` making it after the answer,
     with time to start. A launch granting `*` covers any window. One
     that opens later asks, as any other would.
-  - `tide launch` reads the focused workspace. On home, it asks the shell
-    (`qs -c tide ipc call prompt launch`), naming the classes the app's
+  - `tide launch` reads the focused workspace. On one that asks, it asks
+    the shell (`qs -c tide ipc call prompt launch`), naming the classes the app's
     window may have, found as its grant finds them (§14.3), and a FIFO in
     `$XDG_RUNTIME_DIR` to answer on. Then it waits.
+  - It learns which workspaces ask from `tide-workspaces.lua`'s
+    `ask_for_name`, which the shell writes from each one's `askForName`,
+    matching a name ignoring case. A file from a shell before that setting
+    has none, and then home asks, as it did.
   - A key bound to a launcher script grants `--app '*'`, which names no
     app, so for the prompt that launch is looked up too: `conf`'s
     `Super+C`, `runenv google-chat`, names `google-chat` and its
@@ -1261,6 +1305,54 @@ in how long they last and what stays visible:
     from.
   - With no shell to ask, the app launches on home, and a notification
     says the prompt couldn't be asked.
+
+**Pinned apps.** A window whose app is one of the `pinnedApps` of the
+workspace it's on stays open there.
+
+- tide's close actions leave it open, and a notification says it's pinned
+  on that workspace:
+  - `Super+Backspace`;
+  - the name prompt's Esc (above), which would close a new window;
+  - an app's own close and quit keys, `Ctrl+W`, `Ctrl+Shift+W`, `Ctrl+Q`
+    and `Alt+F4`, while the pinned window is focused. The app never sees
+    them, so `Ctrl+W` doesn't close a Chrome app window's tab or the
+    window, nor `Ctrl+Q` quit Chrome. Every other window still gets them.
+- It's pinned where it is, not as an app: moved to another workspace, or
+  minimized, it closes as any other does. Another app's window on that
+  workspace closes as usual.
+- **The window's own close button still closes it.** So do the app's menus
+  and a `hyprctl dispatch` from elsewhere. Neither Hyprland nor the shell
+  hears of those before the app acts.
+- A pinned terminal loses `Ctrl+W` and `Ctrl+Q` for its own uses, such as
+  a shell's delete word. Pin only what's never typed in that way.
+- The shell's own UI closes no other window, so the prompt's Esc is its
+  only close.
+- **How, on Hyprland.** It's `hypr/tide/pinned.lua`, which `conf` loads
+  as it loads the layout, and hands `tide-workspaces.lua`'s `pinned` list
+  at each load and `conf_workspaces.reload()`. The shell writes that list
+  from `pinnedApps`: per workspace, the classes and sites its apps match
+  (`appMatchers`, `inAppPatterns`' own), so Lua matches them as the shell
+  does, with no regular expressions.
+  - `Super+Backspace` is bound to `pinned.close`, which closes the focused
+    window, as `hl.dsp.window.close()` does, unless it's pinned.
+  - The app's keys are bound to `pinned.shortcut`. A bind can't be
+    conditional on the window, so it's bound for every window, and passes
+    the key on to any but a pinned one by returning `{ pass_event = true }`.
+    Hyprland 0.56.2 reads a Lua bind's result as a dispatch result
+    (`dispatchResultFromLua`, `LuaBindingsRegistration.cpp`), and its key
+    handler sends a press whose bind passes it on to the focused window, and
+    its release too (`CKeybindManager::onKeyEvent`, `handleKeybinds`).
+    For a pinned window it returns nothing, and the key goes nowhere.
+    So the app gets the key pressed, not a copy that Hyprland's
+    `sendshortcut` would make.
+  - A window that can't be read, as one going away, is reported, and the
+    key does what it would with nothing pinned.
+  - Without tide's `pinned.lua`, `conf` binds `Super+Backspace` to
+    Hyprland's own close and leaves the app's keys unbound, as before.
+  - A workspace's name matches ignoring ASCII case there, which is all
+    Lua's `lower()` knows.
+  - The name prompt's Esc asks the shell's own check, `pinnedOn`, which
+    reads the window's class and workspace from Quickshell.
 
 **The short name.**
 
@@ -1411,7 +1503,8 @@ with new keys in **bold**:
 | `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
 | **`Super+V`** | the picker, on its Clipboard tab: what you've copied, and emoji and symbols by name; Enter pastes (§8.4). V as in paste, as on Windows. Terminal on the VM, which it was, has no key now; the launcher finds it |
 | **`Super+C`** / **`Super+Shift+C`** | Google Chat / Google Calendar (`runenv google-chat`, `runenv google-calendar`) |
-| `Super+Backspace` | close window |
+| `Super+Backspace` | close window, unless it's pinned on its workspace (§6.5) |
+| **`Ctrl+W`** / **`Ctrl+Shift+W`** / **`Ctrl+Q`** / **`Alt+F4`** | the app's own, passed on to every window but one pinned on its workspace, which never sees them (§6.5) |
 | **`Super+Z`** | minimize the focused window; its icon goes to the corner tray, and a click there restores it (§6.7) |
 | `Super+L` | lock |
 | **`Super+S`** | toggle keep awake (§10), as the bar's icon does; the OSD says which |
@@ -3259,7 +3352,7 @@ this spec.
     isn't known until its window appears. A grant naming the app is used
     before it, and the same cancel rules apply.
   - **On a named workspace** (`tide launch --workspace NAME`, from the
-    name prompt: a launch from home, or the launcher's `Ctrl+Enter`), the
+    name prompt: a launch from a workspace that asks, or the launcher's `Ctrl+Enter`), the
     window that uses the grant goes to that workspace, made if it's new,
     and focus follows. A canceled grant moves nothing, and the window opens
     where you are. `--workspace` also sets `TIDE_WORKSPACE` (§6.5). It
@@ -3913,13 +4006,26 @@ stays hand-written.
     IDs, or `site:HOST`, empty by default. A bad entry is an error at load
     naming it, and the rest of the list still applies, unlike the other
     settings here. tilemo reads the same key.
-  - They're all lists, so a `.local` file's replaces the shared one whole
-    (§16.1).
+  - `workspaceSettings` is each workspace's `askForName` and `pinnedApps`
+    (§6.5). With neither file setting it, home asks for a name and nothing
+    is pinned. `conf`'s shared file pins mail, chat and calendar on `in`,
+    which asks.
+  - The lists are lists, so a `.local` file's replaces the shared one whole
+    (§16.1). So does a `.local` file's `workspaceSettings`, an object, so a
+    machine's is exactly what it says.
   - A pattern that doesn't compile or has no capture group is an error at
     load naming it, and the last good list stays. The page refuses one the
     same way, and says why.
   - The page lists `standing`, `inApps` and `namePatterns`, as the files
     in effect have them; `muted` is on the Notifications page.
+  - Below them, each standing workspace has a section of its own, home's
+    marked: an "Open new windows on a new workspace" switch, its
+    `askForName`, and its pinned apps, a list with a bin per entry and a
+    field that asks for a program or web address, such as `gmail`.
+    - The first change copies the `workspaceSettings` in effect into the
+      `.local` file, as a list's first change does. With neither file
+      setting it, that's home asking, so turning on another workspace's
+      switch leaves home's on.
   - Each entry has a bin that takes it out, and the standing workspaces and
     the patterns, whose order counts, have arrows that move one. The first
     standing workspace is marked as home, so moving another first makes it
@@ -3935,7 +4041,9 @@ stays hand-written.
   - It applies as a hand edit does: the shell writes `tide-workspaces.lua`
     and has `conf` read it again.
   - Over IPC, `addWorkspaceItem KEY ITEM`, `moveWorkspaceItem KEY ITEM
-    STEP` and `removeWorkspaceItem KEY ITEM` do what the page does.
+    STEP` and `removeWorkspaceItem KEY ITEM` do what the page does, and so
+    do `setWorkspaceAskForName NAME true|false`, `addPinnedApp NAME ITEM`
+    and `removePinnedApp NAME ITEM`.
 
 - **Start at login** lists the commands the shell runs once as the session
   starts, in `startup.json` and `startup.local.json` (`commands`).
@@ -4388,7 +4496,7 @@ light/dark switch.
 | Repo | Gets |
 |---|---|
 | **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service` and its fallback, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. The tide connector, the browser extension in `connector/` (§8.3). `make install`. |
-| **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces and home's apps), the `persistent` workspace rule for home, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
+| **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces, home's apps and each workspace's own settings), the `persistent` workspace rule for home and the pinned apps' close keys, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **tileco** | Tiling on chromeOS. On Linux it can list the browser's tabs in the Windows tab, as tide's own connector does (§8.3). |
 | **scripts** | `setup`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, cliphist, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `tide-tabs`'s host manifest for Chrome and Brave (§8.3). `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |

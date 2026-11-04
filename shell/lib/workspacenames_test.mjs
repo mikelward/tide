@@ -8,6 +8,7 @@ import {
     promptRows, promptChoice, NO_PROMPTS, promptQueued, promptDone, promptWindowGone,
     promptHeading, promptAnswer, promptCancel,
     NO_WINDOWS, windowOpened, windowFocused, windowClosed, windowAnswered, checkMuted, withMuted,
+    workspaceSettingsOf, workspaceSetting, asksForName, askingWorkspaces, pinnedOn, pinnedMatchers, appMatchers, listedApps,
 } from "./workspacenames.mjs";
 
 test("a name is one line, trimmed, at most 32 characters", () => {
@@ -90,6 +91,107 @@ test("a bad setting is an error at load naming it, and the last good settings st
     const local = loadWorkspaceSettings(null, '{"standing": []}', good);
     assert.match(local.errors[0], /^workspaces.local.json: standing/);
     assert.match(parseWorkspaceSettings('{"standing": []}').error, /standing/);
+});
+
+test("with no workspaceSettings, home asks for a name and nothing is pinned", () => {
+    const { settings } = loadWorkspaceSettings('{"standing": ["home", "in"]}', null);
+    assert.equal(settings.workspaceSettings, null);
+    assert.deepEqual(workspaceSettingsOf(settings), { home: { askForName: true } });
+    assert.deepEqual(workspaceSetting(settings, "home"), { askForName: true, pinnedApps: [] });
+    assert.equal(asksForName(settings, "HOME"), true, "a name matches ignoring case");
+    assert.equal(asksForName(settings, "home@DP-2"), true, "a monitor's part is its workspace");
+    assert.equal(asksForName(settings, "in"), false);
+    assert.deepEqual(askingWorkspaces(DEFAULT_SETTINGS), ["in"]);
+});
+
+test("workspaceSettings sets each workspace's askForName and pinnedApps, and what it leaves out is off", () => {
+    const { settings, errors } = loadWorkspaceSettings(JSON.stringify({
+        standing: ["in", "re", "oc"],
+        workspaceSettings: { in: { pinnedApps: ["gmail"] }, RE: { askForName: true } },
+    }), null);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(workspaceSetting(settings, "in"), { askForName: false, pinnedApps: ["gmail"] }, "home doesn't ask once the setting is there");
+    assert.deepEqual(workspaceSetting(settings, "re"), { askForName: true, pinnedApps: [] });
+    assert.deepEqual(workspaceSetting(settings, "oc"), { askForName: false, pinnedApps: [] }, "a workspace it doesn't list");
+    assert.deepEqual(askingWorkspaces(settings), ["RE"]);
+    assert.deepEqual(listedApps(Object.assign({}, settings, { inApps: ["youtube-music"] })), ["youtube-music", "gmail"]);
+});
+
+test("a local file's workspaceSettings replaces the shared one whole", () => {
+    const { settings } = loadWorkspaceSettings(
+        '{"workspaceSettings": {"in": {"askForName": true, "pinnedApps": ["gmail"]}}}',
+        '{"workspaceSettings": {"re": {"askForName": true}}}');
+    assert.deepEqual(workspaceSettingsOf(settings), { re: { askForName: true } });
+});
+
+test("a bad workspaceSettings is an error at load naming it, and the last good settings stay", () => {
+    const good = { standing: ["a"], inApps: [], namePatterns: [], workspaceSettings: null };
+    const cases = [
+        ['{"workspaceSettings": []}', /workspaceSettings must be an object/],
+        ['{"workspaceSettings": null}', /workspaceSettings must be an object/],
+        ['{"workspaceSettings": {"in": true}}', /workspaceSettings: "in" must be an object/],
+        ['{"workspaceSettings": {"in": {"askForName": "yes"}}}', /workspaceSettings: "in": askForName must be true or false, not "yes"/],
+        ['{"workspaceSettings": {"in": {"pinned": []}}}', /workspaceSettings: "in": pinned isn't a setting/],
+        ['{"workspaceSettings": {"in": {"pinnedApps": "gmail"}}}', /workspaceSettings: "in": pinnedApps must be a list/],
+        ['{"workspaceSettings": {"in": {"pinnedApps": [""]}}}', /workspaceSettings: "in": pinnedApps must list text/],
+        ['{"workspaceSettings": {"in": {}, "IN": {}}}', /workspaceSettings names "IN" twice/],
+        ['{"workspaceSettings": {"a@b": {}}}', /workspaceSettings: "a@b": a workspace's name can't have/],
+        ['{"workspaceSettings": {" in": {}}}', /workspaceSettings: " in" has space around it/],
+    ];
+    for (const [text, want] of cases) {
+        const { settings, errors } = loadWorkspaceSettings(text, null, good);
+        assert.equal(errors.length, 1, text);
+        assert.match(errors[0], want, text);
+        assert.equal(settings, good);
+    }
+});
+
+test("a window is pinned on the workspace it's on when its app is pinned there", () => {
+    const settings = {
+        standing: ["in", "re"],
+        workspaceSettings: { In: { pinnedApps: ["google-calendar", "https://mail.google.com", "Thunderbird"] } },
+    };
+    const resolved = { "google-calendar": ["google-calendar", "chrome-calendar.google.com__-Default"] };
+    assert.equal(pinnedOn("chrome-calendar.google.com__-Profile_1", "in", settings, resolved), "in", "a launcher's --app window, in any profile");
+    assert.equal(pinnedOn("chrome-mail.google.com__-Default", "in@DP-2", settings), "in", "a web address's, on another monitor's part");
+    assert.equal(pinnedOn("org.mozilla.Thunderbird", "in", settings), "in", "a bare name matches a qualified class");
+    assert.equal(pinnedOn("chrome-mail.google.com__-Default", "re", settings), null, "pinned on in, not on re");
+    assert.equal(pinnedOn("kitty", "in", settings), null, "an app that isn't pinned");
+    assert.equal(pinnedOn("chrome-mail.google.com__-Default", "special:minimized:in", settings), null, "minimized");
+    assert.equal(pinnedOn("chrome-calendar.google.com__-Default", "in", settings), null, "not before the launcher is looked up");
+});
+
+test("what pinned apps and in apps match, in order, once each", () => {
+    const resolved = { gcal: ["gcal", "chrome-calendar.google.com__-Default", "org.example.Cal.desktop"] };
+    assert.deepEqual(appMatchers(["gcal", "https://Mail.google.com/u/0", "google.com", "org.example.Cal", "gcal"], resolved), [
+        { class: "gcal" }, { site: "calendar.google.com" }, { class: "org.example.cal" },
+        { site: "mail.google.com" }, { class: "google.com" }, { site: "google.com" },
+        // A dotted name is tried as a site too, as inApps' is.
+        { site: "org.example.cal" },
+    ]);
+    assert.deepEqual(pinnedMatchers({ standing: ["in", "re"], workspaceSettings: { in: { askForName: true, pinnedApps: ["gcal", "https://mail.google.com"] }, re: { askForName: true } } }, resolved), [
+        { workspace: "in", classes: ["gcal", "org.example.cal"], sites: ["calendar.google.com", "mail.google.com"] },
+    ]);
+});
+
+test("tide-workspaces.lua lists the workspaces that ask for a name and each one's pinned apps", () => {
+    const lua = workspacesLua({ standing: ["in", "re"], inApps: [], workspaceSettings: { in: { pinnedApps: ["gmail", "https://chat.google.com"] }, re: { askForName: true } } });
+    assert.ok(lua.includes('    ask_for_name = {\n        "re",\n    },\n'), lua);
+    assert.ok(lua.includes('    pinned = {\n        {\n            workspace = "in",\n            classes = {\n                "gmail",\n            },\n'
+        + '            sites = {\n                "chat.google.com",\n            },\n        },\n    },\n'), lua);
+    const none = workspacesLua(DEFAULT_SETTINGS);
+    assert.ok(none.includes('    ask_for_name = {\n        "in",\n    },\n'), none);
+    assert.ok(none.includes("    pinned = {},\n"), none);
+    assert.ok(workspacesLua({ standing: ["in"], workspaceSettings: {} }).includes("    ask_for_name = {},\n"));
+});
+
+test("a window on any workspace whose askForName is on asks, and none on one whose is off", () => {
+    const client = (ws) => ({ address: "0x1", class: "kitty", title: "~", floating: false, workspace: { name: ws } });
+    const settings = { standing: ["in", "re"], inApps: ["gmail"], workspaceSettings: { re: { askForName: true }, in: { askForName: false } } };
+    assert.equal(promptWanted(client("re"), settings), true, "re asks");
+    assert.equal(promptWanted(client("in"), settings), false, "home doesn't, once its askForName is off");
+    assert.equal(promptWanted(client("docs"), settings), false);
+    assert.equal(promptWanted(Object.assign(client("re"), { class: "gmail" }), settings), false, "a home app never asks");
 });
 
 test("an in app matches its class without case, and a bare name a qualified class", () => {
@@ -210,7 +312,7 @@ test("a launcher script in inApps takes the windows its grant finds home", () =>
     assert.equal(isHomeApp("google-calendar", apps, resolved), true, "its own name, as a key's launch names it");
     assert.equal(isHomeApp("chrome-calendar.google.com__-Default", apps), false, "not before it's looked up");
     assert.equal(isHomeApp("chrome-chat.google.com__-Default", apps, resolved), false);
-    assert.equal(promptWanted({ class: "chrome-calendar.google.com__-Default", title: "Calendar", workspace: { name: "in" } }, "in", apps, resolved), false);
+    assert.equal(promptWanted({ class: "chrome-calendar.google.com__-Default", title: "Calendar", workspace: { name: "in" } }, { standing: ["in"], inApps: apps }, resolved), false);
     assert.match(workspacesLua({ standing: ["in"], inApps: apps }, resolved), /calendar\\\\.google\\\\.com_/);
 });
 
@@ -294,12 +396,14 @@ test("the window judged is the one at its address, wherever focus is now", () =>
 
 test("a window first focused on home asks for a name, unless it shouldn't", () => {
     const client = (extra) => Object.assign({ address: "0x1", class: "kitty", title: "~", floating: false, workspace: { id: -1338, name: "in" } }, extra);
-    assert.equal(promptWanted(client({}), "in", []), true);
-    assert.equal(promptWanted(client({ workspace: { id: -1339, name: "docs" } }), "in", []), false, "elsewhere");
-    assert.equal(promptWanted(client({ floating: true }), "in", []), false, "a dialog");
-    assert.equal(promptWanted(client({ class: "", title: "" }), "in", []), false, "a status popup");
-    assert.equal(promptWanted(client({ class: "chrome-chat.google.com__-Default" }), "in", ["chat.google.com"]), false, "a home app");
-    assert.equal(promptWanted(null, "in", []), false);
+    const settings = { standing: ["in", "re"], inApps: [] };
+    assert.equal(promptWanted(client({}), settings), true);
+    assert.equal(promptWanted(client({ workspace: { id: -1339, name: "docs" } }), settings), false, "elsewhere");
+    assert.equal(promptWanted(client({ workspace: { id: -1340, name: "in@DP-2" } }), settings), true, "home's part on another monitor");
+    assert.equal(promptWanted(client({ floating: true }), settings), false, "a dialog");
+    assert.equal(promptWanted(client({ class: "", title: "" }), settings), false, "a status popup");
+    assert.equal(promptWanted(client({ class: "chrome-chat.google.com__-Default" }), { standing: ["in"], inApps: ["chat.google.com"] }), false, "a home app");
+    assert.equal(promptWanted(null, settings), false);
 });
 
 const names = ["in", "re", "oc", "me", "PR-12", "docs"];
@@ -437,7 +541,7 @@ test("a lookup that answers after its window closed asks nothing", () => {
     assert.equal(answered.live, false, "the window is gone");
     const snapshot = [{ address: "0xa", class: "kitty", title: "~", floating: false, workspace: { name: "in" } }];
     const client = answered.live ? clientAt(snapshot, "a") : null;
-    assert.equal(promptWanted(client, "in", []), false);
+    assert.equal(promptWanted(client, { standing: ["in"], inApps: [] }), false);
     assert.deepEqual(prompts.queue, [], "no prompt for a window that's gone");
 });
 

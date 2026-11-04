@@ -5,21 +5,23 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import "lib/dispatch.mjs" as Dispatch
+import "lib/report.mjs" as Report
 import "lib/workspacenames.mjs" as Names
 import "lib/workspaces.mjs" as Ws
 
 // The name prompt's requests (SPEC.md §6.5), one shown at a time by
 // NamePrompt.qml, the rest waiting their turn (Names.promptQueued):
-//   - a new window on home, as it's first focused, unless it's a dialog, a
-//     status popup or one of home's apps (Names.promptWanted). One that
-//     takes focus as it opens asks at once; one the focus guard left
-//     waiting asks when you go to it. One a launch sent home opens
-//     there and doesn't ask again (Ws.windowPrompt);
+//   - a new window on a workspace whose askForName is on, home by default,
+//     as it's first focused, unless it's a dialog, a status popup or one
+//     of home's apps (Names.promptWanted). One that takes focus as it
+//     opens asks at once; one the focus guard left waiting asks when you
+//     go to it. One a launch sent to such a workspace opens there and
+//     doesn't ask again (Ws.windowPrompt);
 //   - Super+Return, for a workspace to go to, moving no window, so it
 //     asks with no window focused too (`qs -c tide ipc call prompt go`);
 //   - Super+Shift+Return, for the focused window (`qs -c tide ipc call
 //     prompt move`);
-//   - a launch from home, which `tide launch` asks about before starting
+//   - a launch from a workspace that asks, which `tide launch` asks about before starting
 //     anything (`ipc call prompt launch JSON`), waiting for the answer on
 //     a FIFO so it starts the app itself, in its caller's environment; and
 //     the launcher's Ctrl+Enter, which the shell launches.
@@ -40,8 +42,9 @@ Singleton {
     // (Names.windowOpened): the first focus asks Hyprland about one, and an
     // answer that comes after it closed is dropped (Names.windowAnswered).
     property var windows: Names.NO_WINDOWS
-    // Launches answered home (Ws.homeLaunched), so their windows, which
-    // open on home, don't ask again.
+    // Launches answered with a workspace that asks, home by default
+    // (Ws.homeLaunched), so their windows, which open there, don't ask
+    // again.
     property var homeLaunches: Ws.NO_HOME_LAUNCHES
 
     function ask(request) {
@@ -72,7 +75,7 @@ Singleton {
         root.ask({ kind: "launch", argv: argv, cwd: cwd, apps: apps });
     }
 
-    // `tide launch` from home, waiting on the FIFO at `answer`, for an app
+    // `tide launch` from a workspace that asks, waiting on the FIFO at `answer`, for an app
     // whose window may have any of the classes `apps` (resolved there past
     // wrappers and desktop entries), granted to windows of `grants` (`*`
     // for any, as a terminal's). One of home's apps is answered home at
@@ -106,7 +109,7 @@ Singleton {
             return;
         }
         root.state = Names.promptDone(root.state, r.id);
-        if (r.kind === "launch" && Names.sameName(name, root.home)) {
+        if (r.kind === "launch" && Names.asksForName(WorkspacesData.settings, name)) {
             root.homeLaunches = Ws.homeLaunched(root.homeLaunches, r.grants ?? r.apps, Date.now() / 1000);
         }
         const a = Names.promptAnswer(r, name);
@@ -121,9 +124,20 @@ Singleton {
         }
     }
 
-    // Esc, as Names.promptCancel says: a new window on home closes,
-    // politely, as Super+Backspace does; a launch doesn't happen; anything
-    // else stays as it was.
+    // The workspace the window at `address` is pinned on (Names.pinnedOn),
+    // or null.
+    function pinnedOn(address) {
+        const t = Hyprland.toplevels.values.find(t => Ws.normalizeAddress(t.address) === address);
+        if (!t) {
+            return null;
+        }
+        return Names.pinnedOn(t.lastIpcObject?.class || t.wayland?.appId || "", t.workspace?.name ?? "", WorkspacesData.settings, WorkspacesData.resolved);
+    }
+
+    // Esc, as Names.promptCancel says: a new window closes, politely, as
+    // Super+Backspace does, unless it's pinned where it is, when a
+    // notification says so; a launch doesn't happen; anything else stays
+    // as it was.
     function cancel() {
         const r = root.current;
         if (r === null) {
@@ -131,7 +145,16 @@ Singleton {
         }
         root.state = Names.promptDone(root.state, r.id);
         const c = Names.promptCancel(r);
-        if (c.close !== undefined) {
+        const pinned = c.close !== undefined ? root.pinnedOn(c.close) : null;
+        if (pinned !== null) {
+            const notice = Names.pinnedNotice(pinned);
+            console.log(`tide: not closing window ${c.close}: it's pinned on ${pinned}`);
+            Launcher.run(Report.notifyCommand(notice.summary, notice.body), ok => {
+                if (!ok) {
+                    console.warn(`tide: couldn't say window ${c.close} is pinned on ${pinned}`);
+                }
+            });
+        } else if (c.close !== undefined) {
             Hyprland.dispatch(Dispatch.closeWindow(c.close, Hyprland.usingLua));
         } else if (c.reply !== undefined) {
             root.reply(c.answer, c.reply);
@@ -203,16 +226,16 @@ Singleton {
                     try {
                         clients = JSON.parse(text);
                     } catch (e) {
-                        console.warn(`tide: couldn't read hyprctl clients, so a new window on home may not ask for a workspace: ${e.message}`);
+                        console.warn(`tide: couldn't read hyprctl clients, so a new window may not ask for a workspace: ${e.message}`);
                     }
                     const answered = Names.windowAnswered(root.windows, run.address);
                     root.windows = answered.state;
                     // Closed while Hyprland answered: nothing to ask about.
                     const client = answered.live ? Names.clientAt(clients, run.address) : null;
-                    // A launch you sent home stays there, without asking.
+                    // A launch you sent to a workspace that asks stays
+                    // there, without asking.
                     const judged = Ws.windowPrompt(client, {
-                        home: root.home,
-                        inApps: root.inApps,
+                        settings: WorkspacesData.settings,
                         resolved: WorkspacesData.resolved,
                         launches: root.homeLaunches,
                         now: Date.now() / 1000
@@ -225,7 +248,7 @@ Singleton {
             }
             onExited: (code, status) => {
                 if (code !== 0) {
-                    console.warn(`tide: hyprctl clients exited ${code}, so a new window on home may not ask for a workspace`);
+                    console.warn(`tide: hyprctl clients exited ${code}, so a new window may not ask for a workspace`);
                 }
                 destroy();
             }

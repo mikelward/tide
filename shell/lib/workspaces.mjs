@@ -611,8 +611,9 @@ export function homeRenamed(id, event, home) {
     return event !== null && event.type === "renamed" && id !== null && event.id === id && event.name !== home;
 }
 
-// Launches the name prompt sent home (SPEC.md §6.5), so the window each
-// opens there, through its grant, doesn't ask again: newest first, each
+// Launches the name prompt sent to a workspace whose askForName is on,
+// home by default (SPEC.md §6.5), so the window each opens there, through
+// its grant, doesn't ask again: newest first, each
 // {apps, at}, `apps` the classes its window may have (`*` for any, as the
 // focus guard's grant reads it) and `at` the answer's time in seconds. One
 // is good for HOME_LAUNCH_SECONDS: the guard's grant holds 10 s from
@@ -647,11 +648,12 @@ export function homeLaunchWindow(launches, cls, now) {
 
 // Whether the window Hyprland describes as `client`, just first focused,
 // asks for a workspace (SPEC.md §6.5): {ask, launches}. It asks when
-// promptWanted says so, unless it's the window of a launch sent home
-// (homeLaunchWindow), which keeps home without asking, since Esc there
+// promptWanted says so for the Workspaces `settings`, unless it's the
+// window of a launch answered with a workspace that asks
+// (homeLaunchWindow), which keeps it without asking, since Esc there
 // would close it.
-export function windowPrompt(client, { home, inApps, resolved = {}, launches, now }) {
-    if (!promptWanted(client, home, inApps, resolved)) {
+export function windowPrompt(client, { settings, resolved = {}, launches, now }) {
+    if (!promptWanted(client, settings, resolved)) {
         return { ask: false, launches };
     }
     const w = homeLaunchWindow(launches, client.class, now);

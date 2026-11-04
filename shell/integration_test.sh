@@ -763,7 +763,8 @@ shell_loaded() {
 # hand edit, and a cap of 0 refused. Then the Power page: Lock set over a
 # hand edit, written for conf and the lid switch held, and a lid action
 # that isn't one refused. Then the Workspaces page: a standing workspace
-# added over a hand edit, and a pattern with no capture group refused. Before all that, it checks the
+# added over a hand edit, a pattern with no capture group refused, and a
+# workspace's switch turned on and an app pinned. Before all that, it checks the
 # shell recorded no wallpaper for the lock, having none to draw (§15).
 # The clicks come before the shell need have heard of the hand edit, and
 # the second before the first could be written in the background. load
@@ -1213,6 +1214,35 @@ written_settings() {
             exit 1
             ;;
     esac
+    # Each workspace's own settings (SPEC.md §6.5): re's switch turned on
+    # and gmail pinned on in, in workspaces.local.json, home still asking as
+    # it did with no workspaceSettings, and both in the file conf reads.
+    ipc call settings setWorkspaceAskForName re true >/dev/null || exit 1
+    ipc call settings addPinnedApp in gmail >/dev/null || exit 1
+    if ! python3 -c 'import json, sys
+s = json.load(open(sys.argv[1]))["workspaceSettings"]
+assert s == {"in": {"askForName": True, "pinnedApps": ["gmail"]}, "re": {"askForName": True, "pinnedApps": []}}, s' "$workspaces_local"; then
+        echo "FAIL: the Workspaces page should turn on re's askForName and pin gmail on in, in $workspaces_local as it answers; it has: $(cat "$workspaces_local" 2>&1)" >&2
+        exit 1
+    fi
+    # conf's file is written once any apply before it has ended.
+    i=0
+    until sed -n '/^    ask_for_name = {$/,/^    },$/p' "$workspaces_conf" 2>/dev/null | grep -qxF '        "re",' &&
+        grep -qxF '            workspace = "in",' "$workspaces_conf"; do
+        if waited "the shell didn't write re's askForName and in's pinned gmail to $workspaces_conf: $(cat "$workspaces_conf" 2>&1)" "$i"; then
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    _refused=$(ipc call settings addPinnedApp in Gmail) || exit 1
+    case "$_refused" in
+        *"is listed already"*) ;;
+        *)
+            echo "FAIL: the Workspaces page should refuse pinning gmail on in twice, saying why; it answered: $_refused" >&2
+            exit 1
+            ;;
+    esac
     # The Floating page: a rule added over a hand edit, in
     # floating.local.json and the file conf reads as the call answers, and
     # a title pattern Hyprland would read differently refused.
@@ -1318,7 +1348,10 @@ launch() {
     # leaves it out (SPEC.md §8.2).
     printf '[Desktop Entry]\nType=Application\nName=Cafepro\nExec=tide-test-gnome\nOnlyShowIn=GNOME;\n' \
         >"$tmp/home/.local/share/applications/tide-test-gnome.desktop" || exit 1
-    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s/launched"\n' "$tmp" >"$tmp/bin/tide" || exit 1
+    # A stand-in tide that records what the launcher runs. The shell also
+    # asks it for app classes, for home's and pinned apps (SPEC.md §6.5),
+    # whenever it looks a program up; that's no launch, so it answers none.
+    printf '#!/bin/sh\ntest "$1" = app-classes && exit 0\nprintf "%%s\\n" "$*" >>"%s/launched"\n' "$tmp" >"$tmp/bin/tide" || exit 1
     chmod +x "$tmp/bin/tide" || exit 1
     keyboard
     env -i PATH="$tmp/bin:$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \

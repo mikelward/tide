@@ -850,7 +850,7 @@ test("a launch from home answered home opens there, and its window doesn't ask a
     assert.equal(answered.live, true);
     const clients = [{ address: "0xa1", class: "kitty", title: "kitty", workspace: { name: "in" }, floating: false }];
     const client = clientAt(clients, "a1");
-    const opts = { home: "in", inApps: ["gmail"], launches, now: 1002 };
+    const opts = { settings: { standing: ["in", "re"], inApps: ["gmail"] }, launches, now: 1002 };
     const judged = windowPrompt(client, opts);
     assert.equal(judged.ask, false, "no name prompt, whose Esc would close it");
     assert.deepEqual(prompts.queue, []);

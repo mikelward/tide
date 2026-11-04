@@ -1,7 +1,11 @@
 // Tests for workspacepage.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { editedList, itemNote, movedItem, withItem, withoutItem } from "./workspacepage.mjs";
+import {
+    editedList, editedWorkspace, itemNote, movedItem, withAskForName, withItem, withoutItem, withoutPinned, withPinned,
+    workspaceHeading,
+} from "./workspacepage.mjs";
+import { loadWorkspaceSettings, workspaceSetting } from "./workspacenames.mjs";
 
 const SHARED = '{"standing": ["in", "re", "oc", "me"], "inApps": ["mail.google.com"]}';
 
@@ -40,4 +44,25 @@ test("a change names its entry by place and text, so a hand edit since is refuse
 test("a file that doesn't load, or a list that isn't the page's, changes nothing", () => {
     assert.match(editedList(SHARED, "{", "inApps", l => ({ list: l })).error, /^workspaces\.local\.json: /);
     assert.match(editedList(SHARED, null, "muted", l => ({ list: l })).error, /muted isn't one of the page's lists/);
+});
+
+test("a workspace's switch and pinned apps go to the local file, the settings in effect copied first", () => {
+    const r = editedWorkspace(SHARED, '{"muted": ["slack"]}', "re", w => withAskForName(w, true));
+    assert.deepEqual(JSON.parse(r.text), {
+        muted: ["slack"],
+        workspaceSettings: { in: { askForName: true }, re: { askForName: true, pinnedApps: [] } },
+    }, "home keeps asking, as it did with no workspaceSettings");
+    const settings = loadWorkspaceSettings(SHARED, r.text).settings;
+    assert.equal(workspaceSetting(settings, "re").askForName, true);
+    const off = editedWorkspace(SHARED, r.text, "IN", w => withAskForName(w, false));
+    assert.deepEqual(JSON.parse(off.text).workspaceSettings.in, { askForName: false, pinnedApps: [] }, "matched ignoring case, keeping its own");
+    const pinned = editedWorkspace(SHARED, off.text, "in", w => withPinned(w, " gmail "));
+    assert.deepEqual(pinned.setting, { askForName: false, pinnedApps: ["gmail"] });
+    assert.match(editedWorkspace(SHARED, pinned.text, "in", w => withPinned(w, "Gmail")).error, /Gmail is listed already/);
+    assert.deepEqual(editedWorkspace(SHARED, pinned.text, "in", w => withoutPinned(w, 0, "gmail")).setting.pinnedApps, []);
+    assert.match(editedWorkspace(SHARED, pinned.text, "in", w => withoutPinned(w, 0, "x")).error, /entry 1 isn't x/);
+    assert.match(editedWorkspace(SHARED, "{", "in", w => withAskForName(w, true)).error, /workspaces.local.json/);
+    assert.match(editedWorkspace(SHARED, null, "a@b", w => withAskForName(w, true)).error, /workspaceSettings: "a@b"/);
+    assert.equal(workspaceHeading("in", 0), "in · home");
+    assert.equal(workspaceHeading("re", 1), "re");
 });

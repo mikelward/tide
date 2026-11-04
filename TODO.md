@@ -7,6 +7,25 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **A local `workspaceSettings` replaces the shared one whole**
+  (2026-11-04), as the lists do, rather than merging per workspace: the
+  page copies the settings in effect on its first change, so a machine's
+  file says exactly what it gets. The cost: a hand-written local entry for
+  one workspace drops the shared ones, home's `askForName` included. The
+  alternative is merging by workspace name and then by field. Reversible:
+  `loadWorkspaceSettings`.
+- **A window opening on a monitor's part of a workspace that asks asks
+  too** (2026-11-04): `in@DP-2` is `in`, as everywhere else in the shell.
+  Before, only the main monitor's part asked. Reversible: `promptWanted`.
+- **A pinned app's new window still asks** on a workspace that asks, and
+  Esc then keeps it open rather than closing it (2026-11-04). The
+  alternative is pinned apps never asking, as home's apps don't.
+  Reversible: `promptWanted`.
+- **An app's swallowed close key says why**, with the same notification
+  as `Super+Backspace` (2026-11-04), so a `Ctrl+W` that does nothing
+  isn't a mystery. The alternative is swallowing it silently. Reversible:
+  `pinned.shortcut`.
+
 - **A launch sent home keeps its window there for 15 s** (2026-11-03):
   its window opens on home and would ask again, so the shell notes the
   launch's classes as it answers home, and their first window that would

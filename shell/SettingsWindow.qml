@@ -18,6 +18,7 @@ import "lib/outputs.mjs" as Outputs
 import "lib/power.mjs" as Power
 import "lib/settings.mjs" as Settings
 import "lib/status.mjs" as Status
+import "lib/workspacenames.mjs" as Names
 import "lib/workspacepage.mjs" as WsPage
 
 // The settings panel (SPEC.md §16), centered on the focused monitor over a
@@ -325,6 +326,19 @@ PanelWindow {
         }
         function removeWorkspaceItem(key: string, item: string): string {
             return WorkspacesData.removeItem(key, undefined, item);
+        }
+        // One workspace's own settings, as the Workspaces page sets them:
+        // `qs -c tide ipc call settings setWorkspaceAskForName re true`,
+        // and `... addPinnedApp in gmail` or `... removePinnedApp in
+        // gmail`. Each answers why not, or "".
+        function setWorkspaceAskForName(name: string, on: bool): string {
+            return WorkspacesData.setAskForName(name, on);
+        }
+        function addPinnedApp(name: string, item: string): string {
+            return WorkspacesData.addPinned(name, item);
+        }
+        function removePinnedApp(name: string, item: string): string {
+            return WorkspacesData.removePinned(name, undefined, item);
         }
         // Adds, moves (a step later) or takes out one of the Floating page's
         // rules, by its class and title pattern ("" for none), as it does:
@@ -2972,7 +2986,10 @@ PanelWindow {
                     // Workspaces: the standing workspaces, home's apps and
                     // the name patterns, each a list whose entries the bin
                     // takes out and, where order counts, the arrows move;
-                    // one typed at the foot is added (SPEC.md §6.5, §16).
+                    // one typed at the foot is added. Then each standing
+                    // workspace's own settings: whether its new windows ask
+                    // for a workspace, and its pinned apps, a list as home's
+                    // apps are (SPEC.md §6.5, §16).
                     Column {
                         id: workspacesPage
 
@@ -3110,6 +3127,167 @@ PanelWindow {
                                                 visible: newItem.text === "" && !newItem.activeFocus
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: wsList.modelData.hint
+                                                color: Theme.fgFaint
+                                                font.family: Theme.font
+                                                font.pixelSize: 13
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Repeater {
+                            model: WorkspacesData.standing
+
+                            Column {
+                                id: wsOwn
+
+                                required property var modelData
+                                required property int index
+                                readonly property var setting: Names.workspaceSetting(WorkspacesData.settings, modelData)
+
+                                width: workspacesPage.width
+                                spacing: 2
+
+                                Heading {
+                                    text: WsPage.workspaceHeading(wsOwn.modelData, wsOwn.index).toUpperCase()
+                                }
+
+                                Item {
+                                    width: wsOwn.width
+                                    implicitHeight: 32
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 10
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: WsPage.ASK_LABEL
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                    }
+
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 6
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 56
+                                        height: 26
+                                        radius: 13
+                                        color: wsOwn.setting.askForName ? Theme.accentBg : Theme.surface2
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: wsOwn.setting.askForName ? "On" : "Off"
+                                            color: wsOwn.setting.askForName ? Theme.accentFg : Theme.fg
+                                            font.family: Theme.font
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        TapHandler {
+                                            onTapped: workspacesPage.changed(WorkspacesData.setAskForName(wsOwn.modelData, !wsOwn.setting.askForName))
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    leftPadding: 10
+                                    topPadding: 4
+                                    text: WsPage.PINNED_LABEL
+                                    color: Theme.fgDim
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                }
+
+                                Repeater {
+                                    model: wsOwn.setting.pinnedApps
+
+                                    Item {
+                                        id: pinnedItem
+
+                                        required property var modelData
+                                        required property int index
+
+                                        width: wsOwn.width
+                                        implicitHeight: 32
+
+                                        Text {
+                                            anchors.left: parent.left
+                                            anchors.leftMargin: 10
+                                            anchors.right: pinnedBin.left
+                                            anchors.rightMargin: 6
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            elide: Text.ElideRight
+                                            textFormat: Text.PlainText
+                                            text: pinnedItem.modelData
+                                            color: Theme.fg
+                                            font.family: Theme.font
+                                            font.pixelSize: 13
+                                        }
+
+                                        Row {
+                                            id: pinnedBin
+
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: 6
+                                            anchors.verticalCenter: parent.verticalCenter
+
+                                            StepButton {
+                                                name: "edit-delete-symbolic"
+                                                value: 0
+                                                next: 1
+                                                onActivated: workspacesPage.changed(WorkspacesData.removePinned(wsOwn.modelData, pinnedItem.index, pinnedItem.modelData))
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Item {
+                                    width: wsOwn.width
+                                    implicitHeight: 32
+
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 6
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 6
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        height: 26
+                                        radius: 6
+                                        color: Theme.surface2
+                                        border.width: newPinned.activeFocus ? 1 : 0
+                                        border.color: Theme.accent
+
+                                        TextInput {
+                                            id: newPinned
+
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 8
+                                            anchors.rightMargin: 8
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            clip: true
+                                            color: Theme.fg
+                                            font.family: Theme.font
+                                            font.pixelSize: 13
+                                            onAccepted: {
+                                                const error = WorkspacesData.addPinned(wsOwn.modelData, text);
+                                                workspacesPage.changed(error);
+                                                if (error === "") {
+                                                    text = "";
+                                                    keys.forceActiveFocus();
+                                                }
+                                            }
+                                            Keys.onEscapePressed: {
+                                                text = "";
+                                                keys.forceActiveFocus();
+                                            }
+
+                                            Text {
+                                                visible: newPinned.text === "" && !newPinned.activeFocus
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: WsPage.PINNED_HINT
                                                 color: Theme.fgFaint
                                                 font.family: Theme.font
                                                 font.pixelSize: 13
