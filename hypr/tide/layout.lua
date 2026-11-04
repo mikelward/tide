@@ -258,6 +258,15 @@ local function follow(st, now, place_new)
     return order
 end
 
+-- The single-window rule for workspace `st`: its own width if one was
+-- dragged or set (layoutmsg single), else the config's, by aspect.
+local function single_rules(st)
+    if st and st.single_width then
+        return { { min_aspect = 0, width = st.single_width } }
+    end
+    return config.single
+end
+
 local function recalculate(ctx)
     local n = #ctx.targets
     if n == 0 then
@@ -277,6 +286,9 @@ local function recalculate(ctx)
         return
     end
     local st = state_for(id, ctx.area)
+    -- The work area, for a drag of a lone window's edge, which is all its
+    -- tiles cover.
+    st.area = ctx.area
     -- A window whose address can't be read (it's going away) is left out
     -- of the order, so it leaves no hole for the helpers to trip on, and
     -- takes a place after the rest.
@@ -302,7 +314,7 @@ local function recalculate(ctx)
             return nil
         end
         arriving = nil
-        local slots = geometry.arrange(st.mode, ctx.area, #order + 1, st.opts[st.mode], config.single)
+        local slots = geometry.arrange(st.mode, ctx.area, #order + 1, st.opts[st.mode], single_rules(st))
         return direction.landing(slots, a.d, a.from)
     end
     st.order = st.seen and follow(st, now, place_new) or now
@@ -318,7 +330,7 @@ local function recalculate(ctx)
         place[address] = i
     end
     local spare = #st.order
-    local boxes = geometry.arrange(st.mode, ctx.area, n, st.opts[st.mode], config.single)
+    local boxes = geometry.arrange(st.mode, ctx.area, n, st.opts[st.mode], single_rules(st))
     for i, t in ipairs(ctx.targets) do
         local p = addresses[i] and place[addresses[i]]
         if not p then
@@ -354,8 +366,10 @@ end
 
 -- `layoutmsg` commands:
 --   mode <tile|threecol|twocol|monocle>, next, prev, monocle (toggle),
---   mfact <+d|-d|value>, addmaster, removemaster, reset, and refresh, which
---   changes nothing so the workspace is laid out again
+--   mfact <+d|-d|value>, addmaster, removemaster, reset, single
+--   <value|reset> (a lone window's width on this workspace, 0.1 to 1, or
+--   the config's rule again), and refresh, which changes nothing so the
+--   workspace is laid out again
 local function layout_msg(ctx, msg)
     local id = workspace_id(ctx, true)
     if id == nil then
@@ -393,10 +407,20 @@ local function layout_msg(ctx, msg)
         o.nmaster = math.max(floor, o.nmaster + (cmd == "addmaster" and 1 or -1))
     elseif cmd == "reset" then
         st.opts[st.mode] = copy(config.modes[st.mode])
+    elseif cmd == "single" then
+        if arg == "reset" then
+            st.single_width = nil
+        else
+            local v = tonumber(arg)
+            if not v then
+                return "tide: single expects a width from 0.1 to 1, or reset"
+            end
+            st.single_width = geometry.clamp(v, 0.1, 1.0)
+        end
     elseif cmd == "refresh" then
         return true
     else
-        return "tide: expected mode, next, prev, monocle, mfact, addmaster, removemaster, reset or refresh"
+        return "tide: expected mode, next, prev, monocle, mfact, addmaster, removemaster, reset, single or refresh"
     end
     return true
 end
@@ -800,7 +824,26 @@ local function drag_step()
     if not ok or not pos then
         return -- no pointer to follow this step; the next one tries again
     end
-    local v = geometry.drag_mfact(drag.edge, drag.area, pos.x - drag.offset)
+    local x = pos.x - drag.offset
+    if drag.edge.kind == "lone" then
+        -- A lone window stays centered: the edge's distance from the
+        -- center is half its width.
+        local area = drag.area
+        if area.w <= 0 then
+            return
+        end
+        local from_center = x - (area.x + area.w / 2)
+        if drag.edge.side == "left" then
+            from_center = -from_center
+        end
+        local v = tonumber(string.format("%.4f", geometry.clamp(2 * from_center / area.w, 0.1, 1.0)))
+        if v ~= drag.single then
+            drag.single = v
+            hl.dispatch(hl.dsp.layout(string.format("single %.4f", v)))
+        end
+        return
+    end
+    local v = geometry.drag_mfact(drag.edge, drag.area, x)
     v = v and tonumber(string.format("%.4f", v))
     if v and v ~= drag.mfact then
         drag.mfact = v
@@ -843,13 +886,31 @@ function M.drag_press()
         return PASS
     end
     local o = st.opts[st.mode]
-    local edge = geometry.edge_at(geometry.split_edges(st.mode, area, #boxes, o), area, pos.x, pos.y, grab)
+    local edges
+    if #boxes == 1 and #st.order == 1 and st.area then
+        -- A lone window: either side drags its width, centered, in the
+        -- work area, which its own box doesn't cover. Only once the layout
+        -- has placed it alone: one left alone without a recalculate is
+        -- still where its old tile was.
+        local b = boxes[1]
+        area = st.area
+        edges = { { x = b.x, kind = "lone", side = "left" }, { x = b.x + b.w, kind = "lone", side = "right" } }
+    else
+        edges = geometry.split_edges(st.mode, area, #boxes, o)
+    end
+    local edge = geometry.edge_at(edges, area, pos.x, pos.y, grab)
     if not edge or covered(windows, pos.x, pos.y) then
         return PASS
     end
     -- The edge keeps its offset from the pointer, so it doesn't jump to it.
     -- The area is the press's: an mfact change moves the edge, not the area.
-    drag = { ws = id, mode = st.mode, edge = edge, area = area, offset = pos.x - edge.x, mfact = o.mfact }
+    -- A lone window's width as it is now, so a press that doesn't move
+    -- sets no width of the workspace's own in place of the rule.
+    local single = st.single_width
+    if edge.kind == "lone" and area.w > 0 then
+        single = tonumber(string.format("%.4f", boxes[1].w / area.w))
+    end
+    drag = { ws = id, mode = st.mode, edge = edge, area = area, offset = pos.x - edge.x, mfact = o.mfact, single = single }
     if drag_timer then
         drag_timer:set_enabled(true)
     else

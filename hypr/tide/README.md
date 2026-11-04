@@ -99,7 +99,8 @@ as `custom>>tide-layout>>WORKSPACE,MODE`, which the bar follows, and
 `setup()` adds a `workspace.active` handler that announces each workspace's
 mode as it becomes active, so a bar that started later catches up. The
 same commands also work as plain `layoutmsg`s (`mode <name>`, `next`, `prev`,
-`monocle`, `mfact <+d|-d|value>`, `addmaster`, `removemaster`, `reset`), but
+`monocle`, `mfact <+d|-d|value>`, `addmaster`, `removemaster`, `reset`,
+`single <value|reset>`), but
 those don't announce.
 
 ## Status
