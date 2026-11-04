@@ -1579,6 +1579,14 @@ the built-in dispatchers instead, with a monitor move for a floating window.
   - The edges are tile's, twocol's and threecol's with one stack window.
     In threecol with stacks either side, either side of the centered
     master drags it, and it grows or shrinks both ways.
+  - **A lone window's** left and right edges drag its width, and it stays
+    centered, so both sides move: the edge's distance from the work area's
+    center is half the width, from 10% to the whole width. That width is
+    the workspace's own (`layoutmsg single <value>`, or `single reset` for
+    the rule again) in place of the single-window rule. A second window
+    tiles as ever, and the width comes back whenever the workspace is down
+    to one. The layout must have placed the window alone: one left alone
+    without a recalculate is still where its old tile was.
   - The rows of a stack are always equal, so there's no edge to drag
     between two of them; nor between twocol's two masters, which split
     their side equally.

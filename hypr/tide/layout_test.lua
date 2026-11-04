@@ -1180,6 +1180,46 @@ test("a drag reuses its timer and clamps at mfact's ends", function()
     qs.drag_release()
 end)
 
+test("a lone window's edges drag its width, both sides at once, and it keeps it", function()
+    local qs, layout = fresh()
+    hl.area = UW
+    -- 80% of 3440, centered: 344 to 3096.
+    local t = relayout(layout, UW, 1, 1)
+    box_eq(t[1].placed, { x = 344, y = 34, w = 2752, h = 1406 }, "the single-window rule")
+    -- A press and release that doesn't move sets nothing of its own.
+    hl.cursor = { x = 3096, y = 500 }
+    local from = #hl.dispatched
+    qs.drag_press()
+    qs.drag_release()
+    eq(layout_msgs(from), "", "no width of its own from a click")
+    hl.cursor = { x = 3096, y = 500 }
+    eq(qs.drag_press(), nil, "a press on its right edge is taken")
+    from = #hl.dispatched
+    hl.cursor.x = 2752
+    tick()
+    eq(layout_msgs(from), "single 0.6000", "the right edge in to 2752: 60%, centered")
+    qs.drag_release()
+    t = relayout(layout, UW, 1, 1)
+    box_eq(t[1].placed, { x = 688, y = 34, w = 2064, h = 1406 }, "both sides moved in")
+    -- The left edge, out again.
+    hl.cursor = { x = 688, y = 500 }
+    eq(qs.drag_press(), nil, "its left edge too")
+    from = #hl.dispatched
+    hl.cursor.x = 0
+    qs.drag_release()
+    eq(layout_msgs(from), "single 1.0000", "out to the screen's edge: the whole width")
+    -- A second window tiles as ever; alone again, the width comes back.
+    relayout(layout, UW, 1, 2)
+    layout.layout_msg({ area = UW, targets = targets(1, 2) }, "single 0.5")
+    t = relayout(layout, UW, 1, 2)
+    eq(t[1].placed.w, 1720, "two windows tile, whatever the lone width")
+    t = relayout(layout, UW, 1, 1)
+    eq(t[1].placed.w, 1720, "alone again: its width, 50%")
+    eq(layout.layout_msg({ area = UW, targets = targets(1, 1) }, "single reset"), true)
+    t = relayout(layout, UW, 1, 1)
+    eq(t[1].placed.w, 2752, "reset: the rule's again")
+end)
+
 test("an emptied workspace keeps no edge to drag", function()
     -- Its last tiled windows leave together, and Hyprland calls no
     -- recalculate for none, so what it last placed is still there to find.
@@ -1273,7 +1313,8 @@ test("a press counts only the windows tiled there now", function()
     hl.cursor = { x = 1720, y = 700 }
     eq(qs.drag_press(), nil, "the two windows' edge is taken")
     qs.drag_release()
-    -- One of the two left without a recalculate: a lone window has no edge.
+    -- One of the two left without a recalculate: not yet placed alone, so
+    -- its old edge isn't a lone window's.
     table.remove(hl.tiled[1], 2)
     r = qs.drag_press()
     eq(type(r) == "table" and r.pass_event, true, "a lone window's old edge passes on")
