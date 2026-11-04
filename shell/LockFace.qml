@@ -224,7 +224,7 @@ Item {
                 source: face.wallpaper === "" ? "" : Appearance.fileUrl(face.wallpaper)
                 // Framed as Wallpaper.qml frames it; a picture fitted whole
                 // has the gradient in its bars.
-                fillMode: face.wallpaperPlacement.fit ? Image.PreserveAspectFit : Image.PreserveAspectCrop
+                fillMode: face.wallpaperPlacement.stretch ? Image.Stretch : face.wallpaperPlacement.fit ? Image.PreserveAspectFit : Image.PreserveAspectCrop
                 horizontalAlignment: Image.AlignHCenter
                 verticalAlignment: face.wallpaperPlacement.vertical === "top" ? Image.AlignTop : face.wallpaperPlacement.vertical === "bottom" ? Image.AlignBottom : Image.AlignVCenter
                 asynchronous: true

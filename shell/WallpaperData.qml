@@ -23,8 +23,8 @@ Singleton {
     property string path: ""
     // The color to fill with, as #rrggbb, or "" for none or a file.
     property string color: ""
-    // How a picture is placed (Appearance.POSITIONS), for light and dark.
-    readonly property string position: Appearance.wallpaperPosition(AppearanceData.settings)
+    // How the mode's picture is placed (Appearance.POSITIONS).
+    readonly property string position: Appearance.wallpaperPosition(AppearanceData.settings, AppearanceData.dark)
     // What show() last drew, a file, a color or "", once it has.
     property string shown: ""
     property bool showing: false

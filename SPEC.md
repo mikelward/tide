@@ -3714,9 +3714,10 @@ to be focused.
     - `conf`'s `~/.config/hypr/wallpaper-light.jpg` or `-dark.jpg`, as
       `theme.sh` names them;
     - `conf`'s `~/.config/hypr/wallpaper.jpg`.
-  - `wallpaperPosition` places an image on each monitor. It's one setting
-    for light and dark both. Anything else fails at load, naming the
-    setting.
+  - `lightWallpaperPosition` and `darkWallpaperPosition` place the mode's
+    image on each monitor, since the two are different pictures. One not
+    set is `wallpaperPosition`'s, both modes' at once, else `fill`.
+    Anything else fails at load, naming the setting.
     - `fill`, the default, covers the monitor, centered, and trims what
       doesn't fit, as swaybg's `fill` does.
     - `fill-top` covers it too, but keeps the picture's top and trims only
@@ -3725,9 +3726,12 @@ to be focused.
       each fill. The position only chooses which edge of a tall one stays.
     - `fit` shows the whole picture, centered, scaled to fit. The bars
       beside it are the bar's background color, `Theme.barBg`.
-    - The shell draws it with Qt's Image: a crop or a fit, aligned to the
-      edge kept. Qt crops from the side away from its alignment
-      (`QQuickImage::updatePaintNode`).
+    - `stretch` shows the whole picture across the whole monitor, scaled
+      across and down apart, so it's out of its shape where the monitor's
+      shape differs.
+    - The shell draws it with Qt's Image: a crop, a fit or a stretch,
+      aligned to the edge kept. Qt crops from the side away from its
+      alignment (`QQuickImage::updatePaintNode`).
   - A directory isn't an image it can read, and one it can't decode is
     logged and passed over for the next. With none, it draws no
     wallpaper, and logs which it tried.
@@ -4031,21 +4035,26 @@ stays hand-written.
       names its own path, can't answer first.
     - **Cost and reliability:** nothing new to install, since the portal is
       tide's file chooser already; one D-Bus call a choice.
-  - **Wallpaper position** steps through the positions with ‹ and ›:
-    Fill, centered; Fill, keep top; Fill, keep bottom; and Fit whole
-    picture. It's `wallpaperPosition` (§15), one for light and dark.
+  - **Each picture's position** is a row under its wallpaper, Light
+    wallpaper position and Dark wallpaper position, each stepping through
+    the positions with ‹ and ›: Fill, centered; Fill, keep top; Fill, keep
+    bottom; Fit whole picture; and Stretch to fill. They're
+    `lightWallpaperPosition` and `darkWallpaperPosition` (§15). A color has
+    no position, so its row is hidden.
   - **Each picture has a preview** under its row, so a crop is no
-    surprise. A color, or no picture, has none. It shows the position
-    chosen.
+    surprise. A color, or no picture, has none. It shows that picture's
+    position.
     - It's the whole picture, scaled to fit 240 by 160 px, with a frame
       over it for the part a monitor shows. What the monitor trims is
       dimmed. For a fit, the frame is the whole monitor, its bars around
-      the picture.
+      the picture. For a stretch, it's the whole picture drawn in the
+      monitor's shape, with nothing dimmed.
     - There's one preview for each size of monitor connected, labeled with
       the monitors' names. Monitors of the same size share one.
     - A line under it gives the numbers in the monitor's pixels, such as
       `DP-1, 3440×1440: scaled to 3440×2150, trims 33% of its height (355
-      px top, 355 px bottom)`.
+      px top, 355 px bottom)`, or for a stretch `DP-1, 3440×1440: stretches
+      all of it to 3440×1440, 49% wider`.
     - The mode showing now previews the file the shell draws. The other
       mode previews the first of its candidates (§15) that loads.
     - The preview loads the file at its own size, to learn that size, and

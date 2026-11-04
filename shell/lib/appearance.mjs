@@ -25,10 +25,12 @@ export const DEFAULTS = Object.freeze({ mode: "schedule", light: "07:00", dark: 
 const MODES = ["schedule", "sun", "light", "dark"];
 // The settings that decide light or dark, and every one there is.
 const THEME_KEYS = ["mode", "light", "dark", "latitude", "longitude"];
-const KEYS = THEME_KEYS.concat(["dimStrength", "lightWallpaper", "darkWallpaper", "wallpaperPosition"]);
-// How a picture is placed on a monitor (SPEC.md §15), wallpaperPosition:
-// one for light and dark both.
-export const POSITIONS = Object.freeze(["fill", "fill-top", "fill-bottom", "fit"]);
+const KEYS = THEME_KEYS.concat(["dimStrength", "lightWallpaper", "darkWallpaper", "lightWallpaperPosition",
+    "darkWallpaperPosition", "wallpaperPosition"]);
+// How a picture is placed on a monitor (SPEC.md §15): each mode's own,
+// lightWallpaperPosition or darkWallpaperPosition, else wallpaperPosition,
+// for both.
+export const POSITIONS = Object.freeze(["fill", "fill-top", "fill-bottom", "fit", "stretch"]);
 const DAY = 24 * 60 * 60 * 1000;
 
 // "HH:MM" as {h, min}, or null when it isn't a 24-hour time.
@@ -86,9 +88,11 @@ export function parseAppearance(text) {
                 return { error: wallpaperError(key, v) };
             }
             break;
+        case "lightWallpaperPosition":
+        case "darkWallpaperPosition":
         case "wallpaperPosition":
             if (!POSITIONS.includes(v)) {
-                return { error: `wallpaperPosition must be one of ${POSITIONS.map(p => `"${p}"`).join(", ")}` };
+                return { error: `${key} must be one of ${POSITIONS.map(p => `"${p}"`).join(", ")}` };
             }
             break;
         default:
@@ -694,11 +698,14 @@ export function fileUrl(path) {
 //   does, trimming what's left over;
 // - "fill-top" covers it too, keeping the top and trimming the bottom;
 // - "fill-bottom" keeps the bottom and trims the top;
-// - "fit" shows all of it, centered, with bars where it doesn't reach.
+// - "fit" shows all of it, centered, with bars where it doesn't reach;
+// - "stretch" shows all of it across the whole monitor, out of its shape
+//   where the two shapes differ.
 // A picture wider than the monitor is trimmed equally at the sides in each
 // fill: the position only chooses which way a tall one gives.
 // Returns null until both sizes are known (an image still loading), or:
-// - scale: monitor pixels per picture pixel;
+// - scale: monitor pixels per picture pixel, across;
+// - scaleY: the same, down: scale but for "stretch";
 // - shown: the picture's size on the monitor, {width, height};
 // - frame: the monitor's rectangle in the picture's pixels, {x, y, width,
 //   height};
@@ -714,6 +721,17 @@ export function wallpaperFrame(image, screen, position = "fill") {
     if (!POSITIONS.includes(position)) {
         throw new Error(`unknown wallpaper position: ${position}`);
     }
+    if (position === "stretch") {
+        return {
+            scale: screen.width / image.width,
+            scaleY: screen.height / image.height,
+            shown: { width: screen.width, height: screen.height },
+            frame: { x: 0, y: 0, width: image.width, height: image.height },
+            visible: { x: 0, y: 0, width: image.width, height: image.height },
+            trimmed: { top: 0, bottom: 0, left: 0, right: 0 },
+            bars: { x: 0, y: 0 },
+        };
+    }
     const fit = position === "fit";
     const scale = (fit ? Math.min : Math.max)(screen.width / image.width, screen.height / image.height);
     const width = screen.width / scale;
@@ -727,6 +745,7 @@ export function wallpaperFrame(image, screen, position = "fill") {
     const y1 = Math.min(image.height, frame.y + frame.height);
     return {
         scale,
+        scaleY: scale,
         shown: { width: image.width * scale, height: image.height * scale },
         frame,
         visible: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 },
@@ -755,6 +774,16 @@ export function framingCaption(name, image, screen, position = "fill") {
         .filter(([v]) => px(v, whole) > 0).map(([v, side]) => `${px(v, whole)} px ${side}`).join(", ");
     const t = f.trimmed;
     const bars = { x: Math.round(f.bars.x), y: Math.round(f.bars.y) };
+    // Out of shape by how much wider or taller the monitor is than the
+    // picture, to the nearest percent.
+    const wider = Math.round((f.scale / f.scaleY - 1) * 100);
+    const taller = Math.round((f.scaleY / f.scale - 1) * 100);
+    if (wider > 0) {
+        return `${size}: stretches all of it to ${w}×${h}, ${wider}% wider`;
+    }
+    if (taller > 0) {
+        return `${size}: stretches all of it to ${w}×${h}, ${taller}% taller`;
+    }
     if (bars.x > 0) {
         return `${size}: shows all of it at ${w}×${h}, with ${bars.x} px bars left and right`;
     }
@@ -801,6 +830,13 @@ export function previewLayout(image, screen, position, maxWidth, maxHeight) {
     if (f === null) {
         return null;
     }
+    if (position === "stretch") {
+        // The whole picture in the monitor's shape, as it's drawn there.
+        const k = Math.min(maxWidth / screen.width, maxHeight / screen.height);
+        const w = screen.width * k;
+        const h = screen.height * k;
+        return { width: w, height: h, image: { x: 0, y: 0, width: w, height: h }, frame: { x: 0, y: 0, width: w, height: h }, dims: [] };
+    }
     const x0 = Math.min(0, f.frame.x);
     const y0 = Math.min(0, f.frame.y);
     const x1 = Math.max(image.width, f.frame.x + f.frame.width);
@@ -839,19 +875,21 @@ export function previewCandidates(settings, dark, nowDark, drawn, home, env = ""
     return wallpaperCandidates(settings, dark, home, env);
 }
 
-// The position in effect.
-export function wallpaperPosition(settings) {
-    return settings.wallpaperPosition ?? "fill";
+// The position in effect for light or `dark`: the mode's own, else
+// wallpaperPosition, else fill.
+export function wallpaperPosition(settings, dark) {
+    return settings[dark ? "darkWallpaperPosition" : "lightWallpaperPosition"] ?? settings.wallpaperPosition ?? "fill";
 }
 
-// How Wallpaper.qml and the lock place a picture at `position`: fitted or
-// cropped, and which edge to keep, as Qt's Image fillMode and
+// How Wallpaper.qml and the lock place a picture at `position`: fitted,
+// stretched or cropped, and which edge to keep, as Qt's Image fillMode and
 // verticalAlignment take them. Qt crops from the side its alignment is
 // away from (QQuickImage::updatePaintNode), so this draws what
 // wallpaperFrame says. A picture wider than the monitor stays centered.
 export function wallpaperPlacement(position) {
     return {
         fit: position === "fit",
+        stretch: position === "stretch",
         vertical: position === "fill-top" ? "top" : position === "fill-bottom" ? "bottom" : "center",
     };
 }
@@ -863,11 +901,13 @@ export const POSITION_CHOICES = Object.freeze([
     Object.freeze({ position: "fill-top", label: "Fill, keep top" }),
     Object.freeze({ position: "fill-bottom", label: "Fill, keep bottom" }),
     Object.freeze({ position: "fit", label: "Fit whole picture" }),
+    Object.freeze({ position: "stretch", label: "Stretch to fill" }),
 ]);
 
-// The index in POSITION_CHOICES of `settings`' position.
-export function positionAt(settings) {
-    return Math.max(0, POSITION_CHOICES.findIndex(c => c.position === wallpaperPosition(settings)));
+// The index in POSITION_CHOICES of `settings`' position for light or
+// `dark`.
+export function positionAt(settings, dark) {
+    return Math.max(0, POSITION_CHOICES.findIndex(c => c.position === wallpaperPosition(settings, dark)));
 }
 
 // The index `steps` steps through POSITION_CHOICES from `at`, stopping at
