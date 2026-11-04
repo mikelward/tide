@@ -20,7 +20,7 @@ import "lib/workspaces.mjs" as Workspaces
 // opens it on its own tab, and the same key again closes it:
 // `qs -c tide ipc call switcher toggle TAB` (`launcher toggle` for Apps),
 // and the tap of Super, Hyprland's `tide:launcher` global shortcut, on
-// Workspaces. Tab and Shift+Tab move between the tabs; Escape or a click
+// Apps. Tab and Shift+Tab move between the tabs; Escape or a click
 // on the backdrop closes it. Its quick actions take
 // screenshots, run the session actions, open the settings panel, flip Do
 // not disturb, keep awake and presenter mode, and reload the shell, and Ctrl+Enter opens an
@@ -366,13 +366,13 @@ PanelWindow {
     // The mock's backdrop: black at 35%.
     color: Qt.rgba(0, 0, 0, 0.35)
 
-    // The tap of Super (SPEC.md §8.2), once the pinned Hyprland passes the
-    // tap checks: the switcher on Workspaces.
+    // The tap of Super (SPEC.md §8.2), which conf binds from Hyprland 0.57:
+    // the launcher, the switcher on Apps, as Super+Space opens it.
     GlobalShortcut {
         appid: "tide"
         name: "launcher"
-        description: "Open or close the switcher on its Workspaces tab"
-        onPressed: root.toggle("workspaces")
+        description: "Open or close the launcher: the switcher on its Apps tab"
+        onPressed: root.toggle("apps")
     }
 
     // Quickshell scans the desktop entries when DesktopEntries is first

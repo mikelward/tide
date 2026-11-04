@@ -284,7 +284,7 @@ gives the greeter the same layout badge as the lock.
 | R11 | Labeled clocks for America/Los_Angeles, America/New_York, Europe/London | fixed place labels `SF` / `NYC` / `LON` by default; tzdata abbreviations (PDT/PST …), **not** CLDR, in the popover or on request (§7.3) | shell |
 | R12 | Local clock shows the date | `MMM d` in place of a label | shell |
 | R13 | Urgency on the workspace widget | Hyprland `urgent` on toplevel/workspace, plus attention derived from notifications, since Chrome can't flag urgency on Wayland (§14) | native + shell |
-| R14 | Tap Super for the switcher | a release bind on `SUPER_L` → a Hyprland global shortcut → Quickshell `GlobalShortcut`. Fixed only on Hyprland main (after 0.56.2); `Super+Space` until the pinned version has it (§8) | native + shell |
+| R14 | Tap Super for the launcher | a release bind on `SUPER_L` → a Hyprland global shortcut → Quickshell `GlobalShortcut`. Fixed in Hyprland 0.57.0; `conf` binds it only from 0.57, and `Super+Space` before (§8) | native + shell |
 | R15 | Fuzzy search of `.desktop` apps | `DesktopEntries` + our scorer | shell |
 | R16 | Quick actions | a built-in action list | shell |
 | R16a | Named workspaces, with standing ones and home (`in` by default) first | Hyprland's `name:` workspaces, home kept by a `persistent` workspace rule; the shell's name prompt (§6.5) | native + shell |
@@ -1495,7 +1495,7 @@ with new keys in **bold**:
 
 | Keys | Action |
 |---|---|
-| **tap `Super`** | the switcher, on its Workspaces tab (§8) |
+| **tap `Super`** | the switcher, on its Apps tab: the launcher, as `Super+Space` (§8) |
 | `Super+Space` | the switcher, on its Apps tab: the launcher |
 | **`Super+Tab`** | flip between home and the workspace you last used: from any other workspace it goes to home, and from home back to the last other one, so presses toggle |
 | **`Super+A`** | the switcher, on its Attention tab: every window wanting attention, on any workspace, most recent first; Enter goes there |
@@ -2043,7 +2043,7 @@ See [`switcher.png`](docs/mocks/switcher.png).
     clipboard history, reload shell. Enter runs one, as on Apps; a power
     action asks there when something blocks it. It has no key of its own:
     `Tab` and `Shift+Tab` reach it.
-- **Each key opens it on its own tab:** a tap of `Super` on Workspaces, `Super+Space` on Apps, `Super+A` on Attention (§6.6).
+- **Each key opens it on its own tab:** a tap of `Super` and `Super+Space` on Apps, `Super+A` on Attention (§6.6). Workspaces has no key of its own: `Tab` reaches it.
   The same key again, or `Esc`, closes it; another tab's key moves to
   that tab.
   - `conf`'s keys run `qs -c tide ipc call switcher toggle TAB`, and
@@ -2073,15 +2073,15 @@ See [`switcher.png`](docs/mocks/switcher.png).
 - **Open.** `Super+Space`, or `Tab` from another tab.
   - The tap of `Super` is a release bind on `SUPER_L` that fires a Hyprland
     global shortcut, `tide:launcher`, handled by Quickshell's
-    `GlobalShortcut`; it opens the switcher on Workspaces. That is faster
-    than spawning `qs ipc` per keypress.
+    `GlobalShortcut`; it opens the switcher on Apps, as on tilemo and
+    tileco. That is faster than spawning `qs ipc` per keypress.
   - **Caveat:** on Hyprland 0.56.x a release bind on `SUPER_L` fires on
     *every* Super release, including after `Super+T`. The keybind refactor
-    that fixes this (hyprwm/Hyprland#15568, then #15904) landed on main after
-    0.56.2.
-  - So M3 ships `Super+Space` and turns the tap on only once the pinned
-    Hyprland passes three checks: `Super+T`, `Super`+drag and `Super`+click
-    must not open the switcher.
+    that fixes this (hyprwm/Hyprland#15568, then #15904) is in 0.57.0.
+  - So `conf` binds the tap only when `hl.version()` is 0.57 or later. On
+    0.56 the tap does nothing, and `Super+Space` opens the launcher. Still
+    to check on a real session: `Super+T`, `Super`+drag and `Super`+click
+    must not open it.
 - **Where.** Centered near the top of the focused monitor, over a dimmed
   backdrop. Keyboard focus is exclusive while it's open.
 - **What it searches.**
@@ -4484,7 +4484,7 @@ light/dark switch.
 | Dvorak missing at login | the password "doesn't work" | the greeter uses the session layout and shows a badge |
 | Hyprland config breaks on upgrade | red config-error banner | pinned version, Lua config, CI loads it, upgrades as their own PRs |
 | Tray icon missing | an app started before the tray watcher | the shell (the watcher) is ordered before autostart |
-| `Super` tap misfires | the switcher opens after every `Super+<key>` on Hyprland 0.56.x | `Super+Space` until the pinned Hyprland has the keybind fix and passes the tap checks (§8) |
+| `Super` tap misfires | the launcher opens after every `Super+<key>` on Hyprland 0.56.x | `conf` binds the tap only from Hyprland 0.57, which has the keybind fix; `Super+Space` before (§8) |
 | Dark-on-dark focus hard to see | can't tell which terminal is focused | dim strength is a setting; 0.1 is the next step |
 | Sharing an ultrawide | viewers get a letterboxed strip | the 16:9 area and window-first default in the picker |
 | "Show in folder" opens the wrong file manager | Dolphin and Nautilus both claim `FileManager1` | a user-level activation file → a session-bound unit with a desktop-aware launcher: Nautilus in tide, Dolphin in Plasma, one session at a time; `doctor` checks (§16.2) |
@@ -4511,7 +4511,7 @@ are what "done" means.
 |---|---|---|
 | **M1** | This spec + mocks | agreed; open questions answered |
 | **M2** | Session skeleton + layouts | `setup` installs a session selectable from the current display manager. `doctor` reports no duplicate owners. All four layouts and the single-window rule work per workspace on an ultrawide and on the laptop panel. The focus guard follows §14.1, including each case in §14.2. The Hyprland config is Lua and CI-loaded. Shell memory is measured. |
-| **M3** | Bar + launcher | the bar shows every state in `bar.png` from live data: tray menus, clocks with correct labels and popover abbreviations across a DST fixture, urgency end to end from a kitty bell and from a Chat notification. `Super+Space` opens the launcher (tap-`Super` too, once the pinned Hyprland passes the tap checks), and fuzzy search and quick actions work. |
+| **M3** | Bar + launcher | the bar shows every state in `bar.png` from live data: tray menus, clocks with correct labels and popover abbreviations across a DST fixture, urgency end to end from a kitty bell and from a Chat notification. `Super+Space` opens the launcher (tap-`Super` too, from Hyprland 0.57), and fuzzy search and quick actions work. |
 | **M4** | Notifications, OSD, screenshots | notifications and history survive a shell restart. DND is automatic while sharing a screen or region, and off for a window share. The OSD works. The screen and window screenshots work, including "the window before the launcher"; the frozen region mode follows after the MVP. |
 | **M5** | Idle, lock, login | the idle timeline works, including through a Meet call. Lock via key, idle, suspend and lid. Crash recovery is tested. The greetd greeter shares the lock component. The keyring unlocks at login. The old sway, waybar, swaync, fuzzel and hyprlock configs are deleted from `conf`. |
 | **M6** | Screen sharing | a Meet share of a window, a 16:9 area and a whole screen, from Chrome; restore tokens where Chrome asks for them; the privacy pill and mic mute. |
@@ -5115,8 +5115,8 @@ Decided in review of this spec:
   them, holding mail, chat, calendar and music; a window opened on home
   asks for a workspace, and Esc closes it;
   an empty workspace is removed once you leave it (§6.5).
-- **One switcher:** a tap of `Super` opens it on the workspace list;
-  `Super+Space` and `Super+A` open its other tabs. `Super+Tab` flips
+- **One switcher:** a tap of `Super` or `Super+Space` opens it on the
+  launcher, `Super+A` on Attention, and `Tab` reaches the rest. `Super+Tab` flips
   between home and the last other workspace, `Super+Home` goes to home,
   and `Super+End` to the last workspace other than home (§6.6, §8).
 - **Nothing steals focus:** only what you asked for takes the keyboard (the
