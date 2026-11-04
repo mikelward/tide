@@ -241,7 +241,8 @@ PanelWindow {
         // tide ipc call settings setAppearance mode dark`, a time
         // ("07:15"), a latitude or longitude, a dimStrength (0.1), or a
         // lightWallpaper or darkWallpaper, a file or a color such as
-        // "#1a1d2e" ("" for the default). Answers why not, or "".
+        // "#1a1d2e" ("" for the default), or a wallpaperPosition (fill,
+        // fill-top, fill-bottom or fit). Answers why not, or "".
         function setAppearance(key: string, value: string): string {
             if (key === "latitude" || key === "longitude") {
                 const c = Appearance.parseCoordinate(key, value);
@@ -2057,6 +2058,7 @@ PanelWindow {
                                             screenName: modelData.name
                                             screenWidth: modelData.width
                                             screenHeight: modelData.height
+                                            position: Appearance.wallpaperPosition(appearance.settings)
                                             onFailed: failedPath => {
                                                 if (failedPath === wallpaper.previewPath) {
                                                     wallpaper.tried++;
@@ -2064,6 +2066,58 @@ PanelWindow {
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        // How a picture is placed, light and dark alike
+                        // (§15), which ‹ and › step through.
+                        Item {
+                            id: positionRow
+
+                            readonly property int at: Appearance.positionAt(appearance.settings)
+
+                            width: appearance.width
+                            implicitHeight: 32
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Wallpaper position"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+
+                                StepButton {
+                                    name: "go-previous-symbolic"
+                                    value: positionRow.at
+                                    next: Appearance.steppedPositionAt(positionRow.at, -1)
+                                    onActivated: appearance.set("wallpaperPosition", Appearance.POSITION_CHOICES[next].position)
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 140
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: Appearance.POSITION_CHOICES[positionRow.at].label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                StepButton {
+                                    name: "go-next-symbolic"
+                                    value: positionRow.at
+                                    next: Appearance.steppedPositionAt(positionRow.at, 1)
+                                    onActivated: appearance.set("wallpaperPosition", Appearance.POSITION_CHOICES[next].position)
                                 }
                             }
                         }

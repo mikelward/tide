@@ -771,7 +771,8 @@ shell_loaded() {
 # runs it, as $after_load.
 written_settings() {
     i=0
-    until test -e "$wallpaper_record" && test -z "$(cat "$wallpaper_record")"; do
+    # None is an empty line, then the position: fill, with none set.
+    until test -e "$wallpaper_record" && test "$(cat "$wallpaper_record")" = "$(printf '\nfill')"; do
         if waited "the shell didn't record no wallpaper for the lock in $wallpaper_record" "$i"; then
             exit 1
         fi
@@ -1904,8 +1905,9 @@ rm "$clocks_local" || exit 1
 echo "ok: the lock names a clocks.local.json it can't take, and keeps its clock's settings"
 echo "ok: the lock names a wallpaper record it can't take"
 if test -n "${TIDE_LOCK_PASSWORD:-}"; then
-    # A wallpaper for the lock to draw, blurred, as it unlocks: a picture
-    # it can't load, or an effect it can't make, fails the run.
+    # A wallpaper for the lock to draw, blurred and framed by its position,
+    # as it unlocks: a picture it can't load, or an effect it can't make,
+    # fails the run.
     "$python_path" -c 'import struct, sys, zlib
 def chunk(kind, data):
     return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
@@ -1913,7 +1915,7 @@ rows = b"".join(b"\x00" + b"\x40\x80\xc0" * 2 for _ in range(2))
 with open(sys.argv[1], "wb") as f:
     f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 2, 0, 0, 0))
             + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))' "$tmp/home/wallpaper.png" || exit 1
-    printf '%s\n' "$tmp/home/wallpaper.png" >"$wallpaper_record" || exit 1
+    printf '%s\nfill-top\n' "$tmp/home/wallpaper.png" >"$wallpaper_record" || exit 1
     unlock
 else
     echo "$prog: no TIDE_LOCK_PASSWORD, so the lock isn't unlocked; CI unlocks it" >&2

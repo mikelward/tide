@@ -46,6 +46,9 @@ Item {
     property string wallpaper: ""
     // A color wallpaper, #rrggbb, drawn darkened instead (no blur), or "".
     property string wallpaperColor: ""
+    // How the picture is placed, as the shell places it (Appearance.POSITIONS).
+    property string wallpaperPosition: "fill"
+    readonly property var wallpaperPlacement: Appearance.wallpaperPlacement(wallpaperPosition)
     // The line under the field; the greeter says which session is starting.
     property string status: Lock.statusText(lockState)
     // The last power action's trouble, if any (Lock.powerMessage).
@@ -219,7 +222,11 @@ Item {
                 anchors.fill: parent
                 visible: false
                 source: face.wallpaper === "" ? "" : Appearance.fileUrl(face.wallpaper)
-                fillMode: Image.PreserveAspectCrop
+                // Framed as Wallpaper.qml frames it; a picture fitted whole
+                // has the gradient in its bars.
+                fillMode: face.wallpaperPlacement.fit ? Image.PreserveAspectFit : Image.PreserveAspectCrop
+                horizontalAlignment: Image.AlignHCenter
+                verticalAlignment: face.wallpaperPlacement.vertical === "top" ? Image.AlignTop : face.wallpaperPlacement.vertical === "bottom" ? Image.AlignBottom : Image.AlignVCenter
                 asynchronous: true
                 sourceSize.width: face.width
                 sourceSize.height: face.height

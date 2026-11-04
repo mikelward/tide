@@ -23,6 +23,11 @@ Singleton {
     property string path: ""
     // The color to fill with, as #rrggbb, or "" for none or a file.
     property string color: ""
+    // How a picture is placed (Appearance.POSITIONS), for light and dark.
+    readonly property string position: Appearance.wallpaperPosition(AppearanceData.settings)
+    // What show() last drew, a file, a color or "", once it has.
+    property string shown: ""
+    property bool showing: false
     // What the shell found it couldn't draw (Wallpaper.qml), a corrupt
     // image say, passed over for the next until the candidates change.
     property var undrawable: []
@@ -35,6 +40,12 @@ Singleton {
     onCandidatesChanged: {
         root.undrawable = [];
         root.find();
+    }
+    // The lock frames the picture as the shell does.
+    onPositionChanged: {
+        if (root.showing) {
+            root.writeRecord();
+        }
     }
 
     // Passes over `path`, the one drawn, for the next candidate: Image
@@ -78,15 +89,22 @@ Singleton {
 
     // Draws `wallpaper`, a file or a color, or none, and records it for the
     // lock: each time, not only on a change, so a shell restarted with none
-    // still clears the last shell's. One that can't be recorded is logged;
-    // the lock shows the last one recorded, or none.
+    // still clears the last shell's.
     function show(wallpaper) {
         root.color = Appearance.wallpaperColor(wallpaper);
         root.path = root.color === "" ? wallpaper : "";
+        root.shown = wallpaper;
+        root.showing = true;
+        root.writeRecord();
+    }
+
+    // Records what's drawn, and its position, for the lock. One that can't
+    // be recorded is logged; the lock shows the last one recorded, or none.
+    function writeRecord() {
         if (root.runtimeDir === "") {
             return;
         }
-        const text = Appearance.wallpaperRecord(wallpaper);
+        const text = Appearance.wallpaperRecord(root.shown, root.position);
         if (record.readNow() === text) {
             return;
         }
