@@ -2757,7 +2757,8 @@ today's `hypridle.conf`:
     is the file a shell first finds, if there's no record yet. A shell
     whose record says something other than the file restarts hypridle.
 - **Suspend on AC** is a setting too, off by default: `suspendOnAC`, true
-  or false, in the same files, and a switch on the Idle page.
+  or false, in the same files, and the Idle page's "Sleep when plugged in"
+  switch.
   - The shell writes it to `~/.config/hypr/tide-idle-suspend.conf` as
     `$tide_idle_suspend_on_ac`, 1 or 0, and `tide idle-suspend` reads that
     line. With it on, it suspends without asking UPower.
@@ -5278,7 +5279,7 @@ Decided in review of this spec:
 - **Fonts:** Inter for UI and Ubuntu Mono for code (§15).
 - **Suspend on AC:** off by default. After idle the displays just turn
   off; on battery it suspends after 30 minutes (§10). The Idle page's
-  Suspend on AC turns it on.
+  "Sleep when plugged in" turns it on.
 - **File manager:** Nautilus, with yazi kept for keyboard use (§16.2).
 - **The old stack:** once M5 lands, the sway config and the
   waybar/swaync/fuzzel/hyprlock configs are deleted from `conf`. KDE Plasma

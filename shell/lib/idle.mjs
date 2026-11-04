@@ -8,17 +8,17 @@ import { jsonError } from "./clocks.mjs";
 // The steps, in the timeline's order: each one's setting, what the Idle
 // page calls it, and the hypridle variable it's written to.
 export const STEPS = Object.freeze([
-    Object.freeze({ key: "dim", label: "Dim the screen", variable: "tide_idle_dim" }),
+    Object.freeze({ key: "dim", label: "Dim screens", variable: "tide_idle_dim" }),
     Object.freeze({ key: "lock", label: "Lock", variable: "tide_idle_lock" }),
-    Object.freeze({ key: "displaysOff", label: "Turn off displays", variable: "tide_idle_displays_off" }),
-    Object.freeze({ key: "suspend", label: "Suspend, on battery", variable: "tide_idle_suspend" }),
+    Object.freeze({ key: "displaysOff", label: "Screens off", variable: "tide_idle_displays_off" }),
+    Object.freeze({ key: "suspend", label: "Sleep (on battery)", variable: "tide_idle_suspend" }),
 ]);
 
 // The switches, after the steps: each one's setting, what the Idle page
 // calls it, and the variable it's written to, as 1 or 0. hypridle doesn't
 // read them; tide idle-suspend does, from its own file (suspendConf).
 export const SWITCHES = Object.freeze([
-    Object.freeze({ key: "suspendOnAC", label: "Suspend on AC too", variable: "tide_idle_suspend_on_ac" }),
+    Object.freeze({ key: "suspendOnAC", label: "Sleep when plugged in", variable: "tide_idle_suspend_on_ac" }),
 ]);
 
 // The settings' names, in the page's order.
