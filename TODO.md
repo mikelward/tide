@@ -7,6 +7,12 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **`Super+PgUp`/`PgDn` pass over a workspace whose only windows are
+  minimized** (2026-11-04), as over an empty one, since there's nothing to
+  see there and Hyprland has no window on it (§6.7); `Super+Shift+PgUp`/
+  `PgDn` still take the window to the very next, empty or not. The same on
+  tilemo and tileco. The alternative is counting minimized windows, as the
+  bar's tray does. Reversible: conf's `with_windows` in `hyprland.lua`.
 - **A local `workspaceSettings` replaces the shared one whole**
   (2026-11-04), as the lists do, rather than merging per workspace: the
   page copies the settings in effect on its first change, so a machine's
