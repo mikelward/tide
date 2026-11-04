@@ -646,7 +646,7 @@ picker_opened='until test -e "$XDG_RUNTIME_DIR/picker-open"; do sleep 0.1; done'
 # picked CHAR: the picker opens, takes the keyboard, and copies CHAR once
 # its query is typed.
 picked() {
-    printf '%s; %s; %s; wl-copy -- %s' "$picker_opened" "$focused" "$typed" "$1"
+    printf '%s; %s; %s; tide clipboard put %s' "$picker_opened" "$focused" "$typed" "$1"
 }
 settings_ran="$ran; $mouse_shown; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor; $(picked é)"
 # Then the share picker opens on tide-share-picker's pipe, takes the
@@ -755,7 +755,7 @@ case_8() {
 stubs "$tmp/picker-wrong" "exit 0" "  INFO: Configuration Loaded" ":" "$ran; $mouse_shown; $settings_opened; $focused; $typed; tide launch -- nm-connection-editor; $(picked á); $(shared '[SELECTION]r/window:7')"
 run "$tmp/picker-wrong"
 check "a picker that copies the wrong character fails" test "$code" -ne 0
-check "and says what it copied" contains "$out" "the picker should copy é with \`wl-copy -- é\`; it ran \`wl-copy -- á\`"
+check "and says what it copied" contains "$out" "the picker should copy é with \`tide clipboard put é\`; it ran \`tide clipboard put á\`"
 }
 
 case_9() {
@@ -1195,11 +1195,11 @@ check "or with two of them run together" test "$code" -eq 2
 }
 
 case_57() {
-stubs "$tmp/title-warns" "exit 0" "  WARN qml: tide: bar title: hyprctl activewindow gave no window; the title waits for the next focus change
+stubs "$tmp/title-warns" "exit 0" "  WARN qml: tide: focus: hyprctl activewindow gave no window; the focused window is known at the next focus change
 $loaded"
 run "$tmp/title-warns"
-check "a shell whose title can't read hyprctl fails" test "$code" -ne 0
-check "and says what it said" contains "$out" "tide: bar title: hyprctl activewindow gave no window"
+check "a shell whose focus tracking can't read hyprctl fails" test "$code" -ne 0
+check "and says what it said" contains "$out" "tide: focus: hyprctl activewindow gave no window"
 }
 
 case_58() {

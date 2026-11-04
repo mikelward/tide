@@ -108,17 +108,17 @@ if test "$(systemctl --user is-active tide-lock-fallback.service 2>&1)" = failed
     problem "the fallback lock failed too (tide-lock-fallback.service is failed), so the session may not have locked: \`journalctl --user -u tide-lock-fallback.service\` says why, and \`systemctl --user reset-failed tide-lock-fallback.service\` clears it once that's fixed"
 fi
 
-# The clipboard history behind Super+C (§8.4): tide-clipboard.service
+# The clipboard history behind Super+V (§8.4): tide-clipboard.service
 # hands each copy to cliphist. Without either, the picker's Clipboard tab
 # says so only when it's opened. $TIDE_CLIPHIST stands in for cliphist in
 # the tests.
 cliphist=${TIDE_CLIPHIST:-cliphist}
 if ! command -v "$cliphist" >/dev/null 2>&1; then
-    problem "cliphist isn't installed, so Super+C keeps no clipboard history: install the cliphist package (scripts' \`setup\` does), then \`systemctl --user restart tide-clipboard.service\`"
+    problem "cliphist isn't installed, so Super+V keeps no clipboard history: install the cliphist package (scripts' \`setup\` does), then \`systemctl --user restart tide-clipboard.service\`"
 fi
 state=$(systemctl --user is-active tide-clipboard.service 2>&1)
 if test "$state" != active; then
-    problem "tide-clipboard.service is ${state:-not active}, so what you copy doesn't reach Super+C's history: \`systemctl --user enable --now tide-clipboard.service\`, and \`journalctl --user -u tide-clipboard.service\` if it doesn't stay up"
+    problem "tide-clipboard.service is ${state:-not active}, so what you copy doesn't reach Super+V's history: \`systemctl --user enable --now tide-clipboard.service\`, and \`journalctl --user -u tide-clipboard.service\` if it doesn't stay up"
 fi
 
 # Quickshell. tide-shell runs waybar when qs is too old for tide's shell,

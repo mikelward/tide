@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# tide clipboard: the clipboard history behind the picker on Super+C
+# tide clipboard: the clipboard history behind the picker on Super+V
 # (SPEC.md §8.4), kept by cliphist.
 #
 #   tide clipboard store [--max-items N]
@@ -28,7 +28,13 @@
 #
 #   tide clipboard copy ID
 #
-#     Puts entry ID back on the clipboard (`cliphist decode | wl-copy`).
+#     Puts entry ID back on the clipboard (`cliphist decode | wl-copy`),
+#     and exits once it's there, though wl-copy's child stays to serve it.
+#
+#   tide clipboard put TEXT
+#
+#     Puts TEXT on the clipboard, as copy does: the picker's Characters
+#     tab.
 #
 #   tide clipboard delete ID
 #
@@ -50,6 +56,7 @@ usage() {
     echo "usage: $prog store [--max-items N]" >&2
     echo "       $prog list" >&2
     echo "       $prog copy ID" >&2
+    echo "       $prog put TEXT" >&2
     echo "       $prog delete ID" >&2
     echo "       $prog wipe [--notify]" >&2
     exit 2
@@ -172,28 +179,56 @@ list() {
     exit 1
 }
 
+# Two files on the runtime directory's tmpfs, $tmp and $errs, removed at
+# exit, for `sub`.
+temporaries() {
+    if ! tmp=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/tide-clipboard.XXXXXX") ||
+        ! errs=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/tide-clipboard.XXXXXX"); then
+        echo "$prog $1: couldn't make a temporary file" >&2
+        rm -f "${tmp:-}"
+        exit 1
+    fi
+    trap 'rm -f "$tmp" "$errs"' EXIT
+}
+
+# wl-copy with its arguments, its stdin this one's, its stderr in $errs:
+# exits 1, saying why, for `sub`, when it fails. Its stderr goes to a file,
+# not $(...): once it owns the clipboard it forks, and the child keeps
+# stderr open until the clipboard is replaced (wl-copy.c's
+# did_set_selection_callback, 2.2.1), so a pipe would wait until then, and
+# so would the picker's paste, which waits for this to exit.
+wl_copy() {
+    _sub=$1
+    shift
+    if ! wl-copy "$@" 2>"$errs"; then
+        echo "$prog $_sub: wl-copy failed: $(cat "$errs")" >&2
+        exit 1
+    fi
+}
+
 copy() {
     test $# -eq 1 || usage
     entry_id "$1"
     need cliphist cliphist
     need wl-copy wl-clipboard
-    # Through a file on the runtime directory's tmpfs, so both halves'
-    # failures are seen: plain sh has no pipefail.
-    if ! tmp=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/tide-clipboard.XXXXXX"); then
-        echo "$prog copy: couldn't make a temporary file" >&2
-        exit 1
-    fi
-    trap 'rm -f "$tmp"' EXIT
+    # Through a file, so both halves' failures are seen: plain sh has no
+    # pipefail.
+    temporaries copy
     # The ID on stdin, as `list` printed it: cliphist 0.4.0's decode takes
     # no argument, and later ones read stdin when given none.
     if ! err=$(printf '%s\t\n' "$1" | cliphist decode 2>&1 >"$tmp"); then
         echo "$prog copy: cliphist couldn't find entry $1: $err" >&2
         exit 1
     fi
-    if ! err=$(wl-copy <"$tmp" 2>&1); then
-        echo "$prog copy: wl-copy failed: $err" >&2
-        exit 1
-    fi
+    wl_copy copy <"$tmp"
+}
+
+# TEXT onto the clipboard, as the picker's Characters tab copies one.
+put() {
+    test $# -eq 1 || usage
+    need wl-copy wl-clipboard
+    temporaries put
+    wl_copy put -- "$1"
 }
 
 delete() {
@@ -235,6 +270,7 @@ case "${1:-}" in
     store) shift; store "$@" ;;
     list) shift; list "$@" ;;
     copy) shift; copy "$@" ;;
+    put) shift; put "$@" ;;
     delete) shift; delete "$@" ;;
     wipe) shift; wipe "$@" ;;
     *) usage ;;

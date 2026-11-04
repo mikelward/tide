@@ -589,7 +589,7 @@ load() {
     # The commands' inputs are fixed (the default zones, $TZ, the system's
     # tzdata; the stand-ins' answers), so anything the shell's commands
     # warn of is a failure.
-    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl)|replay|tell|apply)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl|keyboards)" "$log" >"$tmp/reports"; then
+    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|focus|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl)|replay|tell|apply)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl|keyboards)" "$log" >"$tmp/reports"; then
         echo "FAIL: $_what loaded, but its commands warned:" >&2
         cat "$tmp/reports" >&2
         exit 1
@@ -1438,11 +1438,9 @@ launch() {
     fi
     ipc call settings close >/dev/null || exit 1
     # The picker (SPEC.md §8.4): its Characters tab reads the installed
-    # character list, and "e acute" and Enter copy é, through a stand-in
-    # wl-copy that keeps its arguments.
+    # character list, and "e acute" and Enter copy é with `tide clipboard
+    # put é`, which the stand-in tide keeps.
     _what="the picker"
-    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s/copied"\n' "$tmp" >"$tmp/bin/wl-copy" || exit 1
-    chmod +x "$tmp/bin/wl-copy" || exit 1
     _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
     ipc call picker open characters >/dev/null || exit 1
     focused "$_focus"
@@ -1451,7 +1449,7 @@ launch() {
 " >"$tmp/wtype.log" 2>&1
     typed $? "the picker"
     i=0
-    until test -s "$tmp/copied"; do
+    until grep -q '^clipboard put ' "$tmp/launched" 2>/dev/null; do
         if waited "the picker didn't copy é" "$i"; then
             grep -v '^\[' "$log" >&2
             exit 1
@@ -1459,9 +1457,9 @@ launch() {
         sleep 0.1
         i=$((i + 1))
     done
-    _copied=$(cat "$tmp/copied")
-    if test "$_copied" != "-- é"; then
-        echo "FAIL: the picker should copy é with \`wl-copy -- é\`; it ran \`wl-copy $_copied\`" >&2
+    _copied=$(grep '^clipboard put ' "$tmp/launched")
+    if test "$_copied" != "clipboard put é"; then
+        echo "FAIL: the picker should copy é with \`tide clipboard put é\`; it ran \`tide $_copied\`" >&2
         exit 1
     fi
     share

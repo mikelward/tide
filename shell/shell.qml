@@ -61,7 +61,7 @@ ShellRoot {
     // The network prompt (see AgentData.qml), which does the same.
     AgentPrompt {}
 
-    // The clipboard and characters picker on Super+C, which does the same.
+    // The clipboard and characters picker on Super+V, which does the same.
     PickerWindow {}
 
     // The screen-share picker, for tide-share-picker, which does the same.

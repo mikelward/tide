@@ -1,7 +1,7 @@
 // Tests for dispatch.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, moveWindowToNamed, closeWindow, minimizeWindow, sendWindowTo, floatWindow } from "./dispatch.mjs";
+import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, moveWindowToNamed, closeWindow, minimizeWindow, sendWindowTo, floatWindow, sendShortcut } from "./dispatch.mjs";
 
 test("a Lua config gets hl.dsp calls", () => {
     assert.equal(focusWorkspace(3, true), "hl.dsp.focus({ workspace = 3 })");
@@ -91,4 +91,12 @@ test("the name prompt's move goes through conf's move, which keeps the window's 
     assert.equal(moveWindowToNamed("0x55aa01", "docs", false), "movetoworkspace name:docs,address:0x55aa01");
     assert.throws(() => moveWindowToNamed("x) os.exit(", "docs", true), /not a window address/);
     assert.throws(() => moveWindowToNamed("55aa01", "a\nb", true), /not a workspace name/);
+});
+
+test("the picker's paste sends the window it opened over a shortcut, in either config", () => {
+    assert.equal(sendShortcut("CTRL", "V", "55AA01", true), 'hl.dsp.send_shortcut({ mods = "CTRL", key = "V", window = "address:0x55aa01" })');
+    assert.equal(sendShortcut("CTRL SHIFT", "V", "0x55aa01", false), "sendshortcut CTRL SHIFT, V, address:0x55aa01");
+    assert.throws(() => sendShortcut("CTRL", "V", "not-hex", true), /not a window address/);
+    assert.throws(() => sendShortcut('CTRL" })', "V", "55aa01", true), /not modifiers/);
+    assert.throws(() => sendShortcut("CTRL", "V, x", "55aa01", false), /not a key/);
 });

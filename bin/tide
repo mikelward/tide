@@ -179,9 +179,9 @@
 #     switches to this machine and away. Exits 1, saying why, if it can't
 #     read the input devices from /sys or udev's data from /run/udev.
 #
-#   tide clipboard store | list | copy ID | delete ID | wipe
+#   tide clipboard store | list | copy ID | put TEXT | delete ID | wipe
 #
-#     The clipboard history behind the picker on Super+C (SPEC.md §8.4);
+#     The clipboard history behind the picker on Super+V (SPEC.md §8.4);
 #     see tide-clipboard.
 #
 #   tide doctor
@@ -210,7 +210,7 @@ usage() {
     echo "       $prog idle-suspend [--unplugged | --cancel]" >&2
     echo "       $prog prompt-focus" >&2
     echo "       $prog keyboards" >&2
-    echo "       $prog clipboard store | list | copy ID | delete ID | wipe" >&2
+    echo "       $prog clipboard store | list | copy ID | put TEXT | delete ID | wipe" >&2
     echo "       $prog doctor" >&2
     exit 2
 }

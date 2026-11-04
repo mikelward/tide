@@ -80,7 +80,7 @@ func TestRunClassesOfALauncherScript(t *testing.T) {
 }
 
 // scripts' runenv runs its arguments, so the program past it is the one
-// granted, and looked up: Super+Shift+C's `runenv google-chat` is
+// granted, and looked up: Super+C's `runenv google-chat` is
 // google-chat's --app window's.
 func TestRunenvIsAWrapper(t *testing.T) {
 	for _, words := range []string{"runenv google-chat", "/home/user/scripts/runenv google-chat", "env runenv google-chat"} {

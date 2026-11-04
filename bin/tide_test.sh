@@ -277,7 +277,7 @@ run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_PROGRAM=thunderbird FAKE_CLASSES=
 check "without --app, it names the program past wrappers and its desktop entries' classes" \
     python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); assert r["apps"] == ["thunderbird", "org.mozilla.Thunderbird"], r' "$log.request"
 # A key bound to a launcher script grants '*', which names no app, so the
-# prompt is told the script's own classes: Super+Shift+C's `--app '*' --
+# prompt is told the script's own classes: Super+C's `--app '*' --
 # runenv google-chat` is google-chat's, one of home's apps, not a window
 # to ask a workspace for (SPEC.md §6.5).
 run XDG_RUNTIME_DIR="$tmp/prompt-runtime" FAKE_PROGRAM=google-chat FAKE_CLASSES="chrome-chat.google.com__-Default" \

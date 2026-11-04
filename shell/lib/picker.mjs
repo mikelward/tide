@@ -1,4 +1,4 @@
-// The picker on Super+C (SPEC.md §8.4): its two tabs, the clipboard
+// The picker on Super+V (SPEC.md §8.4): its two tabs, the clipboard
 // history as `tide clipboard list` prints it (cliphist's list), and the
 // character list in shell/chars/chars.tsv.
 
@@ -272,4 +272,37 @@ export function listedHistory(failed, out, errors) {
     }
     const parsed = parseHistory(out);
     return { entries: parsed.entries, error: "", warnings: parsed.errors };
+}
+
+// Terminals, by window class, which paste on Ctrl+Shift+V: their Ctrl+V
+// goes to the program running in them.
+export const TERMINALS = Object.freeze([
+    "kitty",
+    "foot",
+    "footclient",
+    "Alacritty",
+    "org.wezfurlong.wezterm",
+    "com.mitchellh.ghostty",
+    "org.kde.konsole",
+    "org.gnome.Terminal",
+    "org.gnome.Ptyxis",
+    "org.gnome.Console",
+]);
+
+// Enter's paste: the shortcut that pastes into a window of class `cls`,
+// as {mods, key} in Hyprland's spelling.
+export function pasteShortcut(cls) {
+    const c = String(cls ?? "").toLowerCase();
+    const terminal = TERMINALS.some(t => t.toLowerCase() === c);
+    return { mods: terminal ? "CTRL SHIFT" : "CTRL", key: "V" };
+}
+
+// The window Enter pastes into, {address, class}, from the focused window
+// when the picker opens (floating.mjs's windowOf of FocusData.active,
+// which is null on an empty workspace), or null for none.
+export function pasteTarget(window) {
+    if (!window || !window.address) {
+        return null;
+    }
+    return { address: window.address, class: window.class ?? "" };
 }

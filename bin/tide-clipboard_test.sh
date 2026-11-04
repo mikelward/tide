@@ -84,10 +84,24 @@ printf "systemctl %s\n" "$*" >> "$FAKE_LOG"
 printf '%s\n' "${FAKE_UNIT_STATE:-active}"
 test "${FAKE_UNIT_STATE:-active}" = active
 FAKE
+# wl-copy, as wl-clipboard's: what it's given (stdin, or the words after
+# --) goes to $FAKE_DIR/copied. With $FAKE_WLCOPY_HOLD it then leaves a
+# child holding its stderr open until the FIFO at $FAKE_WLCOPY_HOLD is
+# written, as the real one's background child keeps it while it owns the
+# clipboard (wl-copy.c's did_set_selection_callback, 2.2.1).
 cat > "$fake/wl-copy" <<'FAKE'
 #!/bin/sh
 printf "wl-copy %s\n" "$*" >> "$FAKE_LOG"
-cat > "$FAKE_DIR/copied"
+if test "${1:-}" = --; then
+    shift
+    printf '%s' "$*" > "$FAKE_DIR/copied"
+else
+    cat > "$FAKE_DIR/copied"
+fi
+if test -n "${FAKE_WLCOPY_HOLD:-}"; then
+    # Read-write, so opening it never waits for a writer.
+    (read -r _ <>"$FAKE_WLCOPY_HOLD") </dev/null >/dev/null &
+fi
 exit "${FAKE_WLCOPY_STATUS:-0}"
 FAKE
 cat > "$fake/notify-send" <<'FAKE'
@@ -98,7 +112,7 @@ chmod +x "$fake"/*
 # Only the fakes, and what sh itself needs.
 base=$tmp/base
 mkdir "$base"
-for t in cat grep mktemp rm printf; do
+for t in cat grep mktemp rm printf mkfifo timeout; do
     p=$(command -v "$t") && ln -s "$p" "$base/$t"
 done
 SAVED_PATH=$PATH
@@ -107,7 +121,7 @@ export PATH="$fake:$base" XDG_RUNTIME_DIR="$tmp"
 reset() {
     : > "$log"
     rm -f "$tmp/stored" "$tmp/deleted" "$tmp/copied"
-    unset FAKE_CLIPHIST_VERSION FAKE_NO_DB FAKE_UNIT_STATE CLIPBOARD_STATE FAKE_TYPES FAKE_WLPASTE_STATUS FAKE_CLIPHIST_STATUS FAKE_WLCOPY_STATUS
+    unset FAKE_CLIPHIST_VERSION FAKE_NO_DB FAKE_UNIT_STATE FAKE_WLCOPY_HOLD CLIPBOARD_STATE FAKE_TYPES FAKE_WLPASTE_STATUS FAKE_CLIPHIST_STATUS FAKE_WLCOPY_STATUS
 }
 
 # --- store ---------------------------------------------------------------------
@@ -236,6 +250,46 @@ for f in "$tmp"/tide-clipboard.*; do
     test -e "$f" && leftover=yes
 done
 check "copy leaves no temporary file" test "$leftover" = no
+
+# wl-copy's background child keeps its stderr while it owns the clipboard,
+# so copy mustn't wait on that pipe: the picker pastes once copy exits.
+# The child is let go after; a copy that waited would only end then.
+reset
+mkfifo "$tmp/hold"
+FAKE_WLCOPY_HOLD=$tmp/hold
+export FAKE_WLCOPY_HOLD
+# Into a file, not $(...), whose pipe the child would hold too; and
+# --foreground, so a copy that waited is stopped but the child isn't.
+timeout --foreground 10 "$cmd" copy 41 >"$tmp/out" 2>&1
+code=$?
+printf '\n' 1<>"$tmp/hold"
+check "copy returns while wl-copy's child still owns the clipboard: status $code" test "$code" -eq 0
+check "and copied the entry" test "$(cat "$tmp/copied")" = "entry 41"
+rm -f "$tmp/hold"
+
+# put: text onto the clipboard, as the picker's Characters tab copies one.
+reset
+mkfifo "$tmp/hold"
+FAKE_WLCOPY_HOLD=$tmp/hold
+export FAKE_WLCOPY_HOLD
+# Into a file, not $(...), whose pipe the child would hold too; and
+# --foreground, so a copy that waited is stopped but the child isn't.
+timeout --foreground 10 "$cmd" put "é" >"$tmp/out" 2>&1
+code=$?
+printf '\n' 1<>"$tmp/hold"
+check "put returns while wl-copy's child still owns the clipboard: status $code" test "$code" -eq 0
+check "and copied the text" test "$(cat "$tmp/copied")" = "é"
+check "with the text after --, so one starting - isn't an option" contains "$(cat "$log")" "wl-copy -- é"
+rm -f "$tmp/hold"
+reset
+FAKE_WLCOPY_STATUS=1
+export FAKE_WLCOPY_STATUS
+out=$("$cmd" put x 2>&1)
+check "a failed put exits 1" test $? -eq 1
+check "a failed put says so: $out" contains "$out" "wl-copy failed"
+reset
+out=$("$cmd" put 2>&1)
+check "put needs the text" test $? -eq 2
 
 reset
 out=$("$cmd" copy 4x1 2>&1)
