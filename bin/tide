@@ -32,8 +32,9 @@
 #     as it opens, and focus follows (the name prompt). If you move on
 #     first, the grant is canceled and the window opens where you are,
 #     unfocused, like any other.
-#     Without --workspace, a launch from the home workspace (the one
-#     ~/.config/hypr/tide-workspaces.lua names) asks the shell's name prompt
+#     Without --workspace, a launch from a workspace whose new windows ask
+#     for a name (ask_for_name in ~/.config/hypr/tide-workspaces.lua, home
+#     by default) asks the shell's name prompt
 #     for a workspace first, and waits for its answer on a FIFO in
 #     $XDG_RUNTIME_DIR, then launches there as --workspace does, still from
 #     here, in its caller's environment. One of home's apps is answered
@@ -494,7 +495,8 @@ web_app() {
     exit 127
 }
 
-# A launch from home (SPEC.md §6.5): asks the shell's name prompt for a
+# A launch from a workspace that asks for a name (SPEC.md §6.5, home by
+# default, asks_for_name): asks the shell's name prompt for a
 # workspace, and waits for its answer on a FIFO, so the app still starts
 # from here, with this caller's environment. Sets ws to the workspace
 # chosen, or exits on Esc. With no shell to ask, or no answer, it says
@@ -546,6 +548,22 @@ home_workspace() {
     line=$(grep -m 1 '^    home = ".*",$' "$file") || return 0
     line=${line#    home = \"}
     printf '%s' "${line%\",}" | sed 's/\\\(.\)/\1/g'
+}
+
+# Whether a launch from the workspace named $1 asks the name prompt first
+# (SPEC.md §6.5): it's one that tide-workspaces.lua's ask_for_name lists,
+# ignoring case, as the shell wrote it from each workspace's askForName.
+# A file from a shell before that setting lists none, and then it's home
+# that asks, as it always did. With no file, none does.
+asks_for_name() {
+    file=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/tide-workspaces.lua
+    test -r "$file" || return 1
+    if ! grep -q '^    ask_for_name = ' "$file"; then
+        test "$1" = "$(home_workspace)"
+        return
+    fi
+    sed -n -e '/^    ask_for_name = {},$/q' -e '/^    ask_for_name = {$/,/^    },$/p' "$file" |
+        sed -n 's/^        "\(.*\)",$/\1/p' | sed 's/\\\(.\)/\1/g' | grep -Fxiq -- "$1"
 }
 
 # $1 as a JSON string, for the shell's IPC: backslashes, quotes, tabs,
@@ -704,14 +722,14 @@ launch() {
     if test "$background" = yes; then
         launch_background "$@"
     fi
-    # The focused workspace, read once: home asks for a name, and the app
+    # The focused workspace, read once: one that asks for a name asks, and the app
     # gets it as TIDE_WORKSPACE otherwise.
     focused=
     focused_ok=no
     if test -z "$ws" && focused=$(focused_workspace launch); then
         focused_ok=yes
     fi
-    if test "$focused_ok" = yes && test "$focused" = "$(home_workspace)"; then
+    if test "$focused_ok" = yes && asks_for_name "$focused"; then
         ask_workspace "$@"
     fi
     if test -z "$app"; then

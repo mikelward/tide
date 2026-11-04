@@ -5,6 +5,7 @@
 
 import { jsonError } from "./clocks.mjs";
 import { isAlnum, match } from "./fuzzy.mjs";
+import { workspaceOf } from "./span.mjs";
 
 // The longest a name may be, in characters.
 export const MAX_NAME = 32;
@@ -13,13 +14,21 @@ export const MAX_NAME = 32;
 // workspace (§6.5).
 export const DEFAULT_STANDING = Object.freeze(["in", "re", "oc", "me"]);
 
-// What each setting is when no file sets it.
+// What each setting is when no file sets it. A null workspaceSettings is
+// one no file sets: then home asks for a name and nothing is pinned
+// (workspaceSettingsOf).
 export const DEFAULT_SETTINGS = Object.freeze({
     standing: DEFAULT_STANDING,
     inApps: Object.freeze([]),
     namePatterns: Object.freeze([]),
     muted: Object.freeze([]),
+    workspaceSettings: null,
 });
+
+// What a workspace's entry in workspaceSettings may set (SPEC.md §6.5):
+// whether a new window there asks for a workspace's name, and the apps
+// tide's close keys leave open there.
+export const WORKSPACE_FIELDS = Object.freeze(["askForName", "pinnedApps"]);
 
 // What a workspace's name can't hold: quotes, backslashes, `@` and control
 // characters. A name goes into Hyprland's `name:` selectors, Lua strings,
@@ -95,7 +104,14 @@ function settingsError(value) {
     }
     for (const key of Object.keys(value)) {
         if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) {
-            return `${key} isn't a setting (standing, inApps, namePatterns or muted)`;
+            return `${key} isn't a setting (standing, inApps, namePatterns, muted or workspaceSettings)`;
+        }
+        if (key === "workspaceSettings") {
+            const err = workspaceSettingsError(value[key]);
+            if (err) {
+                return err;
+            }
+            continue;
         }
         // A bad muted entry is dropped alone (checkMuted), not the file.
         if (key === "muted") {
@@ -135,6 +151,112 @@ function settingsError(value) {
         }
     }
     return null;
+}
+
+// Why `value`, a file's workspaceSettings, can't be taken, or null: an
+// object whose keys are workspaces' names, each named once, ignoring case,
+// and whose values set only WORKSPACE_FIELDS, askForName true or false and
+// pinnedApps a list of apps as inApps lists them.
+function workspaceSettingsError(value) {
+    if (!isObject(value)) {
+        return "workspaceSettings must be an object, each key a workspace's name";
+    }
+    const seen = [];
+    for (const name of Object.keys(value)) {
+        const named = `workspaceSettings: ${JSON.stringify(name)}`;
+        const checked = checkName(name);
+        if (checked.error) {
+            return `${named}: ${checked.error}`;
+        }
+        if (checked.name !== name) {
+            return `${named} has space around it`;
+        }
+        if (matchName(seen, name) !== null) {
+            return `workspaceSettings names ${JSON.stringify(name)} twice`;
+        }
+        seen.push(name);
+        const v = value[name];
+        if (!isObject(v)) {
+            return `${named} must be an object, with askForName or pinnedApps`;
+        }
+        for (const field of Object.keys(v)) {
+            if (!WORKSPACE_FIELDS.includes(field)) {
+                return `${named}: ${field} isn't a setting (askForName or pinnedApps)`;
+            }
+        }
+        if (v.askForName !== undefined && typeof v.askForName !== "boolean") {
+            return `${named}: askForName must be true or false, not ${JSON.stringify(v.askForName)}`;
+        }
+        if (v.pinnedApps !== undefined) {
+            const err = listError(`${named}: pinnedApps`, v.pinnedApps);
+            if (err) {
+                return err;
+            }
+        }
+    }
+    return null;
+}
+
+// Each workspace's settings in effect (SPEC.md §6.5): workspaceSettings
+// as the files have it, or, when neither sets it, home asking for a name.
+export function workspaceSettingsOf(settings) {
+    const ws = settings?.workspaceSettings;
+    if (ws === null || ws === undefined) {
+        return { [homeName(settings ?? {})]: { askForName: true } };
+    }
+    return ws;
+}
+
+// One workspace's settings, {askForName, pinnedApps}: its entry's, the
+// name matched ignoring case and a monitor's part read as its workspace
+// (span.mjs). A workspace with no entry, or a field the entry doesn't
+// set, doesn't ask and pins nothing.
+export function workspaceSetting(settings, name) {
+    const all = workspaceSettingsOf(settings);
+    const ws = workspaceOf(name);
+    const key = Object.keys(all).find((k) => sameName(k, ws));
+    const v = key === undefined ? {} : all[key];
+    return {
+        askForName: v.askForName === true,
+        pinnedApps: Array.isArray(v.pinnedApps) ? v.pinnedApps : [],
+    };
+}
+
+// Whether a new window on the workspace named `name`, or a launch from it,
+// asks for a workspace (askForName).
+export function asksForName(settings, name) {
+    return workspaceSetting(settings, name).askForName;
+}
+
+// The workspaces whose askForName is on, as workspaceSettings names them.
+export function askingWorkspaces(settings) {
+    const all = workspaceSettingsOf(settings);
+    return Object.keys(all).filter((k) => all[k].askForName === true);
+}
+
+// Every app a setting lists, home's and each workspace's pinned ones, for
+// the lookups of their programs' classes (homeAppPrograms).
+export function listedApps(settings) {
+    const all = workspaceSettingsOf(settings);
+    return (settings?.inApps ?? []).concat(...Object.keys(all).map((k) => all[k].pinnedApps ?? []));
+}
+
+// The workspace a window of class `cls` on the Hyprland workspace named
+// `workspace` is pinned on, or null: it is when its app is one of that
+// workspace's pinnedApps, matched as home's apps are (isHomeApp, with
+// `resolved` as there). tide's close actions leave such a window open.
+export function pinnedOn(cls, workspace, settings, resolved = {}) {
+    const ws = workspaceOf(workspace);
+    if (ws === "" || ws.startsWith("special:")) {
+        return null;
+    }
+    return isHomeApp(cls, workspaceSetting(settings, ws).pinnedApps, resolved) ? ws : null;
+}
+
+// The notification a close refused for a window pinned on `workspace`
+// says (SPEC.md §6.5), as hypr/tide/pinned.lua's says it.
+export function pinnedNotice(workspace) {
+    return { summary: "Pinned window", body: `It's pinned on ${workspace}, so it stays open.` };
 }
 
 // One file's settings: {settings} or {error}.
@@ -299,42 +421,57 @@ function classSite(cls) {
     return m ? m[2].toLowerCase() : null;
 }
 
-// The window classes an "in" app's entry matches, as RE2 patterns for a
-// Hyprland window rule (which matches the whole class, ignoring nothing).
-// Each is matched as a class the way the focus guard matches one
-// (focus.lua's same_id). `resolved` maps a program entry's app to the
-// classes `tide app-classes` found for it; a Chrome `--app` class among
-// them stands for its site, in any profile.
-export function inAppPatterns(inApps, resolved = {}) {
+// What an "in" app's entries match, in order, once each: {class} for a
+// window class, matched as the focus guard matches one (focus.lua's
+// same_id), and {site} for a site's Chrome `--app` windows, in any
+// profile. `resolved` maps a program entry's app to the classes `tide
+// app-classes` found for it; a Chrome `--app` class among them stands for
+// its site. inAppPatterns makes Hyprland's patterns of them, and conf's
+// close keys match pinned apps by them (hypr/tide/pinned.lua).
+export function appMatchers(list, resolved = {}) {
     const out = [];
-    const add = (p) => {
-        if (!out.includes(p)) {
-            out.push(p);
+    const add = (m) => {
+        if (!out.some((o) => o.class === m.class && o.site === m.site)) {
+            out.push(m);
         }
     };
-    for (const raw of inApps) {
+    for (const raw of list) {
         const e = homeAppEntry(raw);
         if (e === null) {
             continue;
         }
         if (e.kind === "url") {
-            add(sitePattern(e.host));
+            add({ site: e.host });
             continue;
         }
-        add(classPattern(e.app));
+        add({ class: e.app });
         if (e.kind === "site") {
-            add(sitePattern(e.host));
+            add({ site: e.host });
         }
         if (e.kind === "program") {
             for (const cls of resolved[e.app] ?? []) {
                 const site = classSite(cls);
                 const app = normalizeAppId(cls);
                 if (site !== null) {
-                    add(sitePattern(site));
+                    add({ site });
                 } else if (app !== "") {
-                    add(classPattern(app));
+                    add({ class: app });
                 }
             }
+        }
+    }
+    return out;
+}
+
+// The window classes an "in" app's entry matches, as RE2 patterns for a
+// Hyprland window rule (which matches the whole class, ignoring nothing):
+// appMatchers' classes and sites.
+export function inAppPatterns(inApps, resolved = {}) {
+    const out = [];
+    for (const m of appMatchers(inApps, resolved)) {
+        const p = m.site !== undefined ? sitePattern(m.site) : classPattern(m.class);
+        if (!out.includes(p)) {
+            out.push(p);
         }
     }
     return out;
@@ -442,18 +579,47 @@ export function luaString(s) {
     return out + '"';
 }
 
+// The pinned apps (SPEC.md §6.5) as conf's close keys match them
+// (hypr/tide/pinned.lua): for each workspace that pins any, in
+// workspaceSettings' order, {workspace, classes, sites}, appMatchers'
+// classes (normalized app IDs) and sites.
+export function pinnedMatchers(settings, resolved = {}) {
+    const all = workspaceSettingsOf(settings);
+    const out = [];
+    for (const name of Object.keys(all)) {
+        const matchers = appMatchers(all[name].pinnedApps ?? [], resolved);
+        if (matchers.length > 0) {
+            out.push({
+                workspace: name,
+                classes: matchers.filter((m) => m.class !== undefined).map((m) => m.class),
+                sites: matchers.filter((m) => m.site !== undefined).map((m) => m.site),
+            });
+        }
+    }
+    return out;
+}
+
 // ~/.config/hypr/tide-workspaces.lua, which conf's hyprland.lua reads as
 // data: the home workspace it makes at login and keeps, the standing
 // workspaces in order, which its workspace keys step through as the bar
-// does, and the classes its window rules send home.
+// does, the classes its window rules send home, the workspaces whose new
+// windows ask for a name, which `tide launch` reads, and each workspace's
+// pinned apps, which conf's close keys leave open.
 export function workspacesLua(settings, resolved = {}) {
-    const list = (items) => items.length === 0 ? "{}" : `{\n${items.map((i) => `        ${luaString(i)},\n`).join("")}    }`;
+    const list = (items, pad = "    ") => items.length === 0 ? "{}" : `{\n${items.map((i) => `${pad}    ${luaString(i)},\n`).join("")}${pad}}`;
+    const pinned = pinnedMatchers(settings, resolved).map((p) => "        {\n"
+        + `            workspace = ${luaString(p.workspace)},\n`
+        + `            classes = ${list(p.classes, "            ")},\n`
+        + `            sites = ${list(p.sites, "            ")},\n`
+        + "        },\n");
     return "-- Written by tide's shell from workspaces.json and workspaces.local.json\n"
         + "-- (tide SPEC.md §6.5, §16); edit those, not this.\n"
         + "return {\n"
         + `    home = ${luaString(homeName(settings))},\n`
         + `    standing = ${list(settings.standing ?? DEFAULT_STANDING)},\n`
         + `    in_apps = ${list(inAppPatterns(settings.inApps ?? [], resolved))},\n`
+        + `    ask_for_name = ${list(askingWorkspaces(settings))},\n`
+        + `    pinned = ${pinned.length === 0 ? "{}" : `{\n${pinned.join("")}    }`},\n`
         + "}\n";
 }
 
@@ -584,16 +750,18 @@ function normalizeAddress(address) {
 
 // Whether a window Hyprland describes as `client` (an object from
 // `hyprctl clients -j`) takes the name prompt as it's first focused: it's
-// on home, tiled, has a class or a title (a status popup has neither), and
-// isn't one of home's apps (SPEC.md §6.5).
-export function promptWanted(client, home, inApps, resolved = {}) {
+// on a workspace whose askForName is on (any monitor's part of it), tiled,
+// has a class or a title (a status popup has neither), and isn't one of
+// home's apps (SPEC.md §6.5). `settings` are the Workspaces settings.
+export function promptWanted(client, settings, resolved = {}) {
     if (!client || typeof client !== "object") {
         return false;
     }
     const cls = String(client.class ?? "");
     const title = String(client.title ?? "");
-    return client.workspace?.name === home && client.floating !== true
-        && !(cls === "" && title === "") && !isHomeApp(cls, inApps, resolved);
+    const ws = String(client.workspace?.name ?? "");
+    return ws !== "" && !ws.startsWith("special:") && asksForName(settings, ws) && client.floating !== true
+        && !(cls === "" && title === "") && !isHomeApp(cls, settings.inApps ?? [], resolved);
 }
 
 // The name prompt's rows for what's typed: first the typed name itself,

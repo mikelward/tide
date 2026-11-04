@@ -327,6 +327,7 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
              .config/hypr/tide/direction.lua \
              .config/hypr/tide/span.lua \
              .config/hypr/tide/focus.lua \
+             .config/hypr/tide/pinned.lua \
              .config/systemd/user/tide.service \
              .config/systemd/user/tide-lock.service \
              .config/systemd/user/tide-lock-fallback.service \

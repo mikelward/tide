@@ -22,9 +22,14 @@ and full width below that. See SPEC.md §6 for the design.
   (SPEC.md §6.5): each monitor's part's name, what a switch shows, and
   where windows go when a monitor goes and comes back.
 - `layout.lua` registers the layout and provides helpers for keybinds.
+- `pinned.lua` keeps a workspace's pinned apps open (SPEC.md §6.5): its
+  `close` is `Super+Backspace`'s, and its `shortcut`, bound to an app's
+  own close and quit keys, passes each key on to every window but a
+  pinned one.
 - `layout_test.lua` tests `geometry.lua` and `layout.lua`, the latter
   against a stub of `hl`; `direction_test.lua` tests `direction.lua`,
-  and `span_test.lua` tests `span.lua`.
+  `span_test.lua` tests `span.lua`, and `pinned_test.lua` tests
+  `pinned.lua`, against a stub of `hl` too.
 
 ## Using it
 
@@ -58,6 +63,15 @@ hl.bind("SUPER + SHIFT + Right", function() qs.move_side(1) end)
 -- Drag the master/stack edge with no key held (SPEC.md §6.6).
 hl.bind("mouse:272", qs.drag_press)
 hl.bind("mouse:272", qs.drag_release, { release = true, non_consuming = true, ignore_mods = true, locked = true })
+
+-- A workspace's pinned apps stay open (SPEC.md §6.5), from the shell's
+-- tide-workspaces.lua, which conf reads and checks first.
+local pinned = dofile(os.getenv("HOME") .. "/.config/hypr/tide/pinned.lua")
+pinned.set(dofile(os.getenv("HOME") .. "/.config/hypr/tide-workspaces.lua").pinned)
+hl.bind("SUPER + BackSpace", pinned.close)
+for _, keys in ipairs(pinned.shortcuts) do
+    hl.bind(keys, pinned.shortcut)
+end
 ```
 
 `focus_side` focuses the window to the left or right of the focused one,

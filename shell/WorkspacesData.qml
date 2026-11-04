@@ -15,8 +15,10 @@ import "lib/writes.mjs" as Writes
 
 // The Workspaces settings (SPEC.md §6.5, §16), from workspaces.json and
 // workspaces.local.json (§16.1): the standing workspaces, the first of them
-// home, and the apps that live on home. What conf's Hyprland config needs
-// of them, home's name and the classes its window rules send there, is
+// home, the apps that live on home, and each workspace's own settings.
+// What conf's Hyprland config needs of them, home's name, the classes its
+// window rules send there, the workspaces that ask for a name and each
+// one's pinned apps, is
 // written to ~/.config/hypr/tide-workspaces.lua, which hyprland.lua reads
 // as it loads, and `hyprctl eval conf_workspaces.reload()` has it read
 // again, as the shell starts too. A bad file is a notification naming it,
@@ -178,10 +180,11 @@ Singleton {
         root.wantRules();
     }
 
-    // Looks up the classes of each program in inApps not looked up yet;
-    // each answer rewrites the rules (Names.workspacesLua).
+    // Looks up the classes of each program in inApps or a workspace's
+    // pinnedApps not looked up yet; each answer rewrites the rules
+    // (Names.workspacesLua).
     function resolve() {
-        for (const p of Names.homeAppPrograms(root.settings.inApps ?? [])) {
+        for (const p of Names.homeAppPrograms(Names.listedApps(root.settings))) {
             if (root.resolved[p.app] !== undefined || root.resolving.includes(p.app)) {
                 continue;
             }
@@ -196,7 +199,7 @@ Singleton {
         root.resolving = root.resolving.filter(a => a !== app);
         // The tracker has logged why; this says what it costs.
         if (!ok) {
-            console.warn(`tide: couldn't find the window classes of ${app}, one of home's apps, so only a window named ${app} goes home`);
+            console.warn(`tide: couldn't find the window classes of ${app}, listed in the Workspaces settings, so only a window named ${app} is taken for it`);
         }
         const next = Object.assign({}, root.resolved);
         next[app] = ok ? classes.split("\n").map(c => c.trim()).filter(c => c !== "") : [];
@@ -254,6 +257,41 @@ Singleton {
 
     function removeItem(key, index, item) {
         return root.editList(key, list => Page.withoutItem(list, index, item));
+    }
+
+    // The Workspaces page's settings for one workspace (SPEC.md §16):
+    // its askForName switch, and adding or taking out a pinned app, in
+    // workspaces.local.json, as Page.editedWorkspace makes it. Each
+    // returns why it didn't, or "".
+    function setAskForName(name, on) {
+        return root.editWorkspace(name, "askForName", w => Page.withAskForName(w, on));
+    }
+
+    function addPinned(name, item) {
+        return root.editWorkspace(name, "pinnedApps", w => Page.withPinned(w, item));
+    }
+
+    function removePinned(name, index, item) {
+        return root.editWorkspace(name, "pinnedApps", w => Page.withoutPinned(w, index, item));
+    }
+
+    function editWorkspace(name, field, change) {
+        const what = `${name}'s ${field}`;
+        const sharedText = shared.readNow();
+        const localText = local.readNow();
+        const broken = [shared.broken, local.broken].filter(b => b !== "");
+        if (broken.length > 0) {
+            return `${broken[0]}; not changing ${what}`;
+        }
+        const result = Page.editedWorkspace(sharedText, localText, name, change);
+        if (result.error) {
+            return `${result.error}; not changing ${what}`;
+        }
+        const error = local.writeNow(result.text);
+        root.saveFailure = error === "" ? "" : `${error}; ${what} not saved`;
+        root.load();
+        root.report();
+        return root.saveFailure;
     }
 
     function editList(key, change) {
