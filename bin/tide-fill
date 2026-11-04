@@ -1,0 +1,165 @@
+#!/bin/sh
+#
+# tide fill: what the picker's Fill tab on Super+Shift+V lists and types
+# (SPEC.md §8.4): your snippets, and each Bitwarden login's username,
+# password and 2FA code, through rbw.
+#
+#   tide fill list
+#
+#     Prints one row per line, tab-separated: KIND, KEY, FIELD, LABEL and
+#     DETAIL. A snippet's KIND is snippet and its KEY its name; a login's
+#     is login, its rbw ID, and FIELD username, password or totp. When rbw
+#     is installed but locked, one row of KIND unlock stands for the
+#     logins. Secrets are never printed: only names, users and folders.
+#
+#     Snippets are tide's settings files snippets.json and
+#     snippets.local.json in ~/.config/tide, each an object of name to
+#     text, as {"Home address": "1 Main St\nSpringfield"}; the local
+#     file's name wins. A file that isn't such an object is said on stderr
+#     and left out.
+#
+#   tide fill type snippet NAME
+#   tide fill type login ID username|password|totp
+#
+#     Types the value into the focused window: with wtype on Hyprland,
+#     and tide-kwin-paste --type on KDE Plasma. The value goes to the
+#     typer's stdin, never its arguments, and is never put on the
+#     clipboard, so no clipboard history keeps a password.
+#
+#   tide fill unlock
+#
+#     Unlocks rbw, which asks for the master password with its pinentry.
+#
+# Exits 1, saying why, when rbw, jq or the typer fails or is missing, and
+# 2 for a bad argument.
+
+prog="tide fill"
+tab='	'
+
+usage() {
+    echo "usage: $prog list" >&2
+    echo "       $prog type snippet NAME" >&2
+    echo "       $prog type login ID username|password|totp" >&2
+    echo "       $prog unlock" >&2
+    exit 2
+}
+
+fail() {
+    echo "$prog: $1" >&2
+    exit 1
+}
+
+dir=${XDG_CONFIG_HOME:-$HOME/.config}/tide
+
+# The snippets, both files merged, as one JSON object; a file that isn't
+# an object of strings is said and left out.
+snippets() {
+    command -v jq >/dev/null 2>&1 || fail "jq isn't installed, so the snippets can't be read; install the jq package"
+    merged='{}'
+    for f in "$dir/snippets.json" "$dir/snippets.local.json"; do
+        test -e "$f" || continue
+        if ! one=$(jq -c 'if type == "object" and all(.[]; type == "string") then . else error("not an object of name to text") end' "$f" 2>&1); then
+            echo "$prog: $f: ${one#jq: error (at *): }; its snippets are left out" >&2
+            continue
+        fi
+        merged=$(printf '%s\n%s\n' "$merged" "$one" | jq -cs 'add')
+    done
+    printf '%s\n' "$merged"
+}
+
+list() {
+    test $# -eq 0 || usage
+    snippets | jq -r --arg tab "$tab" 'to_entries[] | ["snippet", .key, "text", .key, "Snippet"]
+        | map(gsub("[\t\n]"; " ")) | join($tab)'
+    command -v rbw >/dev/null 2>&1 || return 0
+    if ! rbw unlocked >/dev/null 2>&1; then
+        printf 'unlock\t-\t-\tUnlock Bitwarden\trbw asks for your master password\n'
+        return 0
+    fi
+    if ! logins=$(rbw list --fields id,name,user,folder 2>&1); then
+        fail "rbw couldn't list the logins: $logins"
+    fi
+    # awk, not read: a tab is whitespace to IFS, so read would run an
+    # empty user into the folder after it.
+    printf '%s\n' "$logins" | awk -F '\t' '
+        $1 == "" { next }
+        {
+            id = $1; name = $2; user = $3; folder = $4
+            gsub(/\n/, " ", name)
+            detail = (folder == "" ? "Bitwarden" : folder)
+            if (user != "") detail = user " · " detail
+            if (user != "") printf "login\t%s\tusername\t%s · username\t%s\n", id, name, detail
+            printf "login\t%s\tpassword\t%s · password\t%s\n", id, name, detail
+            printf "login\t%s\ttotp\t%s · 2FA code\t%s\n", id, name, detail
+        }'
+}
+
+# Types stdin into the focused window. wtype's virtual keyboard is
+# Hyprland's and sway's; KWin keeps it for the on-screen keyboard, so on
+# Plasma it's KWin's fake-input, through tide-kwin-paste.
+typer() {
+    case ":${XDG_CURRENT_DESKTOP:-}:" in
+        *:KDE:*)
+            command -v tide-kwin-paste >/dev/null 2>&1 || fail "tide-kwin-paste isn't installed, so it can't type; run tide's make install-session"
+            tide-kwin-paste --type
+            ;;
+        *)
+            command -v wtype >/dev/null 2>&1 || fail "wtype isn't installed, so it can't type; install the wtype package"
+            wtype -
+            ;;
+    esac
+}
+
+# Types $1, the value, exactly: no newline is added.
+type_value() {
+    if ! err=$(printf '%s' "$1" | typer 2>&1); then
+        fail "couldn't type it: $err"
+    fi
+}
+
+type_entry() {
+    kind=${1:-}
+    case "$kind" in
+        snippet)
+            test $# -eq 2 || usage
+            # The x keeps a trailing newline $(...) would drop, and comes
+            # only after a lookup that worked.
+            value=$(snippets | jq -je --arg name "$2" 'if has($name) then .[$name] else error("no snippet named \($name)") end' 2>/dev/null &&
+                printf x) || fail "no snippet named $2"
+            value=${value%x}
+            ;;
+        login)
+            test $# -eq 3 || usage
+            command -v rbw >/dev/null 2>&1 || fail "rbw isn't installed; install the rbw package"
+            case "$3" in
+                username | password) cmd="rbw get --field $3" ;;
+                totp) cmd="rbw code" ;;
+                *) usage ;;
+            esac
+            # stderr apart, so a message is never mixed into a secret.
+            if ! errs=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/tide-fill.XXXXXX"); then
+                fail "couldn't make a temporary file"
+            fi
+            trap 'rm -f "$errs"' EXIT
+            # rbw prints the value and a newline, which $(...) drops: a
+            # value's own trailing newline isn't something a login has.
+            if ! value=$($cmd "$2" 2>"$errs"); then
+                fail "rbw couldn't get the $3: $(cat "$errs")"
+            fi
+            test -n "$value" || fail "that login has no $3"
+            ;;
+        *) usage ;;
+    esac
+    type_value "$value"
+}
+
+case "${1:-}" in
+    list) shift; list "$@" ;;
+    type) shift; type_entry "$@" ;;
+    unlock)
+        test $# -eq 1 || usage
+        command -v rbw >/dev/null 2>&1 || fail "rbw isn't installed; install the rbw package"
+        rbw unlock || fail "rbw couldn't unlock"
+        ;;
+    *) usage ;;
+esac

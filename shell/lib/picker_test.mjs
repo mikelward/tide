@@ -7,13 +7,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
     TABS, TAB_NAMES, PLACEHOLDERS, CHARACTER_LIMIT, toggled, movedTab, parseHistory, historyRows,
-    words, parseChars, characterRows, codePoint, characterSub, emptyText, listedHistory, FUZZY_CHARS, pasteShortcut, pasteTarget,
+    words, parseChars, characterRows, codePoint, characterSub, emptyText, listedHistory, FUZZY_CHARS, pasteShortcut, pasteTarget, parseFill, fillRows, fillCommand, listedFill, listingTarget,
 } from "./picker.mjs";
 
 const shipped = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "chars", "chars.tsv"), "utf8");
 
-test("two tabs, Clipboard first, each named", () => {
-    assert.deepEqual([...TABS], ["clipboard", "characters"]);
+test("three tabs, Clipboard first, each named", () => {
+    assert.deepEqual([...TABS], ["clipboard", "characters", "fill"]);
     for (const t of TABS) {
         assert.ok(TAB_NAMES[t] && PLACEHOLDERS[t], t);
     }
@@ -26,10 +26,11 @@ test("Super+V opens it, again closes it, and the other tab's key moves there", (
     assert.throws(() => toggled(false, "clipboard", "apps"), /not a picker tab/);
 });
 
-test("Tab and Shift+Tab move between the two tabs, and wrap", () => {
+test("Tab and Shift+Tab move between the tabs, and wrap", () => {
     assert.equal(movedTab("clipboard", 1), "characters");
-    assert.equal(movedTab("characters", 1), "clipboard");
-    assert.equal(movedTab("clipboard", -1), "characters");
+    assert.equal(movedTab("characters", 1), "fill");
+    assert.equal(movedTab("fill", 1), "clipboard");
+    assert.equal(movedTab("clipboard", -1), "fill");
 });
 
 test("the history is read from cliphist's list: text, links and images", () => {
@@ -216,4 +217,51 @@ test("Enter pastes into the window focused at opening, and nowhere with none", (
     assert.deepEqual(pasteTarget({ address: "0x55aa01", class: "kitty", title: "t" }), { address: "0x55aa01", class: "kitty" });
     assert.equal(pasteTarget(null), null, "no window, as FocusData says on an empty workspace");
     assert.equal(pasteTarget({ address: "", class: "x" }), null);
+});
+
+const FILL = [
+    "snippet\tHome address\ttext\tHome address\tSnippet",
+    "login\tid-1\tusername\tgithub.com · username\tme@example.com · web",
+    "login\tid-1\tpassword\tgithub.com · password\tme@example.com · web",
+    "login\tid-1\ttotp\tgithub.com · 2FA code\tme@example.com · web",
+    "bad line",
+].join("\n");
+
+test("the Fill tab reads tide fill list's rows, and names a line it can't", () => {
+    const { entries, errors } = parseFill(FILL);
+    assert.deepEqual(entries[0], { kind: "snippet", key: "Home address", field: "text", name: "Home address", sub: "Snippet" });
+    assert.deepEqual(entries[2], { kind: "login", key: "id-1", field: "password", name: "github.com · password", sub: "me@example.com · web" });
+    assert.equal(entries.length, 4);
+    assert.equal(errors.length, 1);
+});
+
+test("Fill's rows match by name and detail, and Enter types the row's own field", () => {
+    const { entries } = parseFill(FILL);
+    assert.deepEqual(fillRows(entries, "").map((r) => r.item.name).slice(0, 2), ["Home address", "github.com · username"]);
+    assert.deepEqual(fillRows(entries, "addr").map((r) => r.item.name), ["Home address"]);
+    assert.ok(fillRows(entries, "github pass").some((r) => r.item.field === "password"));
+    assert.ok(fillRows(entries, "me@example").length >= 3, "a login is found by its user");
+    assert.deepEqual(fillCommand(entries[0]), ["tide", "fill", "type", "snippet", "Home address"]);
+    assert.deepEqual(fillCommand(entries[3]), ["tide", "fill", "type", "login", "id-1", "totp"]);
+});
+
+test("a locked vault's Unlock row stays first whatever's typed, and unlocks", () => {
+    const { entries } = parseFill("unlock\t-\t-\tUnlock Bitwarden\trbw asks for your master password\nsnippet\tPhone\ttext\tPhone\tSnippet");
+    assert.equal(fillRows(entries, "phone")[0].item.kind, "unlock");
+    assert.deepEqual(fillCommand(entries[0]), ["tide", "fill", "unlock"]);
+});
+
+test("a failed Fill listing shows why; an empty one says how to add some", () => {
+    assert.equal(listedFill(true, "", "tide fill: rbw couldn't list the logins: offline\n").error, "rbw couldn't list the logins: offline");
+    assert.deepEqual(listedFill(false, "", "tide fill: x.json: bad; its snippets are left out\n").warnings, ["tide fill: x.json: bad; its snippets are left out"]);
+    assert.match(emptyText("fill", "", {}), /snippets\.json/);
+    assert.equal(emptyText("fill", "", { loading: true }), "");
+});
+
+test("a finished listing fills only its own tab, and only if it's the latest", () => {
+    assert.equal(listingTarget("fill", 2, { clipboard: 1, fill: 2 }), "fill");
+    assert.equal(listingTarget("clipboard", 1, { clipboard: 1, fill: 2 }), "clipboard");
+    // A stale Fill listing whose token happens to match the history's count.
+    assert.equal(listingTarget("fill", 1, { clipboard: 1, fill: 2 }), null);
+    assert.equal(listingTarget("clipboard", 2, { clipboard: 3, fill: 2 }), null);
 });

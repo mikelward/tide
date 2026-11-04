@@ -185,6 +185,11 @@
 #     The clipboard history behind the picker on Super+V (SPEC.md §8.4);
 #     see tide-clipboard.
 #
+#   tide fill list | type snippet NAME | type login ID FIELD | unlock
+#
+#     The snippets and Bitwarden logins behind the picker's Fill tab on
+#     Super+Shift+V (SPEC.md §8.4); see tide-fill.
+#
 #   tide doctor
 #
 #     Checks the running session and prints one line per problem, with
@@ -212,6 +217,7 @@ usage() {
     echo "       $prog prompt-focus" >&2
     echo "       $prog keyboards" >&2
     echo "       $prog clipboard store | list | copy ID | put TEXT | delete ID | wipe" >&2
+    echo "       $prog fill list | type snippet NAME | type login ID FIELD | unlock" >&2
     echo "       $prog doctor" >&2
     exit 2
 }
@@ -1201,5 +1207,6 @@ case "${1:-}" in
     # Installed beside this script.
     doctor) shift; exec sh "$(dirname "$0")/tide-doctor" "$@" ;;
     clipboard) shift; exec sh "$(dirname "$0")/tide-clipboard" "$@" ;;
+    fill) shift; exec sh "$(dirname "$0")/tide-fill" "$@" ;;
     *) usage ;;
 esac

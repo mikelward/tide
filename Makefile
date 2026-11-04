@@ -82,6 +82,7 @@ test-fast:
 	sh session/session_test.sh
 	sh bin/tide_test.sh
 	sh bin/tide-clipboard_test.sh
+	sh bin/tide-fill_test.sh
 	sh bin/tide-lock_test.sh
 	sh bin/tide-shell_test.sh
 	sh bin/tide-doctor_test.sh
@@ -179,7 +180,7 @@ install-session:
 		test -x build/$$cmd || { echo "make install-session: no build/$$cmd; run make build first, as yourself" >&2; exit 1; }; \
 	done
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
-	install -m 755 bin/tide bin/tide-clipboard bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
+	install -m 755 bin/tide bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
 	install -m 644 session/tide.desktop "$(DESTDIR)$(PREFIX)/share/wayland-sessions/"
 	@# KWin lets a program use its fake-input (KDE's Win+V paste) only if
 	@# a desktop entry whose Exec is that program's path lists it in
