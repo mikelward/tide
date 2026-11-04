@@ -138,7 +138,7 @@ export const PAGES = Object.freeze([
         label: "Clipboard",
         icon: "edit-paste-symbolic",
         keywords: ["copy history", "paste history"],
-        about: "What you copy is kept for the picker on Super+C, the newest first, apart from passwords a password manager marks. Off, new copies aren't kept; what's kept stays until it's cleared. A smaller number trims the history at the next copy.",
+        about: "What you copy is kept for the picker on Super+V, the newest first, apart from passwords a password manager marks. Off, new copies aren't kept; what's kept stays until it's cleared. A smaller number trims the history at the next copy.",
         advanced: null,
     },
     {

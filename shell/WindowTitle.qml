@@ -1,10 +1,8 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
-import Quickshell.Io
 import "lib/dispatch.mjs" as Dispatch
 import "lib/title.mjs" as Title
-import "lib/workspaces.mjs" as Ws
 
 // The window title in the middle of this monitor's bar (SPEC.md §7.1):
 // the focused window's when it's on this monitor, else nothing, from
@@ -26,65 +24,8 @@ Text {
         font: root.font
     }
 
-    // Nothing has focus after focus moves to an empty workspace, which
-    // Hyprland.activeToplevel doesn't show (Title.hasFocus).
-    property bool focusGone: false
-    // Hyprland.activeToplevel stays null until the first activewindowv2
-    // event, so until then the focused window is the one `hyprctl
-    // activewindow -j` names when the shell starts (Title.activeAtStart).
-    property bool focusSeen: false
-    property string startAddress: ""
-    readonly property var startFocus: {
-        if (root.focusSeen || root.startAddress === "") {
-            return null;
-        }
-        return Hyprland.toplevels.values.find(t => Ws.normalizeAddress(t.address) === root.startAddress) ?? null;
-    }
-    readonly property var active: root.focusGone ? null : (Hyprland.activeToplevel ?? root.startFocus)
-
-    Connections {
-        target: Hyprland
-
-        function onRawEvent(event) {
-            if (event.name === "activewindowv2") {
-                root.focusSeen = true;
-                root.focusGone = !Title.hasFocus(event.data);
-            }
-        }
-    }
-
-    Process {
-        id: activeWindow
-
-        // Quickshell reports a command that can't start (no hyprctl on
-        // PATH) only by stopping without `started` (shell/lib/launch.mjs).
-        property bool started: false
-
-        command: ["hyprctl", "activewindow", "-j"]
-        running: true
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const address = Title.activeAtStart(text);
-                if (address === undefined) {
-                    console.warn("tide: bar title: hyprctl activewindow gave no window; the title waits for the next focus change");
-                    return;
-                }
-                root.startAddress = address ?? "";
-            }
-        }
-        onStarted: started = true
-        onExited: (code, status) => {
-            if (code !== 0) {
-                console.warn(`tide: bar title: hyprctl activewindow exited ${code}`);
-            }
-        }
-        onRunningChanged: {
-            if (!running && !started) {
-                console.warn("tide: bar title: couldn't start hyprctl; it waits for the next focus change");
-            }
-        }
-    }
+    // The focused window, or null with none (FocusData.qml).
+    readonly property var active: FocusData.active
 
     // The window the title stands for, {address, title}, or null.
     readonly property var window: Title.barWindow({

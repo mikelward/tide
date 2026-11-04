@@ -276,17 +276,16 @@ once you have agreed with it or reversed it.
   floating window is 15 px. The alternatives are wider zones, or a tiled
   zone only on one side of the edge. Reversible: `resize_grab` in
   `layout.lua` and `extend_border_grab_area` in conf's `hyprland.lua`.
-- [ ] **The picker on `Super+C` is its own overlay, not two more switcher
+- [ ] **The picker on `Super+V` is its own overlay, not two more switcher
   tabs** (SPEC.md §8.4). The switcher goes somewhere; the picker copies
   something, and the switcher's `Tab` cycle stays at four. The
   alternative is Clipboard and Characters tabs in `LauncherWindow.qml`.
   It's reversible by moving the two tabs' rows into the switcher.
-- [ ] **Enter in the picker copies; it doesn't paste.** Pasting needs
-  Hyprland's `sendshortcut` in Lua form, unchecked on 0.56, or wtype timed
-  against the picker's surface going away, and a terminal wants
-  `Ctrl+Shift+V`. The alternative is pasting into the window you were in
-  (see *Paste from the picker* below). Reversible: paste adds a step after
-  the copy.
+- [ ] **Enter in the picker pastes with Ctrl+Shift+V into a terminal,**
+  by window class (`TERMINALS` in `shell/lib/picker.mjs`), and Ctrl+V
+  anywhere else. A terminal missing from the list gets Ctrl+V, which
+  its shell reads as a literal-next. The alternative is a setting per
+  class. Reversible: the list is one constant.
 - [ ] **Clipboard history keeps the newest 200 entries**, and survives
   logout, in cliphist's default database. cliphist's default is 750; 200
   is a few days of copying and keeps old secrets around for less long. The
@@ -1832,17 +1831,9 @@ If the fork is adopted, machines build a pinned release tag, never a branch:
   The repository is public, so nothing secret ever goes in it, on any
   branch: per-machine settings stay in an untracked local file.
 
-## Paste from the picker
-
-`Super+C`'s Enter copies (SPEC.md §8.4). To paste too, check
-Hyprland 0.56's Lua form of `sendshortcut` against its source, then send
-`Ctrl+V` to the window the picker opened over, or `Ctrl+Shift+V` when its
-class is a terminal's. If Hyprland can't, use wtype once the picker's
-layer surface is gone, and find a signal for that rather than a delay.
-
 ## Edit a clipboard entry before pasting
 
-Later, after *Paste from the picker*: let the picker (SPEC.md §8.4) change an
+Let the picker (SPEC.md §8.4) change an
 entry before it's copied, so a paste needs no tidying afterward. Ideas so far:
 
 - **Last path component.** Turn `/some/dir/file.txt` into `file.txt`, and maybe

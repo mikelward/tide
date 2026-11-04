@@ -156,3 +156,20 @@ export function floatWindow(address, lua) {
     const w = windowAddress(address);
     return lua ? `hl.dsp.window.float({ action = "enable", window = ${luaString(w)} })` : `setfloating ${w}`;
 }
+
+// Send the window at `address` the shortcut `mods` + `key` (Hyprland's
+// send_shortcut, 0.56.2's LuaBindingsDispatchers.cpp), whatever has the
+// keyboard: the picker's paste (SPEC.md §8.4). `mods` is Hyprland's
+// spelling, "CTRL" or "CTRL SHIFT"; `key` a key name, "V".
+export function sendShortcut(mods, key, address, lua) {
+    const w = windowAddress(address);
+    if (!/^[A-Z]+( [A-Z]+)*$/.test(String(mods ?? ""))) {
+        throw new Error(`not modifiers: ${mods}`);
+    }
+    if (!/^[A-Za-z0-9]+$/.test(String(key ?? ""))) {
+        throw new Error(`not a key: ${key}`);
+    }
+    return lua
+        ? `hl.dsp.send_shortcut({ mods = ${luaString(mods)}, key = ${luaString(key)}, window = ${luaString(w)} })`
+        : `sendshortcut ${mods}, ${key}, ${w}`;
+}

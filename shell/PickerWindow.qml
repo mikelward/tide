@@ -3,17 +3,20 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
+import "lib/dispatch.mjs" as Dispatch
+import "lib/floating.mjs" as Rules
 import "lib/launch.mjs" as Run
 import "lib/launcher.mjs" as Search
 import "lib/picker.mjs" as Picker
 
-// The picker on Super+C (SPEC.md §8.4): a Clipboard tab, the history
+// The picker on Super+V (SPEC.md §8.4): a Clipboard tab, the history
 // tide-clipboard.service keeps with cliphist, and a Characters tab, emoji
 // and symbols from shell/chars/chars.tsv found by name. Drawn like the
 // switcher, near the top of the focused monitor over a dimmed backdrop.
-// `qs -c tide ipc call picker toggle clipboard` (conf's Super+C) opens
+// `qs -c tide ipc call picker toggle clipboard` (conf's Super+V) opens
 // it, and the same again closes it; Tab and Shift+Tab move between the
-// tabs; Enter copies the selection and closes; Shift+Delete forgets the
+// tabs; Enter copies the selection, closes, and pastes it into the window
+// the picker opened over; Shift+Delete forgets the
 // selected clipboard entry; Esc or a click on the backdrop closes it.
 PanelWindow {
     id: root
@@ -36,6 +39,11 @@ PanelWindow {
     property string charsError: ""
     property bool charsRead: false
 
+    // The window focused when the picker opened, {address, class}, which
+    // Enter pastes into; null with none, as on an empty workspace
+    // (FocusData.qml).
+    property var pasteInto: null
+
     readonly property var rows: root.tab === "clipboard" ? Picker.historyRows(root.history, root.query) : Picker.characterRows(root.chars, root.query)
     readonly property string emptyText: Picker.emptyText(root.tab, root.query, {
         loading: root.historyLoading,
@@ -52,6 +60,7 @@ PanelWindow {
         if (visible) {
             return;
         }
+        pasteInto = Picker.pasteTarget(Rules.windowOf(FocusData.active));
         const focused = Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor);
         if (focused) {
             screen = focused;
@@ -96,18 +105,28 @@ PanelWindow {
         lister.createObject(root, { token: root.listing }).running = true;
     }
 
-    // Enter: the selection onto the clipboard, then away, so Ctrl+V pastes
-    // it where you were. A failure is logged (Launcher.run).
+    // Enter: the selection onto the clipboard, the picker away, and, once
+    // the copy has worked, Ctrl+V (Ctrl+Shift+V in a terminal) sent to the
+    // window it opened over. With no window, or a failed copy, it doesn't
+    // paste. A failure is logged (Launcher.run).
     function choose(index) {
         const row = rows[index];
         if (!row) {
             return;
         }
+        const into = root.pasteInto;
         close();
+        const paste = ok => {
+            if (!ok || !into) {
+                return;
+            }
+            const keys = Picker.pasteShortcut(into.class);
+            Hyprland.dispatch(Dispatch.sendShortcut(keys.mods, keys.key, into.address, Hyprland.usingLua));
+        };
         if (root.tab === "clipboard") {
-            Launcher.run(["tide", "clipboard", "copy", row.item.id], null);
+            Launcher.run(["tide", "clipboard", "copy", row.item.id], paste);
         } else {
-            Launcher.run(["wl-copy", "--", row.item.char], null);
+            Launcher.run(["tide", "clipboard", "put", row.item.char], paste);
         }
     }
 
@@ -143,7 +162,7 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     color: Qt.rgba(0, 0, 0, 0.35)
 
-    // `qs -c tide ipc call picker toggle clipboard`: conf's Super+C. A tab
+    // `qs -c tide ipc call picker toggle clipboard`: conf's Super+V. A tab
     // it doesn't have is refused, and says so.
     IpcHandler {
         target: "picker"
@@ -537,8 +556,8 @@ PanelWindow {
 
                 Repeater {
                     model: root.tab === "clipboard"
-                        ? [["↑↓", "select"], ["↵", "copy"], ["Shift+Del", "forget"], ["Tab", "characters"], ["Esc", "close"]]
-                        : [["↑↓", "select"], ["↵", "copy"], ["Tab", "clipboard"], ["Esc", "close"]]
+                        ? [["↑↓", "select"], ["↵", "paste"], ["Shift+Del", "forget"], ["Tab", "characters"], ["Esc", "close"]]
+                        : [["↑↓", "select"], ["↵", "paste"], ["Tab", "clipboard"], ["Esc", "close"]]
 
                     Text {
                         required property var modelData

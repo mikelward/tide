@@ -1,4 +1,4 @@
-# The clipboard history behind the picker on Super+C (SPEC.md §8.4): each
+# The clipboard history behind the picker on Super+V (SPEC.md §8.4): each
 # new copy goes to cliphist through `tide clipboard store`, which skips one
 # a password manager marks.
 [Unit]

@@ -34,7 +34,7 @@ notify-send (libnotify), which the shell reports a bad settings
 file with, jq, which `tide doctor` reads Hyprland's JSON with, python3,
 which it reads the session bus's config with, and NetworkManager's nmcli,
 which the network menu lists VPNs with, and wl-clipboard and cliphist,
-which keep the clipboard history the picker on `Super+C` lists (SPEC.md
+which keep the clipboard history the picker on `Super+V` lists (SPEC.md
 §8.4). `setup-tide` installs them all.
 jq and python3 are free distro packages that run locally, with no network
 calls; without one, the doctor reports the check it skipped.

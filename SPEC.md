@@ -128,7 +128,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **System monitor popover**: the CPU and Memory tabs, and throttling. [`sysmon.png`](docs/mocks/sysmon.png) | ![system monitor](docs/mocks/sysmon.png) |
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
 | **Screen-share picker**: screens, windows, 16:9 area. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
-| **Picker**: `Super+C`'s Clipboard tab, and its Characters tab searched by name. [`picker.png`](docs/mocks/picker.png) | ![picker](docs/mocks/picker.png) |
+| **Picker**: `Super+V`'s Clipboard tab, and its Characters tab searched by name. [`picker.png`](docs/mocks/picker.png) | ![picker](docs/mocks/picker.png) |
 | **Screenshots**: region and window modes. [`screenshot.png`](docs/mocks/screenshot.png) | ![screenshot](docs/mocks/screenshot.png) |
 | **Minimized windows**: the five ways to show them that were weighed; C, the corner tray, was chosen (§6.7). Its bars still show the chips' old app icons. [`minimized.png`](docs/mocks/minimized.png) | ![minimized windows](docs/mocks/minimized.png) |
 | **Fonts**: the same pieces in Ubuntu + Ubuntu Mono, Ubuntu Sans + Ubuntu Sans Mono, and Inter + JetBrains Mono. [`fonts.png`](docs/mocks/fonts.png) | ![fonts](docs/mocks/fonts.png) |
@@ -1249,7 +1249,7 @@ in how long they last and what stays visible:
     `$XDG_RUNTIME_DIR` to answer on. Then it waits.
   - A key bound to a launcher script grants `--app '*'`, which names no
     app, so for the prompt that launch is looked up too: `conf`'s
-    `Super+Shift+C`, `runenv google-chat`, names `google-chat` and its
+    `Super+C`, `runenv google-chat`, names `google-chat` and its
     `--app` window's class. Before, it named only `*`, so a home app
     launched from home asked for a workspace, and went there, or nowhere
     on Esc.
@@ -1408,9 +1408,9 @@ with new keys in **bold**:
 | **`Super+Tab`** | flip between home and the workspace you last used: from any other workspace it goes to home, and from home back to the last other one, so presses toggle |
 | **`Super+A`** | the switcher, on its Attention tab: every window wanting attention, on any workspace, most recent first; Enter goes there |
 | **`Super+Alt+Space`** | next keyboard layout, once there are two, on every keyboard (§16), as a click on the bar's layout label does |
-| `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `Shift+C` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
-| **`Super+C`** | the picker, on its Clipboard tab: what you've copied, and emoji and symbols by name (§8.4); C for clipboard and characters. It was Google Calendar, which has no key now; the launcher finds it |
-| **`Super+V`** | a terminal on the VM, `Super+W`'s twin: the `terminal_on_vm` helper, with the host from `~/.vm` |
+| `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
+| **`Super+V`** | the picker, on its Clipboard tab: what you've copied, and emoji and symbols by name; Enter pastes (§8.4). V as in paste, as on Windows. Terminal on the VM, which it was, has no key now; the launcher finds it |
+| **`Super+C`** / **`Super+Shift+C`** | Google Chat / Google Calendar (`runenv google-chat`, `runenv google-calendar`) |
 | `Super+Backspace` | close window |
 | **`Super+Z`** | minimize the focused window; its icon goes to the corner tray, and a click there restores it (§6.7) |
 | `Super+L` | lock |
@@ -2205,7 +2205,7 @@ See [`switcher.png`](docs/mocks/switcher.png).
 
 See [`picker.png`](docs/mocks/picker.png).
 
-- **One overlay, two tabs**, on `Super+C`:
+- **One overlay, two tabs**, on `Super+V`:
   - **Clipboard:** what you've copied, newest first, one line each. An
     image shows as its format, size and dimensions.
   - **Characters:** emoji and symbols, found by name: `arrow`,
@@ -2216,12 +2216,12 @@ See [`picker.png`](docs/mocks/picker.png).
 - It's drawn like the switcher (§8.1), on the focused monitor, and takes
   the keyboard the same way (§14.2).
 - **Keys.** All single-modifier, like the rest of tide's.
-  - `Super+C` opens it on Clipboard. `Super+C` again, `Esc`, or a click
+  - `Super+V` opens it on Clipboard. `Super+V` again, `Esc`, or a click
     on the backdrop closes it.
   - `Tab` / `Shift+Tab` move between the two tabs.
   - `↑`/`↓` or `Ctrl+N`/`Ctrl+P` move the selection.
-  - `Enter` copies the selection to the clipboard and closes. `Ctrl+V`
-    then pastes it, as after any copy.
+  - `Enter` copies the selection to the clipboard, closes, and pastes
+    it into the window the picker opened over (below).
   - `Shift+Delete` removes the selected entry from the history, as it
     removes a suggestion in a browser's address bar.
   - `conf`'s key runs `qs -c tide ipc call picker toggle clipboard`.
@@ -2241,14 +2241,28 @@ See [`picker.png`](docs/mocks/picker.png).
     symbols, then emoji, each in Unicode's order. So `e acute` offers é and É, but
     not á.
   - With no query, the Characters tab lists the whole list in its order.
-- **Enter doesn't paste for you, yet.** Pasting means sending the window
-  you were in a key, `Ctrl+V` in most apps and `Ctrl+Shift+V` in a
-  terminal.
-  - Hyprland's `sendshortcut` dispatcher would do it, but its Lua form
-    on 0.56 isn't checked yet.
-  - wtype would do it too, but only once the picker's surface has gone
-    and the keyboard is back with that window, which nothing reports.
-  - So Enter copies, which always works, and pasting is in TODO.md.
+- **Enter pastes.** It copies with `tide clipboard copy ID`, or `tide
+  clipboard put TEXT` for a character. Each exits once the clipboard holds
+  it, though wl-copy's child stays to serve it: its stderr goes to a file,
+  since the child keeps it open (wl-copy.c, 2.2.1), and a pipe would wait
+  until the clipboard is replaced.
+- Once the copy has worked, the shell sends the window
+  that was focused when the picker opened `Ctrl+V`, or `Ctrl+Shift+V`
+  when its class is a terminal's (kitty, foot, Alacritty, WezTerm,
+  Ghostty, Konsole, GNOME's terminals).
+  - Hyprland 0.56.2's `hl.dsp.send_shortcut({ mods, key, window })`
+    sends it (`LuaBindingsDispatchers.cpp`). Given a window, it moves
+    the keyboard there for the one key, then back, so it doesn't wait
+    for the picker's surface to go.
+  - With no window focused, or a failed copy, nothing is pasted; the
+    copy stays on the clipboard.
+  - The focused window is `FocusData.qml`'s, which the bar's title
+    (§7.1) uses too. Quickshell 0.3's `activeToplevel` alone is wrong
+    twice: on an empty workspace it still names the last window, so the
+    picker would paste on another workspace; and until the first focus
+    change after the shell starts it's null, so the picker wouldn't
+    paste. FocusData watches `activewindowv2` for an empty address, and
+    asks `hyprctl activewindow -j` at start.
 
 **The history.**
 
@@ -4330,7 +4344,7 @@ light/dark switch.
 | Archives | built into Nautilus | File Roller if Thunar wins |
 | Displays | nwg-displays (GTK 3) | writes Hyprland's monitor config; also linked from Settings |
 | Bluetooth pairing | blueman-manager (GTK 3) | overskride is GTK 4 but thinly packaged |
-| Clipboard history | `cliphist`, with the picker on `Super+C` (§8.4) | `tide-clipboard.service` runs `wl-paste --watch tide clipboard store`, which skips password-manager copies |
+| Clipboard history | `cliphist`, with the picker on `Super+V` (§8.4) | `tide-clipboard.service` runs `wl-paste --watch tide clipboard store`, which skips password-manager copies |
 | Audio mixer | pavucontrol (GTK 4) | pwvucontrol for the libadwaita look |
 | Calculator | GNOME Calculator | qalculate-gtk for power use |
 

@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
     TABS, TAB_NAMES, PLACEHOLDERS, CHARACTER_LIMIT, toggled, movedTab, parseHistory, historyRows,
-    words, parseChars, characterRows, codePoint, characterSub, emptyText, listedHistory, FUZZY_CHARS,
+    words, parseChars, characterRows, codePoint, characterSub, emptyText, listedHistory, FUZZY_CHARS, pasteShortcut, pasteTarget,
 } from "./picker.mjs";
 
 const shipped = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "chars", "chars.tsv"), "utf8");
@@ -19,7 +19,7 @@ test("two tabs, Clipboard first, each named", () => {
     }
 });
 
-test("Super+C opens it, again closes it, and the other tab's key moves there", () => {
+test("Super+V opens it, again closes it, and the other tab's key moves there", () => {
     assert.deepEqual(toggled(false, "characters", "clipboard"), { visible: true, tab: "clipboard" });
     assert.deepEqual(toggled(true, "clipboard", "clipboard"), { visible: false, tab: "clipboard" });
     assert.deepEqual(toggled(true, "clipboard", "characters"), { visible: true, tab: "characters" });
@@ -200,4 +200,17 @@ test("a failed listing shows why in the tab; a good one lists", () => {
     assert.deepEqual(ok.entries.map((e) => e.id), ["2"]);
     assert.equal(ok.error, "");
     assert.equal(ok.warnings.length, 1);
+});
+
+test("Enter pastes with Ctrl+V, or Ctrl+Shift+V in a terminal", () => {
+    assert.deepEqual(pasteShortcut("google-chrome"), { mods: "CTRL", key: "V" });
+    assert.deepEqual(pasteShortcut("kitty"), { mods: "CTRL SHIFT", key: "V" });
+    assert.deepEqual(pasteShortcut("alacritty"), { mods: "CTRL SHIFT", key: "V" }, "classes match whatever their case");
+    assert.deepEqual(pasteShortcut(""), { mods: "CTRL", key: "V" });
+});
+
+test("Enter pastes into the window focused at opening, and nowhere with none", () => {
+    assert.deepEqual(pasteTarget({ address: "0x55aa01", class: "kitty", title: "t" }), { address: "0x55aa01", class: "kitty" });
+    assert.equal(pasteTarget(null), null, "no window, as FocusData says on an empty workspace");
+    assert.equal(pasteTarget({ address: "", class: "x" }), null);
 });

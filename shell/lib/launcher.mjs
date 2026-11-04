@@ -237,7 +237,7 @@ export function quickActions(state = {}) {
         quick("dark-style", "Dark style", onOff(state.dark) + (state.darkUntil ? ` until ${state.darkUntil}` : ""), "night-light-symbolic", ["theme", "light", "night", "appearance", "mode"]),
         quick("keep-awake", "Keep awake", state.micHolds ? "On while the mic is live" : onOff(state.keepAwake), KEEP_AWAKE_ICON, ["caffeine", "coffee", "idle", "inhibit"], "Super+S"),
         quick("presenter", "Presenter mode", onOff(state.presenting), "x-office-presentation-symbolic", ["presentation", "slides", "projector", "meeting"], "Super+P"),
-        quick("clear-clipboard", "Clear clipboard history", "Forget everything Super+C lists", "edit-clear-all-symbolic", ["clipboard", "wipe", "history", "cliphist", "forget"]),
+        quick("clear-clipboard", "Clear clipboard history", "Forget everything Super+V lists", "edit-clear-all-symbolic", ["clipboard", "wipe", "history", "cliphist", "forget"]),
         quick("reload", "Reload shell", "tide", "view-refresh-symbolic", ["restart", "quickshell"]),
     ].filter(q => q).map((q, rank) => Object.assign({}, q, { rank }));
 }

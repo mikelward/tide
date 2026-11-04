@@ -348,11 +348,11 @@ check "a failed unit is named, with where to look" \
 run TIDE_CLIPHIST=no-such-cliphist
 check "no cliphist is a problem" test "$status" -eq 1
 check "no cliphist is named, with the fix" \
-    contains "$out" "cliphist isn't installed, so Super+C keeps no clipboard history: install the cliphist package"
+    contains "$out" "cliphist isn't installed, so Super+V keeps no clipboard history: install the cliphist package"
 run FAKE_INACTIVE="tide-clipboard.service=inactive"
 check "a stopped history unit is a problem" test "$status" -eq 1
 check "a stopped history unit is named, with the fix" \
-    contains "$out" "tide-clipboard.service is inactive, so what you copy doesn't reach Super+C's history: \`systemctl --user enable --now tide-clipboard.service\`"
+    contains "$out" "tide-clipboard.service is inactive, so what you copy doesn't reach Super+V's history: \`systemctl --user enable --now tide-clipboard.service\`"
 
 # The lock (§10): its unit, its QML and its PAM file, each a lock that
 # never comes or never unlocks if it's missing.
