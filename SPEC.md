@@ -2878,6 +2878,11 @@ talk, a demo, or a meeting room's screen.
   - `tide-lock.service` has `OnFailure=tide-lock-fallback.service`, which
     runs `hyprlock`. `make install` installs both units, and `setup`
     installs hyprlock.
+  - A unit that isn't there never fails, so `OnFailure=` can't cover it.
+    That happens when `make install` hasn't run since the unit was added,
+    or the unit is masked. So `conf`'s `lock_cmd` starts the unit only when
+    its `LoadState` is `loaded`. Otherwise it runs hyprlock itself, unless
+    one is running, and sends the same notification.
   - `tide-lock` fails at once when the lock can't start: no `qs`, a `qs`
     older than 0.3 (§3.2), or no `lock.qml`. It says why in the journal
     and exits 78. The unit doesn't restart on 78
