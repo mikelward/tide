@@ -123,12 +123,14 @@ ShellRoot {
         }
     }
 
-    // The wallpaper, drawn blurred behind the password face (SPEC.md §15):
-    // the one the shell draws now, as it records it in the session's runtime
-    // directory (WallpaperData.qml), followed as it changes. No record, or
-    // none in it, is the face's own gradient.
+    // The wallpaper behind the password face (SPEC.md §15): the one the
+    // shell draws now, as it records it in the session's runtime directory
+    // (WallpaperData.qml), followed as it changes. A picture's path is
+    // `wallpaper`, drawn blurred; a color is `wallpaperColor`. No record,
+    // or none in it, is the face's own gradient.
     readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
     property string wallpaper: ""
+    property string wallpaperColor: ""
 
     FileView {
         path: root.runtimeDir === "" ? "" : `${root.runtimeDir}/tide-wallpaper`
@@ -141,12 +143,14 @@ ShellRoot {
                 console.warn(`tide-lock: ${path}: ${r.error}; no wallpaper`);
             }
             root.wallpaper = r.path;
+            root.wallpaperColor = r.color;
         }
         onLoadFailed: error => {
             if (error !== FileViewError.FileNotFound) {
                 console.warn(`tide-lock: ${path}: ${FileViewError.toString(error)}; no wallpaper`);
             }
             root.wallpaper = "";
+            root.wallpaperColor = "";
         }
     }
 
@@ -267,6 +271,7 @@ ShellRoot {
             user: root.user
             hour24: root.hour24
             wallpaper: root.wallpaper
+            wallpaperColor: root.wallpaperColor
             powerMessage: powerActions.message
             powerBusy: powerActions.busy
             layout: keymap.badge

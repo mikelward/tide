@@ -3536,29 +3536,38 @@ to be focused.
   | Chrome | follows the color scheme; its own tab strip and toolbar stay Chrome's |
   | kitty | its existing light and dark themes |
 
-- **Wallpaper.** Optional light and dark images, drawn by the shell on the
-  background layer, and blurred for the lock.
-  - The shell shows the first of these it can read, for the mode it is:
-    - the mode's own, `lightWallpaper` or `darkWallpaper` in
-      `appearance.json`;
+- **Wallpaper.** Optional light and dark images or colors, drawn by the
+  shell on the background layer, and shown by the lock.
+  - Each of `lightWallpaper` and `darkWallpaper` in `appearance.json` is a
+    file's path, absolute or from `~/`, or a color as `#rrggbb`. `#rgb` is
+    taken too, as `#rrggbb` with each digit doubled. Case doesn't matter.
+    Anything else fails at load, naming the setting.
+  - A color set for the mode is drawn on every monitor as a plain fill.
+    Nothing else is tried.
+  - With no color set for the mode, the shell shows the first of these it
+    can read:
+    - the mode's own image, `lightWallpaper` or `darkWallpaper`;
     - `$TIDE_WALLPAPER`, as `tide-shell` takes it;
     - `conf`'s `~/.config/hypr/wallpaper-light.jpg` or `-dark.jpg`, as
       `theme.sh` names them;
     - `conf`'s `~/.config/hypr/wallpaper.jpg`.
-  - It fills each monitor, cropping what doesn't fit, as swaybg's `fill`
-    does. A directory isn't one it can read, and one it can't decode is
-    logged and passed over for the next. With none, it draws no wallpaper,
-    and logs which it tried.
+  - An image fills each monitor, cropping what doesn't fit, as swaybg's
+    `fill` does. A directory isn't one it can read, and one it can't
+    decode is logged and passed over for the next. With none, it draws no
+    wallpaper, and logs which it tried.
   - It's looked for again as the mode or the settings change, so a switch
     to dark shows the dark one at once.
   - So `tide-shell` runs no wallpaper daemon beside the Quickshell shell.
   - The lock shows the same one behind its password face, blurred and
-    darkened so the face's light text reads on a light picture. The
-    screensaver face stays black.
-  - The shell records the path it draws in the session's runtime
-    directory (`tide-wallpaper`), and the lock follows that. So the two
-    agree without the lock working out the mode or the settings itself.
-    With no record, or none in it, the lock keeps its own gradient.
+    darkened so the face's light text reads on a light picture. A color
+    isn't blurred, only darkened as a picture is. The screensaver face
+    stays black.
+  - The shell records what it draws in the session's runtime directory
+    (`tide-wallpaper`), and the lock follows that. So the two agree
+    without the lock working out the mode or the settings itself.
+    - The record is one line: the file's path, the color as `#rrggbb`, or
+      empty for none. A record from before colors reads as it did.
+    - With no record, or none in it, the lock keeps its own gradient.
   - The greeter runs before anyone logs in, with no one's wallpaper to
     show, so it keeps its gradient too.
 - **Fonts and icons:**
@@ -3606,7 +3615,7 @@ tide's own, and links out for the rest:
 | Workspaces | the standing workspaces, home first; the apps that live on home; and the patterns that name a workspace from a window's title (§6.5) |
 | Floating | the rules that float a window by its class and title, and the floating windows no rule covers yet (§6.4) |
 | **General** | |
-| Appearance | dark / light / automatic, schedule, dim strength, wallpaper |
+| Appearance | dark / light / automatic, schedule, dim strength, wallpaper image or color |
 | Notifications | Do not disturb on a schedule, whether critical alerts break through, and the muted apps and sites (§9) |
 | Clipboard | the history on or off, how many copies it keeps, and Clear history (§8.4) |
 | Clocks | the system's time zone; zones, order, labels, 24 h, dedupe-local |
@@ -3810,9 +3819,18 @@ stays hand-written.
     `conf`'s own stands. One `hyprland.local.lua` sets still wins.
   - The shell applies it as it starts, too, even unchanged, as it does the
     input settings: setting the same strength again changes nothing.
-  - The light and dark wallpapers (§15) are a file's path each, typed
-    and set with Enter as the location is: absolute, or from `~/`. Empty
-    is the default, `conf`'s images.
+  - The light and dark wallpapers (§15) are a file's path or a color
+    each, typed and set with Enter as the location is. A path is
+    absolute, or from `~/`; a color is `#rrggbb` or `#rgb`. Empty is the
+    default, `conf`'s images.
+  - **Each has a swatch,** showing the color set, or a neutral icon for an
+    image or the default. It opens a small popover under it.
+    - It offers eight colors from tide's palette: four dark backgrounds,
+      the lock's teal and violet among them, then a dusk blue and three
+      light ones.
+    - A field under them takes any `#rrggbb`, set with Enter.
+    - Choosing one sets it as the field would, and closes the popover.
+      Escape, or a click anywhere else, closes it with nothing set.
   - **Each has a choose button,** which opens the desktop's file chooser,
     offering images: `tide-pick` (`cmd/tide-pick`) asks the portal's
     FileChooser (`OpenFile`), which `xdg-desktop-portal-gtk` serves with

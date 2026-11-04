@@ -472,7 +472,7 @@ fi
 # And a wallpaper record that names a relative path.
 if test "\$config" = lock && test -z "\$WAYLAND_DEBUG" && ! test -e "\$(dirname "\$0")/lock-takes-any-wallpaper" &&
     test "\$(cat "\$XDG_RUNTIME_DIR/tide-wallpaper" 2>/dev/null)" = wallpaper.png; then
-    echo "  WARN qml: tide-lock: \$XDG_RUNTIME_DIR/tide-wallpaper: expected a file's absolute path, on a line of its own; no wallpaper"
+    echo "  WARN qml: tide-lock: \$XDG_RUNTIME_DIR/tide-wallpaper: expected a file's absolute path or a color, on a line of its own; no wallpaper"
 fi
 if test -n "\$WAYLAND_DEBUG" && test "\$1" = -c; then
     ${5:-$launcher}

@@ -44,6 +44,8 @@ Item {
     // The wallpaper's path, drawn blurred behind the password face (SPEC.md
     // §15), or "" for the face's own gradient; the greeter has none.
     property string wallpaper: ""
+    // A color wallpaper, #rrggbb, drawn darkened instead (no blur), or "".
+    property string wallpaperColor: ""
     // The line under the field; the greeter says which session is starting.
     property string status: Lock.statusText(lockState)
     // The last power action's trouble, if any (Lock.powerMessage).
@@ -236,7 +238,15 @@ Item {
                 blurEnabled: true
                 blur: 1.0
                 blurMax: 64
-                brightness: -0.25
+                brightness: -Appearance.LOCK_DARKEN
+            }
+
+            // A color wallpaper: plain, with nothing to blur, darkened as
+            // the picture is (Appearance.lockColor).
+            Rectangle {
+                anchors.fill: parent
+                visible: face.wallpaperColor !== ""
+                color: face.wallpaperColor === "" ? "transparent" : Appearance.lockColor(face.wallpaperColor)
             }
 
             // The battery and the notification count, top right, in the

@@ -634,7 +634,7 @@ reports() {
 lock_files() {
     i=0
     until grep -qF 'tide-lock: clocks.local.json: hour24 must be true or false; the clock keeps its last settings' "$log" &&
-        grep -qF "tide-lock: $wallpaper_record: expected a file's absolute path, on a line of its own; no wallpaper" "$log"; do
+        grep -qF "tide-lock: $wallpaper_record: expected a file's absolute path or a color, on a line of its own; no wallpaper" "$log"; do
         if waited "the lock didn't name the bad hour24 in $clocks_local and the relative path in $wallpaper_record" "$i"; then
             cat "$log" >&2
             exit 1
