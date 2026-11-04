@@ -11,6 +11,7 @@ import {
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
     expandHome, pickCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
+    wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
 } from "./appearance.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -697,4 +698,94 @@ test("the chosen file is the setting, from ~/ when it's home's", () => {
     for (const v of ["~/Pictures/Day one.jpg", "/srv/night.png"]) {
         assert.equal(withSetting("{}", "lightWallpaper", v).error, undefined, v);
     }
+});
+
+// The user's case: a 16:10 picture on a 21:9 monitor.
+const PICTURE = { width: 3840, height: 2400 };
+const ULTRAWIDE = { width: 3440, height: 1440 };
+const close = (actual, expected, what) => assert.ok(Math.abs(actual - expected) < 1e-6, `${what}: ${actual}, expected ${expected}`);
+
+test("a picture fills the monitor, centered, trimming what's left over", () => {
+    const f = wallpaperFrame(PICTURE, ULTRAWIDE);
+    close(f.scale, 3440 / 3840, "scale");
+    assert.equal(Math.round(f.shown.width), 3440);
+    assert.equal(Math.round(f.shown.height), 2150);
+    close(f.frame.x, 0, "frame x");
+    close(f.frame.width, 3840, "frame width");
+    close(f.frame.height, 1440 * 3840 / 3440, "frame height");
+    close(f.frame.y, (2400 - f.frame.height) / 2, "frame y");
+    for (const k of ["x", "y", "width", "height"]) {
+        close(f.visible[k], f.frame[k], `all of the frame is on the picture: ${k}`);
+    }
+    close(f.trimmed.top, f.trimmed.bottom, "the same off the top and the bottom");
+    close(f.trimmed.top + f.trimmed.bottom, 1 - 1440 / 2150, "a third of the height");
+    assert.equal(f.trimmed.left, 0);
+    assert.equal(f.trimmed.right, 0);
+});
+
+test("a picture wider than the monitor is trimmed at the sides", () => {
+    const f = wallpaperFrame({ width: 5120, height: 1440 }, { width: 2560, height: 1440 });
+    close(f.scale, 1, "scale");
+    close(f.trimmed.left, 0.25, "left");
+    close(f.trimmed.right, 0.25, "right");
+    assert.equal(f.trimmed.top, 0);
+    assert.deepEqual(f.visible, { x: 1280, y: 0, width: 2560, height: 1440 });
+});
+
+test("a picture the monitor's shape is shown whole, scaled", () => {
+    const f = wallpaperFrame({ width: 1920, height: 1200 }, { width: 2560, height: 1600 });
+    close(f.scale, 4 / 3, "scale up");
+    assert.deepEqual(f.trimmed, { top: 0, bottom: 0, left: 0, right: 0 });
+});
+
+test("there's no frame until both sizes are known", () => {
+    assert.equal(wallpaperFrame({ width: 0, height: 0 }, ULTRAWIDE), null, "an image still loading");
+    assert.equal(wallpaperFrame(PICTURE, { width: 0, height: 1440 }), null);
+    assert.equal(wallpaperFrame(null, ULTRAWIDE), null);
+});
+
+test("the caption gives the numbers in the monitor's pixels", () => {
+    assert.equal(framingCaption("DP-1", PICTURE, ULTRAWIDE), "DP-1, 3440×1440: scaled to 3440×2150, trims 33% of its height (355 px top, 355 px bottom)");
+    assert.equal(framingCaption("HDMI-A-1", { width: 5120, height: 1440 }, { width: 2560, height: 1440 }), "HDMI-A-1, 2560×1440: scaled to 5120×1440, trims 50% of its width (1280 px left, 1280 px right)");
+    assert.equal(framingCaption("eDP-1", { width: 1920, height: 1200 }, { width: 2560, height: 1600 }), "eDP-1, 2560×1600: shows all of it, scaled to 2560×1600");
+    assert.equal(framingCaption("DP-1", { width: 0, height: 0 }, ULTRAWIDE), "", "none while it loads");
+});
+
+test("monitors alike share a preview, sized in pixels", () => {
+    assert.deepEqual(previewScreens([
+        { name: "DP-1", width: 3440, height: 1440, devicePixelRatio: 1 },
+        { name: "eDP-1", width: 1280, height: 800, devicePixelRatio: 2 },
+        { name: "DP-2", width: 3440, height: 1440, devicePixelRatio: 1 },
+        { name: "gone", width: 0, height: 0, devicePixelRatio: 1 },
+    ]), [
+        { name: "DP-1, DP-2", width: 3440, height: 1440 },
+        { name: "eDP-1", width: 2560, height: 1600 },
+    ]);
+});
+
+test("the preview fits the picture in its box and dims what the monitor trims", () => {
+    const l = previewLayout(PICTURE, ULTRAWIDE, "fill", 240, 160);
+    assert.equal(l.width, 240);
+    assert.equal(l.height, 150);
+    assert.deepEqual(l.image, { x: 0, y: 0, width: 240, height: 150 });
+    close(l.frame.height, 240 * 1440 / 3440, "the frame is the monitor's shape");
+    close(l.frame.y, (150 - l.frame.height) / 2, "centered");
+    assert.equal(l.dims.length, 2, "a band above the frame and one below");
+    close(l.dims[0].height, l.frame.y, "above");
+    close(l.dims[1].y, l.frame.y + l.frame.height, "below");
+    const tall = previewLayout({ width: 1200, height: 1600 }, ULTRAWIDE, "fill", 240, 160);
+    assert.equal(tall.height, 160, "a portrait picture is held to the box's height");
+    assert.equal(tall.width, 120);
+    assert.equal(previewLayout({ width: 0, height: 0 }, ULTRAWIDE, "fill", 240, 160), null);
+});
+
+test("the page previews what the shell draws now, or the other mode's candidates", () => {
+    const s = { lightWallpaper: "~/day.jpg", darkWallpaper: "#1a1d2e" };
+    assert.deepEqual(previewCandidates(s, false, false, "/home/user/day.jpg", "/home/user"), ["/home/user/day.jpg"]);
+    assert.deepEqual(previewCandidates(s, false, false, "", "/home/user"), [], "none drawn, none shown");
+    assert.deepEqual(previewCandidates(s, true, false, "/home/user/day.jpg", "/home/user"), [], "a color isn't previewed");
+    assert.deepEqual(previewCandidates({}, true, false, "/home/user/day.jpg", "/home/user", "/srv/w.png"),
+        ["/srv/w.png", "/home/user/.config/hypr/wallpaper-dark.jpg", "/home/user/.config/hypr/wallpaper.jpg"]);
+    assert.deepEqual(previewCandidates(s, false, true, "", "/home/user"),
+        ["/home/user/day.jpg", "/home/user/.config/hypr/wallpaper-light.jpg", "/home/user/.config/hypr/wallpaper.jpg"]);
 });
