@@ -455,7 +455,7 @@ if test "\$config" = lock; then
 fi
 # As the shell, with no wallpaper to draw, it records none for the lock.
 if test "\$config" = shell && ! test -e "\$(dirname "\$0")/no-wallpaper-record"; then
-    printf '\n' >"\$XDG_RUNTIME_DIR/tide-wallpaper"
+    printf '\nfill\n' >"\$XDG_RUNTIME_DIR/tide-wallpaper"
 fi
 if test -f "\$(dirname "\$0")/load-\$config.txt"; then
     cat "\$(dirname "\$0")/load-\$config.txt"

@@ -4,9 +4,10 @@ import Quickshell.Wayland
 import "lib/appearance.mjs" as Appearance
 
 // The wallpaper on one monitor (SPEC.md §15): on the background layer,
-// under everything, a picture filling the monitor as swaybg's fill mode
-// does, or a color filling it plainly. With no wallpaper there's no window
-// at all.
+// under everything, a picture placed as wallpaperPosition says (filling
+// the monitor as swaybg's fill mode does, keeping its top or bottom, or
+// fitted whole), or a color filling it plainly. With no wallpaper there's
+// no window at all.
 PanelWindow {
     id: root
 
@@ -26,13 +27,20 @@ PanelWindow {
         left: true
         right: true
     }
-    // A color wallpaper, or under an image that hasn't loaded, or couldn't.
+    readonly property var placement: Appearance.wallpaperPlacement(WallpaperData.position)
+
+    // A color wallpaper, or under an image that hasn't loaded, or couldn't,
+    // or the bars beside one fitted whole.
     color: WallpaperData.color !== "" ? WallpaperData.color : Theme.barBg
 
     Image {
         anchors.fill: parent
         source: WallpaperData.path === "" ? "" : Appearance.fileUrl(WallpaperData.path)
-        fillMode: Image.PreserveAspectCrop
+        // Qt crops from the side away from the alignment, so this is
+        // Appearance.wallpaperFrame's framing.
+        fillMode: root.placement.fit ? Image.PreserveAspectFit : Image.PreserveAspectCrop
+        horizontalAlignment: Image.AlignHCenter
+        verticalAlignment: root.placement.vertical === "top" ? Image.AlignTop : root.placement.vertical === "bottom" ? Image.AlignBottom : Image.AlignVCenter
         asynchronous: true
         // Decoded at the monitor's size rather than the file's: its pixels,
         // which are the window's size times its scale.

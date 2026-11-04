@@ -12,6 +12,7 @@ import {
     expandHome, pickCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
+    POSITIONS, POSITION_CHOICES, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt,
 } from "./appearance.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -578,25 +579,40 @@ test("a wallpaper the shell couldn't draw is passed over for the next", () => {
 });
 
 test("the shell records the wallpaper it draws for the lock, which reads it back", () => {
-    assert.equal(wallpaperRecord("/home/user/Pictures/day 1.jpg"), "/home/user/Pictures/day 1.jpg\n");
-    assert.equal(wallpaperRecord(""), "\n", "none, as an empty line, which a missing file's FileView can still write");
-    assert.deepEqual(recordedWallpaper(wallpaperRecord("")), { path: "", color: "" });
-    assert.deepEqual(recordedWallpaper(wallpaperRecord("/home/user/Pictures/day 1.jpg")), { path: "/home/user/Pictures/day 1.jpg", color: "" });
-    assert.deepEqual(recordedWallpaper(""), { path: "", color: "" });
-    assert.deepEqual(recordedWallpaper("/srv/night.png"), { path: "/srv/night.png", color: "" }, "with no newline");
+    assert.equal(wallpaperRecord("/home/user/Pictures/day 1.jpg"), "/home/user/Pictures/day 1.jpg\nfill\n");
+    assert.equal(wallpaperRecord(""), "\nfill\n", "none, as an empty line, which a missing file's FileView can still write");
+    assert.deepEqual(recordedWallpaper(wallpaperRecord("")), { path: "", color: "", position: "fill" });
+    assert.deepEqual(recordedWallpaper(wallpaperRecord("/home/user/Pictures/day 1.jpg")), { path: "/home/user/Pictures/day 1.jpg", color: "", position: "fill" });
+    assert.deepEqual(recordedWallpaper(""), { path: "", color: "", position: "fill" });
+    assert.deepEqual(recordedWallpaper("/srv/night.png"), { path: "/srv/night.png", color: "", position: "fill" }, "with no newline");
     assert.match(recordedWallpaper("Pictures/day.jpg\n").error, /absolute path/);
     assert.equal(recordedWallpaper("Pictures/day.jpg\n").path, "");
-    assert.match(recordedWallpaper("/a.jpg\n/b.jpg\n").error, /on a line of its own/);
+    assert.match(recordedWallpaper("/a.jpg\nfill\n/b.jpg\n").error, /on a line of its own/);
+});
+
+test("the record carries the position, so the lock frames a picture as the shell does", () => {
+    for (const position of ["fill", "fill-top", "fill-bottom", "fit"]) {
+        assert.equal(wallpaperRecord("/srv/day.jpg", position), `/srv/day.jpg\n${position}\n`);
+        assert.deepEqual(recordedWallpaper(wallpaperRecord("/srv/day.jpg", position)), { path: "/srv/day.jpg", color: "", position });
+    }
+    assert.deepEqual(recordedWallpaper(wallpaperRecord("#1a1d2e", "fit")), { path: "", color: "#1a1d2e", position: "fit" });
+    // Written before positions: the wallpaper's line alone, drawn as fill.
+    assert.deepEqual(recordedWallpaper("/home/user/day.jpg\n"), { path: "/home/user/day.jpg", color: "", position: "fill" });
+    for (const bad of ["/srv/day.jpg\ncenter\n", "#1a1d2e\n/a.jpg\n", "/srv/day.jpg\n\n"]) {
+        const r = recordedWallpaper(bad);
+        assert.match(r.error, /expected a position, one of fill, fill-top, fill-bottom, fit/, JSON.stringify(bad));
+        assert.deepEqual([r.path, r.color, r.position], ["", "", "fill"], "none, as a bad wallpaper is");
+    }
 });
 
 test("a color wallpaper is recorded for the lock as its color, and old records still read", () => {
-    assert.equal(wallpaperRecord("#1a1d2e"), "#1a1d2e\n");
-    assert.deepEqual(recordedWallpaper(wallpaperRecord("#1a1d2e")), { path: "", color: "#1a1d2e" });
-    assert.deepEqual(recordedWallpaper("#ABC\n"), { path: "", color: "#aabbcc" });
+    assert.equal(wallpaperRecord("#1a1d2e"), "#1a1d2e\nfill\n");
+    assert.deepEqual(recordedWallpaper(wallpaperRecord("#1a1d2e")), { path: "", color: "#1a1d2e", position: "fill" });
+    assert.deepEqual(recordedWallpaper("#ABC\n"), { path: "", color: "#aabbcc", position: "fill" });
     // Written before colors: a path, or none, reads as it did.
-    assert.deepEqual(recordedWallpaper("/home/user/day.jpg\n"), { path: "/home/user/day.jpg", color: "" });
-    assert.deepEqual(recordedWallpaper("\n"), { path: "", color: "" });
-    for (const bad of ["#12345\n", "#1a1d2e\n/a.jpg\n", "red\n"]) {
+    assert.deepEqual(recordedWallpaper("/home/user/day.jpg\n"), { path: "/home/user/day.jpg", color: "", position: "fill" });
+    assert.deepEqual(recordedWallpaper("\n"), { path: "", color: "", position: "fill" });
+    for (const bad of ["#12345\n", "red\n"]) {
         const r = recordedWallpaper(bad);
         assert.match(r.error, /absolute path or a color/, JSON.stringify(bad));
         assert.equal(r.path, "");
@@ -788,4 +804,91 @@ test("the page previews what the shell draws now, or the other mode's candidates
         ["/srv/w.png", "/home/user/.config/hypr/wallpaper-dark.jpg", "/home/user/.config/hypr/wallpaper.jpg"]);
     assert.deepEqual(previewCandidates(s, false, true, "", "/home/user"),
         ["/home/user/day.jpg", "/home/user/.config/hypr/wallpaper-light.jpg", "/home/user/.config/hypr/wallpaper.jpg"]);
+});
+
+test("wallpaperPosition is one of the positions, for light and dark both", () => {
+    for (const p of POSITIONS) {
+        assert.deepEqual(parseAppearance(JSON.stringify({ wallpaperPosition: p })), { settings: { wallpaperPosition: p } });
+    }
+    for (const bad of ["center", "", "FILL", 1, null]) {
+        assert.equal(parseAppearance(JSON.stringify({ wallpaperPosition: bad })).error,
+            'wallpaperPosition must be one of "fill", "fill-top", "fill-bottom", "fit"', JSON.stringify(bad));
+    }
+    const loaded = loadAppearance('{"wallpaperPosition": "middle"}', null);
+    assert.deepEqual(loaded.errors, ['appearance.json: wallpaperPosition must be one of "fill", "fill-top", "fill-bottom", "fit"'], "fails at load, naming it");
+    assert.equal(wallpaperPosition(DEFAULTS), "fill", "fill when unset, as before");
+    assert.equal(wallpaperPosition(loadAppearance('{"wallpaperPosition": "fit"}', '{"wallpaperPosition": "fill-top"}').settings), "fill-top", "the local file's wins");
+    assert.deepEqual(JSON.parse(withSetting(null, "wallpaperPosition", "fill-bottom").text), { wallpaperPosition: "fill-bottom" });
+    assert.match(withSetting(null, "wallpaperPosition", "left").error, /wallpaperPosition must be one of/);
+});
+
+test("fill-top keeps the top of a tall picture and trims the bottom", () => {
+    const f = wallpaperFrame(PICTURE, ULTRAWIDE, "fill-top");
+    assert.equal(f.frame.y, 0);
+    assert.equal(f.trimmed.top, 0);
+    close(f.trimmed.bottom, 1 - 1440 / 2150, "a third off the bottom");
+    assert.equal(framingCaption("DP-1", PICTURE, ULTRAWIDE, "fill-top"), "DP-1, 3440×1440: scaled to 3440×2150, trims 33% of its height (710 px bottom)");
+});
+
+test("fill-bottom keeps the bottom and trims the top", () => {
+    const f = wallpaperFrame(PICTURE, ULTRAWIDE, "fill-bottom");
+    close(f.frame.y + f.frame.height, 2400, "down to the bottom edge");
+    assert.equal(f.trimmed.bottom, 0);
+    close(f.trimmed.top, 1 - 1440 / 2150, "a third off the top");
+    assert.equal(framingCaption("DP-1", PICTURE, ULTRAWIDE, "fill-bottom"), "DP-1, 3440×1440: scaled to 3440×2150, trims 33% of its height (710 px top)");
+});
+
+test("a picture wider than the monitor stays centered whichever edge a fill keeps", () => {
+    const wide = { width: 5120, height: 1440 };
+    const screen = { width: 2560, height: 1440 };
+    for (const p of ["fill", "fill-top", "fill-bottom"]) {
+        const f = wallpaperFrame(wide, screen, p);
+        assert.deepEqual(f.visible, { x: 1280, y: 0, width: 2560, height: 1440 }, p);
+        assert.deepEqual(f.trimmed, { top: 0, bottom: 0, left: 0.25, right: 0.25 }, p);
+    }
+});
+
+test("fit shows the whole picture, with bars where it doesn't reach", () => {
+    const f = wallpaperFrame(PICTURE, ULTRAWIDE, "fit");
+    close(f.scale, 0.6, "scaled to the height");
+    assert.deepEqual(f.visible, { x: 0, y: 0, width: 3840, height: 2400 });
+    assert.deepEqual(f.trimmed, { top: 0, bottom: 0, left: 0, right: 0 });
+    close(f.bars.x, (3440 - 2304) / 2, "bars at the sides");
+    assert.equal(f.bars.y, 0);
+    assert.equal(framingCaption("DP-1", PICTURE, ULTRAWIDE, "fit"), "DP-1, 3440×1440: shows all of it at 2304×1440, with 568 px bars left and right");
+    const wide = wallpaperFrame({ width: 5120, height: 1440 }, { width: 2560, height: 1440 }, "fit");
+    close(wide.bars.y, 360, "a wide picture's bars are above and below");
+    assert.equal(framingCaption("DP-1", { width: 5120, height: 1440 }, { width: 2560, height: 1440 }, "fit"), "DP-1, 2560×1440: shows all of it at 2560×720, with 360 px bars top and bottom");
+    assert.equal(wallpaperFrame({ width: 1920, height: 1200 }, { width: 2560, height: 1600 }, "fit").bars.x, 0, "none for a picture the monitor's shape");
+    assert.equal(wallpaperFrame(PICTURE, ULTRAWIDE, "fill").bars.x, 0, "none in a fill");
+    assert.throws(() => wallpaperFrame(PICTURE, ULTRAWIDE, "middle"), /unknown wallpaper position: middle/);
+});
+
+test("the preview of a fit draws the monitor whole, the picture inside it", () => {
+    const l = previewLayout(PICTURE, ULTRAWIDE, "fit", 240, 160);
+    assert.deepEqual(l.frame, { x: 0, y: 0, width: l.width, height: l.height });
+    close(l.width, 240, "the monitor is the wider");
+    close(l.height, 240 * 1440 / 3440, "the monitor's shape");
+    close(l.image.height, l.height, "the picture's full height");
+    close(l.image.x, (240 - l.image.width) / 2, "centered");
+    assert.deepEqual(l.dims, [], "nothing trimmed, so nothing dimmed");
+    const top = previewLayout(PICTURE, ULTRAWIDE, "fill-top", 240, 160);
+    assert.equal(top.frame.y, 0);
+    assert.equal(top.dims.length, 1, "only below");
+});
+
+test("the shell and the lock place a picture as wallpaperFrame says", () => {
+    assert.deepEqual(wallpaperPlacement("fill"), { fit: false, vertical: "center" });
+    assert.deepEqual(wallpaperPlacement("fill-top"), { fit: false, vertical: "top" });
+    assert.deepEqual(wallpaperPlacement("fill-bottom"), { fit: false, vertical: "bottom" });
+    assert.deepEqual(wallpaperPlacement("fit"), { fit: true, vertical: "center" });
+});
+
+test("the page's ‹ and › step through the positions, stopping at either end", () => {
+    assert.deepEqual(POSITION_CHOICES.map(c => c.position), POSITIONS);
+    assert.equal(positionAt({}), 0);
+    assert.equal(positionAt({ wallpaperPosition: "fit" }), 3);
+    assert.equal(steppedPositionAt(0, -1), 0);
+    assert.equal(steppedPositionAt(0, 1), 1);
+    assert.equal(steppedPositionAt(3, 1), 3);
 });

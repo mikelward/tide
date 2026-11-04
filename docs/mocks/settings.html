@@ -82,7 +82,7 @@
 <p class="note"><b>Power</b>: the battery as the bar's popover shows it, the power profile when power-profiles-daemon is there (the page says so when it isn't), and what closing the lid does with no other monitor: Suspend, logind's own; Lock; or Do nothing, which hold logind's lid switch.</p>
 <p class="note"><b>Workspaces</b>: the standing workspaces (the first is home), home's apps and the name patterns, each a list with a bin per entry, arrows where order counts, and a field to add one, refused with the reason when the files wouldn't take it. Then each standing workspace's own settings: a switch for whether its new windows, and launches from it, ask for a workspace (on for home by default), and its pinned apps, which tide's close keys leave open there.</p>
 <p class="note"><b>Floating</b>: the rules that float a window, each a class and, optionally, a title pattern, with arrows, a bin and two fields to add one. Below, Floating now: the floating windows no rule covers, one per class. Always float, or Super+Alt+F for the focused window, fills the fields with its class and exact title, the title selected to trim; Enter or Add adds it. More about this window, opened here, lists what else Hyprland says of it, read-only. The second shows a pattern the shell and Hyprland would read differently refused, saying why.</p>
-<p class="note"><b>Appearance</b>: the wallpaper rows, each with its swatch, choose button and path. A picture has a preview under its row: the whole picture, a frame for what each size of monitor shows, and what it trims dimmed, with the numbers under it. Here a 3840×2400 picture loses a third of its height on a 3440×1440 monitor, and two thirds of its width on a 1440×2560 one turned on its side; each size of monitor has a preview of its own, which wrap. A color has no preview. The times and location rows above them are left out.</p>
+<p class="note"><b>Appearance</b>: the wallpaper rows, each with its swatch, choose button and path. A picture has a preview under its row: the whole picture, a frame for what each size of monitor shows, and what it trims dimmed, with the numbers under it. Here a 3840×2400 picture loses a third of its height on a 3440×1440 monitor, all of it off the bottom with Fill, keep top, and two thirds of its width, equally at each side, on a 1440×2560 one turned on its side; each size of monitor has a preview of its own, which wrap. Wallpaper position, one for light and dark, steps through Fill, centered; Fill, keep top; Fill, keep bottom; and Fit whole picture. The second shows Fit: the whole picture, with the bar's color in the bars beside it. A color has no preview. The times and location rows above them are left out.</p>
 <script>
 // The sidebar: a group's heading (a string), then its pages.
 const PAGES = [
@@ -107,47 +107,60 @@ const pictureSvg = (w, h) => `<svg width="${w}" height="${h}" viewBox="0 0 3840 
   <path d="M0 1800 Q960 1550 1920 1750 T3840 1700 V2400 H0 Z" fill="#26233a"/>
   <path d="M0 2150 Q1200 2000 2400 2120 T3840 2100 V2400 H0 Z" fill="#141322"/>
 </svg>`;
-function framing(img, scr) {
-  const scale = Math.max(scr.width / img.width, scr.height / img.height);
-  const fw = scr.width / scale, fh = scr.height / scale;
-  return { scale, frame: { x: (img.width - fw) / 2, y: (img.height - fh) / 2, width: fw, height: fh } };
+function framing(img, scr, pos) {
+  const scale = (pos === 'fit' ? Math.min : Math.max)(scr.width / img.width, scr.height / img.height);
+  const fw = scr.width / scale, fh = scr.height / scale, spare = img.height - fh;
+  const y = pos === 'fill-top' ? 0 : pos === 'fill-bottom' ? spare : spare / 2;
+  return { scale, frame: { x: (img.width - fw) / 2, y, width: fw, height: fh } };
 }
-function preview(name, scr) {
+function preview(name, scr, pos = 'fill') {
   const img = PICTURE;
-  const { scale, frame: f } = framing(img, scr);
-  const k = Math.min(240 / img.width, 160 / img.height);
-  const r = (x, y, w, h, cls) => `<div class="${cls}" style="left:${x * k}px;top:${y * k}px;width:${w * k}px;height:${h * k}px"></div>`;
+  const { scale, frame: f } = framing(img, scr, pos);
+  const ux = Math.min(0, f.x), uy = Math.min(0, f.y);
+  const uw = Math.max(img.width, f.x + f.width) - ux, uh = Math.max(img.height, f.y + f.height) - uy;
+  const k = Math.min(240 / uw, 160 / uh);
+  const r = (x, y, w, h, cls, style = '') => `<div class="${cls}" style="left:${(x - ux) * k}px;top:${(y - uy) * k}px;width:${w * k}px;height:${h * k}px;${style}"></div>`;
   const vx = Math.max(0, f.x), vy = Math.max(0, f.y), vw = Math.min(img.width, f.x + f.width) - vx, vh = Math.min(img.height, f.y + f.height) - vy;
   const dims = [[0, 0, img.width, vy], [0, vy + vh, img.width, img.height - vy - vh], [0, vy, vx, vh], [vx + vw, vy, img.width - vx - vw, vh]]
     .filter(([, , w, h]) => w > 0.5 && h > 0.5).map(([x, y, w, h]) => r(x, y, w, h, 'dim')).join('');
   const sw = Math.round(img.width * scale), sh = Math.round(img.height * scale);
   const tv = 1 - vh / img.height, th = 1 - vw / img.width;
-  const cap = tv > 0.001
-    ? `scaled to ${sw}×${sh}, trims ${Math.round(tv * 100)}% of its height (${Math.round(vy * scale)} px top, ${Math.round((img.height - vy - vh) * scale)} px bottom)`
+  const bx = Math.round(Math.max(0, -f.x * scale)), by = Math.round(Math.max(0, -f.y * scale));
+  const px = (n, side) => n > 0 ? [`${n} px ${side}`] : [];
+  const cap = bx > 0 ? `shows all of it at ${sw}×${sh}, with ${bx} px bars left and right`
+    : by > 0 ? `shows all of it at ${sw}×${sh}, with ${by} px bars top and bottom`
+    : tv > 0.001
+    ? `scaled to ${sw}×${sh}, trims ${Math.round(tv * 100)}% of its height (${[...px(Math.round(vy * scale), 'top'), ...px(Math.round((img.height - vy - vh) * scale), 'bottom')].join(', ')})`
     : th > 0.001
       ? `scaled to ${sw}×${sh}, trims ${Math.round(th * 100)}% of its width (${Math.round(vx * scale)} px left, ${Math.round((img.width - vx - vw) * scale)} px right)`
       : `shows all of it, scaled to ${sw}×${sh}`;
-  return `<div class="preview"><div class="pic" style="width:${img.width * k}px;height:${img.height * k}px">
-    <div style="left:0;top:0">${pictureSvg(img.width * k, img.height * k)}</div>${dims}${r(f.x, f.y, f.width, f.height, 'frame')}</div>
+  return `<div class="preview"><div class="pic" style="width:${uw * k}px;height:${uh * k}px">
+    ${r(f.x, f.y, f.width, f.height, '', 'background:var(--bar-bg)')}<div style="left:${-ux * k}px;top:${-uy * k}px">${pictureSvg(img.width * k, img.height * k)}</div>${dims}${r(f.x, f.y, f.width, f.height, 'frame')}</div>
     <div class="cap">${name}, ${scr.width}×${scr.height}: ${cap}</div></div>`;
 }
 const wallpaperRow = (label, chip, path) => `<div class="wrow"><span class="l">${label}</span>
   <span class="btn">${chip ? `<span class="chip" style="background:${chip}"></span>` : '<i class="ms">palette</i>'}</span>
   <span class="btn"><i class="ms">folder_open</i></span>
   <span class="path"${path ? '' : ' style="color:var(--fg-faint)"'}>${path || 'default'}</span></div>`;
+const positionRow = (label) => `<div class="srow"><span class="l">Wallpaper position</span><span class="step"><span class="btn"><i class="ms">chevron_left</i></span><span class="v" style="width:140px">${label}</span><span class="btn"><i class="ms">chevron_right</i></span></span></div>`;
 const appearanceRows = () =>
   '<div class="srow"><span class="l" style="font-variant-numeric:tabular-nums">Dark until 07:00</span><span class="sw" style="width:92px">Light now</span></div>' +
   '<div class="srow"><span class="l">Mode</span><span class="step"><span class="btn"><i class="ms">chevron_left</i></span><span class="v" style="width:140px">By the clock</span><span class="btn"><i class="ms">chevron_right</i></span></span></div>' +
   '<div class="srow"><span class="l">Dim inactive windows</span><span class="step"><span class="btn"><i class="ms">remove</i></span><span class="v">7%</span><span class="btn"><i class="ms">add</i></span></span></div>' +
   wallpaperRow('Light wallpaper', '', '~/Pictures/dusk.jpg') +
-  `<div class="previews">${preview('DP-1', { width: 3440, height: 1440 })}${preview('DP-2', { width: 1440, height: 2560 })}</div>` +
-  wallpaperRow('Dark wallpaper', '#13303a', '#13303a');
+  `<div class="previews">${preview('DP-1', { width: 3440, height: 1440 }, 'fill-top')}${preview('DP-2', { width: 1440, height: 2560 }, 'fill-top')}</div>` +
+  wallpaperRow('Dark wallpaper', '#13303a', '#13303a') + positionRow('Fill, keep top');
+const fitRows = () =>
+  wallpaperRow('Light wallpaper', '', '~/Pictures/dusk.jpg') +
+  `<div class="previews">${preview('DP-1', { width: 3440, height: 1440 }, 'fit')}</div>` +
+  wallpaperRow('Dark wallpaper', '#13303a', '#13303a') + positionRow('Fit whole picture');
 const btn = (icon, dim) => `<span class="btn${dim ? ' dim' : ''}"><i class="ms">${icon}</i></span>`;
 const list = (cmds) => cmds.map((c, i) => `<div class="item"><span class="cmd">${c}</span>${btn('arrow_upward', i === 0)}${btn('arrow_downward', i === cmds.length - 1)}${btn('delete')}</div>`).join('');
 const panels = [
   ['Appearance',
    'Light or dark, by the clock, at sunrise and sunset, or always one. A wallpaper is a picture, chosen or typed, or a color from the swatch; empty is conf\u2019s. A picture fills each monitor, trimming what doesn\u2019t fit, as its preview shows.',
    appearanceRows()],
+  ['Appearance', '', fitRows()],
   ['Keyboard',
    'For every keyboard. A layout is XKB\u2019s name for it, such as us, or us,de for two; a variant is one such as dvorak, or none. One set in hyprland.local.lua still wins.',
    '<div class="srow"><span class="l">Layout</span><span class="field" style="width:150px;margin:0;color:var(--fg)">us</span></div><div class="srow"><span class="l">Variant</span><span class="field" style="width:150px;margin:0">none</span></div><div class="srow"><span class="l">Repeat delay</span><span class="step"><span class="btn"><i class="ms">remove</i></span><span class="v">600 ms</span><span class="btn"><i class="ms">add</i></span></span></div><div class="srow"><span class="l">Repeat rate</span><span class="step"><span class="btn"><i class="ms">remove</i></span><span class="v">25/s</span><span class="btn"><i class="ms">add</i></span></span></div>' +

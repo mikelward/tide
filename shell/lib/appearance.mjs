@@ -25,7 +25,10 @@ export const DEFAULTS = Object.freeze({ mode: "schedule", light: "07:00", dark: 
 const MODES = ["schedule", "sun", "light", "dark"];
 // The settings that decide light or dark, and every one there is.
 const THEME_KEYS = ["mode", "light", "dark", "latitude", "longitude"];
-const KEYS = THEME_KEYS.concat(["dimStrength", "lightWallpaper", "darkWallpaper"]);
+const KEYS = THEME_KEYS.concat(["dimStrength", "lightWallpaper", "darkWallpaper", "wallpaperPosition"]);
+// How a picture is placed on a monitor (SPEC.md §15), wallpaperPosition:
+// one for light and dark both.
+export const POSITIONS = Object.freeze(["fill", "fill-top", "fill-bottom", "fit"]);
 const DAY = 24 * 60 * 60 * 1000;
 
 // "HH:MM" as {h, min}, or null when it isn't a 24-hour time.
@@ -81,6 +84,11 @@ export function parseAppearance(text) {
         case "darkWallpaper":
             if (wallpaperError(key, v)) {
                 return { error: wallpaperError(key, v) };
+            }
+            break;
+        case "wallpaperPosition":
+            if (!POSITIONS.includes(v)) {
+                return { error: `wallpaperPosition must be one of ${POSITIONS.map(p => `"${p}"`).join(", ")}` };
             }
             break;
         default:
@@ -635,29 +643,42 @@ export function drawableCandidates(candidates, undrawable) {
 
 // What the shell writes for the lock to draw (SPEC.md §15): the wallpaper
 // it draws now, on a line: a file's path, which the lock blurs, a color as
-// #rrggbb, or an empty line for none. Never empty: Quickshell 0.3.1's
-// FileView.setText skips text equal to what it holds, and a file that
-// doesn't exist holds "", so it could never be written empty.
-export function wallpaperRecord(wallpaper) {
-    return `${wallpaper}\n`;
+// #rrggbb, or an empty line for none; then the position (POSITIONS) on a
+// line of its own, so the lock frames a picture as the shell does. Never
+// empty: Quickshell 0.3.1's FileView.setText skips text equal to what it
+// holds, and a file that doesn't exist holds "", so it could never be
+// written empty.
+export function wallpaperRecord(wallpaper, position = "fill") {
+    return `${wallpaper}\n${position}\n`;
 }
 
-// The wallpaper a record the shell wrote names: {path, color}, each "" but
-// the one it is, both "" for none, or both "" and an error for one that's
-// neither a file's absolute path nor a color on a line. A record from
+// The wallpaper a record the shell wrote names: {path, color, position},
+// path and color each "" but the one it is, both "" for none. One that's
+// neither a file's absolute path nor a color on a line, or whose position
+// isn't one, is none, with an error. A record from before positions, the
+// wallpaper's line alone, is "fill", as the shell drew it then; one from
 // before colors, a path or none, reads as it did.
 export function recordedWallpaper(text) {
-    const line = text.endsWith("\n") ? text.slice(0, -1) : text;
+    const lines = (text.endsWith("\n") ? text.slice(0, -1) : text).split("\n");
+    const none = error => ({ path: "", color: "", position: "fill", error });
+    if (lines.length > 2) {
+        return none("expected a file's absolute path or a color, on a line of its own, then a position");
+    }
+    const line = lines[0];
+    const position = lines.length > 1 ? lines[1] : "fill";
+    if (!POSITIONS.includes(position)) {
+        return none(`expected a position, one of ${POSITIONS.join(", ")}, on the line after the wallpaper`);
+    }
     if (line === "") {
-        return { path: "", color: "" };
+        return { path: "", color: "", position };
     }
     if (wallpaperColor(line) !== "") {
-        return { path: "", color: wallpaperColor(line) };
+        return { path: "", color: wallpaperColor(line), position };
     }
-    if (!line.startsWith("/") || /[\n\r\0]/.test(line)) {
-        return { path: "", color: "", error: "expected a file's absolute path or a color, on a line of its own" };
+    if (!line.startsWith("/") || /[\r\0]/.test(line)) {
+        return none("expected a file's absolute path or a color, on a line of its own");
     }
-    return { path: line, color: "" };
+    return { path: line, color: "", position };
 }
 
 // A file's path as a file: URL, each part escaped, so a name with a space,
@@ -668,8 +689,14 @@ export function fileUrl(path) {
 
 // Where a picture lands on a monitor (SPEC.md §15), for the Appearance
 // page's preview (§16). `image` and `screen` are {width, height} in pixels;
-// `position` is how the picture is placed. "fill" scales it to cover the
-// monitor, centered, as swaybg's fill does, trimming what's left over.
+// `position` is one of POSITIONS:
+// - "fill" scales it to cover the monitor, centered, as swaybg's fill
+//   does, trimming what's left over;
+// - "fill-top" covers it too, keeping the top and trimming the bottom;
+// - "fill-bottom" keeps the bottom and trims the top;
+// - "fit" shows all of it, centered, with bars where it doesn't reach.
+// A picture wider than the monitor is trimmed equally at the sides in each
+// fill: the position only chooses which way a tall one gives.
 // Returns null until both sizes are known (an image still loading), or:
 // - scale: monitor pixels per picture pixel;
 // - shown: the picture's size on the monitor, {width, height};
@@ -677,18 +704,23 @@ export function fileUrl(path) {
 //   height};
 // - visible: the part of the picture the monitor shows, the same way;
 // - trimmed: the fraction of the picture's width or height cut off each
-//   side, {top, bottom, left, right}.
+//   side, {top, bottom, left, right};
+// - bars: the width of each bar beside the picture, {x, y}, in the
+//   monitor's pixels: none but for "fit".
 export function wallpaperFrame(image, screen, position = "fill") {
     if (!(image?.width > 0 && image?.height > 0 && screen?.width > 0 && screen?.height > 0)) {
         return null;
     }
-    if (position !== "fill") {
+    if (!POSITIONS.includes(position)) {
         throw new Error(`unknown wallpaper position: ${position}`);
     }
-    const scale = Math.max(screen.width / image.width, screen.height / image.height);
+    const fit = position === "fit";
+    const scale = (fit ? Math.min : Math.max)(screen.width / image.width, screen.height / image.height);
     const width = screen.width / scale;
     const height = screen.height / scale;
-    const frame = { x: (image.width - width) / 2, y: (image.height - height) / 2, width, height };
+    const spare = image.height - height;
+    const y = position === "fill-top" ? 0 : position === "fill-bottom" ? spare : spare / 2;
+    const frame = { x: (image.width - width) / 2, y, width, height };
     const x0 = Math.max(0, frame.x);
     const y0 = Math.max(0, frame.y);
     const x1 = Math.min(image.width, frame.x + frame.width);
@@ -704,6 +736,7 @@ export function wallpaperFrame(image, screen, position = "fill") {
             left: x0 / image.width,
             right: (image.width - x1) / image.width,
         },
+        bars: { x: Math.max(0, -frame.x * scale), y: Math.max(0, -frame.y * scale) },
     };
 }
 
@@ -721,6 +754,13 @@ export function framingCaption(name, image, screen, position = "fill") {
     const parts = (a, aName, b, bName, whole) => [[a, aName], [b, bName]]
         .filter(([v]) => px(v, whole) > 0).map(([v, side]) => `${px(v, whole)} px ${side}`).join(", ");
     const t = f.trimmed;
+    const bars = { x: Math.round(f.bars.x), y: Math.round(f.bars.y) };
+    if (bars.x > 0) {
+        return `${size}: shows all of it at ${w}×${h}, with ${bars.x} px bars left and right`;
+    }
+    if (bars.y > 0) {
+        return `${size}: shows all of it at ${w}×${h}, with ${bars.y} px bars top and bottom`;
+    }
     if (px(t.top + t.bottom, h) > 0) {
         return `${size}: scaled to ${w}×${h}, trims ${Math.round((t.top + t.bottom) * 100)}% of its height (${parts(t.top, "top", t.bottom, "bottom", h)})`;
     }
@@ -754,7 +794,8 @@ export function previewScreens(screens) {
 // A preview's drawing, at most `maxWidth` by `maxHeight`: the picture and
 // the monitor's frame over it, and the parts of the picture outside the
 // frame, which are dimmed; each {x, y, width, height} in the preview's own
-// pixels. null while wallpaperFrame is.
+// pixels. A frame bigger than the picture ("fit") is drawn whole, its bars
+// around the picture. null while wallpaperFrame is.
 export function previewLayout(image, screen, position, maxWidth, maxHeight) {
     const f = wallpaperFrame(image, screen, position);
     if (f === null) {
@@ -796,4 +837,41 @@ export function previewCandidates(settings, dark, nowDark, drawn, home, env = ""
         return [];
     }
     return wallpaperCandidates(settings, dark, home, env);
+}
+
+// The position in effect.
+export function wallpaperPosition(settings) {
+    return settings.wallpaperPosition ?? "fill";
+}
+
+// How Wallpaper.qml and the lock place a picture at `position`: fitted or
+// cropped, and which edge to keep, as Qt's Image fillMode and
+// verticalAlignment take them. Qt crops from the side its alignment is
+// away from (QQuickImage::updatePaintNode), so this draws what
+// wallpaperFrame says. A picture wider than the monitor stays centered.
+export function wallpaperPlacement(position) {
+    return {
+        fit: position === "fit",
+        vertical: position === "fill-top" ? "top" : position === "fill-bottom" ? "bottom" : "center",
+    };
+}
+
+// The Appearance page's positions (SPEC.md §16), in the order ‹ and › step
+// through them.
+export const POSITION_CHOICES = Object.freeze([
+    Object.freeze({ position: "fill", label: "Fill, centered" }),
+    Object.freeze({ position: "fill-top", label: "Fill, keep top" }),
+    Object.freeze({ position: "fill-bottom", label: "Fill, keep bottom" }),
+    Object.freeze({ position: "fit", label: "Fit whole picture" }),
+]);
+
+// The index in POSITION_CHOICES of `settings`' position.
+export function positionAt(settings) {
+    return Math.max(0, POSITION_CHOICES.findIndex(c => c.position === wallpaperPosition(settings)));
+}
+
+// The index `steps` steps through POSITION_CHOICES from `at`, stopping at
+// either end.
+export function steppedPositionAt(at, steps) {
+    return Math.max(0, Math.min(POSITION_CHOICES.length - 1, at + steps));
 }

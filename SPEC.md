@@ -3682,22 +3682,40 @@ to be focused.
     - `conf`'s `~/.config/hypr/wallpaper-light.jpg` or `-dark.jpg`, as
       `theme.sh` names them;
     - `conf`'s `~/.config/hypr/wallpaper.jpg`.
-  - An image fills each monitor, cropping what doesn't fit, as swaybg's
-    `fill` does. A directory isn't one it can read, and one it can't
-    decode is logged and passed over for the next. With none, it draws no
+  - `wallpaperPosition` places an image on each monitor. It's one setting
+    for light and dark both. Anything else fails at load, naming the
+    setting.
+    - `fill`, the default, covers the monitor, centered, and trims what
+      doesn't fit, as swaybg's `fill` does.
+    - `fill-top` covers it too, but keeps the picture's top and trims only
+      the bottom. `fill-bottom` keeps the bottom and trims the top.
+    - A picture wider than the monitor is trimmed equally at both sides in
+      each fill. The position only chooses which edge of a tall one stays.
+    - `fit` shows the whole picture, centered, scaled to fit. The bars
+      beside it are the bar's background color, `Theme.barBg`.
+    - The shell draws it with Qt's Image: a crop or a fit, aligned to the
+      edge kept. Qt crops from the side away from its alignment
+      (`QQuickImage::updatePaintNode`).
+  - A directory isn't an image it can read, and one it can't decode is
+    logged and passed over for the next. With none, it draws no
     wallpaper, and logs which it tried.
   - It's looked for again as the mode or the settings change, so a switch
     to dark shows the dark one at once.
   - So `tide-shell` runs no wallpaper daemon beside the Quickshell shell.
   - The lock shows the same one behind its password face, blurred and
-    darkened so the face's light text reads on a light picture. A color
-    isn't blurred, only darkened as a picture is. The screensaver face
-    stays black.
+    darkened so the face's light text reads on a light picture. It frames
+    a picture at the same position; a fit's bars show the lock's
+    gradient. A color isn't blurred, only darkened as a picture is. The
+    screensaver face stays black.
   - The shell records what it draws in the session's runtime directory
     (`tide-wallpaper`), and the lock follows that. So the two agree
     without the lock working out the mode or the settings itself.
-    - The record is one line: the file's path, the color as `#rrggbb`, or
-      empty for none. A record from before colors reads as it did.
+    - The record is two lines. The first is the file's path, the color as
+      `#rrggbb`, or empty for none. The second is the position.
+    - A record from before positions, the first line alone, reads as
+      `fill`. One from before colors reads as it did.
+    - A record whose position isn't one is refused as a bad path is: the
+      lock logs it and shows none.
     - With no record, or none in it, the lock keeps its own gradient.
   - The greeter runs before anyone logs in, with no one's wallpaper to
     show, so it keeps its gradient too.
@@ -3746,7 +3764,7 @@ tide's own, and links out for the rest:
 | Workspaces | the standing workspaces, home first; the apps that live on home; and the patterns that name a workspace from a window's title (§6.5) |
 | Floating | the rules that float a window by its class and title, and the floating windows no rule covers yet (§6.4) |
 | **General** | |
-| Appearance | dark / light / automatic, schedule, dim strength, wallpaper image or color |
+| Appearance | dark / light / automatic, schedule, dim strength, wallpaper image or color, and its position, with a preview |
 | Notifications | Do not disturb on a schedule, whether critical alerts break through, and the muted apps and sites (§9) |
 | Clipboard | the history on or off, how many copies it keeps, and Clear history (§8.4) |
 | Clocks | the system's time zone; zones, order, labels, 24 h, dedupe-local |
@@ -3981,11 +3999,16 @@ stays hand-written.
       names its own path, can't answer first.
     - **Cost and reliability:** nothing new to install, since the portal is
       tide's file chooser already; one D-Bus call a choice.
+  - **Wallpaper position** steps through the positions with ‹ and ›:
+    Fill, centered; Fill, keep top; Fill, keep bottom; and Fit whole
+    picture. It's `wallpaperPosition` (§15), one for light and dark.
   - **Each picture has a preview** under its row, so a crop is no
-    surprise. A color, or no picture, has none.
+    surprise. A color, or no picture, has none. It shows the position
+    chosen.
     - It's the whole picture, scaled to fit 240 by 160 px, with a frame
       over it for the part a monitor shows. What the monitor trims is
-      dimmed.
+      dimmed. For a fit, the frame is the whole monitor, its bars around
+      the picture.
     - There's one preview for each size of monitor connected, labeled with
       the monitors' names. Monitors of the same size share one.
     - A line under it gives the numbers in the monitor's pixels, such as
