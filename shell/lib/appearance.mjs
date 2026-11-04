@@ -488,7 +488,7 @@ export function withSetting(localText, key, value, sharedText = null) {
 
 // The inactive dim's strength (SPEC.md §6.2) when nothing sets it: conf's
 // hyprland.lua's, which applies then.
-export const DIM_STRENGTH = 0.07;
+export const DIM_STRENGTH = 0.12;
 
 // The page's − and + for it: a point at a time, from none to half.
 const DIM_STEP = 0.01;

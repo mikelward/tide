@@ -463,12 +463,12 @@ test("a time steps past the other one, so light and dark can cross", () => {
     assert.equal(withSetting('{"light": "18:45"}', "light", steppedTimePast("18:45", 1, "19:00")).error, undefined);
 });
 
-test("the dim strength is a number from 0 to 1, conf's 0.07 until it's set", () => {
+test("the dim strength is a number from 0 to 1, conf's 0.12 until it's set", () => {
     assert.deepEqual(parseAppearance('{"dimStrength": 0.12}'), { settings: { dimStrength: 0.12 } });
     assert.equal(parseAppearance('{"dimStrength": 1.5}').error, "dimStrength must be a number from 0 to 1");
     assert.equal(parseAppearance('{"dimStrength": "strong"}').error, "dimStrength must be a number from 0 to 1");
-    assert.equal(DIM_STRENGTH, 0.07);
-    assert.equal(dimStrength(DEFAULTS), 0.07);
+    assert.equal(DIM_STRENGTH, 0.12);
+    assert.equal(dimStrength(DEFAULTS), 0.12);
     assert.equal(dimStrength(loadAppearance(null, '{"dimStrength": 0}').settings), 0, "none at all is a strength");
     assert.equal(dimStrength(loadAppearance('{"dimStrength": 0.2}', '{"dimStrength": 0.1}').settings), 0.1, "the local file's wins");
 });
