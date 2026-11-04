@@ -2248,8 +2248,9 @@ See [`picker.png`](docs/mocks/picker.png).
   until the clipboard is replaced.
 - Once the copy has worked, the shell sends the window
   that was focused when the picker opened `Ctrl+V`, or `Ctrl+Shift+V`
-  when its class is a terminal's (kitty, foot, Alacritty, WezTerm,
-  Ghostty, Konsole, GNOME's terminals).
+  when its class is a terminal's (foot, Alacritty, WezTerm, Ghostty,
+  Konsole, GNOME's terminals). Not kitty: conf's `kitty.conf` maps
+  `Ctrl+V` to paste and sends `Ctrl+Shift+V` as a literal `^V`.
   - Hyprland 0.56.2's `hl.dsp.send_shortcut({ mods, key, window })`
     sends it (`LuaBindingsDispatchers.cpp`). Given a window, it moves
     the keyboard there for the one key, then back, so it doesn't wait

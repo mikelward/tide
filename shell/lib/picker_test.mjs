@@ -204,7 +204,10 @@ test("a failed listing shows why in the tab; a good one lists", () => {
 
 test("Enter pastes with Ctrl+V, or Ctrl+Shift+V in a terminal", () => {
     assert.deepEqual(pasteShortcut("google-chrome"), { mods: "CTRL", key: "V" });
-    assert.deepEqual(pasteShortcut("kitty"), { mods: "CTRL SHIFT", key: "V" });
+    assert.deepEqual(pasteShortcut("foot"), { mods: "CTRL SHIFT", key: "V" });
+    // conf's kitty.conf maps Ctrl+V to paste, and Ctrl+Shift+V to a literal
+    // ^V, so kitty gets Ctrl+V.
+    assert.deepEqual(pasteShortcut("kitty"), { mods: "CTRL", key: "V" });
     assert.deepEqual(pasteShortcut("alacritty"), { mods: "CTRL SHIFT", key: "V" }, "classes match whatever their case");
     assert.deepEqual(pasteShortcut(""), { mods: "CTRL", key: "V" });
 });

@@ -284,8 +284,10 @@ once you have agreed with it or reversed it.
 - [ ] **Enter in the picker pastes with Ctrl+Shift+V into a terminal,**
   by window class (`TERMINALS` in `shell/lib/picker.mjs`), and Ctrl+V
   anywhere else. A terminal missing from the list gets Ctrl+V, which
-  its shell reads as a literal-next. The alternative is a setting per
-  class. Reversible: the list is one constant.
+  its shell reads as a literal-next. kitty isn't on it, since conf's
+  kitty.conf pastes on Ctrl+V and makes Ctrl+Shift+V a literal ^V. The
+  alternative is a setting per class. Reversible: the list is one
+  constant.
 - [ ] **Clipboard history keeps the newest 200 entries**, and survives
   logout, in cliphist's default database. cliphist's default is 750; 200
   is a few days of copying and keeps old secrets around for less long. The

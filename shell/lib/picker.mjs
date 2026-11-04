@@ -275,9 +275,9 @@ export function listedHistory(failed, out, errors) {
 }
 
 // Terminals, by window class, which paste on Ctrl+Shift+V: their Ctrl+V
-// goes to the program running in them.
+// goes to the program running in them. Not kitty: conf's kitty.conf maps
+// Ctrl+V to paste_from_clipboard and sends Ctrl+Shift+V as a literal ^V.
 export const TERMINALS = Object.freeze([
-    "kitty",
     "foot",
     "footclient",
     "Alacritty",
