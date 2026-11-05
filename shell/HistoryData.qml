@@ -2,7 +2,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Io
 import "lib/history.mjs" as History
 import "lib/notifications.mjs" as Notes
@@ -193,7 +192,7 @@ Singleton {
         }
 
         function toggle(): void {
-            const monitor = Hyprland.focusedMonitor?.name ?? "";
+            const monitor = Compositor.focusedMonitorName;
             if (monitor === "") {
                 root.close();
             } else {

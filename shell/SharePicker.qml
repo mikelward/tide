@@ -50,7 +50,7 @@ PanelWindow {
         if (root.reply !== "") {
             root.answer("");
         }
-        const focused = Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor) ?? null;
+        const focused = Compositor.focusedScreen;
         if (focused) {
             screen = focused;
         }

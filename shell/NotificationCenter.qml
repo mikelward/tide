@@ -19,7 +19,7 @@ PanelWindow {
     required property var panel
 
     screen: root.panel.screen
-    visible: HistoryData.openOn !== "" && HistoryData.openOn === (root.panel.monitor?.name ?? "")
+    visible: HistoryData.openOn !== "" && HistoryData.openOn === (root.panel.screen?.name ?? "")
     anchors {
         top: true
         right: true

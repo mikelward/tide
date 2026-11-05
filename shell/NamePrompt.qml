@@ -81,7 +81,7 @@ PanelWindow {
         root.shownFor = root.request.id;
         root.edited = false;
         root.selected = 0;
-        const focused = Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor);
+        const focused = Compositor.focusedScreen;
         if (focused) {
             root.screen = focused;
         }

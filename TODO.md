@@ -23,9 +23,16 @@ once you have agreed with it or reversed it.
   display managers honor, so it isn't offered where it can't start.
 - **`tide doctor` skips the home workspace in tidewm's session**
   (2026-11-05), saying so on stderr, rather than reporting Hyprland as not
-  running: the check reads Hyprland's persistent workspaces, and tidewm's
-  home comes from conf's config for it, which doesn't exist yet. Its bars
-  and config errors are tidewm's own there.
+  running: the check reads Hyprland's persistent workspaces, and on
+  tidewm the shell will keep home itself, with `persist workspace`, which
+  it doesn't yet: tidewm's config can't know home's name. Its bars and
+  config errors are tidewm's own there.
+- **The shell asks tidewm through Quickshell's I3 module** (2026-11-05),
+  which speaks sway's IPC as tidewm does, rather than through a client of
+  tide's own: it's in every Quickshell build, and tidewm's output focus
+  event keeps its focused monitor right. Its workspaces don't fit
+  tidewm's, which span every monitor, so the workspaces step may read
+  tidewm's events itself.
 - **`Super+PgUp`/`PgDn` pass over a workspace whose only windows are
   minimized** (2026-11-04), as over an empty one, since there's nothing to
   see there and Hyprland has no window on it (§6.7); `Super+Shift+PgUp`/
@@ -1897,17 +1904,31 @@ history; tide's changes go on top of v0.9 there. Before rewriting §3.1 around i
 
 **A session on it**, as an option beside Hyprland's, never the default
 until it's done (SPEC.md §5.3). The entry, the wrapper, the units' target
-and the portals are in, and `setup --tidewm` (scripts) builds tidewm at a
-pinned commit, where the distro packages wlroots 0.20. Next, in order:
+and the portals are in, `setup --tidewm` (scripts) builds tidewm at a
+pinned commit, where the distro packages wlroots 0.20, and conf has a
+tidewm config with tide's keys and inputs. `tide`'s grants, focused
+workspace and `prompt-focus`, and `tide doctor`'s bar and config-error
+checks, read tidewm's IPC. What's left is the shell, which reads
+Hyprland's: `Compositor.qml` asks whichever compositor the session runs,
+and so far says which monitor has focus, for the popups, prompts, OSD
+and launcher. Next, in order:
 
-1. `tide doctor`'s home-workspace check on tidewm, once conf's config
-   makes home persistent there. Its bar and config-error checks already
-   read tidewm's IPC, as `tide`'s grants, focused workspace and
-   `prompt-focus` do.
-2. conf: a tidewm config with tide's keys, rules and inputs, and
-   hypridle's displays off without `hyprctl`.
-3. The shell's tidewm backend: its workspaces, windows and monitors from
-   sway's IPC, in place of `Quickshell.Hyprland`.
+1. Workspaces: the bar's and the switcher's, one per name on tidewm, as
+   a workspace there spans every monitor; going to one and renaming one;
+   and home, kept with `persist workspace` as the shell starts and when
+   home is renamed, which `tide doctor` then checks.
+2. Windows: a list from tidewm's tree and window events, by container
+   id: titles, apps, focus order, urgency and the shell's marks
+   (`urgent_order`), and focusing, moving and closing one.
+3. Minimizing, which uses Hyprland's special workspaces, so needs
+   something of tidewm's own.
+4. The settings pages that write `tide-*.lua` for conf's hyprland.lua
+   (floating, input, appearance, outputs and layouts) and the keys page:
+   each over tidewm's IPC or config, or said to be Hyprland's only.
+5. The rest: the lock's keyboard layout (`GET_INPUTS` and input events),
+   the greeter's displays off, the share picker (xdg-desktop-portal-wlr's
+   chooser), the focus guard's evals, and an integration test against a
+   stand-in for tidewm, as `shell/hyprland_stand_in.py` is Hyprland's.
 
 If the fork is adopted, machines build a pinned release tag, never a branch:
 

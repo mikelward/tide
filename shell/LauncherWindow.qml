@@ -78,7 +78,7 @@ PanelWindow {
         };
     })
     readonly property var workspaceList: root.tab === "workspaces" ? Workspaces.barWorkspaces({
-        monitor: Hyprland.focusedMonitor?.name ?? "",
+        monitor: Compositor.focusedMonitorName,
         monitors: Hyprland.monitors.values.map(m => ({
             name: m.name,
             workspace: m.activeWorkspace ? m.activeWorkspace.id : null
@@ -123,7 +123,7 @@ PanelWindow {
         if (visible) {
             return;
         }
-        const focused = onScreen ?? Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor);
+        const focused = onScreen ?? Compositor.focusedScreen;
         if (focused) {
             screen = focused;
         }
@@ -131,7 +131,7 @@ PanelWindow {
         screenshotDelay.stop();
         pending = "";
         windowAtOpen = Workspaces.normalizeAddress(Hyprland.activeToplevel?.address);
-        outputAtOpen = Hyprland.focusedMonitor?.name ?? "";
+        outputAtOpen = Compositor.focusedMonitorName;
         session += 1;
         openedAt = Date.now();
         apps = Search.launcherItems(DesktopEntries.applications.values, LauncherData.desktop);

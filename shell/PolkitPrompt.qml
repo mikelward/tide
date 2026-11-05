@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Wayland
 import "lib/polkit.mjs" as Polkit
 
@@ -23,7 +22,7 @@ PanelWindow {
     // It opens on the monitor you're on, and stays there.
     onWantedChanged: {
         if (wanted) {
-            const focused = Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor);
+            const focused = Compositor.focusedScreen;
             if (focused) {
                 screen = focused;
             }
