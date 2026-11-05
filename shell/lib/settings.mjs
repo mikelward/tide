@@ -165,7 +165,7 @@ export const PAGES = Object.freeze([
         label: "Start at login",
         icon: "system-run-symbolic",
         keywords: ["startup", "autostart", "login items"],
-        about: "Commands started once as you log in, one after another in this order, without taking focus: each is a program and its arguments, such as google-calendar, and one already running isn't started again. A home app's window goes to home. A change takes effect at the next login. The list is this machine's own once changed.",
+        about: "These start when you log in, in this order. One already running is skipped. Changes apply at your next login.",
         advanced: null,
     },
 ]);

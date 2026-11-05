@@ -177,7 +177,7 @@ const panels = [
    '<div class="head">SHORTCUTS</div><div class="about" style="padding-top:2px">The key bindings Hyprland has now, from conf\u2019s hyprland.lua and hyprland.local.lua, in their order. What one does is its description in hl.bind.</div>' +
    binds([['Super+Space', 'Launcher'], ['Super+Return', 'Go to a workspace by name'], ['Super+V', 'Clipboard history'], ['Super+L', 'Lock'], ['Super+S', 'Keep awake']])],
   ['Start at login',
-   'Commands started once as you log in, one after another in this order, without taking focus: each is a program and its arguments, such as google-calendar, and one already running isn’t started again. A home app’s window goes to home. A change takes effect at the next login. The list is this machine’s own once changed.',
+   'These start when you log in, in this order. One already running is skipped. Changes apply at your next login.',
    list(['google-calendar', 'google-chat']) +
    '<div class="field typing">sh -c &quot;sleep 5; nm-applet&quot;</div>' +
    '<div class="refused">sh -c &quot;sleep 5; nm-applet&quot; has a quote, backslash or $, which runs as typed, with no shell; put shell syntax in a script; not changing Start at login</div>'],
