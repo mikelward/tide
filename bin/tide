@@ -133,6 +133,16 @@
 #     outside tide), the level changes and nothing else happens; a
 #     shell that fails to show it is reported, and still exits 0.
 #
+#   tide lock
+#
+#     Locks the session now: Super+L and the shell's Lock run it (SPEC.md
+#     §10). With hypridle running, it's `loginctl lock-session`: logind's
+#     Lock reaches hypridle, whose lock_cmd starts the lock. Without
+#     hypridle, nothing answers logind, so it starts tide-lock.service
+#     itself, or hyprlock where that isn't installed or won't start, as
+#     lock_cmd does. A critical notification then says idle and suspend
+#     won't lock either. Exits 1 if nothing could lock.
+#
 #   tide idle-lock
 #
 #     Locks the session for idleness: hypridle's lock step runs it in
@@ -215,6 +225,7 @@ usage() {
     echo "       $prog autostart-allowed UNIT" >&2
     echo "       $prog network-agent" >&2
     echo "       $prog brightness STEP" >&2
+    echo "       $prog lock" >&2
     echo "       $prog idle-lock" >&2
     echo "       $prog idle-suspend [--unplugged | --cancel]" >&2
     echo "       $prog prompt-focus" >&2
@@ -1071,6 +1082,58 @@ brightness() {
     fi
 }
 
+# A notification that stays until it's seen, as the lock's own fallback
+# sends: one sent while locking waits under the lock.
+tell_critical() {
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send --urgency=critical -a tide "$1" "$2" ||
+            echo "$prog: couldn't send the notification \"$1\"" >&2
+    else
+        echo "$prog: no notify-send, so only the journal says \"$1\"" >&2
+    fi
+}
+
+lock() {
+    test $# -eq 0 || usage
+    hypridle=$(systemctl --user is-active hypridle.service 2>&1)
+    if test "$hypridle" = active; then
+        if loginctl lock-session; then
+            return 0
+        else
+            status=$?
+        fi
+        echo "$prog lock: loginctl lock-session failed (exit $status), so the lock starts without logind" >&2
+    else
+        echo "$prog lock: hypridle.service is ${hypridle:-not active}, so nothing answers logind's Lock, and the lock starts without it" >&2
+        tell_critical "Idle and suspend won't lock" "hypridle isn't running. Run tide doctor to see why."
+    fi
+    if ! state=$(systemctl --user show -p LoadState --value tide-lock.service 2>&1); then
+        echo "$prog lock: couldn't check tide-lock.service ($state), so hyprlock locks instead" >&2
+    elif test "$state" != loaded; then
+        echo "$prog lock: tide-lock.service is ${state:-not known}, so hyprlock locks instead" >&2
+    elif systemctl --user start tide-lock.service; then
+        # A lock that can't run fails the unit, and its OnFailure= runs
+        # hyprlock.
+        return 0
+    else
+        echo "$prog lock: couldn't start tide-lock.service, so hyprlock locks instead" >&2
+    fi
+    # $TIDE_HYPRLOCK stands in for hyprlock in the tests.
+    hyprlock=${TIDE_HYPRLOCK:-hyprlock}
+    # Only this user's hyprlock counts: another user's locks only their
+    # session. Without pgrep, one is started, which is the safe way to err.
+    if pgrep -u "$(id -u)" -x "$hyprlock" >/dev/null 2>&1; then
+        return 0
+    fi
+    if ! command -v "$hyprlock" >/dev/null 2>&1; then
+        echo "$prog lock: there's no hyprlock either, so the session isn't locked" >&2
+        tell_critical "The session didn't lock" "Neither tide-lock nor hyprlock could run. Run tide doctor to see why."
+        return 1
+    fi
+    tell_critical "The tide lock failed" "hyprlock locked the session instead. Run tide doctor to see why."
+    exec "$hyprlock"
+}
+
 idle_lock() {
     test $# -eq 0 || usage
     dir=${XDG_RUNTIME_DIR:-}
@@ -1290,6 +1353,7 @@ case "${1:-}" in
     autostart-allowed) shift; autostart_allowed "$@" ;;
     network-agent) shift; network_agent "$@" ;;
     brightness) shift; brightness "$@" ;;
+    lock) shift; lock "$@" ;;
     idle-lock) shift; idle_lock "$@" ;;
     idle-suspend) shift; idle_suspend "$@" ;;
     prompt-focus) shift; prompt_focus "$@" ;;

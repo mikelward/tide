@@ -20,7 +20,9 @@ const POWER = new Set(["suspend", "reboot", "poweroff"]);
 // when something blocks it, unless `force` says to go ahead anyway.
 export function actionCommand(id, force = false) {
     if (id === "lock") {
-        return ["loginctl", "lock-session"];
+        // Through logind, or without it when hypridle isn't there to answer
+        // (SPEC.md §10).
+        return ["tide", "lock"];
     }
     if (id === "logout") {
         return ["uwsm", "stop"];

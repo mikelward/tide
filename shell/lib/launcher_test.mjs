@@ -470,7 +470,7 @@ test("screenshots wait for the launcher to go, the session runs through logind o
     assert.deepEqual(quickCommand("screenshot-screen", { output: "DP-2" }), { run: ["screenshot", "--output", "DP-2"], afterClose: true });
     assert.deepEqual(quickCommand("screenshot-screen"), { run: ["screenshot"], afterClose: true });
     assert.deepEqual(quickCommand("screenshot-screen", { output: "" }), { run: ["screenshot"], afterClose: true });
-    assert.deepEqual(quickCommand("lock"), { run: ["loginctl", "lock-session"], afterClose: false, power: false });
+    assert.deepEqual(quickCommand("lock"), { run: ["tide", "lock"], afterClose: false, power: false });
     // A power action checks inhibitors, so it fails when something blocks it.
     assert.deepEqual(quickCommand("suspend"), { run: ["systemctl", "--check-inhibitors=yes", "suspend"], afterClose: false, power: true });
     assert.equal(quickCommand("logout").power, false);

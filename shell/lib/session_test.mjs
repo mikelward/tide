@@ -7,8 +7,8 @@ test("the menu lists lock, log out, suspend, restart and shut down, in that orde
     assert.deepEqual(ACTIONS.map(a => a.label), ["Lock", "Log out", "Suspend", "Restart", "Shut down"]);
 });
 
-test("lock goes through logind and log out through uwsm", () => {
-    assert.deepEqual(actionCommand("lock"), ["loginctl", "lock-session"]);
+test("lock goes through tide lock and log out through uwsm", () => {
+    assert.deepEqual(actionCommand("lock"), ["tide", "lock"]);
     assert.deepEqual(actionCommand("logout"), ["uwsm", "stop"]);
     assert.equal(isPower("lock"), false);
     assert.equal(isPower("logout"), false);

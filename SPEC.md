@@ -3038,6 +3038,18 @@ talk, a demo, or a meeting room's screen.
 - **All of them go through logind.** `loginctl lock-session` raises logind's
   `Lock` signal; hypridle's `lock_cmd` then starts `tide-lock.service`.
   There is one path to test.
+- **Except without hypridle** (maintainer, 2026-11-05). Then nothing
+  answers logind's `Lock`. A leftover drop-in once skipped hypridle at
+  every login, and `Super+L` did nothing.
+  - So `Super+L` and the shell's Lock run `tide lock`. With hypridle
+    running, that's `loginctl lock-session`. Without it, it starts
+    `tide-lock.service` itself, or hyprlock where that isn't installed or
+    won't start, as `lock_cmd` does.
+  - A critical notification, "Idle and suspend won't lock", waits under the
+    lock, since only hypridle locks for those. `tide doctor` says why
+    hypridle isn't running.
+  - `conf`'s binding falls back to `loginctl lock-session` where `tide lock`
+    fails, as it does in a tide from before it.
 - **Before sleep.** hypridle runs `before_sleep_cmd` on `PrepareForSleep`.
   `inhibit_sleep = 3` holds the suspend until an ext-session-lock client has
   actually locked, so you always wake to the lock.
