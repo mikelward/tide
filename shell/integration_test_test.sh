@@ -155,7 +155,7 @@ if test "\$1" = ipc; then
         *"call settings addFloating firefox"*) echo 'title "a(?=b)" uses a lookahead or lookbehind, which Hyprland'"'"'s patterns don'"'"'t have; not changing the floating rules' ;;
         *"call settings setWorkspaceAskForName re true"*) : ;;
         *"call settings addPinnedApp in gmail"*) printf '%s\n' '{"standing": ["in", "re", "oc", "me", "docs"], "workspaceSettings": {"in": {"askForName": true, "pinnedApps": ["gmail"]}, "re": {"askForName": true, "pinnedApps": []}}}' >"\$HOME/.config/tide/workspaces.local.json" && printf '%s\n' '-- Written by tide' 'return {' '    home = "in",' '    ask_for_name = {' '        "in",' '        "re",' '    },' '    pinned = {' '        {' '            workspace = "in",' '        },' '    },' '}' >"\$HOME/.config/hypr/tide-workspaces.lua" ;;
-        *"call settings addPinnedApp in Gmail"*) echo "Gmail is listed already; not changing in's pinnedApps" ;;
+        *"call settings addPinnedApp in Gmail"*) echo "Gmail is already in the list; not changing in's pinnedApps" ;;
         *"call settings addWorkspaceItem namePatterns"*) echo 'namePatterns: "[A-Z]+" has no capture group, whose text would be the name; not changing namePatterns' ;;
         *"call settings setPower lidClose lock"*) printf '%s\n' "-- Written by tide's settings panel (SPEC.md §16); edit power.local.json instead." 'return {' '    lid_close = "lock",' '}' >"\$HOME/.config/hypr/tide-power.lua" && : >"\$XDG_RUNTIME_DIR/lid-set" ;;
         *"call settings setPower lidClose hibernate"*) echo 'lidClose must be suspend, lock, nothing, not "hibernate"; not changing lidClose' ;;

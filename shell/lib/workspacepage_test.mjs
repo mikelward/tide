@@ -23,7 +23,7 @@ test("moving a workspace first makes it home", () => {
 });
 
 test("a list the files wouldn't take is refused, saying why", () => {
-    assert.match(editedList(SHARED, null, "standing", l => withItem(l, "RE")).error, /RE is listed already/);
+    assert.match(editedList(SHARED, null, "standing", l => withItem(l, "RE")).error, /RE is already in the list/);
     assert.match(editedList(SHARED, null, "standing", l => withItem(l, 'say "hi"')).error, /^standing: /);
     assert.match(editedList('{"standing": ["in"]}', null, "standing", l => withoutItem(l, 0, "in")).error, /standing must name at least one workspace/);
     assert.match(editedList(SHARED, null, "namePatterns", l => withItem(l, "[A-Z]+")).error, /has no capture group/);
@@ -58,7 +58,7 @@ test("a workspace's switch and pinned apps go to the local file, the settings in
     assert.deepEqual(JSON.parse(off.text).workspaceSettings.in, { askForName: false, pinnedApps: [] }, "matched ignoring case, keeping its own");
     const pinned = editedWorkspace(SHARED, off.text, "in", w => withPinned(w, " gmail "));
     assert.deepEqual(pinned.setting, { askForName: false, pinnedApps: ["gmail"] });
-    assert.match(editedWorkspace(SHARED, pinned.text, "in", w => withPinned(w, "Gmail")).error, /Gmail is listed already/);
+    assert.match(editedWorkspace(SHARED, pinned.text, "in", w => withPinned(w, "Gmail")).error, /Gmail is already in the list/);
     assert.deepEqual(editedWorkspace(SHARED, pinned.text, "in", w => withoutPinned(w, 0, "gmail")).setting.pinnedApps, []);
     assert.match(editedWorkspace(SHARED, pinned.text, "in", w => withoutPinned(w, 0, "x")).error, /entry 1 isn't x/);
     assert.match(editedWorkspace(SHARED, "{", "in", w => withAskForName(w, true)).error, /workspaces.local.json/);

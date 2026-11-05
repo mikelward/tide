@@ -1238,7 +1238,7 @@ assert s == {"in": {"askForName": True, "pinnedApps": ["gmail"]}, "re": {"askFor
     done
     _refused=$(ipc call settings addPinnedApp in Gmail) || exit 1
     case "$_refused" in
-        *"is listed already"*) ;;
+        *"is already in the list"*) ;;
         *)
             echo "FAIL: the Workspaces page should refuse pinning gmail on in twice, saying why; it answered: $_refused" >&2
             exit 1
