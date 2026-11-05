@@ -1,7 +1,8 @@
 # The session lock (SPEC.md §10): tide-lock, a Quickshell process of its
 # own built from the shell's QML. Every lock goes through logind:
 # `loginctl lock-session` raises its Lock signal, and hypridle's lock_cmd
-# starts this unit. It exits 0 once the password is accepted.
+# starts this unit. Without hypridle, `tide lock` starts it for Super+L.
+# It exits 0 once the password is accepted.
 [Unit]
 Description=tide lock screen
 Documentation=https://github.com/mikelward/tide

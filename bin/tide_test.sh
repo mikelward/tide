@@ -18,6 +18,7 @@ check() {
     if "$@"; then pass; else fail "$_name"; fi
 }
 contains() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
+lacks() { ! contains "$@"; }
 not_contains() { ! contains "$@"; }
 
 tmp=$(mktemp -d) || exit 1
@@ -29,9 +30,20 @@ log=$tmp/log
 # Each fake logs its arguments. systemctl sleeps $FAKE_SYSTEMCTL_SLEEP and
 # exits $FAKE_SYSTEMCTL_STATUS; hyprctl answers $FAKE_HYPRCTL_REPLY (ok by
 # default); uwsm runs the command after --, as `uwsm app` does.
+# With $FAKE_IS_ACTIVE set, is-active answers it; with $FAKE_LOADSTATE
+# set, show answers it.
 cat > "$fake/systemctl" <<'FAKE'
 #!/bin/sh
 printf "systemctl %s\n" "$*" >> "$FAKE_LOG"
+if test -n "${FAKE_IS_ACTIVE:-}" && test "$2" = is-active; then
+    echo "$FAKE_IS_ACTIVE"
+    test "$FAKE_IS_ACTIVE" = active
+    exit
+fi
+if test -n "${FAKE_LOADSTATE:-}" && test "$2" = show; then
+    echo "$FAKE_LOADSTATE"
+    exit 0
+fi
 sleep "${FAKE_SYSTEMCTL_SLEEP:-0}"
 test "${FAKE_SYSTEMCTL_STATUS:-0}" -eq 0 || echo "Job failed" >&2
 exit "${FAKE_SYSTEMCTL_STATUS:-0}"
@@ -869,6 +881,59 @@ check "a failed lock leaves no flag for the next lock" test ! -e "$runtime/tide-
 check "a failed lock is reported" contains "$(cat "$tmp/err")" "lock-session failed (exit 1)"
 run "$qs" idle-lock now
 check "idle-lock takes no arguments" test $? -eq 2
+
+# lock: with hypridle running, through logind; without it, the lock starts
+# without logind: tide-lock.service, or hyprlock where that isn't loaded or
+# won't start. pgrep finds a running hyprlock with $FAKE_HYPRLOCK_RUNNING,
+# but only when it's asked for this user's.
+cat > "$fake/pgrep" <<'FAKE'
+#!/bin/sh
+printf "pgrep %s\n" "$*" >> "$FAKE_LOG"
+test -n "${FAKE_HYPRLOCK_RUNNING:-}" && test "$1" = -u && test "$2" = "$(id -u)"
+FAKE
+cat > "$fake/fake-hyprlock" <<'FAKE'
+#!/bin/sh
+printf "hyprlock %s\n" "$*" >> "$FAKE_LOG"
+FAKE
+chmod +x "$fake/pgrep" "$fake/fake-hyprlock"
+run FAKE_IS_ACTIVE=active TIDE_HYPRLOCK=fake-hyprlock "$qs" lock
+check "lock exits 0" test $? -eq 0
+check "with hypridle, lock goes through logind" contains "$(cat "$log")" "loginctl lock-session"
+check "with hypridle, lock starts nothing itself" lacks "$(cat "$log")" "systemctl --user start"
+check "with hypridle, lock sends no notification" lacks "$(cat "$log")" "notify-send"
+check "a clean lock says nothing" test ! -s "$tmp/err"
+run FAKE_IS_ACTIVE=inactive FAKE_LOADSTATE=loaded TIDE_HYPRLOCK=fake-hyprlock "$qs" lock
+check "without hypridle, lock exits 0" test $? -eq 0
+check "without hypridle, lock doesn't count on logind" lacks "$(cat "$log")" "loginctl"
+check "without hypridle, lock starts tide-lock.service itself" contains "$(cat "$log")" "systemctl --user start tide-lock.service"
+check "without hypridle, a notification says idle and suspend won't lock" \
+    contains "$(cat "$log")" "notify-send --urgency=critical -a tide Idle and suspend won't lock hypridle isn't running. Run tide doctor to see why."
+check "without hypridle, it says why in the journal" contains "$(cat "$tmp/err")" "hypridle.service is inactive, so nothing answers logind's Lock"
+check "without hypridle, hyprlock doesn't run too" lacks "$(cat "$log")" "hyprlock "
+run FAKE_IS_ACTIVE=active FAKE_LOADSTATE=loaded FAKE_LOGINCTL_STATUS=1 TIDE_HYPRLOCK=fake-hyprlock "$qs" lock
+check "a failed lock-session still locks" contains "$(cat "$log")" "systemctl --user start tide-lock.service"
+check "a failed lock-session is reported" contains "$(cat "$tmp/err")" "loginctl lock-session failed (exit 1)"
+run FAKE_IS_ACTIVE=inactive FAKE_LOADSTATE=not-found TIDE_HYPRLOCK=fake-hyprlock "$qs" lock
+check "without tide-lock.service, lock exits 0" test $? -eq 0
+check "without tide-lock.service, hyprlock locks" contains "$(cat "$log")" "hyprlock "
+check "without tide-lock.service, it isn't started" lacks "$(cat "$log")" "systemctl --user start"
+check "without tide-lock.service, a notification says so" \
+    contains "$(cat "$log")" "notify-send --urgency=critical -a tide The tide lock failed hyprlock locked the session instead."
+check "without tide-lock.service, the journal says why" contains "$(cat "$tmp/err")" "tide-lock.service is not-found, so hyprlock locks instead"
+run FAKE_IS_ACTIVE=inactive FAKE_LOADSTATE=loaded FAKE_SYSTEMCTL_STATUS=1 TIDE_HYPRLOCK=fake-hyprlock "$qs" lock
+check "a tide-lock.service that won't start leaves it to hyprlock" contains "$(cat "$log")" "hyprlock "
+check "and that's reported" contains "$(cat "$tmp/err")" "couldn't start tide-lock.service, so hyprlock locks instead"
+run FAKE_IS_ACTIVE=inactive FAKE_LOADSTATE=masked FAKE_HYPRLOCK_RUNNING=1 TIDE_HYPRLOCK=fake-hyprlock "$qs" lock
+check "a hyprlock already running counts as the lock" test $? -eq 0
+check "and isn't started twice" lacks "$(cat "$log")" "hyprlock "
+check "only this user's hyprlock is looked for" contains "$(cat "$log")" "pgrep -u $(id -u) -x fake-hyprlock"
+run FAKE_IS_ACTIVE=inactive FAKE_LOADSTATE=not-found TIDE_HYPRLOCK=no-such-hyprlock "$qs" lock
+check "with nothing to lock, lock fails" test $? -eq 1
+check "with nothing to lock, a notification says the session didn't lock" \
+    contains "$(cat "$log")" "notify-send --urgency=critical -a tide The session didn't lock"
+run "$qs" lock now
+check "lock takes no arguments" test $? -eq 2
+rm "$fake/pgrep"
 
 # idle-suspend: busctl answers UPower's OnBattery with $FAKE_ON_BATTERY
 # (on battery by default) and exits $FAKE_BUSCTL_STATUS.
