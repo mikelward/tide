@@ -1926,15 +1926,14 @@ Workspaces tab and the name prompt, which go to them and keep home's
 name and home itself, which tidewm starts on; and which windows there
 are and which has focus, from tidewm's tree and window events, for the
 bar's icons and title, the switcher's Windows tab, the marks, the
-guard's and notifications', and the name prompt, which moves and closes
-them. Next, in order:
+guard's and notifications', the name prompt, which moves and closes
+them, and minimizing, with tidewm's own `minimize`. conf binds Super+Z
+there once that's in. Next, in order:
 
-1. Minimizing, which uses Hyprland's special workspaces, so on tidewm
-   uses tidewm's own `minimize`, once tidewm has it.
-2. The settings pages that write `tide-*.lua` for conf's hyprland.lua
+1. The settings pages that write `tide-*.lua` for conf's hyprland.lua
    (floating, input, appearance, outputs and layouts) and the keys page:
    each over tidewm's IPC or config, or said to be Hyprland's only.
-3. The rest: home's apps' rules, which conf's hyprland.lua makes on
+2. The rest: home's apps' rules, which conf's hyprland.lua makes on
    Hyprland, with the window events that send home the windows of
    home's apps that opened before them (`WorkspacesData.qml`); a name
    with a `;`, which tidewm's commands can't take, nor a rename one

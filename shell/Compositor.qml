@@ -17,7 +17,7 @@ import "lib/workspaces.mjs" as Ws
 // open there, which workspaces there are, for the bar, the switcher and
 // the name prompt, and goes to and renames them, and which windows there
 // are and which has focus, for the bar's icons and title and the
-// switcher, and focuses, moves, closes and maximizes one.
+// switcher, and focuses, moves, closes, minimizes and maximizes one.
 Singleton {
     id: root
 
@@ -128,6 +128,19 @@ Singleton {
             return;
         }
         root.tidewmCommand(Tw.closeCommand(address), `close window ${address}`);
+    }
+
+    // Minimizes the window at `address` from the workspace named `name`
+    // (§6.7): on Hyprland, to that workspace's minimize workspace
+    // (Dispatch.minimizeWindow); on tidewm, by its own minimize, which
+    // keeps the window on its workspace, hidden. Either way moveWindowTo
+    // back to `name` restores it.
+    function minimizeWindow(address, name) {
+        if (!root.tidewm) {
+            Hyprland.dispatch(Dispatch.minimizeWindow(address, name, Hyprland.usingLua));
+            return;
+        }
+        root.tidewmCommand(Tw.minimizeCommand(address), `minimize window ${address}`);
     }
 
     // Toggles maximize on the window at `address`, which is the focused

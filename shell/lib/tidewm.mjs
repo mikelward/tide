@@ -9,6 +9,7 @@
 // focusHistoryID is a window's place in it.
 
 import { tidewmName } from "./compositor.mjs";
+import { minimizedWorkspace } from "./minimized.mjs";
 
 export const NO_WINDOWS = Object.freeze({ list: Object.freeze([]), order: Object.freeze([]) });
 
@@ -173,7 +174,10 @@ export function promptEvent(data) {
 // focusHistoryID}]. `address` is tidewm's container ID, as a string, which
 // the shell only compares and hands back. `workspace` is the ID of the
 // workspace in `workspaces` ([{id, name}], Compositor.workspaces) of its
-// name, or null. `fullscreen` is as Hyprland gives it, 0 none, 1
+// name, or null. A window tidewm has minimized is on no workspace, and its
+// workspaceName is the minimize workspace Hyprland's would be on
+// (minimized.mjs), which is all the shell reads to know it's minimized and
+// from where. `fullscreen` is as Hyprland gives it, 0 none, 1
 // maximized, 2 fullscreen, 3 both. `focusHistoryID` is its place in the
 // order, 0 the focused window, or -1 for one never focused since the
 // shell started, as Hyprland's -1.
@@ -181,12 +185,13 @@ export function shellWindows(state, workspaces) {
     const ids = new Map(Array.from(workspaces ?? []).map(w => [w.name, w.id]));
     return state.list.map(c => {
         const name = typeof c.workspace === "string" ? c.workspace : "";
+        const minimized = c.minimized === true && name !== "";
         return {
             address: String(c.id),
             title: c.name ?? "",
             app: appOf(c),
-            workspace: ids.has(name) ? ids.get(name) : null,
-            workspaceName: name,
+            workspace: !minimized && ids.has(name) ? ids.get(name) : null,
+            workspaceName: minimized ? minimizedWorkspace(name) : name,
             monitor: c.output ?? "",
             urgent: c.urgent === true,
             fullscreen: (c.fullscreen_mode ? 2 : 0) + (c.maximized ? 1 : 0),
@@ -207,9 +212,10 @@ export function activeWindow(windows, current) {
 }
 
 // Commands for one window, by its address (container ID): focusing it,
-// which shows its workspace; moving it to the workspace named `name` and
-// focusing it there; asking it to close, as Super+Backspace does; and
-// toggling its maximize. null for an address that isn't a container ID,
+// which shows its workspace, and brings it back if it's minimized; moving
+// it to the workspace named `name` and focusing it there; asking it to
+// close, as Super+Backspace does; minimizing it; and toggling its
+// maximize. null for an address that isn't a container ID,
 // or a name tidewm can't take.
 function con(address) {
     const s = String(address ?? "");
@@ -230,6 +236,11 @@ export function moveAndFocusCommand(address, name) {
 export function closeCommand(address) {
     const c = con(address);
     return c === null ? null : `${c} kill`;
+}
+
+export function minimizeCommand(address) {
+    const c = con(address);
+    return c === null ? null : `${c} minimize enable`;
 }
 
 export function maximizeCommand(address) {

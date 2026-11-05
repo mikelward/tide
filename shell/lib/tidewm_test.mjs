@@ -3,8 +3,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, markEvents, appOf, shellWindows, activeWindow,
-    promptEvent, focusCommand, moveAndFocusCommand, closeCommand, maximizeCommand,
+    promptEvent, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand,
 } from "./tidewm.mjs";
+import { minimizedFrom, trayWindows } from "./minimized.mjs";
 import { promptWanted } from "./workspacenames.mjs";
 
 // A container as tidewm's IPC gives one.
@@ -208,6 +209,24 @@ test("the shell's windows are shaped as Hyprland's", () => {
         "a workspace the list doesn't have yet has no ID");
 });
 
+test("a minimized window is on its workspace's minimize workspace, as on Hyprland", () => {
+    let s = treeWindows(tree);
+    s = windowEvent(s, event("minimize", con(10, { minimized: true, visible: false })));
+    const w = shellWindows(s, workspaces);
+    assert.deepEqual([w[0].workspace, w[0].workspaceName, minimizedFrom(w[0].workspaceName)], [null, "special:minimized:in", "in"]);
+    assert.equal(w[1].workspaceName, "in", "the others are where they are");
+    assert.deepEqual(trayWindows(w.map(x => ({ address: x.address, app: x.app, title: x.title, workspace: x.workspaceName })), "in"),
+        [{ address: "10", app: "app10", title: "title 10" }], "the tray shows it");
+    s = windowEvent(s, event("minimize", con(10, { minimized: false })));
+    assert.equal(shellWindows(s, workspaces)[0].workspaceName, "in", "brought back");
+});
+
+test("a minimized window is never the focused one, though it was last focused", () => {
+    let s = treeWindows(tree);
+    s = windowEvent(s, event("minimize", con(11, { minimized: true, focused: false })));
+    assert.equal(activeWindow(shellWindows(s, workspaces), "in"), null);
+});
+
 test("the focused window is the one first in the order, while it's on the current workspace", () => {
     const w = shellWindows(treeWindows(tree), workspaces);
     assert.equal(activeWindow(w, "in").address, "11");
@@ -219,6 +238,7 @@ test("a window's commands name it by its container ID", () => {
     assert.equal(focusCommand("11"), "[con_id=11] focus");
     assert.equal(moveAndFocusCommand("11", "my mail"), "[con_id=11] move to workspace number my mail; [con_id=11] focus");
     assert.equal(closeCommand("11"), "[con_id=11] kill");
+    assert.equal(minimizeCommand("11"), "[con_id=11] minimize enable");
     assert.equal(maximizeCommand("11"), "[con_id=11] maximize toggle");
 });
 
@@ -228,5 +248,6 @@ test("an address that isn't a container ID, or a name tidewm can't take, sends n
     assert.equal(focusCommand("1] kill; [con_id=2"), null);
     assert.equal(moveAndFocusCommand("11", "a;b"), null);
     assert.equal(closeCommand("0x5a3f"), null);
+    assert.equal(minimizeCommand("a;b"), null);
     assert.equal(maximizeCommand(undefined), null);
 });

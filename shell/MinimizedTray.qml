@@ -3,7 +3,6 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import Quickshell.Widgets
-import "lib/dispatch.mjs" as Dispatch
 import "lib/minimized.mjs" as Min
 import "lib/workspaces.mjs" as Ws
 
@@ -16,17 +15,18 @@ PanelWindow {
     id: root
 
     required property var modelData
-    readonly property var monitor: Hyprland.monitorFor(root.screen)
-    readonly property var list: Min.trayWindows(Hyprland.toplevels.values.map(t => {
-        const address = Ws.normalizeAddress(t.address);
-        return {
-            address: address,
-            app: t.lastIpcObject?.class || t.wayland?.appId || "",
-            title: t.title ?? "",
-            workspace: t.workspace?.name ?? "",
-            focus: Ws.focusRank(MarkData.focusOrder, address, t.lastIpcObject?.focusHistoryID)
-        };
-    }), root.monitor?.activeWorkspace?.name ?? "")
+    // The name of the workspace this monitor shows: on tidewm, the current
+    // one, which every monitor shows.
+    readonly property string shown: Compositor.tidewm
+        ? Compositor.tidewmCurrentName
+        : (Hyprland.monitorFor(root.screen)?.activeWorkspace?.name ?? "")
+    readonly property var list: Min.trayWindows(Compositor.windows.map(w => ({
+        address: w.address,
+        app: w.app,
+        title: w.title,
+        workspace: w.workspaceName,
+        focus: Ws.focusRank(MarkData.focusOrder, w.address, w.focusHistoryID)
+    })), root.shown)
 
     screen: modelData
     visible: root.list.length > 0
@@ -77,8 +77,7 @@ PanelWindow {
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton
-                        onClicked: Hyprland.dispatch(Dispatch.moveWindowToWorkspace(
-                            slot.modelData.address, root.monitor?.activeWorkspace?.name ?? "", Hyprland.usingLua))
+                        onClicked: Compositor.moveWindowTo(slot.modelData.address, root.shown)
                     }
 
                     // The title, above the icon while it's hovered.
