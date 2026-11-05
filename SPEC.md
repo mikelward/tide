@@ -459,7 +459,9 @@ flowchart TD
   which conf's tidewm config includes, and apply it with `tide-msg
   reload`. A mouse's acceleration is libinput's adaptive profile there, or
   flat at 0, since tidewm has no curve, and a device's own settings are
-  Hyprland's alone for now. What else the shell takes from
+  Hyprland's alone for now. The Appearance page's dim strength (§6.2) is
+  `tide-appearance.conf`'s `dim_inactive`, applied the same way. What else
+  the shell takes from
   Hyprland's events is still Hyprland's. Home (§6.5) is the shell's to
   keep there, as tidewm's config can't know its name: `tide-tidewm`
   starts tidewm on it and keeps it, by the name the shell last wrote to
