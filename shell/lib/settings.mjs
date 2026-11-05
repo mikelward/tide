@@ -147,7 +147,7 @@ export const PAGES = Object.freeze([
         label: "Clocks",
         icon: "preferences-system-time-symbolic",
         keywords: ["time zone", "timezone", "world clock", "24 hour"],
-        about: "The bar's clocks, left to right, before the local one, which is always last; a clock in the local zone is hidden. A label is any text, none for just the time, or abbr for the zone's abbreviation, such as PDT. The list is this machine's own once changed.",
+        about: "Extra clocks for the bar, left to right. Local time is always last. A label can be any text, such as PT or LAX, or abbr for the zone's short name.",
         advanced: null,
     },
     {

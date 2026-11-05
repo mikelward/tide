@@ -1101,7 +1101,7 @@ PanelWindow {
                             bottomPadding: 4
                             wrapMode: Text.Wrap
                             textFormat: Text.PlainText
-                            text: ClockData.settingSystemZone ? "Setting the time zone…" : ClockData.systemZoneFailure !== "" ? ClockData.systemZoneFailure : sessionZone !== "" ? `TZ is ${sessionZone} in this session, so the bar keeps that zone` : ""
+                            text: ClockData.settingSystemZone ? "Setting the time zone…" : ClockData.systemZoneFailure !== "" ? ClockData.systemZoneFailure : sessionZone !== "" ? `The TZ environment variable is ${sessionZone}, so the bar uses that zone.` : ""
                             color: ClockData.systemZoneFailure !== "" && !ClockData.settingSystemZone ? Theme.danger : Theme.fgDim
                             font.family: Theme.font
                             font.pixelSize: 12
