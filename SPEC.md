@@ -4057,7 +4057,10 @@ stays hand-written.
 
 - **Keyboard's shortcuts** list the bindings Hyprland has now, from
   `hyprctl binds -j`, as the shell starts and again as the Keyboard page
-  shows, below its settings under a Shortcuts heading.
+  shows, below its settings under a Shortcuts heading. On tidewm (§5.3)
+  they're its config file's, from its own `GET_BINDINGS`, through
+  `tide-msg --type get_bindings`, each doing its command, as its lines
+  have no descriptions.
   - They were a Keys page of their own. Keyboard has them now, as macOS's
     Keyboard settings have its shortcuts.
   - `openPage keys`, and the launcher's Keyboard shortcuts, open Keyboard

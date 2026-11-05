@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/mikelward/quickspace/internal/swayipc/swayipctest"
@@ -75,6 +76,17 @@ func TestAQueryPrintsTheReply(t *testing.T) {
 	}
 	if got := tidewm.Sent(); len(got) != 1 || got[0].Type != 3 || got[0].Payload != "" {
 		t.Fatalf("sent %v, not GET_OUTPUTS", got)
+	}
+}
+
+func TestGetBindingsIsTidewmsOwnQuery(t *testing.T) {
+	tidewm := swayipctest.New(t, `[{"type":"key","keys":"Mod4+Return","command":"exec foot","mode":"default"}]`)
+	status, out, _ := tideMsg([]string{"SWAYSOCK=" + tidewm.Socket}, "--type", "get_bindings")
+	if status != 0 || !strings.Contains(out, `"Mod4+Return"`) {
+		t.Fatalf("status %d, out %q", status, out)
+	}
+	if got := tidewm.Sent(); len(got) != 1 || got[0].Type != 200 || got[0].Payload != "" {
+		t.Fatalf("sent %v, not GET_BINDINGS", got)
 	}
 }
 
