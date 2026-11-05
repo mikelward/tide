@@ -2786,7 +2786,7 @@ PanelWindow {
                                     Text {
                                         visible: newMuted.text === "" && !newMuted.activeFocus
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: "Mute an app ID or site:HOST"
+                                        text: "Mute an app ID, such as org.gnome.Nautilus, or site:chat.google.com"
                                         color: Theme.fgFaint
                                         font: newMuted.font
                                     }
