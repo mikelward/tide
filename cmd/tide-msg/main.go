@@ -12,6 +12,12 @@
 //
 // prints the focused workspace's name.
 //
+//	tide-msg --type QUERY
+//
+// prints the reply to a query, as JSON: get_workspaces, get_outputs,
+// get_tree, get_version, get_config, get_inputs or get_seats, as swaymsg
+// names them. tide doctor reads tidewm's outputs and config errors so.
+//
 // It exits 0 when that worked, 1 when tidewm refused a command, and 2 for
 // a usage error, or when there's no tidewm to ask or it didn't answer.
 package main
@@ -35,12 +41,21 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("tide-msg", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	focused := flags.Bool("focused-workspace", false, "print the focused workspace's name")
+	query := flags.String("type", "", "print the reply to the query `QUERY` (get_outputs, get_config and the rest), as JSON")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
-	if *focused == (flags.NArg() > 0) {
+	kind, known := swayipc.Queries[*query]
+	modes := 0
+	for _, on := range []bool{*focused, *query != "", flags.NArg() > 0} {
+		if on {
+			modes++
+		}
+	}
+	if modes != 1 || (*query != "" && !known) {
 		fmt.Fprintln(stderr, "usage: tide-msg [--] COMMAND...")
 		fmt.Fprintln(stderr, "       tide-msg --focused-workspace")
+		fmt.Fprintln(stderr, "       tide-msg --type get_workspaces|get_outputs|get_tree|get_version|get_config|get_inputs|get_seats")
 		return 2
 	}
 	socket, err := swayipc.Socket(env)
@@ -55,6 +70,15 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 		fmt.Fprintln(stdout, name)
+		return 0
+	}
+	if *query != "" {
+		reply, err := swayipc.Send(socket, kind, nil)
+		if err != nil {
+			fmt.Fprintf(stderr, "tide-msg: couldn't ask tidewm at %s for %s: %v\n", socket, *query, err)
+			return 2
+		}
+		fmt.Fprintln(stdout, string(reply))
 		return 0
 	}
 	cmd := strings.Join(flags.Args(), " ")

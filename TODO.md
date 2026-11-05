@@ -26,10 +26,11 @@ once you have agreed with it or reversed it.
 - **The tidewm entry is "tide (tidewm)", shown only with tidewm
   installed** (2026-11-05): `TryExec=tidewm`, which the greeter and other
   display managers honor, so it isn't offered where it can't start.
-- **`tide doctor` skips what asks Hyprland in tidewm's session**
-  (2026-11-05): one bar per monitor, config errors and the home workspace,
-  saying so on stderr, rather than reporting Hyprland as not running.
-  Until tidewm's IPC replaces them.
+- **`tide doctor` skips the home workspace in tidewm's session**
+  (2026-11-05), saying so on stderr, rather than reporting Hyprland as not
+  running: the check reads Hyprland's persistent workspaces, and tidewm's
+  home comes from conf's config for it, which doesn't exist yet. Its bars
+  and config errors are tidewm's own there.
 - **`Super+PgUp`/`PgDn` pass over a workspace whose only windows are
   minimized** (2026-11-04), as over an empty one, since there's nothing to
   see there and Hyprland has no window on it (§6.7); `Super+Shift+PgUp`/
@@ -1907,8 +1908,9 @@ and the portals are in. Next, in order:
    click in the last 2 s, so the shell's polkit prompt takes the keyboard
    there too. `tide`'s grants and focused workspace already go through
    tidewm's IPC.
-2. `tide doctor`'s bar, config-error and home-workspace checks through
-   tidewm's IPC.
+2. `tide doctor`'s home-workspace check on tidewm, once conf's config
+   makes home persistent there. Its bar and config-error checks already
+   read tidewm's IPC.
 3. conf: a tidewm config with tide's keys, rules and inputs, and
    hypridle's displays off without `hyprctl`.
 4. scripts: `setup` builds tidewm from a pinned tag (below).

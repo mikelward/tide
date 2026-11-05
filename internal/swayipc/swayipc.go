@@ -1,5 +1,6 @@
 // Package swayipc speaks sway's IPC, which tidewm answers on the socket
-// named in SWAYSOCK (SPEC.md §5.3): a command, and the focused workspace.
+// named in SWAYSOCK (SPEC.md §5.3): a command, a query, and the focused
+// workspace.
 // It's i3's protocol: a message is "i3-ipc", its payload's length and its
 // type, both 32 bits in this machine's byte order, then the payload.
 package swayipc
@@ -19,7 +20,24 @@ import (
 const (
 	RunCommand    = 0
 	GetWorkspaces = 1
+	GetOutputs    = 3
+	GetTree       = 4
+	GetVersion    = 7
+	GetConfig     = 9
+	GetInputs     = 100
+	GetSeats      = 101
 )
+
+// Queries are the queries by the names swaymsg gives them.
+var Queries = map[string]uint32{
+	"get_workspaces": GetWorkspaces,
+	"get_outputs":    GetOutputs,
+	"get_tree":       GetTree,
+	"get_version":    GetVersion,
+	"get_config":     GetConfig,
+	"get_inputs":     GetInputs,
+	"get_seats":      GetSeats,
+}
 
 var magic = []byte("i3-ipc")
 
