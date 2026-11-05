@@ -129,10 +129,16 @@ chars:
 	$(NODE) shell/chars/generate.mjs "$(EMOJI_TEST)" "$(UNICODE_DATA)" > shell/chars/chars.tsv.tmp || { rm -f shell/chars/chars.tsv.tmp; exit 1; }
 	mv shell/chars/chars.tsv.tmp shell/chars/chars.tsv
 
-build: build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste
+build: build/tide-grant build/tide-msg build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste
 
-build/tide-grant: go.mod go.sum $(wildcard cmd/tide-grant/*.go)
+# The sway IPC client tide-grant and tide-msg share, for tidewm.
+SWAYIPC = $(wildcard internal/swayipc/*.go)
+
+build/tide-grant: go.mod go.sum $(wildcard cmd/tide-grant/*.go) $(SWAYIPC)
 	$(GO) build -o $@ ./cmd/tide-grant
+
+build/tide-msg: go.mod $(wildcard cmd/tide-msg/*.go) $(SWAYIPC)
+	$(GO) build -o $@ ./cmd/tide-msg
 
 build/tide-tz: go.mod $(wildcard cmd/tide-tz/*.go)
 	$(GO) build -o $@ ./cmd/tide-tz
@@ -205,11 +211,11 @@ install-shell:
 # Root has no Go module cache to build with, so install-session only copies
 # the Go commands that `make build` (or `make install`) left in build/.
 install-session:
-	@for cmd in tide-grant tide-tz tide-greetd tide-agent tide-tabs tide-pick tide-kwin-paste; do \
+	@for cmd in tide-grant tide-msg tide-tz tide-greetd tide-agent tide-tabs tide-pick tide-kwin-paste; do \
 		test -x build/$$cmd || { echo "make install-session: no build/$$cmd; run make build first, as yourself" >&2; exit 1; }; \
 	done
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
-	install -m 755 bin/tide bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-tidewm bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
+	install -m 755 bin/tide bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-tidewm bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-msg build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
 	install -m 644 session/tide.desktop session/tide-tidewm.desktop "$(DESTDIR)$(PREFIX)/share/wayland-sessions/"
 	@# KWin lets a program use its fake-input (KDE's Win+V paste) only if
 	@# a desktop entry whose Exec is that program's path lists it in

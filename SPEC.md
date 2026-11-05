@@ -433,10 +433,13 @@ flowchart TD
   session's names, trying each name in a directory before the next
   directory, so tide installs `tidewm-portals.conf` (wlr, then gtk)
   beside `tide-portals.conf`. tide's units, hypridle and the autostart
-  allowlist take any `XDG_CURRENT_DESKTOP` with `tide` in it. The shell
-  still reads only Hyprland's IPC, so on tidewm the bar has no
-  workspaces, and `tide launch` can't grant focus, until its tidewm
-  backend lands. `tide doctor` leaves out the checks that ask Hyprland,
+  allowlist take any `XDG_CURRENT_DESKTOP` with `tide` in it. `tide`
+  and `tide-grant` record grants, and read the focused workspace, over
+  tidewm's IPC there, through `tide-msg`, a small client of sway's
+  protocol. The shell still reads only Hyprland's IPC, so on tidewm the
+  bar has no workspaces until its tidewm backend lands, and `tide
+  prompt-focus` can't tell yet, so a polkit prompt comes as a
+  notification. `tide doctor` leaves out the checks that ask Hyprland,
   and says so.
 
 ### 5.4 Guards that keep it that way

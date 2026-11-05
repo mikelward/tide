@@ -1903,9 +1903,10 @@ history; tide's changes go on top of v0.9 there. Before rewriting §3.1 around i
 until it's done (SPEC.md §5.3). The entry, the wrapper, the units' target
 and the portals are in. Next, in order:
 
-1. `tide`'s grants, focus and focused workspace through tidewm's IPC
-   (`grant --or-recent`, `focus recent`, GET_WORKSPACES), so `tide launch`
-   grants focus there.
+1. `tide prompt-focus` from tidewm's `last_input` (GET_SEATS): a key or
+   click in the last 2 s, so the shell's polkit prompt takes the keyboard
+   there too. `tide`'s grants and focused workspace already go through
+   tidewm's IPC.
 2. `tide doctor`'s bar, config-error and home-workspace checks through
    tidewm's IPC.
 3. conf: a tidewm config with tide's keys, rules and inputs, and

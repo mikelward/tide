@@ -17,8 +17,8 @@
 #          wrapper script whose app isn't known in advance. xdg-open
 #          and gio open grant the default app for the target's type
 #          (xdg-mime), or '*' when it can't be found. It comes
-#          first but for reading the focused workspace (one hyprctl call,
-#          below), so a key press or focus change while the shell is still
+#          first but for reading the focused workspace (one call to the
+#          compositor, below), so a key press or focus change while the shell is still
 #          starting cancels it, and its 10 s run from the key press that
 #          launched it;
 #       2. waits for the shell, so no app starts before the notification,
@@ -45,7 +45,9 @@
 #     NFC-normalized) kept, so a shpool or tmux session can be named after
 #     it. If the focused workspace can't be read, or tide-grant can't keep
 #     its letters and digits, it's empty, and the launch says why.
-#     Outside a tide session it just runs COMMAND.
+#     Outside a tide session it just runs COMMAND. In tidewm's session
+#     (SPEC.md §5.3), the grant and the focused workspace go over tidewm's
+#     IPC, through tide-msg, as do tide grant's and tide focus's.
 #     --background starts it as the session's Start at login does (SPEC.md
 #     §16): with no focus grant and no name prompt, so nothing it opens
 #     takes focus, and its windows go where Hyprland's rules put them. It
@@ -165,7 +167,7 @@
 #     2 s, so the prompt follows your pkexec or button, and 1 if not. The
 #     shell's polkit agent asks it, and otherwise offers the prompt through
 #     a notification. Exits 2, saying why, if it can't tell: outside a tide
-#     session, or when the guard can't be asked.
+#     session, in tidewm's for now, or when the guard can't be asked.
 #
 #   tide keyboards
 #
@@ -229,6 +231,32 @@ in_tide() {
     return 1
 }
 
+# Whether the tide session runs tidewm, whose entry names it in
+# XDG_CURRENT_DESKTOP (SPEC.md §5.3), rather than Hyprland. Its guard and
+# workspaces are asked over its IPC, through tide-msg.
+in_tidewm() {
+    in_tide || return 1
+    case ":${XDG_CURRENT_DESKTOP:-}:" in
+        *:tidewm:*) return 0 ;;
+    esac
+    return 1
+}
+
+# $1 as one word of a tidewm command, as internal/swayipc's Word makes it:
+# as it is, or in double quotes when it has a space, a tab or a `;`.
+# tidewm's quotes take no escapes, so one that's empty or has a double
+# quote or another control character fails.
+tidewm_word() {
+    case $1 in
+        '' | *\"*) return 1 ;;
+    esac
+    test "$(printf '%s' "$1" | LC_ALL=C tr -d '\001-\010\012-\037\177')" = "$1" || return 1
+    case $1 in
+        *[[:space:]\;]*) printf '"%s"' "$1" ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
 # `systemctl start` blocks until the shell reports ready, and returns at once
 # when it already has. The bound is our own: the units' timeouts chain (the
 # shell's starts only after hypridle's), so they don't bound this.
@@ -248,15 +276,28 @@ wait_for_shell() {
     fi
 }
 
-# The guard lives in Hyprland's Lua config (hypr/tide/focus.lua), so the
+# On Hyprland the guard lives in its Lua config (hypr/tide/focus.lua), so the
 # grant goes in through `hyprctl eval`, with the ID escaped for a Lua string.
 # Returns 1, having said why, when the guard didn't take it; $2 names the
 # subcommand for the message, $3 the guard's function (grant by default),
 # and $4 what the call does, for the messages (a focus grant by default).
 # $5, if given, is the call's argument already written as Lua, for a list
-# of IDs; $1 then only names them in the messages.
+# of IDs; $1 then only names them in the messages. In tidewm's session,
+# $6 is the call as tidewm's command instead, its words quoted, and it goes
+# through tide-msg.
 grant() {
     what=${4:-record a focus grant}
+    if in_tidewm; then
+        if ! command -v tide-msg >/dev/null 2>&1; then
+            echo "$prog $2: no tide-msg, so couldn't $what for $1 (make install builds it)" >&2
+            return 1
+        fi
+        if ! reply=$(tide-msg "$6" 2>&1); then
+            echo "$prog $2: couldn't $what for $1: $reply" >&2
+            return 1
+        fi
+        return 0
+    fi
     if ! command -v hyprctl >/dev/null 2>&1; then
         echo "$prog $2: no hyprctl, so couldn't $what for $1" >&2
         return 1
@@ -278,23 +319,31 @@ grant_only() {
     if ! in_tide; then
         exit 0
     fi
-    grant "$ids_names" grant grant_or_recent "" "$ids_lua" || exit 1
+    grant "$ids_names" grant grant_or_recent "" "$ids_lua" "grant --or-recent$ids_tidewm" || exit 1
 }
 
 # The IDs given to grant or focus, as $ids_names for the messages and
-# $ids_lua for the guard: a Lua string for one, a list for several.
+# $ids_lua for Hyprland's guard: a Lua string for one, a list for several.
+# $ids_tidewm is them as words of tidewm's command, each after a space.
 ids_arg() {
     if test $# -eq 0; then
         usage
     fi
     ids_names=""
     ids_lua=""
+    ids_tidewm=""
     for id do
         if test -z "$id"; then
             usage
         fi
         ids_names="${ids_names:+$ids_names, }$id"
         ids_lua="${ids_lua:+$ids_lua, }$(lua_string "$id")"
+        if word=$(tidewm_word "$id"); then
+            ids_tidewm="$ids_tidewm $word"
+        elif in_tidewm; then
+            echo "$prog: tidewm can't be told the ID $id, which has a quote or a control character" >&2
+            exit 2
+        fi
     done
     if test $# -gt 1; then
         ids_lua="{ $ids_lua }"
@@ -309,7 +358,7 @@ focus_app() {
     if ! in_tide; then
         exit 0
     fi
-    grant "$ids_names" focus focus_recent "focus its window" "$ids_lua" || exit 1
+    grant "$ids_names" focus focus_recent "focus its window" "$ids_lua" "focus recent$ids_tidewm" || exit 1
 }
 
 # The program a command runs, as written, past wrappers (`env VAR=x editor`
@@ -400,6 +449,18 @@ sanitized() {
 # monitor's part of a workspace, NAME@OUT, is NAME (SPEC.md §6.5,
 # Monitors; shell/lib/span.mjs).
 focused_workspace() {
+    if in_tidewm; then
+        if ! command -v tide-msg >/dev/null 2>&1; then
+            echo "$prog $1: no tide-msg, so couldn't read the focused workspace (make install builds it)" >&2
+            return 1
+        fi
+        if ! name=$(tide-msg --focused-workspace 2>&1) || test -z "$name"; then
+            echo "$prog $1: couldn't read the focused workspace: ${name:-tidewm named none}" >&2
+            return 1
+        fi
+        printf '%s\n' "$name"
+        return 0
+    fi
     if ! command -v hyprctl >/dev/null 2>&1; then
         echo "$prog $1: no hyprctl, so couldn't read the focused workspace" >&2
         return 1
@@ -536,6 +597,7 @@ ask_workspace() {
         "workspace "?*)
             ws=${answer#workspace }
             opts=", { workspace = $(lua_string "$ws") }"
+            opts_tidewm=" --workspace $(tidewm_word "$ws")"
             ;;
         cancel) exit 0 ;;
         *)
@@ -609,6 +671,11 @@ add_app() {
     seen_ids="$seen_ids$key|"
     count=$((count + 1))
     app_json="${app_json:+$app_json, }$(json_string "$1")"
+    if word=$(tidewm_word "$1"); then
+        apps_tidewm="$apps_tidewm $word"
+    elif in_tidewm; then
+        echo "$prog launch: tidewm can't be told the ID $1, which has a quote or a control character, so it's left out of the grant" >&2
+    fi
     if test "$count" -eq 1; then
         names=$1
         apps=$(lua_string "$1")
@@ -620,17 +687,20 @@ add_app() {
 
 launch() {
     # app is the first --app; names all of them, for the messages; apps
-    # the Lua list of all, and count how many (add_app). An empty ID means
-    # none given, as it always has.
+    # the Lua list of all, apps_tidewm them as words of tidewm's command,
+    # and count how many (add_app). An empty ID means none given, as it
+    # always has.
     app=
     names=
     apps=
+    apps_tidewm=
     count=0
     wildcard=no
     lookup=no
     seen_ids='|'
-    # The grant's options, as Lua, after its pid and key.
+    # The grant's options, as Lua, after its pid and key, and as tidewm's.
     opts=
+    opts_tidewm=
     # The workspace --workspace names, or empty.
     ws=
     # The IDs it grants, as JSON (add_app), which tell the name prompt
@@ -686,6 +756,7 @@ launch() {
                     exit 2
                 fi
                 opts=", { workspace = $(lua_string "$ws") }"
+                opts_tidewm=" --workspace $(tidewm_word "$ws")"
                 ;;
             --app | --app=*)
                 if test "$1" = --app; then
@@ -776,10 +847,11 @@ EOF2
     # A grant that fails is reported; the app starts anyway. One ID goes
     # in as a string, several as a list.
     if test "$count" -gt 1; then
-        grant "$names" launch grant "" "{ $apps }${opts:+, nil, nil$opts}"
+        grant "$names" launch grant "" "{ $apps }${opts:+, nil, nil$opts}" "grant$opts_tidewm$apps_tidewm"
     elif test "$lookup" != yes; then
-        grant "$app" launch grant "" "$(lua_string "$app")${opts:+, nil, nil$opts}"
-    elif grant "$app" launch grant "" "$(lua_string "$app"), nil, $$$opts"; then
+        # One ID: $app, which an opener's fallback sets without add_app.
+        grant "$app" launch grant "" "$(lua_string "$app")${opts:+, nil, nil$opts}" "grant$opts_tidewm $(tidewm_word "$app")"
+    elif grant "$app" launch grant "" "$(lua_string "$app"), nil, $$$opts" "grant --key $$$opts_tidewm$apps_tidewm"; then
         # The program's desktop entries may name the class its window has
         # (Exec=foo, StartupWMClass=org.example.Foo). They're read after
         # the grant is in, so a key press or focus change meanwhile still
@@ -787,9 +859,11 @@ EOF2
         # keyed by this process's pid, so a lookup for a launch that was
         # canceled can't widen a later launch's grant for the same program.
         classes=$(desktop_classes "$app" "$@")
+        first_tidewm=$apps_tidewm
         count=0
         names=
         apps=
+        apps_tidewm=
         seen_ids="|$(printf '%s' "$app" | tr '[:upper:]' '[:lower:]')|"
         while IFS= read -r class; do
             add_app "$class"
@@ -797,7 +871,8 @@ EOF2
 $classes
 EOF2
         if test "$count" -gt 0; then
-            grant "$app (adding $names)" launch extend "add classes to the focus grant" "$(lua_string "$app"), { $apps }, nil, $$"
+            grant "$app (adding $names)" launch extend "add classes to the focus grant" "$(lua_string "$app"), { $apps }, nil, $$" \
+                "grant extend --key $$$first_tidewm$apps_tidewm"
         fi
     fi
     # uwsm app keeps the caller's environment: it starts a scope with
@@ -1150,6 +1225,13 @@ prompt_focus() {
     test $# -eq 0 || usage
     if ! in_tide; then
         echo "$prog prompt-focus: not in a tide session, so there's no focus guard to ask" >&2
+        exit 2
+    fi
+    # tidewm's guard has the answer (GET_SEATS's last_input), but nothing
+    # asks it yet (TODO.md), so the shell offers its prompt through a
+    # notification there.
+    if in_tidewm; then
+        echo "$prog prompt-focus: tidewm's focus guard isn't asked yet, so a prompt waits for you" >&2
         exit 2
     fi
     if ! command -v hyprctl >/dev/null 2>&1; then

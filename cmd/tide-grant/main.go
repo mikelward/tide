@@ -7,7 +7,9 @@
 //
 //	tide-grant --pid SHELL-PID -- COMMAND-LINE
 //
-// The grant names the shell's pid, so a window from any process the command
+// The grant goes to the session's focus guard: Hyprland's Lua config, or,
+// in tidewm's session (SPEC.md §5.3), tidewm's `grant` command over its
+// IPC. It names the shell's pid, so a window from any process the command
 // starts can use it: the focus guard walks the window's parents in /proc.
 // It also names the app the line's first command runs, for an app that's
 // already running, which opens its window from the process it already had
@@ -56,6 +58,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mikelward/quickspace/internal/swayipc"
 	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/syntax"
 )
@@ -182,7 +185,7 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	if runs != "" {
 		app = filepath.Base(runs)
 	}
-	if err := grant(app, *pid); err != nil {
+	if err := grant(app, *pid, env); err != nil {
 		fmt.Fprintf(stderr, "tide: couldn't record a focus grant for %s: %v\n", flags.Arg(0), err)
 		return 1
 	}
@@ -230,7 +233,7 @@ func extendFromEntries(app, runs string, settings []string, pid int, env []strin
 	if len(more) == 0 {
 		return status
 	}
-	if err := extend(app, more, pid); err != nil {
+	if err := extend(app, more, pid, env); err != nil {
 		fmt.Fprintf(stderr, "tide: couldn't add %s to the focus grant for %s: %v\n", strings.Join(more, ", "), app, err)
 		return 1
 	}
@@ -254,7 +257,7 @@ func extendForOpener(app, target string, pid int, env []string, stderr io.Writer
 	if len(more) == 0 {
 		return 0
 	}
-	if err := extend(app, more, pid); err != nil {
+	if err := extend(app, more, pid, env); err != nil {
 		fmt.Fprintf(stderr, "tide: couldn't add %s to the focus grant for %s: %v\n", strings.Join(more, ", "), app, err)
 		return 1
 	}
@@ -262,8 +265,19 @@ func extendForOpener(app, target string, pid int, env []string, stderr io.Writer
 }
 
 func inTide(desktops string) bool {
+	return hasDesktop(desktops, "tide")
+}
+
+// inTidewm says whether the tide session runs tidewm, whose session
+// entry names it in XDG_CURRENT_DESKTOP (SPEC.md §5.3), rather than
+// Hyprland.
+func inTidewm(desktops string) bool {
+	return inTide(desktops) && hasDesktop(desktops, "tidewm")
+}
+
+func hasDesktop(desktops, name string) bool {
 	for _, d := range strings.Split(desktops, ":") {
-		if d == "tide" {
+		if d == name {
 			return true
 		}
 	}
@@ -601,11 +615,19 @@ func scanProgram(fields []string, isWrapper func(int)) (name string, at int, don
 	return "", -1, false
 }
 
-// grant records a one-shot grant through Hyprland's Lua config, for app's
-// windows and those of pid's descendants; with no app, for the descendants
-// only. The grant is keyed by this process's pid, so extend widens this
-// grant and no later one for the same app and shell.
-func grant(app string, pid int) error {
+// grant records a one-shot grant with the session's focus guard, for
+// app's windows and those of pid's descendants; with no app, for the
+// descendants only: through tidewm's IPC in its session, and Hyprland's
+// Lua config otherwise. The grant is keyed by this process's pid, so
+// extend widens this grant and no later one for the same app and shell.
+func grant(app string, pid int, env []string) error {
+	if inTidewm(lookup(env, "XDG_CURRENT_DESKTOP")) {
+		var ids []string
+		if app != "" {
+			ids = []string{app}
+		}
+		return tidewmCommand(env, []string{"grant", "--pid", strconv.Itoa(pid), "--key", strconv.Itoa(os.Getpid())}, ids)
+	}
 	lua := "nil"
 	if app != "" {
 		lua = luaString(app)
@@ -615,12 +637,34 @@ func grant(app string, pid int) error {
 
 // extend adds classes to the grant this process recorded for app and pid,
 // if it still holds.
-func extend(app string, classes []string, pid int) error {
+func extend(app string, classes []string, pid int, env []string) error {
+	if inTidewm(lookup(env, "XDG_CURRENT_DESKTOP")) {
+		return tidewmCommand(env,
+			[]string{"grant", "extend", "--key", strconv.Itoa(os.Getpid()), "--pid", strconv.Itoa(pid)},
+			append([]string{app}, classes...))
+	}
 	quoted := make([]string, len(classes))
 	for i, c := range classes {
 		quoted[i] = luaString(c)
 	}
 	return eval("tide_focus.extend(" + luaString(app) + ", { " + strings.Join(quoted, ", ") + " }, " + strconv.Itoa(pid) + ", " + strconv.Itoa(os.Getpid()) + ")")
+}
+
+// tidewmCommand runs a command over tidewm's IPC: words as they are, then
+// ids, each quoted as one word.
+func tidewmCommand(env []string, words, ids []string) error {
+	socket, err := swayipc.Socket(env)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		w, err := swayipc.Word(id)
+		if err != nil {
+			return err
+		}
+		words = append(words, w)
+	}
+	return swayipc.Command(socket, strings.Join(words, " "))
 }
 
 // eval runs a Lua call in Hyprland, which answers "ok" when it ran.
