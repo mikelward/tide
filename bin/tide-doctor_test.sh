@@ -261,7 +261,7 @@ healthy() {
     mkdir -p "$tmp/proc/101"
     echo "0::/user.slice/user-1000.slice/user@1000.service/session.slice/hypridle.service" > "$tmp/proc/101/cgroup"
     printf 'HOME=/home/user\0' > "$tmp/proc/100/environ"
-    cp xdg-desktop-portal/tide-portals.conf "$tmp/config/xdg-desktop-portal/"
+    cp xdg-desktop-portal/tide-portals.conf xdg-desktop-portal/tidewm-portals.conf "$tmp/config/xdg-desktop-portal/"
     # Home's name, as the shell writes it.
     mkdir -p "$tmp/config/hypr"
     printf '%s\n' 'return {' '    home = "in",' '    in_apps = {},' '}' > "$tmp/config/hypr/tide-workspaces.lua"
@@ -928,9 +928,49 @@ if ! cat "$tmp/config/xdg-desktop-portal/tide-portals.conf" >/dev/null 2>&1; the
 fi # root reads it anyway
 chmod 644 "$tmp/config/xdg-desktop-portal/tide-portals.conf"
 
-# The doctor's copy of the shipped config must match the repo's.
+# A file for another of the session's desktops, read first, is a problem:
+# xdg-desktop-portal tries each desktop in a directory before the next.
+healthy
+rm "$tmp/config/xdg-desktop-portal/tide-portals.conf"
+mkdir -p "$tmp/etc/xdg-desktop-portal" "$tmp/share/xdg-desktop-portal"
+printf '[preferred]\ndefault=hyprland;gtk\n' > "$tmp/etc/xdg-desktop-portal/hyprland-portals.conf"
+cp xdg-desktop-portal/tide-portals.conf "$tmp/share/xdg-desktop-portal/"
+run
+check "Hyprland's portal config read before tide's is a problem" \
+    contains "$out" "portals read $tmp/etc/xdg-desktop-portal/hyprland-portals.conf, not tide's tide-portals.conf"
+
+# The doctor's copies of the shipped configs must match the repo's.
 check "the doctor's copy of tide-portals.conf is the shipped one" \
-    test "$(sed -n "/^    cat <<'EOF'$/,/^EOF$/p" "$doctor" | sed '1d;$d')" = "$(cat xdg-desktop-portal/tide-portals.conf)"
+    test "$(sed -n "/<<'TIDE_PORTALS'$/,/^TIDE_PORTALS$/p" "$doctor" | sed '1d;$d')" = "$(cat xdg-desktop-portal/tide-portals.conf)"
+check "the doctor's copy of tidewm-portals.conf is the shipped one" \
+    test "$(sed -n "/<<'TIDEWM_PORTALS'$/,/^TIDEWM_PORTALS$/p" "$doctor" | sed '1d;$d')" = "$(cat xdg-desktop-portal/tidewm-portals.conf)"
+
+# tidewm's session (SPEC.md §5.3): its own portal config, read before
+# tide's, and none of the checks that ask Hyprland.
+healthy
+run XDG_CURRENT_DESKTOP=tidewm:tide FAKE_HYPRCTL_FAILS="HYPRLAND_INSTANCE_SIGNATURE not set"
+check "a healthy tidewm session exits 0" test "$status" -eq 0
+check "a healthy tidewm session says so" test "$out" = "No problems found."
+check "and says which checks it left out" \
+    contains "$(cat "$tmp/err")" "in tidewm's session, one bar per monitor, the compositor's config errors and the home workspace aren't checked yet"
+rm "$tmp/config/hypr/tide-workspaces.lua"
+run XDG_CURRENT_DESKTOP=tidewm:tide
+check "tidewm's session doesn't ask for Hyprland's home workspace" test "$status" -eq 0
+run XDG_CURRENT_DESKTOP=tide:tidewm
+check "tidewm not first in its session is a problem" \
+    contains "$out" "XDG_CURRENT_DESKTOP is 'tide:tidewm': tidewm must come first, or portals ignore tidewm-portals.conf; start the session from its tide-tidewm.desktop entry"
+healthy
+rm "$tmp/config/xdg-desktop-portal/tidewm-portals.conf"
+mkdir -p "$tmp/share/xdg-desktop-portal"
+cp xdg-desktop-portal/tidewm-portals.conf "$tmp/share/xdg-desktop-portal/"
+run XDG_CURRENT_DESKTOP=tidewm:tide
+check "tide's portal config read before tidewm's is a problem in tidewm's session" \
+    contains "$out" "portals read $tmp/config/xdg-desktop-portal/tide-portals.conf, not tide's tidewm-portals.conf"
+healthy
+cp xdg-desktop-portal/tide-portals.conf "$tmp/config/xdg-desktop-portal/tidewm-portals.conf"
+run XDG_CURRENT_DESKTOP=tidewm:tide
+check "Hyprland's choice in tidewm's portal config is a problem" \
+    contains "$out" "$tmp/config/xdg-desktop-portal/tidewm-portals.conf isn't the one tide ships (default=wlr;gtk under [preferred])"
 
 healthy
 run FAKE_CONFIGERRORS="$(printf 'line 3: bad keyword\nline 9: bad value\n')"

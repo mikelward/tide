@@ -7,7 +7,7 @@ Documentation=https://github.com/mikelward/tide
 # Scoped to the tide session. Plasma reaches graphical-session.target
 # too, so this is never WantedBy= that.
 PartOf=graphical-session.target
-After=wayland-session@tide-hyprland.target graphical-session.target
+After=wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target graphical-session.target
 
 [Service]
 # The clipboard only, not the primary selection (middle-click).
@@ -19,4 +19,5 @@ RestartSec=1
 Slice=background-graphical.slice
 
 [Install]
-WantedBy=wayland-session@tide-hyprland.target
+# Either tide session: Hyprland's, or tidewm's (SPEC.md §5.3).
+WantedBy=wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target
