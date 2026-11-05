@@ -215,8 +215,9 @@ export const NO_KEYBOARD = "No keyboard";
 
 // The line under the field, and whether it's a failure's, drawn in red:
 // "Checking" while PAM checks; else "No keyboard" while there's none
-// (hasKeyboard), as when a KVM has switched it away; else PAM's message or
-// the failure. Those are kept, and come back with a keyboard.
+// (hasKeyboard), as when a KVM has switched it away, since a keyboard
+// comes before the password; else PAM's message or the failure. Those are
+// kept, and come back with a keyboard.
 export function statusLine(state, keyboard) {
     if (state.checking) return { text: "Checking", error: false };
     if (!keyboard) return { text: NO_KEYBOARD, error: false };

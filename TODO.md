@@ -7,11 +7,6 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
-- **"No keyboard" is in the line's usual color, not red** (2026-11-05),
-  since it isn't a failed attempt, and it stands in for a failure's message
-  until a keyboard comes back. "Checking" and the greeter's "Starting …"
-  still win over it, being under way without keys. The alternative is red,
-  or the failure winning. Reversible: `Lock.statusLine`.
 - **tidewm's session puts tidewm first** (2026-11-05):
   `XDG_CURRENT_DESKTOP=tidewm:tide`, against Hyprland's `tide:Hyprland`.
   xdg-desktop-portal reads only the first name's file, and picks any
