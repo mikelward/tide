@@ -5,7 +5,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { INITIAL, next } from "./lock.mjs";
+import { INITIAL, NO_KEYBOARD, next, statusLine } from "./lock.mjs";
 import {
     DISPLAYS_INITIAL, DISPLAYS_OFF_AFTER, LISTING_SCRIPT, SAVER_AFTER, SHELL_ID, SHELL_SESSION, authFailureEvent, canPickUser, displaysCommand,
     displaysNext, execCommand, fileId, greetdError, parseDesktopEntry, parseListing,
@@ -175,6 +175,15 @@ test("a greetd error after the password was taken asks for it again", () => {
     assert.equal(after.error, true);
     assert.equal(after.message, "Couldn't start tide: a session is already running.");
     assert.equal(statusText(after, "tide", after.message), after.message);
+});
+
+test("the session starting wins over no keyboard", () => {
+    let state = next(INITIAL, { type: "key", text: "x" }).state;
+    state = next(state, { type: "submit" }).state;
+    assert.equal(statusText(state, "tide", statusLine(state, false).text), "Checking");
+    state = next(state, { type: "done", result: "success" }).state;
+    assert.equal(statusText(state, "tide", statusLine(state, false).text), "Starting tide");
+    assert.equal(statusText(INITIAL, "tide", statusLine(INITIAL, false).text), NO_KEYBOARD);
 });
 
 test("a greetd error while checking keeps what was typed since", () => {

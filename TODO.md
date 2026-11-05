@@ -7,6 +7,11 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **"No keyboard" is in the line's usual color, not red** (2026-11-05),
+  since it isn't a failed attempt, and it stands in for a failure's message
+  until a keyboard comes back. "Checking" and the greeter's "Starting …"
+  still win over it, being under way without keys. The alternative is red,
+  or the failure winning. Reversible: `Lock.statusLine`.
 - **`Super+PgUp`/`PgDn` pass over a workspace whose only windows are
   minimized** (2026-11-04), as over an empty one, since there's nothing to
   see there and Hyprland has no window on it (§6.7); `Super+Shift+PgUp`/
