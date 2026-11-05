@@ -460,7 +460,11 @@ flowchart TD
   reload`. A mouse's acceleration is libinput's adaptive profile there, or
   flat at 0, since tidewm has no curve, and a device's own settings are
   Hyprland's alone for now. The Appearance page's dim strength (§6.2) is
-  `tide-appearance.conf`'s `dim_inactive`, applied the same way. What else
+  `tide-appearance.conf`'s `dim_inactive`, applied the same way. The
+  Displays page (§16) writes `tide-outputs.conf`, an `output` line for
+  each monitor, named by the description it has on Hyprland, which
+  tidewm takes too, with its scale and place, applied the same way; it
+  lists the monitors tidewm's `GET_OUTPUTS` gives. What else
   the shell takes from
   Hyprland's events is still Hyprland's. Home (§6.5) is the shell's to
   keep there, as tidewm's config can't know its name: `tide-tidewm`
@@ -4179,7 +4183,10 @@ stays hand-written.
   - The page lists the monitors `hyprctl monitors all -j` gives, a closed
     lid's panel included, then any with settings that isn't connected. It
     lists them again as it shows and once a change applies, so a scale
-    Reset hands back to Hyprland shows as Hyprland's.
+    Reset hands back to Hyprland shows as Hyprland's. On tidewm (§5.3) the
+    list is `GET_OUTPUTS`', each described from its make, model and
+    serial as Hyprland describes it, so a monitor's settings are the same
+    under either.
   - − and + step a scale a quarter, from 0.5 to 3. Hyprland may round it to
     one that divides the screen evenly; a scale between quarters goes to
     the nearest one that way first. A scale set past either end by hand
