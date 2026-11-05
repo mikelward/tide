@@ -526,6 +526,22 @@ export function appearanceLua(settings) {
     return lines.join("\n") + "\n";
 }
 
+// What reaches tidewm (SPEC.md §5.3), as the lines conf's tidewm config
+// includes from ~/.config/tidewm/tide-appearance.conf: only what's set, so
+// the config's own stands for the rest. tidewm's dim_inactive takes the
+// strength as Hyprland's dim_strength does, from 0 to 1.
+export function appearanceConf(settings) {
+    const lines = [
+        "# Written by tide from appearance.json and appearance.local.json (tide SPEC.md §16).",
+        "# Change those, or the Appearance page of tide's settings, not this file. Only",
+        "# what's set is here; conf's tidewm config has the rest.",
+    ];
+    if (settings.dimStrength !== undefined) {
+        lines.push(`dim_inactive ${settings.dimStrength}`);
+    }
+    return lines.join("\n") + "\n";
+}
+
 // What's wrong with a wallpaper setting, or "": a file's path, absolute or
 // from ~/, on one line, a color, or "" for the default.
 function wallpaperError(key, v) {

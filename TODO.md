@@ -1939,11 +1939,23 @@ them, and minimizing, with tidewm's own `minimize`. conf binds Super+Z
 there once that's in. Next, in order:
 
 1. The settings pages that write `tide-*.lua` for conf's hyprland.lua
-   (floating, appearance, outputs and layouts) and the keys page: each a
-   `tide-*.conf` conf's tidewm config includes, as the input pages' is,
-   or said to be Hyprland's only. The input pages still lack a device's
-   own settings there, which tidewm names by identifier
-   (`GET_INPUTS`), not as `hyprctl devices` does.
+   and the keys page: each a `tide-*.conf` conf's tidewm config includes,
+   as the input and appearance pages' are, or said to be Hyprland's only.
+   - **Displays** needs tidewm to name an output by its description, as
+     the page keys a monitor's settings (sway's `output "Make Model
+     Serial"`), and to place one beside another (`auto-right` and the
+     like) rather than at a position in pixels.
+   - **Floating**'s title patterns are RE2's, and tidewm's `for_window`
+     takes POSIX extended ones, which lack lazy counts and `\w \d \s`
+     and `\x` escapes; a class alone is easy (an app ID or an X11 class,
+     either case). The shell floats the windows a new rule covers with
+     `floating enable`.
+   - **Layouts**: tidewm's `single_window` lines take the single-window
+     widths; its default modes, `mfact`, `nmaster` and where a new window
+     goes have no lines yet.
+   - The input pages still lack a device's own settings there, which
+     tidewm names by identifier (`GET_INPUTS`), not as `hyprctl devices`
+     does.
 2. The rest: home's apps' rules, which conf's hyprland.lua makes on
    Hyprland, with the window events that send home the windows of
    home's apps that opened before them (`WorkspacesData.qml`); a name

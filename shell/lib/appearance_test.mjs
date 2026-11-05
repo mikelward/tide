@@ -12,7 +12,7 @@ import {
     expandHome, pickCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
-    POSITIONS, POSITION_CHOICES, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt,
+    POSITIONS, POSITION_CHOICES, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf
 } from "./appearance.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -933,4 +933,12 @@ test("the page's ‹ and › step through each mode's positions, stopping at eit
     assert.equal(steppedPositionAt(0, -1), 0);
     assert.equal(steppedPositionAt(0, 1), 1);
     assert.equal(steppedPositionAt(4, 1), 4);
+});
+
+test("tidewm's file has the dim strength as its dim_inactive, and only what's set", () => {
+    const text = appearanceConf({ dimStrength: 0.12, mode: "dark" });
+    assert.ok(text.startsWith("# Written by tide from appearance.json"), text);
+    assert.ok(text.endsWith("\ndim_inactive 0.12\n"), text);
+    assert.ok(appearanceConf({ mode: "dark" }).split("\n").every(line => line === "" || line.startsWith("#")));
+    assert.ok(appearanceConf({ dimStrength: 0 }).includes("\ndim_inactive 0\n"), "none at all");
 });

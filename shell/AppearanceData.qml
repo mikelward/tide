@@ -19,6 +19,9 @@ import "lib/writes.mjs" as Writes
 // settings do: written to ~/.config/hypr/tide-appearance.lua, which conf's
 // hyprland.lua reads, and applied with `hyprctl eval
 // conf_appearance.reload()`, tried again until it is (shell/lib/writes.mjs).
+// On tidewm (§5.3) it's ~/.config/tidewm/tide-appearance.conf, its
+// dim_inactive, which conf's tidewm config includes, and `tide-msg
+// reload` has tidewm read it, as InputData's.
 Singleton {
     id: root
 
@@ -171,11 +174,16 @@ Singleton {
             root.stepped(Writes.targetUnreadable(root.target, `${written.broken}; the dim keeps its strength`));
             return;
         }
-        // Applied as the shell starts even unchanged, as InputData's: a shell
+        // Applied as the shell starts even unchanged on Hyprland: a shell
         // that died with an apply still to retry would otherwise leave it
         // unapplied, and setting the same strength again changes nothing.
-        root.target = Writes.readTarget(root.target, writtenText, null).state;
-        root.stepped(Writes.wantTarget(root.target, Appearance.appearanceLua(root.settings)));
+        // tidewm's reload starts every output and device over, so a shell
+        // start leaves tidewm with what this session's record says it read
+        // (AppliedRecord), as InputData's.
+        root.target = Compositor.tidewm
+            ? Writes.readTarget(root.target, writtenText, root.target.known ? writtenText : applied.firstApplied(writtenText, root.target.failure)).state
+            : Writes.readTarget(root.target, writtenText, null).state;
+        root.stepped(Writes.wantTarget(root.target, Compositor.tidewm ? Appearance.appearanceConf(root.settings) : Appearance.appearanceLua(root.settings)));
     }
 
     function stepped(r) {
@@ -308,16 +316,26 @@ Singleton {
         path: local.path
     }
 
-    // What hyprland.lua reads. Written only when it would say something
-    // else.
+    // What hyprland.lua reads, or on tidewm what its config includes.
+    // Written only when it would say something else.
     SettingsFile {
         id: written
 
-        path: `${root.configHome}/hypr/tide-appearance.lua`
+        path: Compositor.tidewm ? `${root.configHome}/tidewm/tide-appearance.conf` : `${root.configHome}/hypr/tide-appearance.lua`
+    }
+
+    // This session's record of what tidewm last read.
+    AppliedRecord {
+        id: applied
+
+        name: "tide-appearance-tidewm-applied"
+        unsure: "reloading tidewm to be sure it has the dim strength"
+        again: "tidewm may be reloaded again to be sure it has the dim strength"
     }
 
     // Has hyprland.lua take what was written, as LayoutsData's applier:
-    // `hyprctl eval` answers "ok", or why not, on stdout.
+    // `hyprctl eval` answers "ok", or why not, on stdout. On tidewm,
+    // `tide-msg reload` exits 0, or says why not on stderr.
     Component {
         id: applier
 
@@ -348,18 +366,22 @@ Singleton {
                 if (!state.started) {
                     console.warn(state.report.message);
                     error = state.report.message.replace(/^tide: /, "");
-                } else if (state.code !== 0 || reply.trim() !== "ok") {
+                } else if (state.code !== 0 || (!Compositor.tidewm && reply.trim() !== "ok")) {
                     // A hyprland.lua from before conf_appearance, say.
                     error = `couldn't apply the dim strength: ${(reply + state.errors).trim()}`;
                     console.warn(`tide: ${error}`);
                 } else if (state.report?.level === "log") {
                     console.log(state.report.message);
                 }
-                root.stepped(Writes.targetApplied(root.target, error));
+                const done = Writes.targetApplied(root.target, error);
+                if (Compositor.tidewm && error === "") {
+                    applied.record(Writes.recordOf(done.state.applied));
+                }
+                root.stepped(done);
                 destroy();
             }
 
-            command: ["hyprctl", "eval", "conf_appearance.reload()"]
+            command: Compositor.tidewm ? ["tide-msg", "reload"] : ["hyprctl", "eval", "conf_appearance.reload()"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     run.reply = text;
