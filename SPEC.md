@@ -596,6 +596,11 @@ flowchart TD
   - portal backend selection;
   - `hyprctl configerrors`;
   - unscoped autostart entries;
+  - hypridle running, since without it idle, suspend and `Super+L` don't
+    lock (§10). One skipped at login by a drop-in's `ExecCondition=` is
+    named with that drop-in: the one whose condition systemd says failed.
+    The journal says only that it was skipped, and one left by another
+    setup can allow only its own desktop;
   - the lock's pieces (§10): `tide-lock.service` installed and loaded, its
     `lock.qml`, and the `tide-lock` PAM file, readable by the user, without
     which PAM falls back to its `other` service; and whether the last lock

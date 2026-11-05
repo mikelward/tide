@@ -52,12 +52,101 @@ case ":${XDG_CURRENT_DESKTOP}:" in
 esac
 
 # Units.
-for unit in tide.service hypridle.service; do
-    state=$(systemctl --user is-active "$unit" 2>&1)
-    if test "$state" != active; then
-        problem "$unit is ${state:-not active}: see \`systemctl --user status $unit\` and \`journalctl --user -u $unit\`"
+state=$(systemctl --user is-active tide.service 2>&1)
+if test "$state" != active; then
+    problem "tide.service is ${state:-not active}: see \`systemctl --user status tide.service\` and \`journalctl --user -u tide.service\`"
+fi
+# hypridle answers logind's Lock, idle and suspend (§10), so without it none
+# of them locks. A drop-in's ExecCondition= that says no skips it at login,
+# with Result=exec-condition and nothing in the journal but "skipped", so
+# the drop-in that did it is named. Every ExecCondition= runs, and one that
+# fails is enough. tide's own allows tide's session; one left by another
+# setup (an old quickspace.conf, say) may allow only its own.
+#
+# systemd keeps each condition's exit status, so the one that said no is
+# known: one that exited non-zero, and wasn't marked to have its failure
+# ignored (ExecCondition=-...), which systemd counts as a yes. Its drop-in
+# is the one with the same command. systemd shows it
+# unquoted and unescaped, so both are compared without quotes, backslashes,
+# a leading prefix (- @ : + !), extra spaces, or $$ for $. Operators stay,
+# so a condition with = never matches one with !=.
+condition_text() {
+    printf '%s' "$1" | sed -e 's/^[-@:+!]*//' -e 's/\$\$/$/g' | tr -d "'\"\\\\" |
+        tr -s '[:space:]' ' ' | sed -e 's/^ //' -e 's/ $//'
+}
+hypridle_skipped() {
+    lockless=$1
+    if ! conds=$(systemctl --user show -p ExecCondition --value hypridle.service 2>&1); then
+        problem "hypridle.service was skipped at login by an ExecCondition=, $lockless, and which one isn't known ($conds): \`systemctl --user status hypridle.service\` shows the conditions"
+        return
     fi
-done
+    failed=$(printf '%s\n' "$conds" | grep ' ; ignore_errors=no ; ' |
+        grep ' ; code=exited ; status=' | grep -v ' ; status=0[ /}]' |
+        sed -n 's/.*argv\[\]=\(.*\) ; ignore_errors=.*/\1/p' | head -n 1)
+    if test -z "$failed"; then
+        problem "hypridle.service was skipped at login by an ExecCondition=, $lockless, and systemd doesn't say which: \`systemctl --user status hypridle.service\` shows the conditions"
+        return
+    fi
+    if ! dropins=$(systemctl --user show -p DropInPaths --value hypridle.service 2>&1); then
+        problem "hypridle.service was skipped at login by its ExecCondition= \`$failed\`, $lockless, and its drop-ins couldn't be listed ($dropins), so the file isn't named: \`systemctl --user cat hypridle.service\` shows where it is"
+        return
+    fi
+    want=$(condition_text "$failed")
+    found=
+    unread=
+    for dropin in $dropins; do
+        if ! test -e "$dropin"; then
+            # systemd still runs what it read, until it's reloaded.
+            problem "$dropin is gone, but systemd still has it for hypridle.service: \`systemctl --user daemon-reload\`, then \`systemctl --user start hypridle.service\`"
+            unread=yes
+            continue
+        fi
+        gstatus=0
+        lines=$(grep '^[[:space:]]*ExecCondition=' "$dropin" 2>&1) || gstatus=$?
+        if test "$gstatus" -gt 1; then
+            problem "couldn't read $dropin ($lines), so whether its ExecCondition= skipped hypridle isn't known"
+            unread=yes
+            continue
+        fi
+        while IFS= read -r line; do
+            test -n "$line" || continue
+            if test "$(condition_text "${line#*ExecCondition=}")" = "$want"; then
+                found="$found $dropin"
+                break
+            fi
+        done <<LINES
+$lines
+LINES
+    done
+    found=${found# }
+    case "$found" in
+        "")
+            test -n "$unread" ||
+                problem "hypridle.service was skipped at login by its ExecCondition= \`$failed\`, $lockless, and no drop-in has it: \`systemctl --user cat hypridle.service\` shows where it is"
+            ;;
+        *" "*)
+            # The same condition in more than one: each is a candidate.
+            problem "hypridle.service was skipped at login by its ExecCondition= \`$failed\`, which each of these has: $found, $lockless: remove it from those no other session needs, then \`systemctl --user daemon-reload\` and \`systemctl --user start hypridle.service\`"
+            ;;
+        */hypridle.service.d/tide.conf)
+            problem "hypridle.service was skipped at login by tide's own ExecCondition=, which runs it only where XDG_CURRENT_DESKTOP has tide, $lockless: \`systemctl --user start hypridle.service\` starts it"
+            ;;
+        *)
+            problem "hypridle.service was skipped at login by the ExecCondition= in $found, $lockless: remove it if no other session needs it, then \`systemctl --user daemon-reload\` and \`systemctl --user start hypridle.service\`"
+            ;;
+    esac
+}
+state=$(systemctl --user is-active hypridle.service 2>&1)
+if test "$state" != active; then
+    lockless="so idle, suspend and Super+L don't lock the session"
+    if ! result=$(systemctl --user show -p Result --value hypridle.service 2>&1); then
+        problem "hypridle.service is ${state:-not active}, $lockless, and whether a condition skipped it isn't known ($result): see \`systemctl --user status hypridle.service\`"
+    elif test "$result" = exec-condition; then
+        hypridle_skipped "$lockless"
+    else
+        problem "hypridle.service is ${state:-not active}, $lockless: see \`systemctl --user status hypridle.service\` and \`journalctl --user -u hypridle.service\`"
+    fi
+fi
 
 # The lock (§10). A broken one shows only when the session should lock, as a
 # lock that never comes or one that won't take the password, so each piece is
