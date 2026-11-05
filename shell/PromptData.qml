@@ -4,8 +4,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
-import "lib/dispatch.mjs" as Dispatch
 import "lib/report.mjs" as Report
+import "lib/tidewm.mjs" as Tw
 import "lib/workspacenames.mjs" as Names
 import "lib/workspaces.mjs" as Ws
 
@@ -41,6 +41,7 @@ Singleton {
     // Windows opened since the shell started that haven't been judged yet
     // (Names.windowOpened): the first focus asks Hyprland about one, and an
     // answer that comes after it closed is dropped (Names.windowAnswered).
+    // tidewm's focus event carries the window, so it's judged at once.
     property var windows: Names.NO_WINDOWS
     // Launches answered with a workspace that asks, home by default
     // (Ws.homeLaunched), so their windows, which open there, don't ask
@@ -61,7 +62,9 @@ Singleton {
     // workspace, home included. With none there's nothing to move, so it
     // only says so in the log.
     function askMove() {
-        const address = Ws.normalizeAddress(Hyprland.activeToplevel?.address);
+        const address = Compositor.tidewm
+            ? Compositor.tidewmActive?.address ?? null
+            : Ws.normalizeAddress(Hyprland.activeToplevel?.address);
         if (address === null) {
             console.log("tide: Super+Shift+Return with no window focused; nothing to move");
             return;
@@ -120,18 +123,18 @@ Singleton {
         } else if (a.go !== undefined) {
             Compositor.goToWorkspace(a.go);
         } else {
-            Hyprland.dispatch(Dispatch.moveWindowToNamed(a.move, a.name, Hyprland.usingLua));
+            Compositor.moveWindowToNamed(a.move, a.name);
         }
     }
 
     // The workspace the window at `address` is pinned on (Names.pinnedOn),
     // or null.
     function pinnedOn(address) {
-        const t = Hyprland.toplevels.values.find(t => Ws.normalizeAddress(t.address) === address);
-        if (!t) {
+        const w = Compositor.windows.find(w => w.address === address);
+        if (!w) {
             return null;
         }
-        return Names.pinnedOn(t.lastIpcObject?.class || t.wayland?.appId || "", t.workspace?.name ?? "", WorkspacesData.settings, WorkspacesData.resolved);
+        return Names.pinnedOn(w.app, w.workspaceName, WorkspacesData.settings, WorkspacesData.resolved);
     }
 
     // Esc, as Names.promptCancel says: a new window closes, politely, as
@@ -155,7 +158,7 @@ Singleton {
                 }
             });
         } else if (c.close !== undefined) {
-            Hyprland.dispatch(Dispatch.closeWindow(c.close, Hyprland.usingLua));
+            Compositor.closeWindow(c.close);
         } else if (c.reply !== undefined) {
             root.reply(c.answer, c.reply);
         }
@@ -196,6 +199,23 @@ Singleton {
         }
     }
 
+    // The window at `address`, just first focused, as the compositor
+    // describes it (`client`, null once it's gone): it asks for a
+    // workspace if Ws.windowPrompt says so. A launch you sent to a workspace that asks stays there,
+    // without asking.
+    function judge(address, client) {
+        const judged = Ws.windowPrompt(client, {
+            settings: WorkspacesData.settings,
+            resolved: WorkspacesData.resolved,
+            launches: root.homeLaunches,
+            now: Date.now() / 1000
+        });
+        root.homeLaunches = judged.launches;
+        if (judged.ask) {
+            root.ask({ kind: "window", address: address });
+        }
+    }
+
     Component {
         id: replier
 
@@ -231,19 +251,7 @@ Singleton {
                     const answered = Names.windowAnswered(root.windows, run.address);
                     root.windows = answered.state;
                     // Closed while Hyprland answered: nothing to ask about.
-                    const client = answered.live ? Names.clientAt(clients, run.address) : null;
-                    // A launch you sent to a workspace that asks stays
-                    // there, without asking.
-                    const judged = Ws.windowPrompt(client, {
-                        settings: WorkspacesData.settings,
-                        resolved: WorkspacesData.resolved,
-                        launches: root.homeLaunches,
-                        now: Date.now() / 1000
-                    });
-                    root.homeLaunches = judged.launches;
-                    if (judged.ask) {
-                        root.ask({ kind: "window", address: run.address });
-                    }
+                    root.judge(run.address, answered.live ? Names.clientAt(clients, run.address) : null);
                 }
             }
             onExited: (code, status) => {
@@ -256,7 +264,7 @@ Singleton {
     }
 
     Connections {
-        target: Hyprland
+        target: Compositor.tidewm ? null : Hyprland
 
         function onRawEvent(event) {
             const data = String(event.data);
@@ -275,6 +283,30 @@ Singleton {
                 if (focused && focused.lookup) {
                     root.windows = focused.state;
                     lookup.createObject(root, { address: address }).running = true;
+                }
+            }
+        }
+    }
+
+    // tidewm's window events (TidewmData.qml), as Hyprland's above.
+    Connections {
+        target: Compositor.tidewm ? TidewmData : null
+
+        function onWindowHeard(data) {
+            const e = Tw.promptEvent(data);
+            if (e === null) {
+                return;
+            }
+            if (e.change === "new") {
+                root.windows = Names.windowOpened(root.windows, e.address);
+            } else if (e.change === "close") {
+                root.windows = Names.windowClosed(root.windows, e.address);
+                root.state = Names.promptWindowGone(root.state, e.address);
+            } else {
+                const focused = Names.windowFocused(root.windows, e.address);
+                if (focused.lookup) {
+                    root.windows = Names.windowAnswered(focused.state, e.address).state;
+                    root.judge(e.address, e.client);
                 }
             }
         }
