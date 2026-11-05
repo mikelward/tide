@@ -86,6 +86,7 @@ if test -n "${FAKE_TIDEMSG_STATUS:-}"; then
     exit "$FAKE_TIDEMSG_STATUS"
 fi
 test "$1" != --focused-workspace || printf '%s\n' "${FAKE_TIDEWM_WORKSPACE-PR-12 login}"
+test "$1" != --prompt-may-focus || exit "${FAKE_TIDEWM_PROMPT:-0}"
 FAKE
 chmod +x "$fake"/*
 # tide-grant answers --program with $FAKE_PROGRAM, else the command's first
@@ -635,9 +636,15 @@ check "and that the grant failed too" \
 run "$tw" "$qs" workspace
 check "on tidewm, tide workspace prints tidewm's focused one" test "$(cat "$tmp/out")" = PR12login
 run "$tw" "$qs" prompt-focus
-check "on tidewm, prompt-focus can't tell yet" test $? -eq 2
-check "and says so" contains "$(cat "$tmp/err")" "tidewm's focus guard isn't asked yet"
-check "and asks no one" test ! -s "$log"
+check "on tidewm, prompt-focus exits 0 when tidewm's guard lets the prompt focus" test $? -eq 0
+check "it asks tidewm, not Hyprland" test "$(cat "$log")" = "tide-msg --prompt-may-focus"
+run "$tw" FAKE_TIDEWM_PROMPT=1 "$qs" prompt-focus
+check "on tidewm, prompt-focus exits 1 when tidewm's guard says no" test $? -eq 1
+check "and says nothing" test ! -s "$tmp/err"
+run "$tw" FAKE_TIDEMSG_STATUS=2 FAKE_TIDEMSG_ERROR="SWAYSOCK isn't set, so there's no tidewm to ask" "$qs" prompt-focus
+check "on tidewm, prompt-focus exits 2 when tidewm can't be asked" test $? -eq 2
+check "and says why" \
+    contains "$(cat "$tmp/err")" "tide prompt-focus: couldn't ask the focus guard: tide-msg: SWAYSOCK isn't set, so there's no tidewm to ask"
 mv "$fake/tide-msg" "$tmp/tide-msg.away"
 run "$tw" "$qs" grant app
 check "on tidewm, grant without tide-msg exits 1" test $? -eq 1

@@ -78,8 +78,25 @@ func TestAQueryPrintsTheReply(t *testing.T) {
 	}
 }
 
+func TestPromptMayFocusIsTheExitStatus(t *testing.T) {
+	for reply, want := range map[string]int{
+		`[{"name":"seat0","prompt_may_focus":true}]`:  0,
+		`[{"name":"seat0","prompt_may_focus":false}]`: 1,
+		`[{"name":"seat0"}]`:                          2, // a tidewm too old to say
+	} {
+		tidewm := swayipctest.New(t, reply)
+		status, out, _ := tideMsg([]string{"SWAYSOCK=" + tidewm.Socket}, "--prompt-may-focus")
+		if status != want || out != "" {
+			t.Errorf("%s: status %d, out %q, want %d", reply, status, out, want)
+		}
+		if got := tidewm.Sent(); len(got) != 1 || got[0].Type != 101 {
+			t.Errorf("%s: sent %v, not GET_SEATS", reply, got)
+		}
+	}
+}
+
 func TestUsage(t *testing.T) {
-	for _, args := range [][]string{nil, {"--focused-workspace", "nop"}, {"--nope"},
+	for _, args := range [][]string{nil, {"--focused-workspace", "nop"}, {"--nope"}, {"--prompt-may-focus", "--focused-workspace"},
 		{"--type", "get_marks"}, {"--type", "get_config", "nop"}, {"--type", "get_config", "--focused-workspace"}} {
 		if status, _, _ := tideMsg([]string{"SWAYSOCK=/x"}, args...); status != 2 {
 			t.Errorf("%q: status %d", args, status)

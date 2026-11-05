@@ -167,7 +167,8 @@
 #     2 s, so the prompt follows your pkexec or button, and 1 if not. The
 #     shell's polkit agent asks it, and otherwise offers the prompt through
 #     a notification. Exits 2, saying why, if it can't tell: outside a tide
-#     session, in tidewm's for now, or when the guard can't be asked.
+#     session, or when the guard can't be asked. In tidewm's session it
+#     asks tidewm's guard, through tide-msg.
 #
 #   tide keyboards
 #
@@ -1227,11 +1228,18 @@ prompt_focus() {
         echo "$prog prompt-focus: not in a tide session, so there's no focus guard to ask" >&2
         exit 2
     fi
-    # tidewm's guard has the answer (GET_SEATS's last_input), but nothing
-    # asks it yet (TODO.md), so the shell offers its prompt through a
-    # notification there.
+    # tidewm's guard answers through GET_SEATS's prompt_may_focus.
     if in_tidewm; then
-        echo "$prog prompt-focus: tidewm's focus guard isn't asked yet, so a prompt waits for you" >&2
+        if ! command -v tide-msg >/dev/null 2>&1; then
+            echo "$prog prompt-focus: no tide-msg, so couldn't ask the focus guard (make install builds it)" >&2
+            exit 2
+        fi
+        status=0
+        err=$(tide-msg --prompt-may-focus 2>&1) || status=$?
+        case $status in
+            0 | 1) exit "$status" ;;
+        esac
+        echo "$prog prompt-focus: couldn't ask the focus guard: ${err:-tide-msg exited $status}" >&2
         exit 2
     fi
     if ! command -v hyprctl >/dev/null 2>&1; then

@@ -434,12 +434,12 @@ flowchart TD
   directory, so tide installs `tidewm-portals.conf` (wlr, then gtk)
   beside `tide-portals.conf`. tide's units, hypridle and the autostart
   allowlist take any `XDG_CURRENT_DESKTOP` with `tide` in it. `tide`
-  and `tide-grant` record grants, and read the focused workspace, over
-  tidewm's IPC there, through `tide-msg`, a small client of sway's
-  protocol. The shell still reads only Hyprland's IPC, so on tidewm the
-  bar has no workspaces until its tidewm backend lands, and `tide
-  prompt-focus` can't tell yet, so a polkit prompt comes as a
-  notification. `tide doctor` counts bars and reports config errors
+  and `tide-grant` record grants, read the focused workspace, and ask
+  whether a polkit prompt may take the keyboard (`tide prompt-focus`,
+  from GET_SEATS's `prompt_may_focus`), over tidewm's IPC there, through
+  `tide-msg`, a small client of sway's protocol. The shell still reads
+  only Hyprland's IPC, so on tidewm the bar has no workspaces until its
+  tidewm backend lands. `tide doctor` counts bars and reports config errors
   from tidewm's `GET_OUTPUTS` and `GET_CONFIG` there, and leaves out the
   home workspace's check, which asks Hyprland, saying so.
 
