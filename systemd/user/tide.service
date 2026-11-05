@@ -28,6 +28,10 @@ ExecStart=tide-shell
 # won't lock, as when hypridle was skipped (SPEC.md §10). It never fails
 # the shell.
 ExecStartPost=-tide lock-check
+# Autostart units left running from an earlier login, when the user
+# manager outlived it, never met the allowlist; those it skips stop now
+# (SPEC.md §5.4). It never fails the shell either.
+ExecStartPost=-tide autostart-sweep
 TimeoutStartSec=15
 Restart=on-failure
 RestartSec=1

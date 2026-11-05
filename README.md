@@ -155,6 +155,9 @@ autostart unit; in the tide session it skips each entry that
 tray icons stay out, while Plasma runs them all as before. The list is
 `nm-applet`, only while the shell's network agent isn't running; add
 desktop IDs, one per line, to `~/.config/tide/autostart` to allow more.
+When the shell starts, it also stops any autostart program left running from
+an earlier login that the list skips, as shpool's sessions keep the user's
+services running across a logout.
 
 ## Mocks
 
