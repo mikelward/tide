@@ -1502,6 +1502,7 @@ with new keys in **bold**:
 | `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
 | **`Super+V`** | the picker, on its Clipboard tab: what you've copied, and emoji and symbols by name; Enter pastes (§8.4). V as in paste, as on Windows. Terminal on the VM, which it was, has no key now; the launcher finds it |
 | **`Super+Shift+V`** | the picker, on its Fill tab: your snippets and each Bitwarden login's username, password and 2FA code; Enter types it (§8.4) |
+| **`Super+;`** | the picker, on its Characters tab: emoji and symbols by name; Enter pastes (§8.4). Not Windows's `Super+.`, which is the next layout here |
 | **`Super+C`** / **`Super+Shift+C`** | Google Chat / Google Calendar (`runenv google-chat`, `runenv google-calendar`) |
 | `Super+Backspace` | close window, unless it's pinned on its workspace (§6.5) |
 | **`Ctrl+W`** / **`Ctrl+Shift+W`** / **`Ctrl+Q`** / **`Alt+F4`** | the app's own, passed on to every window but one pinned on its workspace, which never sees them (§6.5) |
@@ -2308,8 +2309,8 @@ See [`switcher.png`](docs/mocks/switcher.png).
 
 See [`picker.png`](docs/mocks/picker.png).
 
-- **One overlay, three tabs**, on `Super+V`, and on `Super+Shift+V` on
-  Fill:
+- **One overlay, three tabs**, on `Super+V`, on `Super+;` on Characters,
+  and on `Super+Shift+V` on Fill:
   - **Clipboard:** what you've copied, newest first, one line each. An
     image shows as its format, size and dimensions.
   - **Characters:** emoji and symbols, found by name: `arrow`,
