@@ -1858,9 +1858,8 @@ See [`bar.png`](docs/mocks/bar.png).
 - **Each shows its name**, cut with an ellipsis past 16 characters.
 - **App icons only for attention.** A chip shows no icon for an ordinary
   window. It shows one for each of its windows that wants attention
-  (§14.4): urgent, kept from focus by the focus guard, marked by a
-  notification, or with an unread count rising in its title while off
-  screen, the same windows the switcher's Attention tab lists. Up to
+  (§14.4): urgent, kept from focus by the focus guard, or marked by a
+  notification, the same windows the switcher's Attention tab lists. Up to
   5, then `+n`.
   - So a chip with an icon is always an urgent one.
   - A minimized window that wants attention shows on the chip of the
@@ -3628,18 +3627,10 @@ to be focused.
 - **A new window the guard kept from focus** gets the same mark. The guard
   announces it on the event socket, and the shell shows it the way it shows
   attention derived from notifications (below).
-- **An unread count in a title** gets it too, as tilemo does: a window
-  whose title's count rises, as "Chat (2)" becoming "Chat (3)" or
-  "(3) Inbox", while its workspace isn't on screen. It's the number in
-  the title's first parentheses, from Hyprland's `windowtitlev2` event.
-  - It catches an app that neither notifies nor activates, such as a
-    Chrome tab or `--app` window with notifications off.
-  - A count that falls or stays is no news, and a window on screen isn't
-    marked, since you can see it.
-  - The first title tide sees for a window only sets its count, so a
-    restarted shell marks only counts that rise from what it has seen.
-  - Focusing the window clears the mark. A muted app's window is never
-    marked, and muting clears its mark for good, as with the other marks.
+- **An unread count isn't attention.** A title's count, such as Gmail's
+  "(3) Inbox", rises with every message, wanted or not. A window wants
+  attention when it notifies, rings the bell or activates itself.
+  tilemo and tileco follow the same rules.
 - **Who actually asks**, checked in each project's source:
 
   | Client | Raises urgency on Wayland? |

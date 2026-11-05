@@ -20,9 +20,6 @@ import "lib/workspaces.mjs" as Ws
 //   - Notifications': NotificationData reports each one that arrives or is
 //     updated, and each that closes, while the shell is the notification
 //     server.
-//   - Titles': a window whose title's unread count rises ("Chat (3)")
-//     while it's off screen is marked until it's focused or closes, for
-//     apps that neither notify nor activate, as tilemo does.
 //   - The focus guard hears every marked window in the order they were
 //     marked (tide_focus.set_order), since only the shell sees both
 //     kinds together, and the switcher's Attention tab lists them newest
@@ -231,16 +228,6 @@ Singleton {
             if (mark?.type === "guarded") {
                 mark = Object.assign({}, mark, {
                     app: root.windows.find(w => w.address === mark.address)?.app ?? "",
-                    muted: root.muted
-                });
-            } else if (mark?.type === "titled") {
-                // An unread count rising in an off-screen window's title
-                // (Ws.updateMarks's "titled", SPEC.md §14.4).
-                const w = root.windows.find(x => x.address === mark.address);
-                mark = Object.assign({}, mark, {
-                    app: w?.app ?? "",
-                    workspace: w?.workspace ?? null,
-                    visible: root.visible,
                     muted: root.muted
                 });
             } else if (mark?.type === "focused") {
