@@ -3550,12 +3550,11 @@ PanelWindow {
                         }
 
                         Text {
-                            visible: FloatingData.rules.length === 0
                             x: 10
                             width: floatingPage.width - 20
                             topPadding: 4
                             bottomPadding: 4
-                            text: "No rules yet. Dialogs always float."
+                            text: "Dialogs always float."
                             color: Theme.fgDim
                             font.family: Theme.font
                             font.pixelSize: 13
