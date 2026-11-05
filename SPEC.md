@@ -441,10 +441,12 @@ flowchart TD
   whether a polkit prompt may take the keyboard (`tide prompt-focus`,
   from GET_SEATS's `prompt_may_focus`), over tidewm's IPC there, through
   `tide-msg`, a small client of sway's protocol. The shell asks tidewm
-  only which monitor has focus, through Quickshell's I3 module, so its
-  popups, prompts, OSD and launcher open there; it reads the rest from
-  Hyprland's IPC, so on tidewm the bar has no workspaces until the rest of
-  its tidewm backend lands. `tide doctor` counts bars and reports config errors
+  which monitor has focus and which workspaces there are, through
+  Quickshell's I3 module, so its popups, prompts, OSD and launcher open
+  on the focused monitor, and the bar, the switcher and the name prompt
+  list tidewm's workspaces, one per name, and go to them. It reads windows
+  from Hyprland's IPC still, so on tidewm the bar has no app icons until
+  the rest of its tidewm backend lands. `tide doctor` counts bars and reports config errors
   from tidewm's `GET_OUTPUTS` and `GET_CONFIG` there, and leaves out the
   home workspace's check, which asks Hyprland, saying so.
 

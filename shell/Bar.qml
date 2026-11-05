@@ -70,7 +70,7 @@ PanelWindow {
         anchors.left: logo.right
         anchors.leftMargin: 8
         anchors.verticalCenter: parent.verticalCenter
-        monitorName: bar.monitor?.name ?? ""
+        monitorName: bar.screen?.name ?? ""
         // The layout symbol after it isn't a target.
         reach: bar.leftReaches[1]
     }
