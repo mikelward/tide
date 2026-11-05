@@ -3048,6 +3048,10 @@ talk, a demo, or a meeting room's screen.
   - A critical notification, "Idle and suspend won't lock", waits under the
     lock, since only hypridle locks for those. `tide doctor` says why
     hypridle isn't running.
+  - The same notification comes at login, so it's not news only at the
+    first lock that doesn't come. `tide.service` runs `tide lock-check`
+    once the shell is up to show it, and after each restart of the shell.
+    It never fails the shell.
   - `conf`'s binding falls back to `loginctl lock-session` where `tide lock`
     fails, as it does in a tide from before it.
 - **Before sleep.** hypridle runs `before_sleep_cmd` on `PrepareForSleep`.

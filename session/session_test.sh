@@ -154,6 +154,8 @@ check "a bad setting isn't restarted" has_line "$unit" "RestartPreventExitStatus
 check "hypridle is wanted, not required" has_line "$unit" "Wants=hypridle.service"
 check "hypridle is not required" lacks_line_matching "$unit" '^Requires=.*hypridle'
 check "the shell starts after hypridle" has_line "$unit" "After=hypridle.service"
+check "once the shell is up, it says if the session won't lock" \
+    has_line "$unit" "ExecStartPost=-tide lock-check"
 check "the shell is up before autostarted apps" \
     has_line "$unit" "Before=xdg-desktop-autostart.target"
 
@@ -341,7 +343,8 @@ if command -v systemd-analyze >/dev/null 2>&1; then
     chmod 700 "$tmp/run"
     printf '#!/bin/sh\n' > "$tmp/stub"
     chmod +x "$tmp/stub"
-    sed "s|^ExecStart=tide-shell\$|ExecStart=$tmp/stub|" "$unit" > "$tmp/units/tide.service"
+    sed -e "s|^ExecStart=tide-shell\$|ExecStart=$tmp/stub|" \
+        -e "s|^ExecStartPost=-tide lock-check\$|ExecStartPost=-$tmp/stub|" "$unit" > "$tmp/units/tide.service"
     # A stand-in for the packaged hypridle.service, with the drop-in on top.
     printf '[Unit]\nDescription=hypridle\n[Service]\nExecStart=%s\n' "$tmp/stub" \
         > "$tmp/units/hypridle.service"

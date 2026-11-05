@@ -935,6 +935,22 @@ run "$qs" lock now
 check "lock takes no arguments" test $? -eq 2
 rm "$fake/pgrep"
 
+# lock-check: quiet with hypridle running; without it, a notification says
+# idle and suspend won't lock.
+run FAKE_IS_ACTIVE=active "$qs" lock-check
+check "with hypridle, lock-check exits 0" test $? -eq 0
+check "with hypridle, lock-check sends nothing" lacks "$(cat "$log")" "notify-send"
+check "with hypridle, lock-check says nothing" test ! -s "$tmp/err"
+run FAKE_IS_ACTIVE=inactive "$qs" lock-check
+check "without hypridle, lock-check still exits 0" test $? -eq 0
+check "without hypridle, a notification says idle and suspend won't lock" \
+    contains "$(cat "$log")" "notify-send --urgency=critical -a tide Idle and suspend won't lock hypridle isn't running. Run tide doctor to see why."
+check "without hypridle, lock-check says why in the journal" \
+    contains "$(cat "$tmp/err")" "hypridle.service is inactive, so idle and suspend won't lock"
+check "lock-check starts nothing" lacks "$(cat "$log")" "systemctl --user start"
+run "$qs" lock-check now
+check "lock-check takes no arguments" test $? -eq 2
+
 # idle-suspend: busctl answers UPower's OnBattery with $FAKE_ON_BATTERY
 # (on battery by default) and exits $FAKE_BUSCTL_STATUS.
 cat > "$fake/busctl" <<'FAKE'

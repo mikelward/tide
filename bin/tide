@@ -143,6 +143,13 @@
 #     lock_cmd does. A critical notification then says idle and suspend
 #     won't lock either. Exits 1 if nothing could lock.
 #
+#   tide lock-check
+#
+#     Says at login when idle and suspend won't lock: when hypridle isn't
+#     running, a critical notification says so, rather than nothing until
+#     the first lock that doesn't come. tide.service runs it once the shell
+#     is up to show it. It exits 0 either way; `tide doctor` says why.
+#
 #   tide idle-lock
 #
 #     Locks the session for idleness: hypridle's lock step runs it in
@@ -226,6 +233,7 @@ usage() {
     echo "       $prog network-agent" >&2
     echo "       $prog brightness STEP" >&2
     echo "       $prog lock" >&2
+    echo "       $prog lock-check" >&2
     echo "       $prog idle-lock" >&2
     echo "       $prog idle-suspend [--unplugged | --cancel]" >&2
     echo "       $prog prompt-focus" >&2
@@ -1134,6 +1142,14 @@ lock() {
     exec "$hyprlock"
 }
 
+lock_check() {
+    test $# -eq 0 || usage
+    hypridle=$(systemctl --user is-active hypridle.service 2>&1)
+    test "$hypridle" = active && return 0
+    echo "$prog lock-check: hypridle.service is ${hypridle:-not active}, so idle and suspend won't lock" >&2
+    tell_critical "Idle and suspend won't lock" "hypridle isn't running. Run tide doctor to see why."
+}
+
 idle_lock() {
     test $# -eq 0 || usage
     dir=${XDG_RUNTIME_DIR:-}
@@ -1354,6 +1370,7 @@ case "${1:-}" in
     network-agent) shift; network_agent "$@" ;;
     brightness) shift; brightness "$@" ;;
     lock) shift; lock "$@" ;;
+    lock-check) shift; lock_check "$@" ;;
     idle-lock) shift; idle_lock "$@" ;;
     idle-suspend) shift; idle_suspend "$@" ;;
     prompt-focus) shift; prompt_focus "$@" ;;
