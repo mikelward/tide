@@ -10,26 +10,20 @@ import "lib/workspaces.mjs" as Ws
 // standing ones first, home first, then the rest in the order they were
 // made, each with an app icon only for a window wanting attention.
 // shell/lib/workspaces.mjs decides what each shows; this only draws
-// it and sends clicks to Hyprland, which makes a standing workspace that
-// isn't made yet as it's clicked.
+// it and sends clicks to the compositor (Compositor.qml), which makes a
+// standing workspace that isn't made yet as it's clicked.
 Row {
     id: root
 
-    // This bar's monitor, as Hyprland names it.
+    // This bar's monitor, as the compositor names it.
     required property string monitorName
     // How far the click targets at the ends reach past them (Bar.qml).
     property var reach: ({ left: Click.PAD, right: Click.PAD })
 
     spacing: 3
 
-    readonly property var monitors: Hyprland.monitors.values.map(m => ({
-        name: m.name,
-        workspace: m.activeWorkspace ? m.activeWorkspace.id : null,
-    }))
-    readonly property var workspaces: Hyprland.workspaces.values.map(w => ({
-        id: w.id,
-        name: w.name,
-    }))
+    readonly property var monitors: Compositor.monitors
+    readonly property var workspaces: Compositor.workspaces
     readonly property var windows: Hyprland.toplevels.values.map(t => ({
         address: Ws.normalizeAddress(t.address),
         workspace: t.workspace ? t.workspace.id : null,
@@ -89,7 +83,7 @@ Row {
                 MouseArea {
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
-                    onClicked: Hyprland.dispatch(Dispatch.focusWorkspaceName(chip.modelData.name, Hyprland.usingLua))
+                    onClicked: Compositor.goToWorkspace(chip.modelData.name)
                 }
             }
 
@@ -204,7 +198,7 @@ Row {
             root.wheel -= notches * 120;
             const target = Ws.scrollTarget(root.list, root.current, notches);
             if (target !== null) {
-                Hyprland.dispatch(Dispatch.focusWorkspaceName(target, Hyprland.usingLua));
+                Compositor.goToWorkspace(target);
             }
         }
     }

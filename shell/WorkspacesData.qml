@@ -25,8 +25,8 @@ import "lib/writes.mjs" as Writes
 // once, and the last good settings stay; one that can't be written or
 // applied is tried again until it is (shell/lib/writes.mjs).
 //
-// It also keeps home's name: a rename from elsewhere (`hyprctl`) is
-// undone as it's heard.
+// It also keeps home's name: a rename from elsewhere (`hyprctl`, or
+// `swaymsg` on tidewm) is undone as it's heard.
 Singleton {
     id: root
 
@@ -39,7 +39,7 @@ Singleton {
     // after home was made never hears it made; a rename leaves it, so the
     // rename can be undone.
     property var homeId: null
-    readonly property var listedHome: Hyprland.workspaces.values.find(w => w.name === root.home)?.id ?? null
+    readonly property var listedHome: Compositor.workspaces.find(w => w.name === root.home)?.id ?? null
 
     onListedHomeChanged: {
         if (root.listedHome !== null) {
@@ -349,17 +349,20 @@ Singleton {
                         ? Names.uncoveredOpened(root.uncovered, address, fields[2] ?? "", root.appliedRules)
                         : Names.uncoveredClosed(root.uncovered, address);
                 }
-                return;
             }
-            const ws = Ws.workspaceEvent(event.name, event.data);
-            if (ws === null) {
-                return;
+        }
+    }
+
+    // Home made, gone or renamed, on either compositor (Compositor.qml).
+    Connections {
+        target: Compositor
+
+        function onWorkspaceEvent(event) {
+            if (Ws.homeRenamed(root.homeId, event, root.home)) {
+                console.log(`tide: workspace ${root.home} was renamed ${event.name}; naming it ${root.home} again`);
+                Compositor.renameWorkspace(event.id, event.name, root.home);
             }
-            if (Ws.homeRenamed(root.homeId, ws, root.home)) {
-                console.log(`tide: workspace ${root.home} was renamed ${ws.name}; naming it ${root.home} again`);
-                Hyprland.dispatch(Dispatch.renameWorkspace(ws.id, root.home, Hyprland.usingLua));
-            }
-            root.homeId = Ws.homeIdAfter(root.homeId, ws, root.home);
+            root.homeId = Ws.homeIdAfter(root.homeId, event, root.home);
         }
     }
 

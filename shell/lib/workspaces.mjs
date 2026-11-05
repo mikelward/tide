@@ -431,7 +431,9 @@ function icons(windows, marked) {
 // yet or not; then the rest, named ones in the order they were made, which
 // is their falling IDs, and any numbered one (a second monitor's, before
 // anything names it) after them by number. `workspaces` is Hyprland's,
-// [{id, name}]; special workspaces aren't on the bar. Each is
+// [{id, name}], or tidewm's, [{id, order, name}], whose IDs don't fall,
+// so `order` places each as Hyprland's ID would (compositor.mjs's
+// tidewmWorkspaces); special workspaces aren't on the bar. Each is
 // {id, ids, name, standing, home}, id being null for a standing one that
 // isn't made yet. A standing name matches a workspace's without case, as
 // one typed at the prompt does, so `In` made by hand is still home's place.
@@ -452,13 +454,14 @@ export function workspaceOrder(workspaces, standing) {
         }
         const name = workspaceOf(raw);
         const main = raw === name;
+        const order = Number.isInteger(w.order) ? w.order : w.id;
         const ws = byName.get(name);
         if (!ws) {
-            byName.set(name, { id: w.id, ids: [w.id], name, main, order: w.id });
+            byName.set(name, { id: w.id, ids: [w.id], name, main, order });
             continue;
         }
         ws.ids.push(w.id);
-        ws.order = Math.max(ws.order, w.id);
+        ws.order = Math.max(ws.order, order);
         if ((main && !ws.main) || (main === ws.main && w.id > ws.id)) {
             ws.id = w.id;
             ws.main = main;

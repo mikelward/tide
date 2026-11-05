@@ -1919,12 +1919,13 @@ workspace and `prompt-focus`, and `tide doctor`'s bar and config-error
 checks, read tidewm's IPC. What's left is the shell, which reads
 Hyprland's: `Compositor.qml` asks whichever compositor the session runs,
 and so far says which monitor has focus, for the popups, prompts, OSD
-and launcher. Next, in order:
+and launcher, and which workspaces there are, for the bar, the
+switcher's Workspaces tab and the name prompt, which go to them and keep
+home's name. Next, in order:
 
-1. Workspaces: the bar's and the switcher's, one per name on tidewm, as
-   a workspace there spans every monitor; going to one and renaming one;
-   and home, kept with `persist workspace` as the shell starts and when
-   home is renamed, which `tide doctor` then checks.
+1. Home, kept with `persist workspace` as the shell starts and when home
+   is renamed, which `tide doctor` then checks; and home as the workspace
+   tidewm starts on, which is `1`.
 2. Windows: a list from tidewm's tree and window events, by container
    id: titles, apps, focus order, urgency and the shell's marks
    (`urgent_order`), and focusing, moving and closing one.
@@ -1933,7 +1934,9 @@ and launcher. Next, in order:
 4. The settings pages that write `tide-*.lua` for conf's hyprland.lua
    (floating, input, appearance, outputs and layouts) and the keys page:
    each over tidewm's IPC or config, or said to be Hyprland's only.
-5. The rest: the lock's keyboard layout (`GET_INPUTS` and input events),
+5. The rest: a name with a `;`, which tidewm's commands can't take, nor
+   a rename one with " to " (sway's quoting would do), the lock's
+   keyboard layout (`GET_INPUTS` and input events),
    the greeter's displays off, the share picker (xdg-desktop-portal-wlr's
    chooser), the focus guard's evals, and an integration test against a
    stand-in for tidewm, as `shell/hyprland_stand_in.py` is Hyprland's.

@@ -79,14 +79,8 @@ PanelWindow {
     })
     readonly property var workspaceList: root.tab === "workspaces" ? Workspaces.barWorkspaces({
         monitor: Compositor.focusedMonitorName,
-        monitors: Hyprland.monitors.values.map(m => ({
-            name: m.name,
-            workspace: m.activeWorkspace ? m.activeWorkspace.id : null
-        })),
-        workspaces: Hyprland.workspaces.values.map(w => ({
-            id: w.id,
-            name: w.name
-        })),
+        monitors: Compositor.monitors,
+        workspaces: Compositor.workspaces,
         windows: Hyprland.toplevels.values.map(t => ({
             address: Workspaces.normalizeAddress(t.address),
             workspace: t.workspace ? t.workspace.id : null,
@@ -217,7 +211,7 @@ PanelWindow {
         // window goes back to the workspace it came from (§6.7).
         if (row.item.kind === "workspace") {
             close();
-            Hyprland.dispatch(Dispatch.focusWorkspaceName(row.item.name, Hyprland.usingLua));
+            Compositor.goToWorkspace(row.item.name);
             return;
         }
         if (row.item.kind === "window") {

@@ -41,10 +41,7 @@ PanelWindow {
     readonly property string suggested: root.window
         ? Names.shortName(root.window.title, DesktopEntries.heuristicLookup(root.windowClass)?.name ?? "", PromptData.patterns)
         : ""
-    readonly property var names: Ws.workspaceOrder(Hyprland.workspaces.values.map(w => ({
-        id: w.id,
-        name: w.name
-    })), WorkspacesData.standing).map(w => w.name)
+    readonly property var names: Ws.workspaceOrder(Compositor.workspaces, WorkspacesData.standing).map(w => w.name)
     readonly property var rows: Names.promptRows({
         names: root.names,
         typed: field.text,
