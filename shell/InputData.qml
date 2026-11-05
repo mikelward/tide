@@ -41,9 +41,6 @@ Singleton {
 
     readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`
     readonly property string dir: `${root.configHome}/tide`
-    // Where the record of what tidewm last read lives: this session's, so
-    // a new login, a new tidewm, starts without one.
-    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
 
     // Sets one setting, in input.local.json: the settings panel writes only
     // the .local files (§16.1). Returns why it didn't, or "": a bad
@@ -165,48 +162,11 @@ Singleton {
         // restarted with an apply still to retry would leave it undone.
         // tidewm's reload starts every output and device over, so a shell
         // start leaves tidewm with what this session's record says it read
-        // (firstApplied).
+        // (AppliedRecord).
         root.target = Compositor.tidewm
-            ? Writes.readTarget(root.target, writtenText, root.target.known ? writtenText : root.firstApplied(writtenText)).state
+            ? Writes.readTarget(root.target, writtenText, root.target.known ? writtenText : applied.firstApplied(writtenText, root.target.failure)).state
             : Writes.readTarget(root.target, writtenText, null).state;
         root.stepped(Writes.wantTarget(root.target, Compositor.tidewm ? Input.inputConf(root.input) : Input.inputLua(root.input)));
-    }
-
-    // On tidewm, what it has as this shell first reads its file: what the
-    // session's record of the last reload says, else the file, which tidewm
-    // read as it started, recorded now, as IdleData's for hypridle. So a
-    // shell that died with a reload still to retry leaves the next one to
-    // do it. A record that can't be read or written says nothing, so tidewm
-    // reloads to be sure; nor does a file that couldn't be read until now.
-    function firstApplied(writtenText) {
-        if (root.target.failure !== "") {
-            return null;
-        }
-        if (root.runtimeDir === "") {
-            return writtenText;
-        }
-        const text = recorded.readNow();
-        if (recorded.broken !== "") {
-            console.warn(`tide: ${recorded.broken}; reloading tidewm to be sure it has the input settings`);
-            return null;
-        }
-        const first = Writes.firstApplied(writtenText, text);
-        return Writes.afterRecord(first, first.record === null || root.record(first.record));
-    }
-
-    // Records what tidewm has now, returning whether it could. One that
-    // can't be written is logged: it only costs another reload if this
-    // shell dies with one still to retry.
-    function record(text) {
-        if (root.runtimeDir === "") {
-            return true;
-        }
-        const error = recorded.writeNow(text);
-        if (error !== "") {
-            console.warn(`tide: ${error}; tidewm may be reloaded again to be sure it has the input settings`);
-            return false;
-        }
-        return true;
     }
 
     SettingsFile {
@@ -233,11 +193,13 @@ Singleton {
         path: Compositor.tidewm ? `${root.configHome}/tidewm/tide-input.conf` : `${root.configHome}/hypr/tide-input.lua`
     }
 
-    // This session's record of what tidewm last read (firstApplied).
-    SettingsFile {
-        id: recorded
+    // This session's record of what tidewm last read.
+    AppliedRecord {
+        id: applied
 
-        path: root.runtimeDir === "" ? "" : `${root.runtimeDir}/tide-input-tidewm-applied`
+        name: "tide-input-tidewm-applied"
+        unsure: "reloading tidewm to be sure it has the input settings"
+        again: "tidewm may be reloaded again to be sure it has the input settings"
     }
 
     // Has conf's hyprland.lua apply what was written: `hyprctl eval` answers
@@ -286,11 +248,11 @@ Singleton {
                     // It worked, but said something on the way, as MarkData's.
                     console.log(state.report.message);
                 }
-                const applied = Writes.targetApplied(root.target, error);
+                const done = Writes.targetApplied(root.target, error);
                 if (Compositor.tidewm && error === "") {
-                    root.record(Writes.recordOf(applied.state.applied));
+                    applied.record(Writes.recordOf(done.state.applied));
                 }
-                root.stepped(applied);
+                root.stepped(done);
                 destroy();
             }
 
