@@ -97,7 +97,7 @@ PanelWindow {
             right: presenter.x,
             gap: 32
         })
-        monitor: bar.monitor
+        monitorName: bar.screen?.name ?? ""
     }
 
     // Presenter mode's pill, then the privacy pills, come first on the

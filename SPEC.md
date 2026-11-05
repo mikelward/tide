@@ -444,9 +444,12 @@ flowchart TD
   which monitor has focus and which workspaces there are, through
   Quickshell's I3 module, so its popups, prompts, OSD and launcher open
   on the focused monitor, and the bar, the switcher and the name prompt
-  list tidewm's workspaces, one per name, and go to them. It reads windows
-  from Hyprland's IPC still, so on tidewm the bar has no app icons until
-  the rest of its tidewm backend lands. Home (§6.5) is the shell's to
+  list tidewm's workspaces, one per name, and go to them. Its windows come
+  from tidewm's `GET_TREE`, asked through `tide-msg`, and window events
+  (`TidewmData.qml`), for the bar's icons and title and the switcher's
+  Windows tab, which focus, bring back and maximize them; the marks the
+  shell keeps, and what else it takes from Hyprland's events, are still
+  Hyprland's. Home (§6.5) is the shell's to
   keep there, as tidewm's config can't know its name: `tide-tidewm`
   starts tidewm on it and keeps it, by the name the shell last wrote to
   `tide-workspaces.lua`, and the shell keeps it from then on, with

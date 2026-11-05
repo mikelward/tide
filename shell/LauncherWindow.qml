@@ -64,31 +64,20 @@ PanelWindow {
         : root.tab === "actions" ? Search.actionRows(root.items, root.query)
         : Search.search(root.items, root.query, LauncherData.frecency, root.openedAt)
     // Every window, as the Windows and Attention tabs list them.
-    readonly property var allWindows: Hyprland.toplevels.values.map(t => {
-        const address = Workspaces.normalizeAddress(t.address);
-        const app = t.lastIpcObject?.class || t.wayland?.appId || "";
-        return {
-            address: address,
-            title: t.title ?? "",
-            app: app,
-            appName: DesktopEntries.heuristicLookup(app)?.name ?? app,
-            workspace: t.workspace?.name ?? "",
-            urgent: t.urgent,
-            focus: Workspaces.focusRank(MarkData.focusOrder, address, t.lastIpcObject?.focusHistoryID)
-        };
-    })
+    readonly property var allWindows: Compositor.windows.map(w => ({
+        address: w.address,
+        title: w.title,
+        app: w.app,
+        appName: DesktopEntries.heuristicLookup(w.app)?.name ?? w.app,
+        workspace: w.workspaceName,
+        urgent: w.urgent,
+        focus: Workspaces.focusRank(MarkData.focusOrder, w.address, w.focusHistoryID)
+    }))
     readonly property var workspaceList: root.tab === "workspaces" ? Workspaces.barWorkspaces({
         monitor: Compositor.focusedMonitorName,
         monitors: Compositor.monitors,
         workspaces: Compositor.workspaces,
-        windows: Hyprland.toplevels.values.map(t => ({
-            address: Workspaces.normalizeAddress(t.address),
-            workspace: t.workspace ? t.workspace.id : null,
-            workspaceName: t.workspace?.name ?? "",
-            app: t.lastIpcObject?.class || t.wayland?.appId || "",
-            urgent: t.urgent,
-            fullscreen: t.lastIpcObject?.fullscreen ?? 0
-        })),
+        windows: Compositor.barWindows,
         marks: MarkData.marks,
         standing: WorkspacesData.standing,
         muted: WorkspacesData.muted
@@ -124,7 +113,7 @@ PanelWindow {
         // A screenshot still waiting would catch the launcher it's opening.
         screenshotDelay.stop();
         pending = "";
-        windowAtOpen = Workspaces.normalizeAddress(Hyprland.activeToplevel?.address);
+        windowAtOpen = FocusData.focused?.address ?? null;
         outputAtOpen = Compositor.focusedMonitorName;
         session += 1;
         openedAt = Date.now();
@@ -216,9 +205,11 @@ PanelWindow {
         }
         if (row.item.kind === "window") {
             close();
-            Hyprland.dispatch(row.item.restoreTo
-                ? Dispatch.moveWindowToWorkspace(row.item.address, row.item.restoreTo, Hyprland.usingLua)
-                : Dispatch.focusWindow(row.item.address, Hyprland.usingLua));
+            if (row.item.restoreTo) {
+                Compositor.moveWindowTo(row.item.address, row.item.restoreTo);
+            } else {
+                Compositor.focusWindow(row.item.address);
+            }
             return;
         }
         // A browser tab: its browser brings it up, then its window takes
@@ -227,9 +218,11 @@ PanelWindow {
             close();
             TabsData.activate(row.item);
             if (row.item.address) {
-                Hyprland.dispatch(row.item.restoreTo
-                    ? Dispatch.moveWindowToWorkspace(row.item.address, row.item.restoreTo, Hyprland.usingLua)
-                    : Dispatch.focusWindow(row.item.address, Hyprland.usingLua));
+                if (row.item.restoreTo) {
+                    Compositor.moveWindowTo(row.item.address, row.item.restoreTo);
+                } else {
+                    Compositor.focusWindow(row.item.address);
+                }
             }
             return;
         }

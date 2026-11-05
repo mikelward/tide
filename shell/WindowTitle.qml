@@ -1,7 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
-import "lib/dispatch.mjs" as Dispatch
 import "lib/title.mjs" as Title
 
 // The window title in the middle of this monitor's bar (SPEC.md §7.1):
@@ -10,8 +8,8 @@ import "lib/title.mjs" as Title
 Text {
     id: root
 
-    // This bar's HyprlandMonitor.
-    required property var monitor
+    // This bar's monitor's name.
+    required property string monitorName
 
     // About Title.MAX_TITLE characters wide, as waybar's max-length had
     // it. Past that, and past the room Bar.qml gives it, the text elides,
@@ -25,13 +23,13 @@ Text {
     }
 
     // The focused window, or null with none (FocusData.qml).
-    readonly property var active: FocusData.active
+    readonly property var active: FocusData.focused
 
     // The window the title stands for, {address, title}, or null.
     readonly property var window: Title.barWindow({
-        monitor: root.monitor?.name ?? null,
+        monitor: root.monitorName !== "" ? root.monitorName : null,
         active: root.active ? {
-            monitor: root.active.monitor?.name ?? null,
+            monitor: root.active.monitor,
             address: root.active.address,
             title: root.active.title
         } : null
@@ -49,7 +47,7 @@ Text {
         TapHandler {
             onDoubleTapped: {
                 if (root.window) {
-                    Hyprland.dispatch(Dispatch.toggleMaximize(Hyprland.usingLua));
+                    Compositor.toggleMaximize(root.window.address);
                 }
             }
         }

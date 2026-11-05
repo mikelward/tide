@@ -1919,13 +1919,18 @@ workspace and `prompt-focus`, and `tide doctor`'s bar, config-error
 and home checks, read tidewm's IPC. What's left is the shell, which reads
 Hyprland's: `Compositor.qml` asks whichever compositor the session runs,
 and so far says which monitor has focus, for the popups, prompts, OSD
-and launcher, and which workspaces there are, for the bar, the
-switcher's Workspaces tab and the name prompt, which go to them and keep
-home's name and home itself, which tidewm starts on. Next, in order:
+and launcher; which workspaces there are, for the bar, the switcher's
+Workspaces tab and the name prompt, which go to them and keep home's
+name and home itself, which tidewm starts on; and which windows there
+are and which has focus, from tidewm's tree and window events, for the
+bar's icons and title and the switcher's Windows tab. Next, in order:
 
-1. Windows: a list from tidewm's tree and window events, by container
-   id: titles, apps, focus order, urgency and the shell's marks
-   (`urgent_order`), and focusing, moving and closing one.
+1. The marks (`MarkData.qml`): the focus guard's, urgency's and
+   notifications', and their order, from tidewm's `urgent_order` and
+   window events, in place of Hyprland's `activewindowv2`, `urgent`,
+   `windowtitlev2` and `custom>>tide-attention` events; and the name
+   prompt's and home's window events (`PromptData.qml`,
+   `WorkspacesData.qml`), which close and move windows.
 2. Minimizing, which uses Hyprland's special workspaces, so needs
    something of tidewm's own.
 3. The settings pages that write `tide-*.lua` for conf's hyprland.lua
@@ -1935,9 +1940,11 @@ home's name and home itself, which tidewm starts on. Next, in order:
    Hyprland; a name with a `;`, which tidewm's commands can't take, nor
    a rename one with " to " (sway's quoting would do); the lock's
    keyboard layout (`GET_INPUTS` and input events); the greeter's
-   displays off; the share picker (xdg-desktop-portal-wlr's chooser); the
-   focus guard's evals; and an integration test against a stand-in for
-   tidewm, as `shell/hyprland_stand_in.py` is Hyprland's.
+   displays off; the picker's paste, Hyprland's `sendshortcut`, so on
+   tidewm a choice is only copied; the share picker
+   (xdg-desktop-portal-wlr's chooser); the focus guard's evals; and an
+   integration test against a stand-in for tidewm, as
+   `shell/hyprland_stand_in.py` is Hyprland's.
 
 If the fork is adopted, machines build a pinned release tag, never a branch:
 
