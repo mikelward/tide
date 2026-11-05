@@ -141,13 +141,18 @@ test("the battery's hover text says its %, and charging, charged or time left, a
     assert.equal(batteryTip({ present: false, percentage: 0.5, state: 2 }), "", "no battery, no text");
 });
 
-test("the volume's hover text is tilemo's", () => {
-    assert.equal(volumeTip({ muted: false }), "Sound");
-    assert.equal(volumeTip({ muted: true }), "Sound muted");
+test("the volume's hover text gives the level and the output", () => {
+    assert.equal(volumeTip({ muted: false, volume: 0.64, output: "Speakers" }), "Sound 64%, Speakers");
+    assert.equal(volumeTip({ muted: true, volume: 0.64, output: "Headphones" }), "Muted, Headphones");
+    assert.equal(volumeTip({ muted: false, volume: 1.2, output: "" }), "Sound 120%", "above 100% as an app set it");
+    assert.equal(volumeTip({ muted: true }), "Muted");
+    assert.equal(volumeTip({ muted: false }), "Sound", "no level yet");
 });
 
-test("the bell's hover text says Do not disturb, and whether something's new", () => {
-    assert.equal(bellTip({ dnd: false, unread: false }), "Notifications");
-    assert.equal(bellTip({ dnd: true, unread: false }), "Do not disturb");
-    assert.equal(bellTip({ dnd: false, unread: true }), "Notifications, new since you last looked");
+test("the bell's hover text counts what's new, and says Do not disturb", () => {
+    assert.equal(bellTip({ dnd: false, unread: 0 }), "No new notifications");
+    assert.equal(bellTip({ dnd: false, unread: 1 }), "1 new notification");
+    assert.equal(bellTip({ dnd: false, unread: 3 }), "3 new notifications");
+    assert.equal(bellTip({ dnd: true, unread: 0 }), "Do not disturb, no new notifications");
+    assert.equal(bellTip({ dnd: true, unread: 2 }), "Do not disturb, 2 new notifications");
 });

@@ -72,7 +72,7 @@ export function networkIcon({ devices, wifiEnabled, connectivity }) {
 }
 
 // The network icon's hover text (SPEC.md §7.4), in tilemo's words: the
-// Wi-Fi network's name, "Wired network" with its speed, a wired one
+// Wi-Fi network's name and signal, "Wired network" with its speed, a wired one
 // connecting or not connected, "Wi-Fi off" or "No network";
 // then whether it can't reach the internet, and the VPN, "on" or
 // "connecting" (vpn.mjs's lock).
@@ -86,6 +86,9 @@ export function networkTip({ devices, wifiEnabled, connectivity, vpn = "" }) {
         tip = speed ? `Wired network, ${speed}` : "Wired network";
     } else if (wifi) {
         tip = wifi.name || "Wi-Fi";
+        if (Number.isFinite(wifi.signalStrength)) {
+            tip += `, ${Math.round(Math.min(1, Math.max(0, wifi.signalStrength)) * 100)}%`;
+        }
     } else {
         switch (wiredWaiting(devices)) {
         case "connecting":

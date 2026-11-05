@@ -63,16 +63,19 @@ export function batteryTip({ present, percentage, state, toFull = 0, toEmpty = 0
     return toEmpty > 0 ? `${tip}, ${hoursMinutes(toEmpty)} left` : tip;
 }
 
-// The volume's hover text, in tilemo's words.
-export function volumeTip({ muted }) {
-    return muted ? "Sound muted" : "Sound";
+// The volume's hover text (SPEC.md §7.4): the level, or Muted, then the
+// output it plays through, by the name PipeWire gives it.
+export function volumeTip({ muted, volume, output = "" }) {
+    const level = Number.isFinite(volume) ? ` ${volumeText(volume)}` : "";
+    return [muted ? "Muted" : `Sound${level}`].concat(output ? [output] : []).join(", ");
 }
 
-// The bell's hover text (SPEC.md §7.4, §9): Do not disturb when it's on,
-// and whether something arrived since the center was last open.
+// The bell's hover text (SPEC.md §7.4, §9): how many notifications arrived
+// since the center was last open, after Do not disturb when it's on.
 export function bellTip({ dnd, unread }) {
-    const what = dnd ? "Do not disturb" : "Notifications";
-    return unread ? `${what}, new since you last looked` : what;
+    const n = Number.isFinite(unread) ? unread : 0;
+    const count = n === 0 ? "no new notifications" : n === 1 ? "1 new notification" : `${n} new notifications`;
+    return dnd ? `Do not disturb, ${count}` : count[0].toUpperCase() + count.slice(1);
 }
 
 // What the volume icon shows for the default output: muted, or a level by

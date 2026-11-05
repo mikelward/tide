@@ -21,9 +21,19 @@ export function bluetoothIcon(adapter) {
     return { visible: true, icon: "bluetooth-active-symbolic", on: isOn(adapter) };
 }
 
-// The Bluetooth icon's hover text, as tilemo's (SPEC.md §7.4).
-export function bluetoothTip(adapter) {
-    return adapter && isOn(adapter) ? "Bluetooth on" : "Bluetooth off";
+// The Bluetooth icon's hover text (SPEC.md §7.4): on or off, then what's
+// connected, by name for one or two, else how many.
+export function bluetoothTip(adapter, devices = []) {
+    if (!adapter || !isOn(adapter)) {
+        return "Bluetooth off";
+    }
+    const names = devices.filter((d) => d.state === DEVICE_CONNECTED).map(deviceName)
+        .sort((a, b) => a.localeCompare(b));
+    if (names.length === 0) {
+        return "Bluetooth on, nothing connected";
+    }
+    const which = names.length <= 2 ? names.join(" and ") : `${names.length} devices`;
+    return `Bluetooth on, ${which} connected`;
 }
 
 function isOn(adapter) {
