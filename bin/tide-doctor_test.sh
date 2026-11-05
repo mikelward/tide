@@ -21,6 +21,8 @@ check() {
 }
 contains() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
 lacks() { ! contains "$@"; }
+nl='
+'
 
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
@@ -69,6 +71,36 @@ if test "$2" = show && test "$4" = LoadState; then
         *" $6="*) state=${FAKE_LOADSTATE#*"$6"=}; echo "${state%% *}"; exit 0 ;;
     esac
     echo loaded
+    exit 0
+fi
+# show -p Result --value hypridle.service: $FAKE_RESULT, or success, or it
+# fails with $FAKE_RESULT_FAILS; show
+# -p ExecCondition --value: $FAKE_CONDITIONS, as systemd prints each
+# condition and how it exited, or it fails with $FAKE_CONDITIONS_FAILS;
+# show -p DropInPaths --value: $FAKE_DROPINS, or it fails with
+# $FAKE_DROPINS_FAILS.
+if test "$2" = show && test "$4" = Result; then
+    if test -n "$FAKE_RESULT_FAILS"; then
+        echo "$FAKE_RESULT_FAILS" >&2
+        exit 1
+    fi
+    echo "${FAKE_RESULT:-success}"
+    exit 0
+fi
+if test "$2" = show && test "$4" = ExecCondition; then
+    if test -n "$FAKE_CONDITIONS_FAILS"; then
+        echo "$FAKE_CONDITIONS_FAILS" >&2
+        exit 1
+    fi
+    printf '%s\n' "$FAKE_CONDITIONS"
+    exit 0
+fi
+if test "$2" = show && test "$4" = DropInPaths; then
+    if test -n "$FAKE_DROPINS_FAILS"; then
+        echo "$FAKE_DROPINS_FAILS" >&2
+        exit 1
+    fi
+    echo "$FAKE_DROPINS"
     exit 0
 fi
 if test "$2" = show; then
@@ -367,7 +399,112 @@ healthy
 run FAKE_INACTIVE="hypridle.service=failed"
 check "a failed unit is a problem" test "$status" -eq 1
 check "a failed unit is named, with where to look" \
-    contains "$out" "hypridle.service is failed: see \`systemctl --user status hypridle.service\`"
+    contains "$out" "hypridle.service is failed, so idle, suspend and Super+L don't lock the session: see \`systemctl --user status hypridle.service\`"
+run FAKE_INACTIVE="tide.service=failed"
+check "a failed shell is named, with where to look" \
+    contains "$out" "tide.service is failed: see \`systemctl --user status tide.service\`"
+
+# hypridle skipped at login by a drop-in's ExecCondition= (Result=
+# exec-condition): the drop-in whose condition systemd says failed is
+# named, matched by its command, and not tide's own, one whose condition
+# passed, or one with none.
+d=$tmp/units/hypridle.service.d
+mkdir -p "$d"
+printf '%s\n' '[Service]' "ExecCondition=/bin/sh -c 'case \":\$\${XDG_CURRENT_DESKTOP}:\" in *:tide:*) ;; *) exit 1 ;; esac'" > "$d/tide.conf"
+printf '%s\n' '[Service]' "ExecCondition=/bin/sh -c 'case \":\$\${XDG_CURRENT_DESKTOP}:\" in *:quickspace:*) ;; *) exit 1 ;; esac'" > "$d/quickspace.conf"
+printf '%s\n' '[Service]' 'ExecCondition=/usr/bin/true' > "$d/passes.conf"
+printf '%s\n' '[Service]' 'TimeoutStartSec=20' > "$d/timeout.conf"
+# How systemd shows each condition: unquoted, $$ unescaped, with how it
+# exited. TIDE and QUICKSPACE say which desktop the case allows.
+# A fourth argument, yes, marks a condition whose failure is ignored
+# (ExecCondition=-...).
+condition() {
+    printf '{ path=%s ; argv[]=%s ; ignore_errors=%s ; start_time=[Thu 2026-11-05 09:00:00 UTC] ; stop_time=[Thu 2026-11-05 09:00:00 UTC] ; pid=900 ; code=exited ; status=%s }\n' "$1" "$2" "${4:-no}" "$3"
+}
+# shellcheck disable=SC2016  # the ${...} is systemd's text, not ours
+tide_cond=$(condition /bin/sh '/bin/sh -c case ":${XDG_CURRENT_DESKTOP}:" in *:tide:*) ;; *) exit 1 ;; esac' 0)
+# shellcheck disable=SC2016  # the ${...} is systemd's text, not ours
+qs_cond=$(condition /bin/sh '/bin/sh -c case ":${XDG_CURRENT_DESKTOP}:" in *:quickspace:*) ;; *) exit 1 ;; esac' 1)
+true_cond=$(condition /usr/bin/true /usr/bin/true 0)
+all_dropins="$d/tide.conf $d/passes.conf $d/quickspace.conf $d/timeout.conf"
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT=exec-condition \
+    FAKE_CONDITIONS="$tide_cond$nl$true_cond$nl$qs_cond" FAKE_DROPINS="$all_dropins"
+check "a skipped hypridle is a problem" test "$status" -eq 1
+check "a skipped hypridle names the drop-in whose condition failed, and what to do" \
+    contains "$out" "hypridle.service was skipped at login by the ExecCondition= in $d/quickspace.conf, so idle, suspend and Super+L don't lock the session: remove it if no other session needs it, then \`systemctl --user daemon-reload\` and \`systemctl --user start hypridle.service\`"
+check "but not tide's own, which passed" lacks "$out" "$d/tide.conf"
+check "or one whose condition passed" lacks "$out" "passes.conf"
+check "or one with no condition" lacks "$out" "timeout.conf"
+check "and not as merely inactive" lacks "$out" "hypridle.service is inactive"
+# Skipped by tide's own condition: XDG_CURRENT_DESKTOP lacked tide when it
+# started. A condition that passed elsewhere isn't blamed.
+# shellcheck disable=SC2016  # the ${...} is systemd's text, not ours
+tide_failed=$(condition /bin/sh '/bin/sh -c case ":${XDG_CURRENT_DESKTOP}:" in *:tide:*) ;; *) exit 1 ;; esac' 1)
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT=exec-condition \
+    FAKE_CONDITIONS="$true_cond$nl$tide_failed" FAKE_DROPINS="$d/passes.conf $d/tide.conf"
+check "a hypridle skipped by tide's own condition says so" \
+    contains "$out" "hypridle.service was skipped at login by tide's own ExecCondition=, which runs it only where XDG_CURRENT_DESKTOP has tide, so idle, suspend and Super+L don't lock the session"
+check "and blames no other drop-in" lacks "$out" "passes.conf"
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT_FAILS="Failed to connect to bus"
+check "a Result that can't be read is reported, not taken for no skip" \
+    contains "$out" "hypridle.service is inactive, so idle, suspend and Super+L don't lock the session, and whether a condition skipped it isn't known (Failed to connect to bus)"
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT=exec-condition FAKE_CONDITIONS_FAILS="Failed to connect to bus"
+check "conditions that can't be read are reported" \
+    contains "$out" "hypridle.service was skipped at login by an ExecCondition=, so idle, suspend and Super+L don't lock the session, and which one isn't known (Failed to connect to bus)"
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT=exec-condition FAKE_CONDITIONS="$true_cond"
+check "with no failed condition recorded, nothing is blamed" \
+    contains "$out" "and systemd doesn't say which"
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT=exec-condition \
+    FAKE_CONDITIONS="$qs_cond" FAKE_DROPINS_FAILS="Failed to connect to bus"
+check "drop-ins that can't be listed are reported, with the condition" \
+    contains "$out" "skipped at login by its ExecCondition= \`/bin/sh -c case \":\${XDG_CURRENT_DESKTOP}:\" in *:quickspace:*) ;; *) exit 1 ;; esac\`, so idle, suspend and Super+L don't lock the session, and its drop-ins couldn't be listed (Failed to connect to bus)"
+# A drop-in that can't be read (a directory, here, which even root can't
+# grep) is named, and isn't taken for one with no condition.
+mkdir "$d/unreadable.conf"
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT=exec-condition \
+    FAKE_CONDITIONS="$qs_cond" FAKE_DROPINS="$d/unreadable.conf"
+check "a drop-in that can't be read is reported" \
+    contains "$out" "couldn't read $d/unreadable.conf ("
+check "and nothing else is blamed for want of it" lacks "$out" "no drop-in has it"
+# A drop-in deleted since systemd read it still counts until a reload.
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT=exec-condition \
+    FAKE_CONDITIONS="$qs_cond" FAKE_DROPINS="$d/deleted.conf"
+check "a drop-in deleted since systemd read it says to reload" \
+    contains "$out" "$d/deleted.conf is gone, but systemd still has it for hypridle.service: \`systemctl --user daemon-reload\`, then \`systemctl --user start hypridle.service\`"
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT=exec-condition \
+    FAKE_CONDITIONS="$qs_cond" FAKE_DROPINS="$d/tide.conf $d/timeout.conf"
+check "a failed condition in no drop-in says so" contains "$out" "and no drop-in has it"
+# Conditions that differ only in an operator aren't the same: = passed and
+# != failed, and only the drop-in with != is named, whichever comes first.
+# shellcheck disable=SC2016  # the $XDG_... is the drop-in's, not ours
+printf '%s\n' '[Service]' 'ExecCondition=test "$XDG_CURRENT_DESKTOP" = tide' > "$d/is.conf"
+# shellcheck disable=SC2016  # as above
+printf '%s\n' '[Service]' 'ExecCondition=test "$XDG_CURRENT_DESKTOP" != tide' > "$d/isnt.conf"
+# shellcheck disable=SC2016  # the $XDG_... is systemd's text, not ours
+is_cond=$(condition /usr/bin/test 'test $XDG_CURRENT_DESKTOP = tide' 0)
+# shellcheck disable=SC2016  # as above
+isnt_cond=$(condition /usr/bin/test 'test $XDG_CURRENT_DESKTOP != tide' 1)
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT=exec-condition \
+    FAKE_CONDITIONS="$is_cond$nl$isnt_cond" FAKE_DROPINS="$d/is.conf $d/isnt.conf"
+check "conditions differing in an operator are told apart" \
+    contains "$out" "by the ExecCondition= in $d/isnt.conf,"
+check "and the one that passed isn't named" lacks "$out" "$d/is.conf"
+# A failure that's ignored (ExecCondition=-...) is a yes to systemd, so a
+# later condition is the one that skipped it.
+printf '%s\n' '[Service]' 'ExecCondition=-/usr/bin/false' > "$d/ignored.conf"
+ignored_cond=$(condition /usr/bin/false /usr/bin/false 1 yes)
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT=exec-condition \
+    FAKE_CONDITIONS="$ignored_cond$nl$qs_cond" FAKE_DROPINS="$d/ignored.conf $d/quickspace.conf"
+check "a condition whose failure is ignored isn't blamed" lacks "$out" "ignored.conf"
+check "the one after it that skipped hypridle is" \
+    contains "$out" "by the ExecCondition= in $d/quickspace.conf,"
+# The same failed condition in two drop-ins names both, as candidates.
+cp "$d/quickspace.conf" "$d/quickspace-copy.conf"
+run FAKE_INACTIVE="hypridle.service=inactive" FAKE_RESULT=exec-condition \
+    FAKE_CONDITIONS="$qs_cond" FAKE_DROPINS="$d/quickspace.conf $d/quickspace-copy.conf"
+check "the same condition in two drop-ins names both" \
+    contains "$out" "which each of these has: $d/quickspace.conf $d/quickspace-copy.conf, so idle, suspend and Super+L don't lock the session: remove it from those no other session needs"
+rm -rf "$tmp/units"
 
 # The clipboard history (§8.4): cliphist, and the unit that feeds it.
 run TIDE_CLIPHIST=no-such-cliphist
