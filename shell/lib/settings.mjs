@@ -75,7 +75,7 @@ export const PAGES = Object.freeze([
         label: "Keyboard",
         icon: "input-keyboard-symbolic",
         keywords: ["layout", "xkb", "repeat", "dvorak"],
-        about: "",
+        about: "Layout, such as us, or us,de for two. Variant, such as dvorak.",
         advanced: null,
     },
     {

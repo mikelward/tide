@@ -3555,7 +3555,7 @@ PanelWindow {
                             width: floatingPage.width - 20
                             topPadding: 4
                             bottomPadding: 4
-                            text: "No rules yet. Dialogs still float."
+                            text: "No rules yet. Dialogs always float."
                             color: Theme.fgDim
                             font.family: Theme.font
                             font.pixelSize: 13
