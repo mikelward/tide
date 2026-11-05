@@ -113,3 +113,40 @@ export function tidewmRename(from, to) {
     }
     return `rename workspace ${f} to ${t}`;
 }
+
+// What keeps home, named `home`, on tidewm, which reads no
+// tide-workspaces.lua: `persist workspace`, which makes it if it's new.
+// null for a home tidewm's commands can't name.
+export function tidewmKeepHome(home) {
+    const h = tidewmName(home);
+    return h === null ? null : `persist workspace ${h}`;
+}
+
+// Letting old homes go, `pending` (names), once tidewm has said which
+// workspaces there are (`names`, empty until then), so each goes once it's
+// empty, as Hyprland's turned-off rule lets it: {command, pending}.
+// `command` unpersists those still there, or is null; `pending` is what's
+// left to let go, all of it until the list is known and none after, since
+// one not in the list is gone already, which tidewm would refuse. Home
+// itself, as it is now, stays.
+export function tidewmRelease(pending, home, names) {
+    const listed = Array.from(names ?? []);
+    const old = Array.from(pending ?? []).filter(n => n !== home);
+    if (listed.length === 0) {
+        return { command: null, pending: old };
+    }
+    const there = old.filter((n, i) => old.indexOf(n) === i && listed.indexOf(n) >= 0 && tidewmName(n) !== null);
+    return {
+        command: there.length > 0 ? there.map(n => `unpersist workspace ${n}`).join("; ") : null,
+        pending: [],
+    };
+}
+
+// The home tide-tidewm kept as tidewm started: the one named in `text`,
+// the tide-workspaces.lua the shell last wrote, read as tide-tidewm reads
+// it (`    home = "NAME",`), or `in` with no such line, as before the shell
+// has run. The shell lets it go if home is now another (tidewmRelease).
+export function startedHome(text) {
+    const m = /^    home = "(.*)",$/m.exec(String(text ?? ""));
+    return m ? m[1] : "in";
+}

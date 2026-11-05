@@ -20,6 +20,7 @@ check() {
     if "$@"; then pass; else fail "$_name"; fi
 }
 contains() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
+lacks() { ! contains "$@"; }
 
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
@@ -244,9 +245,10 @@ printf '%s\n' "${FAKE_QS_VERSION:-Quickshell 0.3.1 (revision 1a4716c, distribute
 exit "${FAKE_QS_VERSION_STATUS:-0}"
 FAKE
 # tidewm's tide-msg answers --type get_outputs with $FAKE_TIDEWM_OUTPUTS
-# (a 1920x1080 monitor with tide's 30 px bar by default) and get_config
-# with $FAKE_TIDEWM_CONFIG (no errors by default); with $FAKE_TIDEMSG_FAILS
-# it says that and fails.
+# (a 1920x1080 monitor with tide's 30 px bar by default), get_config
+# with $FAKE_TIDEWM_CONFIG (no errors by default) and get_workspaces with
+# $FAKE_TIDEWM_WORKSPACES (home, `in`, kept, by default); with
+# $FAKE_TIDEMSG_FAILS it says that and fails.
 cat > "$fake/tide-msg" <<'FAKE'
 #!/bin/sh
 if test -n "$FAKE_TIDEMSG_FAILS"; then
@@ -257,9 +259,12 @@ outputs=$FAKE_TIDEWM_OUTPUTS
 test -n "$outputs" || outputs='[{"name": "eDP-1", "active": true, "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080}, "window_area": {"x": 0, "y": 30, "width": 1920, "height": 1050}, "layers": [{"namespace": "wallpaper", "layer": "background", "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080}, "exclusive_zone": -1}, {"namespace": "tide-bar", "layer": "top", "rect": {"x": 0, "y": 0, "width": 1920, "height": 30}, "exclusive_zone": 30}]}]'
 config=$FAKE_TIDEWM_CONFIG
 test -n "$config" || config='{"config": "", "path": "/c", "errors": []}'
+workspaces=$FAKE_TIDEWM_WORKSPACES
+test -n "$workspaces" || workspaces='[{"id": 2, "name": "in", "num": -1, "focused": true, "persistent": true}]'
 case "$*" in
     "--type get_outputs") printf '%s\n' "$outputs" ;;
     "--type get_config") printf '%s\n' "$config" ;;
+    "--type get_workspaces") printf '%s\n' "$workspaces" ;;
     *) echo "tide-msg: unexpected $*" >&2; exit 2 ;;
 esac
 FAKE
@@ -971,8 +976,7 @@ healthy
 run XDG_CURRENT_DESKTOP=tidewm:tide FAKE_HYPRCTL_FAILS="HYPRLAND_INSTANCE_SIGNATURE not set"
 check "a healthy tidewm session exits 0" test "$status" -eq 0
 check "a healthy tidewm session says so" test "$out" = "No problems found."
-check "and says which check it left out" \
-    contains "$(cat "$tmp/err")" "in tidewm's session, the home workspace isn't checked yet"
+check "and leaves no check out" test ! -s "$tmp/err"
 tw=XDG_CURRENT_DESKTOP=tidewm:tide
 bar='{"namespace": "tide-bar", "layer": "top", "rect": {"x": 0, "y": 0, "width": 1920, "height": 30}, "exclusive_zone": 30}'
 waybar='{"namespace": "waybar", "layer": "top", "rect": {"x": 0, "y": 30, "width": 1920, "height": 30}, "exclusive_zone": 30}'
@@ -1007,12 +1011,33 @@ check "and the config check" \
 mv "$fake/tide-msg" "$tmp/tide-msg.away"
 run "$tw"
 check "on tidewm, no tide-msg is a problem" \
-    contains "$out" "no tide-msg, so tidewm's bars and config errors aren't checked"
+    contains "$out" "no tide-msg, so tidewm's bars, config errors and home aren't checked"
 check "said once" test "$(grep -c 'tide-msg' "$tmp/out")" -eq 1
 mv "$tmp/tide-msg.away" "$fake/tide-msg"
+# Home on tidewm: the shell keeps it with `persist workspace`.
+run "$tw" FAKE_TIDEWM_WORKSPACES='[{"id": 2, "name": "in", "num": -1, "focused": true, "persistent": false}]'
+check "a home tidewm doesn't keep is a problem, naming the shell" \
+    contains "$out" "home (in) isn't persistent, so it goes when it's left empty: \`systemctl --user restart tide.service\`, whose shell keeps it"
+check "and nothing about conf, which doesn't keep it there" lacks "$out" "update conf"
+run "$tw" FAKE_TIDEWM_WORKSPACES='[{"id": 4, "name": "1", "num": 1, "focused": true, "persistent": false}]'
+check "no home on tidewm is a problem" \
+    contains "$out" "there's no home workspace (in), so its apps open where you are: \`systemctl --user restart tide.service\`, whose shell makes it"
+printf '%s\n' 'return {' '    home = "my mail",' '}' > "$tmp/config/hypr/tide-workspaces.lua"
+run "$tw" FAKE_TIDEWM_WORKSPACES='[{"id": 4, "name": "my mail", "num": -1, "focused": true, "persistent": true}]'
+check "home is the one the shell names, spaces and all" test "$status" -eq 0
+run "$tw" FAKE_TIDEWM_WORKSPACES='[{"id": 4, "name": "in", "num": -1, "focused": true, "persistent": true}]'
+check "and another workspace kept under the old name isn't home" \
+    contains "$out" "there's no home workspace (my mail)"
+run "$tw" FAKE_TIDEWM_WORKSPACES='not json'
+check "a reply that isn't JSON is a problem" \
+    contains "$out" "couldn't read tidewm's workspaces ("
+run "$tw" FAKE_TIDEMSG_FAILS="SWAYSOCK isn't set, so there's no tidewm to ask"
+check "tidewm not answering leaves home unchecked, saying so" \
+    contains "$out" "tide-msg: SWAYSOCK isn't set, so there's no tidewm to ask, so whether home (my mail) is kept isn't known: is tidewm running?"
 rm "$tmp/config/hypr/tide-workspaces.lua"
-run XDG_CURRENT_DESKTOP=tidewm:tide
-check "tidewm's session doesn't ask for Hyprland's home workspace" test "$status" -eq 0
+run "$tw"
+check "on tidewm too, no tide-workspaces.lua is a problem" \
+    contains "$out" "tide-workspaces.lua, so conf doesn't know which workspace is home: is tide's shell running?"
 run XDG_CURRENT_DESKTOP=tide:tidewm
 check "tidewm not first in its session is a problem" \
     contains "$out" "XDG_CURRENT_DESKTOP is 'tide:tidewm': tidewm must come first, or portals ignore tidewm-portals.conf; start the session from its tide-tidewm.desktop entry"

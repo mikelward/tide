@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
+import "lib/compositor.mjs" as Comp
 import "lib/dispatch.mjs" as Dispatch
 import "lib/launch.mjs" as Run
 import "lib/mute.mjs" as Mute
@@ -21,9 +22,12 @@ import "lib/writes.mjs" as Writes
 // one's pinned apps, is
 // written to ~/.config/hypr/tide-workspaces.lua, which hyprland.lua reads
 // as it loads, and `hyprctl eval conf_workspaces.reload()` has it read
-// again, as the shell starts too. A bad file is a notification naming it,
-// once, and the last good settings stay; one that can't be written or
-// applied is tried again until it is (shell/lib/writes.mjs).
+// again, as the shell starts too. On tidewm, which reads no such file,
+// applying it is keeping home, with `persist workspace`; the file is
+// still written, for Hyprland's session and tide-tidewm, which starts
+// tidewm on home. A bad file is a notification naming it, once, and the
+// last good settings stay; one that can't be written or applied is tried
+// again until it is (shell/lib/writes.mjs).
 //
 // It also keeps home's name: a rename from elsewhere (`hyprctl`, or
 // `swaymsg` on tidewm) is undone as it's heard.
@@ -47,6 +51,36 @@ Singleton {
         }
     }
 
+    // The home tidewm was last told to keep (Comp.tidewmKeepHome), so a
+    // new home lets the old one go: at first the one tide-tidewm kept as
+    // tidewm started, from the file as the shell finds it, which may be
+    // stale (Comp.startedHome); "" on Hyprland.
+    property string keptHome: ""
+    property bool keptHomeRead: false
+    // Old homes to let go on tidewm, which happens once tidewm has listed
+    // its workspaces, which may be after the first apply (Comp.tidewmRelease).
+    property var oldHomes: []
+    readonly property var release: Compositor.tidewm
+        ? Comp.tidewmRelease(root.oldHomes, root.home, Compositor.workspaces.map(w => w.name))
+        : null
+
+    onReleaseChanged: root.releaseOldHomes()
+
+    function releaseOldHomes() {
+        const r = root.release;
+        if (r === null || (r.command === null && r.pending.length === root.oldHomes.length)) {
+            return;
+        }
+        root.oldHomes = r.pending;
+        if (r.command !== null) {
+            const command = ["tide-msg", r.command];
+            Launcher.run(command, ok => {
+                if (!ok) {
+                    console.warn(`tide: ${command.join(" ")} failed, so an old home stays kept until tidewm restarts`);
+                }
+            });
+        }
+    }
     property var reports: Report.NOTHING
     property var fileErrors: []
     // Bad entries in `muted`, each dropped alone (Names.checkMuted), and
@@ -81,7 +115,18 @@ Singleton {
             return;
         }
         if (r.action?.apply) {
-            applier.createObject(root).running = true;
+            if (!Compositor.tidewm) {
+                applier.createObject(root).running = true;
+            } else {
+                // tidewm reads no tide-workspaces.lua, so the shell keeps
+                // home itself; home's apps' rules are Hyprland's only.
+                const keep = Comp.tidewmKeepHome(root.home);
+                if (keep === null) {
+                    root.stepped(Writes.targetApplied(root.target, `home's name, ${root.home}, has a ; in it, which tidewm's commands can't take, so home isn't kept`));
+                    return;
+                }
+                applier.createObject(root, { command: ["tide-msg", keep], tidewm: true, home: root.home }).running = true;
+            }
         }
         root.report();
     }
@@ -171,6 +216,10 @@ Singleton {
         if (written.broken !== "") {
             root.stepped(Writes.targetUnreadable(root.target, `${written.broken}; home and its apps' rules stay as they were`));
             return;
+        }
+        if (Compositor.tidewm && !root.keptHomeRead) {
+            root.keptHome = Comp.startedHome(writtenText);
+            root.keptHomeRead = true;
         }
         // Hyprland outlives the shell, and a shell that died with an apply
         // still to retry left it with the old home and rules, so the first
@@ -433,13 +482,17 @@ Singleton {
     }
 
     // Has hyprland.lua take what was written: `hyprctl eval` answers "ok",
-    // or why not, on stdout.
+    // or why not, on stdout. On tidewm it's `tide-msg` keeping home, which
+    // exits 0, or says why not on stderr.
     Component {
         id: applier
 
         Process {
             id: run
 
+            property bool tidewm: false
+            // The home it keeps, on tidewm.
+            property string home: ""
             property var state: Run.initial()
             property string reply: ""
             property bool replyRead: false
@@ -464,7 +517,10 @@ Singleton {
                 if (!state.started) {
                     console.warn(state.report.message);
                     error = state.report.message.replace(/^tide: /, "");
-                } else if (state.code !== 0 || reply.trim() !== "ok") {
+                } else if (run.tidewm && state.code !== 0) {
+                    error = `couldn't keep home, ${run.home}, on tidewm: ${(reply + state.errors).trim()}`;
+                    console.warn(`tide: ${error}`);
+                } else if (!run.tidewm && (state.code !== 0 || reply.trim() !== "ok")) {
                     // A conf from before named workspaces has no
                     // conf_workspaces.
                     error = `couldn't apply the workspace settings: ${(reply + state.errors).trim()}`;
@@ -472,9 +528,15 @@ Singleton {
                 } else if (state.report?.level === "log") {
                     console.log(state.report.message);
                 }
+                if (run.tidewm && error === "") {
+                    if (root.keptHome !== "" && root.keptHome !== run.home) {
+                        root.oldHomes = root.oldHomes.concat([root.keptHome]);
+                    }
+                    root.keptHome = run.home;
+                }
                 const text = root.target.onDisk;
                 root.stepped(Writes.targetApplied(root.target, error));
-                if (error === "") {
+                if (error === "" && !run.tidewm) {
                     root.rulesApplied(text);
                 }
                 destroy();

@@ -9,4 +9,22 @@
 # so that's where `uwsm finalize` goes, as Hyprland's one exec-once: it
 # hands WAYLAND_DISPLAY, DISPLAY and tidewm's IPC socket, SWAYSOCK, to
 # the session's units, and tells uwsm the compositor is ready.
-exec tidewm -s 'exec uwsm finalize SWAYSOCK' "$@"
+# Before that, it goes to home (§6.5) and keeps it, as Hyprland's session
+# starts there: tidewm itself starts on workspace 1, which goes once it's
+# left empty. Home's name is the one tide's shell last wrote for conf's
+# hyprland.lua, or `in` before the shell has run, and the shell keeps home
+# from then on (shell/WorkspacesData.qml). A name can't hold a quote
+# (§6.5), so it goes inside single quotes whole; one with a `;`, which
+# would end tidewm's command, is left to the shell, which says why.
+home=in
+lua=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/tide-workspaces.lua
+if line=$(grep -m 1 '^    home = ".*",$' "$lua" 2>/dev/null); then
+    line=${line#    home = \"}
+    home=${line%\",}
+fi
+start='exec uwsm finalize SWAYSOCK'
+case $home in
+    *\;* | *\'* | '') ;;
+    *) start="tide-msg 'workspace number $home; persist workspace $home'; $start" ;;
+esac
+exec tidewm -s "$start" "$@"
