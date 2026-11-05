@@ -168,7 +168,7 @@ const btn = (icon, dim) => `<span class="btn${dim ? ' dim' : ''}"><i class="ms">
 const list = (cmds) => cmds.map((c, i) => `<div class="item"><span class="cmd">${c}</span>${btn('arrow_upward', i === 0)}${btn('arrow_downward', i === cmds.length - 1)}${btn('delete')}</div>`).join('');
 const panels = [
   ['Appearance',
-   'Light or dark, by the clock, at sunrise and sunset, or always one. A wallpaper is a picture, chosen or typed, or a color from the swatch; empty is conf\u2019s. Each picture is placed on every monitor as its position says, as its preview shows.',
+   'Light or dark, for the bar and apps. Sunrise and sunset needs your latitude and longitude, negative for south and west. Switching by hand lasts until the next scheduled change.',
    appearanceRows()],
   ['Appearance', '', fitRows()],
   ['Keyboard',

@@ -120,7 +120,7 @@ export const PAGES = Object.freeze([
         label: "Appearance",
         icon: "night-light-symbolic",
         keywords: ["wallpaper", "background", "sunset", "sunrise"],
-        about: "Light or dark for the shell and apps. By the clock goes light and dark at the times below; sunrise and sunset needs this machine's latitude and longitude, north and east positive. A switch made now lasts until the next change.",
+        about: "Light or dark, for the bar and apps. Sunrise and sunset needs your latitude and longitude, negative for south and west. Switching by hand lasts until the next scheduled change.",
         advanced: null,
     },
     {
