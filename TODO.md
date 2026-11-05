@@ -33,6 +33,13 @@ once you have agreed with it or reversed it.
   event keeps its focused monitor right. Its workspaces don't fit
   tidewm's, which span every monitor, so the workspaces step may read
   tidewm's events itself.
+- **The shell doesn't tell tidewm's guard its marks** (2026-11-05), as
+  it tells Hyprland's with `tide_focus.set_order`. Hyprland's guard uses
+  that list only to stop its own notifications once a shell marks
+  windows, and tidewm's guard sends none. `urgent enable` would also come
+  back as an `urgent` event, which the shell reads as the guard's mark,
+  lasting until the window is focused, so a notification's mark would
+  outlast the notification.
 - **Home's window events on tidewm wait for home's rules** (2026-11-05):
   they note the windows of home's apps that open before a rule covers
   them, to send them home once one does, and tidewm has no such rules yet,
@@ -1922,17 +1929,16 @@ bar's icons and title, the switcher's Windows tab, the marks, the
 guard's and notifications', and the name prompt, which moves and closes
 them. Next, in order:
 
-1. The shell's marks told to tidewm's guard with `urgent enable`, so its
-   urgency order has them as `tide_focus.set_order` gives Hyprland's.
-2. Minimizing, which uses Hyprland's special workspaces, so needs
-   something of tidewm's own.
-3. The settings pages that write `tide-*.lua` for conf's hyprland.lua
+1. Minimizing, which uses Hyprland's special workspaces, so on tidewm
+   uses tidewm's own `minimize`, once tidewm has it.
+2. The settings pages that write `tide-*.lua` for conf's hyprland.lua
    (floating, input, appearance, outputs and layouts) and the keys page:
    each over tidewm's IPC or config, or said to be Hyprland's only.
-4. The rest: home's apps' rules, which conf's hyprland.lua makes on
+3. The rest: home's apps' rules, which conf's hyprland.lua makes on
    Hyprland, with the window events that send home the windows of
-   home's apps that opened before them (`WorkspacesData.qml`); a name with a `;`, which tidewm's commands can't take, nor
-   a rename one with " to " (sway's quoting would do); the lock's
+   home's apps that opened before them (`WorkspacesData.qml`); a name
+   with a `;`, which tidewm's commands can't take, nor a rename one
+   with " to " (sway's quoting would do); the lock's
    keyboard layout (`GET_INPUTS` and input events); the greeter's
    displays off; the picker's paste, Hyprland's `sendshortcut`, so on
    tidewm a choice is only copied; the share picker
