@@ -3,7 +3,7 @@
 # runs the transitional owners (the bar, swaync, a polkit agent); see TODO.md.
 [Unit]
 Description=tide shell
-Documentation=https://github.com/mikelward/quickspace
+Documentation=https://github.com/mikelward/tide
 # Scoped to the tide session. Plasma reaches graphical-session.target
 # too, so this is never WantedBy= that.
 PartOf=graphical-session.target
