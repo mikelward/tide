@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    ACCEL_STEP, LADDERS, SECTIONS, accelCurve, accelPoints, connectedDevices, deviceKind, deviceSection, listedDevices, deviceSettingError, deviceShown, formatValue, hasOwn, inputLua, isText, loadInput,
+    ACCEL_STEP, LADDERS, SECTIONS, accelCurve, accelPoints, connectedDevices, deviceKind, deviceSection, listedDevices, deviceSettingError, deviceShown, formatValue, hasOwn, inputConf, inputLua, isText, loadInput,
     pairError, parseInput, parseValue, settingError, shown, stepped, targetLabel, targets, withDeviceSetting, withSetting, withoutDevice,
 } from "./input.mjs";
 
@@ -475,4 +475,54 @@ test("a listing that fails, or doesn't read, names no devices, not the last list
     const bad = listedDevices(false, "{");
     assert.deepEqual(bad.devices, []);
     assert.match(bad.error, /^hyprctl devices -j: line 1:/);
+});
+
+test("tidewm's file has an input block for each section with something set, in tidewm's names", () => {
+    const text = inputConf({
+        mouse: { speed: -0.5, scrollSpeed: 2, naturalScroll: true, leftHanded: false },
+        touchpad: { speed: 0.25, tapToClick: false, disableWhileTyping: true },
+        keyboard: { layout: "us,de", variant: "dvorak,", repeatDelay: 300, repeatRate: 40 },
+    });
+    assert.ok(text.startsWith("# Written by tide from input.json and input.local.json"), text);
+    assert.ok(text.endsWith([
+        "input type:pointer {",
+        "    pointer_accel -0.5",
+        "    scroll_factor 2",
+        "    natural_scroll enabled",
+        "    left_handed disabled",
+        "}",
+        "input type:touchpad {",
+        "    pointer_accel 0.25",
+        "    tap disabled",
+        "    dwt enabled",
+        "}",
+        "input type:keyboard {",
+        "    xkb_layout us,de",
+        "    xkb_variant dvorak,",
+        "    repeat_delay 300",
+        "    repeat_rate 40",
+        "}",
+        "",
+    ].join("\n")), text);
+});
+
+test("tidewm's file has no block for a section with nothing set, and is only comments with nothing set", () => {
+    const text = inputConf({ touchpad: { tapToClick: true } });
+    assert.ok(!text.includes("type:pointer") && !text.includes("type:keyboard"), text);
+    assert.ok(text.includes("input type:touchpad {\n    tap enabled\n}\n"), text);
+    assert.ok(inputConf({}).split("\n").every(line => line === "" || line.startsWith("#")));
+});
+
+test("on tidewm a mouse's acceleration is libinput's flat profile at 0 and its adaptive one otherwise", () => {
+    assert.ok(inputConf({ mouse: { acceleration: 0 } }).includes("    accel_profile flat\n"));
+    assert.ok(inputConf({ mouse: { acceleration: 2 } }).includes("    accel_profile adaptive\n"));
+});
+
+test("on tidewm an empty variant is quoted, as tidewm takes no variant", () => {
+    assert.ok(inputConf({ keyboard: { layout: "us", variant: "" } }).includes('    xkb_variant ""\n'));
+});
+
+test("tidewm's file leaves a device's own settings to Hyprland's", () => {
+    const text = inputConf({ mouse: { speed: 0.5 }, devices: { "logitech-mx": { speed: -0.5 } } });
+    assert.ok(!text.includes("logitech-mx") && !text.includes("-0.5"), text);
 });

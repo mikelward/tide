@@ -12,7 +12,10 @@ import "lib/writes.mjs" as Writes
 // and input.local.json (§16.1). What's set is written to
 // ~/.config/hypr/tide-input.lua, which conf's hyprland.lua reads, and
 // `hyprctl eval conf_input.reload()` applies it to every mouse, touchpad and
-// keyboard without reloading the rest of the config. A bad file is a
+// keyboard without reloading the rest of the config. On tidewm (§5.3) it's
+// ~/.config/tidewm/tide-input.conf, in tidewm's own lines, which conf's
+// tidewm config includes, and `tide-msg reload` has tidewm read it; a
+// device's own settings are Hyprland's alone for now. A bad file is a
 // notification naming it, once, and changes nothing. So is a change that
 // can't be saved; one that can't be written or applied is tried again
 // until it is (shell/lib/writes.mjs). The files are read and written as
@@ -38,6 +41,9 @@ Singleton {
 
     readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`
     readonly property string dir: `${root.configHome}/tide`
+    // Where the record of what tidewm last read lives: this session's, so
+    // a new login, a new tidewm, starts without one.
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
 
     // Sets one setting, in input.local.json: the settings panel writes only
     // the .local files (§16.1). Returns why it didn't, or "": a bad
@@ -81,8 +87,13 @@ Singleton {
     // Lists the connected mice, touchpads and keyboards again, for the pages
     // to name.
     // A list that fails is logged, and the pages name only the devices that
-    // have settings of their own.
+    // have settings of their own. On tidewm there's no list for now: its
+    // devices' own settings are Hyprland's alone.
     function listDevices() {
+        if (Compositor.tidewm) {
+            root.connected = [];
+            return;
+        }
         lister.createObject(root).running = true;
     }
 
@@ -152,8 +163,50 @@ Singleton {
         // Hyprland outlives the shell, and reloading the file costs it
         // nothing, so a shell start applies it even unchanged: a shell
         // restarted with an apply still to retry would leave it undone.
-        root.target = Writes.readTarget(root.target, writtenText, null).state;
-        root.stepped(Writes.wantTarget(root.target, Input.inputLua(root.input)));
+        // tidewm's reload starts every output and device over, so a shell
+        // start leaves tidewm with what this session's record says it read
+        // (firstApplied).
+        root.target = Compositor.tidewm
+            ? Writes.readTarget(root.target, writtenText, root.target.known ? writtenText : root.firstApplied(writtenText)).state
+            : Writes.readTarget(root.target, writtenText, null).state;
+        root.stepped(Writes.wantTarget(root.target, Compositor.tidewm ? Input.inputConf(root.input) : Input.inputLua(root.input)));
+    }
+
+    // On tidewm, what it has as this shell first reads its file: what the
+    // session's record of the last reload says, else the file, which tidewm
+    // read as it started, recorded now, as IdleData's for hypridle. So a
+    // shell that died with a reload still to retry leaves the next one to
+    // do it. A record that can't be read or written says nothing, so tidewm
+    // reloads to be sure; nor does a file that couldn't be read until now.
+    function firstApplied(writtenText) {
+        if (root.target.failure !== "") {
+            return null;
+        }
+        if (root.runtimeDir === "") {
+            return writtenText;
+        }
+        const text = recorded.readNow();
+        if (recorded.broken !== "") {
+            console.warn(`tide: ${recorded.broken}; reloading tidewm to be sure it has the input settings`);
+            return null;
+        }
+        const first = Writes.firstApplied(writtenText, text);
+        return Writes.afterRecord(first, first.record === null || root.record(first.record));
+    }
+
+    // Records what tidewm has now, returning whether it could. One that
+    // can't be written is logged: it only costs another reload if this
+    // shell dies with one still to retry.
+    function record(text) {
+        if (root.runtimeDir === "") {
+            return true;
+        }
+        const error = recorded.writeNow(text);
+        if (error !== "") {
+            console.warn(`tide: ${error}; tidewm may be reloaded again to be sure it has the input settings`);
+            return false;
+        }
+        return true;
     }
 
     SettingsFile {
@@ -172,16 +225,25 @@ Singleton {
         onFileChanged: root.load()
     }
 
-    // What conf's hyprland.lua reads. Written only when it would say
-    // something else.
+    // What conf's hyprland.lua reads, or on tidewm what its config includes.
+    // Written only when it would say something else.
     SettingsFile {
         id: written
 
-        path: `${root.configHome}/hypr/tide-input.lua`
+        path: Compositor.tidewm ? `${root.configHome}/tidewm/tide-input.conf` : `${root.configHome}/hypr/tide-input.lua`
+    }
+
+    // This session's record of what tidewm last read (firstApplied).
+    SettingsFile {
+        id: recorded
+
+        path: root.runtimeDir === "" ? "" : `${root.runtimeDir}/tide-input-tidewm-applied`
     }
 
     // Has conf's hyprland.lua apply what was written: `hyprctl eval` answers
     // "ok", or why not, on stdout, so its reply is read, not just its exit.
+    // On tidewm, `tide-msg reload` exits 0, or says why not, as tidewm's
+    // errors in its config, on stderr.
     Component {
         id: applier
 
@@ -216,7 +278,7 @@ Singleton {
                 if (!state.started) {
                     console.warn(state.report.message);
                     error = state.report.message.replace(/^tide: /, "");
-                } else if (state.code !== 0 || reply.trim() !== "ok") {
+                } else if (state.code !== 0 || (!Compositor.tidewm && reply.trim() !== "ok")) {
                     // A conf without conf_input.reload, say.
                     error = `couldn't apply the mouse, touchpad and keyboard settings: ${(reply + state.errors).trim()}`;
                     console.warn(`tide: ${error}`);
@@ -224,11 +286,15 @@ Singleton {
                     // It worked, but said something on the way, as MarkData's.
                     console.log(state.report.message);
                 }
-                root.stepped(Writes.targetApplied(root.target, error));
+                const applied = Writes.targetApplied(root.target, error);
+                if (Compositor.tidewm && error === "") {
+                    root.record(Writes.recordOf(applied.state.applied));
+                }
+                root.stepped(applied);
                 destroy();
             }
 
-            command: ["hyprctl", "eval", "conf_input.reload()"]
+            command: Compositor.tidewm ? ["tide-msg", "reload"] : ["hyprctl", "eval", "conf_input.reload()"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     run.reply = text;
