@@ -10,17 +10,17 @@ test("splitTerse splits on unescaped colons", () => {
     assert.deepEqual(splitTerse(""), [""]);
 });
 
-test("the list command asks for the five fields parseConnections reads, untranslated", () => {
+test("the list command asks for the six fields parseConnections reads, untranslated", () => {
     assert.deepEqual(LIST_COMMAND.slice(0, 3), ["env", "LC_ALL=C", "nmcli"]);
     assert.ok(LIST_COMMAND.includes("-t"));
-    assert.equal(LIST_COMMAND[LIST_COMMAND.indexOf("-f") + 1], "NAME,UUID,TYPE,ACTIVE,STATE");
+    assert.equal(LIST_COMMAND[LIST_COMMAND.indexOf("-f") + 1], "NAME,UUID,TYPE,ACTIVE,STATE,DEVICE");
 });
 
 const output = [
-    "Home Wi-Fi:11111111-1111-1111-1111-111111111111:802-11-wireless:yes:activated",
-    "Office\\:VPN:22222222-2222-2222-2222-222222222222:vpn:yes:activated",
-    "wg0:33333333-3333-3333-3333-333333333333:wireguard:no:",
-    "Wired connection 1:44444444-4444-4444-4444-444444444444:802-3-ethernet:no:",
+    "Home Wi-Fi:11111111-1111-1111-1111-111111111111:802-11-wireless:yes:activated:wlan0",
+    "Office\\:VPN:22222222-2222-2222-2222-222222222222:vpn:yes:activated:tun0",
+    "wg0:33333333-3333-3333-3333-333333333333:wireguard:no::",
+    "Wired connection 1:44444444-4444-4444-4444-444444444444:802-3-ethernet:no::",
     "",
 ].join("\n");
 
@@ -28,23 +28,33 @@ test("parseConnections keeps VPN and WireGuard connections only", () => {
     const { vpns, errors } = parseConnections(output);
     assert.deepEqual(errors, []);
     assert.deepEqual(vpns, [
-        { name: "Office:VPN", uuid: "22222222-2222-2222-2222-222222222222", active: true, state: "activated" },
-        { name: "wg0", uuid: "33333333-3333-3333-3333-333333333333", active: false, state: "" },
+        { name: "Office:VPN", uuid: "22222222-2222-2222-2222-222222222222", active: true, state: "activated", device: "tun0" },
+        { name: "wg0", uuid: "33333333-3333-3333-3333-333333333333", active: false, state: "", device: "" },
+    ]);
+});
+
+// The wired profiles, so the popover can say which of a device's is up.
+test("parseConnections lists wired connections apart from VPNs", () => {
+    const { wired } = parseConnections(output + "Dock:77777777-7777-7777-7777-777777777777:802-3-ethernet:yes:activated:enx001122\n");
+    assert.deepEqual(wired, [
+        { name: "Wired connection 1", uuid: "44444444-4444-4444-4444-444444444444", active: false, state: "", device: "" },
+        { name: "Dock", uuid: "77777777-7777-7777-7777-777777777777", active: true, state: "activated", device: "enx001122" },
     ]);
 });
 
 test("parseConnections reports a line it can't read, and keeps the rest", () => {
-    const { vpns, errors } = parseConnections("garbage\nvpn1:55555555-5555-5555-5555-555555555555:vpn:no:\n:::: \n");
+    const { vpns, errors } = parseConnections("garbage\nvpn1:55555555-5555-5555-5555-555555555555:vpn:no::\n::::: \n");
     assert.equal(vpns.length, 1);
     assert.equal(errors.length, 2);
     assert.match(errors[0], /"garbage"/);
-    // Five fields, but no uuid to bring it up by.
-    assert.match(errors[1], /"::::/);
+    // Six fields, but no uuid to bring it up by.
+    assert.match(errors[1], /":::::/);
 });
 
 test("parseConnections ignores a state on an inactive connection", () => {
-    const { vpns } = parseConnections("v:66666666-6666-6666-6666-666666666666:vpn:no:activated\n");
+    const { vpns } = parseConnections("v:66666666-6666-6666-6666-666666666666:vpn:no:activated:tun0\n");
     assert.equal(vpns[0].state, "");
+    assert.equal(vpns[0].device, "");
 });
 
 test("lock is on while any VPN is up, connecting while one comes up", () => {

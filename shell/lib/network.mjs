@@ -1,7 +1,9 @@
 // The bar's network icon and popover (SPEC.md §7.4), as pure functions the
 // QML binds to. Devices and networks are Quickshell.Networking's
-// (NetworkManager), passed in as plain objects: a device is {type,
-// connected, networks}, with `networks` an array.
+// (NetworkManager), passed in as plain objects: a device is {type, name,
+// connected, state, networks}, with `networks` an array, and a wired one
+// adds hasLink (a cable is in), linkSpeed (in Mb/s, 0 when unknown) and
+// network, its one network, whose nmSettings are its saved profiles.
 
 // Quickshell's DeviceType, ConnectionState and NetworkConnectivity.
 export const WIFI = 1;
@@ -31,9 +33,21 @@ export function connectedWifi(devices) {
     return null;
 }
 
+// What's on the wire, when nothing else is connected: "connecting" while a
+// wired device comes up, "unconnected" while a cable is in but nothing is
+// up on it, else "".
+function wiredWaiting(devices) {
+    const wired = devices.filter((d) => d.type === WIRED);
+    if (wired.some((d) => d.state === CONNECTING)) {
+        return "connecting";
+    }
+    return wired.some((d) => d.hasLink) ? "unconnected" : "";
+}
+
 // The bar icon: wired when a cable is connected, else the Wi-Fi strength,
-// else Wi-Fi off or offline. A connection that can't reach the internet
-// (a captive portal, or limited) shows its "no route" form. Hidden where
+// else a wired connection on its way up or a cable with none, else Wi-Fi
+// off or offline. A connection that can't reach the internet (a captive
+// portal, or limited) shows its "no route" form. Hidden where
 // NetworkManager reports no devices at all.
 export function networkIcon({ devices, wifiEnabled, connectivity }) {
     if (devices.length === 0) {
@@ -47,23 +61,38 @@ export function networkIcon({ devices, wifiEnabled, connectivity }) {
     if (wifi) {
         return { visible: true, icon: noRoute ? "network-wireless-no-route-symbolic" : signalIcon(wifi.signalStrength) };
     }
+    switch (wiredWaiting(devices)) {
+    case "connecting":
+        return { visible: true, icon: "network-wired-acquiring-symbolic" };
+    case "unconnected":
+        return { visible: true, icon: "network-wired-disconnected-symbolic" };
+    }
     const hasWifi = devices.some((d) => d.type === WIFI);
     return { visible: true, icon: hasWifi && !wifiEnabled ? "network-wireless-disabled-symbolic" : "network-offline-symbolic" };
 }
 
 // The network icon's hover text (SPEC.md §7.4), in tilemo's words: the
-// Wi-Fi network's name, "Wired network", "Wi-Fi off" or "No network";
+// Wi-Fi network's name, "Wired network" with its speed, a wired one
+// connecting or not connected, "Wi-Fi off" or "No network";
 // then whether it can't reach the internet, and the VPN, "on" or
 // "connecting" (vpn.mjs's lock).
 export function networkTip({ devices, wifiEnabled, connectivity, vpn = "" }) {
     const noRoute = connectivity === PORTAL || connectivity === LIMITED;
     const wifi = connectedWifi(devices);
     let tip;
-    if (devices.some((d) => d.type === WIRED && d.connected)) {
-        tip = "Wired network";
+    const cable = devices.find((d) => d.type === WIRED && d.connected);
+    if (cable) {
+        const speed = speedText(cable.linkSpeed);
+        tip = speed ? `Wired network, ${speed}` : "Wired network";
     } else if (wifi) {
         tip = wifi.name || "Wi-Fi";
     } else {
+        switch (wiredWaiting(devices)) {
+        case "connecting":
+            return "Wired network, connecting";
+        case "unconnected":
+            return "Wired network, not connected";
+        }
         tip = devices.some((d) => d.type === WIFI) && !wifiEnabled ? "Wi-Fi off" : "No network";
         return tip;
     }
@@ -77,6 +106,80 @@ export function networkTip({ devices, wifiEnabled, connectivity, vpn = "" }) {
         parts.push("VPN connecting");
     }
     return parts.join(", ");
+}
+
+// A link speed in Mb/s as people say it: "100 Mb/s", "1 Gb/s",
+// "2.5 Gb/s"; "" when it's unknown.
+export function speedText(mbps) {
+    if (!Number.isFinite(mbps) || mbps <= 0) {
+        return "";
+    }
+    if (mbps >= 1000) {
+        return `${Math.round(mbps / 100) / 10} Gb/s`;
+    }
+    return `${mbps} Mb/s`;
+}
+
+// The popover's wired devices: connected first, then by name.
+export function wiredList(devices) {
+    const rank = (d) => (d.connected ? 0 : 1);
+    return devices.filter((d) => d.type === WIRED)
+        .sort((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name)));
+}
+
+// A wired device's line in the popover: "Wired", or "Wired (enp3s0)" when
+// there's more than one to tell apart, then what it's doing.
+export function wiredLabel(device, count) {
+    const name = count > 1 && device.name ? `Wired (${device.name})` : "Wired";
+    const status = wiredStatus(device);
+    return status ? `${name} · ${status}` : name;
+}
+
+export function wiredStatus(device) {
+    if (device.state === CONNECTING) {
+        return "Connecting…";
+    }
+    if (device.state === DISCONNECTING) {
+        return "Disconnecting…";
+    }
+    if (device.connected) {
+        const speed = speedText(device.linkSpeed);
+        return speed ? `Connected, ${speed}` : "Connected";
+    }
+    return device.hasLink ? "" : "Unplugged";
+}
+
+// What a click on a wired device's row does: "disconnect" while it's up or
+// coming up, "connect" with a cable in, else nothing, "".
+export function wiredAction(device) {
+    if (device.connected || device.state === CONNECTING) {
+        return "disconnect";
+    }
+    return device.hasLink ? "connect" : "";
+}
+
+// A wired device's saved profiles, for choosing between them: listed only
+// when there are two or more and a cable is in, by name. `connections` is
+// the wired connections nmcli lists (vpn.mjs's parseConnections), which say
+// which one is up and on which device, since Quickshell 0.3 doesn't: a
+// profile two adapters share can be up on only one. Each is {settings,
+// name, active}.
+export function wiredProfiles(device, connections) {
+    const profiles = device.network?.nmSettings ?? [];
+    if (!device.hasLink || profiles.length < 2) {
+        return [];
+    }
+    const up = new Set(connections.filter((c) => c.active && c.device === device.name).map((c) => c.uuid));
+    return profiles.map((s) => ({ settings: s, name: s.id, active: up.has(s.uuid) }))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+
+// The command that switches a wired device to one of its profiles, by
+// uuid and on that device: NetworkManager takes down what's up there in
+// the same step. Quickshell 0.3's connectWithSettings won't, since it does
+// nothing on a network that's already connected.
+export function wiredProfileCommand(profile, device) {
+    return ["nmcli", "connection", "up", "uuid", profile.settings.uuid, "ifname", device.name];
 }
 
 // A Wi-Fi network's line in the popover.

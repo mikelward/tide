@@ -1,15 +1,17 @@
-// The network icon's VPN lock and the popover's VPNs (SPEC.md §7.4).
-// Quickshell.Networking 0.3 doesn't list VPN connections, so these come
+// The network icon's VPN lock and the popover's VPNs (SPEC.md §7.4), and
+// which wired profile is up. Quickshell.Networking 0.3 doesn't list VPN
+// connections or say which of a device's profiles is active, so these come
 // from NetworkManager's own nmcli, read as plain text here:
 //
-//   LC_ALL=C nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show
+//   LC_ALL=C nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE,DEVICE connection show
 
-// The connection types that count as a VPN.
+// The connection types that count as a VPN, and as wired.
 const VPN_TYPES = new Set(["vpn", "wireguard"]);
+const WIRED_TYPE = "802-3-ethernet";
 
 // In the C locale, since nmcli translates "yes" and "activated", and its
 // manual asks scripts that read its output to set LC_ALL=C.
-export const LIST_COMMAND = ["env", "LC_ALL=C", "nmcli", "-t", "-f", "NAME,UUID,TYPE,ACTIVE,STATE", "connection", "show"];
+export const LIST_COMMAND = ["env", "LC_ALL=C", "nmcli", "-t", "-f", "NAME,UUID,TYPE,ACTIVE,STATE,DEVICE", "connection", "show"];
 
 // One line of nmcli's terse output, split into its fields. Terse output
 // escapes ":" and "\" inside a field with "\", so a VPN named "a:b" is
@@ -29,29 +31,35 @@ export function splitTerse(line) {
     return fields;
 }
 
-// The VPN connections in LIST_COMMAND's output: {vpns, errors}. A vpn is
-// {name, uuid, active, state}, state being nmcli's ("activated",
-// "activating", "deactivating") or "" when it's down. A line that doesn't
-// have the five fields is an error, so a change in nmcli's output shows in
+// The VPN and wired connections in LIST_COMMAND's output: {vpns, wired,
+// errors}. Each is {name, uuid, active, state, device}, state being
+// nmcli's ("activated", "activating", "deactivating") or "" when it's
+// down, and device the interface it's up on, or "". A line that doesn't
+// have the six fields is an error, so a change in nmcli's output shows in
 // the log rather than as VPNs that quietly vanished.
 export function parseConnections(text) {
     const vpns = [];
+    const wired = [];
     const errors = [];
     for (const line of String(text).split("\n")) {
         if (line.trim() === "") {
             continue;
         }
         const f = splitTerse(line);
-        if (f.length !== 5 || f[1] === "") {
+        if (f.length !== 6 || f[1] === "") {
             errors.push(`nmcli: can't read connection line ${JSON.stringify(line)}`);
             continue;
         }
-        const [name, uuid, type, active, state] = f;
+        const [name, uuid, type, active, state, device] = f;
+        const up = active === "yes";
+        const connection = { name, uuid, active: up, state: up ? state : "", device: up ? device : "" };
         if (VPN_TYPES.has(type)) {
-            vpns.push({ name, uuid, active: active === "yes", state: active === "yes" ? state : "" });
+            vpns.push(connection);
+        } else if (type === WIRED_TYPE) {
+            wired.push(connection);
         }
     }
-    return { vpns, errors };
+    return { vpns, wired, errors };
 }
 
 // The lock on the network icon: "on" while any VPN is up, "connecting"

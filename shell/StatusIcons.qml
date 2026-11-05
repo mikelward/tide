@@ -186,11 +186,18 @@ Row {
     SymbolicIcon {
         id: network
 
-        // Quickshell.Networking's devices as network.mjs reads them.
+        // Quickshell.Networking's devices as network.mjs reads them, each
+        // with the device itself for the popover to act on.
         readonly property var devices: Networking.devices.values.map(d => ({
             type: d.type,
+            name: d.name,
             connected: d.connected,
+            state: d.state,
             networks: d.networks?.values ?? [],
+            hasLink: d.hasLink ?? false,
+            linkSpeed: d.linkSpeed ?? 0,
+            network: d.network ?? null,
+            device: d,
         }))
         readonly property var view: Net.networkIcon({
             devices: devices,

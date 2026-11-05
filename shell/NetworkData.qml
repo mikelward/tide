@@ -18,8 +18,10 @@ Singleton {
     // The network popovers that are open, across monitors (Net.trackOpen).
     property var open: []
 
-    // The VPN connections, from shell/lib/vpn.mjs's parseConnections.
+    // The VPN and wired connections, from shell/lib/vpn.mjs's
+    // parseConnections: the wired ones say which profile is up.
     property var vpns: []
+    property var wired: []
     readonly property string lock: Vpn.lock(root.vpns)
     // The last toggle that didn't work, {uuid, action}, so its row says so;
     // null when none.
@@ -106,6 +108,7 @@ Singleton {
                     console.warn(`tide: ${e}`);
                 }
                 root.vpns = result.vpns;
+                root.wired = result.wired;
                 root.vpnFailed = Vpn.settledFailure(root.vpnFailed, result.vpns);
             }
         }

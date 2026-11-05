@@ -1205,6 +1205,14 @@ tested where it can be without a live session.
     lock follows a VPN brought up from elsewhere without the minute's
     wait, and that one needing a password asks through the polkit or
     nm-applet secret agent.
+    Wired devices get rows of their own above Wi-Fi (§7.4), from
+    Quickshell's `WiredDevice`: connected with the link speed, connecting,
+    or unplugged, a click to connect or disconnect, and a row per saved
+    profile when there are two or more, the active one from the same
+    `nmcli` list. On a live session, check: unplugging and replugging a
+    cable, a USB or dock adapter appearing as a second device, switching
+    between two profiles, and the bar icon while a cable is in but
+    nothing is up on it.
   - The tray (`shell/Tray.qml`, from `shell/lib/tray.mjs`) shows apps'
     StatusNotifierItems, hiding passive ones as waybar did: a left or
     right click opens the menu (§7.4), which `shell/TrayMenu.qml` draws,
