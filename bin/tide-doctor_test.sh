@@ -112,7 +112,11 @@ if test "$2" = show; then
     for name in "$@"; do
         for u in $FAKE_AUTOSTART_UNITS; do
             if test "${u%%=*}" = "$name"; then
-                printf 'Id=%s\nExecMainStartTimestampMonotonic=%s\n\n' "$name" "${u#*=}"
+                if test -n "${FAKE_TIME_FIRST:-}"; then
+                    printf 'ExecMainStartTimestampMonotonic=%s\nId=%s\n\n' "${u#*=}" "$name"
+                else
+                    printf 'Id=%s\nExecMainStartTimestampMonotonic=%s\n\n' "$name" "${u#*=}"
+                fi
             fi
         done
     done
@@ -1278,6 +1282,13 @@ check "an autostart unit is named, with the fix" \
 check "an allowlisted autostart unit isn't a problem" test -z "$(grep 'app-xiccd' "$tmp/out")"
 check "a unit whose condition stopped its command isn't a problem" test -z "$(grep 'app-skipped' "$tmp/out")"
 check "a unit that ran before this session began isn't a problem" test -z "$(grep 'app-earlier' "$tmp/out")"
+# systemctl show keeps the unit's own property order, so each record is
+# read whole.
+run FAKE_TIME_FIRST=1 FAKE_AUTOSTART_UNITS="app-blueman@autostart.service=321 app-earlier@autostart.service=50"
+check "with the start time printed first, each unit keeps its own" \
+    test "$(grep -c '^autostart unit' "$tmp/out")" -eq 1
+check "and the one this session ran is named" \
+    contains "$out" "autostart unit app-blueman@autostart.service ran in tide"
 check "systemctl is asked for every loaded autostart unit, dead ones too" \
     contains "$(cat "$tmp/systemctl-args")" "list-units --all --plain --no-legend app-*@autostart.service"
 echo xiccd > "$tmp/config/tide/autostart"
