@@ -439,8 +439,9 @@ flowchart TD
   protocol. The shell still reads only Hyprland's IPC, so on tidewm the
   bar has no workspaces until its tidewm backend lands, and `tide
   prompt-focus` can't tell yet, so a polkit prompt comes as a
-  notification. `tide doctor` leaves out the checks that ask Hyprland,
-  and says so.
+  notification. `tide doctor` counts bars and reports config errors
+  from tidewm's `GET_OUTPUTS` and `GET_CONFIG` there, and leaves out the
+  home workspace's check, which asks Hyprland, saying so.
 
 ### 5.4 Guards that keep it that way
 

@@ -67,8 +67,20 @@ func TestNoTidewmExits2(t *testing.T) {
 	}
 }
 
+func TestAQueryPrintsTheReply(t *testing.T) {
+	tidewm := swayipctest.New(t, `[{"name":"eDP-1","layers":[]}]`)
+	status, out, _ := tideMsg([]string{"SWAYSOCK=" + tidewm.Socket}, "--type", "get_outputs")
+	if status != 0 || out != `[{"name":"eDP-1","layers":[]}]`+"\n" {
+		t.Fatalf("status %d, out %q", status, out)
+	}
+	if got := tidewm.Sent(); len(got) != 1 || got[0].Type != 3 || got[0].Payload != "" {
+		t.Fatalf("sent %v, not GET_OUTPUTS", got)
+	}
+}
+
 func TestUsage(t *testing.T) {
-	for _, args := range [][]string{nil, {"--focused-workspace", "nop"}, {"--nope"}} {
+	for _, args := range [][]string{nil, {"--focused-workspace", "nop"}, {"--nope"},
+		{"--type", "get_marks"}, {"--type", "get_config", "nop"}, {"--type", "get_config", "--focused-workspace"}} {
 		if status, _, _ := tideMsg([]string{"SWAYSOCK=/x"}, args...); status != 2 {
 			t.Errorf("%q: status %d", args, status)
 		}

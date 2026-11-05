@@ -243,6 +243,26 @@ fi
 printf '%s\n' "${FAKE_QS_VERSION:-Quickshell 0.3.1 (revision 1a4716c, distributed by test)}"
 exit "${FAKE_QS_VERSION_STATUS:-0}"
 FAKE
+# tidewm's tide-msg answers --type get_outputs with $FAKE_TIDEWM_OUTPUTS
+# (a 1920x1080 monitor with tide's 30 px bar by default) and get_config
+# with $FAKE_TIDEWM_CONFIG (no errors by default); with $FAKE_TIDEMSG_FAILS
+# it says that and fails.
+cat > "$fake/tide-msg" <<'FAKE'
+#!/bin/sh
+if test -n "$FAKE_TIDEMSG_FAILS"; then
+    echo "tide-msg: $FAKE_TIDEMSG_FAILS" >&2
+    exit 2
+fi
+outputs=$FAKE_TIDEWM_OUTPUTS
+test -n "$outputs" || outputs='[{"name": "eDP-1", "active": true, "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080}, "window_area": {"x": 0, "y": 30, "width": 1920, "height": 1050}, "layers": [{"namespace": "wallpaper", "layer": "background", "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080}, "exclusive_zone": -1}, {"namespace": "tide-bar", "layer": "top", "rect": {"x": 0, "y": 0, "width": 1920, "height": 30}, "exclusive_zone": 30}]}]'
+config=$FAKE_TIDEWM_CONFIG
+test -n "$config" || config='{"config": "", "path": "/c", "errors": []}'
+case "$*" in
+    "--type get_outputs") printf '%s\n' "$outputs" ;;
+    "--type get_config") printf '%s\n' "$config" ;;
+    *) echo "tide-msg: unexpected $*" >&2; exit 2 ;;
+esac
+FAKE
 chmod +x "$fake"/* "$tmp/qs-bin/qs"
 
 # A healthy session: every owner in place, one of each daemon, the portal
@@ -951,8 +971,45 @@ healthy
 run XDG_CURRENT_DESKTOP=tidewm:tide FAKE_HYPRCTL_FAILS="HYPRLAND_INSTANCE_SIGNATURE not set"
 check "a healthy tidewm session exits 0" test "$status" -eq 0
 check "a healthy tidewm session says so" test "$out" = "No problems found."
-check "and says which checks it left out" \
-    contains "$(cat "$tmp/err")" "in tidewm's session, one bar per monitor, the compositor's config errors and the home workspace aren't checked yet"
+check "and says which check it left out" \
+    contains "$(cat "$tmp/err")" "in tidewm's session, the home workspace isn't checked yet"
+tw=XDG_CURRENT_DESKTOP=tidewm:tide
+bar='{"namespace": "tide-bar", "layer": "top", "rect": {"x": 0, "y": 0, "width": 1920, "height": 30}, "exclusive_zone": 30}'
+waybar='{"namespace": "waybar", "layer": "top", "rect": {"x": 0, "y": 30, "width": 1920, "height": 30}, "exclusive_zone": 30}'
+monitor() { # monitor WINDOW_AREA LAYER...: one monitor of tidewm's, as JSON
+    area=$1
+    shift
+    printf '[{"name": "eDP-1", "active": true, "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080}, "window_area": %s, "layers": [%s]}]' \
+        "$area" "$(printf '%s\n' "$@" | paste -sd, -)"
+}
+run "$tw" FAKE_TIDEWM_OUTPUTS="$(monitor '{"x": 0, "y": 60, "width": 1920, "height": 1020}' "$bar" "$waybar")"
+check "a second bar on tidewm is a problem" \
+    contains "$out" "2 bars on eDP-1 (tide-bar, waybar): only tide's should be there"
+run "$tw" FAKE_TIDEWM_OUTPUTS="$(monitor '{"x": 0, "y": 30, "width": 1920, "height": 1010}' "$bar")"
+check "space reserved beyond tide's bar on tidewm is a problem" \
+    contains "$out" "eDP-1 reserves 40 px at the bottom beyond tide's bar"
+run "$tw" FAKE_TIDEWM_OUTPUTS="$(monitor '{"x": 50, "y": 30, "width": 1870, "height": 1050}' "$bar")"
+check "and on the left" contains "$out" "eDP-1 reserves 50 px on the left beyond tide's bar"
+run "$tw" FAKE_TIDEWM_OUTPUTS='[{"name": "eDP-1", "active": true, "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080}}]'
+check "a tidewm too old to list layer surfaces is a problem" \
+    contains "$out" "tidewm doesn't list eDP-1's layer surfaces, so its bars weren't counted: update tidewm"
+run "$tw" FAKE_TIDEWM_OUTPUTS='[{"name": "HDMI-A-1", "active": false}]'
+check "an output that's off has no bars to count" test "$status" -eq 0
+run "$tw" FAKE_TIDEWM_CONFIG='{"config": "x", "errors": ["/c:3: no setting is called bindcode", "/c:9: bad value"]}'
+check "each tidewm config error is a problem" test "$(grep -c '^tidewm config error: /c:' "$tmp/out")" -eq 2
+check "naming the file and line" \
+    contains "$out" "tidewm config error: /c:3: no setting is called bindcode: fix it, then reload tidewm's config"
+run "$tw" FAKE_TIDEMSG_FAILS="SWAYSOCK isn't set, so there's no tidewm to ask"
+check "tidewm not answering leaves the bar check incomplete" \
+    contains "$out" "tide-msg: SWAYSOCK isn't set, so there's no tidewm to ask, so the one-bar-per-monitor check is incomplete: is tidewm running?"
+check "and the config check" \
+    contains "$out" "tide-msg: SWAYSOCK isn't set, so there's no tidewm to ask, so tidewm's config errors aren't checked: is tidewm running?"
+mv "$fake/tide-msg" "$tmp/tide-msg.away"
+run "$tw"
+check "on tidewm, no tide-msg is a problem" \
+    contains "$out" "no tide-msg, so tidewm's bars and config errors aren't checked"
+check "said once" test "$(grep -c 'tide-msg' "$tmp/out")" -eq 1
+mv "$tmp/tide-msg.away" "$fake/tide-msg"
 rm "$tmp/config/hypr/tide-workspaces.lua"
 run XDG_CURRENT_DESKTOP=tidewm:tide
 check "tidewm's session doesn't ask for Hyprland's home workspace" test "$status" -eq 0

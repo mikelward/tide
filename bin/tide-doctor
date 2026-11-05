@@ -24,8 +24,9 @@
 #     takes the shell's tide-workspaces.lua and conf's rule for it;
 #   - no monitor has more than one bar, by shape or by space reserved
 #     beyond tide's own bar.
-# In tidewm's session (SPEC.md §5.3), the last three ask Hyprland, so
-# they're left out, and it says so on stderr.
+# In tidewm's session (SPEC.md §5.3), the bars and config errors are
+# tidewm's, read through tide-msg, and the home workspace, which asks
+# Hyprland, is left out, saying so on stderr.
 #   - no XDG autostart unit off the allowlist ran in tide.
 
 prog=${0##*/}
@@ -859,10 +860,14 @@ elif test "$installed" != "$(shipped_portals_conf "$first")"; then
     problem "$found isn't the one tide ships ($backends under [preferred]), so portals may pick the wrong backend: reinstall it with \`make install\` in the tide checkout"
 fi
 
-# The next three checks ask Hyprland, so tidewm's session skips them, and
-# says so.
+# The home workspace's check asks Hyprland, so tidewm's session skips it,
+# and says so; the bars and config errors are tidewm's own there, read
+# through tide-msg.
 if test "$compositor" = tidewm; then
-    echo "$prog: in tidewm's session, one bar per monitor, the compositor's config errors and the home workspace aren't checked yet: those checks ask Hyprland" >&2
+    echo "$prog: in tidewm's session, the home workspace isn't checked yet: that check asks Hyprland" >&2
+    if ! command -v tide-msg >/dev/null 2>&1; then
+        problem "no tide-msg, so tidewm's bars and config errors aren't checked: run \`make build\`, then \`sudo make install-session PREFIX=/usr\`, in the tide checkout"
+    fi
 fi
 
 # One bar per monitor (§5.2): a second one stacks above or below the first.
@@ -918,17 +923,73 @@ bars_on_monitors() {
               "\($name)\treserved\t\($extra | join(", "))"
           else empty end' 2>&1
 }
-if test "$compositor" = tidewm; then
+# tidewm's GET_OUTPUTS gives the same two signals: each output's layer
+# surfaces, in the layout's logical pixels, and its window_area, the rect
+# less what exclusive zones take, which is the reserved space. A tidewm
+# too old to list them prints "MONITOR<tab>old".
+bars_on_tidewm() {
+    # On failure it prints the error instead, and returns false.
+    if ! outputs=$(tide-msg --type get_outputs 2>&1); then
+        printf '%s' "$outputs"
+        return 1
+    fi
+    printf '%s' "$outputs" | jq -r '
+        .[] | select(.active) | .name as $name | .rect as $m
+        | if .layers == null or .window_area == null then "\($name)\told" else
+          [.layers[] | select(.layer != "background")] as $all
+          | [$all[] | .rect as $b | select($b.x >= $m.x and $b.x < $m.x + $m.width
+                     and $b.y >= $m.y and $b.y - $m.y < $m.height / 8
+                     and $b.width >= $m.width / 2 and $b.height <= $m.height / 8)] as $bars
+          | ([$all[] | select(.namespace == "tide-bar") | .rect.height] | max) as $ours
+          | .window_area as $w
+          | {top: ($w.y - $m.y), bottom: (($m.y + $m.height) - ($w.y + $w.height)),
+             left: ($w.x - $m.x), right: (($m.x + $m.width) - ($w.x + $w.width))} as $r
+          | (if $ours == null then [] else
+                [if $r.top > $ours then "\($r.top - $ours) px at the top" else empty end,
+                 if $r.bottom > 0 then "\($r.bottom) px at the bottom" else empty end,
+                 if $r.left > 0 then "\($r.left) px on the left" else empty end,
+                 if $r.right > 0 then "\($r.right) px on the right" else empty end]
+             end) as $extra
+          | if ($bars | length) > 1 then
+                "\($name)\tbars\t\($bars | length)\t\($bars | map(.namespace) | join(", "))"
+            elif ($extra | length) > 0 then
+                "\($name)\treserved\t\($extra | join(", "))"
+            else empty end
+          end' 2>&1
+}
+
+# tidewm's config errors (GET_CONFIG's errors), one problem each, each
+# naming the file and line.
+tidewm_config_errors() {
+    command -v tide-msg >/dev/null 2>&1 || return 0
+    if ! command -v jq >/dev/null 2>&1; then
+        problem "jq isn't installed, so tidewm's config errors aren't checked: install jq (scripts' setup does)"
+    elif ! config=$(tide-msg --type get_config 2>&1); then
+        problem "$config, so tidewm's config errors aren't checked: is tidewm running?"
+    elif ! errors=$(printf '%s' "$config" | jq -r '(.errors // [])[]' 2>&1); then
+        problem "couldn't read tidewm's config errors from its reply ($errors)"
+    else
+        while IFS= read -r line; do
+            test -n "$line" && problem "tidewm config error: $line: fix it, then reload tidewm's config"
+        done <<EOF
+$errors
+EOF
+    fi
+}
+if test "$compositor" = tidewm && ! command -v tide-msg >/dev/null 2>&1; then
     :
 elif ! command -v jq >/dev/null 2>&1; then
     problem "jq isn't installed, so the one-bar-per-monitor check is skipped: install jq (scripts' setup does)"
-elif ! bars=$(bars_on_monitors); then
+elif test "$compositor" = tidewm && ! bars=$(bars_on_tidewm); then
+    problem "$bars, so the one-bar-per-monitor check is incomplete: is tidewm running?"
+elif test "$compositor" != tidewm && ! bars=$(bars_on_monitors); then
     problem "$bars, so the one-bar-per-monitor check is incomplete: is Hyprland running?"
 else
     while IFS='	' read -r monitor kind detail namespaces; do
         case "$kind" in
             bars) problem "$detail bars on $monitor ($namespaces): only tide's should be there; stop the others and remove them from autostart" ;;
             reserved) problem "$monitor reserves $detail beyond tide's bar: another bar or dock holds that edge (or a monitor rule reserves it); stop it and remove it from autostart" ;;
+            old) problem "tidewm doesn't list $monitor's layer surfaces, so its bars weren't counted: update tidewm" ;;
         esac
     done <<EOF
 $bars
@@ -937,7 +998,7 @@ fi
 
 # Hyprland's config errors, one problem each.
 if test "$compositor" = tidewm; then
-    :
+    tidewm_config_errors
 elif ! errors=$(hyprctl configerrors 2>&1); then
     problem "hyprctl configerrors failed ($errors): is Hyprland running?"
 else
