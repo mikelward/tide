@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusText, faceTop } from "./lock.mjs";
+import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -64,7 +64,7 @@ test("Enter starts PAM and answers its prompt with the typed password", () => {
     assert.equal(r.state.checking, true);
     assert.equal(r.state.input, "");
     assert.equal(fieldText(r.state), "");
-    assert.equal(statusText(r.state), "Checking");
+    assert.deepEqual(statusLine(r.state, true), { text: "Checking", error: false });
     const answered = next(r.state, prompt);
     assert.deepEqual(answered.actions, [{ type: "respond", text: "pw" }]);
     assert.equal(answered.state.pending, null);
@@ -542,6 +542,19 @@ test("an input event during a read reads once more after it", () => {
     r = keyboardsNext(r.state, { type: "answer", names: "Keychron K2\n" });
     assert.equal(r.query, false);
     assert.equal(r.state.count, 1);
+});
+
+test("with no keyboard, the line says so, over a failure, which comes back with one", () => {
+    const failed = run(INITIAL, ...type("pw"), { type: "submit" }, prompt, { type: "done", result: "failed" }).state;
+    assert.deepEqual(statusLine(failed, true), { text: WRONG, error: true });
+    // The KVM switches away: not a failure, so not in red.
+    assert.deepEqual(statusLine(failed, false), { text: NO_KEYBOARD, error: false });
+    assert.deepEqual(statusLine(INITIAL, false), { text: "No keyboard", error: false });
+});
+
+test("a check under way still says Checking with no keyboard", () => {
+    const checking = run(INITIAL, ...type("pw"), { type: "submit" }).state;
+    assert.deepEqual(statusLine(checking, false), { text: "Checking", error: false });
 });
 
 test("the field shows its focus in the accent, with a caret, only with focus and a keyboard", () => {

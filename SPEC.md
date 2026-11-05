@@ -2931,6 +2931,11 @@ talk, a demo, or a meeting room's screen.
   monitor's, or one with no keyboard to type with, as when a monitor's
   KVM has switched its USB keyboard to another machine. A failed attempt's
   red border wins over both.
+  - With no keyboard, the line under the field says "No keyboard", on
+    every face, in its usual color. It takes the place of PAM's message or
+    the failure, which come back with a keyboard. "Checking" still shows
+    while an attempt is checked, and on the greeter so does the session
+    starting.
   - A keyboard is an input device udev tags `ID_INPUT_KEYBOARD`: one with
     every key from Esc to D. A power button isn't one. A USB receiver's
     keyboard part is, paired or not.

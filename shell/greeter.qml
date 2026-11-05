@@ -404,7 +404,7 @@ ShellRoot {
                 lockState: root.face
                 hostname: root.hostname
                 user: root.userLabel
-                status: Greeter.statusText(root.face, root.chosen?.name ?? "", Lock.statusText(root.face))
+                status: Greeter.statusText(root.face, root.chosen?.name ?? "", Lock.statusLine(root.face, keyboards.present).text)
                 powerMessage: powerActions.message
                 powerBusy: powerActions.busy
                 layout: keymap.badge

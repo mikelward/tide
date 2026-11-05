@@ -49,8 +49,10 @@ Item {
     // How the picture is placed, as the shell places it (Appearance.POSITIONS).
     property string wallpaperPosition: "fill"
     readonly property var wallpaperPlacement: Appearance.wallpaperPlacement(wallpaperPosition)
-    // The line under the field; the greeter says which session is starting.
-    property string status: Lock.statusText(lockState)
+    // The line under the field (Lock.statusLine); the greeter says which
+    // session is starting.
+    readonly property var line: Lock.statusLine(lockState, keyboard)
+    property string status: line.text
     // The last power action's trouble, if any (Lock.powerMessage).
     property string powerMessage: ""
     property bool powerBusy: false
@@ -484,7 +486,8 @@ Item {
                     }
                 }
 
-                // "Checking", PAM's message, or the failure, under the field.
+                // "Checking", "No keyboard", PAM's message, or the failure,
+                // under the field.
                 // It keeps a line's room when empty, so one appearing moves
                 // nothing.
                 Text {
@@ -498,7 +501,7 @@ Item {
                     // PAM's and greetd's words: never markup.
                     textFormat: Text.PlainText
                     text: face.status
-                    color: face.lockState.error && !face.lockState.checking ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.7)
+                    color: face.line.error ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.7)
                     font.family: "Inter"
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
