@@ -129,7 +129,7 @@ export const PAGES = Object.freeze([
         label: "Notifications",
         icon: "preferences-system-notifications-symbolic",
         keywords: ["dnd", "quiet hours", "schedule", "muted apps"],
-        about: "Do not disturb holds popups; they still go to the notification center. On a schedule, it turns on as the time comes, and off as it ends unless you changed it meanwhile; a window ending earlier than it starts runs into the next day. A muted app or site never pops up and never asks for attention: an app ID, such as org.gnome.Nautilus, or site:chat.google.com.",
+        about: "Do not disturb hides popups. They still go to the notification center. A schedule that ends before it starts runs overnight.",
         advanced: null,
     },
     {
