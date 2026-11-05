@@ -646,8 +646,8 @@ export function prefilled(rules, window) {
     }
     const covering = coveringRule(rules, cls, window.title ?? "");
     const note = covering === null ? ""
-        : covering.builtIn ? `${cls} floats already, by conf's own rules`
-            : `${cls} floats already, by rule ${covering.index + 1}, ${describe(rules[covering.index])}`;
+        : covering.builtIn ? "Already floats (built-in rule)."
+            : `Already floats (rule ${covering.index + 1}).`;
     return { class: cls, title: literalTitle(window.title), note, details: window.details ?? [] };
 }
 
@@ -697,7 +697,7 @@ export function askCommand(window) {
         "--action=edit=Edit rule…",
         "--wait",
         markup(`Always float ${window.class}?`),
-        markup(`New ${window.class} windows would open floating. Edit rule… to narrow it to a title, such as “${window.title}”.`),
+        markup(`New ${window.class} windows will open floating.`),
     ];
 }
 

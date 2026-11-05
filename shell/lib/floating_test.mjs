@@ -168,8 +168,8 @@ test("Always float and Super+Alt+F fill the fields with the window's class and i
     assert.deepEqual(prefilled([], { class: "kitty", title: "htop" }), { class: "kitty", title: "^htop$", note: "", details: [] });
     assert.match(prefilled([], null).error, /no window is focused/);
     assert.match(prefilled([], { class: "", title: "x" }).error, /no class/);
-    assert.equal(prefilled([], { class: "pavucontrol", title: "Volume Control" }).note, "pavucontrol floats already, by conf's own rules");
-    assert.equal(prefilled([calc], { class: "org.gnome.Calculator", title: "" }).note, "org.gnome.Calculator floats already, by rule 1, org.gnome.Calculator");
+    assert.equal(prefilled([], { class: "pavucontrol", title: "Volume Control" }).note, "Already floats (built-in rule).");
+    assert.equal(prefilled([calc], { class: "org.gnome.Calculator", title: "" }).note, "Already floats (rule 1).");
     assert.deepEqual(prefilled([calc], { class: "org.gnome.Calculator", title: "" }).title, "", "no title, no pattern");
 });
 
@@ -196,7 +196,7 @@ test("a window's title is the toplevel's live one, not its client-list snapshot'
     assert.deepEqual(newlyCovered([windowOf(stale)], [], [library]), [], "nor does its old title float it");
     assert.deepEqual(floatingNow([windowOf({ address: "0x3", title: "now", lastIpcObject: { class: "kitty", title: "then", floating: true } })], []),
         [{ class: "kitty", title: "now", address: "3", details: [] }]);
-    assert.match(prefilled([library], windowOf(renamed)).note, /by rule 1/, "Super+Alt+F sees the live title too");
+    assert.match(prefilled([library], windowOf(renamed)).note, /\(rule 1\)/, "Super+Alt+F sees the live title too");
     assert.equal(windowOf({ address: "0x4", title: "", lastIpcObject: { class: "a", title: "first", floating: true } }).title, "first", "before any title event, the snapshot's");
     assert.equal(windowOf({ address: "0x5", title: "t", wayland: { appId: "org.example.App" } }).class, "org.example.App", "no snapshot yet: the app ID");
     assert.equal(windowOf(null), null);
@@ -323,7 +323,7 @@ test("the question offers Always float and Edit rule…, and reads back which", 
     const cmd = askCommand({ class: "org.example.<Player>", title: "a & b" });
     assert.deepEqual(cmd.slice(0, 6), ["notify-send", "--app-name=tide", "--icon=window-restore-symbolic", "--action=always=Always float", "--action=edit=Edit rule…", "--wait"]);
     assert.equal(cmd[6], "Always float org.example.&lt;Player&gt;?");
-    assert.match(cmd[7], /a &amp; b/);
+    assert.equal(cmd[7], "New org.example.&lt;Player&gt; windows will open floating.");
     assert.equal(askOutcome(true, 0, "always\n"), "always");
     assert.equal(askOutcome(true, 0, "edit\n"), "edit");
     assert.equal(askOutcome(true, 0, ""), "dismissed");

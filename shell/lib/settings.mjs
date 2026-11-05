@@ -111,7 +111,7 @@ export const PAGES = Object.freeze([
         label: "Floating",
         icon: "window-restore-symbolic",
         keywords: ["float", "window rules", "dialogs", "tiling"],
-        about: "Windows of these classes open floating, as dialogs do; a title pattern, a regular expression found anywhere in the title, narrows a rule to some of an app's windows. Floating now lists the windows you've floated that no rule covers: Always float fills in a rule for one, its class and exact title, to trim and add with Enter. Super+Alt+F opens this page filled in for the focused window. A window already open floats as its rule is added; taking a rule out leaves open windows as they are.",
+        about: "These apps open floating. Add a title to float only some of their windows.",
         advanced: null,
     },
     {

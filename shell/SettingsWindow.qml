@@ -3554,7 +3554,7 @@ PanelWindow {
                             width: floatingPage.width - 20
                             topPadding: 4
                             bottomPadding: 4
-                            text: "No rules of your own: dialogs float, and the rest tile."
+                            text: "No rules yet. Dialogs still float."
                             color: Theme.fgDim
                             font.family: Theme.font
                             font.pixelSize: 13
@@ -3601,7 +3601,7 @@ PanelWindow {
                                     Text {
                                         visible: newFloatClass.text === "" && !newFloatClass.activeFocus
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: "A class, such as org.gnome.Calculator"
+                                        text: "App ID, such as org.gnome.Calculator"
                                         color: Theme.fgFaint
                                         font.family: Theme.font
                                         font.pixelSize: 13
@@ -3638,7 +3638,7 @@ PanelWindow {
                                     Text {
                                         visible: newFloatTitle.text === "" && !newFloatTitle.activeFocus
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: "Its title, optional, such as ^Library$"
+                                        text: "Title (optional), such as ^Library$"
                                         color: Theme.fgFaint
                                         font.family: Theme.font
                                         font.pixelSize: 13
@@ -3836,7 +3836,7 @@ PanelWindow {
                             topPadding: 4
                             bottomPadding: 4
                             wrapMode: Text.Wrap
-                            text: "No window floats that a rule doesn't cover. Float one with Super+Shift+F to add a rule for it here."
+                            text: "None. Super+Shift+F floats a window."
                             color: Theme.fgDim
                             font.family: Theme.font
                             font.pixelSize: 13
