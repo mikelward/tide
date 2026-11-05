@@ -33,6 +33,15 @@ once you have agreed with it or reversed it.
   event keeps its focused monitor right. Its workspaces don't fit
   tidewm's, which span every monitor, so the workspaces step may read
   tidewm's events itself.
+- **tidewm's settings pages are files its config includes, applied by
+  reload** (2026-11-05): tide writes `~/.config/tidewm/tide-*.conf` in
+  tidewm's own lines, conf's tidewm config includes them (tidewm's
+  `include`, as sway's), and `tide-msg reload` has tidewm read them, as
+  `hyprctl eval conf_*.reload()` has hyprland.lua. A reload starts
+  every output and device over, so a shell start doesn't reload when this
+  session's record of the last reload (as IdleData's for hypridle) says
+  tidewm has the file as it is. Setting each over the IPC instead would apply
+  without a reload but last only until the next one, and couldn't unset.
 - **The shell doesn't tell tidewm's guard its marks** (2026-11-05), as
   it tells Hyprland's with `tide_focus.set_order`. Hyprland's guard uses
   that list only to stop its own notifications once a shell marks
@@ -1930,8 +1939,11 @@ them, and minimizing, with tidewm's own `minimize`. conf binds Super+Z
 there once that's in. Next, in order:
 
 1. The settings pages that write `tide-*.lua` for conf's hyprland.lua
-   (floating, input, appearance, outputs and layouts) and the keys page:
-   each over tidewm's IPC or config, or said to be Hyprland's only.
+   (floating, appearance, outputs and layouts) and the keys page: each a
+   `tide-*.conf` conf's tidewm config includes, as the input pages' is,
+   or said to be Hyprland's only. The input pages still lack a device's
+   own settings there, which tidewm names by identifier
+   (`GET_INPUTS`), not as `hyprctl devices` does.
 2. The rest: home's apps' rules, which conf's hyprland.lua makes on
    Hyprland, with the window events that send home the windows of
    home's apps that opened before them (`WorkspacesData.qml`); a name

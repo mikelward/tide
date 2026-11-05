@@ -454,7 +454,12 @@ flowchart TD
   takes new windows from them, judging each by the window its first
   `focus` event carries, and moves a window or closes it there with
   `move to workspace number` and `kill`. Super+Z minimizes with tidewm's
-  own `minimize` (§6.7). What else the shell takes from
+  own `minimize` (§6.7). The Mouse, Touchpad and Keyboard pages (§16)
+  write `~/.config/tidewm/tide-input.conf`, tidewm's `input type:` lines,
+  which conf's tidewm config includes, and apply it with `tide-msg
+  reload`. A mouse's acceleration is libinput's adaptive profile there, or
+  flat at 0, since tidewm has no curve, and a device's own settings are
+  Hyprland's alone for now. What else the shell takes from
   Hyprland's events is still Hyprland's. Home (§6.5) is the shell's to
   keep there, as tidewm's config can't know its name: `tide-tidewm`
   starts tidewm on it and keeps it, by the name the shell last wrote to
