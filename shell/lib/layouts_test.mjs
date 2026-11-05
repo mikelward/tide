@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import {
     SYMBOLS, defaultMode, parseAnnouncement, layoutSymbol, DEFAULT_LAYOUTS, MODE_NAMES,
     NEW_WINDOW_NAMES, parseLayouts, loadLayouts, effectiveLayouts, shownLayout, steppedLayout,
-    formatLayout, withLayoutSetting, layoutsLua, layoutChoices, layoutRows, steppedSingle,
+    formatLayout, withLayoutSetting, layoutsLua, layoutsConf, layoutChoices, layoutRows, steppedSingle,
 } from "./layouts.mjs";
 
 test("a workspace starts in threecol on an ultrawide work area, else tile", () => {
@@ -232,6 +232,32 @@ test("what's set is written as layout.lua's options", () => {
         "}",
         "",
     ].join("\n"));
+});
+
+test("on tidewm, what's set is written as its layout lines", () => {
+    assert.deepEqual(layoutsConf({}).split("\n").slice(3), [""]);
+    const conf = layoutsConf({
+        ultrawideAspect: 2.4,
+        defaultMode: { normal: "monocle", ultrawide: "twocol" },
+        modes: { tile: { mfact: 0.6, nmaster: 0 }, twocol: { nmaster: 3 } },
+        single: [{ minAspect: 2, width: 0.75 }, { minAspect: 3, width: 0.5 }],
+        newWindow: "top",
+    });
+    assert.deepEqual(conf.split("\n").slice(3), [
+        "ultrawide_aspect 2.4",
+        "default_layout normal monocle",
+        "default_layout ultrawide twocol",
+        "layout_defaults tile mfact 0.6 nmaster 0",
+        "layout_defaults twocol nmaster 3",
+        "single_window 2 0.75",
+        "single_window 3 0.5",
+        "new_window top",
+        "",
+    ]);
+});
+
+test("on tidewm, no single-window rules is the whole width from any aspect", () => {
+    assert.deepEqual(layoutsConf({ single: [] }).split("\n").slice(3), ["single_window 0 1", ""]);
 });
 
 test("layout.lua takes what layoutsLua writes", () => {

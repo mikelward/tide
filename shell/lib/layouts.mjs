@@ -340,6 +340,44 @@ export function layoutsLua(settings) {
     return lines.join("\n") + "\n";
 }
 
+// What's set, as the lines conf's tidewm config includes from
+// tide-layouts.conf (tidewm's docs/config.md). Mode names and numbers are
+// all it holds, so it needs no quoting. tidewm adds single_window lines
+// together, so the list is the file's alone; an empty one is the whole
+// width from any aspect, as layout.lua has none.
+export function layoutsConf(settings) {
+    const lines = [
+        "# Written by tide from layouts.json and layouts.local.json (tide SPEC.md §16).",
+        "# Change those, or the Layouts page of tide's settings, not this file. Only",
+        "# what's set is here; tidewm has the rest.",
+    ];
+    if (settings.ultrawideAspect !== undefined) {
+        lines.push(`ultrawide_aspect ${settings.ultrawideAspect}`);
+    }
+    for (const which of ["normal", "ultrawide"]) {
+        if (settings.defaultMode?.[which] !== undefined) {
+            lines.push(`default_layout ${which} ${settings.defaultMode[which]}`);
+        }
+    }
+    for (const mode of ["tile", "threecol", "twocol"]) {
+        const set = settings.modes?.[mode] || {};
+        const fields = ["mfact", "nmaster"].filter(k => set[k] !== undefined).map(k => `${k} ${set[k]}`);
+        if (fields.length > 0) {
+            lines.push(`layout_defaults ${mode} ${fields.join(" ")}`);
+        }
+    }
+    if (settings.single !== undefined) {
+        const rules = settings.single.length > 0 ? settings.single : [{ minAspect: 0, width: 1 }];
+        for (const r of rules) {
+            lines.push(`single_window ${r.minAspect} ${r.width}`);
+        }
+    }
+    if (settings.newWindow !== undefined) {
+        lines.push(`new_window ${settings.newWindow}`);
+    }
+    return lines.join("\n") + "\n";
+}
+
 // What ‹ and › step through for a "choice" row's setting, as {value,
 // label}s in order.
 export function layoutChoices(path) {
