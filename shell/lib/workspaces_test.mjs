@@ -5,7 +5,7 @@ import { noteOf } from "./mute.mjs";
 import {
     MAX_ICONS, BAR_NAME, NO_MARKS, updateMarks, markedWindows, barWorkspaces, scrollTarget,
     workspaceOrder, barName, workspaceEvent, homeIdAfter, homeRenamed,
-    normalizeAddress, markEvent, sameApp, visibleWorkspaces, activatedEvent, attentionOrder, titleCount,
+    normalizeAddress, markEvent, sameApp, visibleWorkspaces, activatedEvent, attentionOrder,
     withFocus, withoutWindow, focusRank, HOME_LAUNCH_SECONDS, NO_HOME_LAUNCHES, homeLaunched, homeLaunchWindow, windowPrompt,
 } from "./workspaces.mjs";
 import { NO_PROMPTS, NO_WINDOWS, promptQueued, promptDone, promptAnswer, promptRows, promptChoice, windowOpened, windowFocused, windowAnswered, clientAt } from "./workspacenames.mjs";
@@ -746,67 +746,6 @@ test("a mark muting its sender cleared stays cleared when the notification's sen
         sender: noteOf("google-chrome", "Google Chrome", "mail.google.com"), muted: ["site:chat.google.com"] });
     unmarked(marks, windows, ["site:chat.google.com"]);
     unmarked(updateMarks(marks, { type: "muted", muted: [], windows }), windows);
-});
-
-test("an unread count in a title is the number in its first parentheses", () => {
-    assert.equal(titleCount("Chat (3)"), 3);
-    assert.equal(titleCount("(12) Inbox - Gmail"), 12);
-    assert.equal(titleCount("Chat"), 0);
-    assert.equal(titleCount("Release (v2) notes"), 0, "only a number");
-    assert.equal(titleCount(undefined), 0);
-});
-
-test("a title's unread count rising marks its window while it's off screen, until it's focused", () => {
-    const windows = [win("c", 4, "chrome-chat.google.com__-Default"), win("k", 2, "kitty")];
-    const titled = (marks, address, title, visible = new Set([2])) => {
-        const w = windows.find((x) => x.address === address);
-        return updateMarks(marks, { type: "titled", address, title, app: w.app, workspace: w.workspace, visible });
-    };
-    let marks = titled(titled(NO_MARKS, "c", "Chat"), "c", "Chat (1)");
-    assert.deepEqual(shown(marks, windows), ["c"]);
-    // Falling or staying the same is no news.
-    marks = titled(updateMarks(marks, { type: "focused", address: "c" }), "c", "Chat (1)");
-    unmarked(marks, windows);
-    marks = titled(marks, "c", "Chat");
-    unmarked(marks, windows);
-    // Rising again is.
-    marks = titled(marks, "c", "Chat (2)");
-    assert.deepEqual(order(marks, windows), ["c"]);
-    // A window on screen isn't marked: you can see it.
-    unmarked(titled(titled(NO_MARKS, "k", "kitty"), "k", "kitty (5)"), windows);
-    // A closed window's mark and count go with it.
-    marks = updateMarks(marks, { type: "closed", address: "c" });
-    unmarked(marks, windows.slice(1));
-});
-
-test("a muted app's title count marks nothing, and muting clears its mark for good", () => {
-    const windows = [win("c", 4, "chrome-chat.google.com__-Default")];
-    const muted = ["site:chat.google.com"];
-    const ev = (title, m) => ({ type: "titled", address: "c", title, app: windows[0].app, workspace: 4, visible: new Set([2]), muted: m });
-    const seen = updateMarks(NO_MARKS, ev("Chat", []));
-    unmarked(updateMarks(seen, ev("Chat (1)", muted)), windows, muted);
-    let marks = updateMarks(seen, ev("Chat (1)", []));
-    marks = updateMarks(marks, { type: "muted", muted, windows });
-    marks = updateMarks(marks, { type: "muted", muted: [], windows });
-    unmarked(marks, windows);
-});
-
-test("Hyprland's title events become mark events, the title running past the first comma", () => {
-    assert.deepEqual(markEvent("windowtitlev2", "55d3a1b2c0,Chat (3), team"), { type: "titled", address: "55d3a1b2c0", title: "Chat (3), team" });
-    assert.equal(markEvent("windowtitlev2", "nope"), null);
-});
-
-test("the first title seen for a window only sets its count, so a restarted shell marks no window whose count fell", () => {
-    const windows = [win("c", 4, "chrome-chat.google.com__-Default")];
-    const ev = (title) => ({ type: "titled", address: "c", title, app: windows[0].app, workspace: 4, visible: new Set([2]) });
-    // The shell (re)started with Chat showing 5 unread; it falls to 4.
-    let marks = updateMarks(NO_MARKS, ev("Chat (5)"));
-    unmarked(marks, windows);
-    marks = updateMarks(marks, ev("Chat (4)"));
-    unmarked(marks, windows);
-    // Rising from what was seen is news.
-    marks = updateMarks(marks, ev("Chat (6)"));
-    assert.deepEqual(shown(marks, windows), ["c"]);
 });
 
 test("a launch sent home keeps its window there without asking again, once", () => {
