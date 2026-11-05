@@ -188,7 +188,7 @@ install: build install-shell
 		if test -z "$$(ls -A "$$wants")"; then rmdir "$$wants" || exit 1; fi; \
 	fi
 	install -d "$(PORTAL_DIR)"
-	install -m 644 xdg-desktop-portal/tide-portals.conf "$(PORTAL_DIR)/"
+	install -m 644 xdg-desktop-portal/tide-portals.conf xdg-desktop-portal/tidewm-portals.conf "$(PORTAL_DIR)/"
 
 # The Quickshell config alone, which shell/integration_test.sh loads. Each
 # file goes in by rename, so the running shell's reload never finds one
@@ -209,8 +209,8 @@ install-session:
 		test -x build/$$cmd || { echo "make install-session: no build/$$cmd; run make build first, as yourself" >&2; exit 1; }; \
 	done
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
-	install -m 755 bin/tide bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
-	install -m 644 session/tide.desktop "$(DESTDIR)$(PREFIX)/share/wayland-sessions/"
+	install -m 755 bin/tide bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-tidewm bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
+	install -m 644 session/tide.desktop session/tide-tidewm.desktop "$(DESTDIR)$(PREFIX)/share/wayland-sessions/"
 	@# KWin lets a program use its fake-input (KDE's Win+V paste) only if
 	@# a desktop entry whose Exec is that program's path lists it in
 	@# X-KDE-Wayland-Interfaces (cmd/tide-kwin-paste).

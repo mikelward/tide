@@ -17,12 +17,15 @@
 #   - each D-Bus name in §5.2 is owned by the unit that should own it, and
 #     no D-Bus activation file can start a rival for it;
 #   - no daemon runs twice, and no rival to an owner runs at all;
-#   - tide-portals.conf is installed and XDG_CURRENT_DESKTOP selects it;
+#   - the session's portal config (tide-portals.conf, or tidewm's
+#     tidewm-portals.conf) is installed and XDG_CURRENT_DESKTOP selects it;
 #   - Hyprland reports no config errors;
 #   - the home workspace (SPEC.md §6.5) exists and is persistent, which
 #     takes the shell's tide-workspaces.lua and conf's rule for it;
 #   - no monitor has more than one bar, by shape or by space reserved
-#     beyond tide's own bar;
+#     beyond tide's own bar.
+# In tidewm's session (SPEC.md §5.3), the last three ask Hyprland, so
+# they're left out, and it says so on stderr.
 #   - no XDG autostart unit off the allowlist ran in tide.
 
 prog=${0##*/}
@@ -39,6 +42,12 @@ case ":${XDG_CURRENT_DESKTOP:-}:" in
         echo "$prog: not in a tide session (XDG_CURRENT_DESKTOP is '${XDG_CURRENT_DESKTOP:-}'); run it from inside one" >&2
         exit 2
         ;;
+esac
+# Which compositor: tidewm's session names it, and the default one is
+# Hyprland's.
+case ":${XDG_CURRENT_DESKTOP}:" in
+    *:tidewm:*) compositor=tidewm ;;
+    *) compositor=hyprland ;;
 esac
 
 # Units.
@@ -777,43 +786,83 @@ if test -s "$pgrep_err"; then
     problem "$(cat "$pgrep_err"), so the process checks are incomplete: is procps installed?"
 fi
 
-# Portals: xdg-desktop-portal reads tide-portals.conf for the first
-# desktop in XDG_CURRENT_DESKTOP, from these directories.
+# Portals: xdg-desktop-portal reads the first DESKTOP-portals.conf it
+# finds, trying each desktop in XDG_CURRENT_DESKTOP, then portals.conf, in
+# each of these directories before the next. The session's own file must
+# be that one: tide-portals.conf in Hyprland's session, which puts tide
+# first, and tidewm-portals.conf in tidewm's, which puts tidewm first.
+if test "$compositor" = tidewm; then
+    first=tidewm
+    session_entry=tide-tidewm.desktop
+else
+    first=tide
+    session_entry=tide.desktop
+fi
+want=$first-portals.conf
 case "${XDG_CURRENT_DESKTOP}" in
-    tide:* | tide) ;;
-    *) problem "XDG_CURRENT_DESKTOP is '$XDG_CURRENT_DESKTOP': tide must come first, or portals ignore tide-portals.conf; start the session from its tide.desktop entry" ;;
+    "$first":* | "$first") ;;
+    *) problem "XDG_CURRENT_DESKTOP is '$XDG_CURRENT_DESKTOP': $first must come first, or portals ignore $want; start the session from its $session_entry entry" ;;
 esac
+desktops=$(printf '%s' "$XDG_CURRENT_DESKTOP" | tr '[:upper:]' '[:lower:]')
 found=
 IFS_save=$IFS
 IFS=:
 for dir in "${XDG_CONFIG_HOME:-$HOME/.config}" ${XDG_CONFIG_DIRS:-/etc/xdg} \
     "${XDG_DATA_HOME:-$HOME/.local/share}" ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do
-    if test -f "$dir/xdg-desktop-portal/tide-portals.conf"; then
-        found=$dir/xdg-desktop-portal/tide-portals.conf
-        break
-    fi
+    for desktop in $desktops ""; do
+        f=$dir/xdg-desktop-portal/${desktop:+$desktop-}portals.conf
+        if test -f "$f"; then
+            found=$f
+            break 2
+        fi
+    done
 done
 IFS=$IFS_save
-# xdg-desktop-portal reads only the first one it finds, so that's the one
-# that must select tide's backends. tide owns the file, so
-# rather than parse it the way GKeyFile would, the doctor checks it is the
-# one `make install` installs: this copy, which the tests keep in step with
-# xdg-desktop-portal/tide-portals.conf.
+# tide owns these files, so rather than parse one the way GKeyFile would,
+# the doctor checks it is the one `make install` installs: these copies,
+# which the tests keep in step with xdg-desktop-portal/.
 shipped_portals_conf() {
-    cat <<'EOF'
+    if test "$1" = tidewm; then
+        cat <<'TIDEWM_PORTALS'
+# Portal backends for XDG_CURRENT_DESKTOP=tidewm:tide, tide's tidewm
+# session. xdg-desktop-portal reads the first file it finds for any of the
+# session's desktops, trying each one in a directory before the next
+# directory, so tide-portals.conf, installed beside this, would otherwise
+# win. The choice is tidewm's own: -wlr shares the screen and takes
+# screenshots, and -gtk does the rest. Never -hyprland, which needs
+# Hyprland.
+[preferred]
+default=wlr;gtk
+TIDEWM_PORTALS
+    else
+        cat <<'TIDE_PORTALS'
 # Portal backends for XDG_CURRENT_DESKTOP=tide:Hyprland. xdg-desktop-portal
 # reads this before hyprland-portals.conf, so the choice is explicit: never
 # -kde, -gnome or -wlr, even when they're installed for other sessions.
 [preferred]
 default=hyprland;gtk
-EOF
+TIDE_PORTALS
+    fi
 }
+if test "$first" = tidewm; then
+    backends="default=wlr;gtk"
+else
+    backends="default=hyprland;gtk"
+fi
 if test -z "$found"; then
-    problem "tide-portals.conf isn't installed, so portals may pick the KDE or GNOME backend: run \`make install\` in the tide checkout"
+    problem "$want isn't installed, so portals may pick the KDE or GNOME backend: run \`make install\` in the tide checkout"
+elif test "${found##*/}" != "$want"; then
+    problem "portals read $found, not tide's $want, so they may pick the wrong backend: run \`make install\` in the tide checkout, which installs $want"
 elif ! installed=$(cat "$found" 2>&1); then
     problem "couldn't read $found ($installed): check its permissions, or reinstall it with \`make install\` in the tide checkout"
-elif test "$installed" != "$(shipped_portals_conf)"; then
-    problem "$found isn't the one tide ships (default=hyprland;gtk under [preferred]), so portals may pick the wrong backend: reinstall it with \`make install\` in the tide checkout"
+elif test "$installed" != "$(shipped_portals_conf "$first")"; then
+    problem "$found isn't the one tide ships ($backends under [preferred]), so portals may pick the wrong backend: reinstall it with \`make install\` in the tide checkout"
+fi
+
+# The next three checks ask Hyprland, so tidewm's session skips them, and
+# says so.
+if test "$compositor" = tidewm; then
+    echo "$prog: in tidewm's session, one bar per monitor, the compositor's config errors and the home workspace aren't checked yet: those checks ask Hyprland" >&2
 fi
 
 # One bar per monitor (§5.2): a second one stacks above or below the first.
@@ -869,7 +918,9 @@ bars_on_monitors() {
               "\($name)\treserved\t\($extra | join(", "))"
           else empty end' 2>&1
 }
-if ! command -v jq >/dev/null 2>&1; then
+if test "$compositor" = tidewm; then
+    :
+elif ! command -v jq >/dev/null 2>&1; then
     problem "jq isn't installed, so the one-bar-per-monitor check is skipped: install jq (scripts' setup does)"
 elif ! bars=$(bars_on_monitors); then
     problem "$bars, so the one-bar-per-monitor check is incomplete: is Hyprland running?"
@@ -885,7 +936,9 @@ EOF
 fi
 
 # Hyprland's config errors, one problem each.
-if ! errors=$(hyprctl configerrors 2>&1); then
+if test "$compositor" = tidewm; then
+    :
+elif ! errors=$(hyprctl configerrors 2>&1); then
     problem "hyprctl configerrors failed ($errors): is Hyprland running?"
 else
     printf '%s\n' "$errors" | while IFS= read -r line; do
@@ -904,7 +957,9 @@ workspaces_lua=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/tide-workspaces.lua
 unescape() {
     printf '%s' "$1" | sed 's/\\\(.\)/\1/g'
 }
-if ! test -e "$workspaces_lua"; then
+if test "$compositor" = tidewm; then
+    :
+elif ! test -e "$workspaces_lua"; then
     problem "no $workspaces_lua, so conf doesn't know which workspace is home: is tide's shell running? It writes the file as it starts"
 elif ! home_line=$(grep -m 1 '^    home = ".*",$' "$workspaces_lua" 2>&1) || test -z "$home_line"; then
     problem "couldn't read home's name from $workspaces_lua${home_line:+ ($home_line)}: restart tide's shell, which writes it"

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { INITIAL, NO_KEYBOARD, next, statusLine } from "./lock.mjs";
@@ -64,6 +64,20 @@ test("a session file becomes a session with the environment pam_systemd reads", 
     assert.deepEqual(s.env, ["XDG_SESSION_TYPE=wayland", "XDG_SESSION_DESKTOP=tide", "XDG_CURRENT_DESKTOP=tide:Hyprland"]);
     assert.deepEqual(sessionFromEntry("hyprland", parseDesktopEntry(HYPR)).env,
         ["XDG_SESSION_TYPE=wayland", "XDG_SESSION_DESKTOP=hyprland"]);
+});
+
+test("tidewm's session entry starts uwsm with tidewm first, and follows tide", () => {
+    const text = readFileSync(new URL("../../session/tide-tidewm.desktop", import.meta.url), "utf8");
+    const s = sessionFromEntry("tide-tidewm", parseDesktopEntry(text));
+    assert.equal(s.name, "tide (tidewm)");
+    assert.equal(s.command, 'uwsm start -e -D tidewm:tide -N "tide (tidewm)" -- tide-tidewm');
+    assert.deepEqual(s.env, ["XDG_SESSION_TYPE=wayland", "XDG_SESSION_DESKTOP=tide-tidewm", "XDG_CURRENT_DESKTOP=tidewm:tide"]);
+    const sessions = sessionList(parseListing(listing(
+        [true, "/usr/share/wayland-sessions/tide-tidewm.desktop", text],
+        [true, "/usr/share/wayland-sessions/plasma.desktop", PLASMA],
+        [true, "/usr/share/wayland-sessions/tide.desktop", TIDE],
+    )));
+    assert.deepEqual(sessions.map((x) => x.id), ["tide", "plasma", "tide-tidewm", SHELL_ID]);
 });
 
 test("a hidden, undisplayed, nameless or commandless file offers no session", () => {

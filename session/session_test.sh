@@ -31,7 +31,10 @@ unit=systemd/user/tide.service
 dropin=systemd/user/hypridle.service.d/tide.conf
 entry=session/tide.desktop
 wrapper=bin/tide-hyprland
+tidewm_entry=session/tide-tidewm.desktop
+tidewm_wrapper=bin/tide-tidewm
 portals=xdg-desktop-portal/tide-portals.conf
+tidewm_portals=xdg-desktop-portal/tidewm-portals.conf
 autostart=systemd/user/app-.service.d/tide-autostart.conf
 lock=systemd/user/tide-lock.service
 lockfallback=systemd/user/tide-lock-fallback.service
@@ -64,15 +67,46 @@ check "the wrapper falls back to Hyprland without start-hyprland" \
     test "$(PATH="$tmp/wrapper-bin-old" /bin/sh "$wrapper" --config x)" = "Hyprland --config x"
 check "the wrapper is executable" test -x "$wrapper"
 check "the wrapper parses as sh" sh -n "$wrapper"
+
+# The tidewm session, an option beside Hyprland's (SPEC.md §5.3): its own
+# wrapper, so its own target, and tidewm first in XDG_CURRENT_DESKTOP, so
+# portals read tidewm-portals.conf.
+tidewm_id=$(basename "$tidewm_wrapper")
+check "the tidewm entry starts its wrapper through uwsm with tidewm:tide" \
+    has_line "$tidewm_entry" "Exec=uwsm start -e -D tidewm:tide -N \"tide (tidewm)\" -- $tidewm_id"
+check "the tidewm entry lists tidewm, then tide, in DesktopNames" \
+    has_line "$tidewm_entry" "DesktopNames=tidewm;tide"
+check "the tidewm entry is offered only where tidewm is installed" \
+    has_line "$tidewm_entry" "TryExec=tidewm"
+check "the tidewm entry says which compositor it runs" \
+    has_line "$tidewm_entry" "Name=tide (tidewm)"
+# A stub tidewm runs its -s command as tidewm does, under /bin/sh -c, with
+# a stub uwsm that prints what it was asked.
+mkdir -p "$tmp/tidewm-bin"
+cat > "$tmp/tidewm-bin/tidewm" <<'STUB'
+#!/bin/sh
+echo "tidewm $*"
+test "$1" = -s && /bin/sh -c "$2"
+STUB
+printf '#!/bin/sh\necho "uwsm $*"\n' > "$tmp/tidewm-bin/uwsm"
+chmod +x "$tmp/tidewm-bin/tidewm" "$tmp/tidewm-bin/uwsm"
+tidewm_ran=$(PATH="$tmp/tidewm-bin:/usr/bin:/bin" /bin/sh "$tidewm_wrapper" -c x)
+check "the tidewm wrapper starts tidewm, passing its arguments through" \
+    test "$(printf '%s\n' "$tidewm_ran" | head -n 1)" = "tidewm -s exec uwsm finalize SWAYSOCK -c x"
+check "tidewm's startup command finalizes the session with tidewm's IPC socket" \
+    test "$(printf '%s\n' "$tidewm_ran" | sed -n 2p)" = "uwsm finalize SWAYSOCK"
+check "the tidewm wrapper is executable" test -x "$tidewm_wrapper"
+check "the tidewm wrapper parses as sh" sh -n "$tidewm_wrapper"
 if command -v shellcheck >/dev/null 2>&1; then
-    check "shellcheck passes on the wrapper and this test" \
-        shellcheck -s sh "$wrapper" session/session_test.sh
+    check "shellcheck passes on the wrappers and this test" \
+        shellcheck -s sh "$wrapper" "$tidewm_wrapper" session/session_test.sh
 fi
 
 # --- tide.service ---------------------------------------------------------
 target="wayland-session@$session_id.target"
-check "the unit is wanted by the tide session's target" \
-    has_line "$unit" "WantedBy=$target"
+tidewm_target="wayland-session@$tidewm_id.target"
+check "the unit is wanted by each tide session's target, Hyprland's and tidewm's" \
+    has_line "$unit" "WantedBy=$target $tidewm_target"
 # Plasma reaches graphical-session.target too; that's how swaync leaked in.
 check "the unit is never WantedBy= graphical-session.target" \
     lacks_line_matching "$unit" '^WantedBy=.*graphical-session\.target'
@@ -80,6 +114,8 @@ check "the unit is WantedBy= nothing else" \
     test "$(grep -c '^WantedBy=' "$unit")" -eq 1
 check "the unit is ordered after its session target" \
     grep -qE "^After=.*$target" "$unit"
+check "the unit is ordered after the tidewm session's target" \
+    grep -qE "^After=.*$tidewm_target" "$unit"
 check "the unit stops with the graphical session" \
     has_line "$unit" "PartOf=graphical-session.target"
 check "ready means the shell said so" has_line "$unit" "Type=notify"
@@ -108,6 +144,7 @@ idle_runs_in() { XDG_CURRENT_DESKTOP=$1 sh -c "$idle_condition"; }
 idle_skips_in() { ! idle_runs_in "$1"; }
 check "hypridle's condition is a sh -c script" test -n "$idle_condition"
 check "hypridle runs in the tide session" idle_runs_in "tide:Hyprland"
+check "hypridle runs in the tidewm session" idle_runs_in "tidewm:tide"
 check "hypridle is skipped under Plasma, even when a package enabled it" idle_skips_in "KDE"
 check "hypridle's unit is skipped in a plain Hyprland login, which runs its own" idle_skips_in "Hyprland"
 check "hypridle is skipped where no desktop is set" idle_skips_in ""
@@ -130,6 +167,7 @@ skips_in() { s=$(condition_status "$@"); test "$s" -eq 1 || { echo "status $s: $
 agent='app-polkit\x2dmate\x2dauthentication\x2dagent\x2d1@autostart.service'
 check "the autostart condition is a sh -c script" test -n "$condition"
 check "another desktop's agent is skipped in the tide session" skips_in "tide:Hyprland" "$agent"
+check "another desktop's agent is skipped in the tidewm session" skips_in "tidewm:tide" "$agent"
 check "another desktop's daemon is skipped in the tide session" \
     skips_in "tide:Hyprland" 'app-xfce4\x2dnotifyd@autostart.service'
 # With no Quickshell shell answering (waybar's bar), nm-applet is the
@@ -246,8 +284,10 @@ check "the history watches the clipboard through tide clipboard store" \
     has_line "$clipboard" "ExecStart=wl-paste --watch tide clipboard store --max-items 200"
 check "the history's database is private" has_line "$clipboard" "UMask=0077"
 check "the history stops with the session" has_line "$clipboard" "PartOf=graphical-session.target"
-check "the history runs only in the tide session" \
-    has_line "$clipboard" "WantedBy=wayland-session@tide-hyprland.target"
+check "the history runs only in the tide sessions" \
+    has_line "$clipboard" "WantedBy=wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target"
+check "and is ordered after either one's target" \
+    grep -qE "^After=wayland-session@tide-hyprland\.target wayland-session@tide-tidewm\.target " "$clipboard"
 check "make install installs the history's unit" \
     grep -q 'systemd/user/tide-clipboard.service' Makefile
 
@@ -305,6 +345,10 @@ check "the portal config names hyprland then gtk" \
     has_line "$portals" "default=hyprland;gtk"
 check "the portal config never picks kde, gnome or wlr" \
     lacks_line_matching "$portals" '^[^#]*(kde|gnome|wlr)'
+check "tidewm's portal config names wlr then gtk" \
+    has_line "$tidewm_portals" "default=wlr;gtk"
+check "tidewm's portal config never picks hyprland, kde or gnome" \
+    lacks_line_matching "$tidewm_portals" '^[^#]*(hyprland|kde|gnome)'
 
 # --- make install / install-session ----------------------------------------------
 home="$tmp/home"
@@ -371,6 +415,7 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
              .config/quickshell/tide/lib/lock.mjs \
              .config/systemd/user/hypridle.service.d/tide.conf \
              .config/xdg-desktop-portal/tide-portals.conf \
+             .config/xdg-desktop-portal/tidewm-portals.conf \
              .config/systemd/user/app-.service.d/tide-autostart.conf \
              .config/quickshell/tide/icons/cpu-symbolic.svg \
              .config/quickshell/tide/icons/memory-symbolic.svg; do
@@ -419,6 +464,8 @@ fi
 if make -s install-session DESTDIR="$tmp/root" PREFIX=/usr >"$tmp/session.log" 2>&1; then
     check "make install-session installs the wrapper" \
         test -x "$tmp/root/usr/bin/tide-hyprland"
+    check "make install-session installs the tidewm session's wrapper" \
+        test -x "$tmp/root/usr/bin/tide-tidewm"
     check "make install-session installs the tide command" \
         test -x "$tmp/root/usr/bin/tide"
     check "make install-session installs tide-grant" \
@@ -433,6 +480,8 @@ if make -s install-session DESTDIR="$tmp/root" PREFIX=/usr >"$tmp/session.log" 2
         test -x "$tmp/root/usr/bin/tide-lock"
     check "make install-session installs the session entry" \
         test -f "$tmp/root/usr/share/wayland-sessions/tide.desktop"
+    check "make install-session installs the tidewm session's entry" \
+        test -f "$tmp/root/usr/share/wayland-sessions/tide-tidewm.desktop"
     check "make install-session installs the lock's PAM service in /etc/pam.d" \
         test -f "$tmp/root/etc/pam.d/tide-lock"
     check "make install-session installs the greeter's command" \

@@ -346,7 +346,7 @@ work". The old setup shows how it fought itself:
 | Lock screen | `tide-lock`, a separate Quickshell process with the same QML (`WlSessionLock` + PAM service `tide-lock`) | hypridle's `lock_cmd`, on logind's `Lock` signal → `tide-lock.service` | hyprlock runs only as the lock's fallback (§10) |
 | Idle timeline, `org.freedesktop.ScreenSaver`, logind lock and sleep bridge | hypridle (§10) | `hypridle.service` | swayidle not run; the shell does not time idle |
 | Screen-share picker | tide, via xdph `custom_picker_binary` | xdph, on demand | `hyprland-share-picker` |
-| Portals | `xdg-desktop-portal` + `-hyprland` + `-gtk` | D-Bus activation | `-kde`, `-gnome`, `-wlr` never selected: `tide-portals.conf` names `hyprland;gtk` |
+| Portals | `xdg-desktop-portal` + `-hyprland` + `-gtk` | D-Bus activation | `-kde`, `-gnome`, `-wlr` never selected: `tide-portals.conf` names `hyprland;gtk`. tidewm's session (§5.3) reads `tidewm-portals.conf`, `wlr;gtk`, instead |
 | Theme schedule | tide | `tide.service` | `theme-daemon.sh` retired |
 | Audio | PipeWire + WirePlumber | their own socket units | PulseAudio |
 | Network, Bluetooth | NetworkManager, BlueZ (system) | system units | tray applets |
@@ -422,11 +422,28 @@ flowchart TD
   its own session target, `wayland-session@tide-hyprland.target`. A
   plain Hyprland login gets `wayland-session@hyprland.desktop.target`
   instead, and starts none of tide's units.
+- **tidewm's session** (§21.1) is an option beside Hyprland's, not the
+  default: `tide-tidewm.desktop`, listed as "tide (tidewm)" only where
+  tidewm is installed. It runs `uwsm start -e -D tidewm:tide -- tide-tidewm`,
+  and the wrapper execs tidewm with `uwsm finalize SWAYSOCK` as its
+  startup command, so the session gets its own target,
+  `wayland-session@tide-tidewm.target`, and tidewm's IPC socket. tidewm
+  comes first in `XDG_CURRENT_DESKTOP` for the portals:
+  xdg-desktop-portal reads the first file it finds for any of the
+  session's names, trying each name in a directory before the next
+  directory, so tide installs `tidewm-portals.conf` (wlr, then gtk)
+  beside `tide-portals.conf`. tide's units, hypridle and the autostart
+  allowlist take any `XDG_CURRENT_DESKTOP` with `tide` in it. The shell
+  still reads only Hyprland's IPC, so on tidewm the bar has no
+  workspaces, and `tide launch` can't grant focus, until its tidewm
+  backend lands. `tide doctor` leaves out the checks that ask Hyprland,
+  and says so.
 
 ### 5.4 Guards that keep it that way
 
 - **Scoped units.** tide's units are `WantedBy=` the tide
-  session's target (`wayland-session@tide-hyprland.target`, §5.3) and
+  sessions' targets (`wayland-session@tide-hyprland.target`, and
+  `wayland-session@tide-tidewm.target` for tidewm's, §5.3) and
   `PartOf=graphical-session.target`, never plainly
   `WantedBy=graphical-session.target`. Plasma also reaches that target, and
   that is exactly how swaync leaked into KDE. Nothing tide installs
@@ -4844,7 +4861,7 @@ dwl**, the dwm-style wlroots compositor (about 3,400 lines of C), built on a
 wlroots version we pin and build ourselves.
 
 The fork lives in its own repository,
-[mikelward/dwl](https://github.com/mikelward/dwl): upstream dwl's history
+[mikelward/tidewm](https://github.com/mikelward/tidewm): upstream dwl's history
 (from [Codeberg](https://codeberg.org/dwl/dwl)), with tide's changes
 on top of a release tag. It keeps dwl's GPL-3.0-or-later license, so keeping
 it out of this Apache-2.0 repository keeps each repository under one license.

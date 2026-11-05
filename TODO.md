@@ -12,6 +12,24 @@ once you have agreed with it or reversed it.
   until a keyboard comes back. "Checking" and the greeter's "Starting …"
   still win over it, being under way without keys. The alternative is red,
   or the failure winning. Reversible: `Lock.statusLine`.
+- **tidewm's session puts tidewm first** (2026-11-05):
+  `XDG_CURRENT_DESKTOP=tidewm:tide`, against Hyprland's `tide:Hyprland`.
+  xdg-desktop-portal reads only the first name's file, and picks any
+  backend installed, so `tide:tidewm` would get Hyprland's portal from
+  `tide-portals.conf` on a machine with both. Everything else of tide's
+  matches `tide` anywhere in the list.
+- **tide installs its own `tidewm-portals.conf`** (2026-11-05), beside
+  `tide-portals.conf` in `~/.config/xdg-desktop-portal`, though tidewm
+  installs one too: xdg-desktop-portal tries every name in a directory
+  before the next, so `tide-portals.conf` there would win over tidewm's
+  in `/usr/local/share`.
+- **The tidewm entry is "tide (tidewm)", shown only with tidewm
+  installed** (2026-11-05): `TryExec=tidewm`, which the greeter and other
+  display managers honor, so it isn't offered where it can't start.
+- **`tide doctor` skips what asks Hyprland in tidewm's session**
+  (2026-11-05): one bar per monitor, config errors and the home workspace,
+  saying so on stderr, rather than reporting Hyprland as not running.
+  Until tidewm's IPC replaces them.
 - **`Super+PgUp`/`PgDn` pass over a workspace whose only windows are
   minimized** (2026-11-04), as over an empty one, since there's nothing to
   see there and Hyprland has no window on it (§6.7); `Super+Shift+PgUp`/
@@ -1870,7 +1888,7 @@ compositor started from tinywl (check its CC0 license before copying).
 Hyprland stays the baseline, but building it on Debian and Ubuntu is heavy,
 so §21.1 records a tide fork of dwl on a pinned wlroots as the
 alternative. The fork's code goes in
-[mikelward/dwl](https://github.com/mikelward/dwl), which holds upstream's
+[mikelward/tidewm](https://github.com/mikelward/tidewm), which holds upstream's
 history; tide's changes go on top of v0.9 there. Before rewriting §3.1 around it, work through §21.1's next steps:
 
 - Screen sharing through `tide-share-picker` on xdg-desktop-portal-wlr,
@@ -1881,6 +1899,21 @@ history; tide's changes go on top of v0.9 there. Before rewriting §3.1 around i
   replacement and a check for each: first draft in `docs/compositor.md`.
   Its fork column is a proposal; check it against dwl 0.9 and wlroots 0.20.
 
+**A session on it**, as an option beside Hyprland's, never the default
+until it's done (SPEC.md §5.3). The entry, the wrapper, the units' target
+and the portals are in. Next, in order:
+
+1. `tide`'s grants, focus and focused workspace through tidewm's IPC
+   (`grant --or-recent`, `focus recent`, GET_WORKSPACES), so `tide launch`
+   grants focus there.
+2. `tide doctor`'s bar, config-error and home-workspace checks through
+   tidewm's IPC.
+3. conf: a tidewm config with tide's keys, rules and inputs, and
+   hypridle's displays off without `hyprctl`.
+4. scripts: `setup` builds tidewm from a pinned tag (below).
+5. The shell's tidewm backend: its workspaces, windows and monitors from
+   sway's IPC, in place of `Quickshell.Hyprland`.
+
 If the fork is adopted, machines build a pinned release tag, never a branch:
 
 - **Tags.** `tide-<upstream base>-<n>`, cut from the fork's `main`
@@ -1890,7 +1923,7 @@ If the fork is adopted, machines build a pinned release tag, never a branch:
   Moving to a new upstream release rebases our changes onto it and starts
   the count again (`tide-0.10-1`).
 - **`setup-tide` pins one.** A line in the same shape as the Hyprland
-  pins, `dwl https://github.com/mikelward/dwl.git tide-0.9-1 make`,
+  pins, `tidewm https://github.com/mikelward/tidewm.git tide-0.9-1 make`,
   so every machine builds the same reviewed code, and moving them all is a
   one-line scripts pull request that CI checks first. Not `main`, which
   moves under a later run; not `v0.9`, which is upstream's code without
