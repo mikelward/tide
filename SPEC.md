@@ -450,8 +450,11 @@ flowchart TD
   Windows tab, which focus, bring back and maximize them. Its marks
   (§14.4) come from tidewm's window events too: a window tidewm marks
   urgent is the guard's, and notifications' marks are kept as on
-  Hyprland, but tidewm's guard isn't told them. What else the
-  shell takes from Hyprland's events is still Hyprland's. Home (§6.5) is the shell's to
+  Hyprland, but tidewm's guard isn't told them. The name prompt (§6.5)
+  takes new windows from them, judging each by the window its first
+  `focus` event carries, and moves a window or closes it there with
+  `move to workspace number` and `kill`. What else the shell takes from
+  Hyprland's events is still Hyprland's. Home (§6.5) is the shell's to
   keep there, as tidewm's config can't know its name: `tide-tidewm`
   starts tidewm on it and keeps it, by the name the shell last wrote to
   `tide-workspaces.lua`, and the shell keeps it from then on, with

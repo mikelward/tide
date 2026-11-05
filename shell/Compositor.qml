@@ -17,7 +17,7 @@ import "lib/workspaces.mjs" as Ws
 // open there, which workspaces there are, for the bar, the switcher and
 // the name prompt, and goes to and renames them, and which windows there
 // are and which has focus, for the bar's icons and title and the
-// switcher, and focuses, moves and maximizes one.
+// switcher, and focuses, moves, closes and maximizes one.
 Singleton {
     id: root
 
@@ -105,6 +105,29 @@ Singleton {
             return;
         }
         root.tidewmCommand(Tw.moveAndFocusCommand(address, name), `move window ${address} to workspace ${JSON.stringify(name)}`);
+    }
+
+    // Moves the window at `address` to tide's workspace named `name`, made
+    // if it's new, and follows it there, focused: the name prompt's Enter
+    // (§6.5). On Hyprland it goes through conf's move, which puts it in
+    // the workspace's part on the window's own monitor
+    // (Dispatch.moveWindowToNamed); a tidewm workspace spans every monitor
+    // already, so it's moveWindowTo's.
+    function moveWindowToNamed(address, name) {
+        if (!root.tidewm) {
+            Hyprland.dispatch(Dispatch.moveWindowToNamed(address, name, Hyprland.usingLua));
+            return;
+        }
+        root.moveWindowTo(address, name);
+    }
+
+    // Asks the window at `address` to close, as Super+Backspace does.
+    function closeWindow(address) {
+        if (!root.tidewm) {
+            Hyprland.dispatch(Dispatch.closeWindow(address, Hyprland.usingLua));
+            return;
+        }
+        root.tidewmCommand(Tw.closeCommand(address), `close window ${address}`);
     }
 
     // Toggles maximize on the window at `address`, which is the focused

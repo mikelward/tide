@@ -143,6 +143,31 @@ export function appOf(con) {
     return con?.app_id || con?.window_properties?.class || "";
 }
 
+// What a window event, its JSON or already parsed, means to the name
+// prompt (PromptData.qml), as Hyprland's openwindow, closewindow and
+// activewindowv2 do: {change, address, client}, `change` "new", "close"
+// or "focus", `address` the container ID as a string, and `client` the
+// window as workspacenames.mjs's promptWanted reads Hyprland's clients,
+// {class, title, workspace: {name}, floating}, since the event carries
+// it and there's nothing to look up. null for any other event.
+export function promptEvent(data) {
+    const event = parsed(data);
+    const con = event?.container;
+    if (!["new", "close", "focus"].includes(event?.change) || !isWindow(con)) {
+        return null;
+    }
+    return {
+        change: event.change,
+        address: String(con.id),
+        client: {
+            class: appOf(con),
+            title: con.name ?? "",
+            workspace: { name: typeof con.workspace === "string" ? con.workspace : "" },
+            floating: con.type === "floating_con",
+        },
+    };
+}
+
 // The windows as Compositor.qml gives Hyprland's: [{address, title, app,
 // workspace, workspaceName, monitor, urgent, fullscreen, floating,
 // focusHistoryID}]. `address` is tidewm's container ID, as a string, which
@@ -183,8 +208,9 @@ export function activeWindow(windows, current) {
 
 // Commands for one window, by its address (container ID): focusing it,
 // which shows its workspace; moving it to the workspace named `name` and
-// focusing it there; closing it; and toggling its maximize. null for an
-// address that isn't a container ID, or a name tidewm can't take.
+// focusing it there; asking it to close, as Super+Backspace does; and
+// toggling its maximize. null for an address that isn't a container ID,
+// or a name tidewm can't take.
 function con(address) {
     const s = String(address ?? "");
     return /^[0-9]+$/.test(s) ? `[con_id=${s}]` : null;
@@ -199,6 +225,11 @@ export function moveAndFocusCommand(address, name) {
     const c = con(address);
     const n = tidewmName(name);
     return c === null || n === null ? null : `${c} move to workspace number ${n}; ${c} focus`;
+}
+
+export function closeCommand(address) {
+    const c = con(address);
+    return c === null ? null : `${c} kill`;
 }
 
 export function maximizeCommand(address) {

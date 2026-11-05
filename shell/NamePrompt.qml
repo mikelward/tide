@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Wayland
 import "lib/launcher.mjs" as Search
 import "lib/workspacenames.mjs" as Names
@@ -34,12 +33,12 @@ PanelWindow {
     property bool settingText: false
     property int selected: 0
 
+    // The window asked about, one of Compositor.windows, or null.
     readonly property var window: root.request && root.request.address !== undefined
-        ? Hyprland.toplevels.values.find(t => Ws.normalizeAddress(t.address) === root.request.address) ?? null
+        ? Compositor.windows.find(w => w.address === root.request.address) ?? null
         : null
-    readonly property string windowClass: root.window ? (root.window.lastIpcObject?.class || root.window.wayland?.appId || "") : ""
     readonly property string suggested: root.window
-        ? Names.shortName(root.window.title, DesktopEntries.heuristicLookup(root.windowClass)?.name ?? "", PromptData.patterns)
+        ? Names.shortName(root.window.title, DesktopEntries.heuristicLookup(root.window.app)?.name ?? "", PromptData.patterns)
         : ""
     readonly property var names: Ws.workspaceOrder(Compositor.workspaces, WorkspacesData.standing).map(w => w.name)
     readonly property var rows: Names.promptRows({

@@ -3,8 +3,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, markEvents, appOf, shellWindows, activeWindow,
-    focusCommand, moveAndFocusCommand, maximizeCommand,
+    promptEvent, focusCommand, moveAndFocusCommand, closeCommand, maximizeCommand,
 } from "./tidewm.mjs";
+import { promptWanted } from "./workspacenames.mjs";
 
 // A container as tidewm's IPC gives one.
 function con(id, fields = {}) {
@@ -167,6 +168,33 @@ test("an app is its app ID, or an X11 window's class", () => {
 
 const workspaces = [{ id: 30, name: "in" }, { id: 31, name: "re" }];
 
+test("a window opened, closed or focused is the name prompt's, with the window as Hyprland's clients have it", () => {
+    assert.deepEqual(promptEvent(event("new", con(10, { name: "~", app_id: "kitty", workspace: "re" }))), {
+        change: "new", address: "10", client: { class: "kitty", title: "~", workspace: { name: "re" }, floating: false },
+    });
+    assert.equal(promptEvent(event("close", con(10))).change, "close");
+    assert.equal(promptEvent(event("focus", con(10))).address, "10");
+    const x11 = con(12, { type: "floating_con", app_id: null, window_properties: { class: "Gimp" } });
+    assert.deepEqual(promptEvent(event("focus", x11)).client, { class: "Gimp", title: "title 12", workspace: { name: "in" }, floating: true });
+});
+
+test("the name prompt asks about a tiled window on a workspace that asks, and not a floating one", () => {
+    const settings = { standing: ["in", "re"], inApps: ["gmail"], workspaceSettings: { re: { askForName: true } } };
+    const client = c => promptEvent(event("focus", c)).client;
+    assert.equal(promptWanted(client(con(10, { workspace: "re" })), settings), true);
+    assert.equal(promptWanted(client(con(10, { workspace: "re", type: "floating_con" })), settings), false, "a dialog");
+    assert.equal(promptWanted(client(con(10, { workspace: "re", app_id: "gmail" })), settings), false, "one of home's apps");
+    assert.equal(promptWanted(client(con(10, { workspace: "re", name: "", app_id: null })), settings), false, "a status popup");
+});
+
+test("other window events, and what isn't one, are nothing to the name prompt", () => {
+    for (const change of ["title", "urgent", "move", "fullscreen_mode", "floating", "maximize"]) {
+        assert.equal(promptEvent(event(change, con(10))), null, change);
+    }
+    assert.equal(promptEvent("{not json"), null);
+    assert.equal(promptEvent({ change: "new", container: { id: 3, type: "workspace" } }), null);
+});
+
 test("the shell's windows are shaped as Hyprland's", () => {
     let s = treeWindows(tree);
     s = windowEvent(s, event("fullscreen_mode", con(10, { fullscreen_mode: 1, maximized: true })));
@@ -190,6 +218,7 @@ test("the focused window is the one first in the order, while it's on the curren
 test("a window's commands name it by its container ID", () => {
     assert.equal(focusCommand("11"), "[con_id=11] focus");
     assert.equal(moveAndFocusCommand("11", "my mail"), "[con_id=11] move to workspace number my mail; [con_id=11] focus");
+    assert.equal(closeCommand("11"), "[con_id=11] kill");
     assert.equal(maximizeCommand("11"), "[con_id=11] maximize toggle");
 });
 
@@ -198,5 +227,6 @@ test("an address that isn't a container ID, or a name tidewm can't take, sends n
     assert.equal(focusCommand(""), null);
     assert.equal(focusCommand("1] kill; [con_id=2"), null);
     assert.equal(moveAndFocusCommand("11", "a;b"), null);
+    assert.equal(closeCommand("0x5a3f"), null);
     assert.equal(maximizeCommand(undefined), null);
 });

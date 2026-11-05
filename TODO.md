@@ -33,6 +33,10 @@ once you have agreed with it or reversed it.
   event keeps its focused monitor right. Its workspaces don't fit
   tidewm's, which span every monitor, so the workspaces step may read
   tidewm's events itself.
+- **Home's window events on tidewm wait for home's rules** (2026-11-05):
+  they note the windows of home's apps that open before a rule covers
+  them, to send them home once one does, and tidewm has no such rules yet,
+  so they're done with the rules rather than with the name prompt's.
 - **`Super+PgUp`/`PgDn` pass over a workspace whose only windows are
   minimized** (2026-11-04), as over an empty one, since there's nothing to
   see there and Hyprland has no window on it (§6.7); `Super+Shift+PgUp`/
@@ -1914,20 +1918,20 @@ and launcher; which workspaces there are, for the bar, the switcher's
 Workspaces tab and the name prompt, which go to them and keep home's
 name and home itself, which tidewm starts on; and which windows there
 are and which has focus, from tidewm's tree and window events, for the
-bar's icons and title, the switcher's Windows tab and the marks, the
-guard's and notifications'. Next, in order:
+bar's icons and title, the switcher's Windows tab, the marks, the
+guard's and notifications', and the name prompt, which moves and closes
+them. Next, in order:
 
-1. The name prompt's and home's window events (`PromptData.qml`,
-   `WorkspacesData.qml`), which close and move windows, and the shell's
-   marks told to tidewm's guard with `urgent enable`, so its urgency
-   order has them as `tide_focus.set_order` gives Hyprland's.
+1. The shell's marks told to tidewm's guard with `urgent enable`, so its
+   urgency order has them as `tide_focus.set_order` gives Hyprland's.
 2. Minimizing, which uses Hyprland's special workspaces, so needs
    something of tidewm's own.
 3. The settings pages that write `tide-*.lua` for conf's hyprland.lua
    (floating, input, appearance, outputs and layouts) and the keys page:
    each over tidewm's IPC or config, or said to be Hyprland's only.
 4. The rest: home's apps' rules, which conf's hyprland.lua makes on
-   Hyprland; a name with a `;`, which tidewm's commands can't take, nor
+   Hyprland, with the window events that send home the windows of
+   home's apps that opened before them (`WorkspacesData.qml`); a name with a `;`, which tidewm's commands can't take, nor
    a rename one with " to " (sway's quoting would do); the lock's
    keyboard layout (`GET_INPUTS` and input events); the greeter's
    displays off; the picker's paste, Hyprland's `sendshortcut`, so on
