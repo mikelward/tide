@@ -49,6 +49,8 @@
 #                             (default: conf's)
 #   $TIDE_INPUT_SETUP   a one-shot input setup (default: conf's
 #                             apply-input.sh), run once Hyprland is up
+#   $TIDE_INPUT_WATCH   what sets up a device plugged in later, run for
+#                             the session (default: conf's watch-input.sh)
 
 prog=${0##*/}
 # KDE's agent is always installed, since tide runs beside Plasma
@@ -74,6 +76,7 @@ shell_config=${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/tide/shell.qml
 min_quickshell=0.3
 wallpaper=${TIDE_WALLPAPER:-$HOME/.config/hypr/wallpaper.jpg}
 input_setup=${TIDE_INPUT_SETUP:-$HOME/.config/hypr/scripts/apply-input.sh}
+input_watch=${TIDE_INPUT_WATCH:-$HOME/.config/hypr/scripts/watch-input.sh}
 
 log() {
     echo "$prog: $*" >&2
@@ -194,6 +197,10 @@ fi
 
 if test -n "${TIDE_INPUT_SETUP:-}" && ! is_program "$TIDE_INPUT_SETUP"; then
     log "TIDE_INPUT_SETUP is '$TIDE_INPUT_SETUP', which isn't an executable file"
+    exit $EX_CONFIG
+fi
+if test -n "${TIDE_INPUT_WATCH:-}" && ! is_program "$TIDE_INPUT_WATCH"; then
+    log "TIDE_INPUT_WATCH is '$TIDE_INPUT_WATCH', which isn't an executable file"
     exit $EX_CONFIG
 fi
 if test -n "${TIDE_WALLPAPER:-}" && ! test -f "$TIDE_WALLPAPER"; then
@@ -402,6 +409,12 @@ set_wallpaper() {
 # Without the setting, conf's script is optional: no conf, no input setup.
 if is_program "$input_setup"; then
     "$input_setup" || log "$input_setup failed ($?); input devices keep their defaults"
+fi
+# And a device plugged in later, such as a mouse a KVM switch hands back:
+# Hyprland has no event for one, so conf's watcher runs for the session, in
+# this unit's cgroup, which stopping the unit ends. It logs its own failures.
+if is_program "$input_watch"; then
+    "$input_watch" &
 fi
 
 missing=
