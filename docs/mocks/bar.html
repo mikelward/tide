@@ -14,13 +14,15 @@
   .chip { display: flex; flex-direction: column; align-items: flex-start; }
   .chip .bar { border-radius: 9px; padding: 0 6px; }
   .chip .cap { max-width: 190px; }
+  /* The bar's hover text (shell/BarTip.qml), under the item it names. */
+  .chip .tip { margin-top: 4px; background: var(--surface-2); border: 1px solid var(--line); color: var(--fg); font-size: 12px; padding: 5px 9px; border-radius: 7px; white-space: nowrap; }
   .pill.present { background: var(--accent-bg); color: var(--accent-fg); }
 </style>
 </head>
 <body class="sheet" data-width="1600" data-scale="2">
 
 <h1>Bar</h1>
-<p class="lede">One full-width bar per monitor: a plain 36&nbsp;px rectangle flush with the top edge and both sides, with no margins, rounded corners or shadow. Workspaces sit on the left, the focused window&rsquo;s title in the middle, and status and clocks on the right. Shown here at 1536&nbsp;px wide, a typical laptop, where the zone clocks would leave the title under 200&nbsp;px, so only the local clock shows and the zone clocks are in its popover. A wider monitor shows all four clocks (see Clocks below); the title stays centered and is cut short when it doesn&rsquo;t fit.</p>
+<p class="lede">One full-width bar per monitor: a plain 36&nbsp;px rectangle flush with the top edge and both sides, with no margins, rounded corners or shadow. Workspaces sit on the left, the focused window&rsquo;s title in the middle, and status and clocks on the right. Shown here at 1536&nbsp;px wide, a typical laptop. Every monitor, ultrawide too, shows local&rsquo;s clock alone; the other zones are on hover and in its popover (see Clocks below). The title stays centered and is cut short when it doesn&rsquo;t fit.</p>
 
 <h2>Dark</h2>
 <div class="frame theme-dark">
@@ -58,7 +60,7 @@
   </div>
   <div class="under"></div>
 </div>
-<p class="note">Left to right: tide's wave logo, in the accent blue, which opens the launcher; the workspaces by name, the standing ones (in, re, oc, me) first, with an app icon only for a window that wants attention (on me here), and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (keep awake, faint while off; Bluetooth, faint while off, as in the light bar; headphones while a Bluetooth audio device is connected; network; volume, battery and CPU, each with its percentage; notifications; session), then the clocks: local alone here, all four where there&rsquo;s room. The zone clocks carry short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT). The local clock swaps its label for the date.</p>
+<p class="note">Left to right: tide's wave logo, in the accent blue, which opens the launcher; the workspaces by name, the standing ones (in, re, oc, me) first, with an app icon only for a window that wants attention (on me here), and the current workspace's layout symbol (<code>|M|</code> = three-column). Right: third-party tray icons (StatusNotifierItem), then the built-in status icons (keep awake, faint while off; Bluetooth, faint while off, as in the light bar; headphones while a Bluetooth audio device is connected; network; volume, battery and CPU, each with its percentage; notifications; session), then local&rsquo;s clock, with the date in place of a label. Hovering it lists the other zones by short place labels (SF, NYC, LON), so nothing changes at DST; the clocks popover adds each zone’s current abbreviation (PDT/PST, EDT/EST, BST/GMT).</p>
 
 <h2>Light (07:00–19:00 by default)</h2>
 <div class="frame light theme-light">
@@ -115,22 +117,17 @@
   <div class="chip"><div class="bar"><span class="sicon low"><i class="ms fill">battery_1_bar</i>9%</span></div><div class="cap"><b>Battery low</b>: red at 20% and below, with a critical notification at 7%.</div></div>
   <div class="chip"><div class="bar"><span class="sicon" style="color:var(--warn)"><i class="ms">memory</i>87%</span></div><div class="cap"><b>CPU hot</b>: amber when the CPU is hot or memory is 90% full, red while it throttles. A click shows the top processes, memory and temperature.</div></div>
   <div class="chip"><div class="bar"><span class="sicon dim"><i class="ms">wifi_off</i></span></div><div class="cap"><b>Offline</b>. A VPN adds a small lock to the network icon.</div></div>
-  <div class="chip"><div class="bar"><span class="sicon"><i class="ms fill">volume_up</i>64%</span><span class="sicon hover"><i class="ms fill">battery_5_bar</i>82%</span><span class="sicon"><i class="ms">memory</i>12%</span></div><div class="cap"><b>Hovered</b>: the whole target shows as a rounded rect, icon, % and padding, a touch darker while pressed. Each target reaches halfway to its neighbors, so no click between them is lost; the clocks are one target.</div></div>
+  <div class="chip"><div class="bar"><span class="sicon"><i class="ms fill">volume_up</i>64%</span><span class="sicon hover"><i class="ms fill">battery_5_bar</i>82%</span><span class="sicon"><i class="ms">memory</i>12%</span></div><div class="cap"><b>Hovered</b>: the whole target shows as a rounded rect, icon, % and padding, a touch darker while pressed. Each target reaches halfway to its neighbors, so no click between them is lost.</div></div>
 </div>
 
 <h2>Clocks</h2>
 <div class="chips theme-dark">
   <div class="chip"><div class="bar"><div class="clocks">
-    <span class="clock"><span class="tz">SF</span><span class="t">23:41</span><span class="d">−1</span></span>
-    <span class="clock"><span class="tz">NYC</span><span class="t">02:41</span></span>
-    <span class="clock"><span class="tz">LON</span><span class="t">07:41</span></span>
     <span class="clock local"><span class="tz">Sep 29</span><span class="t">08:41</span></span>
-  </div></div><div class="cap" style="max-width:340px"><b>Different day</b>: a zone whose date differs from local gets a small −1 / +1 (−2 / +2 across the date line).</div></div>
+  </div></div><div class="tip">SF 23:41 −1 · NYC 02:41 · LON 07:41</div><div class="cap" style="max-width:340px"><b>Hovered</b>: the other zones on one line, in order; a zone on another day gets −1 / +1 (−2 / +2 across the date line). A click opens the popover.</div></div>
   <div class="chip"><div class="bar"><div class="clocks">
-    <span class="clock"><span class="tz">SF</span><span class="t">10:41</span></span>
-    <span class="clock"><span class="tz">NYC</span><span class="t">13:41</span></span>
     <span class="clock local"><span class="tz">Dec 7</span><span class="t">18:41</span></span>
-  </div></div><div class="cap" style="max-width:340px"><b>Local is London</b>: the LON clock is dropped rather than shown twice (configurable).</div></div>
+  </div></div><div class="tip">SF 10:41 · NYC 13:41</div><div class="cap" style="max-width:340px"><b>Local is London</b>: LON is left out rather than shown twice (configurable).</div></div>
 </div>
 
 <script>

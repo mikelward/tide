@@ -1,38 +1,19 @@
 import QtQuick
 import "lib/barclick.mjs" as Click
-import "lib/title.mjs" as Title
+import "lib/clocks.mjs" as ClockLib
 
-// The clocks at the bar's right end (SPEC.md §7.3): each listed zone as
-// "LABEL HH:MM", then local as "MMM d HH:MM", with a small −1 / +1 on a zone
-// whose date differs from local's. A click opens the popover; scrolling
-// moves them all in quarter hours, until the pointer leaves. When the bar
-// is short of room for its title, `compact` leaves local alone on the bar;
-// the popover still lists every zone. An Item around the Row, so the
-// click target isn't a Row's child (BarHit.qml).
+// The clock at the bar's right end (SPEC.md §7.3): local's alone, as
+// "MMM d HH:MM", on every screen. Hovering it shows the other zones on one
+// line, each "LABEL HH:MM" with a −1 / +1 on another date; a click opens the
+// popover; scrolling moves them all in quarter hours, until the pointer
+// leaves. An Item around the Row, so the click target isn't a Row's child
+// (BarHit.qml).
 Item {
     id: root
 
     property real wheel: 0
-    property bool compact: false
-    // How far the click target reaches past the clocks (Bar.qml).
+    // How far the click target reaches past the clock (Bar.qml).
     property var reach: ({ left: Click.PAD, right: Click.PAD })
-    // Bumped as the Repeater builds or drops a clock; see fullWidth.
-    property int built: 0
-    // What every clock would take, compact or not, for Bar.qml's decision.
-    readonly property real fullWidth: {
-        // itemAt() isn't a dependency, and a delegate can be built after
-        // count changes (a monitor plugged in once the zones are loaded),
-        // so the delegates' coming and going is read here explicitly.
-        void root.built;
-        let width = 0;
-        for (let i = 0; i < clocks.count; i++) {
-            const item = clocks.itemAt(i);
-            if (item) {
-                width += item.implicitWidth + (i > 0 ? clockRow.spacing : 0);
-            }
-        }
-        return width;
-    }
 
     implicitWidth: clockRow.implicitWidth
     implicitHeight: clockRow.implicitHeight
@@ -40,6 +21,8 @@ Item {
     // One click target for every clock, labels, times and the room
     // between them, so no gap in the span is dead.
     BarHit {
+        id: hit
+
         reach: root.reach
 
         TapHandler {
@@ -75,6 +58,12 @@ Item {
         clocks: root
     }
 
+    BarTip {
+        item: root
+        shown: hit.hovered
+        text: ClockLib.zonesTip(ClockData.items)
+    }
+
     Row {
         id: clockRow
 
@@ -83,9 +72,7 @@ Item {
         Repeater {
             id: clocks
 
-            model: ClockData.items
-            onItemAdded: root.built++
-            onItemRemoved: root.built++
+            model: ClockData.items.filter(c => c.local)
 
             Item {
                 id: clock
@@ -94,7 +81,6 @@ Item {
                 readonly property string label: modelData.label
                 readonly property string time: modelData.time
 
-                visible: Title.clockShown(root.compact, clock.modelData)
                 height: Theme.chipHeight
                 // 5 px either side, so clocks sit 12 px apart with the Row's 2.
                 implicitWidth: row.implicitWidth + 10

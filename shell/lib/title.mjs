@@ -78,28 +78,3 @@ export function titleWidth({ implicit, max, barWidth, left, right, gap }) {
     const room = Math.min(barWidth / 2 - left, right - barWidth / 2);
     return Math.max(0, Math.min(implicit, max, 2 * room - gap));
 }
-
-// Below this much room, the centered title counts as squeezed.
-export const MIN_TITLE_ROOM = 200;
-
-// Whether the bar collapses its clocks to local alone (SPEC.md §7.3): when
-// the room titleWidth would give the title with every clock showing is
-// under MIN_TITLE_ROOM, and the right side is the short one. `right` is
-// the right group's start as laid out now, with the clocks `clocksWidth`
-// wide; `fullClocksWidth` is what every clock would take. The full
-// layout's start is worked back from those, so the answer never depends
-// on whether the clocks are collapsed now, and can't flip on its own result.
-export function collapseClocks({ barWidth, left, right, gap, clocksWidth, fullClocksWidth }) {
-    const fullRight = right + clocksWidth - fullClocksWidth;
-    const leftRoom = barWidth / 2 - left;
-    const rightRoom = fullRight - barWidth / 2;
-    // Hiding clocks only helps when the right side is what's short.
-    return rightRoom < leftRoom && 2 * rightRoom - gap < MIN_TITLE_ROOM;
-}
-
-// Whether a clock from barClocks shows: every one, or only local's while
-// the clocks are collapsed. Only local's carries `local`, so a zone clock
-// has none, which must read as false, not undefined.
-export function clockShown(compact, clock) {
-    return !compact || clock?.local === true;
-}

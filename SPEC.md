@@ -59,9 +59,9 @@ Contents:
   pinned there, so a close key leaves them open.
 - One full-width bar: every workspace on the left, by name, with
   **urgency** shown on the workspace that wants attention. The tray, network, volume, Bluetooth,
-  power and notifications sit on the right, then four clocks:
-  **America/Los_Angeles**, **America/New_York** and **Europe/London**, labeled `SF`, `NYC`,
-  `LON`, and local (no label; the date in its place).
+  power and notifications sit on the right, then local's clock, its date in
+  place of a label. Hovering it shows **America/Los_Angeles**,
+  **America/New_York** and **Europe/London**, labeled `SF`, `NYC` and `LON`.
 - A **switcher** on a tap of Super: one overlay whose tabs are the
   launcher (fuzzy search over `.desktop` entries plus quick actions), the
   workspaces, every window, and the windows wanting attention (§8).
@@ -1817,7 +1817,7 @@ See [`bar.png`](docs/mocks/bar.png).
   then the built-in status icons: the keyboard layout (once there are
   two), keep-awake, Bluetooth and its audio
   devices, network,
-  volume %, battery %, CPU %, notifications, session. The four clocks come
+  volume %, battery %, CPU %, notifications, session. Local's clock comes
   last.
 - **Middle:** the title of the window your typing goes to. Only the
   focused monitor shows one, wherever on that monitor the window is: under
@@ -1895,14 +1895,20 @@ See [`bar.png`](docs/mocks/bar.png).
 
 ### 7.3 Clocks
 
-- **Zones:** America/Los_Angeles, America/New_York, Europe/London, then local. They show as
+- **The bar shows local's clock alone,** as `MMM d HH:MM`, on every
+  screen, small or ultrawide. The other zones are on hover and a click away.
+  Decided by the maintainer, after using local alone on a laptop.
+- **Zones:** America/Los_Angeles, America/New_York, Europe/London. They show as
   **`SF HH:MM`**, **`NYC HH:MM`** and **`LON HH:MM`** in 24-hour time with
-  tabular figures; local is `MMM d HH:MM`.
+  tabular figures.
+- **Hovering local's clock** shows every other zone on one line, in order,
+  such as `SF 09:41 · NYC 12:41 · LON 17:41`, in the bar's hover text
+  (§7.4). A machine with no other zone shows none.
 - **Place labels don't change at DST**, so the bar looks the same all year.
   A label can be switched per zone to `"abbr"`, tzdata's current abbreviation
   (PDT↔PST, EDT↔EST, BST↔GMT), or to any fixed text.
 - **Abbreviations come from tzdata**, the same source as `date +%Z`. They
-  appear in the popover, and on the bar for any zone set to `"abbr"`.
+  appear in the popover, and in the hover line for any zone set to `"abbr"`.
   CLDR/ICU, which QML's `Intl` and most JS libraries use, can't produce the
   three in any single locale:
   - **en-US** gives `PDT`, `EDT`, but **`GMT+1`** for London in summer.
@@ -1913,10 +1919,10 @@ See [`bar.png`](docs/mocks/bar.png).
   tzdata. It lists each zone's periods of constant offset and abbreviation
   for the next 400 days, local's included, and the shell re-reads it at
   each transition. Tests pin both sides of every DST change (§20).
-- **Local is always last, on the far right.** Any listed zone that is the
-  same zone as local is hidden, whichever zone that is, while
-  `dedupeLocal` is on, as it is by default (below): in London the bar
-  shows SF, NYC and local, and in New York it shows SF, LON and local.
+- **Local is the bar's last item, on the far right.** Any listed zone that
+  is the same zone as local is left out of the hover line, whichever zone
+  that is, while `dedupeLocal` is on, as it is by default (below): in
+  London it shows SF and NYC, and in New York SF and LON.
   Decided in review of this spec.
   - "Same zone" compares zone IDs. When `$TZ` is set, local's ID is the
     zone it names (`UTC` when it's empty); otherwise it's the target of
@@ -1924,36 +1930,26 @@ See [`bar.png`](docs/mocks/bar.png).
     (a `$TZ` that names no zone, a copied file) hides nothing.
   - **Hiding is best effort.** It must work for a zone named by `$TZ` or by
     `/etc/localtime`'s link. Any other setup (a malformed or custom
-    `/etc/localtime`, `$ZONEINFO` overrides, link names) may show the local
-    zone's clock twice; that's accepted, not a bug to chase.
+    `/etc/localtime`, `$ZONEINFO` overrides, link names) may list the local
+    zone in the hover line too; that's accepted, not a bug to chase.
   - A zone that only shares the current offset (Arizona against Los Angeles
-    in summer) stays, so no clock appears and disappears at a DST change.
+    in summer) stays, so no zone appears and disappears at a DST change.
   - The popover still lists the hidden zone, marked as local.
-- **Short of room, local alone.** The window title stays centered, so the
-  right-hand icons and clocks eat into it from the middle out. When every
-  clock showing would leave the title under 200 px, the bar shows only
-  the local clock, and the zone clocks are a click away in the popover. On
-  a laptop at 1536 px that is the usual case; on an ultrawide all four
-  stay. It only applies when the right side is what's short: if the
-  workspaces are, hiding clocks wouldn't help the title. Named workspaces
-  can outgrow the left side on their own; what the bar does then is open
-  (§21). Decided by the
-  maintainer, from the options in [`narrow.png`](docs/mocks/narrow.png).
-- **Different day.** A zone whose date differs from local shows a small
-  `−1` or `+1` (`−2` or `+2` only between zones either side of the date
+- **Different day.** A zone whose date differs from local shows
+  `−1` or `+1` after its time in the hover line (`−2` or `+2` only between zones either side of the date
   line, such as UTC−12 and UTC+14).
 - **Popover** ([`clocks.png`](docs/mocks/clocks.png)): opened by a click on
-  any clock. It shows:
+  the clock. It shows:
   - each zone with its city, current abbreviation and offset from local;
   - a 24-hour strip of night, day and working hours, with a "now" line;
   - the **next DST change**. For example: "London moves to GMT on Sun Oct 25,
     a week before SF and NYC" — the week when the usual gap to London is off
     by an hour;
   - a month calendar with ISO week numbers.
-- **Scroll** over the clocks to scrub time in 15-minute steps, so all four
-  answer "what's 3 pm in SF here?". The first step lands on the next
-  quarter hour. Scrubbed times show in the accent color, and the clocks
-  snap back when the pointer leaves.
+- **Scroll** over the clock to scrub time in 15-minute steps, local's and
+  the hover line's together, so they answer "what's 3 pm in SF here?". The
+  first step lands on the next quarter hour. A scrubbed time shows in the
+  accent color, and it snaps back when the pointer leaves.
 - **Config:** a list of `{zone, label}` in `~/.config/tide/clocks.json`,
   defaulting to the three above. A machine that needs other zones sets its
   own list in **`clocks.local.json`**, which replaces the shared list
@@ -3109,8 +3105,8 @@ talk, a demo, or a meeting room's screen.
 - **Hostname.** It leads with the short hostname: the first label, with a
   leading `<user>-` removed, the same rule as `i3statusdwm`. It's only a
   size above the user's name (32 px to 20), so neither dwarfs the other.
-- **Local's date and time** sit below the hostname. No zone clocks: the
-  bar has them a click away, and the login and lock faces stay simple
+- **Local's date and time** sit below the hostname. No other zones: the
+  bar's clock has them on hover, and the login and lock faces stay simple
   (maintainer, 2026-10-05).
 - **What the lock has and the login face doesn't:** the notification
   count, the battery and Suspend, as the mock shows. Under the user's name
@@ -4028,9 +4024,9 @@ stays hand-written.
     labeled with its city. One that isn't a canonical ID (§7.3), or is
     listed already, is refused, and the page says why.
   - A label is typed and set with Enter. The arrows move a clock, and the
-    bin takes it out; with none left, the bar shows local alone.
+    bin takes it out; with none left, hovering the clock shows nothing.
   - The local zone is marked as local in the list, and as hidden while
-    dedupe-local hides it from the bar.
+    dedupe-local hides it from the hover line.
   - A change names the clock it was made on by its place and zone, so a
     hand edit that has moved the clocks since is refused, not built on.
   - While either file can't be read or doesn't parse, the bar keeps its

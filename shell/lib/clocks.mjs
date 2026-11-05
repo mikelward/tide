@@ -554,6 +554,16 @@ export function barClocks({ clocks, localZone, instant, offsetOf, abbrOf, hour24
     return shown;
 }
 
+// The line hovering local's clock shows (SPEC.md §7.3): every other zone
+// from barClocks as the bar once drew it, with its −1 or +1, in order,
+// or "" when local is the only clock.
+export function zonesTip(items) {
+    return items.filter((c) => !c.local).map((c) => {
+        const day = c.dayOffset > 0 ? ` +${c.dayOffset}` : c.dayOffset < 0 ? ` −${-c.dayOffset}` : "";
+        return c.text + day;
+    }).join(" · ");
+}
+
 // Scrolling over the clocks moves the time they show by this much a notch.
 export const SCRUB_STEP = 15 * MINUTE;
 
