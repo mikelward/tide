@@ -138,7 +138,7 @@ export const PAGES = Object.freeze([
         label: "Clipboard",
         icon: "edit-paste-symbolic",
         keywords: ["copy history", "paste history"],
-        about: "Keeps what you copy for Super+V. Skips passwords.",
+        about: "Keeps what you copy for Super+V. Skips passwords from password managers.",
         advanced: null,
     },
     {
