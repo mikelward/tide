@@ -464,9 +464,12 @@ flowchart TD
   Displays page (§16) writes `tide-outputs.conf`, an `output` line for
   each monitor, named by the description it has on Hyprland, which
   tidewm takes too, with its scale and place, applied the same way; it
-  lists the monitors tidewm's `GET_OUTPUTS` gives. What else
-  the shell takes from
-  Hyprland's events is still Hyprland's. Home (§6.5) is the shell's to
+  lists the monitors tidewm's `GET_OUTPUTS` gives. The Layouts page
+  writes `tide-layouts.conf`, tidewm's layout lines, applied the same way;
+  a reload that changes the layouts' defaults starts every workspace's
+  from them again there, as `tide_layout.reload()` does, but one for
+  another page leaves them be. What else the shell takes from Hyprland's
+  events is still Hyprland's. Home (§6.5) is the shell's to
   keep there, as tidewm's config can't know its name: `tide-tidewm`
   starts tidewm on it and keeps it, by the name the shell last wrote to
   `tide-workspaces.lua`, and the shell keeps it from then on, with

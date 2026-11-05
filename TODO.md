@@ -1940,16 +1940,13 @@ there once that's in. Next, in order:
 
 1. The settings pages that write `tide-*.lua` for conf's hyprland.lua
    and the keys page: each a `tide-*.conf` conf's tidewm config includes,
-   as the input, appearance and displays pages' are, or said to be
-   Hyprland's only.
+   as the input, appearance, displays and layouts pages' are, or said to
+   be Hyprland's only.
    - **Floating**'s title patterns are RE2's, and tidewm's `for_window`
      takes POSIX extended ones, which lack lazy counts and `\w \d \s`
      and `\x` escapes; a class alone is easy (an app ID or an X11 class,
      either case). The shell floats the windows a new rule covers with
      `floating enable`.
-   - **Layouts**: tidewm's `single_window` lines take the single-window
-     widths; its default modes, `mfact`, `nmaster` and where a new window
-     goes have no lines yet.
    - The input pages still lack a device's own settings there, which
      tidewm names by identifier (`GET_INPUTS`), not as `hyprctl devices`
      does.

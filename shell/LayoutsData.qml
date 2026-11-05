@@ -11,7 +11,10 @@ import "lib/writes.mjs" as Writes
 // The Layouts settings (SPEC.md §16), from layouts.json and
 // layouts.local.json (§16.1). What's set is written to
 // ~/.config/hypr/tide-layouts.lua, which hypr/tide/layout.lua reads as it
-// sets up, and `hyprctl eval tide_layout.reload()` has it read again. A bad
+// sets up, and `hyprctl eval tide_layout.reload()` has it read again. On
+// tidewm (§5.3) it's ~/.config/tidewm/tide-layouts.conf, tidewm's layout
+// lines, which conf's tidewm config includes, and `tide-msg reload` has
+// tidewm read it, as InputData's. A bad
 // file is a notification naming it, once, and changes nothing. So is a
 // change that can't be saved; one that can't be written or applied is
 // tried again until it is (shell/lib/writes.mjs). The files are read and
@@ -122,9 +125,13 @@ Singleton {
         }
         // layout.lua read the file as Hyprland's config loaded, so a shell
         // start that wants the same leaves it alone: a reload sets each
-        // workspace's mfact and master count back to the settings'.
-        root.target = Writes.readTarget(root.target, writtenText).state;
-        root.stepped(Writes.wantTarget(root.target, Layouts.layoutsLua(root.layouts)));
+        // workspace's mfact and master count back to the settings'. tidewm
+        // outlives the shell too, but not this session's record of what it
+        // read (AppliedRecord), as InputData's.
+        root.target = Compositor.tidewm
+            ? Writes.readTarget(root.target, writtenText, root.target.known ? writtenText : applied.firstApplied(writtenText, root.target.failure)).state
+            : Writes.readTarget(root.target, writtenText).state;
+        root.stepped(Writes.wantTarget(root.target, Compositor.tidewm ? Layouts.layoutsConf(root.layouts) : Layouts.layoutsLua(root.layouts)));
     }
 
     SettingsFile {
@@ -143,16 +150,27 @@ Singleton {
         onFileChanged: root.load()
     }
 
-    // What layout.lua reads. Written only when it would say something
-    // else.
+    // What layout.lua reads, or on tidewm what its config includes. Written
+    // only when it would say something else.
     SettingsFile {
         id: written
 
-        path: `${root.configHome}/hypr/tide-layouts.lua`
+        path: Compositor.tidewm ? `${root.configHome}/tidewm/tide-layouts.conf` : `${root.configHome}/hypr/tide-layouts.lua`
+    }
+
+    // This session's record of what tidewm last read.
+    AppliedRecord {
+        id: applied
+
+        name: "tide-layouts-tidewm-applied"
+        unsure: "reloading tidewm to be sure it has the layout settings"
+        again: "tidewm may be reloaded again to be sure it has the layout settings"
     }
 
     // Has layout.lua take what was written: `hyprctl eval` answers "ok", or
-    // why not, on stdout, so its reply is read, not just its exit.
+    // why not, on stdout, so its reply is read, not just its exit. On
+    // tidewm, `tide-msg reload` exits 0, or says why not, as tidewm's errors
+    // in its config, on stderr.
     Component {
         id: applier
 
@@ -187,7 +205,7 @@ Singleton {
                 if (!state.started) {
                     console.warn(state.report.message);
                     error = state.report.message.replace(/^tide: /, "");
-                } else if (state.code !== 0 || reply.trim() !== "ok") {
+                } else if (state.code !== 0 || (!Compositor.tidewm && reply.trim() !== "ok")) {
                     // A file layout.lua refuses, or a layout.lua from
                     // before reload.
                     error = `couldn't apply the layout settings: ${(reply + state.errors).trim()}`;
@@ -196,11 +214,15 @@ Singleton {
                     // It worked, but said something on the way, as MarkData's.
                     console.log(state.report.message);
                 }
-                root.stepped(Writes.targetApplied(root.target, error));
+                const done = Writes.targetApplied(root.target, error);
+                if (Compositor.tidewm && error === "") {
+                    applied.record(Writes.recordOf(done.state.applied));
+                }
+                root.stepped(done);
                 destroy();
             }
 
-            command: ["hyprctl", "eval", "tide_layout.reload()"]
+            command: Compositor.tidewm ? ["tide-msg", "reload"] : ["hyprctl", "eval", "tide_layout.reload()"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     run.reply = text;
