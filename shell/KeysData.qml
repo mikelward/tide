@@ -7,9 +7,10 @@ import "lib/keys.mjs" as Keys
 import "lib/launch.mjs" as Run
 
 // The key bindings Hyprland has now, for the settings panel's keyboard
-// shortcuts (SPEC.md §16), from `hyprctl binds -j` (shell/lib/keys.mjs):
-// listed as the shell starts, and again as the Keyboard page shows them,
-// since a config reload can change them.
+// shortcuts (SPEC.md §16), from `hyprctl binds -j` (shell/lib/keys.mjs),
+// or on tidewm (§5.3) its config file's, from `tide-msg --type
+// get_bindings`: listed as the shell starts, and again as the Keyboard
+// page shows them, since a config reload can change them.
 Singleton {
     id: root
 
@@ -22,8 +23,8 @@ Singleton {
         lister.createObject(root).running = true;
     }
 
-    // hyprctl binds -j, read once both its streams end, as InputData's
-    // device list is.
+    // hyprctl binds -j, or tidewm's, read once both its streams end, as
+    // InputData's device list is.
     Component {
         id: lister
 
@@ -55,7 +56,8 @@ Singleton {
                 } else if (state.report?.level === "log") {
                     console.log(state.report.message);
                 }
-                const r = Keys.listedBinds(state.report?.level === "warn", out);
+                const failed = state.report?.level === "warn";
+                const r = Compositor.tidewm ? Keys.listedTidewmBinds(failed, out) : Keys.listedBinds(failed, out);
                 if (r.error !== "") {
                     console.warn(`tide: ${r.error}`);
                 }
@@ -64,7 +66,7 @@ Singleton {
                 destroy();
             }
 
-            command: ["hyprctl", "binds", "-j"]
+            command: Compositor.tidewm ? ["tide-msg", "--type", "get_bindings"] : ["hyprctl", "binds", "-j"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     listing.out = text;

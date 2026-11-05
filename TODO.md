@@ -1938,10 +1938,11 @@ guard's and notifications', the name prompt, which moves and closes
 them, and minimizing, with tidewm's own `minimize`. conf binds Super+Z
 there once that's in. Next, in order:
 
-1. The settings pages that write `tide-*.lua` for conf's hyprland.lua
-   and the keys page: each a `tide-*.conf` conf's tidewm config includes,
-   as the input, appearance, displays and layouts pages' are, or said to
-   be Hyprland's only.
+1. The settings pages that write `tide-*.lua` for conf's hyprland.lua:
+   each a `tide-*.conf` conf's tidewm config includes, as the input,
+   appearance, displays and layouts pages' are, or said to be Hyprland's
+   only. The keyboard shortcuts list tidewm's bindings from its
+   `GET_BINDINGS`.
    - **Floating**'s title patterns are RE2's, and tidewm's `for_window`
      takes POSIX extended ones, which lack lazy counts and `\w \d \s`
      and `\x` escapes; a class alone is easy (an app ID or an X11 class,

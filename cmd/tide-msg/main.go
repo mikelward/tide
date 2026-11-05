@@ -21,7 +21,8 @@
 //
 // prints the reply to a query, as JSON: get_workspaces, get_outputs,
 // get_tree, get_version, get_config, get_inputs or get_seats, as swaymsg
-// names them. tide doctor reads tidewm's outputs and config errors so.
+// names them, or tidewm's own get_bindings. tide doctor reads tidewm's
+// outputs and config errors so, and the shell its bindings.
 //
 // It exits 0 when that worked, 1 when tidewm refused a command, and 2 for
 // a usage error, or when there's no tidewm to ask or it didn't answer.
@@ -62,7 +63,7 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "usage: tide-msg [--] COMMAND...")
 		fmt.Fprintln(stderr, "       tide-msg --focused-workspace")
 		fmt.Fprintln(stderr, "       tide-msg --prompt-may-focus")
-		fmt.Fprintln(stderr, "       tide-msg --type get_workspaces|get_outputs|get_tree|get_version|get_config|get_inputs|get_seats")
+		fmt.Fprintln(stderr, "       tide-msg --type get_workspaces|get_outputs|get_tree|get_version|get_config|get_inputs|get_seats|get_bindings")
 		return 2
 	}
 	socket, err := swayipc.Socket(env)

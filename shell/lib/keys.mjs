@@ -1,6 +1,7 @@
 // The settings panel's keyboard shortcuts (SPEC.md §16): the key
-// bindings Hyprland has now, read from `hyprctl binds -j`, as pure
-// functions the QML binds to.
+// bindings Hyprland has now, read from `hyprctl binds -j`, or on tidewm
+// its config file's, read from its GET_BINDINGS, as pure functions the QML
+// binds to.
 //
 // That needs Hyprland 0.56.2, tide's pin: 0.56.0's JSON gives each value
 // one field late from has_description on (src/debug/HyprCtl.cpp's
@@ -106,5 +107,55 @@ export function listedBinds(failed, text) {
         return { binds: [], error: "couldn't run hyprctl binds -j" };
     }
     const r = parseBinds(text);
+    return r.error ? { binds: [], error: r.error } : { binds: r.binds, error: "" };
+}
+
+// A switch binding on tidewm, as its sway name says.
+const SWITCHES = {
+    "lid:on": "Lid closed", "lid:off": "Lid opened", "lid:toggle": "Lid closed or opened",
+    "tablet:on": "Tablet mode on", "tablet:off": "Tablet mode off", "tablet:toggle": "Tablet mode on or off",
+};
+
+// Parses tidewm's GET_BINDINGS (`tide-msg --type get_bindings`), as
+// parseBinds parses hyprctl's: {binds} as [{keys, does, submap}], in the
+// config file's order, or {error}. tidewm's lines have no descriptions,
+// so what one does is its command.
+export function parseTidewmBinds(text) {
+    const what = "tide-msg --type get_bindings";
+    let value;
+    try {
+        value = JSON.parse(text);
+    } catch (e) {
+        return { error: `${what}: not JSON` };
+    }
+    // A tidewm from before GET_BINDINGS says it doesn't know the request
+    if (value !== null && typeof value === "object" && typeof value.error === "string") {
+        return { error: `${what}: ${value.error}; is tidewm too old to list them?` };
+    }
+    if (!Array.isArray(value)) {
+        return { error: `${what}: expected a list of bindings` };
+    }
+    const binds = [];
+    for (const b of value) {
+        if (b === null || typeof b !== "object" || typeof b.keys !== "string" || typeof b.command !== "string") {
+            return { error: `${what}: a binding without its keys or command` };
+        }
+        const isSwitch = b.type === "switch";
+        binds.push({
+            keys: isSwitch ? (SWITCHES[b.keys] || b.keys) : keysLabel(0, b.keys),
+            does: b.command.replace(/\s+/g, " ").trim(),
+            submap: typeof b.mode === "string" && b.mode !== "default" ? b.mode : "",
+        });
+    }
+    return { binds };
+}
+
+// What the page shows from a run of `tide-msg --type get_bindings`, as
+// listedBinds.
+export function listedTidewmBinds(failed, text) {
+    if (failed) {
+        return { binds: [], error: "couldn't run tide-msg --type get_bindings" };
+    }
+    const r = parseTidewmBinds(text);
     return r.error ? { binds: [], error: r.error } : { binds: r.binds, error: "" };
 }

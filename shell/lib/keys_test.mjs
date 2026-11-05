@@ -1,7 +1,7 @@
 // Tests for keys.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { keyLabel, keysLabel, parseBinds, listedBinds } from "./keys.mjs";
+import { keyLabel, keysLabel, parseBinds, listedBinds, parseTidewmBinds, listedTidewmBinds } from "./keys.mjs";
 
 // One binding as Hyprland 0.56.2's `hyprctl binds -j` gives it
 // (src/debug/HyprCtl.cpp's bindsRequest).
@@ -116,4 +116,28 @@ test("a failed run lists nothing and says so", () => {
     assert.deepEqual(listedBinds(true, ""), { binds: [], error: "couldn't run hyprctl binds -j" });
     assert.deepEqual(listedBinds(false, listing(bind({ has_description: true, modmask: 64, key: "T", description: "Terminal" }))),
                      { binds: [{ keys: "Super+T", does: "Terminal", submap: "" }], error: "" });
+});
+
+test("tidewm's bindings are its config file's, each doing its command", () => {
+    const text = JSON.stringify([
+        { type: "key", keys: "Mod4+Return", command: "exec   foot", mode: "default", release: false, locked: false },
+        { type: "key", keys: "Escape", command: "mode default", mode: "resize", release: false, locked: true },
+        { type: "key", keys: "Control+Shift+period", command: "layout toggle", mode: "default" },
+        { type: "switch", keys: "lid:on", command: "output eDP-1 disable", mode: "default", locked: true },
+    ]);
+    assert.deepEqual(parseTidewmBinds(text).binds, [
+        { keys: "Super+Return", does: "exec foot", submap: "" },
+        { keys: "Escape", does: "mode default", submap: "resize" },
+        { keys: "Ctrl+Shift+.", does: "layout toggle", submap: "" },
+        { keys: "Lid closed", does: "output eDP-1 disable", submap: "" },
+    ]);
+});
+
+test("a tidewm listing that can't be read says why", () => {
+    assert.deepEqual(listedTidewmBinds(true, ""), { binds: [], error: "couldn't run tide-msg --type get_bindings" });
+    assert.equal(listedTidewmBinds(false, '{"success": false, "error": "unsupported message type"}').error,
+        "tide-msg --type get_bindings: unsupported message type; is tidewm too old to list them?");
+    assert.match(listedTidewmBinds(false, "unsupported").error, /not JSON/);
+    assert.match(listedTidewmBinds(false, "{}").error, /expected a list of bindings/);
+    assert.match(listedTidewmBinds(false, '[{"keys": "Mod4+x"}]').error, /without its keys or command/);
 });

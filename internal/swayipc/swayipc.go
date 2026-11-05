@@ -26,6 +26,8 @@ const (
 	GetConfig     = 9
 	GetInputs     = 100
 	GetSeats      = 101
+	// GetBindings is tidewm's own: the config file's bindings.
+	GetBindings = 200
 )
 
 // Queries are the queries by the names swaymsg gives them.
@@ -37,6 +39,7 @@ var Queries = map[string]uint32{
 	"get_config":     GetConfig,
 	"get_inputs":     GetInputs,
 	"get_seats":      GetSeats,
+	"get_bindings":   GetBindings,
 }
 
 var magic = []byte("i3-ipc")
