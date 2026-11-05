@@ -2,7 +2,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Pipewire
 import "lib/osd.mjs" as Osd
@@ -43,7 +42,7 @@ Singleton {
     }
 
     function show(pill) {
-        root.monitor = Hyprland.focusedMonitor?.name ?? "";
+        root.monitor = Compositor.focusedMonitorName;
         root.pill = pill;
         root.showing = true;
         hide.restart();

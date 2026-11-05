@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Wayland
 import "lib/agent.mjs" as Agent
 
@@ -23,7 +22,7 @@ PanelWindow {
 
     onWantedChanged: {
         if (wanted) {
-            const focused = Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor);
+            const focused = Compositor.focusedScreen;
             if (focused) {
                 screen = focused;
             }

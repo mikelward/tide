@@ -2,7 +2,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Services.Notifications
 import "lib/history.mjs" as History
 import "lib/mute.mjs" as Mute
@@ -168,7 +167,7 @@ Singleton {
     // while there's none (at startup, or as monitors change) nothing is on
     // screen, and every countdown is held as "unseen" rather than running
     // out on a popup nobody saw.
-    readonly property bool onScreen: Hyprland.focusedMonitor !== null
+    readonly property bool onScreen: Compositor.focusedMonitorName !== ""
 
     onOnScreenChanged: root.track()
 

@@ -72,7 +72,7 @@ PanelWindow {
             return;
         }
         pasteInto = Picker.pasteTarget(Rules.windowOf(FocusData.active));
-        const focused = Quickshell.screens.find(s => Hyprland.monitorFor(s) === Hyprland.focusedMonitor);
+        const focused = Compositor.focusedScreen;
         if (focused) {
             screen = focused;
         }

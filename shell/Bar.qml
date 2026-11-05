@@ -142,7 +142,9 @@ PanelWindow {
         id: statusIcons
 
         reach: bar.reaches[4]
-        monitorName: bar.monitor?.name ?? ""
+        // Its screen's name is its monitor's, on Hyprland and tidewm alike,
+        // and the bell opens the center there (HistoryData.openOn).
+        monitorName: bar.screen?.name ?? ""
         anchors.right: clocks.left
         // With a clock's own 5 px, the session icon sits as far from the
         // first clock as the status items sit from each other (§7.4).

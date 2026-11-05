@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Wayland
 import "lib/notifications.mjs" as Notes
 
@@ -11,13 +10,13 @@ PanelWindow {
     id: root
 
     required property var modelData
-    readonly property bool focused: Hyprland.focusedMonitor !== null && Hyprland.focusedMonitor === Hyprland.monitorFor(screen)
+    readonly property bool focused: Compositor.focusedMonitorName !== "" && Compositor.focusedMonitorName === (screen?.name ?? "")
     // Only the focused monitor makes popups, so a hidden one can't hold or
     // act on a notification. None show under an open notification center,
     // which takes the same corner and lists them anyway; a critical one comes
     // back when it closes. (Drafts live in NotificationData, so a reply being
     // typed survives.)
-    readonly property bool centerOpen: HistoryData.openOn !== "" && HistoryData.openOn === (Hyprland.monitorFor(screen)?.name ?? "")
+    readonly property bool centerOpen: HistoryData.openOn !== "" && HistoryData.openOn === (screen?.name ?? "")
     readonly property var shown: focused && !centerOpen ? Notes.shown(NotificationData.queue) : []
 
     screen: modelData
