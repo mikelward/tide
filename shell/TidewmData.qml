@@ -20,7 +20,9 @@ Singleton {
     property var state: Tw.NO_WINDOWS
     // While the tree is being asked for, the window events heard
     // meanwhile, replayed on it when it comes, since it may be older than
-    // they are; null otherwise.
+    // they are; null otherwise. Each goes on the windows as they are too,
+    // so what's judged by them meanwhile, as MarkData's marks, sees the
+    // window as the event has it.
     property var heard: null
 
     function askForTree() {
@@ -31,6 +33,10 @@ Singleton {
         root.heard = [];
         tree.running = true;
     }
+
+    // A window event, its JSON, as it's heard, for MarkData's marks
+    // (Tw.markEvents), which follow the events themselves.
+    signal windowHeard(var data)
 
     // Asked again while asking: the listener connected again meanwhile.
     property bool treeAgain: false
@@ -67,9 +73,9 @@ Singleton {
             }
             if (root.heard !== null) {
                 root.heard = root.heard.concat([event.data]);
-            } else {
-                root.state = Tw.windowEvent(root.state, event.data);
             }
+            root.state = Tw.windowEvent(root.state, event.data);
+            root.windowHeard(event.data);
         }
     }
 

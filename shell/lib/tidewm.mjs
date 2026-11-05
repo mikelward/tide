@@ -111,6 +111,33 @@ export function asksForTree(type, data) {
     return type === "workspace" && event?.change === "rename";
 }
 
+// The mark events (workspaces.mjs's updateMarks) a window event means, as
+// workspaces.mjs's markEvent reads Hyprland's: a window focused or
+// closed, and one tidewm marks urgent, which is its focus guard
+// holding the window, as Hyprland's tide-attention says, or the window
+// asking for focus. tidewm doesn't tell the two apart, so it's "guarded"
+// either way: its mark lasts until the window is focused. [] for any
+// other event, and for urgency taken away, which focusing the window
+// does and which clears the mark anyway.
+export function markEvents(data) {
+    const event = parsed(data);
+    const con = event?.container;
+    if (typeof event?.change !== "string" || !isWindow(con)) {
+        return [];
+    }
+    const address = String(con.id);
+    switch (event.change) {
+    case "focus":
+        return [{ type: "focused", address }];
+    case "close":
+        return [{ type: "closed", address }];
+    case "urgent":
+        return con.urgent === true ? [{ type: "guarded", address }] : [];
+    default:
+        return [];
+    }
+}
+
 // A window's app: its Wayland app ID, or an X11 window's class.
 export function appOf(con) {
     return con?.app_id || con?.window_properties?.class || "";

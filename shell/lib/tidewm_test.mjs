@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, appOf, shellWindows, activeWindow,
+    NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, markEvents, appOf, shellWindows, activeWindow,
     focusCommand, moveAndFocusCommand, maximizeCommand,
 } from "./tidewm.mjs";
 
@@ -67,6 +67,24 @@ test("a refreshed tree's focused window goes first, even one the shell didn't kn
     assert.equal(refreshed(s, "{not json"), null);
 });
 
+test("events heard while the tree is on its way, put on the windows and replayed on the tree, land once", () => {
+    // Heard before the tree came: 14 opened and was focused, 11 retitled
+    let live = NO_WINDOWS;
+    const heard = [event("new", con(14)), event("focus", con(14, { focused: true })), event("title", con(11, { name: "Chat (1)" }))];
+    for (const e of heard) {
+        live = windowEvent(live, e);
+    }
+    assert.equal(live.list.find(c => c.id === 11).workspace, "in", "judged meanwhile by the event's own container");
+    // The tree predates them all
+    let s = refreshed(live, tree);
+    for (const e of heard) {
+        s = windowEvent(s, e);
+    }
+    assert.deepEqual(s.list.map(c => c.id), [10, 11, 12, 13, 14]);
+    assert.deepEqual(s.order, [14, 11]);
+    assert.equal(s.list.find(c => c.id === 11).name, "Chat (1)");
+});
+
 test("a new window joins the list, and a closed one leaves it and the order", () => {
     let s = treeWindows(tree);
     s = windowEvent(s, event("new", con(14)));
@@ -120,6 +138,25 @@ test("nothing else does", () => {
     assert.equal(asksForTree("workspace", JSON.stringify({ change: "init", current: { id: 9, name: "in" } })), false);
     assert.equal(asksForTree("window", event("new", con(10))), false);
     assert.equal(asksForTree("tick", "{not json"), false);
+});
+
+test("a window focused or closed is a mark event, as Hyprland's are", () => {
+    assert.deepEqual(markEvents(event("focus", con(10, { focused: true }))), [{ type: "focused", address: "10" }]);
+    assert.deepEqual(markEvents(event("close", con(10))), [{ type: "closed", address: "10" }]);
+});
+
+test("a window tidewm marks urgent is the guard's, until it's focused", () => {
+    assert.deepEqual(markEvents(event("urgent", con(10, { urgent: true }))), [{ type: "guarded", address: "10" }]);
+    assert.deepEqual(markEvents(event("urgent", con(10, { urgent: false }))), [], "urgency taken away, as focusing does");
+});
+
+test("other window events, and what isn't one, mark nothing", () => {
+    assert.deepEqual(markEvents(event("new", con(10, { urgent: true }))), [], "the urgent event that follows marks it");
+    assert.deepEqual(markEvents(event("move", con(10))), []);
+    assert.deepEqual(markEvents(event("title", con(10, { name: "Chat (3)" }))), [], "a title marks nothing, as on Hyprland");
+    assert.deepEqual(markEvents(event("fullscreen_mode", con(10))), []);
+    assert.deepEqual(markEvents("{not json"), []);
+    assert.deepEqual(markEvents(JSON.stringify({ change: "focus", container: { id: 3, type: "workspace" } })), []);
 });
 
 test("an app is its app ID, or an X11 window's class", () => {

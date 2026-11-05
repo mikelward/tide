@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import "lib/launch.mjs" as Run
+import "lib/tidewm.mjs" as Tw
 import "lib/workspaces.mjs" as Ws
 
 // The bar's attention marks (SPEC.md §14.4), one set for every monitor's
@@ -24,6 +25,9 @@ import "lib/workspaces.mjs" as Ws
 //     marked (tide_focus.set_order), since only the shell sees both
 //     kinds together, and the switcher's Attention tab lists them newest
 //     first.
+// On tidewm (SPEC.md §5.3) the events are tidewm's window events
+// (TidewmData.qml, Tw.markEvents), the guard's marks being the windows it
+// marks urgent, and its guard is its own: nothing is replayed or pushed.
 Singleton {
     id: root
 
@@ -31,12 +35,12 @@ Singleton {
 
     // What a notification's mark is judged against: the windows, and the
     // workspaces on screen when it arrives.
-    readonly property var windows: Hyprland.toplevels.values.map(t => ({
-        address: Ws.normalizeAddress(t.address),
-        workspace: t.workspace ? t.workspace.id : null,
-        app: t.lastIpcObject?.class || t.wayland?.appId || "",
+    readonly property var windows: Compositor.windows.map(w => ({
+        address: w.address,
+        workspace: w.workspace,
+        app: w.app,
         // Lower is more recent (Notes.siteWindowClasses, Ws.focusRank).
-        focus: Ws.focusRank(root.focusOrder, Ws.normalizeAddress(t.address), t.lastIpcObject?.focusHistoryID),
+        focus: Ws.focusRank(root.focusOrder, w.address, w.focusHistoryID),
     }))
 
     // Muted apps' windows are never marked (SPEC.md §9, Muted apps): their
@@ -54,10 +58,14 @@ Singleton {
 
     // Windows focused since the shell started, newest first (Ws.withFocus).
     property var focusOrder: []
-    readonly property var visible: Ws.visibleWorkspaces(Hyprland.monitors.values.map(m => ({
-        workspace: m.activeWorkspace ? m.activeWorkspace.id : null,
-        special: m.lastIpcObject?.specialWorkspace?.id ?? 0,
-    })))
+    // tidewm has no special workspaces, and shows its current one on every
+    // monitor.
+    readonly property var visible: Ws.visibleWorkspaces(Compositor.tidewm
+        ? Compositor.monitors.map(m => ({ workspace: m.workspace, special: 0 }))
+        : Hyprland.monitors.values.map(m => ({
+            workspace: m.activeWorkspace ? m.activeWorkspace.id : null,
+            special: m.lastIpcObject?.specialWorkspace?.id ?? 0,
+        })))
 
     // A notification arrived, or was updated in place: it marks its app's
     // windows that aren't on screen now (`app` an app or a list of them). Each update adds to what it marked.
@@ -90,6 +98,9 @@ Singleton {
     // (a reload while the startup replay still runs) can't finish the
     // other's; two replays only announce the same windows twice.
     function resync() {
+        if (Compositor.tidewm) {
+            return;
+        }
         // tide_focus.announce_waiting() (hypr/tide/focus.lua)
         // re-sends tide-attention for each waiting window, which the
         // Connections below turn into marks like any other.
@@ -118,7 +129,7 @@ Singleton {
     // Tells the guard every marked window in order, one call at a
     // time, so an older list can't land after a newer one.
     function push() {
-        if (root.pushing || root.pushed === root.noted) {
+        if (Compositor.tidewm || root.pushing || root.pushed === root.noted) {
             return;
         }
         root.pushing = true;
@@ -213,34 +224,50 @@ Singleton {
     }
 
     Connections {
-        target: Hyprland
+        target: Compositor.tidewm ? null : Hyprland
 
         function onRawEvent(event) {
-            let mark = Ws.markEvent(event.name, event.data);
-            if (mark?.type === "focused") {
-                root.focusOrder = Ws.withFocus(root.focusOrder, mark.address);
-            } else if (mark?.type === "closed") {
-                root.focusOrder = Ws.withoutWindow(root.focusOrder, mark.address);
+            root.heard(Ws.markEvent(event.name, event.data));
+        }
+    }
+
+    Connections {
+        target: Compositor.tidewm ? TidewmData : null
+
+        function onWindowHeard(data) {
+            for (const mark of Tw.markEvents(data)) {
+                root.heard(mark);
             }
-            if (mark?.type === "urgent") {
-                mark = Ws.activatedEvent(mark.address, root.windows);
-            }
-            if (mark?.type === "guarded") {
-                mark = Object.assign({}, mark, {
-                    app: root.windows.find(w => w.address === mark.address)?.app ?? "",
-                    muted: root.muted
-                });
-            } else if (mark?.type === "focused") {
-                // Whether muting had cleared a notification's mark on it
-                // (Ws.updateMarks's "focused").
-                mark = Object.assign({}, mark, { app: root.windows.find(w => w.address === mark.address)?.app });
-            }
-            if (mark !== null) {
-                root.marks = Ws.updateMarks(root.marks, mark);
-            }
-            if (mark?.type === "guardReset") {
-                root.resync();
-            }
+        }
+    }
+
+    // A mark event heard from either compositor (Ws.markEvent, Tw.markEvents),
+    // or null, filled in with what updateMarks needs to judge it.
+    function heard(event) {
+        let mark = event;
+        if (mark?.type === "focused") {
+            root.focusOrder = Ws.withFocus(root.focusOrder, mark.address);
+        } else if (mark?.type === "closed") {
+            root.focusOrder = Ws.withoutWindow(root.focusOrder, mark.address);
+        }
+        if (mark?.type === "urgent") {
+            mark = Ws.activatedEvent(mark.address, root.windows);
+        }
+        if (mark?.type === "guarded") {
+            mark = Object.assign({}, mark, {
+                app: root.windows.find(w => w.address === mark.address)?.app ?? "",
+                muted: root.muted
+            });
+        } else if (mark?.type === "focused") {
+            // Whether muting had cleared a notification's mark on it
+            // (Ws.updateMarks's "focused").
+            mark = Object.assign({}, mark, { app: root.windows.find(w => w.address === mark.address)?.app });
+        }
+        if (mark !== null) {
+            root.marks = Ws.updateMarks(root.marks, mark);
+        }
+        if (mark?.type === "guardReset") {
+            root.resync();
         }
     }
 }
