@@ -152,6 +152,26 @@ func FocusedWorkspace(socket string) (string, error) {
 	return "", errors.New("no workspace is focused")
 }
 
+// PromptMayFocus is whether a polkit prompt opening now may take the
+// keyboard, by tidewm's focus guard (GET_SEATS's prompt_may_focus). A
+// tidewm too old to say is an error.
+func PromptMayFocus(socket string) (bool, error) {
+	reply, err := Send(socket, GetSeats, nil)
+	if err != nil {
+		return false, err
+	}
+	var seats []struct {
+		PromptMayFocus *bool `json:"prompt_may_focus"`
+	}
+	if err := json.Unmarshal(reply, &seats); err != nil {
+		return false, fmt.Errorf("couldn't read the seats %q: %w", reply, err)
+	}
+	if len(seats) == 0 || seats[0].PromptMayFocus == nil {
+		return false, errors.New("tidewm doesn't say whether a prompt may take the keyboard: update tidewm")
+	}
+	return *seats[0].PromptMayFocus, nil
+}
+
 // Word makes s one argument of a command, as tidewm reads one: as it is,
 // or in double quotes when it has a space, a tab or a ";". tidewm's
 // quotes take no escapes, so s can't have a double quote, and it can't be

@@ -12,6 +12,11 @@
 //
 // prints the focused workspace's name.
 //
+//	tide-msg --prompt-may-focus
+//
+// exits 0 if a polkit prompt opening now may take the keyboard, by
+// tidewm's focus guard, and 1 if not, for tide prompt-focus.
+//
 //	tide-msg --type QUERY
 //
 // prints the reply to a query, as JSON: get_workspaces, get_outputs,
@@ -41,13 +46,14 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("tide-msg", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	focused := flags.Bool("focused-workspace", false, "print the focused workspace's name")
+	prompt := flags.Bool("prompt-may-focus", false, "exit 0 if a polkit prompt may take the keyboard now, 1 if not")
 	query := flags.String("type", "", "print the reply to the query `QUERY` (get_outputs, get_config and the rest), as JSON")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 	kind, known := swayipc.Queries[*query]
 	modes := 0
-	for _, on := range []bool{*focused, *query != "", flags.NArg() > 0} {
+	for _, on := range []bool{*focused, *prompt, *query != "", flags.NArg() > 0} {
 		if on {
 			modes++
 		}
@@ -55,6 +61,7 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	if modes != 1 || (*query != "" && !known) {
 		fmt.Fprintln(stderr, "usage: tide-msg [--] COMMAND...")
 		fmt.Fprintln(stderr, "       tide-msg --focused-workspace")
+		fmt.Fprintln(stderr, "       tide-msg --prompt-may-focus")
 		fmt.Fprintln(stderr, "       tide-msg --type get_workspaces|get_outputs|get_tree|get_version|get_config|get_inputs|get_seats")
 		return 2
 	}
@@ -62,6 +69,17 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "tide-msg: %v\n", err)
 		return 2
+	}
+	if *prompt {
+		may, err := swayipc.PromptMayFocus(socket)
+		if err != nil {
+			fmt.Fprintf(stderr, "tide-msg: couldn't ask tidewm at %s whether a prompt may take the keyboard: %v\n", socket, err)
+			return 2
+		}
+		if may {
+			return 0
+		}
+		return 1
 	}
 	if *focused {
 		name, err := swayipc.FocusedWorkspace(socket)
