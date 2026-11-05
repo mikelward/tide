@@ -183,8 +183,12 @@ cat > "$tmp/input-setup" <<'FAKE'
 printf 'input-setup\n' >> "$FAKE_LOG"
 exit "${FAKE_INPUT_STATUS:-0}"
 FAKE
+cat > "$tmp/input-watch" <<'FAKE'
+#!/bin/sh
+printf 'input-watch\n' >> "$FAKE_LOG"
+FAKE
 : > "$tmp/wallpaper.jpg"
-chmod +x "$fake"/* "$swww"/* "$swaybg"/* "$qs"/* "$notify"/* "$tmp/theme-daemon" "$tmp/agent" "$tmp/input-setup"
+chmod +x "$fake"/* "$swww"/* "$swaybg"/* "$qs"/* "$notify"/* "$tmp/theme-daemon" "$tmp/agent" "$tmp/input-setup" "$tmp/input-watch"
 
 both="org.freedesktop.Notifications org.kde.StatusNotifierWatcher"
 
@@ -210,7 +214,7 @@ run() {
         # shellcheck disable=SC2016  # the session's own sh expands them
         env PATH="$fake:$swww:$PATH" TIDE_BAR=waybar XDG_CONFIG_HOME="$tmp/config" FAKE_OWNED="$tmp/owned" FAKE_LOG="$tmp/log" FAKE_PIDS="$tmp/pids" \
             TIDE_THEME_DAEMON="$tmp/theme-daemon" TIDE_POLKIT_AGENT="$tmp/agent" \
-            TIDE_WALLPAPER="$tmp/wallpaper.jpg" TIDE_INPUT_SETUP="$tmp/input-setup" \
+            TIDE_WALLPAPER="$tmp/wallpaper.jpg" TIDE_INPUT_SETUP="$tmp/input-setup" TIDE_INPUT_WATCH="$tmp/input-watch" \
             TIDE_SHELL_WAIT=1 "$@" setsid -w sh -c 'echo $$ > "$1"; exec sh "$2"' sh "$tmp/session" "$shell" 2>&1 >/dev/null
         echo $? > "$tmp/status"
         cleanup
@@ -279,6 +283,7 @@ check "the theme daemon exiting ends the shell with a failure" test "$status" -n
 check "the exit is reported" contains "$(cat "$tmp/err")" "the theme daemon exited"
 check "the wallpaper is set" contains "$log" "swww img $tmp/wallpaper.jpg"
 check "the input setup runs" contains "$log" "input-setup"
+check "the watcher for devices plugged in later runs" contains "$log" "input-watch"
 
 run FAKE_NAMES="$both" FAKE_IMG_FAILS=1 FAKE_INPUT_STATUS=4
 check "a failed wallpaper doesn't hold up ready" contains "$(cat "$tmp/log")" "systemd-notify --ready"
@@ -295,6 +300,11 @@ run FAKE_NAMES="$both" TIDE_INPUT_SETUP="$tmp/no-such-setup"
 check "a missing TIDE_INPUT_SETUP fails, not to be retried" test "$status" -eq 78
 check "a missing TIDE_INPUT_SETUP is reported by name" \
     contains "$(cat "$tmp/err")" "TIDE_INPUT_SETUP is '$tmp/no-such-setup'"
+
+run FAKE_NAMES="$both" TIDE_INPUT_WATCH="$tmp/no-such-watch"
+check "a missing TIDE_INPUT_WATCH fails, not to be retried" test "$status" -eq 78
+check "a missing TIDE_INPUT_WATCH is reported by name" \
+    contains "$(cat "$tmp/err")" "TIDE_INPUT_WATCH is '$tmp/no-such-watch'"
 
 # swww-daemon never answers: once ready, the shell reports it with swww's
 # last error, then runs for the session as usual.
