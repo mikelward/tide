@@ -12,11 +12,14 @@ import "lib/writes.mjs" as Writes
 // outputs.local.json (§16.1): each monitor's scale and place, by its
 // description. What's set is written to ~/.config/hypr/tide-outputs.lua,
 // which conf's hyprland.lua reads, and `hyprctl eval conf_outputs.reload()`
-// has it applied with hl.monitor. A bad file is a notification naming it,
-// once, and changes nothing. So is a change that can't be saved; one that
-// can't be written or applied is tried again until it is
-// (shell/lib/writes.mjs). The files are read and written as they're
-// needed, synchronously (SettingsFile.qml).
+// has it applied with hl.monitor. On tidewm (§5.3) it's
+// ~/.config/tidewm/tide-outputs.conf, output lines naming each monitor by
+// its description, which conf's tidewm config includes, and `tide-msg
+// reload` has tidewm read it, as InputData's. A bad file is a
+// notification naming it, once, and changes nothing. So is a change that
+// can't be saved; one that can't be written or applied is tried again
+// until it is (shell/lib/writes.mjs). The files are read and written as
+// they're needed, synchronously (SettingsFile.qml).
 Singleton {
     id: root
 
@@ -33,8 +36,8 @@ Singleton {
     property var fileErrors: []
     // Why the panel's last change couldn't be saved, or "".
     property string saveFailure: ""
-    // The file conf's hyprland.lua reads, written and applied
-    // (shell/lib/writes.mjs).
+    // The file conf's hyprland.lua, or tidewm's config, reads, written and
+    // applied (shell/lib/writes.mjs).
     property var target: Writes.TARGET
 
     readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`
@@ -158,9 +161,13 @@ Singleton {
         // even unchanged: a shell restarted with an apply still to retry
         // would leave it undone. It costs nothing, since Hyprland (0.56's
         // CMonitorRuleManager::ensureMonitorStatus) leaves a monitor whose
-        // rule hasn't changed alone.
-        root.target = Writes.readTarget(root.target, writtenText, null).state;
-        root.stepped(Writes.wantTarget(root.target, Outputs.outputsLua(root.outputs)));
+        // rule hasn't changed alone. tidewm's reload starts every output
+        // and device over, so a shell start leaves tidewm with what this
+        // session's record says it read (AppliedRecord), as InputData's.
+        root.target = Compositor.tidewm
+            ? Writes.readTarget(root.target, writtenText, root.target.known ? writtenText : applied.firstApplied(writtenText, root.target.failure)).state
+            : Writes.readTarget(root.target, writtenText, null).state;
+        root.stepped(Writes.wantTarget(root.target, Compositor.tidewm ? Outputs.outputsConf(root.outputs) : Outputs.outputsLua(root.outputs)));
     }
 
     SettingsFile {
@@ -179,16 +186,27 @@ Singleton {
         onFileChanged: root.load()
     }
 
-    // What conf's hyprland.lua reads. Written only when it would say
-    // something else.
+    // What conf's hyprland.lua reads, or on tidewm what its config includes.
+    // Written only when it would say something else.
     SettingsFile {
         id: written
 
-        path: `${root.configHome}/hypr/tide-outputs.lua`
+        path: Compositor.tidewm ? `${root.configHome}/tidewm/tide-outputs.conf` : `${root.configHome}/hypr/tide-outputs.lua`
+    }
+
+    // This session's record of what tidewm last read.
+    AppliedRecord {
+        id: applied
+
+        name: "tide-outputs-tidewm-applied"
+        unsure: "reloading tidewm to be sure it has the display settings"
+        again: "tidewm may be reloaded again to be sure it has the display settings"
     }
 
     // Has conf's hyprland.lua apply what was written: `hyprctl eval` answers
     // "ok", or why not, on stdout, so its reply is read, not just its exit.
+    // On tidewm, `tide-msg reload` exits 0, or says why not, as tidewm's
+    // errors in its config, on stderr.
     Component {
         id: applier
 
@@ -223,7 +241,7 @@ Singleton {
                 if (!state.started) {
                     console.warn(state.report.message);
                     error = state.report.message.replace(/^tide: /, "");
-                } else if (state.code !== 0 || reply.trim() !== "ok") {
+                } else if (state.code !== 0 || (!Compositor.tidewm && reply.trim() !== "ok")) {
                     // A conf without conf_outputs.reload, say.
                     error = `couldn't apply the display settings: ${(reply + state.errors).trim()}`;
                     console.warn(`tide: ${error}`);
@@ -231,16 +249,20 @@ Singleton {
                     // It worked, but said something on the way, as MarkData's.
                     console.log(state.report.message);
                 }
-                root.stepped(Writes.targetApplied(root.target, error));
-                // The scales Hyprland chose for the settings now, for the
-                // page: one Reset hands back to Hyprland shows its own.
+                const done = Writes.targetApplied(root.target, error);
+                if (Compositor.tidewm && error === "") {
+                    applied.record(Writes.recordOf(done.state.applied));
+                }
+                root.stepped(done);
+                // The scales the compositor chose for the settings now, for
+                // the page: one Reset hands back to it shows its own.
                 if (error === "") {
                     root.listMonitors();
                 }
                 destroy();
             }
 
-            command: ["hyprctl", "eval", "conf_outputs.reload()"]
+            command: Compositor.tidewm ? ["tide-msg", "reload"] : ["hyprctl", "eval", "conf_outputs.reload()"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     run.reply = text;
@@ -265,8 +287,9 @@ Singleton {
         }
     }
 
-    // Lists the monitors: hyprctl monitors all -j, read once both its
-    // streams end, as the applier's are.
+    // Lists the monitors: hyprctl monitors all -j, or on tidewm tide-msg's
+    // get_outputs, which has disabled ones too, read once both its streams
+    // end, as the applier's are.
     Component {
         id: lister
 
@@ -298,7 +321,8 @@ Singleton {
                 } else if (state.report?.level === "log") {
                     console.log(state.report.message);
                 }
-                const r = Outputs.listedMonitors(state.report?.level === "warn", out);
+                const failed = state.report?.level === "warn";
+                const r = Compositor.tidewm ? Outputs.listedOutputs(failed, out) : Outputs.listedMonitors(failed, out);
                 if (r.error !== "") {
                     console.warn(`tide: ${r.error}`);
                 }
@@ -306,7 +330,7 @@ Singleton {
                 destroy();
             }
 
-            command: ["hyprctl", "monitors", "all", "-j"]
+            command: Compositor.tidewm ? ["tide-msg", "--type", "get_outputs"] : ["hyprctl", "monitors", "all", "-j"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     listing.out = text;

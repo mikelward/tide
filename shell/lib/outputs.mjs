@@ -4,7 +4,8 @@
 // A monitor is named by its description as `hyprctl monitors` gives it
 // ("Dell Inc. DELL U2720Q 1234ABC"), not its port, so its settings follow
 // it from one port to another; conf's hyprland.lua passes it to
-// hl.monitor as `desc:` and the description.
+// hl.monitor as `desc:` and the description. tidewm takes the same
+// description as an output's name, so the settings are the same there.
 
 import { jsonError } from "./clocks.mjs";
 import { stepped } from "./steps.mjs";
@@ -264,6 +265,71 @@ export function listedMonitors(failed, text) {
         monitors.push({ name: m.name, description: m.description, scale: typeof m.scale === "number" ? m.scale : null });
     }
     return { monitors, error: "" };
+}
+
+// A monitor's description as Hyprland gives it (src/output/Monitor.cpp),
+// from the make, model and serial tidewm's GET_OUTPUTS gives: joined by
+// spaces, trimmed, then without commas. tidewm names the output by it.
+export function tidewmDescription(output) {
+    const parts = [output.make, output.model, output.serial].map(p => typeof p === "string" ? p : "");
+    return parts.join(" ").trim().replace(/,/g, "");
+}
+
+// The monitors from `tide-msg --type get_outputs`, tidewm's, as
+// listedMonitors gives Hyprland's.
+export function listedOutputs(failed, text) {
+    const what = "tide-msg --type get_outputs";
+    if (failed) {
+        return { monitors: [], error: `couldn't run ${what}` };
+    }
+    let value;
+    try {
+        value = JSON.parse(text);
+    } catch (e) {
+        return { monitors: [], error: `${what}: not JSON` };
+    }
+    if (!Array.isArray(value)) {
+        return { monitors: [], error: `${what}: expected a list of outputs` };
+    }
+    const monitors = [];
+    for (const o of value) {
+        if (!isObject(o) || typeof o.name !== "string") {
+            return { monitors: [], error: `${what}: an output without its name` };
+        }
+        monitors.push({ name: o.name, description: tidewmDescription(o), scale: typeof o.scale === "number" ? o.scale : null });
+    }
+    return { monitors, error: "" };
+}
+
+// What's set, as the output lines conf's tidewm config includes from
+// tide-outputs.conf: each monitor by its description, sorted. tidewm's
+// quoted names can't hold a ", so a monitor whose description has one is
+// left out, saying so.
+export function outputsConf(settings) {
+    const lines = [
+        "# Written by tide from outputs.json and outputs.local.json (tide SPEC.md §16).",
+        "# Change those, or the Displays page of tide's settings, not this file.",
+    ];
+    const monitors = settings.monitors || {};
+    for (const name of Object.keys(monitors).sort()) {
+        const m = monitors[name];
+        const fields = [];
+        if (m.scale !== undefined) {
+            fields.push(`scale ${m.scale}`);
+        }
+        if (m.position !== undefined) {
+            fields.push(`position ${m.position}`);
+        }
+        if (fields.length === 0) {
+            continue;
+        }
+        if (name.includes('"')) {
+            lines.push(`# Not here, as tidewm can't name it: ${name}`);
+            continue;
+        }
+        lines.push(`output "${name}" ${fields.join(" ")}`);
+    }
+    return lines.join("\n") + "\n";
 }
 
 // The monitors the page lists: each one connected, then each one with

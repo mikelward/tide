@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
     POSITIONS, parseOutputs, loadOutputs, monitorSettings, withOutputSetting, steppedScale,
     formatScale, outputsLua, listedMonitors, shownMonitors, withoutMonitor, localOutputs,
+    tidewmDescription, listedOutputs, outputsConf,
 } from "./outputs.mjs";
 
 const DELL = "Dell Inc. DELL U2720Q 1234ABC";
@@ -148,4 +149,45 @@ test("the page lists each connected monitor, then each with settings that isn't"
         { name: "DP-1", description: DELL, scale: 1.5 },
         { name: "", description: PANEL, scale: null },
     ]);
+});
+
+test("on tidewm, a monitor's description is Hyprland's, from its make, model and serial", () => {
+    assert.equal(tidewmDescription({ make: "Dell Inc.", model: "DELL U2720Q", serial: "1234ABC" }), DELL);
+    // What it doesn't give is left out, and commas go after the trim
+    assert.equal(tidewmDescription({ make: "BOE", model: "0x0BCA", serial: "" }), PANEL);
+    assert.equal(tidewmDescription({ make: "Acme, Ltd", model: "", serial: "9" }), "Acme Ltd  9");
+    assert.equal(tidewmDescription({ make: "", model: "", serial: "" }), "");
+});
+
+test("tide-msg's outputs give each monitor's name, description and scale", () => {
+    const text = JSON.stringify([
+        { name: "DP-1", make: "Dell Inc.", model: "DELL U2720Q", serial: "1234ABC", scale: 1.5, active: true },
+        { name: "eDP-1", make: "BOE", model: "0x0BCA", serial: "", active: false },
+    ]);
+    assert.deepEqual(listedOutputs(false, text), {
+        monitors: [
+            { name: "DP-1", description: DELL, scale: 1.5 },
+            { name: "eDP-1", description: PANEL, scale: null },
+        ],
+        error: "",
+    });
+    assert.deepEqual(listedOutputs(true, ""), { monitors: [], error: "couldn't run tide-msg --type get_outputs" });
+    assert.equal(listedOutputs(false, "{").error, "tide-msg --type get_outputs: not JSON");
+    assert.equal(listedOutputs(false, "{}").error, "tide-msg --type get_outputs: expected a list of outputs");
+    assert.equal(listedOutputs(false, '[{"make": "BOE"}]').error, "tide-msg --type get_outputs: an output without its name");
+});
+
+test("on tidewm, what's set is written as output lines by description, sorted", () => {
+    const conf = outputsConf({ monitors: { [PANEL]: { scale: 1.25 }, [DELL]: { scale: 1.5, position: "auto-left" }, Empty: {} } });
+    assert.deepEqual(conf.split("\n").slice(2), [
+        `output "${PANEL}" scale 1.25`,
+        `output "${DELL}" scale 1.5 position auto-left`,
+        "",
+    ]);
+    assert.equal(outputsConf({}).split("\n").slice(2).join("\n"), "");
+});
+
+test("on tidewm, a monitor whose description has a quote is left out, saying so", () => {
+    const conf = outputsConf({ monitors: { 'Odd "Inc" 7': { scale: 2 } } });
+    assert.deepEqual(conf.split("\n").slice(2), ['# Not here, as tidewm can\'t name it: Odd "Inc" 7', ""]);
 });

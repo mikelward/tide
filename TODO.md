@@ -1940,11 +1940,8 @@ there once that's in. Next, in order:
 
 1. The settings pages that write `tide-*.lua` for conf's hyprland.lua
    and the keys page: each a `tide-*.conf` conf's tidewm config includes,
-   as the input and appearance pages' are, or said to be Hyprland's only.
-   - **Displays** needs tidewm to name an output by its description, as
-     the page keys a monitor's settings (sway's `output "Make Model
-     Serial"`), and to place one beside another (`auto-right` and the
-     like) rather than at a position in pixels.
+   as the input, appearance and displays pages' are, or said to be
+   Hyprland's only.
    - **Floating**'s title patterns are RE2's, and tidewm's `for_window`
      takes POSIX extended ones, which lack lazy counts and `\w \d \s`
      and `\x` escapes; a class alone is easy (an app ID or an X11 class,
