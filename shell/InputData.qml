@@ -14,12 +14,12 @@ import "lib/writes.mjs" as Writes
 // `hyprctl eval conf_input.reload()` applies it to every mouse, touchpad and
 // keyboard without reloading the rest of the config. On tidewm (§5.3) it's
 // ~/.config/tidewm/tide-input.conf, in tidewm's own lines, which conf's
-// tidewm config includes, and `tide-msg reload` has tidewm read it; a
-// device's own settings are Hyprland's alone for now. A bad file is a
-// notification naming it, once, and changes nothing. So is a change that
-// can't be saved; one that can't be written or applied is tried again
-// until it is (shell/lib/writes.mjs). The files are read and written as
-// they're needed, synchronously (SettingsFile.qml).
+// tidewm config includes, and `tide-msg reload` has tidewm read it, a
+// device's own by the name Hyprland gives it, which tidewm takes. A bad
+// file is a notification naming it, once, and changes nothing. So is a
+// change that can't be saved; one that can't be written or applied is
+// tried again until it is (shell/lib/writes.mjs). The files are read and
+// written as they're needed, synchronously (SettingsFile.qml).
 Singleton {
     id: root
 
@@ -82,15 +82,10 @@ Singleton {
     }
 
     // Lists the connected mice, touchpads and keyboards again, for the pages
-    // to name.
+    // to name: Hyprland's, or tidewm's by the names Hyprland would give them.
     // A list that fails is logged, and the pages name only the devices that
-    // have settings of their own. On tidewm there's no list for now: its
-    // devices' own settings are Hyprland's alone.
+    // have settings of their own.
     function listDevices() {
-        if (Compositor.tidewm) {
-            root.connected = [];
-            return;
-        }
         lister.createObject(root).running = true;
     }
 
@@ -314,7 +309,8 @@ Singleton {
                 } else if (state.report?.level === "log") {
                     console.log(state.report.message);
                 }
-                const r = Input.listedDevices(state.report?.level === "warn", out);
+                const failed = state.report?.level === "warn";
+                const r = Compositor.tidewm ? Input.listedTidewmDevices(failed, out) : Input.listedDevices(failed, out);
                 if (r.error) {
                     console.warn(`tide: ${r.error}`);
                 }
@@ -322,7 +318,7 @@ Singleton {
                 destroy();
             }
 
-            command: ["hyprctl", "devices", "-j"]
+            command: Compositor.tidewm ? ["tide-msg", "--type", "get_inputs"] : ["hyprctl", "devices", "-j"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     listing.out = text;

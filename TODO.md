@@ -1948,9 +1948,6 @@ there once that's in. Next, in order:
      and `\x` escapes; a class alone is easy (an app ID or an X11 class,
      either case). The shell floats the windows a new rule covers with
      `floating enable`.
-   - The input pages still lack a device's own settings there, which
-     tidewm names by identifier (`GET_INPUTS`), not as `hyprctl devices`
-     does.
 2. The rest: home's apps' rules, which conf's hyprland.lua makes on
    Hyprland, with the window events that send home the windows of
    home's apps that opened before them (`WorkspacesData.qml`); a name

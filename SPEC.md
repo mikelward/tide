@@ -458,8 +458,10 @@ flowchart TD
   write `~/.config/tidewm/tide-input.conf`, tidewm's `input type:` lines,
   which conf's tidewm config includes, and apply it with `tide-msg
   reload`. A mouse's acceleration is libinput's adaptive profile there, or
-  flat at 0, since tidewm has no curve, and a device's own settings are
-  Hyprland's alone for now. The Appearance page's dim strength (§6.2) is
+  flat at 0, since tidewm has no curve. A device's own settings are an
+  `input` block naming it as Hyprland does, which tidewm takes too, and
+  the pages list tidewm's devices by those names, from its `GET_INPUTS`.
+  The Appearance page's dim strength (§6.2) is
   `tide-appearance.conf`'s `dim_inactive`, applied the same way. The
   Displays page (§16) writes `tide-outputs.conf`, an `output` line for
   each monitor, named by the description it has on Hyprland, which

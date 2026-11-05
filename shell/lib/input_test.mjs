@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    ACCEL_STEP, LADDERS, SECTIONS, accelCurve, accelPoints, connectedDevices, deviceKind, deviceSection, listedDevices, deviceSettingError, deviceShown, formatValue, hasOwn, inputConf, inputLua, isText, loadInput,
+    ACCEL_STEP, LADDERS, SECTIONS, accelCurve, accelPoints, connectedDevices, connectedTidewmDevices, deviceKind, deviceSection, listedDevices, listedTidewmDevices, deviceSettingError, deviceShown, formatValue, hasOwn, inputConf, inputLua, isText, loadInput,
     pairError, parseInput, parseValue, settingError, shown, stepped, targetLabel, targets, withDeviceSetting, withSetting, withoutDevice,
 } from "./input.mjs";
 
@@ -522,7 +522,44 @@ test("on tidewm an empty variant is quoted, as tidewm takes no variant", () => {
     assert.ok(inputConf({ keyboard: { layout: "us", variant: "" } }).includes('    xkb_variant ""\n'));
 });
 
-test("tidewm's file leaves a device's own settings to Hyprland's", () => {
-    const text = inputConf({ mouse: { speed: 0.5 }, devices: { "logitech-mx": { speed: -0.5 } } });
-    assert.ok(!text.includes("logitech-mx") && !text.includes("-0.5"), text);
+test("on tidewm a device's own settings are a block naming it as Hyprland does, after the sections'", () => {
+    const text = inputConf({
+        mouse: { speed: 0.5 },
+        devices: {
+            "logitech-usb-receiver": { speed: -0.25, layout: "de" },
+            "synps/2-synaptics-touchpad": { tapToClick: true },
+            "nothing-set": {},
+        },
+    });
+    assert.ok(text.endsWith([
+        "input type:pointer {",
+        "    pointer_accel 0.5",
+        "}",
+        'input "logitech-usb-receiver" {',
+        "    pointer_accel -0.25",
+        "    xkb_layout de",
+        "}",
+        'input "synps/2-synaptics-touchpad" {',
+        "    tap enabled",
+        "}",
+        "",
+    ].join("\n")), text);
+});
+
+test("tidewm's devices are listed by the names Hyprland would give them", () => {
+    const text = JSON.stringify([
+        { identifier: "1133:50475:Logitech_USB_Receiver", hyprland_name: "logitech-usb-receiver", type: "keyboard" },
+        { identifier: "1133:50475:Logitech_USB_Receiver", hyprland_name: "logitech-usb-receiver-1", type: "pointer" },
+        { identifier: "2:7:SynPS/2_Synaptics_TouchPad", hyprland_name: "synps/2-synaptics-touchpad", type: "touchpad" },
+        { identifier: "0:0:bad", hyprland_name: 'has "quotes"', type: "keyboard" },
+    ]);
+    assert.deepEqual(connectedTidewmDevices(text).devices, [
+        { name: "logitech-usb-receiver", kind: "keyboard" },
+        { name: "logitech-usb-receiver-1", kind: "mouse" },
+        { name: "synps/2-synaptics-touchpad", kind: "touchpad" },
+    ]);
+    assert.deepEqual(listedTidewmDevices(true, ""), { devices: [], error: "" });
+    assert.match(listedTidewmDevices(false, "{").error, /^tide-msg --type get_inputs: /);
+    assert.match(listedTidewmDevices(false, "{}").error, /expected a list of devices/);
+    assert.match(listedTidewmDevices(false, '[{"type": "keyboard"}]').error, /too old to name it/);
 });

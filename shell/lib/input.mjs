@@ -412,6 +412,46 @@ export function connectedDevices(text) {
     return { devices };
 }
 
+// The mice, touchpads and keyboards tidewm's GET_INPUTS (`tide-msg --type
+// get_inputs`) gives, as connectedDevices gives Hyprland's: each by the
+// name Hyprland would give it, its hyprland_name, and of a pointer's kind
+// as its name says, or {error}.
+export function connectedTidewmDevices(text) {
+    const what = "tide-msg --type get_inputs";
+    let value;
+    try {
+        value = JSON.parse(text);
+    } catch (e) {
+        return { error: `${what}: ${jsonError(text)}` };
+    }
+    if (!Array.isArray(value)) {
+        return { error: `${what}: expected a list of devices` };
+    }
+    const devices = [];
+    for (const d of value) {
+        if (d === null || typeof d !== "object" || typeof d.type !== "string") {
+            return { error: `${what}: a device without its type` };
+        }
+        if (typeof d.hyprland_name !== "string") {
+            return { error: `${what}: a device without its hyprland_name; is tidewm too old to name it?` };
+        }
+        if (deviceNameError(d.hyprland_name) === "") {
+            devices.push({ name: d.hyprland_name, kind: d.type === "keyboard" ? "keyboard" : deviceKind(d.hyprland_name) });
+        }
+    }
+    return { devices };
+}
+
+// tidewm's devices from a run of `tide-msg --type get_inputs`, as
+// listedDevices.
+export function listedTidewmDevices(failed, text) {
+    if (failed) {
+        return { devices: [], error: "" };
+    }
+    const r = connectedTidewmDevices(text);
+    return r.error ? { devices: [], error: r.error } : { devices: r.devices, error: "" };
+}
+
 // The devices a run of hyprctl devices -j lists, with why its output didn't
 // read ("" if it did): none when the run failed (`failed`) or its output
 // didn't read, not the last list's, since those may have gone since.
@@ -524,8 +564,9 @@ function tidewmValue(s, value) {
 }
 
 // The file conf's tidewm config includes: an input block for each section
-// with something set in it. A device's own settings are Hyprland's alone
-// for now: tidewm names devices by identifier, not as hyprctl does.
+// with something set in it, then one for each device with settings of its
+// own, by the name Hyprland gives it, which tidewm takes too. A device's
+// name needs no escapes inside quotes (DEVICE_NAME).
 export function inputConf(input) {
     const lines = [
         "# Written by tide from input.json and input.local.json (tide SPEC.md §16).",
@@ -540,6 +581,18 @@ export function inputConf(input) {
             continue;
         }
         lines.push(`input ${TIDEWM_INPUTS[section]} {`);
+        for (const s of fields) {
+            lines.push(`    ${TIDEWM_SETTINGS[s.key]} ${tidewmValue(s, set[s.key])}`);
+        }
+        lines.push("}");
+    }
+    for (const name of Object.keys(input.devices || {}).sort()) {
+        const set = ownDevice(input.devices, name);
+        const fields = deviceSettings(name).filter(s => set[s.key] !== undefined);
+        if (fields.length === 0) {
+            continue;
+        }
+        lines.push(`input "${name}" {`);
         for (const s of fields) {
             lines.push(`    ${TIDEWM_SETTINGS[s.key]} ${tidewmValue(s, set[s.key])}`);
         }
