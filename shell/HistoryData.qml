@@ -29,6 +29,8 @@ Singleton {
     property string store: "unread"
 
     readonly property bool unread: History.unread(root.history)
+    // How many, for the bell's hover text.
+    readonly property int unreadCount: History.unreadCount(root.history)
     readonly property string dir: (Quickshell.env("XDG_STATE_HOME") || `${Quickshell.env("HOME")}/.local/state`) + "/tide"
     // Notification ids start again with each shell process, so keys carry
     // its start. A config reload keeps the server and its ids, and carries

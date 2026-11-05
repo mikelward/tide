@@ -88,8 +88,14 @@ test("clicking connects a disconnected device and disconnects a connected one", 
     assert.equal(shouldConnect(dev({ state: 3 })), false);
 });
 
-test("the Bluetooth icon's hover text says on or off, as tilemo's", () => {
-    assert.equal(bluetoothTip({ state: 1 }), "Bluetooth on");
-    assert.equal(bluetoothTip({ state: 0 }), "Bluetooth off");
+test("the Bluetooth icon's hover text says on or off, and what's connected", () => {
+    const buds = dev({ name: "Pixel Buds", state: 1 });
+    const mouse = dev({ name: "MX Master", state: 1 });
+    const kbd = dev({ name: "Keyboard", state: 1 });
+    assert.equal(bluetoothTip({ state: 1 }, []), "Bluetooth on, nothing connected");
+    assert.equal(bluetoothTip({ state: 1 }, [buds, dev({ name: "Old", state: 0 })]), "Bluetooth on, Pixel Buds connected");
+    assert.equal(bluetoothTip({ state: 1 }, [mouse, buds]), "Bluetooth on, MX Master and Pixel Buds connected");
+    assert.equal(bluetoothTip({ state: 1 }, [mouse, buds, kbd]), "Bluetooth on, 3 devices connected");
+    assert.equal(bluetoothTip({ state: 0 }, [buds]), "Bluetooth off");
     assert.equal(bluetoothTip(null), "Bluetooth off");
 });

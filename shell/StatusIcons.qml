@@ -141,7 +141,7 @@ Row {
         BarTip {
             item: bluetooth
             shown: bluetoothHit.hovered
-            text: Bt.bluetoothTip(bluetooth.adapter)
+            text: Bt.bluetoothTip(bluetooth.adapter, bluetooth.devices)
         }
 
         BluetoothPopover {
@@ -340,7 +340,11 @@ Row {
         BarTip {
             item: volume
             shown: volumeHit.hovered
-            text: Status.volumeTip({ muted: root.sink?.audio?.muted ?? true })
+            text: Status.volumeTip({
+                muted: root.sink?.audio?.muted ?? true,
+                volume: root.sink?.audio?.volume,
+                output: root.sink?.nickname || root.sink?.description || root.sink?.name || "",
+            })
         }
     }
 
@@ -512,7 +516,7 @@ Row {
         BarTip {
             item: bell
             shown: bellHit.hovered
-            text: Status.bellTip({ dnd: NotificationData.dnd, unread: HistoryData.unread })
+            text: Status.bellTip({ dnd: NotificationData.dnd, unread: HistoryData.unreadCount })
         }
     }
 

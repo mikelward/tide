@@ -126,14 +126,15 @@ test("an unknown prompt event is an error", () => {
 test("the network's hover text names the network, as tilemo's, then the internet and the VPN", () => {
     const home = net("home", { connected: true, signalStrength: 0.9 });
     const tip = (devices, fields = {}) => networkTip({ devices, wifiEnabled: true, connectivity: 4, ...fields });
-    assert.equal(tip([wifi([home])]), "home");
+    assert.equal(tip([wifi([home])]), "home, 90%", "with its signal");
+    assert.equal(tip([wifi([net("dim", { connected: true, signalStrength: undefined })])]), "dim", "no signal reported, none shown");
     assert.equal(tip([wired(true), wifi([home])]), "Wired network", "a cable wins, as on the icon");
     assert.equal(tip([wifi([net("off")])], { wifiEnabled: false }), "Wi-Fi off");
     assert.equal(tip([wifi([net("off")])]), "No network");
-    assert.equal(tip([wifi([home])], { connectivity: 2 }), "home, sign in to reach the internet");
+    assert.equal(tip([wifi([home])], { connectivity: 2 }), "home, 90%, sign in to reach the internet");
     assert.equal(tip([wired(true)], { connectivity: 3 }), "Wired network, no internet");
-    assert.equal(tip([wifi([home])], { vpn: "on" }), "home, VPN on");
-    assert.equal(tip([wifi([home])], { vpn: "connecting" }), "home, VPN connecting");
+    assert.equal(tip([wifi([home])], { vpn: "on" }), "home, 90%, VPN on");
+    assert.equal(tip([wifi([home])], { vpn: "connecting" }), "home, 90%, VPN connecting");
 });
 
 test("a wired connection coming up, or a cable with none, shows on the bar", () => {
