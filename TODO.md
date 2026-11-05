@@ -1114,10 +1114,9 @@ tested where it can be without a live session.
 - The system monitor reads every CPU package's throttle counter and
   sensor; on a live multi-socket machine, check both packages are found
   and that the bar follows the hotter one.
-- The clocks collapse to local alone when the title would get under 200 px
-  (SPEC.md §7.3). On a live session, check the switch at the edge: resize
-  or plug in a monitor across it, and watch for the clocks flickering
-  between the two, which `collapseClocks` is built to prevent.
+- The bar shows local's clock alone, and the other zones on hover
+  (SPEC.md §7.3). On a live session, check the hover line follows a
+  scroll, and stays away while the clocks popover is open.
 
 - Clock logic is in `shell/lib/clocks.mjs`: the `.local` list rule, hiding
   the local zone, day offsets and labels, tested with `node --test`.

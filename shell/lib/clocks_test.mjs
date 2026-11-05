@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     DEFAULT_CLOCKS, jsonError, parseClocks, loadClocks, visibleClocks, dayOffset,
-    formatTime, formatLocal, barClocks, scrubbed, SCRUB_STEP, zoneError,
+    formatTime, formatLocal, barClocks, zonesTip, scrubbed, SCRUB_STEP, zoneError,
     zoneFormError, cityLabel, editableClocks, editedClocks, movedClock, withoutClock,
     relabeledClock, withClock, DEFAULT_SWITCHES, SWITCH_ROWS, parseClocksFile, withClockSwitch,
     loadPlan, formatWall, lockClocks, systemZoneError, systemZoneCommand,
@@ -282,6 +282,20 @@ test("the bar ends with local and marks other days", () => {
         { text: "NYC 19:30", label: "NYC", time: "19:30", dayOffset: -1 },
         { text: "Oct 3 00:30", label: "Oct 3", time: "00:30", dayOffset: 0, local: true },
     ]);
+});
+
+test("hovering local's clock lists the other zones on one line, marking other days", () => {
+    const bar = barClocks({
+        clocks: DEFAULT_CLOCKS, localZone: "Europe/London", instant: at("2026-10-02T23:30:00Z"),
+        offsetOf, abbrOf: () => "",
+    });
+    assert.equal(zonesTip(bar), "SF 16:30 −1 · NYC 19:30 −1");
+    const tokyo = barClocks({
+        clocks: [{ zone: "Asia/Tokyo", label: "TYO" }], localZone: "Europe/London",
+        instant: at("2026-10-02T20:00:00Z"), offsetOf, abbrOf: () => "",
+    });
+    assert.equal(zonesTip(tokyo), "TYO 05:00 +1");
+    assert.equal(zonesTip(bar.filter((c) => c.local)), "", "no zones, no line");
 });
 
 // The GMT+1 trap (SPEC.md §7.3): ICU's en-US names London's summer time

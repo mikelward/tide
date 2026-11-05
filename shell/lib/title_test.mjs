@@ -1,7 +1,7 @@
 // Tests for title.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_TITLE, HOVER_LINE, hoverTitle, barTitle, barWindow, activeAtStart, hasFocus, titleWidth, collapseClocks, MIN_TITLE_ROOM, clockShown } from "./title.mjs";
+import { MAX_TITLE, HOVER_LINE, hoverTitle, barTitle, barWindow, activeAtStart, hasFocus, titleWidth } from "./title.mjs";
 
 const editor = { address: "abc", monitor: "DP-1", title: "SPEC.md - tide" };
 
@@ -70,39 +70,6 @@ test("the bar's title stands for the window a double-click maximizes", () => {
     const focused = { monitor: "DP-1", address: "0xABC", title: "SPEC.md - tide" };
     assert.deepEqual(barWindow({ monitor: "DP-1", active: focused }), { address: "abc", title: "SPEC.md - tide" });
     assert.equal(barWindow({ monitor: "DP-1", active: { ...focused, address: "" } }), null, "no address");
-});
-
-test("the zone clocks collapse only when the title would be squeezed", () => {
-    // Every clock takes 330 px; local alone, 80.
-    const full = { clocksWidth: 330, fullClocksWidth: 330 };
-    const local = { clocksWidth: 80, fullClocksWidth: 330 };
-    const bar = { barWidth: 1536, left: 480, gap: 32 };
-    // A wide bar: plenty of room with every clock.
-    assert.equal(collapseClocks({ barWidth: 3440, left: 480, gap: 32, right: 2600, ...full }), false);
-    // At 1536 px with every clock, the right group starts at 840: 2 * 72 - 32
-    // of room, under MIN_TITLE_ROOM.
-    assert.equal(collapseClocks({ ...bar, right: 840, ...full }), true);
-    // Collapsed, the group starts 250 px further right; the answer comes
-    // from the full layout, so it stays collapsed.
-    assert.equal(collapseClocks({ ...bar, right: 1090, ...local }), true);
-    // Exactly MIN_TITLE_ROOM is enough, collapsed or not.
-    const edge = 1536 / 2 + (MIN_TITLE_ROOM + 32) / 2;
-    assert.equal(collapseClocks({ ...bar, right: edge, ...full }), false);
-    assert.equal(collapseClocks({ ...bar, right: edge + 250, ...local }), false);
-    // When the workspaces' side is what's short, hiding clocks wouldn't
-    // help the centered title, so they stay.
-    assert.equal(collapseClocks({ ...bar, left: 700, right: 1300, ...full }), false);
-});
-
-test("collapsed, only local's clock shows; a zone clock, with no local field, is hidden", () => {
-    const zone = { label: "SF", time: "23:41", dayOffset: -1 };
-    const local = { label: "Oct 3", time: "00:30", dayOffset: 0, local: true };
-    assert.equal(clockShown(false, zone), true);
-    assert.equal(clockShown(false, local), true);
-    assert.equal(clockShown(true, local), true);
-    // A boolean, not undefined, which QML can't assign to visible.
-    assert.equal(clockShown(true, zone), false);
-    assert.equal(clockShown(true, undefined), false);
 });
 
 test("hovering the title shows it in full, past where the bar cuts it", () => {

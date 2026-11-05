@@ -152,20 +152,11 @@ PanelWindow {
         anchors.verticalCenter: parent.verticalCenter
     }
 
-    // Only local's clock when the title would otherwise be squeezed
-    // (SPEC.md §7.3, Title.collapseClocks).
+    // Local's clock (SPEC.md §7.3).
     Clocks {
         id: clocks
 
         reach: bar.reaches[5]
-        compact: Title.collapseClocks({
-            barWidth: bar.width,
-            left: layoutSymbol.x + layoutSymbol.width,
-            right: presenter.x,
-            gap: 32,
-            clocksWidth: clocks.width,
-            fullClocksWidth: clocks.fullWidth
-        })
         anchors.right: parent.right
         anchors.rightMargin: 6
         anchors.verticalCenter: parent.verticalCenter
