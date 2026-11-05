@@ -447,9 +447,11 @@ flowchart TD
   list tidewm's workspaces, one per name, and go to them. Its windows come
   from tidewm's `GET_TREE`, asked through `tide-msg`, and window events
   (`TidewmData.qml`), for the bar's icons and title and the switcher's
-  Windows tab, which focus, bring back and maximize them; the marks the
-  shell keeps, and what else it takes from Hyprland's events, are still
-  Hyprland's. Home (§6.5) is the shell's to
+  Windows tab, which focus, bring back and maximize them. Its marks
+  (§14.4) come from tidewm's window events too: a window tidewm marks
+  urgent is the guard's, and notifications' marks are kept as on
+  Hyprland, but tidewm's guard isn't told them. What else the
+  shell takes from Hyprland's events is still Hyprland's. Home (§6.5) is the shell's to
   keep there, as tidewm's config can't know its name: `tide-tidewm`
   starts tidewm on it and keeps it, by the name the shell last wrote to
   `tide-workspaces.lua`, and the shell keeps it from then on, with

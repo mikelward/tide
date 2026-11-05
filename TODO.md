@@ -1914,14 +1914,13 @@ and launcher; which workspaces there are, for the bar, the switcher's
 Workspaces tab and the name prompt, which go to them and keep home's
 name and home itself, which tidewm starts on; and which windows there
 are and which has focus, from tidewm's tree and window events, for the
-bar's icons and title and the switcher's Windows tab. Next, in order:
+bar's icons and title, the switcher's Windows tab and the marks, the
+guard's and notifications'. Next, in order:
 
-1. The marks (`MarkData.qml`): the focus guard's, urgency's and
-   notifications', and their order, from tidewm's `urgent_order` and
-   window events, in place of Hyprland's `activewindowv2`, `urgent`,
-   `windowtitlev2` and `custom>>tide-attention` events; and the name
-   prompt's and home's window events (`PromptData.qml`,
-   `WorkspacesData.qml`), which close and move windows.
+1. The name prompt's and home's window events (`PromptData.qml`,
+   `WorkspacesData.qml`), which close and move windows, and the shell's
+   marks told to tidewm's guard with `urgent enable`, so its urgency
+   order has them as `tide_focus.set_order` gives Hyprland's.
 2. Minimizing, which uses Hyprland's special workspaces, so needs
    something of tidewm's own.
 3. The settings pages that write `tide-*.lua` for conf's hyprland.lua
