@@ -262,7 +262,7 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
             *" scheme-monitor "*) gsettings monitor org.gnome.desktop.interface color-scheme >/dev/null 2>&1 & ;;
         esac
         case " ${7-$all_runs} " in
-            *" vpns "*) env LC_ALL=C nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show >/dev/null 2>&1 & ;;
+            *" vpns "*) env LC_ALL=C nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE,DEVICE connection show >/dev/null 2>&1 & ;;
         esac
         case " ${7-$all_runs} " in
             *" vpn-monitor "*) nmcli monitor >/dev/null 2>&1 & ;;
@@ -1009,7 +1009,7 @@ case_37() {
 stubs "$tmp/no-vpns" "exit 0" "$loaded" ":" "" full "tide-tz tide-sysmon title replay order scheme scheme-monitor vpn-monitor idle input devices binds layouts outputs dim workspaces floating startup clipboard lid keyboards popups"
 run "$tmp/no-vpns"
 check "a shell that never lists the VPNs fails" test "$code" -ne 0
-check "and says so" contains "$out" 'the shell never ran "nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show..." in 2 s'
+check "and says so" contains "$out" 'the shell never ran "nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE,DEVICE connection show..." in 2 s'
 }
 
 case_38() {
@@ -1180,19 +1180,19 @@ check "or a set with more arguments than gsettings takes" test "$code" -eq 1
 check "and says how it's used" contains "$out" "set SCHEMA[:PATH] KEY VALUE"
 stand_in gsettings set org.gnome.desktop.interface gtk-theme
 check "or fewer" test "$code" -eq 1
-out=$(env LC_ALL=C sh shell/nmcli_stand_in.sh -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show 2>&1)
+out=$(env LC_ALL=C sh shell/nmcli_stand_in.sh -t -f NAME,UUID,TYPE,ACTIVE,STATE,DEVICE connection show 2>&1)
 code=$?
 check "the stand-in nmcli lists the connections" contains "$code:$out" "0:Home:"
-check "with a VPN that's up" contains "$out" "Office VPN:6c0d4c3e-1a2b-4c5d-8e9f-000000000002:vpn:yes:activated"
+check "with a VPN that's up" contains "$out" "Office VPN:6c0d4c3e-1a2b-4c5d-8e9f-000000000002:vpn:yes:activated:wlan0"
 check "and one with an escaped colon" contains "$out" 'Lab\: WireGuard:'
-out=$(env LC_ALL=en_US.UTF-8 sh shell/nmcli_stand_in.sh -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show 2>&1)
+out=$(env LC_ALL=en_US.UTF-8 sh shell/nmcli_stand_in.sh -t -f NAME,UUID,TYPE,ACTIVE,STATE,DEVICE connection show 2>&1)
 code=$?
 check "but only in the C locale" test "$code" -eq 2
 stand_in nmcli connection up uuid 6c0d4c3e-1a2b-4c5d-8e9f-000000000003
 check "and answers nothing else" test "$code" -eq 2
 stand_in nmcli monitor extra
 check "not even its own calls with more arguments" test "$code" -eq 2
-out=$(env LC_ALL=C sh shell/nmcli_stand_in.sh "-t -f" NAME,UUID,TYPE,ACTIVE,STATE connection show 2>&1)
+out=$(env LC_ALL=C sh shell/nmcli_stand_in.sh "-t -f" NAME,UUID,TYPE,ACTIVE,STATE,DEVICE connection show 2>&1)
 code=$?
 check "or with two of them run together" test "$code" -eq 2
 }

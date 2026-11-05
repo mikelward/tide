@@ -4,8 +4,9 @@ import Quickshell.Networking
 import "lib/network.mjs" as Net
 import "lib/vpn.mjs" as Vpn
 
-// The network popover (SPEC.md §7.4): Wi-Fi on or off, the networks in
-// range, the VPNs, and NetworkManager's editor for everything else. A
+// The network popover (SPEC.md §7.4): the wired devices and their
+// profiles, Wi-Fi on or off, the networks in range, the VPNs, and
+// NetworkManager's editor for everything else. A
 // network that needs a password asks for it here, once NetworkManager says
 // so. There's one per monitor; what they share lives in NetworkData.
 PopupWindow {
@@ -120,6 +121,66 @@ PopupWindow {
 
                 width: parent.width
                 spacing: 2
+
+                // Each wired device: a click connects or disconnects it,
+                // and with a choice of saved profiles, a row each.
+                Repeater {
+                    model: Net.wiredList(root.devices)
+
+                    Column {
+                        id: wiredDevice
+
+                        required property var modelData
+                        readonly property string action: Net.wiredAction(modelData)
+
+                        width: list.width
+                        spacing: 2
+
+                        MenuRow {
+                            width: list.width
+                            icon: wiredDevice.modelData.hasLink ? "network-wired-symbolic" : "network-wired-disconnected-symbolic"
+                            label: Net.wiredLabel(wiredDevice.modelData, Net.wiredList(root.devices).length)
+                            selected: wiredDevice.modelData.connected
+                            enabled: wiredDevice.action !== ""
+                            onClicked: {
+                                if (wiredDevice.action === "disconnect") {
+                                    wiredDevice.modelData.device.disconnect();
+                                } else if (wiredDevice.action === "connect") {
+                                    wiredDevice.modelData.network?.connect();
+                                }
+                            }
+                        }
+
+                        Repeater {
+                            model: Net.wiredProfiles(wiredDevice.modelData, NetworkData.wired)
+
+                            MenuRow {
+                                required property var modelData
+
+                                width: list.width
+                                indent: true
+                                label: modelData.name
+                                selected: modelData.active
+                                onClicked: {
+                                    if (modelData.active) {
+                                        return;
+                                    }
+                                    // A password it asks for (802.1X) follows
+                                    // your click (SPEC.md §5.6).
+                                    AgentData.noteStarted(modelData.settings.uuid);
+                                    const name = modelData.name;
+                                    Launcher.run(Net.wiredProfileCommand(modelData, wiredDevice.modelData), ok => {
+                                        if (!ok) {
+                                            // nmcli's own message is in the log (Launcher).
+                                            console.warn(`tide: couldn't switch to the wired profile ${name}`);
+                                        }
+                                        NetworkData.readVpns();
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
 
                 MenuRow {
                     width: list.width

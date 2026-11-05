@@ -1803,7 +1803,7 @@ gsettings monitor org.gnome.desktop.interface color-scheme
 gsettings set org.gnome.desktop.interface color-scheme
 gsettings set org.gnome.desktop.interface gtk-theme
 nmcli monitor
-nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show
+nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE,DEVICE connection show
 systemctl --user try-restart hypridle.service
 hyprctl eval conf_input.reload()
 hyprctl devices -j

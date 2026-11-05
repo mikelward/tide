@@ -3,7 +3,7 @@
 # A stand-in for nmcli, for shell/integration_test.sh: the shell's own calls,
 # answered as NetworkManager's would answer them.
 #
-#   LC_ALL=C nmcli_stand_in.sh -t -f NAME,UUID,TYPE,ACTIVE,STATE connection show
+#   LC_ALL=C nmcli_stand_in.sh -t -f NAME,UUID,TYPE,ACTIVE,STATE,DEVICE connection show
 #   nmcli_stand_in.sh monitor
 #
 # The list is a Wi-Fi network, a VPN that's up, a WireGuard VPN that's
@@ -19,16 +19,16 @@ case "$#|$*" in
     "1|monitor")
         exec tail --pid="$PPID" -f /dev/null
         ;;
-    "5|-t -f NAME,UUID,TYPE,ACTIVE,STATE connection show")
+    "5|-t -f NAME,UUID,TYPE,ACTIVE,STATE,DEVICE connection show")
         if test "${LC_ALL:-}" != C; then
             echo "nmcli: the integration test's stand-in lists connections only for LC_ALL=C" >&2
             exit 2
         fi
         cat <<'LIST'
-Home:6c0d4c3e-1a2b-4c5d-8e9f-000000000001:802-11-wireless:yes:activated
-Office VPN:6c0d4c3e-1a2b-4c5d-8e9f-000000000002:vpn:yes:activated
-Lab\: WireGuard:6c0d4c3e-1a2b-4c5d-8e9f-000000000003:wireguard:no:
-Wired connection 1:6c0d4c3e-1a2b-4c5d-8e9f-000000000004:802-3-ethernet:no:
+Home:6c0d4c3e-1a2b-4c5d-8e9f-000000000001:802-11-wireless:yes:activated:wlan0
+Office VPN:6c0d4c3e-1a2b-4c5d-8e9f-000000000002:vpn:yes:activated:wlan0
+Lab\: WireGuard:6c0d4c3e-1a2b-4c5d-8e9f-000000000003:wireguard:no::
+Wired connection 1:6c0d4c3e-1a2b-4c5d-8e9f-000000000004:802-3-ethernet:no::
 LIST
         ;;
     *)
