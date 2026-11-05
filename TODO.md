@@ -1897,7 +1897,8 @@ history; tide's changes go on top of v0.9 there. Before rewriting §3.1 around i
 
 **A session on it**, as an option beside Hyprland's, never the default
 until it's done (SPEC.md §5.3). The entry, the wrapper, the units' target
-and the portals are in. Next, in order:
+and the portals are in, and `setup --tidewm` (scripts) builds tidewm at a
+pinned commit, where the distro packages wlroots 0.20. Next, in order:
 
 1. `tide doctor`'s home-workspace check on tidewm, once conf's config
    makes home persistent there. Its bar and config-error checks already
@@ -1905,8 +1906,7 @@ and the portals are in. Next, in order:
    `prompt-focus` do.
 2. conf: a tidewm config with tide's keys, rules and inputs, and
    hypridle's displays off without `hyprctl`.
-3. scripts: `setup` builds tidewm from a pinned tag (below).
-4. The shell's tidewm backend: its workspaces, windows and monitors from
+3. The shell's tidewm backend: its workspaces, windows and monitors from
    sway's IPC, in place of `Quickshell.Hyprland`.
 
 If the fork is adopted, machines build a pinned release tag, never a branch:

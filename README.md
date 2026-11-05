@@ -53,9 +53,10 @@ login (SPEC.md §5.3). If the display manager doesn't list the session,
 install it with `sudo make install-session PREFIX=/usr`.
 
 **tide (tidewm)** is the same session on tidewm, tide's fork of dwl
-(mikelward/tidewm), listed only where tidewm is installed. It's still
-being built: the shell reads only Hyprland's IPC so far, so its bar has
-no workspaces there yet. Hyprland's stays the default.
+(mikelward/tidewm), listed only where tidewm is installed: scripts'
+`setup --tidewm` builds it, on Debian testing and Arch. It's still being
+built: the shell reads only Hyprland's IPC so far, so its bar has no
+workspaces there yet. Hyprland's stays the default.
 
 `make install-session` also installs tide's greeter, for greetd (SPEC.md
 §11): `tide-greeter`, which runs Hyprland with its own config and the
