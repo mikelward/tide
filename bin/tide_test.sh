@@ -766,6 +766,65 @@ check "other escaped characters are undone too" \
         "tide: not starting org.example.a+b in tide; add org.example.a+b to $tmp/config/tide/autostart to allow it"
 check "a unit that isn't an autostart one is a usage error" test "$(allowed 'app-foo.service'; echo $?)" -eq 2
 
+# autostart-sweep: an autostart unit left running from an earlier login,
+# when the user manager outlived it (lingering, or a shpool session), never
+# met the allowlist; the sweep stops those the allowlist skips. The fake
+# systemctl lists $FAKE_UNITS as running, says this session began at
+# monotonic 1000, and gives each unit the start time in $FAKE_STARTED
+# ("unit=time" words). It logs every call.
+mkdir "$tmp/sweep-bin"
+cat > "$tmp/sweep-bin/systemctl" <<'FAKE'
+#!/bin/sh
+printf "systemctl %s\n" "$*" >> "$FAKE_LOG"
+case "$*" in
+    "--user list-units"*) for u in $FAKE_UNITS; do echo "$u loaded active running $u"; done ;;
+    *"--value graphical-session.target") echo 1000 ;;
+    "--user show -p Id -p ExecMainStartTimestampMonotonic"*)
+        for pair in $FAKE_STARTED; do
+            if test -n "${FAKE_TIME_FIRST:-}"; then
+                printf 'ExecMainStartTimestampMonotonic=%s\nId=%s\n\n' "${pair##*=}" "${pair%=*}"
+            else
+                printf 'Id=%s\nExecMainStartTimestampMonotonic=%s\n\n' "${pair%=*}" "${pair##*=}"
+            fi
+        done ;;
+esac
+FAKE
+chmod +x "$tmp/sweep-bin/systemctl"
+sweep() {
+    : > "$log"
+    env PATH="$tmp/sweep-bin:$tmp/agent-bin:$PATH" FAKE_LOG="$log" FAKE_AGENT="${FAKE_AGENT-registered}" \
+        XDG_CURRENT_DESKTOP="${DESKTOP-tide:Hyprland}" XDG_CONFIG_HOME="$tmp/config" \
+        FAKE_UNITS="$1" FAKE_STARTED="$2" FAKE_TIME_FIRST="${FAKE_TIME_FIRST:-}" sh "$qs" autostart-sweep 2>"$tmp/err"
+    echo $?
+}
+old='app-nm\x2dapplet@autostart.service app-blueman@autostart.service'
+check "the sweep stops leftovers the allowlist skips" \
+    test "$(sweep "$old" 'app-nm\x2dapplet@autostart.service=200 app-blueman@autostart.service=300')" -eq 0
+check "it stops nm-applet, left from before, while the shell's agent runs" \
+    contains "$(cat "$log")" 'systemctl --user stop -- app-nm\x2dapplet@autostart.service'
+check "and blueman's applet" contains "$(cat "$log")" "systemctl --user stop -- app-blueman@autostart.service"
+check "and says why" contains "$(cat "$tmp/err")" "left running from an earlier login"
+sweep "$old" 'app-nm\x2dapplet@autostart.service=1200 app-blueman@autostart.service=1300' >/dev/null
+check "a unit started this session is left to the allowlist that started it" lacks "$(cat "$log")" "--user stop"
+# systemctl show keeps the properties in the order the unit gives them,
+# not the order asked for, so each record is read whole.
+FAKE_TIME_FIRST=1 sweep "$old" 'app-nm\x2dapplet@autostart.service=1200 app-blueman@autostart.service=300' >/dev/null
+check "with the start time printed first, the leftover is the one stopped" \
+    contains "$(cat "$log")" "systemctl --user stop -- app-blueman@autostart.service"
+check "and this session's unit isn't" lacks "$(cat "$log")" 'stop -- app-nm\x2dapplet@autostart.service'
+mkdir -p "$tmp/config/tide"
+printf 'blueman\n' > "$tmp/config/tide/autostart"
+sweep "$old" 'app-nm\x2dapplet@autostart.service=200 app-blueman@autostart.service=300' >/dev/null
+check "a leftover on the user's list stays" lacks "$(cat "$log")" "stop -- app-blueman@autostart.service"
+rm -rf "$tmp/config"
+FAKE_AGENT='' sweep "$old" 'app-nm\x2dapplet@autostart.service=200' >/dev/null
+check "nm-applet stays while no shell's agent answers" lacks "$(cat "$log")" "--user stop"
+DESKTOP=KDE sweep "$old" 'app-blueman@autostart.service=300' >/dev/null
+check "outside tide the sweep does nothing" test ! -s "$log"
+check "the sweep takes no arguments" test "$(sh "$qs" autostart-sweep extra 2>/dev/null; echo $?)" -eq 2
+check "tide.service sweeps once the shell is up" \
+    grep -qx 'ExecStartPost=-tide autostart-sweep' systemd/user/tide.service
+
 # The drop-in on every app-*.service: only autostart units in tide ask
 # the allowlist; everything else passes without asking.
 dropin=$(sed -n "s/^ExecCondition=\/bin\/sh -c '\(.*\)'\$/\1/p" systemd/user/app-.service.d/tide-autostart.conf)

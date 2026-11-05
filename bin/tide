@@ -116,6 +116,16 @@
 #     desktop ID per line; lines starting with # are comments, so an ID
 #     that itself starts with # is written escaped, as \x23ID.
 #
+#   tide autostart-sweep
+#
+#     Stops each XDG autostart unit left running from an earlier login that
+#     `tide autostart-allowed` would skip now. The user manager can outlive
+#     a logout (lingering, or a shpool session), and with it the units it
+#     ran, which never met the allowlist. tide.service runs it once the
+#     shell is up. A unit started this session is left alone: the
+#     allowlist already let it start. Outside a tide session it does
+#     nothing. Exits 1 if a unit couldn't be listed, checked or stopped.
+#
 #   tide network-agent
 #
 #     Prints where the Quickshell shell's network agent stands (`ipc call
@@ -230,6 +240,7 @@ usage() {
     echo "       $prog grant ID..." >&2
     echo "       $prog focus ID..." >&2
     echo "       $prog autostart-allowed UNIT" >&2
+    echo "       $prog autostart-sweep" >&2
     echo "       $prog network-agent" >&2
     echo "       $prog brightness STEP" >&2
     echo "       $prog lock" >&2
@@ -1058,6 +1069,65 @@ autostart_allowed() {
     exit 1
 }
 
+autostart_sweep() {
+    test $# -eq 0 || usage
+    case ":${XDG_CURRENT_DESKTOP:-}:" in
+        *:tide:*) ;;
+        *) return 0 ;;
+    esac
+    if ! names=$(systemctl --user list-units --state=active --plain --no-legend 'app-*@autostart.service' 2>&1); then
+        echo "$prog autostart-sweep: systemctl couldn't list the autostart units ($names)" >&2
+        exit 1
+    fi
+    names=$(printf '%s\n' "$names" | awk 'NF { print $1 }')
+    test -n "$names" || return 0
+    # Started before this session's graphical-session.target, as tide
+    # doctor tells the units this session ran.
+    if ! since=$(systemctl --user show -p ActiveEnterTimestampMonotonic --value graphical-session.target 2>&1); then
+        echo "$prog autostart-sweep: systemctl couldn't say when this session began ($since)" >&2
+        exit 1
+    fi
+    # shellcheck disable=SC2086  # one unit name per word
+    if ! shown=$(systemctl --user show -p Id -p ExecMainStartTimestampMonotonic -- $names 2>&1); then
+        echo "$prog autostart-sweep: systemctl couldn't show the autostart units ($shown)" >&2
+        exit 1
+    fi
+    # One blank-line-separated record per unit, its properties in whatever
+    # order systemctl gives them.
+    old=$(printf '%s\n' "$shown" | awk -v since="${since:-0}" '
+        BEGIN { RS = ""; FS = "\n" }
+        {
+            id = ""; start = 0
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /^Id=/) id = substr($i, 4)
+                if ($i ~ /^ExecMainStartTimestampMonotonic=/) start = substr($i, 33) + 0
+            }
+            if (id != "" && start > 0 && start < since + 0) print id
+        }
+    ')
+    status=0
+    for unit in $old; do
+        # In a subshell, since it exits; its "not starting" message is for
+        # the unit's own journal.
+        err=$( (autostart_allowed "$unit") 2>&1 >/dev/null)
+        case $? in
+            0) ;;
+            1)
+                echo "$prog: stopping $unit, left running from an earlier login: it isn't on tide's autostart allowlist" >&2
+                if ! out=$(systemctl --user stop -- "$unit" 2>&1); then
+                    echo "$prog autostart-sweep: couldn't stop $unit ($out)" >&2
+                    status=1
+                fi
+                ;;
+            *)
+                echo "$prog autostart-sweep: couldn't check $unit against the allowlist (${err:-no reason given})" >&2
+                status=1
+                ;;
+        esac
+    done
+    return "$status"
+}
+
 brightness() {
     if test $# -ne 1 || test -z "$1"; then
         usage
@@ -1367,6 +1437,7 @@ case "${1:-}" in
     grant) shift; grant_only "$@" ;;
     focus) shift; focus_app "$@" ;;
     autostart-allowed) shift; autostart_allowed "$@" ;;
+    autostart-sweep) shift; autostart_sweep "$@" ;;
     network-agent) shift; network_agent "$@" ;;
     brightness) shift; brightness "$@" ;;
     lock) shift; lock "$@" ;;

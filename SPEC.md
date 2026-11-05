@@ -514,6 +514,12 @@ flowchart TD
   running, plus any desktop IDs in `~/.config/tide/autostart`. Everything
   else is skipped in tide and still runs under KDE. `doctor` reports any
   that ran anyway.
+  - **Leftovers are stopped.** The user manager can outlive a logout
+    (lingering, or a shpool session), and so can the autostart units it
+    ran, which never met the list. Once the shell is up, `tide.service`
+    runs `tide autostart-sweep`, which stops each one still running from
+    before this session that the list skips now. A unit started this
+    session is left alone, since the list let it start.
   - `nm-applet` is NetworkManager's secret agent wherever `tide-agent`
     (§5.6) isn't. `tide autostart-allowed` asks the shell (`ipc call
     agent status`): no Quickshell shell answering means waybar is the bar
