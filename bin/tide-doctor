@@ -23,11 +23,11 @@
 #   - the home workspace (SPEC.md §6.5) exists and is persistent, which
 #     takes the shell's tide-workspaces.lua and conf's rule for it;
 #   - no monitor has more than one bar, by shape or by space reserved
-#     beyond tide's own bar.
-# In tidewm's session (SPEC.md §5.3), the bars and config errors are
-# tidewm's, read through tide-msg, and the home workspace, which asks
-# Hyprland, is left out, saying so on stderr.
+#     beyond tide's own bar;
 #   - no XDG autostart unit off the allowlist ran in tide.
+# In tidewm's session (SPEC.md §5.3), the bars, the config errors and
+# home are tidewm's, read through tide-msg; the shell, not conf, keeps
+# home there.
 
 prog=${0##*/}
 problems=0
@@ -860,14 +860,10 @@ elif test "$installed" != "$(shipped_portals_conf "$first")"; then
     problem "$found isn't the one tide ships ($backends under [preferred]), so portals may pick the wrong backend: reinstall it with \`make install\` in the tide checkout"
 fi
 
-# The home workspace's check asks Hyprland, so tidewm's session skips it,
-# and says so; the bars and config errors are tidewm's own there, read
-# through tide-msg.
-if test "$compositor" = tidewm; then
-    echo "$prog: in tidewm's session, the home workspace isn't checked yet: that check asks Hyprland" >&2
-    if ! command -v tide-msg >/dev/null 2>&1; then
-        problem "no tide-msg, so tidewm's bars and config errors aren't checked: run \`make build\`, then \`sudo make install-session PREFIX=/usr\`, in the tide checkout"
-    fi
+# In tidewm's session, the bars, the config errors and home are tidewm's
+# own, read through tide-msg.
+if test "$compositor" = tidewm && ! command -v tide-msg >/dev/null 2>&1; then
+    problem "no tide-msg, so tidewm's bars, config errors and home aren't checked: run \`make build\`, then \`sudo make install-session PREFIX=/usr\`, in the tide checkout"
 fi
 
 # One bar per monitor (§5.2): a second one stacks above or below the first.
@@ -1010,24 +1006,45 @@ else
 fi
 
 # The home workspace (SPEC.md §6.5): the shell writes its name to
-# tide-workspaces.lua, and conf's hyprland.lua makes it persistent. Without
-# either, home can vanish when left empty and its apps open where you are.
-# The name is read as the shell writes it (`    home = "NAME",`), and
-# compared with Hyprland's after undoing each one's escapes of " and \.
+# tide-workspaces.lua, and conf's hyprland.lua makes it persistent; on
+# tidewm, which reads no such file, the shell keeps it itself, with
+# `persist workspace`. Without either, home can vanish when left empty and
+# its apps open where you are. The name is read as the shell writes it
+# (`    home = "NAME",`), and compared with Hyprland's after undoing each
+# one's escapes of " and \.
 workspaces_lua=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/tide-workspaces.lua
 unescape() {
     printf '%s' "$1" | sed 's/\\\(.\)/\1/g'
 }
-if test "$compositor" = tidewm; then
-    :
-elif ! test -e "$workspaces_lua"; then
+# Whether tidewm keeps home, $1, as a problem if it doesn't.
+home_on_tidewm() {
+    if ! command -v tide-msg >/dev/null 2>&1; then
+        return 0
+    elif ! command -v jq >/dev/null 2>&1; then
+        problem "jq isn't installed, so whether home ($1) is kept isn't checked: install jq (scripts' setup does)"
+    elif ! workspaces=$(tide-msg --type get_workspaces 2>&1); then
+        problem "$workspaces, so whether home ($1) is kept isn't known: is tidewm running?"
+    elif ! persistent=$(printf '%s' "$workspaces" | jq -r --arg home "$1" \
+            'map(select(.name == $home)) | if length == 0 then "missing" else (.[0].persistent | tostring) end' 2>&1); then
+        problem "couldn't read tidewm's workspaces ($persistent), so whether home ($1) is kept isn't known"
+    else
+        case "$persistent" in
+            true) ;;
+            missing) problem "there's no home workspace ($1), so its apps open where you are: \`systemctl --user restart tide.service\`, whose shell makes it" ;;
+            *) problem "home ($1) isn't persistent, so it goes when it's left empty: \`systemctl --user restart tide.service\`, whose shell keeps it" ;;
+        esac
+    fi
+}
+if ! test -e "$workspaces_lua"; then
     problem "no $workspaces_lua, so conf doesn't know which workspace is home: is tide's shell running? It writes the file as it starts"
 elif ! home_line=$(grep -m 1 '^    home = ".*",$' "$workspaces_lua" 2>&1) || test -z "$home_line"; then
     problem "couldn't read home's name from $workspaces_lua${home_line:+ ($home_line)}: restart tide's shell, which writes it"
 else
     home_ws=${home_line#    home = \"}
     home_ws=$(unescape "${home_ws%\",}")
-    if ! workspaces=$(hyprctl -j workspaces 2>&1); then
+    if test "$compositor" = tidewm; then
+        home_on_tidewm "$home_ws"
+    elif ! workspaces=$(hyprctl -j workspaces 2>&1); then
         problem "hyprctl workspaces failed ($workspaces), so whether home ($home_ws) is kept isn't known"
     else
         # Each workspace's name, then whether it's persistent, as one line.

@@ -21,12 +21,12 @@ once you have agreed with it or reversed it.
 - **The tidewm entry is "tide (tidewm)", shown only with tidewm
   installed** (2026-11-05): `TryExec=tidewm`, which the greeter and other
   display managers honor, so it isn't offered where it can't start.
-- **`tide doctor` skips the home workspace in tidewm's session**
-  (2026-11-05), saying so on stderr, rather than reporting Hyprland as not
-  running: the check reads Hyprland's persistent workspaces, and on
-  tidewm the shell will keep home itself, with `persist workspace`, which
-  it doesn't yet: tidewm's config can't know home's name. Its bars and
-  config errors are tidewm's own there.
+- **tidewm's session starts on home by the shell's last name for it**
+  (2026-11-05): `tide-tidewm` reads home's name from the
+  `tide-workspaces.lua` the shell wrote for conf's hyprland.lua, as
+  `tide doctor` does, and has tidewm go there and keep it as it starts,
+  rather than tidewm gaining a setting for its first workspace. The
+  shell keeps home from then on.
 - **The shell asks tidewm through Quickshell's I3 module** (2026-11-05),
   which speaks sway's IPC as tidewm does, rather than through a client of
   tide's own: it's in every Quickshell build, and tidewm's output focus
@@ -1915,31 +1915,29 @@ until it's done (SPEC.md §5.3). The entry, the wrapper, the units' target
 and the portals are in, `setup --tidewm` (scripts) builds tidewm at a
 pinned commit, where the distro packages wlroots 0.20, and conf has a
 tidewm config with tide's keys and inputs. `tide`'s grants, focused
-workspace and `prompt-focus`, and `tide doctor`'s bar and config-error
-checks, read tidewm's IPC. What's left is the shell, which reads
+workspace and `prompt-focus`, and `tide doctor`'s bar, config-error
+and home checks, read tidewm's IPC. What's left is the shell, which reads
 Hyprland's: `Compositor.qml` asks whichever compositor the session runs,
 and so far says which monitor has focus, for the popups, prompts, OSD
 and launcher, and which workspaces there are, for the bar, the
 switcher's Workspaces tab and the name prompt, which go to them and keep
-home's name. Next, in order:
+home's name and home itself, which tidewm starts on. Next, in order:
 
-1. Home, kept with `persist workspace` as the shell starts and when home
-   is renamed, which `tide doctor` then checks; and home as the workspace
-   tidewm starts on, which is `1`.
-2. Windows: a list from tidewm's tree and window events, by container
+1. Windows: a list from tidewm's tree and window events, by container
    id: titles, apps, focus order, urgency and the shell's marks
    (`urgent_order`), and focusing, moving and closing one.
-3. Minimizing, which uses Hyprland's special workspaces, so needs
+2. Minimizing, which uses Hyprland's special workspaces, so needs
    something of tidewm's own.
-4. The settings pages that write `tide-*.lua` for conf's hyprland.lua
+3. The settings pages that write `tide-*.lua` for conf's hyprland.lua
    (floating, input, appearance, outputs and layouts) and the keys page:
    each over tidewm's IPC or config, or said to be Hyprland's only.
-5. The rest: a name with a `;`, which tidewm's commands can't take, nor
-   a rename one with " to " (sway's quoting would do), the lock's
-   keyboard layout (`GET_INPUTS` and input events),
-   the greeter's displays off, the share picker (xdg-desktop-portal-wlr's
-   chooser), the focus guard's evals, and an integration test against a
-   stand-in for tidewm, as `shell/hyprland_stand_in.py` is Hyprland's.
+4. The rest: home's apps' rules, which conf's hyprland.lua makes on
+   Hyprland; a name with a `;`, which tidewm's commands can't take, nor
+   a rename one with " to " (sway's quoting would do); the lock's
+   keyboard layout (`GET_INPUTS` and input events); the greeter's
+   displays off; the share picker (xdg-desktop-portal-wlr's chooser); the
+   focus guard's evals; and an integration test against a stand-in for
+   tidewm, as `shell/hyprland_stand_in.py` is Hyprland's.
 
 If the fork is adopted, machines build a pinned release tag, never a branch:
 

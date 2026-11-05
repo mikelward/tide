@@ -446,9 +446,13 @@ flowchart TD
   on the focused monitor, and the bar, the switcher and the name prompt
   list tidewm's workspaces, one per name, and go to them. It reads windows
   from Hyprland's IPC still, so on tidewm the bar has no app icons until
-  the rest of its tidewm backend lands. `tide doctor` counts bars and reports config errors
-  from tidewm's `GET_OUTPUTS` and `GET_CONFIG` there, and leaves out the
-  home workspace's check, which asks Hyprland, saying so.
+  the rest of its tidewm backend lands. Home (§6.5) is the shell's to
+  keep there, as tidewm's config can't know its name: `tide-tidewm`
+  starts tidewm on it and keeps it, by the name the shell last wrote to
+  `tide-workspaces.lua`, and the shell keeps it from then on, with
+  `persist workspace`. `tide doctor` counts bars, reports config errors
+  and checks home from tidewm's `GET_OUTPUTS`, `GET_CONFIG` and
+  `GET_WORKSPACES` there.
 
 ### 5.4 Guards that keep it that way
 
@@ -1142,6 +1146,10 @@ in how long they last and what stays visible:
   - `tide doctor` names what's wrong when home doesn't exist or isn't
     persistent (`conf`'s rule is missing), or the shell hasn't written the
     file. A `conf_workspaces.reload()` that fails is a notification.
+  - On tidewm (§5.3), which reads no such file, the shell keeps home with
+    `persist workspace`, and lets an old home go with `unpersist
+    workspace` when home is renamed. A `tide-msg` that fails is a
+    notification too. Home's apps' rules are Hyprland's only, for now.
 - It can't be renamed. tide offers no way to, and a rename from elsewhere
   (`hyprctl`) is undone by the shell when it hears `renameworkspace`.
 - A list of apps lives there, set in `workspaces.json` (`inApps`, §16).

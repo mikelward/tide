@@ -1,7 +1,7 @@
 // Tests for compositor.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isTidewm, screenNamed, tidewmWorkspaces, tidewmCurrent, tidewmMonitors, tidewmWorkspaceEvent, tidewmGoTo, tidewmRename } from "./compositor.mjs";
+import { isTidewm, screenNamed, tidewmWorkspaces, tidewmCurrent, tidewmMonitors, tidewmWorkspaceEvent, tidewmGoTo, tidewmRename, tidewmKeepHome, tidewmRelease, startedHome } from "./compositor.mjs";
 import { workspaceOrder } from "./workspaces.mjs";
 
 test("tidewm's session is the one naming tidewm", () => {
@@ -116,4 +116,51 @@ test("a rename tidewm would split wrongly can't be sent", () => {
     assert.equal(tidewmRename("To", "in"), null);
     assert.equal(tidewmRename("toast", "in"), "rename workspace toast to in", "a name that only starts with to");
     assert.equal(tidewmRename("a;b", "in"), null);
+});
+
+test("tidewm keeps home, making it if it's new", () => {
+    assert.equal(tidewmKeepHome("in"), "persist workspace in");
+    assert.equal(tidewmKeepHome("my mail"), "persist workspace my mail");
+});
+
+test("a home tidewm can't name can't be kept", () => {
+    assert.equal(tidewmKeepHome("a;b"), null);
+    assert.equal(tidewmKeepHome(""), null);
+});
+
+test("an old home is let go once it's empty", () => {
+    assert.deepEqual(tidewmRelease(["in"], "mail", ["in", "re", "mail"]),
+        { command: "unpersist workspace in", pending: [] });
+    assert.deepEqual(tidewmRelease(["in", "inbox", "in"], "mail", ["in", "inbox"]),
+        { command: "unpersist workspace in; unpersist workspace inbox", pending: [] }, "each once");
+});
+
+test("until tidewm has listed its workspaces, old homes wait", () => {
+    assert.deepEqual(tidewmRelease(["in"], "mail", []), { command: null, pending: ["in"] });
+});
+
+test("an old home that's gone already, or that tidewm can't name, is dropped, as tidewm would refuse it", () => {
+    assert.deepEqual(tidewmRelease(["in"], "mail", ["re", "mail"]), { command: null, pending: [] });
+    assert.deepEqual(tidewmRelease(["a;b"], "mail", ["a;b"]), { command: null, pending: [] });
+});
+
+test("home as it is now is never let go", () => {
+    assert.deepEqual(tidewmRelease(["mail"], "mail", ["mail"]), { command: null, pending: [] },
+        "renamed back before the release");
+    assert.deepEqual(tidewmRelease(["mail"], "mail", []), { command: null, pending: [] });
+});
+
+test("the home tidewm started on is the one the shell last wrote", () => {
+    assert.equal(startedHome('return {\n    home = "my mail",\n    in_apps = {},\n}\n'), "my mail");
+});
+
+test("with no file, or no home in it, tidewm started on in", () => {
+    assert.equal(startedHome(""), "in");
+    assert.equal(startedHome(null), "in");
+    assert.equal(startedHome("return {}\n"), "in");
+    assert.equal(startedHome('return {\n  home = "x",\n}\n'), "in", "not as the shell writes it");
+});
+
+test("so a stale home is let go", () => {
+    assert.deepEqual(tidewmRelease([startedHome("")], "mail", ["in", "mail"]).command, "unpersist workspace in");
 });

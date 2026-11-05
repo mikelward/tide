@@ -89,12 +89,40 @@ echo "tidewm $*"
 test "$1" = -s && /bin/sh -c "$2"
 STUB
 printf '#!/bin/sh\necho "uwsm $*"\n' > "$tmp/tidewm-bin/uwsm"
-chmod +x "$tmp/tidewm-bin/tidewm" "$tmp/tidewm-bin/uwsm"
-tidewm_ran=$(PATH="$tmp/tidewm-bin:/usr/bin:/bin" /bin/sh "$tidewm_wrapper" -c x)
+# A stub tide-msg prints what it was asked, and fails with $FAKE_TIDEMSG_FAILS.
+cat > "$tmp/tidewm-bin/tide-msg" <<'STUB'
+#!/bin/sh
+echo "tide-msg $*"
+test -z "$FAKE_TIDEMSG_FAILS"
+STUB
+chmod +x "$tmp/tidewm-bin/tidewm" "$tmp/tidewm-bin/uwsm" "$tmp/tidewm-bin/tide-msg"
+mkdir -p "$tmp/tidewm-config/hypr"
+# tidewm_start [VAR=VALUE...]: what the wrapper's tidewm and its startup
+# command print, with the shell's config under $tmp/tidewm-config.
+tidewm_start() {
+    env PATH="$tmp/tidewm-bin:/usr/bin:/bin" XDG_CONFIG_HOME="$tmp/tidewm-config" "$@" /bin/sh "$tidewm_wrapper" -c x
+}
+tidewm_ran=$(tidewm_start)
 check "the tidewm wrapper starts tidewm, passing its arguments through" \
-    test "$(printf '%s\n' "$tidewm_ran" | head -n 1)" = "tidewm -s exec uwsm finalize SWAYSOCK -c x"
+    test "$(printf '%s\n' "$tidewm_ran" | head -n 1)" = "tidewm -s tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c x"
+check "before the shell has named home, tidewm goes to in and keeps it" \
+    test "$(printf '%s\n' "$tidewm_ran" | sed -n 2p)" = "tide-msg workspace number in; persist workspace in"
 check "tidewm's startup command finalizes the session with tidewm's IPC socket" \
-    test "$(printf '%s\n' "$tidewm_ran" | sed -n 2p)" = "uwsm finalize SWAYSOCK"
+    test "$(printf '%s\n' "$tidewm_ran" | sed -n 3p)" = "uwsm finalize SWAYSOCK"
+# shellcheck disable=SC2016 # the name has a $ that mustn't expand
+printf '%s\n' 'return {' '    home = "my $HOME & mail",' '    in_apps = {},' '}' > "$tmp/tidewm-config/hypr/tide-workspaces.lua"
+tidewm_ran=$(tidewm_start)
+# shellcheck disable=SC2016 # nor here
+check "tidewm goes to the home the shell names, as written" \
+    test "$(printf '%s\n' "$tidewm_ran" | sed -n 2p)" = 'tide-msg workspace number my $HOME & mail; persist workspace my $HOME & mail'
+tidewm_ran=$(tidewm_start FAKE_TIDEMSG_FAILS=1)
+check "the session finalizes even if tidewm refuses home" \
+    test "$(printf '%s\n' "$tidewm_ran" | sed -n 3p)" = "uwsm finalize SWAYSOCK"
+printf '%s\n' 'return {' '    home = "a;b",' '}' > "$tmp/tidewm-config/hypr/tide-workspaces.lua"
+tidewm_ran=$(tidewm_start)
+check "a home tidewm's commands can't name is left to the shell" \
+    test "$tidewm_ran" = "tidewm -s exec uwsm finalize SWAYSOCK -c x
+uwsm finalize SWAYSOCK"
 check "the tidewm wrapper is executable" test -x "$tidewm_wrapper"
 check "the tidewm wrapper parses as sh" sh -n "$tidewm_wrapper"
 if command -v shellcheck >/dev/null 2>&1; then
