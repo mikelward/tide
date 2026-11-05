@@ -1355,6 +1355,7 @@ PanelWindow {
                         }
 
                         Text {
+                            visible: text !== ""
                             width: keyList.width
                             leftPadding: 10
                             rightPadding: 10

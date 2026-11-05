@@ -21,7 +21,7 @@ export const PAGES = Object.freeze([
         label: "Displays",
         icon: "video-display-symbolic",
         keywords: ["monitors", "scale", "resolution"],
-        about: "Each monitor's scale and where it goes beside the others, kept with the monitor whichever port it's in. Hyprland may round a scale to one that divides the screen evenly. One set for a monitor in hyprland.local.lua still wins.",
+        about: "Scale and position for each monitor.",
         advanced: { label: "Arrange displays", command: ["nwg-displays"] },
     },
     {
@@ -57,7 +57,7 @@ export const PAGES = Object.freeze([
         label: "Mouse",
         icon: "input-mouse-symbolic",
         keywords: ["pointer", "left-handed", "right-handed", "speed"],
-        about: "For every mouse, or one chosen by name with ‹ and ›, whose own settings apply over every mouse's. One set for a single mouse in hyprland.local.lua still wins.",
+        about: "All mice, or one at a time with ‹ and ›.",
         advanced: null,
     },
     {
@@ -66,7 +66,7 @@ export const PAGES = Object.freeze([
         label: "Touchpad",
         icon: "input-touchpad-symbolic",
         keywords: ["trackpad", "pointing stick", "tap to click", "left-handed", "right-handed"],
-        about: "For every touchpad, apart from the mice, or one chosen by name with ‹ and ›, whose own settings apply over every touchpad's. One set for a single touchpad in hyprland.local.lua still wins.",
+        about: "All touchpads, or one at a time with ‹ and ›.",
         advanced: null,
     },
     {
@@ -75,7 +75,7 @@ export const PAGES = Object.freeze([
         label: "Keyboard",
         icon: "input-keyboard-symbolic",
         keywords: ["layout", "xkb", "repeat", "dvorak"],
-        about: "For every keyboard. A layout is XKB's name for it, such as us, or us,de for two; a variant is one such as dvorak, or none. One set in hyprland.local.lua still wins.",
+        about: "",
         advanced: null,
     },
     {
@@ -84,7 +84,7 @@ export const PAGES = Object.freeze([
         label: "Power",
         icon: "battery-good-symbolic",
         keywords: ["battery", "power profile", "lid", "laptop"],
-        about: "The battery, and the power profile, which power-profiles-daemon sets for the whole machine. Closing the lid with no other monitor suspends, locks or does nothing; with one, the laptop's screen just turns off, as it always has.",
+        about: "With an external monitor connected, closing the lid only turns off the laptop screen.",
         advanced: null,
     },
     {
@@ -93,7 +93,7 @@ export const PAGES = Object.freeze([
         label: "Layouts",
         icon: "view-dual-symbolic",
         keywords: ["tiling", "master", "monocle", "ultrawide"],
-        about: "How a new workspace starts, by its monitor's shape, and each layout's master width and count. A change applies to every workspace, which keeps its layout but loses a width or count changed with the keys.",
+        about: "New workspaces start with these layouts. Changes here reset widths set with the keys.",
         advanced: null,
     },
     {
@@ -138,7 +138,7 @@ export const PAGES = Object.freeze([
         label: "Clipboard",
         icon: "edit-paste-symbolic",
         keywords: ["copy history", "paste history"],
-        about: "What you copy is kept for the picker on Super+V, the newest first, apart from passwords a password manager marks. Off, new copies aren't kept; what's kept stays until it's cleared. A smaller number trims the history at the next copy.",
+        about: "Keeps what you copy for Super+V. Skips passwords.",
         advanced: null,
     },
     {
@@ -181,7 +181,7 @@ export const SECTIONS = Object.freeze([
         label: "Keyboard shortcuts",
         icon: "preferences-desktop-keyboard-shortcuts-symbolic",
         keywords: ["shortcuts", "bindings", "hotkeys"],
-        about: "The key bindings Hyprland has now, from conf's hyprland.lua and hyprland.local.lua, in their order. What one does is its description in hl.bind.",
+        about: "",
     },
 ]);
 
