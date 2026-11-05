@@ -75,6 +75,18 @@ cat > "$fake/notify-send" <<'FAKE'
 #!/bin/sh
 printf "notify-send %s\n" "$*" >> "$FAKE_LOG"
 FAKE
+# tide-msg, tidewm's IPC, logs its arguments, answers --focused-workspace
+# with $FAKE_TIDEWM_WORKSPACE, and with $FAKE_TIDEMSG_STATUS set, fails
+# with that status, saying $FAKE_TIDEMSG_ERROR.
+cat > "$fake/tide-msg" <<'FAKE'
+#!/bin/sh
+printf "tide-msg %s\n" "$*" >> "$FAKE_LOG"
+if test -n "${FAKE_TIDEMSG_STATUS:-}"; then
+    echo "tide-msg: ${FAKE_TIDEMSG_ERROR:-refused}" >&2
+    exit "$FAKE_TIDEMSG_STATUS"
+fi
+test "$1" != --focused-workspace || printf '%s\n' "${FAKE_TIDEWM_WORKSPACE-PR-12 login}"
+FAKE
 chmod +x "$fake"/*
 # tide-grant answers --program with $FAKE_PROGRAM, else the command's first
 # word, exiting $FAKE_PROGRAM_STATUS; and --classes with $FAKE_CLASSES
@@ -111,6 +123,8 @@ test -z "${FAKE_CLASSES:-}" || printf '%s\n' $FAKE_CLASSES
 exit "${FAKE_CLASSES_STATUS:-0}"
 FAKE
 chmod +x "$fake/tide-grant"
+# A copy, for the tests after the ones that take it away.
+cp "$fake/tide-grant" "$tmp/tide-grant.fake"
 
 # run ENV... -- ARGS...: runs tide with the fakes first on PATH, in a
 # tide session unless the env says otherwise.
@@ -564,6 +578,72 @@ run XDG_CURRENT_DESKTOP=KDE "$qs" prompt-focus
 check "outside tide prompt-focus can't tell" test $? -eq 2 -a ! -s "$log"
 run "$qs" prompt-focus now
 check "prompt-focus takes no arguments" test $? -eq 2
+
+# In tidewm's session (SPEC.md §5.3), the guard and the focused workspace
+# are tidewm's, asked through tide-msg, and Hyprland is never asked.
+cp "$tmp/tide-grant.fake" "$fake/tide-grant"
+tw=XDG_CURRENT_DESKTOP=tidewm:tide
+run "$tw" "$qs" launch app one two
+check "on tidewm, launch exits 0" test $? -eq 0
+check "on tidewm, the focused workspace comes from tidewm, first" \
+    test "$(sed -n 1p "$log")" = "tide-msg --focused-workspace"
+check "on tidewm, the grant goes to tidewm, keyed by tide's pid" \
+    grep -qE '^tide-msg grant --key [0-9]+ app$' "$log"
+check "on tidewm, Hyprland isn't asked" not_contains "$(cat "$log")" hyprctl
+check "on tidewm, the app runs through uwsm app" contains "$(cat "$log")" "uwsm app -- app one two"
+check "on tidewm, the app gets the workspace's name" test "$(cat "$log.env")" = PR12login
+check "on tidewm, a clean launch says nothing" test ! -s "$tmp/err"
+run "$tw" FAKE_CLASSES="org.example.Editor example-editor-x11 EDITOR" "$qs" launch editor
+key=$(sed -n 's/^tide-msg grant --key \([0-9][0-9]*\) editor$/\1/p' "$log")
+check "on tidewm, the program's grant is keyed" test -n "$key"
+check "on tidewm, its desktop entries' classes are added to that grant, by its key" \
+    test "$(grep 'grant extend' "$log")" = "tide-msg grant extend --key $key editor org.example.Editor example-editor-x11"
+run "$tw" "$qs" launch --workspace 'PR-12, login (2)' --app kitty --app org.kitty -- app
+check "on tidewm, --workspace and the IDs go in as tidewm reads them, quoted where they need it" \
+    grep -qxF 'tide-msg grant --workspace "PR-12, login (2)" kitty org.kitty' "$log"
+check "on tidewm, --workspace reads no focused workspace" not_contains "$(cat "$log")" "--focused-workspace"
+run "$tw" "$qs" launch "$fake/xdg-open" https://example.com/
+check "on tidewm, an opener whose app isn't found grants the first window of any app" \
+    grep -qxF 'tide-msg grant *' "$log"
+run "$tw" FAKE_OPENER="org.mozilla.firefox firefox" "$qs" launch "$fake/xdg-open" https://example.com/
+check "on tidewm, an opener grants the app it opens with" \
+    grep -qxF 'tide-msg grant org.mozilla.firefox firefox' "$log"
+run "$tw" FAKE_OPENER_STATUS=3 "$qs" launch "$fake/gio" trash file.txt
+check "on tidewm, a command running no opener grants its program" \
+    grep -qxF 'tide-msg grant gio' "$log"
+run "$tw" "$qs" grant chrome-a__-Default 'My App'
+check "on tidewm, grant falls back to the app's last window, as one grant" \
+    test "$(cat "$log")" = 'tide-msg grant --or-recent chrome-a__-Default "My App"'
+run "$tw" "$qs" focus org.example.Chat
+check "on tidewm, focus brings up the app's most recent window" \
+    test "$(cat "$log")" = 'tide-msg focus recent org.example.Chat'
+run "$tw" "$qs" grant 'a"b'
+check "on tidewm, an ID with a quote is refused" test $? -eq 2
+check "and says why" contains "$(cat "$tmp/err")" 'tidewm can'"'"'t be told the ID a"b'
+check "and asks nothing" test ! -s "$log"
+run "$tw" FAKE_TIDEMSG_STATUS=1 FAKE_TIDEMSG_ERROR='focus recent org.example.Chat: no window of org.example.Chat' "$qs" focus org.example.Chat
+check "on tidewm, a refused focus exits 1" test $? -eq 1
+check "and says why" \
+    contains "$(cat "$tmp/err")" "tide focus: couldn't focus its window for org.example.Chat: tide-msg: focus recent org.example.Chat: no window of org.example.Chat"
+run "$tw" FAKE_TIDEMSG_STATUS=2 FAKE_TIDEMSG_ERROR="SWAYSOCK isn't set, so there's no tidewm to ask" "$qs" launch app
+check "on tidewm, a launch with no tidewm to ask still launches" contains "$(cat "$log")" "uwsm app -- app"
+check "with an empty TIDE_WORKSPACE" test "$(cat "$log.env")" = ""
+check "and says why" \
+    contains "$(cat "$tmp/err")" "tide launch: couldn't read the focused workspace: tide-msg: SWAYSOCK isn't set, so there's no tidewm to ask"
+check "and that the grant failed too" \
+    contains "$(cat "$tmp/err")" "tide launch: couldn't record a focus grant for app: tide-msg: SWAYSOCK isn't set"
+run "$tw" "$qs" workspace
+check "on tidewm, tide workspace prints tidewm's focused one" test "$(cat "$tmp/out")" = PR12login
+run "$tw" "$qs" prompt-focus
+check "on tidewm, prompt-focus can't tell yet" test $? -eq 2
+check "and says so" contains "$(cat "$tmp/err")" "tidewm's focus guard isn't asked yet"
+check "and asks no one" test ! -s "$log"
+mv "$fake/tide-msg" "$tmp/tide-msg.away"
+run "$tw" "$qs" grant app
+check "on tidewm, grant without tide-msg exits 1" test $? -eq 1
+check "and says how to get it" \
+    contains "$(cat "$tmp/err")" "tide grant: no tide-msg, so couldn't record a focus grant for app (make install builds it)"
+mv "$tmp/tide-msg.away" "$fake/tide-msg"
 run "$qs" grant
 check "grant with no ID is a usage error" test $? -eq 2
 run "$qs" grant ''
