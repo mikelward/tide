@@ -13,16 +13,16 @@ import {
 // first standing workspace is home; patterns are tried in turn), and what
 // the field at the foot asks for.
 export const LISTS = Object.freeze([
-    { key: "standing", heading: "STANDING WORKSPACES", ordered: true, hint: "Add a workspace, such as docs" },
-    { key: "inApps", heading: "HOME'S APPS", ordered: false, hint: "Add a program or web address, such as gmail" },
-    { key: "namePatterns", heading: "NAME PATTERNS", ordered: true, hint: "Add a pattern, such as \\b([A-Z]+-[0-9]+)\\b" },
+    { key: "standing", heading: "ALWAYS ON THE BAR", ordered: true, hint: "Add a workspace, such as docs" },
+    { key: "inApps", heading: "START ON HOME", ordered: false, hint: "Add an app or web address, such as gmail" },
+    { key: "namePatterns", heading: "NAME FROM WINDOW TITLE", ordered: true, hint: "Add a regex. Its first ( ) is the name." },
 ]);
 
 // What each standing workspace's section says: its switch for askForName,
 // and its pinned apps' field.
-export const ASK_LABEL = "Open new windows on a new workspace";
+export const ASK_LABEL = "New windows ask for a workspace";
 export const PINNED_LABEL = "Pinned apps";
-export const PINNED_HINT = "Pin a program or web address, such as gmail";
+export const PINNED_HINT = "Pin an app or web address, such as gmail";
 
 // A standing workspace's section heading: its name, and home's mark.
 export function workspaceHeading(name, index) {
@@ -140,7 +140,7 @@ export function withItem(list, raw) {
         return { error: "type something to add" };
     }
     if (list.some(i => sameName(i, item))) {
-        return { error: `${item} is listed already` };
+        return { error: `${item} is already in the list` };
     }
     return { list: list.concat([item]) };
 }

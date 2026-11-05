@@ -102,7 +102,7 @@ export const PAGES = Object.freeze([
         label: "Workspaces",
         icon: "view-grid-symbolic",
         keywords: ["home workspace", "standing workspaces", "name patterns"],
-        about: "Standing workspaces are always on the bar, in this order; the first is home, made at login, where home's apps always open. Home's apps start there at login: a program, such as gmail, or a web address, opened as a Chrome app window. A window class or a site goes there without starting. A name pattern is a regular expression tried against a new window's title, in order: its first capture group names the window's workspace. On a workspace that opens new windows on a new workspace, each new window asks for one, and so does a launch from it. Super+Backspace and an app's own Ctrl+W, Ctrl+Shift+W, Ctrl+Q and Alt+F4 leave a workspace's pinned apps open there; a window's own close button still closes it.",
+        about: "Workspaces listed here are always on the bar. The first is home. Pinned apps ignore close keys like Ctrl+W.",
         advanced: null,
     },
     {

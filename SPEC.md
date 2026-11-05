@@ -1214,7 +1214,7 @@ in how long they last and what stays visible:
   part (Monitors, below) is its workspace.
 - **`askForName`** says whether a new window there asks for a workspace
   (below), and whether a launch from there does. The settings page calls
-  it "Open new windows on a new workspace".
+  it "New windows ask for a workspace".
 - **`pinnedApps`** lists the apps whose windows stay open there. Each entry
   is as `inApps` has them: a program, a web address, a class or a site,
   matched to windows the same way, through the same lookups.
@@ -4167,7 +4167,7 @@ stays hand-written.
   - The page lists `standing`, `inApps` and `namePatterns`, as the files
     in effect have them; `muted` is on the Notifications page.
   - Below them, each standing workspace has a section of its own, home's
-    marked: an "Open new windows on a new workspace" switch, its
+    marked: a "New windows ask for a workspace" switch, its
     `askForName`, and its pinned apps, a list with a bin per entry and a
     field that asks for a program or web address, such as `gmail`.
     - The first change copies the `workspaceSettings` in effect into the
