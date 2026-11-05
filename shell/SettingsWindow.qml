@@ -1756,7 +1756,7 @@ PanelWindow {
                         // mode, since sunrise and sunset can't be chosen
                         // until it's set.
                         Repeater {
-                            model: [{ key: "latitude", label: "Latitude" }, { key: "longitude", label: "Longitude" }]
+                            model: [{ key: "latitude", label: "Latitude, negative for south", example: "such as 37.8" }, { key: "longitude", label: "Longitude, negative for west", example: "such as -122.4" }]
 
                             Item {
                                 id: coordinate
@@ -1827,7 +1827,7 @@ PanelWindow {
                                         Text {
                                             visible: degrees.text === "" && !degrees.activeFocus
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: "none"
+                                            text: coordinate.modelData.example
                                             color: Theme.fgFaint
                                             font: degrees.font
                                         }
