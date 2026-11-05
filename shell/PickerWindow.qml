@@ -4,7 +4,6 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import "lib/dispatch.mjs" as Dispatch
-import "lib/floating.mjs" as Rules
 import "lib/launch.mjs" as Run
 import "lib/launcher.mjs" as Search
 import "lib/picker.mjs" as Picker
@@ -71,7 +70,10 @@ PanelWindow {
         if (visible) {
             return;
         }
-        pasteInto = Picker.pasteTarget(Rules.windowOf(FocusData.active));
+        // The paste is Hyprland's sendshortcut, which tidewm has no
+        // counterpart to yet, so on tidewm a choice is only copied.
+        pasteInto = Compositor.tidewm ? null
+            : Picker.pasteTarget(FocusData.focused ? { address: FocusData.focused.address, class: FocusData.focused.app } : null);
         const focused = Compositor.focusedScreen;
         if (focused) {
             screen = focused;

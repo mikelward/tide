@@ -6,6 +6,7 @@ import Quickshell.Hyprland
 import Quickshell.I3
 import "lib/compositor.mjs" as Comp
 import "lib/dispatch.mjs" as Dispatch
+import "lib/tidewm.mjs" as Tw
 import "lib/workspaces.mjs" as Ws
 
 // What the shell asks of the compositor the session runs (SPEC.md §5.3):
@@ -13,8 +14,10 @@ import "lib/workspaces.mjs" as Ws
 // tidewm's, through its I3 module, which speaks sway's IPC as tidewm does.
 // Each binding reads only the one in use, so the other isn't asked. It
 // says which monitor has focus, for the popups, prompts and launcher that
-// open there, and which workspaces there are, for the bar, the switcher
-// and the name prompt, and goes to and renames them.
+// open there, which workspaces there are, for the bar, the switcher and
+// the name prompt, and goes to and renames them, and which windows there
+// are and which has focus, for the bar's icons and title and the
+// switcher, and focuses, moves and maximizes one.
 Singleton {
     id: root
 
@@ -40,6 +43,87 @@ Singleton {
     readonly property var monitors: root.tidewm
         ? Comp.tidewmMonitors(I3.monitors.values.map(m => m.name), Comp.tidewmCurrent(root.tidewmListed))
         : Hyprland.monitors.values.map(m => ({ name: m.name, workspace: m.activeWorkspace ? m.activeWorkspace.id : null }))
+
+    // The current workspace's name on tidewm, which every monitor shows.
+    readonly property string tidewmCurrentName: root.tidewm ? (root.tidewmListed.find(w => w?.focused === true)?.name ?? "") : ""
+
+    // The windows the bar draws, [{address, workspace, workspaceName, app,
+    // urgent, fullscreen}] (workspaces.mjs's barWorkspaces), apart from
+    // `windows` so Hyprland's title changes don't redraw the bar.
+    readonly property var barWindows: root.tidewm
+        ? Tw.shellWindows(TidewmData.state, root.workspaces).map(w => ({
+            address: w.address,
+            workspace: w.workspace,
+            workspaceName: w.workspaceName,
+            app: w.app,
+            urgent: w.urgent,
+            fullscreen: w.fullscreen
+        }))
+        : Hyprland.toplevels.values.map(t => ({
+            address: Ws.normalizeAddress(t.address),
+            workspace: t.workspace ? t.workspace.id : null,
+            workspaceName: t.workspace?.name ?? "",
+            app: t.lastIpcObject?.class || t.wayland?.appId || "",
+            urgent: t.urgent,
+            fullscreen: t.lastIpcObject?.fullscreen ?? 0
+        }))
+    // Every window, [{address, title, app, workspace, workspaceName,
+    // monitor, urgent, fullscreen, floating, focusHistoryID}], with its
+    // title and its place in the focus history (Tw.shellWindows).
+    readonly property var windows: root.tidewm
+        ? Tw.shellWindows(TidewmData.state, root.workspaces)
+        : Hyprland.toplevels.values.map(t => ({
+            address: Ws.normalizeAddress(t.address),
+            title: t.title ?? "",
+            app: t.lastIpcObject?.class || t.wayland?.appId || "",
+            workspace: t.workspace ? t.workspace.id : null,
+            workspaceName: t.workspace?.name ?? "",
+            monitor: t.monitor?.name ?? "",
+            urgent: t.urgent,
+            fullscreen: t.lastIpcObject?.fullscreen ?? 0,
+            floating: t.lastIpcObject?.floating === true,
+            focusHistoryID: t.lastIpcObject?.focusHistoryID ?? -1
+        }))
+    // The focused window on tidewm, one of `windows`, or null. Hyprland's
+    // is FocusData's, which knows Hyprland's quirks.
+    readonly property var tidewmActive: root.tidewm ? Tw.activeWindow(root.windows, root.tidewmCurrentName) : null
+
+    // Focuses the window at `address`, showing its workspace.
+    function focusWindow(address) {
+        if (!root.tidewm) {
+            Hyprland.dispatch(Dispatch.focusWindow(address, Hyprland.usingLua));
+            return;
+        }
+        root.tidewmCommand(Tw.focusCommand(address), `focus window ${address}`);
+    }
+
+    // Moves the window at `address` to the workspace named `name`, and
+    // focuses it there, as a minimized one is brought back (§6.7).
+    function moveWindowTo(address, name) {
+        if (!root.tidewm) {
+            Hyprland.dispatch(Dispatch.moveWindowToWorkspace(address, name, Hyprland.usingLua));
+            return;
+        }
+        root.tidewmCommand(Tw.moveAndFocusCommand(address, name), `move window ${address} to workspace ${JSON.stringify(name)}`);
+    }
+
+    // Toggles maximize on the window at `address`, which is the focused
+    // one: Hyprland's dispatcher takes no address.
+    function toggleMaximize(address) {
+        if (!root.tidewm) {
+            Hyprland.dispatch(Dispatch.toggleMaximize(Hyprland.usingLua));
+            return;
+        }
+        root.tidewmCommand(Tw.maximizeCommand(address), `maximize window ${address}`);
+    }
+
+    function tidewmCommand(command, what) {
+        if (command === null) {
+            console.warn(`tide: tidewm can't be asked to ${what}: no container ID, or a name with a ;`);
+            return;
+        }
+        I3.dispatch(command);
+    }
 
     // A workspace was made, went or was renamed: {type, id, name}, type
     // "created", "destroyed" or "renamed", as workspaces.mjs's

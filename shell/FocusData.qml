@@ -8,8 +8,10 @@ import "lib/title.mjs" as Title
 import "lib/workspaces.mjs" as Ws
 
 // The focused window, for every part of the shell that needs it: the bar's
-// title (WindowTitle.qml) and the picker's paste (PickerWindow.qml).
-// Hyprland.activeToplevel alone gets two cases wrong on Quickshell 0.3
+// title (WindowTitle.qml), the picker's paste (PickerWindow.qml) and the
+// launcher's screenshot (LauncherWindow.qml). On tidewm it's
+// Compositor.qml's. Hyprland.activeToplevel alone gets two cases wrong on
+// Quickshell 0.3
 // (shell/lib/title.mjs): after focus moves to an empty workspace it still
 // names the last window, and until the first focus change after the shell
 // starts it's null.
@@ -30,10 +32,25 @@ Singleton {
         }
         return Hyprland.toplevels.values.find(t => Ws.normalizeAddress(t.address) === root.startAddress) ?? null;
     }
-    readonly property var active: root.focusGone ? null : (Hyprland.activeToplevel ?? root.startFocus)
+    readonly property var active: Compositor.tidewm ? null : root.focusGone ? null : (Hyprland.activeToplevel ?? root.startFocus)
+    // The focused window as plain data, on either compositor, or null:
+    // {address, title, monitor, app}, monitor being its monitor's name.
+    readonly property var focused: Compositor.tidewm
+        ? (Compositor.tidewmActive ? {
+            address: Compositor.tidewmActive.address,
+            title: Compositor.tidewmActive.title,
+            monitor: Compositor.tidewmActive.monitor,
+            app: Compositor.tidewmActive.app
+        } : null)
+        : (root.active ? {
+            address: Ws.normalizeAddress(root.active.address),
+            title: root.active.title ?? "",
+            monitor: root.active.monitor?.name ?? null,
+            app: root.active.lastIpcObject?.class || root.active.wayland?.appId || ""
+        } : null)
 
     Connections {
-        target: Hyprland
+        target: Compositor.tidewm ? null : Hyprland
 
         function onRawEvent(event) {
             if (event.name === "activewindowv2") {
@@ -51,7 +68,7 @@ Singleton {
         property bool started: false
 
         command: ["hyprctl", "activewindow", "-j"]
-        running: true
+        running: !Compositor.tidewm
 
         stdout: StdioCollector {
             onStreamFinished: {

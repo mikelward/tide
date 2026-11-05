@@ -1,9 +1,7 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Widgets
 import "lib/barclick.mjs" as Click
-import "lib/dispatch.mjs" as Dispatch
 import "lib/workspaces.mjs" as Ws
 
 // Every workspace on one monitor's bar, by name (SPEC.md §6.5, §7.2): the
@@ -24,15 +22,8 @@ Row {
 
     readonly property var monitors: Compositor.monitors
     readonly property var workspaces: Compositor.workspaces
-    readonly property var windows: Hyprland.toplevels.values.map(t => ({
-        address: Ws.normalizeAddress(t.address),
-        workspace: t.workspace ? t.workspace.id : null,
-        workspaceName: t.workspace?.name ?? "",
-        app: t.lastIpcObject?.class || t.wayland?.appId || "",
-        urgent: t.urgent,
-        fullscreen: t.lastIpcObject?.fullscreen ?? 0,
-    }))
-    // Hyprland's own urgent flag, and the focus guard's and notifications'
+    readonly property var windows: Compositor.barWindows
+    // The compositor's own urgent flag, and the focus guard's and notifications'
     // marks (MarkData).
     readonly property var list: Ws.barWorkspaces({
         monitor: root.monitorName,
@@ -139,9 +130,9 @@ Row {
                             MouseArea {
                                 anchors.fill: parent
                                 acceptedButtons: Qt.LeftButton
-                                onClicked: Hyprland.dispatch(icon.modelData.restoreTo !== null
-                                    ? Dispatch.moveWindowToWorkspace(icon.modelData.address, icon.modelData.restoreTo, Hyprland.usingLua)
-                                    : Dispatch.focusWindow(icon.modelData.address, Hyprland.usingLua))
+                                onClicked: icon.modelData.restoreTo !== null
+                                    ? Compositor.moveWindowTo(icon.modelData.address, icon.modelData.restoreTo)
+                                    : Compositor.focusWindow(icon.modelData.address)
                             }
                         }
                     }

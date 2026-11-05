@@ -1,0 +1,165 @@
+// Tests for tidewm.mjs.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+    NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, appOf, shellWindows, activeWindow,
+    focusCommand, moveAndFocusCommand, maximizeCommand,
+} from "./tidewm.mjs";
+
+// A container as tidewm's IPC gives one.
+function con(id, fields = {}) {
+    return Object.assign({ id, type: "con", name: `title ${id}`, app_id: `app${id}`, pid: 100 + id,
+        focused: false, urgent: false, fullscreen_mode: 0, maximized: false,
+        workspace: "in", output: "DP-1" }, fields);
+}
+
+const tree = {
+    id: 1, type: "root", nodes: [
+        { id: 2, type: "output", name: "DP-1", nodes: [
+            { id: 3, type: "workspace", name: "in", nodes: [con(10), con(11, { focused: true })],
+                floating_nodes: [con(12, { type: "floating_con" })] },
+        ] },
+        { id: 4, type: "output", name: "HDMI-A-1", nodes: [
+            { id: 5, type: "workspace", name: "in", nodes: [con(13, { output: "HDMI-A-1" })], floating_nodes: [] },
+        ] },
+    ],
+};
+
+test("the tree's windows are every output's, tiled and floating, the focused one first in the order", () => {
+    const s = treeWindows(JSON.stringify(tree));
+    assert.deepEqual(s.list.map(c => c.id), [10, 11, 12, 13]);
+    assert.deepEqual(s.order, [11]);
+});
+
+test("a tree with nothing focused has no order yet", () => {
+    assert.deepEqual(treeWindows({ id: 1, type: "root", nodes: [] }), { list: [], order: [] });
+});
+
+test("a reply that isn't a tree is null", () => {
+    assert.equal(treeWindows("{not json"), null);
+    assert.equal(treeWindows("[]"), null);
+    assert.equal(treeWindows(null), null);
+});
+
+const event = (change, container) => JSON.stringify({ change, container });
+
+test("a tree asked for again keeps the focus history of the windows still there", () => {
+    let s = treeWindows(tree);
+    s = windowEvent(s, event("focus", con(10, { focused: true })));
+    s = windowEvent(s, event("focus", con(13, { focused: true, output: "HDMI-A-1" })));
+    s = windowEvent(s, event("focus", con(12, { type: "floating_con", focused: true })));
+    assert.deepEqual(s.order, [12, 13, 10, 11]);
+    // 13 has closed meanwhile, and 12 has focus, as the tree says
+    const again = { id: 1, type: "root", nodes: [{ id: 3, type: "workspace", name: "inbox",
+        nodes: [con(10, { workspace: "inbox" }), con(11, { workspace: "inbox" })],
+        floating_nodes: [con(12, { type: "floating_con", workspace: "inbox", focused: true })] }] };
+    const r = refreshed(s, JSON.stringify(again));
+    assert.deepEqual(r.order, [12, 10, 11]);
+    assert.deepEqual(r.list.map(c => c.workspace), ["inbox", "inbox", "inbox"], "the tree's containers, renamed workspace and all");
+});
+
+test("a refreshed tree's focused window goes first, even one the shell didn't know had focus", () => {
+    const s = { list: [con(10), con(11)], order: [10, 11] };
+    const again = { id: 1, type: "root", nodes: [con(10), con(11, { focused: true })] };
+    assert.deepEqual(refreshed(s, again).order, [11, 10]);
+    const none = { id: 1, type: "root", nodes: [con(10), con(11)] };
+    assert.deepEqual(refreshed(s, none).order, [10, 11], "with nothing focused, the order as it was");
+    assert.equal(refreshed(s, "{not json"), null);
+});
+
+test("a new window joins the list, and a closed one leaves it and the order", () => {
+    let s = treeWindows(tree);
+    s = windowEvent(s, event("new", con(14)));
+    assert.deepEqual(s.list.map(c => c.id), [10, 11, 12, 13, 14]);
+    s = windowEvent(s, event("close", con(11)));
+    assert.deepEqual(s.list.map(c => c.id), [10, 12, 13, 14]);
+    assert.deepEqual(s.order, []);
+});
+
+test("a focused window goes first in the order, and only it is focused", () => {
+    let s = treeWindows(tree);
+    s = windowEvent(s, event("focus", con(10, { focused: true })));
+    s = windowEvent(s, event("focus", con(13, { focused: true, output: "HDMI-A-1" })));
+    assert.deepEqual(s.order, [13, 10, 11]);
+    assert.deepEqual(s.list.filter(c => c.focused).map(c => c.id), [13]);
+});
+
+test("any other change takes the container whole", () => {
+    let s = treeWindows(tree);
+    s = windowEvent(s, event("title", con(10, { name: "new title" })));
+    s = windowEvent(s, event("move", con(12, { type: "floating_con", workspace: "re" })));
+    s = windowEvent(s, event("maximize", con(13, { maximized: true, output: "HDMI-A-1" })));
+    assert.equal(s.list.find(c => c.id === 10).name, "new title");
+    assert.equal(s.list.find(c => c.id === 12).workspace, "re");
+    assert.equal(s.list.find(c => c.id === 13).maximized, true);
+});
+
+test("events heard before the tree they're in change nothing when replayed on it", () => {
+    const s = treeWindows(tree);
+    const again = windowEvent(windowEvent(s, event("new", con(10))), event("close", con(99)));
+    assert.deepEqual(again.list.map(c => c.id), [10, 11, 12, 13]);
+    assert.deepEqual(again.order, [11]);
+});
+
+test("what isn't a window event leaves the state as it was", () => {
+    const s = treeWindows(tree);
+    assert.equal(windowEvent(s, "{not json"), s);
+    assert.equal(windowEvent(s, JSON.stringify({ change: "new" })), s);
+    assert.equal(windowEvent(s, JSON.stringify({ change: "new", container: { id: 3, type: "workspace" } })), s);
+    assert.equal(windowEvent(NO_WINDOWS, null), NO_WINDOWS);
+});
+
+test("the listener connecting asks for the tree, as does a workspace renamed under its windows", () => {
+    assert.equal(asksForTree("tick", JSON.stringify({ first: true, payload: "" })), true);
+    assert.equal(asksForTree("workspace", JSON.stringify({ change: "rename", current: { id: 9, name: "inbox" }, old: null })), true);
+});
+
+test("nothing else does", () => {
+    assert.equal(asksForTree("tick", JSON.stringify({ first: false, payload: "x" })), false, "someone else's tick");
+    assert.equal(asksForTree("workspace", JSON.stringify({ change: "focus", current: { id: 9, name: "in" } })), false);
+    assert.equal(asksForTree("workspace", JSON.stringify({ change: "init", current: { id: 9, name: "in" } })), false);
+    assert.equal(asksForTree("window", event("new", con(10))), false);
+    assert.equal(asksForTree("tick", "{not json"), false);
+});
+
+test("an app is its app ID, or an X11 window's class", () => {
+    assert.equal(appOf(con(1)), "app1");
+    assert.equal(appOf(con(1, { app_id: null, window_properties: { class: "Gimp", instance: "gimp" } })), "Gimp");
+    assert.equal(appOf(con(1, { app_id: null })), "");
+});
+
+const workspaces = [{ id: 30, name: "in" }, { id: 31, name: "re" }];
+
+test("the shell's windows are shaped as Hyprland's", () => {
+    let s = treeWindows(tree);
+    s = windowEvent(s, event("fullscreen_mode", con(10, { fullscreen_mode: 1, maximized: true })));
+    s = windowEvent(s, event("urgent", con(13, { urgent: true, output: "HDMI-A-1", workspace: "gone" })));
+    const w = shellWindows(s, workspaces);
+    assert.deepEqual(w[0], { address: "10", title: "title 10", app: "app10", workspace: 30, workspaceName: "in",
+        monitor: "DP-1", urgent: false, fullscreen: 3, floating: false, focusHistoryID: -1 });
+    assert.equal(w[1].focusHistoryID, 0, "the focused window");
+    assert.equal(w[2].floating, true);
+    assert.deepEqual([w[3].urgent, w[3].workspace, w[3].workspaceName, w[3].monitor], [true, null, "gone", "HDMI-A-1"],
+        "a workspace the list doesn't have yet has no ID");
+});
+
+test("the focused window is the one first in the order, while it's on the current workspace", () => {
+    const w = shellWindows(treeWindows(tree), workspaces);
+    assert.equal(activeWindow(w, "in").address, "11");
+    assert.equal(activeWindow(w, "re"), null, "focus went to an empty workspace");
+    assert.equal(activeWindow(shellWindows(NO_WINDOWS, workspaces), "in"), null);
+});
+
+test("a window's commands name it by its container ID", () => {
+    assert.equal(focusCommand("11"), "[con_id=11] focus");
+    assert.equal(moveAndFocusCommand("11", "my mail"), "[con_id=11] move to workspace number my mail; [con_id=11] focus");
+    assert.equal(maximizeCommand("11"), "[con_id=11] maximize toggle");
+});
+
+test("an address that isn't a container ID, or a name tidewm can't take, sends nothing", () => {
+    assert.equal(focusCommand("5a3f"), null, "a Hyprland address");
+    assert.equal(focusCommand(""), null);
+    assert.equal(focusCommand("1] kill; [con_id=2"), null);
+    assert.equal(moveAndFocusCommand("11", "a;b"), null);
+    assert.equal(maximizeCommand(undefined), null);
+});
