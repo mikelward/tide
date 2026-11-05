@@ -453,7 +453,8 @@ flowchart TD
   Hyprland, but tidewm's guard isn't told them. The name prompt (§6.5)
   takes new windows from them, judging each by the window its first
   `focus` event carries, and moves a window or closes it there with
-  `move to workspace number` and `kill`. What else the shell takes from
+  `move to workspace number` and `kill`. Super+Z minimizes with tidewm's
+  own `minimize` (§6.7). What else the shell takes from
   Hyprland's events is still Hyprland's. Home (§6.5) is the shell's to
   keep there, as tidewm's config can't know its name: `tide-tidewm`
   starts tidewm on it and keeps it, by the name the shell last wrote to
@@ -1783,6 +1784,13 @@ not taken.
     Windows tab still finds them.
   - Special workspaces aren't on the bar (§7.2), and nothing in tide or
     `conf` toggles one into view.
+- **tidewm's pieces** (§5.3). tidewm has its own `minimize`, which hides
+  a window on the workspace it's on, so the shell reads a window tidewm
+  says is `minimized` as one on Hyprland's minimize workspace, and the
+  bar, the tray and the switcher treat it alike. Focusing it, by any
+  means, brings it back, as `[con_id=N] focus` does from the tray. Its
+  workspace stays while it waits, so one whose windows are all minimized
+  stays on the bar, with no icons, where Hyprland's is gone.
 
 ## 7. Bar
 

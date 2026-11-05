@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
-import "lib/dispatch.mjs" as Dispatch
 import "lib/minimized.mjs" as Min
 import "lib/workspaces.mjs" as Ws
 
@@ -15,13 +14,19 @@ Scope {
         target: "windows"
 
         function minimize(): string {
-            const t = Hyprland.activeToplevel;
-            const address = Ws.normalizeAddress(t?.address);
-            const r = Min.minimizeFrom(t ? { address: address, workspace: t.workspace?.name ?? "" } : null);
+            let active = null;
+            if (Compositor.tidewm) {
+                const w = Compositor.tidewmActive;
+                active = w ? { address: w.address, workspace: w.workspaceName } : null;
+            } else {
+                const t = Hyprland.activeToplevel;
+                active = t ? { address: Ws.normalizeAddress(t.address), workspace: t.workspace?.name ?? "" } : null;
+            }
+            const r = Min.minimizeFrom(active);
             if (r.error !== undefined) {
                 return r.error;
             }
-            Hyprland.dispatch(Dispatch.minimizeWindow(address, r.name, Hyprland.usingLua));
+            Compositor.minimizeWindow(active.address, r.name);
             return "minimized";
         }
     }
