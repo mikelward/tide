@@ -20,6 +20,7 @@ import {
     floatingLua,
     floatingConf,
     floatingNow,
+    coveredNow,
     hyprlandMatch,
     loadFloating,
     MAX_RULES,
@@ -197,6 +198,23 @@ test("Floating now lists floating windows no rule covers, one per class, leaving
         { address: "0x6", class: "", title: "", floating: true },
     ];
     assert.deepEqual(floatingNow(windows, [calc]), [{ class: "kitty", title: "htop", address: "0x1", details: [] }]);
+});
+
+test("Also floating lists every floating window a rule covers, dialogs among them, saying whose rule", () => {
+    const windows = [
+        { address: "0x1", class: "kitty", title: "htop", floating: true },
+        { address: "0x2", class: "xdg-desktop-portal-gtk", title: "Open File", floating: true },
+        { address: "0x3", class: "brave-browser", title: "Save File", floating: true, details: [{ label: "XWayland", value: "no" }] },
+        { address: "0x4", class: "org.gnome.Calculator", title: "Calculator", floating: true },
+        { address: "0x5", class: "org.gnome.Calculator", title: "Calculator", floating: false },
+        { address: "0x6", class: "", title: "Open File", floating: true },
+    ];
+    assert.deepEqual(coveredNow(windows, [calc]), [
+        { class: "xdg-desktop-portal-gtk", title: "Open File", address: "0x2", details: [], builtIn: true },
+        { class: "brave-browser", title: "Save File", address: "0x3", details: [{ label: "XWayland", value: "no" }], builtIn: true },
+        { class: "org.gnome.Calculator", title: "Calculator", address: "0x4", details: [], builtIn: false },
+    ]);
+    assert.deepEqual(coveredNow([], [calc]), []);
 });
 
 test("a new rule floats the tiled windows it covers that the old rules didn't", () => {

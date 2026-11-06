@@ -7,6 +7,13 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **The Floating page lists dialogs under *Also floating*** (2026-11-06),
+  every floating window a rule covers, each with *Details*, which fills the
+  fields and opens *More about this window*, rather than a page of its own
+  for open windows' properties. Tiled windows aren't listed: Super+Alt+F
+  fills the page for the focused one. Reversible: `coveredNow` and its
+  section in `SettingsWindow.qml`.
+
 - **A floating rule is two `for_window` lines on tidewm** (2026-11-06),
   one for `app_id` and one for X11's `class`, as tidewm keeps them apart
   as sway does, rather than tidewm gaining a criterion that matches

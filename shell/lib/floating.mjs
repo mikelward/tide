@@ -647,6 +647,27 @@ export function floatingNow(windows, rules) {
     return out;
 }
 
+// The page's Also floating: the floating windows a rule covers already,
+// conf's dialog rules among them, every one, so a dialog's class and title
+// can be looked up (prefilled shows them). Each {class, title, address,
+// details, builtIn}, builtIn when conf's rules cover it. A window with no
+// class can't be named, so it isn't listed.
+export function coveredNow(windows, rules) {
+    const out = [];
+    for (const w of windows) {
+        const cls = String(w.class ?? "");
+        if (!w.floating || cls === "") {
+            continue;
+        }
+        const covering = coveringRule(rules, cls, w.title ?? "");
+        if (covering === null) {
+            continue;
+        }
+        out.push({ class: cls, title: String(w.title ?? ""), address: w.address, details: w.details ?? [], builtIn: covering.builtIn });
+    }
+    return out;
+}
+
 // The tiled windows to float now that `after` is applied (SPEC.md §16):
 // every window `after` covers that nothing covered before, on any
 // workspace or monitor, a minimized one included. Covered before means by

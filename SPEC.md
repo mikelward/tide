@@ -4554,6 +4554,14 @@ stays hand-written.
     read a window the same way.
     `conf`'s own dialog rules count. A window with no class can't be
     named, so it isn't listed.
+  - *Also floating* lists every other floating window, one each: those a
+    rule covers already, `conf`'s dialog rules among them, so a portal's
+    file chooser or an app's own Open dialog is there. Each says whose
+    rule floats it, *Built in* or *Your rule*.
+    - *Details* fills the fields as *Always float* does, and opens *More
+      about this window*. That shows a window's class and title, and what
+      else the compositor says of it, to look up or copy: a dialog that
+      misbehaves can be named in a bug report, or matched by a rule.
   - *Always float* adds nothing yet. It fills the fields at the foot with
     the window's class and a pattern for its exact title: the title with
     its syntax characters escaped (`.` as `\.`), between `^` and `$`.
