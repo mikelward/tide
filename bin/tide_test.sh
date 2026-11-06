@@ -99,6 +99,7 @@ if test -n "${FAKE_TIDEMSG_STATUS:-}"; then
 fi
 test "$1" != --focused-workspace || printf '%s\n' "${FAKE_TIDEWM_WORKSPACE-PR-12 login}"
 test "$1" != --prompt-may-focus || exit "${FAKE_TIDEWM_PROMPT:-0}"
+test "$1 $2" != "--type get_outputs" || printf '%s\n' "${FAKE_TIDEWM_OUTPUTS-[]}"
 FAKE
 chmod +x "$fake"/*
 # tide-grant answers --program with $FAKE_PROGRAM, else the command's first
@@ -1014,6 +1015,34 @@ check "with nothing to lock, a notification says the session didn't lock" \
 run "$qs" lock now
 check "lock takes no arguments" test $? -eq 2
 rm "$fake/pgrep"
+
+# lid-closed, as conf's tidewm config runs it once the lid has turned the
+# panel off: it locks for the Power page's Lock with no other monitor on.
+power=$tmp/run-config/hypr/tide-power.lua
+mkdir -p "${power%/*}"
+undocked='[{"name": "eDP-1", "active": false, "power": false}]'
+docked='[{"name": "eDP-1", "active": false}, {"name": "DP-1", "active": true}]'
+run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$undocked" "$qs" lid-closed
+check "lid-closed with no Power setting leaves the lid to logind" test "$?:$(cat "$log")" = "0:"
+printf '%s\n' "-- Written by tide's settings panel (SPEC.md §16); edit power.local.json instead." 'return {' '    lid_close = "lock",' '}' > "$power"
+run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$undocked" "$qs" lid-closed
+check "lid-closed with Lock and no other monitor on exits 0" test $? -eq 0
+check "and locks, as tide lock does" contains "$(cat "$log")" "loginctl lock-session"
+check "having asked tidewm which monitors are on" contains "$(cat "$log")" "tide-msg --type get_outputs"
+run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$docked" "$qs" lid-closed
+check "lid-closed with Lock and another monitor on exits 0" test $? -eq 0
+check "and doesn't lock: the lid only turned the panel off" lacks "$(cat "$log")" "loginctl"
+run FAKE_IS_ACTIVE=active FAKE_TIDEMSG_STATUS=2 FAKE_TIDEMSG_ERROR="SWAYSOCK isn't set" "$qs" lid-closed
+check "lid-closed that can't ask tidewm locks" contains "$(cat "$log")" "loginctl lock-session"
+check "and says why" contains "$(cat "$tmp/err")" "tide lid-closed: couldn't tell whether another monitor is on (tide-msg: SWAYSOCK isn't set), so it locks"
+run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="not json" "$qs" lid-closed
+check "lid-closed that can't read tidewm's answer locks too" contains "$(cat "$log")" "loginctl lock-session"
+printf '%s\n' 'return {' '    lid_close = "nothing",' '}' > "$power"
+run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$undocked" "$qs" lid-closed
+check "lid-closed with Do nothing does nothing" test "$?:$(cat "$log")" = "0:"
+rm "$power"
+run "$qs" lid-closed now
+check "lid-closed takes no arguments" test $? -eq 2
 
 # lock-check: quiet with hypridle running; without it, a notification says
 # idle and suspend won't lock.

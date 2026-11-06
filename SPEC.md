@@ -4482,6 +4482,10 @@ stays hand-written.
     monitor, Lock runs `loginctl lock-session`, and Do nothing leaves the
     panel as it is. With another monitor, the lid turns the panel off, as it
     always has, whichever is chosen.
+  - In tidewm's session (§5.3), conf's tidewm config turns the panel off as
+    the lid closes, then runs `tide lid-closed`, which reads the same file.
+    With no other monitor on, Lock locks, as `tide lock` does. If it can't
+    tell whether another monitor is on, it locks.
   - The shell puts the unit right as it starts, too, since the unit
     outlives a shell that died with it the other way. A file it can't
     write, or a `systemctl` that fails, is a notification once and tried
