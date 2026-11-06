@@ -18,8 +18,8 @@ export const FILES = Object.freeze(["floating.json", "floating.local.json"]);
 // one).
 export const MAX_RULES = 64;
 
-// conf's own dialog rules (its hyprland.lua, WINDOW RULES), which float a
-// window whatever the files say: a window one of these covers needs no
+// conf's own dialog rules (its hyprland.lua, WINDOW RULES; on tidewm,
+// floatingConf writes them), which float a window whatever the files say: a window one of these covers needs no
 // rule of its own, so the page doesn't offer one. Kept in step with conf
 // by hand; one missed here only offers a rule that changes nothing.
 export const BUILT_IN = Object.freeze([
@@ -62,11 +62,19 @@ export const CLASSES = Object.freeze({
     },
 });
 
+// \b and \B as RE2 and JavaScript take them, between ASCII's word
+// characters and anything else, spelled out for PCRE2.
+const ASCII_BOUNDARIES = Object.freeze({
+    pcreB: "(?:(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])(?=[A-Za-z0-9_]))",
+    pcreNotB: "(?:(?<=[A-Za-z0-9_])(?=[A-Za-z0-9_])|(?<![A-Za-z0-9_])(?![A-Za-z0-9_]))",
+});
+
 // What JavaScript's u flag lets be escaped as itself; in a class, - too.
 const SYNTAX = "^$\\.*+?()[]{}|/";
 
-// `pattern` as each engine reads it, the same way: {re2, js}, the js
-// meant for the u flag, or {error} naming what it uses that they'd read
+// `pattern` as each engine reads it, the same way: {re2, js, pcre}, the
+// js meant for the u flag and the pcre for tidewm's PCRE2 with Unicode
+// on, or {error} naming what it uses that they'd read
 // differently, or that one lacks. Taken as they are: literals, `^`, `$`,
 // `|`, groups and `(?:…)`, `*`, `+`, `?` and their lazy forms, counts up
 // to MAX_REPEAT, classes, `\b \B` (an ASCII word boundary in both, the u
@@ -74,13 +82,23 @@ const SYNTAX = "^$\\.*+?()[]{}|/";
 // \f \v` and `\xHH`. Translated: `.` to [^\n], since JavaScript's also
 // stops at \r and the line separators; `\w \d \s` and their capitals to
 // CLASSES. JavaScript's own \w and \d are ASCII, RE2's \s is, and RE2's
-// `.` isn't JavaScript's, so neither is ever left to an engine.
+// `.` isn't JavaScript's, so neither is ever left to an engine. For PCRE2,
+// whose \v is any vertical space and whose \b goes by Unicode's words,
+// \v is \x0B, \b and \B are spelled out as ASCII's, and a [ in a class
+// is escaped.
 export function translateTitle(pattern) {
     let re2 = "";
     let js = "";
+    let pcre = "";
     const both = (t) => {
         re2 += t;
         js += t;
+        pcre += t;
+    };
+    const add = (e) => {
+        re2 += e.re2;
+        js += e.js;
+        pcre += e.pcre ?? e.re2;
     };
     // An escape at `i`: {next, re2, js} or {error}.
     const escape = (i, inClass) => {
@@ -88,12 +106,18 @@ export function translateTitle(pattern) {
         if (c === undefined) {
             return { error: "a lone backslash at the end" };
         }
-        const plain = (n) => ({ next: i + n, re2: pattern.slice(i, i + n), js: pattern.slice(i, i + n) });
+        const plain = (n, pcre) => ({ next: i + n, re2: pattern.slice(i, i + n), js: pattern.slice(i, i + n), pcre });
         if (SYNTAX.includes(c) || (inClass && c === "-")) {
             return plain(2);
         }
-        if ("ntrfv".includes(c) || (!inClass && "bB".includes(c))) {
+        if (c === "v") {
+            return plain(2, "\\x0B");
+        }
+        if ("ntrf".includes(c)) {
             return plain(2);
+        }
+        if (!inClass && "bB".includes(c)) {
+            return plain(2, ASCII_BOUNDARIES[c === "b" ? "pcreB" : "pcreNotB"]);
         }
         if (c === "x" && /^[0-9A-Fa-f]{2}$/.test(pattern.slice(i + 2, i + 4))) {
             return plain(4);
@@ -128,8 +152,7 @@ export function translateTitle(pattern) {
             if (e.error) {
                 return { error: e.error };
             }
-            re2 += e.re2;
-            js += e.js;
+            add(e);
             i = e.next;
         } else if (c === "(" && pattern[i + 1] === "?") {
             if (pattern[i + 2] !== ":") {
@@ -163,15 +186,16 @@ export function translateTitle(pattern) {
                     if (e.error) {
                         return { error: e.error };
                     }
-                    re2 += e.re2;
-                    js += e.js;
+                    add(e);
                     j = e.next;
                 } else if (pattern[j] === "[" && pattern[j + 1] === ":") {
                     return { error: "a [:…:] class name, which JavaScript doesn't have" };
                 } else {
                     const cp = pattern.codePointAt(j);
                     const ch = String.fromCodePoint(cp);
-                    both(ch);
+                    // PCRE2 reads [. and [= in a class as POSIX's
+                    // collating elements, which it rejects
+                    add(ch === "[" ? { re2: ch, js: ch, pcre: "\\[" } : { re2: ch, js: ch });
                     j += ch.length;
                 }
             }
@@ -197,21 +221,22 @@ export function translateTitle(pattern) {
             i += ch.length;
         }
     }
-    return { re2, js };
+    return { re2, js, pcre };
 }
 
 // The title pattern as each engine runs it, a whole-title match found
-// anywhere in it, as Hyprland's FullMatch takes it: {re2, js}, the js for
-// the u flag. With no pattern, any title.
+// anywhere in it, as Hyprland's FullMatch takes it: {re2, js, pcre}, as
+// translateTitle has them. With no pattern, any title.
 export function titleMatch(title) {
     if (!title) {
-        return { re2: ".*", js: "^[^\\n]*$" };
+        return { re2: ".*", js: "^[^\\n]*$", pcre: ".*" };
     }
     const t = translateTitle(title);
     if (t.error) {
         throw new Error(`title ${JSON.stringify(title)}: ${t.error}`);
     }
-    return { re2: `[^\\n]*(?:${t.re2})[^\\n]*`, js: `^(?:[^\\n]*(?:${t.js})[^\\n]*)$` };
+    const around = (x) => `[^\\n]*(?:${x})[^\\n]*`;
+    return { re2: around(t.re2), js: `^(?:${around(t.js)})$`, pcre: around(t.pcre) };
 }
 
 // A class as typed, made one: {class} trimmed, or {error}.
@@ -472,6 +497,51 @@ export function floatingLua(rules) {
         + "}\n";
 }
 
+// A value in tidewm's for_window criteria: in double quotes, where \" is
+// a quote and every other character is itself.
+function confQuoted(s) {
+    return `"${s.replace(/"/g, '\\"')}"`;
+}
+
+// BUILT_IN's patterns as PCRE2 reads them, matching all of a class or
+// title: they use nothing PCRE2 reads otherwise than JavaScript does, but
+// $ also takes a final newline in PCRE2.
+function builtInPattern(re) {
+    return confQuoted(re.source.replace(/\$$/, "\\z"));
+}
+
+// ~/.config/tidewm/tide-floating.conf, which conf's tidewm config
+// includes (SPEC.md §5.3): BUILT_IN, which conf has only for Hyprland,
+// then each rule, as for_window lines. tidewm matches
+// with PCRE2, which finds a pattern anywhere unless it's anchored, and
+// whose $ also takes a final newline, so the class and the title (as
+// titleMatch spells them for PCRE2) are anchored with ^ and \z, to match
+// all of each, as Hyprland's FullMatch does. tidewm keeps a Wayland window's app ID and an X11
+// window's class apart, as sway does, where Hyprland's class is either,
+// so each rule is a line for each.
+export function floatingConf(rules) {
+    const lines = [];
+    for (const b of BUILT_IN) {
+        if (b.class) {
+            for (const k of ["app_id", "class"]) {
+                lines.push(`for_window [${k}=${builtInPattern(b.class)}] floating enable\n`);
+            }
+        } else {
+            lines.push(`for_window [title=${builtInPattern(b.title)}] floating enable\n`);
+        }
+    }
+    for (const r of rules) {
+        const cls = confQuoted(`^(?:${hyprlandMatch(r).class})\\z`);
+        const title = confQuoted(`^(?:${titleMatch(r.title).pcre})\\z`);
+        for (const k of ["app_id", "class"]) {
+            lines.push(`for_window [${k}=${cls} title=${title}] floating enable\n`);
+        }
+    }
+    return "# Written by tide's shell from floating.json and floating.local.json\n"
+        + "# (tide SPEC.md §6.4, §16); edit those, not this.\n"
+        + lines.join("");
+}
+
 // A Quickshell toplevel as these functions take a window: {address,
 // class, title, floating, fullscreen}. The title is the toplevel's own,
 // which Quickshell keeps live from windowtitlev2, not its client-list
@@ -599,8 +669,15 @@ export function newlyCovered(windows, before, after) {
 // beside Hyprland's own runtime files, so a shell that restarts floats
 // what a change it applied but didn't get to sweep still needs, and a new
 // Hyprland, at the next login, starts with none.
-export function sweptPath(runtimeDir, instance) {
-    return runtimeDir && instance ? `${runtimeDir}/hypr/${instance}/tide-floating-swept.json` : "";
+// On tidewm, `instance` is its IPC socket's path (SWAYSOCK), which names
+// that tidewm, and the record goes in the runtime directory itself.
+export function sweptPath(runtimeDir, instance, tidewm = false) {
+    if (!runtimeDir || !instance) {
+        return "";
+    }
+    return tidewm
+        ? `${runtimeDir}/tide-floating-swept-${String(instance).split("/").pop()}.json`
+        : `${runtimeDir}/hypr/${instance}/tide-floating-swept.json`;
 }
 
 export function sweptText(rules) {

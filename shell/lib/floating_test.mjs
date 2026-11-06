@@ -18,6 +18,7 @@ import {
     coveringRule,
     editedFloating,
     floatingLua,
+    floatingConf,
     floatingNow,
     hyprlandMatch,
     loadFloating,
@@ -128,6 +129,53 @@ test("the file conf reads gives each rule's class and title as Hyprland's whole-
     assert.equal(floatingLua([]), "-- Written by tide's shell from floating.json and floating.local.json\n-- (tide SPEC.md §6.4, §16); edit those, not this.\nreturn {\n    rules = {},\n}\n");
     assert.equal(floatingLua([calc, { class: 'we"ird', title: "a\\d" }]).split("\n").slice(2).join("\n"),
         'return {\n    rules = {\n        { class = "(?i)org\\\\.gnome\\\\.Calculator", title = ".*" },\n        { class = "(?i)we\\"ird", title = "[^\\\\n]*(?:a[\\\\p{Nd}])[^\\\\n]*" },\n    },\n}\n');
+});
+
+test("on tidewm a rule is two for_window lines, app ID and X11 class, anchored to match all of each", () => {
+    const head = "# Written by tide's shell from floating.json and floating.local.json\n# (tide SPEC.md §6.4, §16); edit those, not this.\n";
+    const builtIn = 'for_window [app_id="^(org\\.pulseaudio\\.)?pavucontrol\\z"] floating enable\n'
+        + 'for_window [class="^(org\\.pulseaudio\\.)?pavucontrol\\z"] floating enable\n'
+        + 'for_window [app_id="^nm-connection-editor\\z"] floating enable\n'
+        + 'for_window [class="^nm-connection-editor\\z"] floating enable\n'
+        + 'for_window [app_id="^blueman-manager\\z"] floating enable\n'
+        + 'for_window [class="^blueman-manager\\z"] floating enable\n'
+        + 'for_window [app_id="^xdg-desktop-portal-(gtk|gnome|kde)\\z"] floating enable\n'
+        + 'for_window [class="^xdg-desktop-portal-(gtk|gnome|kde)\\z"] floating enable\n'
+        + 'for_window [title="^(Open File|Open Files|Save File|Save As)(…|\\.\\.\\.)?\\z"] floating enable\n'
+        + 'for_window [title="^Picture[- ]in[- ][Pp]icture\\z"] floating enable\n';
+    // conf's dialog rules, which the page counts as standing, are tide's
+    // to write on tidewm
+    assert.equal(floatingConf([]), head + builtIn);
+    assert.equal(floatingConf([calc, { class: 'we"ird', title: "a\\d" }]), head + builtIn
+        + 'for_window [app_id="^(?:(?i)org\\.gnome\\.Calculator)\\z" title="^(?:.*)\\z"] floating enable\n'
+        + 'for_window [class="^(?:(?i)org\\.gnome\\.Calculator)\\z" title="^(?:.*)\\z"] floating enable\n'
+        + 'for_window [app_id="^(?:(?i)we\\"ird)\\z" title="^(?:[^\\n]*(?:a[\\p{Nd}])[^\\n]*)\\z"] floating enable\n'
+        + 'for_window [class="^(?:(?i)we\\"ird)\\z" title="^(?:[^\\n]*(?:a[\\p{Nd}])[^\\n]*)\\z"] floating enable\n');
+});
+
+test("on tidewm a title's \\v, \\b and [ mean what they do in Hyprland, not PCRE2's own", () => {
+    const title = (t) => {
+        const lines = floatingConf([{ class: "x", title: t }]).split("\n");
+        return /title="([^"]*)"/.exec(lines[lines.length - 2])[1];
+    };
+    // PCRE2's \v is any vertical space, and a range from it doesn't compile
+    assert.equal(title("a\\vb[\\v-\\r]"), "^(?:[^\\n]*(?:a\\x0Bb[\\x0B-\\r])[^\\n]*)\\z");
+    // PCRE2's \b, with Unicode on, would find no boundary in café's caf
+    const word = "[A-Za-z0-9_]";
+    assert.equal(title("caf\\b|\\B"), `^(?:[^\\n]*(?:caf(?:(?<=${word})(?!${word})|(?<!${word})(?=${word}))`
+        + `|(?:(?<=${word})(?=${word})|(?<!${word})(?!${word})))[^\\n]*)\\z`);
+    // PCRE2 reads [. and [= in a class as collating elements, and rejects them
+    assert.equal(title("[[.a.][[=b=]"), "^(?:[^\\n]*(?:[\\[.a.][\\[=b=])[^\\n]*)\\z");
+    // Hyprland's own patterns keep them
+    assert.equal(hyprlandMatch({ class: "x", title: "a\\vb\\b" }).title, "[^\\n]*(?:a\\vb\\b)[^\\n]*");
+});
+
+test("the record of what was swept is kept beside the session's compositor", () => {
+    assert.equal(sweptPath("/run/user/1000", "abc_1"), "/run/user/1000/hypr/abc_1/tide-floating-swept.json");
+    // tidewm's session is known by its IPC socket, which a new tidewm
+    // makes afresh.
+    assert.equal(sweptPath("/run/user/1000", "/run/user/1000/tidewm-ipc.1000.42.sock", true), "/run/user/1000/tide-floating-swept-tidewm-ipc.1000.42.sock.json");
+    assert.equal(sweptPath("", "abc_1"), "");
 });
 
 test("a rule covers a window by its class, ignoring case, and its title anywhere; conf's own come first", () => {

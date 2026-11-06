@@ -470,7 +470,16 @@ flowchart TD
   writes `tide-layouts.conf`, tidewm's layout lines, applied the same way;
   a reload that changes the layouts' defaults starts every workspace's
   from them again there, as `tide_layout.reload()` does, but one for
-  another page leaves them be. What else the shell takes from Hyprland's
+  another page leaves them be. The Floating page writes
+  `tide-floating.conf`, conf's dialog rules (§6.4) and two `for_window`
+  lines a rule, one for a Wayland
+  window's app ID and one for an X11 window's class, which tidewm keeps
+  apart as sway does, applied the same way. tidewm matches with PCRE2,
+  which reads the page's patterns as Hyprland's RE2 does but for `\v`,
+  `\b` and `\B`, so each is the same pattern with those spelled out as
+  RE2 means them, anchored to match the whole class and title as Hyprland
+  does; it floats the open windows a new rule covers too, and Super+Alt+F
+  fills the page in for tidewm's focused window. What else the shell takes from Hyprland's
   events is still Hyprland's. Home (§6.5) is the shell's to
   keep there, as tidewm's config can't know its name: `tide-tidewm`
   starts tidewm on it and keeps it, by the name the shell last wrote to

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, markEvents, appOf, shellWindows, activeWindow,
-    promptEvent, homeEvent, sendCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand,
+    promptEvent, homeEvent, sendCommand, floatCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand,
 } from "./tidewm.mjs";
 import { minimizedFrom, trayWindows } from "./minimized.mjs";
 import { promptWanted } from "./workspacenames.mjs";
@@ -264,4 +264,9 @@ test("a window is sent home without following it", () => {
     assert.equal(sendCommand("42", "in"), "[con_id=42] move to workspace number in");
     assert.equal(sendCommand("42", "a;b"), null, "a ; would end the command");
     assert.equal(sendCommand("0xabc", "in"), null, "not a container ID");
+});
+
+test("a window a new floating rule covers is floated by its container ID", () => {
+    assert.equal(floatCommand("42"), "[con_id=42] floating enable");
+    assert.equal(floatCommand("0xabc"), null);
 });

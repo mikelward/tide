@@ -107,10 +107,12 @@ test("the shell's JavaScript sticks to what QML's engine has", async () => {
     for (const f of sources) {
         const text = await readFile(new URL(f, dir), "utf8");
         assert.doesNotMatch(text, /\.at\(/, `${f} uses .at()`);
-        // An `re2:` string is RE2's spelling, written for Hyprland, never
-        // run here (floating.mjs's CLASSES).
-        assert.doesNotMatch(text.replace(/\bre2: "[^"]*"/g, ""), /\\[pP]\{/, `${f} uses a \\p{} property escape`);
-        assert.doesNotMatch(text, /\(\?</, `${f} uses a lookbehind or a named group`);
+        // An `re2:` or `pcre…:` string is RE2's or PCRE2's spelling, written
+        // for Hyprland or tidewm, never run here (floating.mjs's CLASSES and
+        // ASCII_BOUNDARIES).
+        const run = text.replace(/\b(?:re2|pcre\w*): "[^"]*"/g, "");
+        assert.doesNotMatch(run, /\\[pP]\{/, `${f} uses a \\p{} property escape`);
+        assert.doesNotMatch(run, /\(\?</, `${f} uses a lookbehind or a named group`);
     }
 });
 

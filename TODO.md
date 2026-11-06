@@ -7,6 +7,14 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **A floating rule is two `for_window` lines on tidewm** (2026-11-06),
+  one for `app_id` and one for X11's `class`, as tidewm keeps them apart
+  as sway does, rather than tidewm gaining a criterion that matches
+  either. Reversible: `floatingConf` in `shell/lib/floating.mjs`.
+- **tide writes conf's dialog rules for tidewm** (2026-11-06): at the top
+  of `tide-floating.conf`, from `BUILT_IN`, rather than conf's tidewm
+  config keeping its own copy, so the page's idea of them is tidewm's.
+  Reversible: `floatingConf`.
 - **tidewm's session puts tidewm first** (2026-11-05):
   `XDG_CURRENT_DESKTOP=tidewm:tide`, against Hyprland's `tide:Hyprland`.
   xdg-desktop-portal reads only the first name's file, and picks any
@@ -1939,11 +1947,8 @@ there once that's in. Next, in order:
    appearance, displays and layouts pages' are, or said to be Hyprland's
    only. The keyboard shortcuts list tidewm's bindings from its
    `GET_BINDINGS`.
-   - **Floating**'s title patterns are RE2's, and tidewm's `for_window`
-     takes POSIX extended ones, which lack lazy counts and `\w \d \s`
-     and `\x` escapes; a class alone is easy (an app ID or an X11 class,
-     either case). The shell floats the windows a new rule covers with
-     `floating enable`.
+   - Always float's question, after a float key floats a window, is still
+     Hyprland's: it waits on Hyprland's events.
 2. The rest: a name
    with a `;`, which tidewm's commands can't take, nor a rename one
    with " to " (sway's quoting would do); the lock's

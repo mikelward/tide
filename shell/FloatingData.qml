@@ -8,6 +8,7 @@ import "lib/dispatch.mjs" as Dispatch
 import "lib/floating.mjs" as Rules
 import "lib/launch.mjs" as Run
 import "lib/report.mjs" as Report
+import "lib/tidewm.mjs" as Tw
 import "lib/workspaces.mjs" as Ws
 import "lib/writes.mjs" as Writes
 
@@ -17,7 +18,10 @@ import "lib/writes.mjs" as Writes
 // conf's hyprland.lua reads as it loads, and `hyprctl eval
 // conf_floating.reload()` has it read again, as the shell starts too. Once
 // Hyprland has new rules, the tiled windows they cover that the old ones
-// didn't are floated, since a rule floats a window only as it opens. A bad
+// didn't are floated, since a rule floats a window only as it opens. On
+// tidewm (§5.3) they're ~/.config/tidewm/tide-floating.conf, for_window
+// lines conf's tidewm config includes, and `tide-msg reload` has tidewm
+// read them, as LayoutsData's. A bad
 // file is a notification naming it, once, and the last good rules stay;
 // one that can't be written or applied is tried again until it is
 // (shell/lib/writes.mjs).
@@ -36,10 +40,15 @@ Singleton {
     // windows a new rule floats (Rules.newlyCovered).
     property var wanted: ({ text: null, rules: [] })
     property var appliedRules: null
-    readonly property string sweptPath: Rules.sweptPath(Quickshell.env("XDG_RUNTIME_DIR") || "", Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || "")
+    readonly property string sweptPath: Compositor.tidewm
+        ? Rules.sweptPath(Quickshell.env("XDG_RUNTIME_DIR") || "", Quickshell.env("SWAYSOCK") || "", true)
+        : Rules.sweptPath(Quickshell.env("XDG_RUNTIME_DIR") || "", Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || "")
 
-    // The open windows, as Hyprland's client list gives them.
-    readonly property var windows: Hyprland.toplevels.values.map(t => Rules.windowOf(t))
+    // The open windows, as Hyprland's client list gives them, or tidewm's
+    // tree (Compositor.windows), which has no more about them to show.
+    readonly property var windows: Compositor.tidewm
+        ? Compositor.windows.map(w => ({ address: w.address, class: w.app, title: w.title, floating: w.floating, fullscreen: w.fullscreen, details: [] }))
+        : Hyprland.toplevels.values.map(t => Rules.windowOf(t))
     // The page's Floating now: floating windows no rule covers.
     readonly property var unruled: Rules.floatingNow(root.windows, root.rules)
 
@@ -108,7 +117,7 @@ Singleton {
         // applies what's wanted, as WorkspacesData does: the same rules
         // again change nothing.
         root.target = Writes.readTarget(root.target, writtenText, null).state;
-        const text = Rules.floatingLua(root.rules);
+        const text = Compositor.tidewm ? Rules.floatingConf(root.rules) : Rules.floatingLua(root.rules);
         root.wanted = { text: text, rules: root.rules };
         root.stepped(Writes.wantTarget(root.target, text));
     }
@@ -138,11 +147,15 @@ Singleton {
                 continue;
             }
             console.log(`tide: floating window ${address}, which a new floating rule covers`);
-            Hyprland.dispatch(Dispatch.floatWindow(address, Hyprland.usingLua));
+            if (Compositor.tidewm) {
+                Compositor.tidewmCommand(Tw.floatCommand(address), `float window ${address}`);
+            } else {
+                Hyprland.dispatch(Dispatch.floatWindow(address, Hyprland.usingLua));
+            }
         }
         root.appliedRules = root.wanted.rules;
         if (root.sweptPath === "") {
-            console.warn("tide: no XDG_RUNTIME_DIR or HYPRLAND_INSTANCE_SIGNATURE, so a shell restarted mid-change won't float the windows it left");
+            console.warn(`tide: no XDG_RUNTIME_DIR or ${Compositor.tidewm ? "SWAYSOCK" : "HYPRLAND_INSTANCE_SIGNATURE"}, so a shell restarted mid-change won't float the windows it left`);
             return;
         }
         const error = swept.writeNow(Rules.sweptText(root.wanted.rules));
@@ -335,7 +348,10 @@ Singleton {
         target: "floating"
 
         function remember(): string {
-            const error = root.prefillFor(Rules.windowOf(Hyprland.activeToplevel));
+            const active = Compositor.tidewmActive;
+            const error = root.prefillFor(Compositor.tidewm
+                ? (active ? { class: active.app, title: active.title, details: [] } : null)
+                : Rules.windowOf(Hyprland.activeToplevel));
             if (error !== "") {
                 Launcher.run(Report.notifyCommand("No floating rule to fill in", error), ok => {
                     if (!ok) {
@@ -372,16 +388,17 @@ Singleton {
         path: root.sweptPath
     }
 
-    // What hyprland.lua reads. Written only when it would say something
-    // else.
+    // What hyprland.lua reads, or on tidewm what its config includes.
+    // Written only when it would say something else.
     SettingsFile {
         id: written
 
-        path: `${root.configHome}/hypr/tide-floating.lua`
+        path: Compositor.tidewm ? `${root.configHome}/tidewm/tide-floating.conf` : `${root.configHome}/hypr/tide-floating.lua`
     }
 
     // Has hyprland.lua take what was written: `hyprctl eval` answers "ok",
-    // or why not, on stdout.
+    // or why not, on stdout. On tidewm, `tide-msg reload` exits 0, or says
+    // why not, as tidewm's errors.
     Component {
         id: applier
 
@@ -412,7 +429,7 @@ Singleton {
                 if (!state.started) {
                     console.warn(state.report.message);
                     error = state.report.message.replace(/^tide: /, "");
-                } else if (state.code !== 0 || reply.trim() !== "ok") {
+                } else if (state.code !== 0 || (!Compositor.tidewm && reply.trim() !== "ok")) {
                     // A conf from before floating rules has no
                     // conf_floating.
                     error = `couldn't apply the floating rules: ${(reply + state.errors).trim()}`;
@@ -428,7 +445,7 @@ Singleton {
                 destroy();
             }
 
-            command: ["hyprctl", "eval", "conf_floating.reload()"]
+            command: Compositor.tidewm ? ["tide-msg", "reload"] : ["hyprctl", "eval", "conf_floating.reload()"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     run.reply = text;

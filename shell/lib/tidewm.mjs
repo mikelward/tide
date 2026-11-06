@@ -259,6 +259,11 @@ export function closeCommand(address) {
     return c === null ? null : `${c} kill`;
 }
 
+export function floatCommand(address) {
+    const c = con(address);
+    return c === null ? null : `${c} floating enable`;
+}
+
 export function minimizeCommand(address) {
     const c = con(address);
     return c === null ? null : `${c} minimize enable`;
