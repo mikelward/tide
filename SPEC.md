@@ -1931,15 +1931,19 @@ See [`bar.png`](docs/mocks/bar.png).
 
 ### 7.3 Clocks
 
-- **The bar shows local's clock alone,** as `MMM d HH:MM`, on every
-  screen, small or ultrawide. The other zones are on hover and a click away.
-  Decided by the maintainer, after using local alone on a laptop.
+- **The bar shows each zone set to be in it, then local's clock,** as
+  `MMM d HH:MM`. Every zone is in the bar unless its entry says
+  `"bar": false` (below), and the popover lists them all, so a machine can
+  keep several zones a click away and two or three on the bar. tide,
+  tilemo and tileco read the same setting and show it the same way. It
+  used to show local's clock alone, by the maintainer's choice after using
+  it on a laptop; untick the zones there to get that back.
 - **Zones:** America/Los_Angeles, America/New_York, Europe/London. They show as
   **`SF HH:MM`**, **`NYC HH:MM`** and **`LON HH:MM`** in 24-hour time with
   tabular figures.
-- **Hovering local's clock** shows every other zone on one line, in order,
-  such as `SF 09:41 · NYC 12:41 · LON 17:41`, in the bar's hover text
-  (§7.4). A machine with no other zone shows none.
+- **Hovering the clocks** shows each zone that isn't in the bar on one
+  line, in order, such as `SF 09:41 · NYC 12:41 · LON 17:41`, in the bar's
+  hover text (§7.4). With every zone in the bar, there's no hover text.
 - **Place labels don't change at DST**, so the bar looks the same all year.
   A label can be switched per zone to `"abbr"`, tzdata's current abbreviation
   (PDT↔PST, EDT↔EST, BST↔GMT), or to any fixed text.
@@ -2005,6 +2009,10 @@ See [`bar.png`](docs/mocks/bar.png).
     shows the right time, but never counts as the local zone.
   - `label` is any one line of text, `""` for just the time, or `"abbr"`
     (above). A line break is an error, since the bar is one line.
+  - `bar`, `true` or `false`, says whether the zone shows in the bar. It's
+    in the bar when left out, and only `"bar": false` is written. Anything
+    else is an error at load. The Clocks page's **Bar** button on each
+    clock sets it.
   - The file can instead be an object: the list as `clocks`, beside two
     switches, `hour24` and `dedupeLocal`, each `true` or `false`. Any of
     the three can be left out.

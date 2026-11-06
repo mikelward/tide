@@ -184,6 +184,12 @@ Singleton {
         return root.edit(clocks => Clocks.relabeledClock(clocks, index, zone, label));
     }
 
+    // Puts a clock in the bar (`inBar` true) or takes it out: every one
+    // still shows in the popover.
+    function setBar(index, zone, inBar) {
+        return root.edit(clocks => Clocks.barredClock(clocks, index, zone, inBar));
+    }
+
     function add(zone) {
         return root.edit(clocks => Clocks.withClock(clocks, zone));
     }
