@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 import {
-    REPEAT_MS, answerCommand, answerOutcome, areaFor, decimalToHex, isUltrawide, options, orderWindows,
+    REPEAT_MS, answerCommand, answerOutcome, areaFor, decimalToHex, isUltrawide, offeredScreens, options, orderWindows,
     parseWindows, preselect, revealY, selectionLine, shareLabel, validReply
 } from "./sharepicker.mjs";
 
@@ -25,7 +25,7 @@ test("xdph's window list parses into id, class, title and address", () => {
 test("an empty or malformed window list gives no windows", () => {
     assert.deepEqual(parseWindows(""), []);
     assert.deepEqual(parseWindows(undefined), []);
-    assert.deepEqual(parseWindows("x[HC>]a[HT>]b[HE>]1[HA>]"), []);
+    assert.deepEqual(parseWindows("x;y[HC>]a[HT>]b[HE>]1[HA>]"), []);
     assert.deepEqual(parseWindows("11[HC>]kitty[HA>]"), []);
 });
 
@@ -89,6 +89,24 @@ test("an ultrawide opens on the focused window, other monitors on the screen", (
     // Nothing focused at all: the first option.
     assert.equal(preselect(opts, { screen: null, address: null }, null, 0), 0);
     assert.equal(preselect([], { screen: null, address: null }, null, 0), -1);
+});
+
+test("on tidewm, whose portal shares no regions, no 16:9 slice is offered", () => {
+    // xdg-desktop-portal-wlr's identifier, which holds while the window does
+    const windows = parseWindows("a1b2[HC>][HT>]notes[HE>]0[HA>]");
+    const opts = options([wide, laptop], windows, () => null, null, false);
+    assert.deepEqual(opts.map(o => o.key), ["screen:DP-1", "screen:eDP-1", "window:a1b2"]);
+    // A window xdg-desktop-portal-wlr offers has no class or address
+    assert.equal(opts[2].label, "notes");
+    assert.equal(opts[2].address, null);
+});
+
+test("xdph's request may share any screen, xdpw's only the outputs it offered", () => {
+    assert.deepEqual(offeredScreens([wide, laptop], "*"), [wide, laptop]);
+    assert.deepEqual(offeredScreens([wide, laptop], "eDP-1"), [laptop]);
+    assert.deepEqual(offeredScreens([wide, laptop], "DP-1\neDP-1\n"), [wide, laptop]);
+    // A request for windows alone
+    assert.deepEqual(offeredScreens([wide, laptop], ""), []);
 });
 
 test("a request within 10 s opens on the last choice, while it's offered", () => {

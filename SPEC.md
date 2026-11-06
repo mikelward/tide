@@ -3240,6 +3240,17 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
   - With no tide shell running, as in a plain Hyprland login with the same
     `xdph.conf`, it runs xdph's own `hyprland-share-picker` if that's
     installed, so a share still works.
+  - In tidewm's session (§5.3), xdg-desktop-portal-wlr runs it as its
+    chooser, `tide-share-picker --dmenu`, from conf's
+    `xdg-desktop-portal-wlr/tidewm` (`chooser_type=dmenu`). xdpw 0.8 writes
+    a line for each output, `Monitor: <output> <description>`, and each
+    window, `Window: <title> (<identifier>)`, and takes back the line
+    chosen. The dialog lists its windows by title alone, with no icon,
+    thumbnail or workspace, since the identifier is
+    ext-foreign-toplevel-list's, which tidewm's IPC doesn't give. It
+    offers only the outputs xdpw listed, none for a request for windows
+    alone. xdpw shares no regions, so there's no 16:9 slice there, and its
+    own restore tokens stand in for the reuse box.
 
   The dialog offers:
   - **Screens:** each output, with a live `ScreencopyView` thumbnail.

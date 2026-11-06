@@ -4,8 +4,9 @@
 
 // xdph 1.4.1 hands the picker its windows in XDPH_WINDOW_SHARING_LIST:
 // `<id>[HC>]<class>[HT>]<title>[HE>]<address>[HA>]` for each, where the id
-// is what a `window:` answer names and the address is Hyprland's, in
-// decimal. xdph has already blanked quotes, `$` and backquotes, and the
+// is what a `window:` answer names (xdph's a number; xdg-desktop-portal-wlr's,
+// by way of tide-share-picker --dmenu, letters and digits) and the address
+// is Hyprland's, in decimal. xdph has already blanked quotes, `$` and backquotes, and the
 // `]` of a `>]` inside a name, so the separators can't appear in one.
 export function parseWindows(list) {
     const windows = [];
@@ -17,7 +18,7 @@ export function parseWindows(list) {
             continue;
         }
         const id = entry.slice(0, hc).trim();
-        if (!/^[0-9]+$/.test(id)) {
+        if (!/^[A-Za-z0-9_-]+$/.test(id)) {
             continue;
         }
         windows.push({
@@ -99,9 +100,10 @@ export function orderWindows(windows, workspaceOf, current) {
 }
 
 // Every option, in the order the arrow keys move through them: screens,
-// windows, then areas. Each has the key a remembered choice is matched by
-// and the selection xdph reads.
-export function options(screens, windows, workspaceOf, current) {
+// windows, then areas, unless `regions` is false, as on tidewm, whose
+// xdg-desktop-portal-wlr shares none. Each has the key a remembered choice
+// is matched by and the selection xdph reads.
+export function options(screens, windows, workspaceOf, current, regions = true) {
     const all = [];
     for (const s of screens) {
         all.push({ kind: "screen", key: `screen:${s.name}`, screen: s.name, label: s.name, detail: `${s.width}×${s.height}` });
@@ -117,7 +119,7 @@ export function options(screens, windows, workspaceOf, current) {
             cls: w.cls
         });
     }
-    for (const s of screens) {
+    for (const s of regions ? screens : []) {
         const a = areaFor(s);
         if (a) {
             all.push({
@@ -136,6 +138,17 @@ export function options(screens, windows, workspaceOf, current) {
 // How long a choice is offered again: Chrome opens two to four portal
 // sessions for one share (§12).
 export const REPEAT_MS = 10000;
+
+// The screens a request may share: every one for xdph ("*"), which lists
+// none; for xdg-desktop-portal-wlr, by tide-share-picker --dmenu, only the
+// outputs it offered, a name a line, none for a request for windows alone.
+export function offeredScreens(screens, offered) {
+    if (offered === "*") {
+        return screens;
+    }
+    const names = String(offered ?? "").split("\n").filter(n => n !== "");
+    return screens.filter(s => names.indexOf(s.name) >= 0);
+}
 
 // The option the dialog opens on, as an index into `opts`:
 // - the last choice, if it was made within REPEAT_MS and is still offered;
