@@ -65,8 +65,8 @@ function recent(list, now) {
     return list.filter(e => now - e.time >= 0 && now - e.time <= PAIR_MS);
 }
 
-// The picker's choice (its option's kind: "screen", "window" or
-// "region", and its label), waiting for its stream.
+// The picker's choice (its option's kind: "screen" or "window", and its
+// label), waiting for its stream.
 export function chose(state, kind, now, label) {
     return {
         waiting: recent(state.waiting, now).concat([{ kind: kind, label: label ?? "", time: now }]),
@@ -157,8 +157,7 @@ export function kindOf(state, id) {
 
 const SHOWN = {
     screen: { icon: "video-display-symbolic", name: "Screen", bare: "A screen" },
-    window: { icon: "focus-windows-symbolic", name: "Window", bare: "A window" },
-    region: { icon: "selection-mode-symbolic", name: "Area", bare: "An area" }
+    window: { icon: "focus-windows-symbolic", name: "Window", bare: "A window" }
 };
 
 // The apps reading a share, by the volume popover's streamLabel: the app's
@@ -187,8 +186,8 @@ export function shareRows(shares, state) {
     });
 }
 
-// Whether popups are held for the shares that are live. A screen or region
-// share holds them; a window share can't show them (§9). A share the shell
+// Whether popups are held for the shares that are live. A screen share
+// holds them; a window share can't show them (§9). A share the shell
 // couldn't pair counts as a screen share, so a popup waits rather than
 // leaking into a stream.
 export function holdsPopups(shares, state) {

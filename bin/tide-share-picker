@@ -5,8 +5,8 @@
 # the windows it can share in XDPH_WINDOW_SHARING_LIST and --allow-token
 # when its allow_token_by_default is on. It asks the running shell to show
 # the dialog, waits for the answer, and prints it for xdph:
-# `[SELECTION]<flags>/screen:<output>`, `.../window:<id>` or
-# `.../region:<output>@<x>,<y>,<w>,<h>`. Printing nothing cancels the share.
+# `[SELECTION]<flags>/screen:<output>` or `.../window:<id>`. Printing
+# nothing cancels the share.
 #
 # The shell answers on a pipe this makes in $XDG_RUNTIME_DIR, since an IPC
 # call returns before the dialog does. With no shell running, xdph's own
@@ -19,7 +19,6 @@
 # <description>` or `Window: <title> (<identifier>)`, and takes back the
 # line chosen. The shell's dialog shows them as xdph's would be, the
 # windows by title alone, and its answer is turned back into xdpw's line.
-# xdpw shares no regions, so the dialog offers none there.
 #
 # TIDE_SHARE_PICKER_TIMEOUT, 300 seconds by default, is how long it waits
 # for an answer before it closes the dialog and cancels.
@@ -148,10 +147,6 @@ if $dmenu; then
                 '' | *[!A-Za-z0-9_-]*) line= ;;
                 *) line=$(awk -v id="$id" 'index($0, "Window: ") == 1 && substr($0, length($0) - length(id) - 1) == "(" id ")" { print; exit }' "$reply.lines") ;;
             esac
-            ;;
-        '[SELECTION]'*/region:*)
-            echo "$prog: xdg-desktop-portal-wlr shares no regions, so nothing is shared" >&2
-            exit 1
             ;;
         '') exit 0 ;;
         *) line= ;;

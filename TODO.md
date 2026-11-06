@@ -1643,11 +1643,10 @@ thumbnails and xdph itself are unchecked. Still to do:
   which falls back to xdph's picker where tide isn't installed, and keeps
   the `tide-share-picker` layer out of screen shares
   (mikelward/conf#415). xdph reads it as it starts.
-- On a real session, share from Meet in Chrome: a window, the 16:9 area of
-  an ultrawide and a whole screen, then a second request within 10 s,
+- On a real session, share from Meet in Chrome: a window and a whole
+  screen, then a second request within 10 s,
   which should open on the first choice. Count the prompts one share
   makes, and check whether Chrome asks for a restore token.
-- Drag to choose an area, the mock's "Select a region…".
 
 ## The rest of `tide doctor`
 
@@ -1924,7 +1923,7 @@ alternative. The fork's code goes in
 history; tide's changes go on top of v0.9 there. Before rewriting §3.1 around it, work through §21.1's next steps:
 
 - Screen sharing through `tide-share-picker` on xdg-desktop-portal-wlr,
-  with an adapter, including a way to share the 16:9 slice.
+  with an adapter.
 - `grim -T` on a dwl build that exposes the toplevel-capture protocols.
 - Re-check Debian 13's toolchain.
 - Inventory everything the spec needs from the compositor, with the fork's
@@ -1956,10 +1955,9 @@ there once that's in. Next, in order:
    `GET_BINDINGS`.
 2. The rest: the greeter's
    displays off, should the greeter move to tidewm (it runs Hyprland);
-   the share picker's windows' thumbnails; and the focus
-   guard's evals. Its 16:9 slice, which xdg-desktop-portal-wlr can't share
-   (a virtual output mirroring the middle of the monitor would), is
-   skipped there (2026-11-06).
+   and the focus guard's evals. Sharing a window or a whole screen is all
+   the share picker needs there (maintainer, 2026-11-06), so its windows
+   need no thumbnails.
 
 If the fork is adopted, machines build a pinned release tag, never a branch:
 

@@ -9,9 +9,8 @@ import "lib/workspaces.mjs" as Ws
 
 // The screen-share picker (SPEC.md §12, docs/mocks/share-picker.png), for
 // `tide-share-picker`, which xdph runs when an app asks to share. It
-// offers each screen, each window xdph can share, and a 16:9 area of each
-// monitor wider than that, centered on the focused monitor over a dimmed
-// backdrop like the launcher. The arrow keys move through the options,
+// offers each screen and each window xdph can share, centered on the
+// focused monitor over a dimmed backdrop like the launcher. The arrow keys move through the options,
 // Enter or a double-click shares the highlighted one, and Escape or Cancel
 // says no. The answer goes back on the pipe the picker named.
 PanelWindow {
@@ -63,7 +62,7 @@ PanelWindow {
         const windows = Compositor.tidewm ? Picker.namedWindows(Picker.parseWindows(list), Compositor.windows) : Picker.parseWindows(list);
         const current = Compositor.tidewm ? (Compositor.tidewmListed.find(w => w?.focused === true)?.id ?? null)
             : (Hyprland.focusedMonitor?.activeWorkspace?.id ?? null);
-        const opts = Picker.options(screens, windows, workspaceOf, current, offered === "*");
+        const opts = Picker.options(screens, windows, workspaceOf, current);
         root.opts = opts;
         root.reuse = allowToken;
         root.selected = Picker.preselect(opts, {
@@ -142,7 +141,7 @@ PanelWindow {
     // `qs -c tide ipc call sharepicker pick REPLY ALLOW LIST SCREENS` opens
     // it for tide-share-picker, which waits on REPLY; SCREENS is "*" for
     // xdph's every screen, or xdg-desktop-portal-wlr's outputs, a name a
-    // line (Picker.offeredScreens), whose regions it can't share; `... cancel REPLY` closes it
+    // line (Picker.offeredScreens); `... cancel REPLY` closes it
     // with no, if REPLY is still the open request's.
     IpcHandler {
         target: "sharepicker"
@@ -289,10 +288,6 @@ PanelWindow {
                             kind: "window",
                             title: "Windows",
                             note: "on every workspace, current one first"
-                        }, {
-                            kind: "region",
-                            title: "Area",
-                            note: ""
                         }]
 
                     Column {
@@ -381,20 +376,6 @@ PanelWindow {
                                             captureSource: tile.shot
                                             live: tile.option.kind !== "window" && root.visible
                                             constraintSize: Qt.size(thumb.width, thumb.height)
-                                        }
-
-                                        // The area's outline over its monitor.
-                                        Rectangle {
-                                            readonly property real k: view.width / Math.max(1, Quickshell.screens.find(s => s.name === tile.option.screen)?.width ?? 1)
-
-                                            visible: tile.option.kind === "region" && view.hasContent && view.sourceSize.width > 0
-                                            x: view.x + (tile.option.area?.x ?? 0) * k
-                                            y: view.y + (tile.option.area?.y ?? 0) * k
-                                            width: (tile.option.area?.w ?? 0) * k
-                                            height: (tile.option.area?.h ?? 0) * k
-                                            color: "transparent"
-                                            border.width: 2
-                                            border.color: Theme.accent
                                         }
 
                                         IconImage {
