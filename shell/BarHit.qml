@@ -1,6 +1,8 @@
 import QtQuick
 import Quickshell
 import "lib/barclick.mjs" as Click
+import "lib/barsettings.mjs" as BarSettings
+import "lib/settings.mjs" as Settings
 
 // A bar item's click target (SPEC.md §7.1): its whole span, the bar's full
 // height, and `reach` past its ends, {left, right}, which splits the gap
@@ -72,11 +74,12 @@ Item {
             id: hover
         }
 
-        // A right-click opens the item's settings page (SPEC.md §7.1).
+        // A right-click opens the item's settings page (SPEC.md §7.1), or
+        // the first page by name, so an open panel turns to it too.
         TapHandler {
             acceptedButtons: Qt.RightButton
             enabled: root.settings !== undefined
-            onTapped: SettingsData.open(root.settings)
+            onTapped: SettingsData.open(BarSettings.opened(root.settings, Settings.PAGES))
         }
 
         // Only watches, so the press still reaches the handlers here.

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BAR_SETTINGS, page } from "./barsettings.mjs";
+import { BAR_SETTINGS, opened, page } from "./barsettings.mjs";
 import { PAGES } from "./settings.mjs";
 
 const SHELL = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -21,6 +21,11 @@ test("each bar item opens its own page", () => {
     assert.equal(page("workspaces"), "workspaces");
     assert.equal(page("volume"), "sound");
     assert.equal(page("sysmon"), "");
+});
+
+test("the first page opens by name, so an open panel turns to it", () => {
+    assert.equal(opened(page("sysmon"), PAGES), PAGES[0].id);
+    assert.equal(opened(page("clocks"), PAGES), "clocks");
 });
 
 test("an unknown bar item is an error, naming it", () => {
