@@ -21,6 +21,7 @@ check() {
     if "$@"; then pass; else fail "$_name"; fi
 }
 contains() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
+not_contains() { ! contains "$@"; }
 
 tmp=$(mktemp -d) || exit 1
 # The long-lived fakes record their pids here, to be stopped after each run.
@@ -295,6 +296,19 @@ check "a missing TIDE_WALLPAPER fails, not to be retried" test "$status" -eq 78
 check "a missing TIDE_WALLPAPER is reported by name" \
     contains "$(cat "$tmp/err")" "TIDE_WALLPAPER is '$tmp/missing.jpg'"
 check "a missing TIDE_WALLPAPER starts nothing" test ! -s "$tmp/log"
+
+# Without conf's scripts, the session goes on, and says what that costs:
+# a watcher that should be there and isn't was, once, the only reason a
+# mouse stayed right-handed after a KVM switch.
+mkdir -p "$tmp/no-conf"
+run FAKE_NAMES="$both" HOME="$tmp/no-conf" TIDE_INPUT_SETUP= TIDE_INPUT_WATCH=
+check "no conf: the session still starts" contains "$(cat "$tmp/log")" "systemd-notify --ready"
+check "no conf: a missing input setup is said" \
+    contains "$(cat "$tmp/err")" "no $tmp/no-conf/.config/hypr/scripts/apply-input.sh, so input devices keep their defaults"
+check "no conf: a missing watcher is said" \
+    contains "$(cat "$tmp/err")" "no $tmp/no-conf/.config/hypr/scripts/watch-input.sh, so a mouse, touchpad or keyboard plugged in after login"
+run FAKE_NAMES="$both"
+check "with both scripts, neither is said to be missing" not_contains "$(cat "$tmp/err")" "/hypr/scripts/"
 
 run FAKE_NAMES="$both" TIDE_INPUT_SETUP="$tmp/no-such-setup"
 check "a missing TIDE_INPUT_SETUP fails, not to be retried" test "$status" -eq 78

@@ -382,7 +382,8 @@ It runs `conf`'s `apply-input.sh` once, which Hyprland's autostart ran
 before it shrank to `uwsm finalize`. Then it starts `conf`'s
 `watch-input.sh` for the session. Hyprland has no event for a new device,
 so that listens to udev and runs `apply-input.sh` again when a mouse,
-touchpad or keyboard is plugged in, such as through a KVM switch.
+touchpad or keyboard is plugged in, such as through a KVM switch. Either
+script missing is logged, with what it costs; the session goes on.
 
 With `TIDE_POLKIT=1` the shell is the polkit agent
 (`Quickshell.Services.Polkit`), opt-in until it has run in a live session,
