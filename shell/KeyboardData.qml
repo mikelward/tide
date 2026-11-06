@@ -7,7 +7,7 @@ import "lib/lock.mjs" as Lock
 
 // The main keyboard's layout, for the bar's label (SPEC.md §7.4): the
 // lock's own reader (LockKeymap), read at start and on each layout switch
-// Hyprland reports. `next()` moves every keyboard to the layout after the
+// Hyprland or tidewm reports. `next()` moves every keyboard to the layout after the
 // main keyboard's, read afresh, as Super+Alt+Space does (§16).
 Singleton {
     id: root
@@ -35,7 +35,7 @@ Singleton {
             console.warn("tide: no next keyboard layout to switch to");
             return;
         }
-        switcher.command = ["hyprctl", "switchxkblayout", "all", String(n)];
+        switcher.command = Lock.switchLayoutCommand(n, keymapReader.tidewm);
         switcher.running = true;
     }
 
@@ -62,13 +62,13 @@ Singleton {
         stdout: StdioCollector {
             onStreamFinished: {
                 if (text.trim() !== "" && text.trim() !== "ok") {
-                    console.warn(`tide: hyprctl switchxkblayout said: ${text.trim()}`);
+                    console.warn(`tide: ${switcher.command.join(" ")} said: ${text.trim()}`);
                 }
             }
         }
         onExited: (code, status) => {
             if (code !== 0) {
-                console.warn(`tide: hyprctl switchxkblayout exited ${code}`);
+                console.warn(`tide: ${switcher.command.join(" ")} exited ${code}`);
             }
         }
     }

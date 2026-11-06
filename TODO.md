@@ -1951,8 +1951,7 @@ there once that's in. Next, in order:
      Hyprland's: it waits on Hyprland's events.
 2. The rest: a name
    with a `;`, which tidewm's commands can't take, nor a rename one
-   with " to " (sway's quoting would do); the lock's
-   keyboard layout (`GET_INPUTS` and input events); the greeter's
+   with " to " (sway's quoting would do); the greeter's
    displays off; the share picker
    (xdg-desktop-portal-wlr's chooser); the focus guard's evals; and an
    integration test against a stand-in for tidewm, as
