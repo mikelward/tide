@@ -124,7 +124,7 @@ Singleton {
                 // home itself, and is home's apps' rule (rulesApplied).
                 const keep = Comp.tidewmKeepHome(root.home);
                 if (keep === null) {
-                    root.stepped(Writes.targetApplied(root.target, `home's name, ${root.home}, has a ; in it, which tidewm's commands can't take, so home isn't kept`));
+                    root.stepped(Writes.targetApplied(root.target, `home's name, ${root.home}, has a " in it, which tidewm's quotes can't hold, so home isn't kept`));
                     return;
                 }
                 applier.createObject(root, { command: ["tide-msg", keep], tidewm: true, home: root.home }).running = true;

@@ -1690,8 +1690,9 @@ check "and says which" contains "$out" "the shell should write tidewm's tide-inp
 case_113() {
 # The stand-in tidewm holds a listener's requests until a drain, answering
 # then with the first tick after a subscription to ticks; answers any other
-# connection at once, as tide-msg's; refuses a command tidewm doesn't know;
-# and sends each listener only the events it subscribed to.
+# connection at once, as tide-msg's; refuses a command tidewm doesn't know,
+# splitting them only at a ; outside double quotes; and sends each
+# listener only the events it subscribed to.
 mkdir -p "$tmp/tidewm" || exit 1
 python3 shell/tidewm_stand_in.py serve "$tmp/tidewm/ipc" >"$tmp/tidewm/serve.log" 2>&1 &
 _serve=$!
@@ -1733,6 +1734,9 @@ print("tree:", kind, tree["type"], len(tree["nodes"][0]["nodes"]))
 msg = connect()
 msg.sendall(message(0, "[con_id=12] focus; frobnicate; [title=x] kill; persist workspace in"))
 print("commands:", [r["success"] for r in read(msg)[1]])
+msg = connect()
+msg.sendall(message(0, 'workspace number "a; frobnicate"; nop'))
+print("quoted:", [r["success"] for r in read(msg)[1]])
 listener.settimeout(0.3)
 try:
     print("before the drain:", listener.recv(1))
@@ -1760,6 +1764,7 @@ kill "$_serve"
 wait "$_serve"
 check "the stand-in tidewm answers a tide-msg at once, while a listener waits" contains "$out" "tree: 4 root 5"
 check "and refuses a command tidewm doesn't know, or criteria it doesn't take" contains "$out" "commands: [True, False, False, True]"
+check "and splits commands only at a ; outside double quotes, as tidewm does" contains "$out" "quoted: [True, True]"
 check "and holds the listener's requests until a drain" contains "$out" "before the drain: nothing"
 check "which answers them, and says so" contains "$out" "drained: ['subscribe [\"window\",\"tick\"]', 'get_workspaces']"
 check "with the first tick after the subscription" contains "$out" "then: [('0x2', {'success': True}), ('0x80000007', {'first': True, 'payload': ''}), ('0x1', 5)]"

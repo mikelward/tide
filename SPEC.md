@@ -4835,9 +4835,10 @@ are what "done" means.
     listens on, so a connection that starts by subscribing waits for a
     drain, as Hyprland's requests do.
   - The shell runs the real `tide-msg`, whose connections the stand-in
-    answers at once, from the same fixtures. It takes only the command
-    words tidewm's `docs/ipc.md` lists, and only `[con_id=N]` criteria,
-    and refuses anything else as tidewm would.
+    answers at once, from the same fixtures. It splits commands at a `;`
+    outside double quotes, as tidewm does, takes only the command words
+    tidewm's `docs/ipc.md` lists, and only `[con_id=N]` criteria, and
+    refuses anything else as tidewm would.
   - The test fails unless the shell asks for the workspaces and monitors,
     listens for window events, asks `tide-msg` for the tree, writes each
     of tidewm's settings files and has tidewm reload them, keeps home, and
