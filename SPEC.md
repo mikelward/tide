@@ -4825,6 +4825,25 @@ are what "done" means.
     no timed wait.
   - The test fails if the shell never asks for the windows or never listens
     for events.
+- **The shell takes in tidewm's data.** The test loads the shell once more
+  in tidewm's session (§5.3), on a stand-in for tidewm's IPC
+  (`shell/tidewm_stand_in.py`) with the same kind of fixtures: workspaces
+  with a home and a name with a comma, windows tiled, floating, minimized,
+  fullscreen and X11, and a script of window, workspace, monitor, layout
+  and input events, one of them renaming home.
+  - Quickshell's I3 module sends its requests on the connection it
+    listens on, so a connection that starts by subscribing waits for a
+    drain, as Hyprland's requests do.
+  - The shell runs the real `tide-msg`, whose connections the stand-in
+    answers at once, from the same fixtures. It takes only the command
+    words tidewm's `docs/ipc.md` lists, and only `[con_id=N]` criteria,
+    and refuses anything else as tidewm would.
+  - The test fails unless the shell asks for the workspaces and monitors,
+    listens for window events, asks `tide-msg` for the tree, writes each
+    of tidewm's settings files and has tidewm reload them, keeps home, and
+    names home `in` again after the rename. It fails if the shell runs
+    `hyprctl` there, or makes any request of Quickshell's Hyprland module,
+    which says so in its log.
   - `hyprctl` is a stand-in too, from the same file, and answers at once
     from the same fixtures. The bar asks it for the window focused at
     startup, the lock and the greeter for the keyboards.

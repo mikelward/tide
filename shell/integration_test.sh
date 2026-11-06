@@ -13,7 +13,12 @@
 # run headless, is the one here. Hyprland's IPC is a stand-in
 # (shell/hyprland_stand_in.py) with workspaces, windows and a script of
 # events, so the bar's workspaces, window icons, title and layout symbol
-# are built from them. Both run in a scratch home and runtime directory, on
+# are built from them. It also loads the shell in tidewm's session (SPEC.md
+# §5.3), on a stand-in for tidewm's IPC (shell/tidewm_stand_in.py) with the
+# same kind of fixtures and events, and the real tide-msg, and fails if
+# that shell asks Hyprland anything, never asks tidewm for its workspaces,
+# monitors and windows, writes none of tidewm's settings files, or leaves
+# home renamed. Both run in a scratch home and runtime directory, on
 # a D-Bus session bus of their own, so a run inside a tide session leaves
 # that session alone.
 #
@@ -61,8 +66,8 @@
 # time, and exit.
 #
 #   $QS                  the Quickshell command (default: qs)
-#   $GO                  the Go command, to build tide-tz and tide-greetd
-#                        (default: go)
+#   $GO                  the Go command, to build tide-tz, tide-greetd and
+#                        tide-msg (default: go)
 #   $TIDE_REQUIRE_QS     set (CI sets it) to fail, not skip, without qs,
 #                        sway, python3, Go, wtype or notify-send
 #   $TIDE_STEP_WAIT      seconds to wait for each step (default: 60)
@@ -152,8 +157,8 @@ missing() {
 qs=${QS:-qs}
 qs_path=$(command -v "$qs") || missing "$qs (Quickshell)"
 sway_path=$(command -v sway) || missing "sway (to run headless)"
-python_path=$(command -v python3) || missing "python3 (for the stand-in Hyprland)"
-go_path=$(command -v "${GO:-go}") || missing "${GO:-go} (to build tide-tz, which the bar's clocks run, and tide-greetd, which the greeter talks to greetd through)"
+python_path=$(command -v python3) || missing "python3 (for the stand-in Hyprland and tidewm)"
+go_path=$(command -v "${GO:-go}") || missing "${GO:-go} (to build tide-tz, which the bar's clocks run, tide-greetd, which the greeter talks to greetd through, and tide-msg, which the shell asks tidewm through)"
 # Without wtype, nothing is typed, so the launcher, the lock's password and
 # the greeter go untested.
 if ! wtype_path=$(command -v wtype); then
@@ -194,14 +199,14 @@ esac
 
 tmp=$(mktemp -d) || exit 1
 qs_pid=
-hypr_pid=
+stand_in_pid=
 keyboard_pid=
 greetd_pid=
 sway_pid=
 bus_pid=
 cleanup() {
     _status=$?
-    for pid in $qs_pid $hypr_pid $greetd_pid $keyboard_pid $sway_pid; do
+    for pid in $qs_pid $stand_in_pid $greetd_pid $keyboard_pid $sway_pid; do
         # It may have exited already.
         kill "$pid" 2>/dev/null
         wait "$pid"
@@ -285,7 +290,13 @@ if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/tide-greetd" ./
     echo "FAIL: couldn't build tide-greetd: $(cat "$tmp/go.log")" >&2
     exit 1
 fi
-helpers="tide-sysmon tide-tz hyprctl gsettings nmcli systemctl timedatectl udevadm tide"
+# What the shell asks tidewm through in its session, the real one, which
+# the stand-in tidewm answers at once.
+if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/helpers/real/tide-msg" ./cmd/tide-msg >"$tmp/go.log" 2>&1; then
+    echo "FAIL: couldn't build tide-msg: $(cat "$tmp/go.log")" >&2
+    exit 1
+fi
+helpers="tide-sysmon tide-tz hyprctl tide-msg gsettings nmcli systemctl timedatectl udevadm tide"
 : >"$tmp/helpers.log" || exit 1
 for _helper in $helpers; do
     cat >"$tmp/helpers/$_helper" <<EOF || exit 1
@@ -399,12 +410,12 @@ helpers() {
     done
 }
 
-# hyprland COMMAND: asks the stand-in Hyprland to drain or play, and prints
-# its answer.
-hyprland() {
-    if ! timeout "$wait" "$python_path" shell/hyprland_stand_in.py "$1" "$hypr_dir" 2>"$tmp/hypr.err"; then
-        echo "FAIL: the stand-in Hyprland didn't $1: $(cat "$tmp/hypr.err")" >&2
-        cat "$tmp/hypr.log" >&2
+# stand_in COMMAND: asks the stand-in compositor, Hyprland or tidewm as
+# load started it, to drain or play, and prints its answer.
+stand_in() {
+    if ! timeout "$wait" "$python_path" "$stand_in" "$1" "$stand_in_dir" 2>"$tmp/stand-in.err"; then
+        echo "FAIL: the stand-in $stand_in_name didn't $1: $(cat "$tmp/stand-in.err")" >&2
+        cat "$tmp/stand-in.log" >&2
         exit 1
     fi
 }
@@ -414,7 +425,7 @@ runs() {
     wc -l <"$tmp/helpers.log"
 }
 
-# settle: answers the shell's Hyprland requests, and lets it take in the
+# settle: answers the shell's requests of the compositor, and lets it take in the
 # answers and its commands' output, until it has nothing more to ask or
 # run. Each pass waits for the commands the shell has started to end,
 # then takes a barrier, then drains the stand-in, which answers only
@@ -432,13 +443,13 @@ settle() {
         _runs=$(runs) || exit 1
         helpers
         barrier
-        _answered=$(hyprland drain) || exit 1
+        _answered=$(stand_in drain) || exit 1
         if test -z "$_answered" && test "$(runs)" = "$_runs" && test -z "$(children)"; then
             return
         fi
         test -z "$_answered" || printf '%s\n' "$_answered" >>"$tmp/answered"
         if test "$(date +%s)" -ge "$_until"; then
-            echo "FAIL: $_what was still asking Hyprland, or running commands, after $wait s" >&2
+            echo "FAIL: $_what was still asking $stand_in_name, or running commands, after $wait s" >&2
             exit 1
         fi
     done
@@ -480,6 +491,9 @@ EOF
 # and its commands' output, and through all of that has nothing reported
 # by the shell's own files, nor anything the clocks warn of. Local time is
 # New York's, one of the default clocks, so it's hidden as local. With
+# $load_compositor set to tidewm, it's tidewm's session instead (SPEC.md
+# §5.3), on a stand-in tidewm, and WHAT must ask tidewm for its
+# workspaces, monitors and windows, and Hyprland for nothing. With
 # $load_env, it starts qs with those settings too; with $load_runs, it
 # waits for the shell to make each of those calls (started) before it
 # settles;
@@ -505,17 +519,28 @@ load() {
     : >"$log" || exit 1
     : >"$tmp/answered" || exit 1
 
-    # Quickshell finds Hyprland by HYPRLAND_INSTANCE_SIGNATURE, and only if
-    # its directory is there as it starts.
-    hypr_signature=tide-test
-    hypr_dir=$tmp/run/hypr/$hypr_signature
-    "$python_path" shell/hyprland_stand_in.py serve "$hypr_dir" >"$tmp/hypr.log" 2>&1 &
-    hypr_pid=$!
+    if test "${load_compositor:-}" = tidewm; then
+        # tidewm's session names tidewm first (session/tide-tidewm.desktop),
+        # and Quickshell's I3 module and tide-msg find tidewm by SWAYSOCK.
+        stand_in=shell/tidewm_stand_in.py
+        stand_in_name=tidewm
+        stand_in_dir=$tmp/run/tidewm
+        compositor_env="XDG_CURRENT_DESKTOP=tidewm:tide SWAYSOCK=$stand_in_dir/ipc.sock"
+    else
+        # Quickshell finds Hyprland by HYPRLAND_INSTANCE_SIGNATURE, and only
+        # if its directory is there as it starts.
+        stand_in=shell/hyprland_stand_in.py
+        stand_in_name=Hyprland
+        stand_in_dir=$tmp/run/hypr/tide-test
+        compositor_env=HYPRLAND_INSTANCE_SIGNATURE=tide-test
+    fi
+    "$python_path" "$stand_in" serve "$stand_in_dir" >"$tmp/stand-in.log" 2>&1 &
+    stand_in_pid=$!
     i=0
-    until test -S "$hypr_dir/control.sock"; do
-        if ! kill -0 "$hypr_pid" 2>/dev/null || waited "the stand-in Hyprland didn't start" "$i"; then
-            echo "FAIL: the stand-in Hyprland didn't start:" >&2
-            cat "$tmp/hypr.log" >&2
+    until test -S "$stand_in_dir/control.sock"; do
+        if ! kill -0 "$stand_in_pid" 2>/dev/null || waited "the stand-in $stand_in_name didn't start" "$i"; then
+            echo "FAIL: the stand-in $stand_in_name didn't start:" >&2
+            cat "$tmp/stand-in.log" >&2
             exit 1
         fi
         sleep 0.1
@@ -528,11 +553,11 @@ load() {
     # notification the notification checks would count. tide-tabs isn't
     # built here either, so the browser tabs' relay (§8.3) is off too, and
     # wouldn't warn that it couldn't start.
-    # shellcheck disable=SC2086 # $load_env is none, or one or more settings
+    # shellcheck disable=SC2086 # $compositor_env and $load_env are settings
     env -i PATH="$tmp/helpers:$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
         ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} TIDE_AGENT=0 TIDE_TABS=0 \
         LANG=C.UTF-8 TZ=America/New_York QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
-        HYPRLAND_INSTANCE_SIGNATURE="$hypr_signature" QS_DISABLE_FILE_WATCHER=1 \
+        $compositor_env QS_DISABLE_FILE_WATCHER=1 \
         ${load_env:-} "$qs_path" "$@" >"$log" 2>&1 &
     qs_pid=$!
 
@@ -554,8 +579,8 @@ load() {
         i=$((i + 1))
     done
     # Loading is synchronous, but what it queued (a Qt.callLater, a queued
-    # signal) runs on the event loop afterward, and so does what Hyprland's
-    # answers and events and the shell's commands set off: settle waits for
+    # signal) runs on the event loop afterward, and so does what the
+    # compositor's answers and events and the shell's commands set off: settle waits for
     # all of it. What waits on anything else outside (another command, a
     # file read) can't be waited for without a timer, and isn't covered.
     _listeners=0
@@ -564,7 +589,7 @@ load() {
             started "$_load_from" "$load_runs"
         fi
         settle
-        _listeners=$(hyprland play) || exit 1
+        _listeners=$(stand_in play) || exit 1
         settle
         shot "$_name"
         if test -n "${after_load:-}"; then
@@ -575,10 +600,10 @@ load() {
     kill "$qs_pid" 2>/dev/null
     wait "$qs_pid"
     qs_pid=
-    kill "$hypr_pid"
-    wait "$hypr_pid"
-    hypr_pid=
-    rm -rf "$hypr_dir"
+    kill "$stand_in_pid"
+    wait "$stand_in_pid"
+    stand_in_pid=
+    rm -rf "$stand_in_dir"
 
     if ! grep -q 'Configuration Loaded' "$log"; then
         echo "FAIL: Quickshell couldn't load $_what:" >&2
@@ -589,21 +614,62 @@ load() {
     # The commands' inputs are fixed (the default zones, $TZ, the system's
     # tzdata; the stand-ins' answers), so anything the shell's commands
     # warn of is a failure.
-    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|focus|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl)|replay|tell|apply)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl|keyboards)" "$log" >"$tmp/reports"; then
+    # On tidewm, Quickshell's I3 module logs a command tidewm refused.
+    if grep -E "tide: (tide-tz|tide-sysmon|tide-msg|tidewm can't|clocks|bar title|focus|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl|tide-msg)|replay|tell|apply|keep|read tidewm)|tide-(lock|greeter): (hyprctl|tide-msg|couldn't start (hyprctl|tide-msg)|keyboards)|Error occurred while running command" "$log" >"$tmp/reports"; then
         echo "FAIL: $_what loaded, but its commands warned:" >&2
         cat "$tmp/reports" >&2
         exit 1
     fi
-    # Without these, the run says nothing about Hyprland's data.
-    if ! grep -qx 'j/clients' "$tmp/answered"; then
+    # Without these, the run says nothing about the compositor's data.
+    if test "$stand_in_name" = tidewm; then
+        tidewm_asked
+    elif ! grep -qx 'j/clients' "$tmp/answered"; then
         echo "FAIL: $_what never asked the stand-in Hyprland for its windows" >&2
         exit 1
     fi
     if test "$_listeners" -lt 1; then
-        echo "FAIL: $_what never listened for the stand-in Hyprland's events" >&2
+        echo "FAIL: $_what never listened for the stand-in $stand_in_name's events" >&2
         exit 1
     fi
-    echo "ok: Quickshell loads $_what"
+    if test -n "${load_compositor:-}"; then
+        echo "ok: Quickshell loads $_what in $load_compositor's session"
+    else
+        echo "ok: Quickshell loads $_what"
+    fi
+}
+
+# tidewm_asked: fails the test unless, in tidewm's session, the shell (its
+# run log from $_load_from on, and what the stand-in answered) asked
+# tidewm for its workspaces and monitors, as Quickshell's I3 module does,
+# listened for its windows' events, and asked tide-msg for its window
+# tree, as TidewmData does once it's listening; and asked Hyprland for
+# nothing, neither running hyprctl nor making a request of Quickshell's
+# Hyprland module, which has no Hyprland to ask and says so.
+tidewm_asked() {
+    for _request in get_workspaces get_outputs; do
+        if ! grep -qx "$_request" "$tmp/answered"; then
+            echo "FAIL: $_what never asked the stand-in tidewm for $_request" >&2
+            exit 1
+        fi
+    done
+    if ! grep -q '^subscribe .*"window"' "$tmp/answered"; then
+        echo "FAIL: $_what never listened for the stand-in tidewm's window events" >&2
+        exit 1
+    fi
+    if ! tail -n "+$((_load_from + 1))" "$tmp/helpers.log" | grep -qx 'tide-msg --type get_tree'; then
+        echo "FAIL: $_what never asked tide-msg for tidewm's windows" >&2
+        exit 1
+    fi
+    if tail -n "+$((_load_from + 1))" "$tmp/helpers.log" | grep '^hyprctl ' >"$tmp/reports"; then
+        echo "FAIL: $_what ran hyprctl in tidewm's session:" >&2
+        cat "$tmp/reports" >&2
+        exit 1
+    fi
+    if grep 'quickshell\.hyprland\.ipc' "$log" >"$tmp/reports"; then
+        echo "FAIL: $_what asked Hyprland in tidewm's session:" >&2
+        cat "$tmp/reports" >&2
+        exit 1
+    fi
 }
 
 # reports CONTEXT: fails the test on anything the shell's own files reported
@@ -730,6 +796,25 @@ reinstall() {
     fi
     settle
     reports "the shell reloaded after make install-shell"
+}
+
+# tidewm_loaded: what's checked of the shell in tidewm's session, once
+# it's loaded: that its settings pages wrote tidewm's own files, which
+# conf's tidewm config includes (SPEC.md §16), and that it named home `in`
+# again once the stand-in tidewm renamed it (§6.5), by tidewm's rename
+# command. load runs it, as $after_load.
+tidewm_loaded() {
+    for _page in input appearance outputs layouts floating; do
+        if ! grep -q '^# Written by tide' "$tidewm_conf/tide-$_page.conf" 2>/dev/null; then
+            echo "FAIL: the shell should write tidewm's tide-$_page.conf in $tidewm_conf; it has: $(cat "$tidewm_conf/tide-$_page.conf" 2>&1)" >&2
+            exit 1
+        fi
+    done
+    if ! grep -qxF 'run_command rename workspace mail to in' "$tmp/answered"; then
+        echo "FAIL: the shell should name home in again once tidewm renames it mail; it asked tidewm:" >&2
+        cat "$tmp/answered" >&2
+        exit 1
+    fi
 }
 
 # shell_loaded: what's checked of the first shell, once it's loaded.
@@ -1880,6 +1965,25 @@ if test -n "$notify_path"; then
 else
     echo "$prog: no notify-send, so the shell isn't sent notifications; CI sends them" >&2
 fi
+# The shell in tidewm's session (SPEC.md §5.3), after the shells that
+# check what they write and apply, since it leaves its files and this
+# session's records of what it applied, and before the lock, which keeps
+# the screen. Without these calls, the run says nothing about the mice and
+# touchpads, the key bindings, the monitors, the settings pages' reloads
+# or home kept, there.
+load_compositor=tidewm
+load_runs='tide-msg --type get_inputs
+tide-msg --type get_bindings
+tide-msg --type get_outputs
+tide-msg reload
+tide-msg persist workspace'
+tidewm_conf=$tmp/home/.config/tidewm
+after_load=tidewm_loaded
+load tidewm "the shell" -c tide
+load_compositor=
+load_runs=
+after_load=
+echo "ok: in tidewm's session, the shell writes tidewm's settings files, and names home again"
 if test -n "$wtype_path"; then
     launch
 else
