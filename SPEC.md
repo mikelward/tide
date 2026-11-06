@@ -4823,6 +4823,13 @@ are what "done" means.
     no timed wait.
   - The test fails if the shell never asks for the windows or never listens
     for events.
+- **And tidewm's.** The test loads the shell and the lock again in tidewm's
+  session (§5.3), `XDG_CURRENT_DESKTOP=tidewm:tide`, with `SWAYSOCK` on a
+  stand-in tidewm (`shell/tidewm_stand_in.py`). It speaks sway's IPC as
+  tidewm does, answering at once from fixed workspaces, windows and a
+  keyboard, and every command works. The test fails on anything the
+  shell's files or commands report, and unless the shell asks tidewm,
+  through `tide-msg`, for its tree and its keyboard.
   - `hyprctl` is a stand-in too, from the same file, and answers at once
     from the same fixtures. The bar asks it for the window focused at
     startup, the lock and the greeter for the keyboards.

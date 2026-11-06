@@ -13,7 +13,9 @@
 # run headless, is the one here. Hyprland's IPC is a stand-in
 # (shell/hyprland_stand_in.py) with workspaces, windows and a script of
 # events, so the bar's workspaces, window icons, title and layout symbol
-# are built from them. Both run in a scratch home and runtime directory, on
+# are built from them. The shell and the lock load again in tidewm's
+# session, against a stand-in tidewm (shell/tidewm_stand_in.py) on
+# SWAYSOCK, with tide-msg built for the run. Both run in a scratch home and runtime directory, on
 # a D-Bus session bus of their own, so a run inside a tide session leaves
 # that session alone.
 #
@@ -198,10 +200,11 @@ hypr_pid=
 keyboard_pid=
 greetd_pid=
 sway_pid=
+tidewm_pid=
 bus_pid=
 cleanup() {
     _status=$?
-    for pid in $qs_pid $hypr_pid $greetd_pid $keyboard_pid $sway_pid; do
+    for pid in $qs_pid $hypr_pid $tidewm_pid $greetd_pid $keyboard_pid $sway_pid; do
         # It may have exited already.
         kill "$pid" 2>/dev/null
         wait "$pid"
@@ -285,7 +288,12 @@ if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/tide-greetd" ./
     echo "FAIL: couldn't build tide-greetd: $(cat "$tmp/go.log")" >&2
     exit 1
 fi
-helpers="tide-sysmon tide-tz hyprctl gsettings nmcli systemctl timedatectl udevadm tide"
+# tidewm's IPC client, which the shell runs in tidewm's session (load_tidewm).
+if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/helpers/real/tide-msg" ./cmd/tide-msg >"$tmp/go.log" 2>&1; then
+    echo "FAIL: couldn't build tide-msg: $(cat "$tmp/go.log")" >&2
+    exit 1
+fi
+helpers="tide-sysmon tide-tz hyprctl gsettings nmcli systemctl timedatectl udevadm tide tide-msg"
 : >"$tmp/helpers.log" || exit 1
 for _helper in $helpers; do
     cat >"$tmp/helpers/$_helper" <<EOF || exit 1
@@ -432,7 +440,11 @@ settle() {
         _runs=$(runs) || exit 1
         helpers
         barrier
-        _answered=$(hyprland drain) || exit 1
+        # The stand-in tidewm answers at once, so there's nothing to drain.
+        _answered=
+        if test -n "$hypr_pid"; then
+            _answered=$(hyprland drain) || exit 1
+        fi
         if test -z "$_answered" && test "$(runs)" = "$_runs" && test -z "$(children)"; then
             return
         fi
@@ -586,14 +598,7 @@ load() {
         exit 1
     fi
     reports "$_what loaded"
-    # The commands' inputs are fixed (the default zones, $TZ, the system's
-    # tzdata; the stand-ins' answers), so anything the shell's commands
-    # warn of is a failure.
-    if grep -E "tide: (tide-tz|tide-sysmon|clocks|bar title|focus|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl)|replay|tell|apply)|tide-(lock|greeter): (hyprctl|couldn't start hyprctl|keyboards)" "$log" >"$tmp/reports"; then
-        echo "FAIL: $_what loaded, but its commands warned:" >&2
-        cat "$tmp/reports" >&2
-        exit 1
-    fi
+    warnings
     # Without these, the run says nothing about Hyprland's data.
     if ! grep -qx 'j/clients' "$tmp/answered"; then
         echo "FAIL: $_what never asked the stand-in Hyprland for its windows" >&2
@@ -604,6 +609,84 @@ load() {
         exit 1
     fi
     echo "ok: Quickshell loads $_what"
+}
+
+# warnings: fails the test on anything the shell's commands warned of in
+# $log. Their inputs are fixed (the default zones, $TZ, the system's
+# tzdata; the stand-ins' answers), so any warning is a failure.
+warnings() {
+    if grep -E "tide: (tide-tz|tide-sysmon|tide-msg|clocks|bar title|focus|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl)|read tidewm|replay|tell|apply)|tide: tidewm can't|tide-(lock|greeter): (hyprctl|tide-msg|couldn't start (hyprctl|tide-msg)|keyboards)" "$log" >"$tmp/reports"; then
+        echo "FAIL: $_what loaded, but its commands warned:" >&2
+        cat "$tmp/reports" >&2
+        exit 1
+    fi
+}
+
+# load_tidewm NAME WHAT ARGS...: as load, in tidewm's session (SPEC.md
+# §5.3): Quickshell with ARGS, XDG_CURRENT_DESKTOP=tidewm:tide and SWAYSOCK
+# on a stand-in tidewm (shell/tidewm_stand_in.py), which answers its I3
+# module, its listeners and tide-msg from fixed workspaces, windows and a
+# keyboard. Fails the test on what load does, and unless the shell asked
+# tidewm for its windows and its keyboard, through tide-msg, as
+# $load_runs names.
+load_tidewm() {
+    _name=$1
+    _what=$2
+    log=$tmp/$1.qs.log
+    shift 2
+    : >"$log" || exit 1
+    tidewm_sock=$tmp/run/tidewm-ipc.sock
+    : >"$tmp/tidewm.requests" || exit 1
+    "$python_path" shell/tidewm_stand_in.py serve "$tidewm_sock" "$tmp/tidewm.requests" >"$tmp/tidewm.log" 2>&1 &
+    tidewm_pid=$!
+    i=0
+    until test -S "$tidewm_sock"; do
+        if ! kill -0 "$tidewm_pid" 2>/dev/null || waited "the stand-in tidewm didn't start" "$i"; then
+            echo "FAIL: the stand-in tidewm didn't start:" >&2
+            cat "$tmp/tidewm.log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    _load_from=$(runs) || exit 1
+    env -i PATH="$tmp/helpers:$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
+        ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} TIDE_AGENT=0 TIDE_TABS=0 \
+        LANG=C.UTF-8 TZ=America/New_York QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
+        XDG_CURRENT_DESKTOP=tidewm:tide SWAYSOCK="$tidewm_sock" QS_DISABLE_FILE_WATCHER=1 \
+        "$qs_path" "$@" >"$log" 2>&1 &
+    qs_pid=$!
+    i=0
+    until grep -q 'Configuration Loaded\|Failed to load configuration' "$log" || ! kill -0 "$qs_pid" 2>/dev/null; do
+        if waited "Quickshell didn't start" "$i"; then
+            cat "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    if grep -q 'Configuration Loaded' "$log"; then
+        if test -n "${load_runs:-}"; then
+            started "$_load_from" "$load_runs"
+        fi
+        settle
+        shot "$_name"
+    fi
+    kill "$qs_pid" 2>/dev/null
+    wait "$qs_pid"
+    qs_pid=
+    kill "$tidewm_pid"
+    wait "$tidewm_pid"
+    tidewm_pid=
+
+    if ! grep -q 'Configuration Loaded' "$log"; then
+        echo "FAIL: Quickshell couldn't load $_what on tidewm:" >&2
+        cat "$log" >&2
+        exit 1
+    fi
+    reports "$_what loaded on tidewm"
+    warnings
+    echo "ok: Quickshell loads $_what on tidewm"
 }
 
 # reports CONTEXT: fails the test on anything the shell's own files reported
@@ -1892,6 +1975,16 @@ fi
 load_runs='hyprctl devices -j
 tide keyboards
 udevadm monitor --udev --subsystem-match=input'
+# The shell and the lock in tidewm's session, before a lock is left
+# holding the screen: its windows and its keyboard
+# from tidewm's tree and inputs, through tide-msg.
+load_runs='tide-msg --type get_tree
+tide-msg --type get_inputs'
+load_tidewm tidewm "the shell" -c tide
+load_runs='tide-msg --type get_inputs'
+load_tidewm tidewm-lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
+load_runs=
+
 # A clocks.local.json and a wallpaper record the lock refuses, which it
 # should name.
 printf '{\n  "hour24": "no"\n}\n' >"$clocks_local" || exit 1

@@ -443,6 +443,14 @@ case "\$1" in
     -c) config=shell ;;
     *) config=\$(basename "\$2" .qml) ;;
 esac
+# In tidewm's session, it asks tidewm for its tree, as the shell does, and
+# its keyboard, as the shell and the lock do, through tide-msg.
+if test -n "\$SWAYSOCK"; then
+    if test "\$config" = shell; then
+        tide-msg --type get_tree >/dev/null
+    fi
+    tide-msg --type get_inputs >/dev/null
+fi
 # As the lock, it locks the screen: loaded, it records its pid, and once
 # it's gone without unlocking, the screen stays locked, as sway keeps it,
 # so the stand-in grim sees only that. The unlock step's lock unlocks it.
@@ -604,10 +612,12 @@ EOF
     cat >"$1/go" <<EOF
 #!/bin/sh
 # As the integration test runs it: go build -buildvcs=false -o OUT ./cmd/tide-tz,
-# then the same for ./cmd/tide-greetd, which the stand-in greeter never runs.
+# then the same for ./cmd/tide-greetd, which the stand-in greeter never runs,
+# and ./cmd/tide-msg, which the shell and the lock run on tidewm.
 case "\$1 \$2 \$3 \$5" in
 "build -buildvcs=false -o ./cmd/tide-tz") printf '#!/bin/sh\n%s\n' '${8:-:}' >"\$4" ;;
 "build -buildvcs=false -o ./cmd/tide-greetd") printf '#!/bin/sh\n' >"\$4" ;;
+"build -buildvcs=false -o ./cmd/tide-msg") printf '#!/bin/sh\n' >"\$4" ;;
 *) exit 2 ;;
 esac
 chmod +x "\$4"

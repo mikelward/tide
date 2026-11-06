@@ -1955,9 +1955,9 @@ there once that's in. Next, in order:
    displays off, should the greeter move to tidewm (it runs Hyprland);
    the share picker's 16:9 slice, which xdg-desktop-portal-wlr can't
    share (a virtual output mirroring the middle of the monitor would),
-   and its windows' icons and thumbnails; the focus guard's evals; and an
-   integration test against a stand-in for tidewm, as
-   `shell/hyprland_stand_in.py` is Hyprland's.
+   and its windows' icons and thumbnails; and the focus guard's evals.
+   The stand-in tidewm (`shell/tidewm_stand_in.py`) plays no events yet,
+   as Hyprland's does, so window and workspace changes aren't covered.
 
 If the fork is adopted, machines build a pinned release tag, never a branch:
 
