@@ -516,6 +516,19 @@ export function uncoveredClosed(list, address) {
     return list.filter((a) => a !== address);
 }
 
+// On tidewm, which has no window rules, the shell is home's apps' rule
+// (SPEC.md §5.3, §6.5): a window that opened, {address, app, workspace},
+// goes home if the rules cover its app and it isn't there already, without
+// being followed, as Hyprland's "silent" rule sends it; any other window is
+// noted, as uncoveredOpened notes it, for rules that cover it later.
+// {list, move}, `move` whether to send it home.
+export function homeAppArrived(list, w, home, rules) {
+    if (!isHomeApp(w.app, rules.inApps, rules.resolved)) {
+        return { list: uncoveredOpened(list, w.address, w.app, rules), move: false };
+    }
+    return { list, move: w.workspace !== home };
+}
+
 // After an apply of `rules`: {list, move}, `move` the addresses to send
 // home. `windows` is [{address, app, workspace}], as Hyprland's toplevels
 // give them. A noted window the rules now cover leaves the list, sent home

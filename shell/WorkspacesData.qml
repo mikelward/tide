@@ -9,6 +9,7 @@ import "lib/dispatch.mjs" as Dispatch
 import "lib/launch.mjs" as Run
 import "lib/mute.mjs" as Mute
 import "lib/report.mjs" as Report
+import "lib/tidewm.mjs" as Tw
 import "lib/workspacenames.mjs" as Names
 import "lib/workspacepage.mjs" as Page
 import "lib/workspaces.mjs" as Ws
@@ -25,7 +26,8 @@ import "lib/writes.mjs" as Writes
 // again, as the shell starts too. On tidewm, which reads no such file,
 // applying it is keeping home, with `persist workspace`; the file is
 // still written, for Hyprland's session and tide-tidewm, which starts
-// tidewm on home. A bad file is a notification naming it, once, and the
+// tidewm on home, and the shell is home's apps' rule there, sending their
+// windows home as they open (Names.homeAppArrived). A bad file is a notification naming it, once, and the
 // last good settings stay; one that can't be written or applied is tried
 // again until it is (shell/lib/writes.mjs).
 //
@@ -119,7 +121,7 @@ Singleton {
                 applier.createObject(root).running = true;
             } else {
                 // tidewm reads no tide-workspaces.lua, so the shell keeps
-                // home itself; home's apps' rules are Hyprland's only.
+                // home itself, and is home's apps' rule (rulesApplied).
                 const keep = Comp.tidewmKeepHome(root.home);
                 if (keep === null) {
                     root.stepped(Writes.targetApplied(root.target, `home's name, ${root.home}, has a ; in it, which tidewm's commands can't take, so home isn't kept`));
@@ -167,26 +169,41 @@ Singleton {
         const text = Names.workspacesLua(root.settings, root.resolved);
         root.wantedRules = { text: text, rules: { inApps: root.settings.inApps ?? [], resolved: root.resolved } };
         root.stepped(Writes.wantTarget(root.target, text));
+        // On tidewm the shell is the rule, so it's in at once.
+        if (Compositor.tidewm) {
+            root.rulesApplied(text);
+        }
     }
 
-    // Hyprland took `text`: if it's the rules last asked for, they say
-    // which windows are covered now, and the noted windows they cover go
-    // home (Names.homeSweep).
+    // Sends the window at `address` home, without following it.
+    function sendHome(address, why) {
+        console.log(`tide: sending window ${address}, ${why}, to ${root.home}`);
+        if (Compositor.tidewm) {
+            Compositor.tidewmCommand(Tw.sendCommand(address, root.home), `send window ${address} to ${JSON.stringify(root.home)}`);
+            return;
+        }
+        Hyprland.dispatch(Dispatch.sendWindowTo(address, root.home, Hyprland.usingLua));
+    }
+
+    // Hyprland took `text`, or on tidewm the shell did: if it's the rules
+    // last asked for, they say which windows are covered now, and the
+    // noted windows they cover go home (Names.homeSweep).
     function rulesApplied(text) {
         if (text !== root.wantedRules.text) {
             return;
         }
         root.appliedRules = root.wantedRules.rules;
-        const windows = Hyprland.toplevels.values.map(t => ({
-            address: Ws.normalizeAddress(t.address),
-            app: t.lastIpcObject?.class || t.wayland?.appId || "",
-            workspace: t.workspace?.name ?? ""
-        }));
+        const windows = Compositor.tidewm
+            ? Compositor.windows.map(w => ({ address: w.address, app: w.app, workspace: w.workspaceName }))
+            : Hyprland.toplevels.values.map(t => ({
+                address: Ws.normalizeAddress(t.address),
+                app: t.lastIpcObject?.class || t.wayland?.appId || "",
+                workspace: t.workspace?.name ?? ""
+            }));
         const r = Names.homeSweep(root.uncovered, windows, root.home, root.appliedRules);
         root.uncovered = r.list;
         for (const address of r.move) {
-            console.log(`tide: sending window ${address}, one of home's apps that opened before its rule, to ${root.home}`);
-            Hyprland.dispatch(Dispatch.sendWindowTo(address, root.home, Hyprland.usingLua));
+            root.sendHome(address, "one of home's apps that opened before its rule");
         }
     }
 
@@ -398,6 +415,28 @@ Singleton {
                         ? Names.uncoveredOpened(root.uncovered, address, fields[2] ?? "", root.appliedRules)
                         : Names.uncoveredClosed(root.uncovered, address);
                 }
+            }
+        }
+    }
+
+    // tidewm's windows opening and closing (TidewmData.qml): with no window
+    // rules there, a home app's window is sent home as it opens.
+    Connections {
+        target: Compositor.tidewm ? TidewmData : null
+
+        function onWindowHeard(data) {
+            const e = Tw.homeEvent(data);
+            if (e === null) {
+                return;
+            }
+            if (e.change === "close") {
+                root.uncovered = Names.uncoveredClosed(root.uncovered, e.address);
+                return;
+            }
+            const r = Names.homeAppArrived(root.uncovered, e, root.home, root.appliedRules);
+            root.uncovered = r.list;
+            if (r.move) {
+                root.sendHome(e.address, "one of home's apps");
             }
         }
     }

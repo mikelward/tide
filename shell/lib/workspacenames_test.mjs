@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
     MAX_NAME, DEFAULT_STANDING, DEFAULT_SETTINGS, checkName, sameName, matchName, homeName,
     parseWorkspaceSettings, loadWorkspaceSettings, inAppPatterns, workspacesLua, luaString,
-    checkPatterns, cleanTitle, firstWord, shortName, isHomeApp, homeAppEntry, homeAppPrograms, homeAppLaunches, NO_UNCOVERED, uncoveredOpened, uncoveredClosed, homeSweep, promptWanted, clientAt, normalizeAppId, checkMuteEntry,
+    checkPatterns, cleanTitle, firstWord, shortName, isHomeApp, homeAppEntry, homeAppPrograms, homeAppLaunches, NO_UNCOVERED, uncoveredOpened, uncoveredClosed, homeSweep, homeAppArrived, promptWanted, clientAt, normalizeAppId, checkMuteEntry,
     promptRows, promptChoice, NO_PROMPTS, promptQueued, promptDone, promptWindowGone,
     promptHeading, promptAnswer, promptCancel,
     NO_WINDOWS, windowOpened, windowFocused, windowClosed, windowAnswered, checkMuted, withMuted,
@@ -370,6 +370,19 @@ test("a home app's window that opened before its rule is sent home once, by the 
     // Gmail, which its rule placed and you moved, never is.
     windows = windows.map((w) => w.address === "a1" ? Object.assign({}, w, { workspace: "work" }) : w);
     assert.deepEqual(homeSweep(r.list, windows, "in", looked).move, []);
+});
+
+test("on tidewm, a home app's new window is sent home as it opens, as Hyprland's rule sends it", () => {
+    const rules = { inApps: ["https://mail.google.com"], resolved: {} };
+    const mail = "chrome-mail.google.com__-Default";
+    let r = homeAppArrived(NO_UNCOVERED, { address: "7", app: mail, workspace: "re" }, "in", rules);
+    assert.deepEqual(r, { list: [], move: true }, "Gmail opened on re goes home, and isn't noted");
+    r = homeAppArrived(NO_UNCOVERED, { address: "8", app: mail, workspace: "in" }, "in", rules);
+    assert.deepEqual(r, { list: [], move: false }, "already home, nothing to do");
+    r = homeAppArrived(NO_UNCOVERED, { address: "9", app: mail, workspace: "" }, "in", rules);
+    assert.equal(r.move, true, "a workspace the event doesn't name is sent home all the same");
+    r = homeAppArrived(NO_UNCOVERED, { address: "10", app: "kitty", workspace: "re" }, "in", rules);
+    assert.deepEqual(r, { list: ["10"], move: false }, "another app's window is noted, as on Hyprland, for a later rule");
 });
 
 test("a noted window that closed, is minimized, or is already home moves nowhere", () => {

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, markEvents, appOf, shellWindows, activeWindow,
-    promptEvent, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand,
+    promptEvent, homeEvent, sendCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand,
 } from "./tidewm.mjs";
 import { minimizedFrom, trayWindows } from "./minimized.mjs";
 import { promptWanted } from "./workspacenames.mjs";
@@ -250,4 +250,18 @@ test("an address that isn't a container ID, or a name tidewm can't take, sends n
     assert.equal(closeCommand("0x5a3f"), null);
     assert.equal(minimizeCommand("a;b"), null);
     assert.equal(maximizeCommand(undefined), null);
+});
+
+test("a window opening or closing on tidewm reads as home's apps need it", () => {
+    const open = { change: "new", container: { id: 42, type: "con", app_id: "chrome-mail.google.com__-Default", workspace: "re", nodes: [], floating_nodes: [] } };
+    assert.deepEqual(homeEvent(open), { change: "new", address: "42", app: "chrome-mail.google.com__-Default", workspace: "re" });
+    assert.deepEqual(homeEvent(JSON.stringify({ ...open, change: "close" })), { change: "close", address: "42", app: "chrome-mail.google.com__-Default", workspace: "re" });
+    assert.equal(homeEvent({ ...open, change: "focus" }), null, "only opens and closes");
+    assert.equal(homeEvent({ change: "new", container: { id: 3, type: "workspace", nodes: [], floating_nodes: [] } }), null, "not a window");
+});
+
+test("a window is sent home without following it", () => {
+    assert.equal(sendCommand("42", "in"), "[con_id=42] move to workspace number in");
+    assert.equal(sendCommand("42", "a;b"), null, "a ; would end the command");
+    assert.equal(sendCommand("0xabc", "in"), null, "not a container ID");
 });

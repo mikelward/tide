@@ -169,6 +169,19 @@ export function promptEvent(data) {
     };
 }
 
+// What a window event, its JSON or already parsed, means to home's apps
+// (WorkspacesData.qml): {change, address, app, workspace} for a window
+// opened ("new") or closed, `workspace` its workspace's name or "" when
+// the event doesn't say; null for any other event.
+export function homeEvent(data) {
+    const event = parsed(data);
+    const c = event?.container;
+    if (!["new", "close"].includes(event?.change) || !isWindow(c)) {
+        return null;
+    }
+    return { change: event.change, address: String(c.id), app: appOf(c), workspace: typeof c.workspace === "string" ? c.workspace : "" };
+}
+
 // The windows as Compositor.qml gives Hyprland's: [{address, title, app,
 // workspace, workspaceName, monitor, urgent, fullscreen, floating,
 // focusHistoryID}]. `address` is tidewm's container ID, as a string, which
@@ -220,6 +233,14 @@ export function activeWindow(windows, current) {
 function con(address) {
     const s = String(address ?? "");
     return /^[0-9]+$/.test(s) ? `[con_id=${s}]` : null;
+}
+
+// Moving the window at `address` to the workspace named `name` without
+// following it: a home app's window sent home as it opens.
+export function sendCommand(address, name) {
+    const c = con(address);
+    const n = tidewmName(name);
+    return c === null || n === null ? null : `${c} move to workspace number ${n}`;
 }
 
 export function focusCommand(address) {

@@ -475,7 +475,10 @@ flowchart TD
   keep there, as tidewm's config can't know its name: `tide-tidewm`
   starts tidewm on it and keeps it, by the name the shell last wrote to
   `tide-workspaces.lua`, and the shell keeps it from then on, with
-  `persist workspace`. `tide doctor` counts bars, reports config errors
+  `persist workspace`. tidewm has no window rules, so the shell is home's
+  apps' rule there: a window of one of them that opens elsewhere is sent
+  home as it opens, unfollowed, as Hyprland's rule sends it, and one that
+  opened before the shell knew its app is sent once it does. `tide doctor` counts bars, reports config errors
   and checks home from tidewm's `GET_OUTPUTS`, `GET_CONFIG` and
   `GET_WORKSPACES` there.
 
