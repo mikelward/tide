@@ -3255,9 +3255,11 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
     `xdg-desktop-portal-wlr/tidewm` (`chooser_type=dmenu`). xdpw 0.8 writes
     a line for each output, `Monitor: <output> <description>`, and each
     window, `Window: <title> (<identifier>)`, and takes back the line
-    chosen. The dialog lists its windows by title alone, with no icon,
-    thumbnail or workspace, since the identifier is
-    ext-foreign-toplevel-list's, which tidewm's IPC doesn't give. It
+    chosen. Its identifier is ext-foreign-toplevel-list's, which tidewm's
+    tree gives each window too (`foreign_toplevel_identifier`), so the
+    dialog names each by the shell's own: its app's icon, its workspace,
+    and the focused one. It has no thumbnail there, which needs Hyprland's
+    toplevels. It
     offers only the outputs xdpw listed, none for a request for windows
     alone. xdpw shares no regions, so there's no 16:9 slice there, and its
     own restore tokens stand in for the reuse box.
