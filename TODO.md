@@ -1954,8 +1954,8 @@ there once that's in. Next, in order:
    only. The keyboard shortcuts list tidewm's bindings from its
    `GET_BINDINGS`.
 2. The rest: the greeter's
-   displays off, should the greeter move to tidewm (it runs Hyprland);
-   and the focus guard's evals. Sharing a window or a whole screen is all
+   displays off, should the greeter move to tidewm (it runs Hyprland).
+   Sharing a window or a whole screen is all
    the share picker needs there (maintainer, 2026-11-06), so its windows
    need no thumbnails.
 

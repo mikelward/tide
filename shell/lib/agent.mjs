@@ -229,8 +229,11 @@ export function connectCommand(uuid) {
 }
 
 // The wildcard focus grant (§14.3) for a VPN's own dialog window, which
-// opens from tide-agent rather than a launch.
-export const GRANT_ANY = ["hyprctl", "eval", "tide_focus.grant(\"*\")"];
+// opens from tide-agent rather than a launch: through Hyprland's guard in
+// Lua, or tidewm's own `grant`.
+export function grantAny(tidewm) {
+    return tidewm ? ["tide-msg", "grant", "*"] : ["hyprctl", "eval", "tide_focus.grant(\"*\")"];
+}
 
 // `ipc call agent status`, for `tide doctor` and `tide autostart-allowed`:
 // "off" (TIDE_AGENT=0), "missing" (tide-agent isn't running), "starting"
