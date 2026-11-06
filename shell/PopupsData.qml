@@ -15,7 +15,8 @@ import "lib/popups.mjs" as Pop
 // resync, since a lazy singleton would otherwise wait for the first
 // popover), as one that exited with a popover open left it thinking one
 // still is, and after a Hyprland config load, which starts the layout
-// afresh.
+// afresh. tidewm has no edge drag yet (docs/compositor.md), so in its
+// session (§5.3) there's nothing to tell.
 Singleton {
     id: root
 
@@ -33,6 +34,9 @@ Singleton {
     property var told: Pop.NOT_TOLD
 
     function push() {
+        if (Compositor.tidewm) {
+            return;
+        }
         const next = Pop.nextCall(root.told, root.anyOpen);
         if (next.send === null) {
             return;
@@ -119,7 +123,7 @@ Singleton {
     }
 
     Connections {
-        target: Hyprland
+        target: Compositor.tidewm ? null : Hyprland
 
         function onRawEvent(event) {
             if (event.name === "configreloaded") {
