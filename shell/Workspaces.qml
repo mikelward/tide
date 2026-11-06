@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Widgets
 import "lib/barclick.mjs" as Click
 import "lib/workspaces.mjs" as Ws
+import "lib/barsettings.mjs" as BarSettings
 
 // Every workspace on one monitor's bar, by name (SPEC.md §6.5, §7.2): the
 // standing ones first, home first, then the rest in the order they were
@@ -61,6 +62,7 @@ Row {
             // First, so its hover goes over the chip's fill and under its
             // name and icons, whose own targets are over it.
             BarHit {
+                settings: BarSettings.page("workspaces")
                 reach: Click.groupReach({
                     x: chip.x,
                     width: chip.width,
@@ -124,6 +126,7 @@ Row {
                         // (§6.7); the chip's own click, under it, doesn't
                         // fire as well.
                         BarHit {
+                            settings: BarSettings.page("workspaces")
                             reach: ({ left: 2, right: 2 })
                             targetHeight: icon.height + 4
 

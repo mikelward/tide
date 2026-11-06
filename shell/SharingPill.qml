@@ -1,6 +1,7 @@
 import QtQuick
 import "lib/barclick.mjs" as Click
 import "lib/share.mjs" as Share
+import "lib/barsettings.mjs" as BarSettings
 
 // The red Sharing pill (SPEC.md §7.4): shown while a screen share is live
 // (ShareData), so you can see from any monitor that the screen is going
@@ -19,6 +20,7 @@ Rectangle {
 
     // First, so its hover goes over the pill's fill and under its content.
     BarHit {
+        settings: BarSettings.page("sharing")
         reach: root.reach
         behind: false
 

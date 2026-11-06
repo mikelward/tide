@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell.Hyprland
+import "lib/barsettings.mjs" as BarSettings
 import "lib/layouts.mjs" as Layouts
 
 // The layout of the workspace shown on this bar's monitor (SPEC.md §6.1,
@@ -30,4 +31,11 @@ Text {
     font.pixelSize: 14
     font.weight: Font.Medium
     font.letterSpacing: -0.27
+
+    // A right-click opens its settings page (SPEC.md §7.1); it takes no
+    // other click.
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: SettingsData.open(BarSettings.page("layout"))
+    }
 }

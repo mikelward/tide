@@ -9,6 +9,7 @@ import "lib/bluetooth.mjs" as Bt
 import "lib/keepawake.mjs" as KeepAwake
 import "lib/network.mjs" as Net
 import "lib/status.mjs" as Status
+import "lib/barsettings.mjs" as BarSettings
 
 // The status icons before the clocks (SPEC.md §7.4), each with hover text
 // (BarTip) in tilemo's words where tilemo has the same icon. So far: the
@@ -70,6 +71,7 @@ Row {
         font.weight: Font.DemiBold
 
         BarHit {
+            settings: BarSettings.page("keyboard")
             id: layoutHit
 
             reach: root.reachOf(layout)
@@ -98,6 +100,7 @@ Row {
         color: KeepAwakeData.on ? Theme.accent : Theme.fgFaint
 
         BarHit {
+            settings: BarSettings.page("keepawake")
             id: keepAwakeHit
 
             reach: root.reachOf(keepAwake)
@@ -129,6 +132,7 @@ Row {
         color: view.on ? Theme.fg : Theme.fgFaint
 
         BarHit {
+            settings: BarSettings.page("bluetooth")
             id: bluetoothHit
 
             reach: root.reachOf(bluetooth)
@@ -166,6 +170,7 @@ Row {
             name: modelData.icon
 
             BarHit {
+                settings: BarSettings.page("bluetooth")
                 id: audioHit
 
                 reach: root.reachOf(audioDevice)
@@ -232,6 +237,7 @@ Row {
         }
 
         BarHit {
+            settings: BarSettings.page("network")
             id: networkHit
 
             reach: root.reachOf(network)
@@ -280,6 +286,7 @@ Row {
             // takes no room (BarHit.qml). Scrolling over it changes the
             // volume too.
             BarHit {
+                settings: BarSettings.page("volume")
                 id: volumeHit
 
                 span: volume
@@ -388,6 +395,7 @@ Row {
             // In here, not the Row itself, which would cull a target that
             // takes no room (BarHit.qml).
             BarHit {
+                settings: BarSettings.page("battery")
                 id: batteryHit
 
                 span: battery
@@ -441,6 +449,7 @@ Row {
             // In here, not the Row itself, which would cull a target that
             // takes no room (BarHit.qml).
             BarHit {
+                settings: BarSettings.page("sysmon")
                 id: sysmonHit
 
                 span: sysmon
@@ -498,6 +507,7 @@ Row {
         }
 
         BarHit {
+            settings: BarSettings.page("notifications")
             id: bellHit
 
             reach: root.reachOf(bell)
@@ -527,6 +537,7 @@ Row {
         name: "system-shutdown-symbolic"
 
         BarHit {
+            settings: BarSettings.page("session")
             id: sessionHit
 
             reach: root.reachOf(session)
