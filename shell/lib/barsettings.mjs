@@ -30,3 +30,9 @@ export function page(item) {
     }
     return BAR_SETTINGS[item];
 }
+
+// The page to open for `id`, one of the map's: "" names the first of
+// `pages` (settings.mjs's PAGES), so a panel open on another turns to it.
+export function opened(id, pages) {
+    return id || pages[0].id;
+}

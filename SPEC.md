@@ -1897,7 +1897,8 @@ See [`bar.png`](docs/mocks/bar.png).
   | notifications, Presenting pill | Notifications |
   | logo, sharing pill, system monitor | the first page, since none fits |
 
-  A tray icon's right-click stays the app's own menu, its only way in. The
+  The first page opens even with the panel open on another. A tray
+  icon's right-click stays the app's own menu, its only way in. The
   layout symbol takes no other click.
 - **Hovered, a target shows its whole span** as a rounded rect, the text
   color at 8% over whatever fill it has, and 15% while pressed
