@@ -49,10 +49,6 @@ once you have agreed with it or reversed it.
   back as an `urgent` event, which the shell reads as the guard's mark,
   lasting until the window is focused, so a notification's mark would
   outlast the notification.
-- **Home's window events on tidewm wait for home's rules** (2026-11-05):
-  they note the windows of home's apps that open before a rule covers
-  them, to send them home once one does, and tidewm has no such rules yet,
-  so they're done with the rules rather than with the name prompt's.
 - **`Super+PgUp`/`PgDn` pass over a workspace whose only windows are
   minimized** (2026-11-04), as over an empty one, since there's nothing to
   see there and Hyprland has no window on it (§6.7); `Super+Shift+PgUp`/
@@ -1948,9 +1944,7 @@ there once that's in. Next, in order:
      and `\x` escapes; a class alone is easy (an app ID or an X11 class,
      either case). The shell floats the windows a new rule covers with
      `floating enable`.
-2. The rest: home's apps' rules, which conf's hyprland.lua makes on
-   Hyprland, with the window events that send home the windows of
-   home's apps that opened before them (`WorkspacesData.qml`); a name
+2. The rest: a name
    with a `;`, which tidewm's commands can't take, nor a rename one
    with " to " (sway's quoting would do); the lock's
    keyboard layout (`GET_INPUTS` and input events); the greeter's
