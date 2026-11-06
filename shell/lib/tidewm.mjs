@@ -258,6 +258,8 @@ export function shellWindows(state, workspaces) {
             // ext-foreign-toplevel-list's, which xdg-desktop-portal-wlr
             // names a window it can share by (SharePicker.qml).
             identifier: typeof c.foreign_toplevel_identifier === "string" ? c.foreign_toplevel_identifier : "",
+            // tidewm's own keep_open: kill leaves it open (keepOpenCommand).
+            keepOpen: c.keep_open === true,
         };
     });
 }
@@ -335,4 +337,30 @@ export function shortcutCommand(address, mods, key) {
 export function maximizeCommand(address) {
     const c = con(address);
     return c === null ? null : `${c} maximize toggle`;
+}
+
+// The command that has tidewm keep open the windows pinned where they are
+// (SPEC.md §6.5), and no others: `[con_id=N] keep_open enable` or
+// `disable` for each of `windows` (shellWindows) whose keepOpen isn't
+// yet what `pinned(window)` says, joined with "; ", or "" for none.
+// tidewm's `keep_open` window event says each change, which puts the
+// window as it now is.
+export function keepOpenCommand(windows, pinned) {
+    const commands = [];
+    for (const w of windows ?? []) {
+        const c = con(w?.address);
+        const want = c !== null && pinned(w) === true;
+        if (c !== null && want !== (w.keepOpen === true)) {
+            commands.push(`${c} keep_open ${want ? "enable" : "disable"}`);
+        }
+    }
+    return commands.join("; ");
+}
+
+// The window, its address, that a close_refused event says tidewm left
+// open, as it's kept open (a pinned window's Super+Backspace, or its
+// app's close keys); null for any other event.
+export function closeRefused(data) {
+    const event = parsed(data);
+    return event?.change === "close_refused" && isWindow(event.container) ? String(event.container.id) : null;
 }

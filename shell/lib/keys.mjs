@@ -119,7 +119,8 @@ const SWITCHES = {
 // Parses tidewm's GET_BINDINGS (`tide-msg --type get_bindings`), as
 // parseBinds parses hyprctl's: {binds} as [{keys, does, submap}], in the
 // config file's order, or {error}. tidewm's lines have no descriptions,
-// so what one does is its command.
+// so what one does is its command, and a --kept-open one's counts only in
+// a window kept open, which is a pinned one (SPEC.md §6.5).
 export function parseTidewmBinds(text) {
     const what = "tide-msg --type get_bindings";
     let value;
@@ -141,9 +142,10 @@ export function parseTidewmBinds(text) {
             return { error: `${what}: a binding without its keys or command` };
         }
         const isSwitch = b.type === "switch";
+        const command = b.command.replace(/\s+/g, " ").trim();
         binds.push({
             keys: isSwitch ? (SWITCHES[b.keys] || b.keys) : keysLabel(0, b.keys),
-            does: b.command.replace(/\s+/g, " ").trim(),
+            does: b.kept_open === true ? `${command}, in a pinned window` : command,
             submap: typeof b.mode === "string" && b.mode !== "default" ? b.mode : "",
         });
     }

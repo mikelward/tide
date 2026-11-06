@@ -123,12 +123,14 @@ test("tidewm's bindings are its config file's, each doing its command", () => {
         { type: "key", keys: "Mod4+Return", command: "exec   foot", mode: "default", release: false, locked: false },
         { type: "key", keys: "Escape", command: "mode default", mode: "resize", release: false, locked: true },
         { type: "key", keys: "Control+Shift+period", command: "layout toggle", mode: "default" },
+        { type: "key", keys: "Ctrl+w", command: "kill", mode: "default", kept_open: true },
         { type: "switch", keys: "lid:on", command: "output eDP-1 disable", mode: "default", locked: true },
     ]);
     assert.deepEqual(parseTidewmBinds(text).binds, [
         { keys: "Super+Return", does: "exec foot", submap: "" },
         { keys: "Escape", does: "mode default", submap: "resize" },
         { keys: "Ctrl+Shift+.", does: "layout toggle", submap: "" },
+        { keys: "Ctrl+W", does: "kill, in a pinned window", submap: "" },
         { keys: "Lid closed", does: "output eDP-1 disable", submap: "" },
     ]);
 });

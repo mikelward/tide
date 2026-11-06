@@ -115,6 +115,8 @@ ShellRoot {
         // The lid's action, put right from the start.
         PowerData.load();
         PopupsData.resync();
+        // Pinned windows kept open by tidewm, in its session.
+        PinnedData.load();
     }
 
     // A toplevel's class and fullscreen state come from Hyprland's client
