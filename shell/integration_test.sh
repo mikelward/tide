@@ -35,7 +35,8 @@
 # gsettings and nmcli, for light and dark and the VPNs, whose monitors
 # report nothing; the real `tide keyboards` over one stand-in keyboard,
 # and a stand-in udevadm whose monitor reports no device coming or going,
-# for the lock's and the greeter's field focus; and a stand-in systemctl,
+# for the lock's and the greeter's field focus; a stand-in busctl, whose
+# file chooser portal answers at once, for Start at login; and a stand-in systemctl,
 # for restarting hypridle once
 # the shell has written its timings, which it checks are the defaults, as
 # it checks the mouse, touchpad and keyboard settings it writes are none. Data from a timer, a file
@@ -263,7 +264,7 @@ chmod +x "$tmp/helpers/real/hyprctl" || exit 1
 # say what they answer), copied so their monitors can exec a tail that
 # ends with the shell; systemctl and timedatectl, for hypridle and the
 # system's time zone.
-for _helper in gsettings nmcli systemctl timedatectl udevadm; do
+for _helper in gsettings nmcli systemctl timedatectl udevadm busctl; do
     cp "shell/${_helper}_stand_in.sh" "$tmp/helpers/real/$_helper" || exit 1
     chmod +x "$tmp/helpers/real/$_helper" || exit 1
 done
@@ -296,7 +297,7 @@ if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/helpers/real/ti
     echo "FAIL: couldn't build tide-msg: $(cat "$tmp/go.log")" >&2
     exit 1
 fi
-helpers="tide-sysmon tide-tz hyprctl tide-msg gsettings nmcli systemctl timedatectl udevadm tide"
+helpers="tide-sysmon tide-tz hyprctl tide-msg gsettings nmcli systemctl timedatectl udevadm busctl tide"
 : >"$tmp/helpers.log" || exit 1
 for _helper in $helpers; do
     cat >"$tmp/helpers/$_helper" <<EOF || exit 1
@@ -617,7 +618,7 @@ load() {
     # tzdata; the stand-ins' answers), so anything the shell's commands
     # warn of is a failure.
     # On tidewm, Quickshell's I3 module logs a command tidewm refused.
-    if grep -E "tide: (tide-tz|tide-sysmon|tide-msg|tidewm can't|clocks|bar title|focus|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl|tide-msg)|replay|tell|apply|keep|read tidewm)|tide-(lock|greeter): (hyprctl|tide-msg|couldn't start (hyprctl|tide-msg)|keyboards)|Error occurred while running command" "$log" >"$tmp/reports"; then
+    if grep -E "tide: (busctl|tide-tz|tide-sysmon|tide-msg|tidewm can't|clocks|bar title|focus|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl|tide-msg)|replay|tell|apply|keep|read tidewm)|tide-(lock|greeter): (hyprctl|tide-msg|couldn't start (hyprctl|tide-msg)|keyboards)|Error occurred while running command" "$log" >"$tmp/reports"; then
         echo "FAIL: $_what loaded, but its commands warned:" >&2
         cat "$tmp/reports" >&2
         exit 1

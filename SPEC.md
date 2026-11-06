@@ -4374,6 +4374,13 @@ stays hand-written.
     exits: `google-calendar` runs `chrome --app=…`, which gives the window
     to a Chrome already running and exits, so a Chrome that reopened
     Calendar's window itself gets a second one (TODO.md).
+  - Home's apps and the list wait for the file chooser portal to answer
+    (`busctl --user get-property` of `org.freedesktop.portal.FileChooser`'s
+    `version`, which D-Bus starts the portal for). Chromium and Electron
+    apps ask once, as they start, whether the portal is there; one started
+    before it draws its own GTK file dialog for as long as it runs, whose
+    Enter cancels in Brave's Open dialog and does nothing in Save. After
+    30 seconds with no answer, the shell logs why and runs them anyway.
   - The shell runs the list once a graphical session. It records the
     session it ran it in, as `graphical-session.target`'s `InvocationID`,
     in `$XDG_RUNTIME_DIR/tide-startup-ran`, so a shell restarted later runs

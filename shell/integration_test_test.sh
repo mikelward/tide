@@ -1345,6 +1345,17 @@ code=$?
 check "or with two of them run together" test "$code" -eq 2
 }
 
+case_117() {
+# The stand-in busctl answers the file chooser portal's version, as
+# xdg-desktop-portal would, and nothing else.
+out=$(sh shell/busctl_stand_in.sh --user --timeout=30 get-property org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop org.freedesktop.portal.FileChooser version 2>&1)
+code=$?
+check "the stand-in busctl gives the file chooser portal's version" test "$code:$out" = "0:u 4"
+out=$(sh shell/busctl_stand_in.sh --user get-property org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop org.freedesktop.portal.FileChooser version 2>&1)
+code=$?
+check "and answers nothing else" test "$code" -eq 1
+}
+
 case_57() {
 stubs "$tmp/title-warns" "exit 0" "  WARN qml: tide: focus: hyprctl activewindow gave no window; the focused window is known at the next focus change
 $loaded"
