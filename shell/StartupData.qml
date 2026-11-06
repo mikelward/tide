@@ -130,6 +130,16 @@ Singleton {
             return;
         }
         root.asking = true;
+        portal.createObject(root).running = true;
+    }
+
+    // The file chooser portal has answered, or given up (Startup.portalWarning):
+    // the session's ID is read next, then the list runs.
+    function portalRead(ok, output, errors) {
+        const warning = Startup.portalWarning(ok, output, errors);
+        if (warning !== "") {
+            console.warn(`tide: ${warning}`);
+        }
         session.createObject(root).running = true;
     }
 
@@ -225,6 +235,62 @@ Singleton {
                 }
             }
             onExited: (exitCode, status) => handle({ type: "exited", code: exitCode })
+        }
+    }
+
+    // Waits for the file chooser portal (Startup.PORTAL_COMMAND).
+    Component {
+        id: portal
+
+        Process {
+            id: wait
+
+            property string output: ""
+            property bool outputRead: false
+            property string errors: ""
+            property bool errorsRead: false
+            property bool started: false
+            property bool exited: false
+            property bool ok: false
+            property bool done: false
+
+            // Once it has exited and both streams are in, or it couldn't
+            // start, which reads neither (shell/lib/launch.mjs).
+            function finish() {
+                if (done || (started && !(exited && outputRead && errorsRead)) || (!started && running)) {
+                    return;
+                }
+                done = true;
+                root.portalRead(ok, output, errors);
+                destroy();
+            }
+
+            command: Startup.PORTAL_COMMAND
+            stdout: StdioCollector {
+                onStreamFinished: {
+                    wait.output = text;
+                    wait.outputRead = true;
+                    wait.finish();
+                }
+            }
+            stderr: StdioCollector {
+                onStreamFinished: {
+                    wait.errors = text;
+                    wait.errorsRead = true;
+                    wait.finish();
+                }
+            }
+            onStarted: started = true
+            onExited: (code, status) => {
+                ok = code === 0;
+                exited = true;
+                finish();
+            }
+            onRunningChanged: {
+                if (!running) {
+                    finish();
+                }
+            }
         }
     }
 

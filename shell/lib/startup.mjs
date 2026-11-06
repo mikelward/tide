@@ -10,6 +10,25 @@ export const FILES = Object.freeze(["startup.json", "startup.local.json"]);
 // under $XDG_RUNTIME_DIR, so a shell restarted later runs nothing.
 export const RECORD = "tide-startup-ran";
 
+// Asks xdg-desktop-portal for its file chooser's version, which D-Bus
+// starts it for if it isn't running, and answers once it is. The list
+// waits for that: Chromium and Electron apps ask once, as they start,
+// whether the portal is there, and one started before it draws its own
+// GTK file dialog for as long as it runs. 30 seconds, then the list runs
+// anyway.
+export const PORTAL_COMMAND = Object.freeze(["busctl", "--user", "--timeout=30", "get-property",
+    "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop", "org.freedesktop.portal.FileChooser", "version"]);
+
+// What to log of PORTAL_COMMAND's run: "" when it answered with a version,
+// as busctl prints one ("u 4"), or why not.
+export function portalWarning(ok, output, errors) {
+    if (ok && /^u [0-9]+$/.test(String(output ?? "").trim())) {
+        return "";
+    }
+    const why = String(errors ?? "").trim() || String(output ?? "").trim() || "no answer";
+    return `busctl: the file chooser portal didn't answer (${why}); starting at login anyway, so apps may draw their own file dialogs until they restart`;
+}
+
 // What tells one graphical session from the next: graphical-session.target's
 // invocation ID, new each time the target starts, which uwsm starts at
 // each login and stops at logout. The runtime directory alone outlives a

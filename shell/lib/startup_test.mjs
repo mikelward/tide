@@ -13,6 +13,8 @@ import {
     parseStartupFile,
     runFailure,
     SESSION_COMMAND,
+    PORTAL_COMMAND,
+    portalWarning,
     STARTED,
     queueEnded,
     homeRuns,
@@ -177,4 +179,13 @@ test("home's apps start as a list of their own, and the list skips them", () => 
     assert.deepEqual(listRuns(home, ["gmail", "slack --x"]), [{ name: "slack --x", argv: launchCommand("slack --x") }]);
     assert.deepEqual(listRuns([], ["a"]), [{ name: "a", argv: launchCommand("a") }]);
     assert.deepEqual(homeRuns([]), []);
+});
+
+test("the list waits for the file chooser portal, then runs whatever it said", () => {
+    assert.deepEqual(PORTAL_COMMAND.slice(0, 4), ["busctl", "--user", "--timeout=30", "get-property"]);
+    assert.equal(portalWarning(true, "u 4\n", ""), "");
+    assert.match(portalWarning(false, "", "Call failed: Connection timed out\n"),
+        /^busctl: the file chooser portal didn't answer \(Call failed: Connection timed out\); starting at login anyway/);
+    assert.match(portalWarning(true, "", ""), /\(no answer\)/);
+    assert.match(portalWarning(false, "", ""), /\(no answer\)/);
 });
