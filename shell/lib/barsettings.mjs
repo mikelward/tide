@@ -1,0 +1,32 @@
+// The settings page a right-click on each bar item opens (SPEC.md §7.1):
+// a page's id in settings.mjs's PAGES, or "" for the panel's first page
+// where no page fits. The tray isn't here: its right-click is the app's
+// own menu. tilemo copies this file as its dashboard/tide-barsettings.js.
+export const BAR_SETTINGS = Object.freeze({
+    logo: "",
+    workspaces: "workspaces",
+    layout: "layouts",
+    title: "floating",
+    presenter: "notifications",
+    sharing: "",
+    mic: "sound",
+    keyboard: "keyboard",
+    keepawake: "idle",
+    bluetooth: "bluetooth",
+    network: "network",
+    volume: "sound",
+    battery: "power",
+    sysmon: "",
+    notifications: "notifications",
+    session: "idle",
+    clocks: "clocks",
+});
+
+// The page bar item `item` opens. An item not in the map is a mistake in
+// the bar, so it throws rather than open the wrong page.
+export function page(item) {
+    if (!Object.prototype.hasOwnProperty.call(BAR_SETTINGS, item)) {
+        throw new Error(`no bar item ${item}; the items are ${Object.keys(BAR_SETTINGS).join(", ")}`);
+    }
+    return BAR_SETTINGS[item];
+}

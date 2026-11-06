@@ -1878,6 +1878,27 @@ See [`bar.png`](docs/mocks/bar.png).
   status icon, and the clocks, which are one target together. A window's
   icon in its workspace is its own small target. Reach is apart from the
   visual spacing (`shell/lib/barclick.mjs`, `shell/BarHit.qml`).
+- **A right-click opens that item's settings page** (§16), on any
+  platform: tide, tilemo and tileco share the map
+  (`shell/lib/barsettings.mjs`), each naming its own pages.
+
+  | Item | Page |
+  |---|---|
+  | workspaces, and the icons on them | Workspaces |
+  | layout symbol | Layouts |
+  | window title | Floating |
+  | clocks | Clocks |
+  | volume, mic pill | Sound |
+  | network | Network |
+  | Bluetooth and its audio devices | Bluetooth |
+  | battery | Power |
+  | keyboard layout | Keyboard |
+  | keep-awake, session | Idle |
+  | notifications, Presenting pill | Notifications |
+  | logo, sharing pill, system monitor | the first page, since none fits |
+
+  A tray icon's right-click stays the app's own menu, its only way in. The
+  layout symbol takes no other click.
 - **Hovered, a target shows its whole span** as a rounded rect, the text
   color at 8% over whatever fill it has, and 15% while pressed
   (`Theme.hover`, `Theme.pressed`). So it reads on both palettes, on the
@@ -1924,7 +1945,9 @@ See [`bar.png`](docs/mocks/bar.png).
 - **Scroll** over the workspaces to move through them, in the bar's order,
   stopping at each, and at either end (`Super+PgUp`/`PgDn` pass over empty
   ones and wrap round instead).
-- **Right-click** a workspace to change its layout.
+- **Right-click** a workspace, or an icon on it, to open Workspaces
+  settings (§7.1). A workspace's layout changes with `Super+.` and
+  `Super+,` (§6.6), its default on the Layouts page.
 - The chips showed every window's icon before. They're quieter now, and
   the switcher's Workspaces and Windows tabs still show what's where
   (§8.1).

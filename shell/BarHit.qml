@@ -25,6 +25,9 @@ Item {
     // pill, a workspace) sets it false and puts this first, so the rect
     // goes over the fill and under the content.
     property bool behind: true
+    // The settings page a right-click opens (lib/barsettings.mjs's), or
+    // undefined for none, as the tray's, whose right-click is its own.
+    property var settings: undefined
     // The click target itself, which a popover's toggle names as its opener.
     readonly property alias area: area
     readonly property bool hovered: hover.hovered
@@ -67,6 +70,13 @@ Item {
 
         HoverHandler {
             id: hover
+        }
+
+        // A right-click opens the item's settings page (SPEC.md §7.1).
+        TapHandler {
+            acceptedButtons: Qt.RightButton
+            enabled: root.settings !== undefined
+            onTapped: SettingsData.open(root.settings)
         }
 
         // Only watches, so the press still reaches the handlers here.

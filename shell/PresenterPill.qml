@@ -1,6 +1,7 @@
 import QtQuick
 import "lib/barclick.mjs" as Click
 import "lib/presenter.mjs" as Presenter
+import "lib/barsettings.mjs" as BarSettings
 
 // The Presenting pill (SPEC.md §7.4): shown while presenter mode is on
 // (PresenterData), in the accent color, so it reads as something you
@@ -20,6 +21,7 @@ Rectangle {
 
     // First, so its hover goes over the pill's fill and under its content.
     BarHit {
+        settings: BarSettings.page("presenter")
         id: hit
 
         reach: root.reach

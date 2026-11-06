@@ -1,6 +1,7 @@
 import QtQuick
 import "lib/barclick.mjs" as Click
 import "lib/mic.mjs" as Mic
+import "lib/barsettings.mjs" as BarSettings
 
 // The orange mic pill (SPEC.md §7.4): shown while an app is recording from
 // the microphone (MicData), next to the Sharing pill, its mic slashed while
@@ -22,6 +23,7 @@ Rectangle {
     readonly property var view: Mic.pillView({ muted: MicData.muted, count: MicData.captures.length })
 
     BarHit {
+        settings: BarSettings.page("mic")
         id: hit
 
         reach: root.reach

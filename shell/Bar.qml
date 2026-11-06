@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 import "lib/barclick.mjs" as Click
 import "lib/title.mjs" as Title
+import "lib/barsettings.mjs" as BarSettings
 
 // One bar per monitor (SPEC.md §7.1): a plain rectangle flush with the top
 // edge and both sides, its exclusive zone keeping tiling below it. Its
@@ -56,6 +57,7 @@ PanelWindow {
         color: Theme.accent
 
         BarHit {
+            settings: BarSettings.page("logo")
             reach: bar.leftReaches[0]
 
             TapHandler {

@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import "lib/title.mjs" as Title
+import "lib/barsettings.mjs" as BarSettings
 
 // The window title in the middle of this monitor's bar (SPEC.md §7.1):
 // the focused window's when it's on this monitor, else nothing, from
@@ -42,6 +43,7 @@ Text {
     // needs no address.
     // Hovered, only while there's a title to double-click.
     BarHit {
+        settings: BarSettings.page("title")
         visible: root.window !== null
 
         TapHandler {

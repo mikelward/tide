@@ -1,6 +1,7 @@
 import QtQuick
 import "lib/barclick.mjs" as Click
 import "lib/clocks.mjs" as ClockLib
+import "lib/barsettings.mjs" as BarSettings
 
 // The clocks at the bar's right end (SPEC.md §7.3): each zone in the bar,
 // as "LABEL HH:MM", then local's, as "MMM d HH:MM". Hovering them shows the
@@ -21,6 +22,7 @@ Item {
     // One click target for every clock, labels, times and the room
     // between them, so no gap in the span is dead.
     BarHit {
+        settings: BarSettings.page("clocks")
         id: hit
 
         reach: root.reach
