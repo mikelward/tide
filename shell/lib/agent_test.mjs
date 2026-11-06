@@ -1,7 +1,7 @@
 // Tests for agent.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CONNECT, GRANT_ANY, OPEN, STARTED_MS, addMissed, buttons, fate, holds, icon, isBluetooth, missedOnDecline, ownerFor, answerLine, connectCommand, connectionName, missedCommand, missedOutcome, noteStarted, notifyCommand, notifyOutcome, parseLine, route, statusText, values } from "./agent.mjs";
+import { CONNECT, OPEN, STARTED_MS, addMissed, buttons, fate, holds, icon, isBluetooth, missedOnDecline, ownerFor, answerLine, connectCommand, connectionName, grantAny, missedCommand, missedOutcome, noteStarted, notifyCommand, notifyOutcome, parseLine, route, statusText, values } from "./agent.mjs";
 
 const wifi = { kind: "wifi", id: "1", ssid: "Home Net", connection: { id: "Home", uuid: "u-1", type: "802-11-wireless" }, userRequested: true, message: "“Home Net” needs a password." };
 const vpn = { kind: "vpn", id: "2", connection: { id: "Work VPN", uuid: "u-3", type: "vpn" }, userRequested: true, message: "Sign in." };
@@ -193,8 +193,9 @@ test("a missed request's notification offers Connect, by uuid", () => {
     assert.deepEqual(connectCommand("u-1"), ["nmcli", "connection", "up", "uuid", "u-1"]);
 });
 
-test("the dialog's grant is the guard's wildcard", () => {
-    assert.deepEqual(GRANT_ANY, ["hyprctl", "eval", 'tide_focus.grant("*")']);
+test("the dialog's grant is the guard's wildcard, on Hyprland or tidewm", () => {
+    assert.deepEqual(grantAny(false), ["hyprctl", "eval", 'tide_focus.grant("*")']);
+    assert.deepEqual(grantAny(true), ["tide-msg", "grant", "*"]);
 });
 
 test("the status doctor reads", () => {

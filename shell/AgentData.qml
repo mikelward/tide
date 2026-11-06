@@ -279,7 +279,7 @@ Singleton {
                 root.answer("go", request.id);
                 return;
             }
-            Launcher.run(Agent.GRANT_ANY, ok => {
+            Launcher.run(Agent.grantAny(Compositor.tidewm), ok => {
                 if (!ok) {
                     console.warn("tide: couldn't grant the VPN's sign-in window focus, so it opens marked instead");
                 }
