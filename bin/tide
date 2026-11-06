@@ -187,6 +187,14 @@
 #     with --cancel on the first input after the step, which removes the
 #     flag: someone is back.
 #
+#   tide displays off | on
+#
+#     Turns every display off, or on again, for hypridle's displays-off
+#     step and its resume (SPEC.md §10): Hyprland's dpms dispatcher, or in
+#     tidewm's session (§5.3) tidewm's `output * power`, through tide-msg,
+#     which keeps the windows where they are. Exits 1 if the compositor
+#     refused, and 2 if there's no compositor to ask.
+#
 #   tide prompt-focus
 #
 #     Asks the focus guard whether a polkit prompt opening now may take
@@ -247,6 +255,7 @@ usage() {
     echo "       $prog lock-check" >&2
     echo "       $prog idle-lock" >&2
     echo "       $prog idle-suspend [--unplugged | --cancel]" >&2
+    echo "       $prog displays off | on" >&2
     echo "       $prog prompt-focus" >&2
     echo "       $prog keyboards" >&2
     echo "       $prog clipboard store | list | copy ID | put TEXT | delete ID | wipe" >&2
@@ -1371,6 +1380,34 @@ idle_suspend() {
 # (`eval` answers only ok): Hyprland 0.56's hyprctl/src/main.cpp sends it
 # as a single command with output, and src/config/lua/ConfigManager.cpp
 # prints each returned value.
+displays() {
+    test $# -eq 1 || usage
+    case $1 in
+        off | on) ;;
+        *) usage ;;
+    esac
+    if in_tidewm; then
+        if ! command -v tide-msg >/dev/null 2>&1; then
+            echo "$prog displays: no tide-msg, so couldn't turn the displays $1 (make install builds it)" >&2
+            exit 2
+        fi
+        status=0
+        err=$(tide-msg output '*' power "$1" 2>&1) || status=$?
+        test "$status" -eq 0 && exit 0
+        echo "$prog displays: couldn't turn the displays $1: ${err:-tide-msg exited $status}" >&2
+        # tide-msg's own: 1 refused, 2 no tidewm to ask.
+        exit "$status"
+    fi
+    if ! command -v hyprctl >/dev/null 2>&1; then
+        echo "$prog displays: no hyprctl, so couldn't turn the displays $1" >&2
+        exit 2
+    fi
+    reply=$(hyprctl dispatch "hl.dsp.dpms({ action = \"$1\" })" 2>&1)
+    test "$reply" = ok && exit 0
+    echo "$prog displays: couldn't turn the displays $1: ${reply:-no answer from Hyprland}" >&2
+    exit 1
+}
+
 prompt_focus() {
     test $# -eq 0 || usage
     if ! in_tide; then
@@ -1444,6 +1481,7 @@ case "${1:-}" in
     lock-check) shift; lock_check "$@" ;;
     idle-lock) shift; idle_lock "$@" ;;
     idle-suspend) shift; idle_suspend "$@" ;;
+    displays) shift; displays "$@" ;;
     prompt-focus) shift; prompt_focus "$@" ;;
     keyboards) shift; keyboards "$@" ;;
     # Installed beside this script.

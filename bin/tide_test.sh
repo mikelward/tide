@@ -589,6 +589,20 @@ check "eval's plain ok isn't an answer" \
     test "$?:$(cat "$tmp/err")" = "2:tide prompt-focus: couldn't ask the focus guard: ok"
 run XDG_CURRENT_DESKTOP=KDE "$qs" prompt-focus
 check "outside tide prompt-focus can't tell" test $? -eq 2 -a ! -s "$log"
+
+# hypridle's displays-off step and its resume (SPEC.md §10).
+run "$qs" displays off
+check "displays off exits 0 when Hyprland takes it" test $? -eq 0
+check "displays off is Hyprland's dpms dispatcher" \
+    test "$(cat "$log")" = 'hyprctl dispatch hl.dsp.dpms({ action = "off" })'
+run "$qs" displays on
+check "displays on turns them on again" \
+    test "$(cat "$log")" = 'hyprctl dispatch hl.dsp.dpms({ action = "on" })'
+run FAKE_HYPRCTL_REPLY='error: unknown dispatcher' "$qs" displays off
+check "displays exits 1 when Hyprland refuses" test $? -eq 1
+check "and says why" contains "$(cat "$tmp/err")" "tide displays: couldn't turn the displays off: error: unknown dispatcher"
+run "$qs" displays dim
+check "displays takes only on or off" test $? -eq 2 -a ! -s "$log"
 run "$qs" prompt-focus now
 check "prompt-focus takes no arguments" test $? -eq 2
 
@@ -630,6 +644,13 @@ check "on tidewm, grant falls back to the app's last window, as one grant" \
 run "$tw" "$qs" focus org.example.Chat
 check "on tidewm, focus brings up the app's most recent window" \
     test "$(cat "$log")" = 'tide-msg focus recent org.example.Chat'
+run "$tw" "$qs" displays off
+check "on tidewm, displays off is tidewm's output power, for every output" \
+    test "$?:$(cat "$log")" = '0:tide-msg output * power off'
+run "$tw" FAKE_TIDEMSG_STATUS=1 FAKE_TIDEMSG_ERROR='output * power on: An output refused to power on' "$qs" displays on
+check "on tidewm, a refused power exits 1" test $? -eq 1
+check "and says why" \
+    contains "$(cat "$tmp/err")" "tide displays: couldn't turn the displays on: tide-msg: output * power on: An output refused to power on"
 run "$tw" "$qs" grant 'a"b'
 check "on tidewm, an ID with a quote is refused" test $? -eq 2
 check "and says why" contains "$(cat "$tmp/err")" 'tidewm can'"'"'t be told the ID a"b'

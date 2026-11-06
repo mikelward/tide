@@ -2868,6 +2868,11 @@ today's `hypridle.conf`:
     timings are recorded in `$XDG_RUNTIME_DIR/tide-idle-applied`, and so
     is the file a shell first finds, if there's no record yet. A shell
     whose record says something other than the file restarts hypridle.
+- **Displays off** is `tide displays off`, and back on is `tide displays
+  on`, both run by hypridle's step in tide's sessions. On Hyprland that's
+  its dpms dispatcher. In tidewm's session (§5.3) it's tidewm's `output *
+  power`, which turns each output off as an idle daemon would, keeping its
+  windows and place.
 - **Suspend on AC** is a setting too, off by default: `suspendOnAC`, true
   or false, in the same files, and the Idle page's "Sleep when plugged in"
   switch.
