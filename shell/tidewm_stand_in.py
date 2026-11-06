@@ -178,6 +178,10 @@ def changed(con, **fields):
 
 
 NEW = window(22, "2", "org.gnome.Nautilus", "Downloads")
+# Opened and focused last, on the workspace the fixtures keep focused, so
+# what the shell judges by focus, Super+Z among it, names it once it has
+# followed the window events.
+DRAFT = window(23, "1", "org.gnome.TextEditor", "draft")
 # What the bar, the marks and the name prompt follow: focus moving to
 # another workspace and window, a window opening, retitled, made urgent,
 # moved, minimized and closed, a workspace made, home renamed, and a
@@ -200,6 +204,8 @@ EVENTS = [
     workspace_event("init", workspace(8, "docs, draft")),
     workspace_event("rename", changed(WORKSPACES[3], name="mail")),
     ("input", {"change": "xkb_layout", "input": KEYBOARD}),
+    window_event("new", DRAFT),
+    window_event("focus", changed(DRAFT, focused=True)),
 ]
 
 # tidewm's commands, by the word that starts each (its docs/ipc.md), and

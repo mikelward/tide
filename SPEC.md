@@ -4864,6 +4864,14 @@ are what "done" means.
     names home `in` again after the rename. It fails if the shell runs
     `hyprctl` there, or makes any request of Quickshell's Hyprland module,
     which says so in its log.
+  - The events end by opening a window on the workspace the fixtures keep
+    focused, and focusing it, so the test then calls Super+Z's minimize,
+    and fails unless the shell asks tidewm to minimize that window, by its
+    container: it followed the window events.
+  - The lock loads there too, and fails unless it listens for tidewm's
+    input events and asks `tide-msg` for the keyboard as it starts and
+    again once the input event is played, for its layout badge, and asks Hyprland
+    nothing.
   - `hyprctl` is a stand-in too, from the same file, and answers at once
     from the same fixtures. The bar asks it for the window focused at
     startup, the lock and the greeter for the keyboards.
