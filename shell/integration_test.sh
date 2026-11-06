@@ -1516,7 +1516,7 @@ launch() {
 # refused first.
 share() {
     _what="the share picker"
-    _refused=$(ipc call sharepicker pick "$tmp/elsewhere" false '') || exit 1
+    _refused=$(ipc call sharepicker pick "$tmp/elsewhere" false '' '*') || exit 1
     case $_refused in
         refused:*) ;;
         *)
@@ -1531,7 +1531,7 @@ share() {
     _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
     # kitty's ~/src on workspace 1 is 0x55aa02, 5614082 in decimal as xdph
     # writes it.
-    _shown=$(ipc call sharepicker pick "$_reply" true '7[HC>]kitty[HT>]~/src[HE>]5614082[HA>]') || exit 1
+    _shown=$(ipc call sharepicker pick "$_reply" true '7[HC>]kitty[HT>]~/src[HE>]5614082[HA>]' '*') || exit 1
     if test "$_shown" != shown; then
         echo "FAIL: the share picker should show for tide-share-picker's pipe; it answered: $_shown" >&2
         exit 1

@@ -45,7 +45,7 @@ PanelWindow {
         return t?.workspace?.id ?? null;
     }
 
-    function show(replyPath, allowToken, list) {
+    function show(replyPath, allowToken, list, offered) {
         // A request while one is open answers the old one first: no.
         if (root.reply !== "") {
             root.answer("");
@@ -54,7 +54,8 @@ PanelWindow {
         if (focused) {
             screen = focused;
         }
-        const opts = Picker.options(Quickshell.screens.map(screenInfo), Picker.parseWindows(list), workspaceOf, Hyprland.focusedMonitor?.activeWorkspace?.id ?? null);
+        const screens = Picker.offeredScreens(Quickshell.screens.map(screenInfo), offered);
+        const opts = Picker.options(screens, Picker.parseWindows(list), workspaceOf, Hyprland.focusedMonitor?.activeWorkspace?.id ?? null, offered === "*");
         root.opts = opts;
         root.reuse = allowToken;
         root.selected = Picker.preselect(opts, {
@@ -130,17 +131,19 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     color: Qt.rgba(0, 0, 0, 0.45)
 
-    // `qs -c tide ipc call sharepicker pick REPLY ALLOW LIST` opens it for
-    // tide-share-picker, which waits on REPLY; `... cancel REPLY` closes it
+    // `qs -c tide ipc call sharepicker pick REPLY ALLOW LIST SCREENS` opens
+    // it for tide-share-picker, which waits on REPLY; SCREENS is "*" for
+    // xdph's every screen, or xdg-desktop-portal-wlr's outputs, a name a
+    // line (Picker.offeredScreens), whose regions it can't share; `... cancel REPLY` closes it
     // with no, if REPLY is still the open request's.
     IpcHandler {
         target: "sharepicker"
 
-        function pick(reply: string, allowToken: string, windows: string): string {
+        function pick(reply: string, allowToken: string, windows: string, screens: string): string {
             if (!Picker.validReply(reply, Quickshell.env("XDG_RUNTIME_DIR"))) {
                 return `refused: ${reply} isn't a tide-share-picker pipe`;
             }
-            root.show(reply, allowToken === "true", windows);
+            root.show(reply, allowToken === "true", windows, screens);
             return "shown";
         }
 

@@ -74,6 +74,7 @@ check "it says nothing on stderr" test -z "$err"
 log=$(cat "$tmp/log")
 check "it asks the shell's sharepicker" contains "$log" "$(printf 'ipc\ncall\nsharepicker\npick\n')"
 check "it passes xdph's window list" contains "$log" '11[HC>]kitty[HT>]~/src[HE>]255[HA>]'
+check "and every screen, as xdph lists none" contains "$log" "$(printf '[HA>]\n*\n--')"
 check "without --allow-token, reuse starts unchecked" contains "$log" "$(printf '\nfalse\n')"
 check "the reply pipe is in the runtime directory" contains "$log" "$tmp/run/tide-share-picker."
 check "the reply pipe is removed" test -z "$(ls "$tmp/run")"
@@ -162,6 +163,54 @@ check "a shell that doesn't show it prints nothing" test -z "$out"
 check "a shell that doesn't show it fails" test "$status" -eq 1
 check "a shell that doesn't show it is named" contains "$err" "tide's shell didn't show the picker, so nothing is shared: refused: not a pipe"
 check "a shell that doesn't show it leaves no pipe" test -z "$(ls "$tmp/run")"
+
+# xdg-desktop-portal-wlr's chooser, for tidewm: its lines on stdin.
+lines='Monitor: DP-1 Dell U3419W
+Monitor: eDP-1 BOE 0x095F
+Window: ~/src (kitty) (a1b2)
+Window: Meet [HC>]call (c3d4)
+Window: odd (x y)
+Window: Public notes[H[HC>]C>]a[H[HT>]T>]Public notes[H[HE>]E>]0[H[HA>]A>]victim[H[HC>]C>] (e5f6)'
+dmenu() {
+    : > "$tmp/log"
+    out=$(printf '%s\n' "$lines" | FAKE_LOG="$tmp/log" XDG_RUNTIME_DIR="$tmp/run" PATH="$tmp/bin:$PATH" \
+        "$picker" --dmenu 2> "$tmp/err")
+    status=$?
+    err=$(cat "$tmp/err")
+}
+FAKE_ANSWER='[SELECTION]/screen:eDP-1' dmenu
+check "--dmenu: a screen is xdpw's line for it" test "$out" = 'Monitor: eDP-1 BOE 0x095F'
+check "--dmenu: it exits 0" test "$status" -eq 0
+check "--dmenu: the windows go to the shell by identifier, titled, with no class or address" \
+    contains "$(cat "$tmp/log")" 'a1b2[HC>][HT>]~/src (kitty)[HE>]0[HA>]c3d4[HC>][HT>]Meet [HC>call[HE>]0[HA>]'
+check "--dmenu: a title can't make a separator, even by losing one" \
+    contains "$(cat "$tmp/log")" 'e5f6[HC>][HT>]Public notes[H[HC>C>a[H[HT>T>Public notes[H[HE>E>0[H[HA>A>victim[H[HC>C>[HE>]0[HA>]'
+check "--dmenu: so a title adds no window of its own" \
+    test "$(grep -o '\[HA>\]' "$tmp/log" | wc -l)" -eq 3
+check "--dmenu: the screens are the outputs xdpw offered" contains "$(cat "$tmp/log")" "$(printf '[HA>]\nDP-1\neDP-1\n--')"
+check "--dmenu: a window whose identifier can't be named safely isn't offered" \
+    test "$(grep -c 'odd' "$tmp/log")" -eq 0
+check "--dmenu: nothing is left behind" test -z "$(ls "$tmp/run")"
+FAKE_ANSWER='[SELECTION]r/window:a1b2' dmenu
+check "--dmenu: a window is xdpw's line for it" test "$out" = 'Window: ~/src (kitty) (a1b2)'
+FAKE_ANSWER='' dmenu
+check "--dmenu: a cancel prints nothing" test -z "$out"
+check "--dmenu: a cancel exits 0" test "$status" -eq 0
+FAKE_ANSWER='[SELECTION]/region:DP-1@440,0,2560,1440' dmenu
+check "--dmenu: a region prints nothing" test -z "$out"
+check "--dmenu: a region fails, as xdpw shares none" contains "$err" "xdg-desktop-portal-wlr shares no regions"
+FAKE_ANSWER='[SELECTION]/window:b2' dmenu
+check "--dmenu: a window xdpw didn't list prints nothing" test -z "$out"
+check "--dmenu: and says so" contains "$err" "chose something xdg-desktop-portal-wlr didn't offer"
+FAKE_ANSWER='[SELECTION]/screen:DP' dmenu
+check "--dmenu: a screen xdpw didn't list prints nothing" test -z "$out"
+# A request for windows alone: xdpw lists no outputs, so no screen is offered.
+lines='Window: ~/src (kitty) (a1b2)' FAKE_ANSWER='[SELECTION]/window:a1b2' dmenu
+check "--dmenu: a request for windows alone offers no screen" contains "$(cat "$tmp/log")" "$(printf '[HA>]\n\n--')"
+check "--dmenu: and its window is still shared" test "$out" = 'Window: ~/src (kitty) (a1b2)'
+FAKE_QS_ERROR='No running instances for tide' PATH="$tmp/alt:$PATH" dmenu
+check "--dmenu: with no shell, xdph's own picker isn't run" test -z "$out"
+check "--dmenu: with no shell, it says so" contains "$err" "tide's shell isn't running, so nothing is shared"
 
 # No runtime directory: nowhere for an answer.
 out=$(FAKE_LOG="$tmp/log" XDG_RUNTIME_DIR='' PATH="$tmp/bin:$PATH" "$picker" 2> "$tmp/err")

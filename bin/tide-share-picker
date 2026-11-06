@@ -13,6 +13,14 @@
 # hyprland-share-picker is run instead, if it's installed, so a share
 # still works.
 #
+# With --dmenu it's xdg-desktop-portal-wlr's chooser instead, for tidewm's
+# session (SPEC.md §5.3), as its chooser_type=dmenu runs one: xdpw writes
+# what it can share on stdin, a line each, `Monitor: <output>
+# <description>` or `Window: <title> (<identifier>)`, and takes back the
+# line chosen. The shell's dialog shows them as xdph's would be, the
+# windows by title alone, and its answer is turned back into xdpw's line.
+# xdpw shares no regions, so the dialog offers none there.
+#
 # TIDE_SHARE_PICKER_TIMEOUT, 300 seconds by default, is how long it waits
 # for an answer before it closes the dialog and cancels.
 
@@ -20,9 +28,11 @@ prog=${0##*/}
 timeout_s=${TIDE_SHARE_PICKER_TIMEOUT:-300}
 
 allow=false
+dmenu=false
 for arg in "$@"; do
     case "$arg" in
         --allow-token) allow=true ;;
+        --dmenu) dmenu=true ;;
         # A later xdph may pass more; unknown ones change nothing here.
         *) echo "$prog: ignoring unknown argument $arg" >&2 ;;
     esac
@@ -43,7 +53,7 @@ if ! err=$(mkfifo -m 600 "$reply" 2>&1); then
     echo "$prog: couldn't make $reply, so nothing is shared: $err" >&2
     exit 1
 fi
-trap 'rm -f "$reply" "$reply.answer"' EXIT
+trap 'rm -f "$reply" "$reply.answer" "$reply.lines"' EXIT
 trap 'exit 1' HUP INT TERM
 
 # Closes the dialog with no, for when this stops waiting on it.
@@ -53,16 +63,43 @@ cancel() {
     fi
 }
 
-if ! shown=$(qs -c tide ipc call sharepicker pick "$reply" "$allow" "${XDPH_WINDOW_SHARING_LIST:-}" 2>&1); then
+# xdpw's lines, and its windows in xdph's list, each by xdpw's identifier,
+# which holds while the window lasts, so a choice the dialog remembers for
+# the next request is the same window, with no class or address, and a
+# title with no >], so it can't hold the separators. A window whose identifier isn't
+# plain letters and digits can't be named safely, so it isn't offered.
+windows=${XDPH_WINDOW_SHARING_LIST:-}
+screens='*'
+if $dmenu; then
+    cat > "$reply.lines" || exit 1
+    windows=$(awk '/^Window: .* \([A-Za-z0-9_-]+\)$/ {
+        title = substr($0, 9)
+        sub(/ \([A-Za-z0-9_-]+\)$/, "", title)
+        id = substr($0, length("Window: " title " (") + 1)
+        sub(/\)$/, "", id)
+        # As xdph does, the ] of each >], again until none is left, since
+        # dropping one can make another
+        while (gsub(/>\]/, ">", title)) {}
+        printf "%s[HC>][HT>]%s[HE>]0[HA>]", id, title
+    }' "$reply.lines")
+    # The outputs xdpw offers, none for a request for windows alone.
+    screens=$(sed -n 's/^Monitor: \([^ ]*\).*/\1/p' "$reply.lines")
+fi
+
+if ! shown=$(qs -c tide ipc call sharepicker pick "$reply" "$allow" "$windows" "$screens" 2>&1); then
     err=$shown
     case "$err" in
         "No running instances"* | "No instances"*)
-            if command -v hyprland-share-picker >/dev/null 2>&1; then
+            if ! $dmenu && command -v hyprland-share-picker >/dev/null 2>&1; then
                 rm -f "$reply"
                 trap - EXIT
                 exec hyprland-share-picker "$@"
             fi
-            echo "$prog: tide's shell isn't running, and there's no hyprland-share-picker, so nothing is shared" >&2
+            if $dmenu; then
+                echo "$prog: tide's shell isn't running, so nothing is shared" >&2
+            else
+                echo "$prog: tide's shell isn't running, and there's no hyprland-share-picker, so nothing is shared" >&2
+            fi
             ;;
         *)
             echo "$prog: tide's shell couldn't show the picker, so nothing is shared: $err" >&2
@@ -96,6 +133,36 @@ if test "$status" -ne 0; then
     exit 1
 fi
 answer=$(cat "$reply.answer")
+
+# xdpw's line for a choice: the monitor's, by its output's name, or the
+# window's, by its identifier.
+if $dmenu; then
+    case "$answer" in
+        '[SELECTION]'*/screen:*)
+            name=${answer#*/screen:}
+            line=$(awk -v n="$name" 'index($0, "Monitor: " n " ") == 1 || $0 == "Monitor: " n { print; exit }' "$reply.lines")
+            ;;
+        '[SELECTION]'*/window:*)
+            id=${answer#*/window:}
+            case "$id" in
+                '' | *[!A-Za-z0-9_-]*) line= ;;
+                *) line=$(awk -v id="$id" 'index($0, "Window: ") == 1 && substr($0, length($0) - length(id) - 1) == "(" id ")" { print; exit }' "$reply.lines") ;;
+            esac
+            ;;
+        '[SELECTION]'*/region:*)
+            echo "$prog: xdg-desktop-portal-wlr shares no regions, so nothing is shared" >&2
+            exit 1
+            ;;
+        '') exit 0 ;;
+        *) line= ;;
+    esac
+    if test -z "$line"; then
+        echo "$prog: the picker chose something xdg-desktop-portal-wlr didn't offer, so nothing is shared: $answer" >&2
+        exit 1
+    fi
+    printf '%s\n' "$line"
+    exit 0
+fi
 
 case "$answer" in
     '[SELECTION]'*)
