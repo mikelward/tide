@@ -139,6 +139,24 @@ export function options(screens, windows, workspaceOf, current, regions = true) 
 // sessions for one share (§12).
 export const REPEAT_MS = 10000;
 
+// xdg-desktop-portal-wlr's windows (tide-share-picker --dmenu), which come
+// with a title alone, named from the shell's own on tidewm (Compositor's
+// windows, each with tidewm's identifier for it): the app, for its icon,
+// and the shell's address, for its workspace and focus. One the shell
+// doesn't know stays as it came.
+export function namedWindows(windows, known) {
+    const byId = new Map();
+    for (const k of known ?? []) {
+        if (k && typeof k.identifier === "string" && k.identifier !== "") {
+            byId.set(k.identifier, k);
+        }
+    }
+    return windows.map(w => {
+        const k = byId.get(w.id);
+        return k ? Object.assign({}, w, { cls: k.app || w.cls, address: k.address }) : w;
+    });
+}
+
 // The screens a request may share: every one for xdph ("*"), which lists
 // none; for xdg-desktop-portal-wlr, by tide-share-picker --dmenu, only the
 // outputs it offered, a name a line, none for a request for windows alone.

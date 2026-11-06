@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 import {
-    REPEAT_MS, answerCommand, answerOutcome, areaFor, decimalToHex, isUltrawide, offeredScreens, options, orderWindows,
+    REPEAT_MS, answerCommand, answerOutcome, areaFor, decimalToHex, isUltrawide, namedWindows, offeredScreens, options, orderWindows,
     parseWindows, preselect, revealY, selectionLine, shareLabel, validReply
 } from "./sharepicker.mjs";
 
@@ -99,6 +99,19 @@ test("on tidewm, whose portal shares no regions, no 16:9 slice is offered", () =
     // A window xdg-desktop-portal-wlr offers has no class or address
     assert.equal(opts[2].label, "notes");
     assert.equal(opts[2].address, null);
+});
+
+test("xdpw's windows are named from tidewm's, by its identifier, for their icon and workspace", () => {
+    const windows = parseWindows("a1b2[HC>][HT>]~/src[HE>]0[HA>]c3d4[HC>][HT>]gone[HE>]0[HA>]");
+    const known = [
+        { address: "12", app: "kitty", identifier: "a1b2", workspace: 2 },
+        { address: "13", app: "firefox", identifier: "" },
+    ];
+    assert.deepEqual(namedWindows(windows, known), [
+        { id: "a1b2", cls: "kitty", title: "~/src", address: "12" },
+        { id: "c3d4", cls: "", title: "gone", address: null },
+    ]);
+    assert.deepEqual(namedWindows(windows, undefined), windows);
 });
 
 test("xdph's request may share any screen, xdpw's only the outputs it offered", () => {

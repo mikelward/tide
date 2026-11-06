@@ -255,6 +255,9 @@ export function shellWindows(state, workspaces) {
             fullscreen: (c.fullscreen_mode ? 2 : 0) + (c.maximized ? 1 : 0),
             floating: c.type === "floating_con",
             focusHistoryID: state.order.indexOf(c.id),
+            // ext-foreign-toplevel-list's, which xdg-desktop-portal-wlr
+            // names a window it can share by (SharePicker.qml).
+            identifier: typeof c.foreign_toplevel_identifier === "string" ? c.foreign_toplevel_identifier : "",
         };
     });
 }

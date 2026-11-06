@@ -41,6 +41,9 @@ PanelWindow {
     }
 
     function workspaceOf(address) {
+        if (Compositor.tidewm) {
+            return Compositor.windows.find(w => w.address === address)?.workspace ?? null;
+        }
         const t = Hyprland.toplevels.values.find(w => Ws.normalizeAddress(w.address) === address);
         return t?.workspace?.id ?? null;
     }
@@ -55,12 +58,17 @@ PanelWindow {
             screen = focused;
         }
         const screens = Picker.offeredScreens(Quickshell.screens.map(screenInfo), offered);
-        const opts = Picker.options(screens, Picker.parseWindows(list), workspaceOf, Hyprland.focusedMonitor?.activeWorkspace?.id ?? null, offered === "*");
+        // On tidewm, xdpw's windows come by title alone, and the shell's
+        // own name them (Picker.namedWindows).
+        const windows = Compositor.tidewm ? Picker.namedWindows(Picker.parseWindows(list), Compositor.windows) : Picker.parseWindows(list);
+        const current = Compositor.tidewm ? (Compositor.tidewmListed.find(w => w?.focused === true)?.id ?? null)
+            : (Hyprland.focusedMonitor?.activeWorkspace?.id ?? null);
+        const opts = Picker.options(screens, windows, workspaceOf, current, offered === "*");
         root.opts = opts;
         root.reuse = allowToken;
         root.selected = Picker.preselect(opts, {
             screen: focused ? screenInfo(focused) : null,
-            address: Ws.normalizeAddress(Hyprland.activeToplevel?.address)
+            address: Compositor.tidewm ? (Compositor.tidewmActive?.address ?? null) : Ws.normalizeAddress(Hyprland.activeToplevel?.address)
         }, root.last, Date.now());
         root.reply = replyPath;
         visible = true;

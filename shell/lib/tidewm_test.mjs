@@ -202,11 +202,18 @@ test("the shell's windows are shaped as Hyprland's", () => {
     s = windowEvent(s, event("urgent", con(13, { urgent: true, output: "HDMI-A-1", workspace: "gone" })));
     const w = shellWindows(s, workspaces);
     assert.deepEqual(w[0], { address: "10", title: "title 10", app: "app10", workspace: 30, workspaceName: "in",
-        monitor: "DP-1", urgent: false, fullscreen: 3, floating: false, focusHistoryID: -1 });
+        monitor: "DP-1", urgent: false, fullscreen: 3, floating: false, focusHistoryID: -1, identifier: "" });
     assert.equal(w[1].focusHistoryID, 0, "the focused window");
     assert.equal(w[2].floating, true);
     assert.deepEqual([w[3].urgent, w[3].workspace, w[3].workspaceName, w[3].monitor], [true, null, "gone", "HDMI-A-1"],
         "a workspace the list doesn't have yet has no ID");
+});
+
+test("a window keeps the identifier xdg-desktop-portal-wlr shares it by", () => {
+    let s = treeWindows(tree);
+    s = windowEvent(s, event("title", con(10, { foreign_toplevel_identifier: "a1b2" })));
+    assert.equal(shellWindows(s, workspaces)[0].identifier, "a1b2");
+    assert.equal(shellWindows(s, workspaces)[1].identifier, "", "none given");
 });
 
 test("a minimized window is on its workspace's minimize workspace, as on Hyprland", () => {
