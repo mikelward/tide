@@ -480,7 +480,9 @@ flowchart TD
   RE2 means them, anchored to match the whole class and title as Hyprland
   does; it floats the open windows a new rule covers too, and Super+Alt+F
   fills the page in for tidewm's focused window. What else the shell takes from Hyprland's
-  events is still Hyprland's. Home (§6.5) is the shell's to
+  events is still Hyprland's. The shell asks Hyprland nothing there, and
+  tells no layout of the bar's popovers (§6.6), since tidewm has no edge
+  drag yet. Home (§6.5) is the shell's to
   keep there, as tidewm's config can't know its name: `tide-tidewm`
   starts tidewm on it and keeps it, by the name the shell last wrote to
   `tide-workspaces.lua`, and the shell keeps it from then on, with

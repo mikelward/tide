@@ -119,11 +119,15 @@ ShellRoot {
 
     // A toplevel's class and fullscreen state come from Hyprland's client
     // list, which Quickshell reads on request; ask again when they change.
+    // tidewm's session asks Hyprland nothing.
     Connections {
-        target: Hyprland
+        target: Compositor.tidewm ? null : Hyprland
 
         // Windows that were open before the shell started need it too.
         Component.onCompleted: {
+            if (Compositor.tidewm) {
+                return;
+            }
             Hyprland.refreshToplevels();
             Hyprland.refreshWorkspaces();
             Hyprland.refreshMonitors();

@@ -3477,7 +3477,7 @@ PanelWindow {
 
                         onVisibleChanged: {
                             refused = "";
-                            if (visible) {
+                            if (visible && !Compositor.tidewm) {
                                 // The client list's floating flags, fresh.
                                 Hyprland.refreshToplevels();
                             }
