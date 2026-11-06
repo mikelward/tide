@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # Tests for shell/integration_test.sh itself, with stand-ins for qs, sway,
-# wtype, notify-send and go, so they run without Quickshell: what the load
+# wtype, grim, notify-send and go, so they run without Quickshell: what the load
 # test does with a shell that loads cleanly, one whose files report an
 # error, one whose event loop never answers, one that ignores Hyprland, one
 # that skips a call to tide-tz, hyprctl, gsettings, nmcli or systemctl,
@@ -10,7 +10,8 @@
 # calls, color scheme or VPNs warn, one whose icon won't load, a
 # notification server that records what it's sent or doesn't, a launcher
 # that runs the app typed or doesn't, a name prompt that goes to the
-# workspace typed or doesn't, a settings panel that opens the
+# workspace typed or doesn't, clocks whose right-click and dropdown's
+# Settings… open their page or don't, a settings panel that opens the
 # Network page's app or doesn't, and opens Keyboard for keys or doesn't, a lock that can't read its
 # keyboards, or unlocks or doesn't, a greeter that logs in or doesn't, and
 # a shell in tidewm's session that asks Hyprland, never asks for its
@@ -111,10 +112,101 @@ stubs() {
     printf '%s\n' "$3" >"$1/load.txt" || exit 1
     cat >"$1/sway" <<'EOF'
 #!/bin/sh
-exec python3 -c 'import os, socket, time
+exec python3 "$(dirname "$0")/sway.py"
+EOF
+    # Wayland for shell/virtual_pointer.py alone: wl_display's sync and
+    # registry, the virtual pointer's manager its only global, and its
+    # moves and buttons. A click there is the shell's: a right-click on the
+    # clocks, the bar's right end, opens Settings on the Clocks page, as
+    # the stand-in qs's shownPage says, unless DIR/no-right-click is there;
+    # a click on them opens their dropdown, which the stand-in grim draws;
+    # and a click on its last row, 32 px tall, 14 px above its bottom, opens
+    # the Clocks page too and closes it, unless DIR/no-settings-row is there,
+    # or DIR/dropdown-stays, which leaves it open.
+    cat >"$1/sway.py" <<'EOF'
+import os, socket, struct, threading
+here = os.path.dirname(os.path.abspath(__file__))
+run = os.environ["XDG_RUNTIME_DIR"]
+MANAGER = b"zwlr_virtual_pointer_manager_v1\0"
+LEFT, RIGHT = 0x110, 0x111
+BAR, DROPDOWN_BOTTOM = 36, 250
+
+
+def knob(name):
+    return os.path.exists(os.path.join(here, name))
+
+
+def click(button, x, y, width):
+    page, dropdown = os.path.join(run, "settings-page"), os.path.join(run, "dropdown")
+    on_clocks = y < BAR and x >= width - 120
+    if button == RIGHT and on_clocks and not knob("no-right-click"):
+        with open(page, "w") as f:
+            f.write("clocks\n")
+    elif button == LEFT and on_clocks:
+        open(dropdown, "w").close()
+    elif button == LEFT and os.path.exists(dropdown) and DROPDOWN_BOTTOM - 46 <= y < DROPDOWN_BOTTOM - 14 \
+            and not knob("no-settings-row"):
+        with open(page, "w") as f:
+            f.write("clocks\n")
+        if not knob("dropdown-stays"):
+            os.remove(dropdown)
+
+
+def serve(conn):
+    buf, ids, at = b"", {}, (0, 0, 1)
+    def send(obj, opcode, payload):
+        conn.sendall(struct.pack("=II", obj, (8 + len(payload)) << 16 | opcode) + payload)
+    while True:
+        data = conn.recv(65536)
+        if not data:
+            return
+        buf += data
+        while len(buf) >= 8:
+            obj, word = struct.unpack("=II", buf[:8])
+            if len(buf) < word >> 16:
+                break
+            body, buf = buf[8:word >> 16], buf[word >> 16:]
+            opcode, args = word & 0xFFFF, struct.unpack("=%dI" % (len(body) // 4), body)
+            if (obj, opcode) == (1, 0):  # sync: done
+                send(args[0], 0, struct.pack("=I", 0))
+            elif (obj, opcode) == (1, 1):  # get_registry: the one global
+                ids["registry"] = args[0]
+                send(args[0], 0, struct.pack("=II", 1, len(MANAGER)) + MANAGER.ljust(-(-len(MANAGER) // 4) * 4, b"\0") + struct.pack("=I", 2))
+            elif obj == ids.get("registry") and opcode == 0:  # bind
+                ids["manager"] = args[-1]
+            elif obj == ids.get("manager") and opcode == 0:  # create_virtual_pointer
+                ids["pointer"] = args[1]
+            elif obj == ids.get("pointer") and opcode == 1:  # motion_absolute
+                at = (args[1], args[2], args[3])
+            elif obj == ids.get("pointer") and opcode == 2 and args[2] == 1:  # a press
+                click(args[1], *at)
+
+
 s = socket.socket(socket.AF_UNIX)
-s.bind(os.environ["XDG_RUNTIME_DIR"] + "/wayland-1")
-time.sleep(3600)'
+s.bind(os.path.join(run, "wayland-1"))
+s.listen()
+while True:
+    threading.Thread(target=serve, args=(s.accept()[0],), daemon=True).start()
+EOF
+    # A grim that writes what it's asked for, as CI's does, unless a lock
+    # that has gone without unlocking still holds the screen, as sway keeps
+    # it then. Asked for a PPM on stdout, it gives a screen 400 by 300: the
+    # bar, 36 px of grey, then black, but for the clocks' dropdown, white
+    # across it to 250 px down, while it's open.
+    cat >"$1/grim" <<'EOF'
+#!/bin/sh
+if test "$*" = "-t ppm -"; then
+    exec python3 -c 'import os, sys
+open_ = os.path.exists(os.path.join(os.environ["XDG_RUNTIME_DIR"], "dropdown"))
+rows = [b"\x80" * 3 * 400 if y < 36 else (b"\xff" if open_ and y < 250 else b"\0") * 3 * 400 for y in range(300)]
+sys.stdout.buffer.write(b"P6\n400 300\n255\n" + b"".join(rows))'
+fi
+if test -s "$XDG_RUNTIME_DIR/locked" && ! kill -0 "$(cat "$XDG_RUNTIME_DIR/locked")" 2>/dev/null; then
+    echo "the screen is still locked by a lock that's gone" >&2
+    exit 1
+fi
+for f in "$@"; do :; done
+echo png >"$f"
 EOF
     cat >"$1/qs" <<EOF
 #!/bin/sh
@@ -758,7 +850,7 @@ case "\$1 \$2 \$3 \$5" in
 esac
 chmod +x "\$4"
 EOF
-    chmod +x "$1/sway" "$1/qs" "$1/wtype" "$1/notify-send" "$1/go" || exit 1
+    chmod +x "$1/sway" "$1/qs" "$1/wtype" "$1/notify-send" "$1/go" "$1/grim" || exit 1
 }
 
 # run DIR [VAR=VALUE...]: the integration test with DIR's stand-ins, a 2 s limit,
@@ -1666,18 +1758,6 @@ check "and says so" contains "$out" "the shell didn't reload after make install-
 
 case_103() {
 stubs "$tmp/shots" "exit 0" "$loaded"
-# A grim that writes what it's asked for, as CI's does, unless a lock that
-# has gone without unlocking still holds the screen, as sway keeps it then.
-cat >"$tmp/shots/grim" <<'EOF2'
-#!/bin/sh
-if test -s "$XDG_RUNTIME_DIR/locked" && ! kill -0 "$(cat "$XDG_RUNTIME_DIR/locked")" 2>/dev/null; then
-    echo "the screen is still locked by a lock that's gone" >&2
-    exit 1
-fi
-for f in "$@"; do :; done
-echo png >"$f"
-EOF2
-chmod +x "$tmp/shots/grim" || exit 1
 run "$tmp/shots" TIDE_SCREENSHOTS="$tmp/shots/out"
 check "a run asked for screenshots passes" test "$code" -eq 0
 # Each face shows: none is photographed behind a lock left behind.
@@ -1854,6 +1934,37 @@ check "which answers them, and says so" contains "$out" "drained: ['subscribe [\
 check "with the first tick after the subscription" contains "$out" "then: [('0x2', {'success': True}), ('0x80000007', {'first': True, 'payload': ''}), ('0x1', 5)]"
 check "and plays to each listener subscribed to an event" contains "$out" "played to: 2"
 check "only what it subscribed to" contains "$out" "listener heard: ['0x80000003']"
+}
+
+case_118() {
+stubs "$tmp/clean" "exit 0" "$loaded"
+run "$tmp/clean"
+check "a shell whose clocks take a right-click and a click to Settings… passes" test "$code" -eq 0
+check "and says so" contains "$out" "ok: a right-click on the clocks opens their settings, and so does their dropdown's Settings…"
+}
+
+case_119() {
+stubs "$tmp/no-right-click" "exit 0" "$loaded"
+: >"$tmp/no-right-click/no-right-click" || exit 1
+run "$tmp/no-right-click"
+check "a shell whose clocks take no right-click fails" test "$code" -ne 0
+check "and says so" contains "$out" "a right-click on the clocks didn't open Settings on the Clocks page"
+}
+
+case_120() {
+stubs "$tmp/no-settings-row" "exit 0" "$loaded"
+: >"$tmp/no-settings-row/no-settings-row" || exit 1
+run "$tmp/no-settings-row"
+check "a clocks dropdown with no Settings… fails" test "$code" -ne 0
+check "and says so" contains "$out" "the clocks' dropdown's Settings… didn't open Settings on the Clocks page"
+}
+
+case_121() {
+stubs "$tmp/dropdown-stays" "exit 0" "$loaded"
+: >"$tmp/dropdown-stays/dropdown-stays" || exit 1
+run "$tmp/dropdown-stays"
+check "a clocks dropdown that stays open after Settings… fails" test "$code" -ne 0
+check "and says so" contains "$out" "the clocks' dropdown's Settings… didn't close the dropdown"
 }
 
 # --case N RESULT: run case_N alone, and write its passes and failures to

@@ -312,12 +312,18 @@ PopupWindow {
                 MenuRow {
                     width: list.width
                     icon: "preferences-system-network-symbolic"
-                    label: "Network settings…"
+                    label: "Network connections…"
                     onClicked: {
                         root.visible = false;
                         // The same path as keys and the launcher (SPEC.md §5.4).
                         Launcher.launch(["nm-connection-editor"]);
                     }
+                }
+
+                SettingsRow {
+                    width: list.width
+                    item: "network"
+                    popover: root
                 }
             }
         }

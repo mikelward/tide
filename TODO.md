@@ -7,6 +7,13 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **A dropdown's Settings… opens Tide Settings** (2026-11-06), on the
+  page its item's right-click opens, rather than the app another row
+  already opens (nm-connection-editor, blueman-manager).
+  So Network's row for nm-connection-editor is *Network connections…*
+  now, not *Network settings…*, and the system monitor's and the sharing
+  pill's dropdowns have no Settings…, as no page fits. Reversible:
+  `shell/SettingsRow.qml` and the dropdowns that use it.
 - **The Floating page lists dialogs under *Also floating*** (2026-11-06),
   every floating window a rule covers, each with *Details*, which fills the
   fields and opens *More about this window*, rather than a page of its own

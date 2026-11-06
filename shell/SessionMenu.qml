@@ -164,6 +164,14 @@ PopupWindow {
                 label: "Cancel"
                 onClicked: root.toggle()
             }
+
+            // Not while it asks about a blocked action.
+            SettingsRow {
+                visible: root.blocked.length === 0
+                width: list.width
+                item: "session"
+                popover: root
+            }
         }
     }
 

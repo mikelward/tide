@@ -87,6 +87,12 @@ PopupWindow {
                         Launcher.launch(["blueman-manager"]);
                     }
                 }
+
+                SettingsRow {
+                    width: list.width
+                    item: "bluetooth"
+                    popover: root
+                }
             }
         }
     }

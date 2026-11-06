@@ -1914,6 +1914,12 @@ See [`bar.png`](docs/mocks/bar.png).
   The first page opens even with the panel open on another. A tray
   icon's right-click stays the app's own menu, its only way in. The
   layout symbol takes no other click.
+- **Each dropdown ends in Settings…**, under a line, which closes it and
+  opens the page its item's right-click opens (`shell/SettingsRow.qml`):
+  the clocks, volume, mic, network, Bluetooth, battery and session
+  dropdowns. The system monitor's and the sharing pill's have none, as no
+  page fits, nor does the session menu while it asks about a blocked
+  action.
 - **Hovered, a target shows its whole span** as a rounded rect, the text
   color at 8% over whatever fill it has, and 15% while pressed
   (`Theme.hover`, `Theme.pressed`). So it reads on both palettes, on the
@@ -2079,7 +2085,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | Keep awake: a cup of coffee | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off; the OSD says which | hover: what it's doing, in the OSD's words |
 | Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | hover: "Bluetooth off", or "Bluetooth on" with what's connected: one or two by name, else how many, or "nothing connected" |
 | Bluetooth audio | one icon per connected headphones, headset or speakers, beside Bluetooth | the Bluetooth popover | hover: its name and battery |
-| Network | wired / Wi-Fi strength / wired connecting or not connected / VPN lock / offline | wired devices, with a choice of saved profiles; network list, with a network's password asked for in place; VPNs; *settings* opens `nm-connection-editor` | hover: the Wi-Fi network's name and signal %, or a cable's speed, then no internet and the VPN |
+| Network | wired / Wi-Fi strength / wired connecting or not connected / VPN lock / offline | wired devices, with a choice of saved profiles; network list, with a network's password asked for in place; VPNs; *connections* opens `nm-connection-editor` | hover: the Wi-Fi network's name and signal %, or a cable's speed, then no internet and the VPN |
 | Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5%; hover: the level ("Sound 64%") or "Muted", then the output's name |
 | Battery | % and charging, red at 20% and below | power profile (performance / balanced / saver), time left | hover: %, then charged, charging and when it's full, or the time left |
 | System monitor | CPU %; amber when the CPU is hot or memory is 90% full, red while it throttles or is critically hot | a readout of CPU, memory and temperature, then tabs: **CPU** (the default: temperature, clock, thermal throttling, the five processes using the most CPU) and **Memory** (memory, swap, the five using the most) | hover: CPU %, then throttling, hot or memory nearly full |

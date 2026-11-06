@@ -99,6 +99,12 @@ PopupWindow {
                 font.family: Theme.font
                 font.pixelSize: 12
             }
+
+            SettingsRow {
+                width: list.width
+                item: "battery"
+                popover: root
+            }
         }
     }
 
