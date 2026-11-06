@@ -407,14 +407,20 @@ set_wallpaper() {
 # Input devices, once (Hyprland is up: this unit starts after uwsm
 # finalize). A failure is reported and the session goes on with defaults.
 # Without the setting, conf's script is optional: no conf, no input setup.
+# It's said, though, as one that should be there and isn't leaves devices
+# with their defaults and no other sign of why.
 if is_program "$input_setup"; then
     "$input_setup" || log "$input_setup failed ($?); input devices keep their defaults"
+else
+    log "no $input_setup, so input devices keep their defaults"
 fi
 # And a device plugged in later, such as a mouse a KVM switch hands back:
 # Hyprland has no event for one, so conf's watcher runs for the session, in
 # this unit's cgroup, which stopping the unit ends. It logs its own failures.
 if is_program "$input_watch"; then
     "$input_watch" &
+else
+    log "no $input_watch, so a mouse, touchpad or keyboard plugged in after login, such as through a KVM switch, keeps its defaults"
 fi
 
 missing=
