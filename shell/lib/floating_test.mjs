@@ -382,6 +382,9 @@ test("the question offers Always float and Edit rule…, and reads back which", 
 test("the declined classes are kept for the Hyprland session, beside its runtime files", () => {
     assert.equal(declinedPath("/run/user/1000", "sig1"), "/run/user/1000/hypr/sig1/tide-floating-declined.json");
     assert.equal(declinedPath("", "sig1"), "");
+    assert.equal(declinedPath("/run/user/1000", "/run/user/1000/tidewm-ipc.1000.42.sock", true),
+        "/run/user/1000/tide-floating-declined-tidewm-ipc.1000.42.sock.json", "tidewm's, by its socket's name");
+    assert.equal(declinedPath("/run/user/1000", "", true), "");
     const state = { declined: ["org.example.player"], pending: ["x"] };
     assert.deepEqual(declinedRead(declinedText(state)), { declined: ["org.example.player"], warning: "" });
     assert.deepEqual(declinedRead(null), { declined: [], warning: "" });

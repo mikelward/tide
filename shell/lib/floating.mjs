@@ -801,8 +801,13 @@ export function askAnswered(state, cls, outcome) {
 // so a restarted shell doesn't ask again, and a new Hyprland, at the next
 // login, starts with none: its path, its text, and the classes it holds
 // (none for no record, or one that doesn't read, with a warning).
-export function declinedPath(runtimeDir, instance) {
-    return runtimeDir && instance ? `${runtimeDir}/hypr/${instance}/tide-floating-declined.json` : "";
+export function declinedPath(runtimeDir, instance, tidewm = false) {
+    if (!runtimeDir || !instance) {
+        return "";
+    }
+    return tidewm
+        ? `${runtimeDir}/tide-floating-declined-${String(instance).split("/").pop()}.json`
+        : `${runtimeDir}/hypr/${instance}/tide-floating-declined.json`;
 }
 
 export function declinedText(state) {

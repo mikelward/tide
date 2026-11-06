@@ -1947,8 +1947,6 @@ there once that's in. Next, in order:
    appearance, displays and layouts pages' are, or said to be Hyprland's
    only. The keyboard shortcuts list tidewm's bindings from its
    `GET_BINDINGS`.
-   - Always float's question, after a float key floats a window, is still
-     Hyprland's: it waits on Hyprland's events.
 2. The rest: the greeter's
    displays off, should the greeter move to tidewm (it runs Hyprland);
    the share picker's 16:9 slice, which xdg-desktop-portal-wlr can't

@@ -223,14 +223,17 @@ Singleton {
 
     // Asking to always float a window floated by the keys (SPEC.md §6.4):
     // the classes asked about, and where the declined ones are kept for
-    // the Hyprland session (Rules.askFloat).
+    // the session, Hyprland's or tidewm's (Rules.askFloat).
     property var asks: Rules.NO_ASKS
     property bool asksRead: false
-    readonly property string declinedPath: Rules.declinedPath(Quickshell.env("XDG_RUNTIME_DIR") || "", Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || "")
+    readonly property string declinedPath: Compositor.tidewm
+        ? Rules.declinedPath(Quickshell.env("XDG_RUNTIME_DIR") || "", Quickshell.env("SWAYSOCK") || "", true)
+        : Rules.declinedPath(Quickshell.env("XDG_RUNTIME_DIR") || "", Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || "")
 
-    // conf's float keys left the window at `address` floating: ask, unless
-    // a rule covers it or its class was asked about this session.
-    function floatedByKeys(address) {
+    // conf's float keys left `window` ({address, class, title}, or null for
+    // one not known) floating: ask, unless a rule covers it or its class
+    // was asked about this session.
+    function floatedByKeys(window) {
         if (!root.asksRead) {
             root.asksRead = true;
             const text = root.declinedPath === "" ? null : declined.readNow();
@@ -243,8 +246,7 @@ Singleton {
             }
             root.asks = Object.assign({}, root.asks, { declined: r.declined });
         }
-        const toplevel = Hyprland.toplevels.values.find(t => Ws.normalizeAddress(t.address) === address);
-        const r = Rules.askFloat(root.asks, root.rules, Rules.windowOf(toplevel));
+        const r = Rules.askFloat(root.asks, root.rules, window);
         root.asks = r.state;
         if (r.ask !== null) {
             asker.createObject(root, { window: r.ask }).running = true;
@@ -274,7 +276,7 @@ Singleton {
             return;
         }
         if (root.declinedPath === "") {
-            console.warn("tide: no XDG_RUNTIME_DIR or HYPRLAND_INSTANCE_SIGNATURE, so a restarted shell may ask about floating again");
+            console.warn(`tide: no XDG_RUNTIME_DIR or ${Compositor.tidewm ? "SWAYSOCK" : "HYPRLAND_INSTANCE_SIGNATURE"}, so a restarted shell may ask about floating again`);
             return;
         }
         const error = declined.writeNow(Rules.declinedText(root.asks));
@@ -285,17 +287,27 @@ Singleton {
     }
 
     Connections {
-        target: Hyprland
+        target: Compositor.tidewm ? null : Hyprland
 
         function onRawEvent(event) {
             const address = Rules.floatedEvent(event.name, event.data);
             if (address !== null) {
-                root.floatedByKeys(address);
+                root.floatedByKeys(Rules.windowOf(Hyprland.toplevels.values.find(t => Ws.normalizeAddress(t.address) === address)));
             }
         }
     }
 
-    // The classes not to ask about again this Hyprland session.
+    // tidewm's float keys, from its binding and window events
+    // (TidewmData.qml).
+    Connections {
+        target: Compositor.tidewm ? TidewmData : null
+
+        function onFloatedByKey(window) {
+            root.floatedByKeys(window);
+        }
+    }
+
+    // The classes not to ask about again this session.
     SettingsFile {
         id: declined
 

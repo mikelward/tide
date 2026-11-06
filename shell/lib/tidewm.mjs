@@ -139,6 +139,51 @@ export function markEvents(data) {
     }
 }
 
+// Whether a binding event, its JSON or already parsed, is one of conf's
+// float keys (SPEC.md §6.4): a config binding whose commands toggle or
+// enable floating on the focused window, as tidewm runs them, each at a
+// ; outside double quotes. tidewm sends it before it runs the command, so
+// the window's floating event, if the window floats, comes next
+// (keyFloated).
+export function bindingFloats(data) {
+    const event = parsed(data);
+    const command = event?.change === "run" ? event.binding?.command : null;
+    if (typeof command !== "string") {
+        return false;
+    }
+    const commands = [];
+    let current = "";
+    let quoted = false;
+    for (const c of command) {
+        if (c === '"') {
+            quoted = !quoted;
+        } else if (c === ";" && !quoted) {
+            commands.push(current);
+            current = "";
+            continue;
+        }
+        current += c;
+    }
+    commands.push(current);
+    return commands.some(c => /^\s*floating\s+(toggle|enable)\s*$/i.test(c));
+}
+
+// The window a float key floated, by a window event that came after a
+// float key's binding (`armed`, bindingFloats): {address, class, title},
+// as FloatingData asks about one, when the event is the focused window's
+// `floating` with it floating now, or null.
+// Any window event after the binding settles it, so a float key that
+// floated nothing, as on a fullscreen window, leaves no later floating
+// event, as a rule's or the shell's own, to be taken for it.
+export function keyFloated(armed, data) {
+    const event = parsed(data);
+    const con = event?.container;
+    if (!armed || event?.change !== "floating" || !isWindow(con) || con.type !== "floating_con" || con.focused !== true) {
+        return null;
+    }
+    return { address: String(con.id), class: appOf(con), title: con.name ?? "" };
+}
+
 // A window's app: its Wayland app ID, or an X11 window's class.
 export function appOf(con) {
     return con?.app_id || con?.window_properties?.class || "";
