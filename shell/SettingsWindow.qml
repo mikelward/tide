@@ -3866,6 +3866,89 @@ PanelWindow {
                             font.pixelSize: 13
                         }
 
+                        // Also floating: the floating windows a rule covers
+                        // already, dialogs among them, so their class and
+                        // title can be looked up: Details fills the fields
+                        // and More about this window from one.
+                        Heading {
+                            visible: FloatingData.covered.length > 0
+                            text: "ALSO FLOATING"
+                        }
+
+                        Repeater {
+                            model: FloatingData.covered
+
+                            Item {
+                                id: coveredWindow
+
+                                required property var modelData
+
+                                width: floatingPage.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.right: coveredBy.left
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    textFormat: Text.PlainText
+                                    text: coveredWindow.modelData.title === "" ? coveredWindow.modelData.class : `${coveredWindow.modelData.class} · ${coveredWindow.modelData.title}`
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Text {
+                                    id: coveredBy
+
+                                    anchors.right: details.left
+                                    anchors.rightMargin: 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: coveredWindow.modelData.builtIn ? "Built in" : "Your rule"
+                                    color: Theme.fgDim
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                }
+
+                                Rectangle {
+                                    id: details
+
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: detailsLabel.implicitWidth + 16
+                                    height: 26
+                                    radius: 7
+                                    color: detailsHover.hovered ? Theme.surface2 : "transparent"
+                                    border.width: 1
+                                    border.color: Theme.surface2
+
+                                    Text {
+                                        id: detailsLabel
+
+                                        anchors.centerIn: parent
+                                        text: "Details"
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 12
+                                    }
+
+                                    HoverHandler {
+                                        id: detailsHover
+                                    }
+
+                                    TapHandler {
+                                        onTapped: {
+                                            FloatingData.detailsOpen = true;
+                                            floatingPage.changed(FloatingData.prefillFor(coveredWindow.modelData));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         Text {
                             visible: floatingPage.refused !== ""
                             x: 10

@@ -51,6 +51,9 @@ Singleton {
         : Hyprland.toplevels.values.map(t => Rules.windowOf(t))
     // The page's Floating now: floating windows no rule covers.
     readonly property var unruled: Rules.floatingNow(root.windows, root.rules)
+    // Its Also floating: the floating windows a rule covers, dialogs among
+    // them, each to look up.
+    readonly property var covered: Rules.coveredNow(root.windows, root.rules)
 
     readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`
     readonly property string dir: `${root.configHome}/tide`
