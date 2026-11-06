@@ -72,7 +72,7 @@ Contents:
 - A screensaver/idle policy, and a lock screen that is the **same screen as
   the login screen**, showing the short hostname.
 - **Google Meet screen sharing** that works in Chrome, including sharing a
-  single window or a 16:9 slice of an ultrawide.
+  single window or a whole screen.
 - Screenshots of a window, a screen or a region.
 - A session that starts **exactly one of each thing** and nothing twice.
 
@@ -128,7 +128,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Settings**: the sidebar grouped under Hardware, Windows and General, Keyboard with its shortcuts, and the newer pages: Start at login, Notifications, Clipboard, Power and Workspaces. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
 | **System monitor popover**: the CPU and Memory tabs, and throttling. [`sysmon.png`](docs/mocks/sysmon.png) | ![system monitor](docs/mocks/sysmon.png) |
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
-| **Screen-share picker**: screens, windows, 16:9 area. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
+| **Screen-share picker**: screens and windows. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
 | **Picker**: `Super+V`'s Clipboard tab, and its Characters tab searched by name. [`picker.png`](docs/mocks/picker.png) | ![picker](docs/mocks/picker.png) |
 | **Screenshots**: region and window modes. [`screenshot.png`](docs/mocks/screenshot.png) | ![screenshot](docs/mocks/screenshot.png) |
 | **Minimized windows**: the five ways to show them that were weighed; C, the corner tray, was chosen (§6.7). Its bars still show the chips' old app icons. [`minimized.png`](docs/mocks/minimized.png) | ![minimized windows](docs/mocks/minimized.png) |
@@ -155,8 +155,8 @@ mock's half-pixel size is rounded up: 12.5px is 13.
   with no C++ plugin to rebuild. One Lua layout covers all four modes,
   including the one Hyprland lacks (two columns + stack), and the
   single-window width rule.
-- `xdg-desktop-portal-hyprland` shares single windows and regions, and it
-  accepts a custom picker.
+- `xdg-desktop-portal-hyprland` shares single windows and whole screens,
+  and it accepts a custom picker.
 - Its IPC reports urgency.
 - The existing config in `conf` is a head start.
 
@@ -2057,7 +2057,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | Icon | Shows | Click | Scroll / other |
 |---|---|---|---|
 | **Presenting** (accent) | presenter mode is on (§10) | turns presenter mode off | hover: "Presenting: Do not disturb and keep awake", as tilemo's |
-| Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen, window or area), and the app reading it; stop it from the app | — |
+| Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen or window), and the app reading it; stop it from the app | — |
 | Privacy: mic (orange) | any app is capturing the microphone; the mic slashed while every mic being recorded from is muted (`Super+Shift+M` mutes them all), so a headset an app picked still shows live | per-app list with mute | hover: "Mic on" or "Mic off", as the OSD says, and how many apps are recording |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
 | Keyboard layout | up to three letters of the main keyboard's layout (US, DVO, GER), as tilemo's; only once there are two layouts | the next layout, as `Super+Alt+Space` (§16) | hover: the layout's full name |
@@ -2746,7 +2746,7 @@ See [`notifications.png`](docs/mocks/notifications.png).
     window has it on. That state is kept across config reloads, as Do not
     disturb is.
 - **Presenter mode** (`Super+P`, §10) holds it on along with keep awake.
-- **Automatic while sharing a screen or region:** popups are held and counted
+- **Automatic while sharing a screen:** popups are held and counted
   in the "held while you were sharing" banner.
   - A **window** share holds nothing, since popups aren't in that stream.
   - Popup surfaces also carry Hyprland's `no_screen_share` layer rule, so
@@ -3272,9 +3272,8 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
   - It asks the running shell (`qs ipc`) to show the dialog, and waits on a
     pipe in `$XDG_RUNTIME_DIR` for the answer, since the IPC call returns
     first. After 5 minutes with no answer it closes the dialog and cancels.
-  - It prints one line: `[SELECTION]<flags>/screen:<output>`,
-    `…/window:<id>`, or `…/region:<output>@<x>,<y>,<w>,<h>`. No
-    `[SELECTION]` means cancel.
+  - It prints one line: `[SELECTION]<flags>/screen:<output>` or
+    `…/window:<id>`. No `[SELECTION]` means cancel.
   - With no tide shell running, as in a plain Hyprland login with the same
     `xdph.conf`, it runs xdph's own `hyprland-share-picker` if that's
     installed, so a share still works.
@@ -3289,16 +3288,12 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
     and the focused one. It has no thumbnail there, which needs Hyprland's
     toplevels. It
     offers only the outputs xdpw listed, none for a request for windows
-    alone. xdpw shares no regions, so there's no 16:9 slice there, and its
-    own restore tokens stand in for the reuse box.
+    alone. xdpw's own restore tokens stand in for the reuse box.
 
   The dialog offers:
   - **Screens:** each output, with a live `ScreencopyView` thumbnail.
   - **Windows:** every window, current workspace first, each with a
     thumbnail.
-  - **Area:** a **16:9 slice** centered on each monitor wider than that, in
-    its logical pixels. For 3440×1440 at scale 1 that is
-    `region:DP-1@440,0,2560,1440`.
   - **Default on an ultrawide** (2:1 or wider): the focused window, since a
     whole 3440×1440 screen arrives letterboxed and unreadable in Meet.
     Elsewhere it's the focused monitor.
@@ -3330,8 +3325,8 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
   - The **Sharing** pill is driven by PipeWire instead: an
     `xdph-streaming-*` video source with a running consumer.
   - The `screencast>>` event serves only as a prompt to re-check.
-- **Knowing what is shared.** Popups are held for a screen or region share
-  but not a window share (§9), so the shell needs the source type.
+- **Knowing what is shared.** Popups are held for a screen share but not a
+  window share (§9), so the shell needs the source type.
   - The picker's dialog is the shell's own, so the shell keeps each choice
     it shares, once `tide-share-picker` has the answer: one that never
     reached xdph has no stream.
@@ -3379,8 +3374,8 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
     PipeWire, so there is nothing reliable to watch.
 - **While sharing:**
   - the bar shows the red **Sharing** pill;
-  - popups are held while a screen or region is shared, and not during a
-    window share, which can't show them (§9);
+  - popups are held while a screen is shared, and not during a window
+    share, which can't show them (§9);
   - popups, the notification center and the launcher carry
     `no_screen_share`, so if one does appear, the stream shows black there
     instead of its content;
@@ -4802,7 +4797,7 @@ light/dark switch.
 | Tray icon missing | an app started before the tray watcher | the shell (the watcher) is ordered before autostart |
 | `Super` tap misfires | the launcher opens after every `Super+<key>` on Hyprland 0.56.x | `conf` binds the tap only from Hyprland 0.57, which has the keybind fix; `Super+Space` before (§8) |
 | Dark-on-dark focus hard to see | can't tell which terminal is focused | dim strength is a setting; 0.1 is the next step |
-| Sharing an ultrawide | viewers get a letterboxed strip | the 16:9 area and window-first default in the picker |
+| Sharing an ultrawide | viewers get a letterboxed strip | the window-first default in the picker |
 | "Show in folder" opens the wrong file manager | Dolphin and Nautilus both claim `FileManager1` | a user-level activation file → a session-bound unit with a desktop-aware launcher: Nautilus in tide, Dolphin in Plasma, one session at a time; `doctor` checks (§16.2) |
 | `Terminal=true` apps open in Konsole | GLib's terminal list lacks kitty | `xdg-terminal-exec` with kitty listed first (§16.2) |
 | CLDR zone names | `GMT+1` instead of `BST` | place labels on the bar; tzdata abbreviations wherever an abbreviation shows (§7.3) |
@@ -4828,9 +4823,9 @@ are what "done" means.
 | **M1** | This spec + mocks | agreed; open questions answered |
 | **M2** | Session skeleton + layouts | `setup` installs a session selectable from the current display manager. `doctor` reports no duplicate owners. All four layouts and the single-window rule work per workspace on an ultrawide and on the laptop panel. The focus guard follows §14.1, including each case in §14.2. The Hyprland config is Lua and CI-loaded. Shell memory is measured. |
 | **M3** | Bar + launcher | the bar shows every state in `bar.png` from live data: tray menus, clocks with correct labels and popover abbreviations across a DST fixture, urgency end to end from a kitty bell and from a Chat notification. `Super+Space` opens the launcher (tap-`Super` too, from Hyprland 0.57), and fuzzy search and quick actions work. |
-| **M4** | Notifications, OSD, screenshots | notifications and history survive a shell restart. DND is automatic while sharing a screen or region, and off for a window share. The OSD works. The screen and window screenshots work, including "the window before the launcher"; the frozen region mode follows after the MVP. |
+| **M4** | Notifications, OSD, screenshots | notifications and history survive a shell restart. DND is automatic while sharing a screen, and off for a window share. The OSD works. The screen and window screenshots work, including "the window before the launcher"; the frozen region mode follows after the MVP. |
 | **M5** | Idle, lock, login | the idle timeline works, including through a Meet call. Lock via key, idle, suspend and lid. Crash recovery is tested. The greetd greeter shares the lock component. The keyring unlocks at login. The old sway, waybar, swaync, fuzzel and hyprlock configs are deleted from `conf`. |
-| **M6** | Screen sharing | a Meet share of a window, a 16:9 area and a whole screen, from Chrome; restore tokens where Chrome asks for them; the privacy pill and mic mute. |
+| **M6** | Screen sharing | a Meet share of a window and a whole screen, from Chrome; restore tokens where Chrome asks for them; the privacy pill and mic mute. |
 | **M7** | Theme + settings | one palette drives the shell, GTK 3/4, Qt and Hyprland; light/dark switches the shell, GTK and kitty live, and Qt live or at next launch as §15 says. A side-by-side screenshot of the shell, Nautilus, an adw-gtk3 app, a Qt app and Chrome, in light and in dark, looks like one desktop. The settings panel exists. |
 | **M8** | Named workspaces + switcher | Home is made at login, first on the bar, and outlives being empty; its apps open there. The standing workspaces are always listed, and made when first used. A window you open on home, and a launch from it, ask for a name, with the short name from the title patterns, and Enter, Esc and an existing name each do what §6.5 says. Empty workspaces go once left. The bar lists workspaces by name, in the order made. The switcher opens on the right tab for each key, `Tab` moves between them, and the Windows tab lists every window. `Super+Return` (go), `Super+Shift+Return` (move), `Alt+Tab`, `Super+A` and `Super+Home` work as §6.6 says. `TIDE_WORKSPACE` reaches an app through `uwsm app`, and `tide workspace` prints it. |
 | **M9** | Browser tabs | the Windows tab lists Chrome's tabs through the extension, Enter brings one up, and the tab says so when the extension is missing (§8.3). |
@@ -5104,15 +5099,12 @@ such as `centeredmaster`, scenefx, and what niri, sway and KWin can do beyond
 
 **Against dwl:**
 
-- **Single-window and region capture.** Two separate paths, checked
-  separately:
-  - **Meet sharing** of one window or a 16:9 slice (§12) goes through the
+- **Single-window capture.** Two separate paths, checked separately:
+  - **Meet sharing** of one window or a whole screen (§12) goes through the
     portal: `xdg-desktop-portal-hyprland` today, `xdg-desktop-portal-wlr` on
     a fork. xdg-desktop-portal-wlr has shared single windows since 0.8.0,
     through `ext-image-copy-capture`, and takes an external chooser command.
-    It shares only monitors and windows, though, never a region, so the
-    16:9 slice would have to be built, for example as a virtual 16:9 output
-    mirroring part of the ultrawide.
+    It shares monitors and windows, which is all §12 needs.
   - **`grim -T` window screenshots** (§13) don't use the portal. grim asks the
     compositor directly, through its toplevel list and the
     `ext-image-copy-capture` protocols, so the fork itself must expose them.
@@ -5147,13 +5139,13 @@ local observation.
 **Next steps, if pursued,** before rewriting §3.1. The first three use the
 sources, then a test session on wlroots 0.19/0.20:
 
-1. Check that xdg-desktop-portal-wlr shares a single window and a region in
-   Chrome, through §12's own `tide-share-picker` rather than the
+1. Check that xdg-desktop-portal-wlr shares a single window and a whole
+   screen in Chrome, through §12's own `tide-share-picker` rather than the
    portal's chooser. The picker reads xdph's `XDPH_OUTPUT_SHARING_LIST` and
    `XDPH_WINDOW_SHARING_LIST` and answers in xdph's `[SELECTION]` format, so it
    needs an adapter for xdpw. Run all of §12's flows end to end: the focused
-   window as the default, the 16:9 slice, preselecting the last choice, and
-   the restore flag.
+   window as the default, preselecting the last choice, and the restore
+   flag.
 2. Check that a dwl build exposing the toplevel and `ext-image-copy-capture`
    protocols takes `grim -T` screenshots of the focused window, found through
    the fork's IPC, which is §13's whole Alt+Print flow.
@@ -5190,18 +5182,6 @@ untested.
   must publish it for every window. xdpw waits for the chooser in its only
   loop, so a share already live may stall while the dialog is open
   (inferred, untested).
-- **16:9 slice: missing.** xdpw shares a whole output or a window, nothing
-  smaller, and `ext-image-capture-source-v1` defines only output and
-  toplevel sources. A slice needs one of three things, all untried:
-  - a virtual output covering the slice, which every client sees and the bar
-    and the fork's monitors must skip;
-  - a pseudo-window over the slice, which the fork captures through
-    wlroots 0.20's scene-node source and lists as a window;
-  - an xdpw patch that sends a `Region:` answer through wlr-screencopy's
-    region capture, which dwl offers: a second fork to keep.
-
-  The first two can also change which output wlroots counts a window in the
-  slice as being on, for its frame timing and preferred scale.
 - **Restore flag: missing.** xdpw grants a restore token only from its own
   `XDPW_PERSIST_MODE` environment variable, for every app at once, and
   writes restore data only for monitors, so a window share never gets one.
@@ -5212,12 +5192,11 @@ untested.
   source, both of which dwl 0.9 offers. dwl's only IPC, its status lines,
   doesn't print the identifier, so the fork adds it.
 
-So the deciding question splits. Window sharing and window screenshots work
-on dwl 0.9 as it stands. The 16:9 slice and the restore flag each need code
-of our own, in the fork or in a patched xdpw.
+So the deciding question passes. Window sharing and window screenshots work
+on dwl 0.9 as it stands. Only the restore flag needs code of our own, in a
+patched xdpw.
 
-**Decided** (2026-11-02): a window share is enough for Meet, so a fork drops
-the 16:9 slice, and the deciding question passes for dwl. Until xdpw asks
+**Decided** (2026-11-02): a window share is enough for Meet. Until xdpw asks
 per share, every share prompts, since the restore flag has nothing to set.
 
 **Step 3, Debian** (checked 2026-11-03, under Sources):
@@ -5355,7 +5334,7 @@ makes every policy decision. It waits until river exposes what tide needs
   River has to report every key and button press in its sequence, without
   consuming them, or this waits too.
 - **Capture exclusion.** §12 shows the launcher and notifications black to
-  the far end of a screen or region share, while they stay visible on your
+  the far end of a screen share, while they stay visible on your
   own screen. Hyprland does that with `no_screen_share`. river 0.4.8 has no
   way to mark a surface for that: `river-layer-shell-v1` sets focus,
   exclusive area and the default output, and the window-management
@@ -5363,9 +5342,7 @@ makes every policy decision. It waits until river exposes what tide needs
   black something out of what it hands the portal, so river has to add it,
   or this waits too.
 - **Capture checks.** `grim -T`, screen and region screenshots, and window and
-  monitor sharing through xdg-desktop-portal-wlr, including §12's 16:9 slice,
-  which xdg-desktop-portal-wlr doesn't offer and would have to be built.
-  `tide-share-picker` needs an adapter, as in §21.1: xdg-desktop-portal-wlr
+  monitor sharing through xdg-desktop-portal-wlr. `tide-share-picker` needs an adapter, as in §21.1: xdg-desktop-portal-wlr
   0.8.4's chooser gets no list of windows and outputs, and takes only
   `Monitor: <name>` or `Window: <identifier>` back, while the picker reads
   xdph's lists and answers `[SELECTION]`. Without it, every choice reads as

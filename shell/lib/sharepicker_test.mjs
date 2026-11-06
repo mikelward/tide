@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 import {
-    REPEAT_MS, answerCommand, answerOutcome, areaFor, decimalToHex, isUltrawide, namedWindows, offeredScreens, options, orderWindows,
+    REPEAT_MS, answerCommand, answerOutcome, decimalToHex, isUltrawide, namedWindows, offeredScreens, options, orderWindows,
     parseWindows, preselect, revealY, selectionLine, shareLabel, validReply
 } from "./sharepicker.mjs";
 
@@ -47,14 +47,6 @@ test("an ultrawide is 2:1 or wider", () => {
     assert.equal(isUltrawide(null), false);
 });
 
-test("the 16:9 area is centered on a monitor wider than 16:9", () => {
-    assert.deepEqual(areaFor(wide), { output: "DP-1", x: 440, y: 0, w: 2560, h: 1440 });
-    // Scale 1.25 gives 2752×1152 logical pixels.
-    assert.deepEqual(areaFor({ name: "DP-1", width: 2752, height: 1152 }), { output: "DP-1", x: 352, y: 0, w: 2048, h: 1152 });
-    assert.equal(areaFor({ name: "a", width: 1920, height: 1080 }), null);
-    assert.equal(areaFor(laptop), null);
-});
-
 test("windows on the current workspace come first, then by workspace", () => {
     const ws = { a: 3, b: 2, c: 1, d: 2 };
     const windows = ["a", "b", "c", "d", "e"].map(x => ({ id: x, address: x }));
@@ -62,7 +54,7 @@ test("windows on the current workspace come first, then by workspace", () => {
     assert.deepEqual(order, ["b", "d", "c", "a", "e"]);
 });
 
-test("options run screens, windows, then areas, with xdph's keys", () => {
+test("options run screens, then windows, with xdph's keys, and no area of a wide monitor", () => {
     const windows = parseWindows("11[HC>]kitty[HT>]~/src[HE>]255[HA>]22[HC>]chrome[HT>][HE>]0[HA>]");
     const opts = options([wide, laptop], windows, addr => (addr === "ff" ? 1 : null), 1);
     assert.deepEqual(opts.map(o => o.key), [
@@ -70,7 +62,6 @@ test("options run screens, windows, then areas, with xdph's keys", () => {
         "screen:eDP-1",
         "window:11",
         "window:22",
-        "region:DP-1@440,0,2560,1440",
     ]);
     assert.equal(opts[2].label, "~/src");
     assert.equal(opts[2].detail, "1");
@@ -91,10 +82,10 @@ test("an ultrawide opens on the focused window, other monitors on the screen", (
     assert.equal(preselect([], { screen: null, address: null }, null, 0), -1);
 });
 
-test("on tidewm, whose portal shares no regions, no 16:9 slice is offered", () => {
+test("on tidewm, a window is xdg-desktop-portal-wlr's", () => {
     // xdg-desktop-portal-wlr's identifier, which holds while the window does
     const windows = parseWindows("a1b2[HC>][HT>]notes[HE>]0[HA>]");
-    const opts = options([wide, laptop], windows, () => null, null, false);
+    const opts = options([wide, laptop], windows, () => null, null);
     assert.deepEqual(opts.map(o => o.key), ["screen:DP-1", "screen:eDP-1", "window:a1b2"]);
     // A window xdg-desktop-portal-wlr offers has no class or address
     assert.equal(opts[2].label, "notes");
@@ -124,7 +115,7 @@ test("xdph's request may share any screen, xdpw's only the outputs it offered", 
 
 test("a request within 10 s opens on the last choice, while it's offered", () => {
     const opts = options([wide, laptop], [], () => null, 1);
-    const last = { key: "region:DP-1@440,0,2560,1440", time: 1000 };
+    const last = { key: "screen:DP-1", time: 1000 };
     const focus = { screen: laptop, address: null };
     assert.equal(opts[preselect(opts, focus, last, 1000 + REPEAT_MS)].key, last.key);
     assert.equal(opts[preselect(opts, focus, last, 1001 + REPEAT_MS)].key, "screen:eDP-1");
@@ -138,13 +129,11 @@ test("the selection line is xdph's format, with r for reuse", () => {
     const opts = options([wide], parseWindows("11[HC>]kitty[HT>]a[HE>]255[HA>]"), () => 1, 1);
     assert.equal(selectionLine(opts[0], false), "[SELECTION]/screen:DP-1");
     assert.equal(selectionLine(opts[1], true), "[SELECTION]r/window:11");
-    assert.equal(selectionLine(opts[2], false), "[SELECTION]/region:DP-1@440,0,2560,1440");
 });
 
 test("the share button names what it shares", () => {
     assert.equal(shareLabel({ kind: "screen" }), "Share screen");
     assert.equal(shareLabel({ kind: "window" }), "Share window");
-    assert.equal(shareLabel({ kind: "region" }), "Share area");
     assert.equal(shareLabel(null), "Share");
 });
 

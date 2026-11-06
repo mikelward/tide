@@ -39,7 +39,7 @@
 <body class="sheet" data-width="1320" data-scale="2">
 
 <h1>Screen-share picker</h1>
-<p class="lede">When an app (Chrome, for Meet) asks the portal to share, <code>xdg-desktop-portal-hyprland</code> runs tide’s picker instead of its own. One dialog lists screens, windows and areas. <b>Enter</b> shares the highlighted choice, and arrow keys move through them. While anything is being shared, the bar shows a red <b>Sharing</b> pill; while a screen or area is shared, popups are held too.</p>
+<p class="lede">When an app (Chrome, for Meet) asks the portal to share, <code>xdg-desktop-portal-hyprland</code> runs tide’s picker instead of its own. One dialog lists screens and windows. <b>Enter</b> shares the highlighted choice, and arrow keys move through them. While anything is being shared, the bar shows a red <b>Sharing</b> pill; while a screen is shared, popups are held too.</p>
 
 <div class="stage theme-dark">
   <div class="bar">
@@ -130,23 +130,6 @@
       </div>
     </div>
 
-    <div class="sec">Area</div>
-    <div class="opts">
-      <div class="opt">
-        <div class="th" style="width:250px;height:105px">
-          <div class="w" style="left:0;top:0;right:0;bottom:0;background:#26262c"></div>
-          <div class="w" style="left:24%;top:0;width:52%;bottom:0;box-shadow:0 0 0 2px #78aeed inset;background:rgba(120,174,237,.12)"></div>
-        </div>
-        <div class="lb"><i class="ms">crop_16_9</i>16:9 in the middle of DP-1<small>2560×1440</small></div>
-      </div>
-      <div class="opt">
-        <div class="th" style="width:250px;height:105px;display:flex;align-items:center;justify-content:center;color:var(--fg-dim)">
-          <i class="ms" style="font-size:34px">highlight_alt</i>
-        </div>
-        <div class="lb"><i class="ms">crop_free</i>Select a region…</div>
-      </div>
-    </div>
-
     <div class="foot">
       <span class="chk"><i class="ms">check</i></span><span>Let this app reuse this choice</span>
       <span class="sp"></span>
@@ -155,7 +138,7 @@
     </div>
   </div>
 </div>
-<p class="note"><b>Why an “Area” option:</b> a whole 3440×1440 ultrawide shared to Meet arrives letterboxed and unreadable. A 16:9 slice of it (or a single window) fills viewers’ screens. <b>Reuse</b> grants a portal restore token (the <code>r</code> flag), for apps that ask to persist. Chrome opens several portal sessions for one share, so a repeat request within 10&nbsp;s opens with the last choice preselected: one <b>Enter</b>, never a silent reuse. The portal doesn’t say which app is asking, so the title stays generic. <b>Ultrawide default:</b> the focused window is preselected, not the whole screen.</p>
+<p class="note"><b>Reuse</b> grants a portal restore token (the <code>r</code> flag), for apps that ask to persist. Chrome opens several portal sessions for one share, so a repeat request within 10&nbsp;s opens with the last choice preselected: one <b>Enter</b>, never a silent reuse. The portal doesn’t say which app is asking, so the title stays generic. <b>Ultrawide default:</b> the focused window is preselected, not the whole screen, since a whole 3440×1440 ultrawide shared to Meet arrives letterboxed and unreadable.</p>
 
 </body>
 </html>

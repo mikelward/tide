@@ -110,12 +110,10 @@ test("an unrelated stream that comes first while a window choice waits stays hel
     assert.equal(kindOf(t, 41), "screen");
 });
 
-test("a screen or area chosen holds popups", () => {
-    for (const kind of ["screen", "region"]) {
-        const s = pair([["chose", kind, 1000], ["nodes", [40], 2000], settled(2000)]);
-        assert.equal(kindOf(s, 40), kind);
-        assert.equal(holdsPopups([share(40)], s), true, kind);
-    }
+test("a screen chosen holds popups", () => {
+    const s = pair([["chose", "screen", 1000], ["nodes", [40], 2000], settled(2000)]);
+    assert.equal(kindOf(s, 40), "screen");
+    assert.equal(holdsPopups([share(40)], s), true);
 });
 
 test("a window share alongside an unnamed one still holds popups", () => {
@@ -194,13 +192,11 @@ test("the Sharing pill shows while any share is live", () => {
 test("the Sharing pill's popover names what each share is", () => {
     const s = pair([
         ["chose", "window", 1000, "Meet - Design review"], ["nodes", [40], 2000],
-        ["chose", "region", 20000, "16:9 in the middle of DP-1"], ["nodes", [40, 41], 21000],
-        ["chose", "screen", 40000, "eDP-1"], ["nodes", [40, 41, 42], 41000],
+        ["chose", "screen", 40000, "eDP-1"], ["nodes", [40, 41], 41000],
         settled(41000),
     ]);
-    assert.deepEqual(shareRows([share(40), share(41), share(42)], s), [
+    assert.deepEqual(shareRows([share(40), share(41)], s), [
         { icon: "focus-windows-symbolic", label: "Window: Meet - Design review" },
-        { icon: "selection-mode-symbolic", label: "Area: 16:9 in the middle of DP-1" },
         { icon: "video-display-symbolic", label: "Screen: eDP-1" },
     ]);
 });

@@ -7,8 +7,8 @@ import "lib/share.mjs" as Share
 
 // Whether a screen share is live (SPEC.md §12): an xdph screencast stream
 // with something consuming it, from PipeWire rather than Hyprland's
-// screencast>> event, which fires for any screencopy. While a screen or
-// area is shared, popups are held (§9), and the notification center counts
+// screencast>> event, which fires for any screencopy. While a screen is
+// shared, popups are held (§9), and the notification center counts
 // them; a window share, known from the share picker's choice, holds none.
 Singleton {
     id: root
@@ -46,8 +46,8 @@ Singleton {
     // Streams already there at startup have no choice to pair with.
     Component.onCompleted: root.apply(Share.nodesSeen(root.pairing, root.shareNodes, Date.now()))
 
-    // The share picker's choice: "screen", "window" or "region", and the
-    // option's label.
+    // The share picker's choice: "screen" or "window", and the option's
+    // label.
     function chose(kind, label) {
         root.apply(Share.chose(root.pairing, kind, Date.now(), label));
     }

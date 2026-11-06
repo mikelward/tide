@@ -88,8 +88,8 @@ run --allow-token
 check "--allow-token starts reuse checked" contains "$(cat "$tmp/log")" "$(printf '\ntrue\n')"
 check "--allow-token still prints the answer" test "$out" = '[SELECTION]/screen:DP-1'
 
-FAKE_ANSWER='[SELECTION]r/region:DP-1@440,0,2560,1440' run
-check "a region answer with reuse is printed" test "$out" = '[SELECTION]r/region:DP-1@440,0,2560,1440'
+FAKE_ANSWER='[SELECTION]r/window:11' run
+check "a window answer with reuse is printed" test "$out" = '[SELECTION]r/window:11'
 
 FAKE_ANSWER='' run
 check "a cancel prints nothing" test -z "$out"
@@ -196,9 +196,6 @@ check "--dmenu: a window is xdpw's line for it" test "$out" = 'Window: ~/src (ki
 FAKE_ANSWER='' dmenu
 check "--dmenu: a cancel prints nothing" test -z "$out"
 check "--dmenu: a cancel exits 0" test "$status" -eq 0
-FAKE_ANSWER='[SELECTION]/region:DP-1@440,0,2560,1440' dmenu
-check "--dmenu: a region prints nothing" test -z "$out"
-check "--dmenu: a region fails, as xdpw shares none" contains "$err" "xdg-desktop-portal-wlr shares no regions"
 FAKE_ANSWER='[SELECTION]/window:b2' dmenu
 check "--dmenu: a window xdpw didn't list prints nothing" test -z "$out"
 check "--dmenu: and says so" contains "$err" "chose something xdg-desktop-portal-wlr didn't offer"

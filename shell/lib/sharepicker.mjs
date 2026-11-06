@@ -65,23 +65,6 @@ export function isUltrawide(screen) {
     return !!screen && screen.height > 0 && screen.width >= 2 * screen.height;
 }
 
-// The 16:9 slice in the middle of a monitor wider than 16:9, in its logical
-// pixels, which is what xdph's `region:` takes. For 3440×1440 at scale 1,
-// x 440, width 2560. A monitor no wider than 16:9 has none.
-export function areaFor(screen) {
-    if (!screen || !(screen.height > 0) || screen.width * 9 <= screen.height * 16) {
-        return null;
-    }
-    const w = Math.round(screen.height * 16 / 9);
-    return {
-        output: screen.name,
-        x: Math.floor((screen.width - w) / 2),
-        y: 0,
-        w: w,
-        h: screen.height
-    };
-}
-
 // The windows in the dialog's order: the current workspace's first, then by
 // workspace number, keeping xdph's order within one. A window Hyprland
 // doesn't place (`workspaceOf` gives null) goes last.
@@ -100,10 +83,9 @@ export function orderWindows(windows, workspaceOf, current) {
 }
 
 // Every option, in the order the arrow keys move through them: screens,
-// windows, then areas, unless `regions` is false, as on tidewm, whose
-// xdg-desktop-portal-wlr shares none. Each has the key a remembered choice
-// is matched by and the selection xdph reads.
-export function options(screens, windows, workspaceOf, current, regions = true) {
+// then windows. Each has the key a remembered choice is matched by and the
+// selection the portal reads.
+export function options(screens, windows, workspaceOf, current) {
     const all = [];
     for (const s of screens) {
         all.push({ kind: "screen", key: `screen:${s.name}`, screen: s.name, label: s.name, detail: `${s.width}×${s.height}` });
@@ -118,19 +100,6 @@ export function options(screens, windows, workspaceOf, current, regions = true) 
             detail: ws === null || ws === undefined ? "" : String(ws),
             cls: w.cls
         });
-    }
-    for (const s of regions ? screens : []) {
-        const a = areaFor(s);
-        if (a) {
-            all.push({
-                kind: "region",
-                key: `region:${a.output}@${a.x},${a.y},${a.w},${a.h}`,
-                screen: a.output,
-                area: a,
-                label: `16:9 in the middle of ${a.output}`,
-                detail: `${a.w}×${a.h}`
-            });
-        }
     }
     return all;
 }
@@ -231,7 +200,7 @@ export function shareLabel(option) {
     if (!option) {
         return "Share";
     }
-    return { screen: "Share screen", window: "Share window", region: "Share area" }[option.kind] ?? "Share";
+    return { screen: "Share screen", window: "Share window" }[option.kind] ?? "Share";
 }
 
 // Whether `path` is a reply pipe `tide-share-picker` made, named as it
