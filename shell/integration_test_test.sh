@@ -12,8 +12,10 @@
 # that runs the app typed or doesn't, a name prompt that goes to the
 # workspace typed or doesn't, a settings panel that opens the
 # Network page's app or doesn't, and opens Keyboard for keys or doesn't, a lock that can't read its
-# keyboards, or unlocks or doesn't, and a greeter that logs in or doesn't.
-# The stand-in Hyprland, hyprctl, tide-sysmon, gsettings, nmcli and greetd
+# keyboards, or unlocks or doesn't, a greeter that logs in or doesn't, and
+# a shell in tidewm's session that asks Hyprland, never asks for its
+# windows or listens for them, writes none of tidewm's files, or leaves
+# home renamed. The stand-in Hyprland, tidewm, hyprctl, tide-sysmon, gsettings, nmcli and greetd
 # are the integration test's own, and the stand-in gsettings and nmcli answer as
 # GNOME's and NetworkManager's would.
 
@@ -438,6 +440,39 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                 ;;
         esac
     fi
+# In tidewm's session, it asks tidewm for its workspaces, monitors and
+# windows, and listens to it, as Quickshell's I3 module and TidewmData do,
+# naming home in again (tidewm_client.py); and as the shell, asks
+# tide-msg for the window tree, the mice and touchpads, the key bindings
+# and the monitors, keeps home, and writes tidewm's settings files and has
+# tidewm reload them. Each of DIR/tidewm-treeless, tidewm-no-files and
+# tidewm-asks-hyprland makes it skip the tree, write no files, or run
+# hyprctl too.
+elif test -n "\$SWAYSOCK"; then
+    python3 "\$(dirname "\$0")/tidewm_client.py" &
+    until test -e "\$XDG_RUNTIME_DIR/tidewm_client.ready"; do sleep 0.1; done
+    rm "\$XDG_RUNTIME_DIR/tidewm_client.ready" || exit 1
+    if test "\$1" = -c; then
+        if ! test -e "\$(dirname "\$0")/tidewm-treeless"; then
+            tide-msg --type get_tree >/dev/null 2>&1 &
+        fi
+        tide-msg --type get_inputs >/dev/null 2>&1 &
+        tide-msg --type get_bindings >/dev/null 2>&1 &
+        tide-msg --type get_outputs >/dev/null 2>&1 &
+        tide-msg persist workspace in >/dev/null 2>&1 &
+        if test -e "\$(dirname "\$0")/tidewm-asks-hyprland"; then
+            hyprctl activewindow -j >/dev/null 2>&1 &
+        fi
+        {
+            if ! test -e "\$(dirname "\$0")/tidewm-no-files"; then
+                mkdir -p "\$HOME/.config/tidewm" &&
+                    for page in input appearance outputs layouts floating; do
+                        printf '# Written by tide from %s.json and %s.local.json\n' "\$page" "\$page" >"\$HOME/.config/tidewm/tide-\$page.conf"
+                    done
+            fi
+            tide-msg reload >/dev/null 2>&1
+        } &
+    fi
 fi
 case "\$1" in
     -c) config=shell ;;
@@ -513,6 +548,66 @@ open(os.environ["XDG_RUNTIME_DIR"] + "/hyprland_client.ready", "w").close()
 parent = os.getppid()
 while os.getppid() == parent:
     time.sleep(0.2)
+EOF
+    # Quickshell's I3 module and TidewmData on tidewm's IPC: the module
+    # subscribes to workspaces and monitors, asks for both, and names home
+    # in again as the shell does once tidewm has renamed it, unless
+    # DIR/tidewm-keeps-rename is there; TidewmData subscribes to windows,
+    # workspaces and ticks, unless DIR/tidewm-deaf is there. Each holds its
+    # connection, as Quickshell does, until qs is gone.
+    cat >"$1/tidewm_client.py" <<'EOF'
+import os, socket, struct, time
+here = os.path.dirname(os.path.abspath(__file__))
+def message(kind, payload=""):
+    data = payload.encode()
+    return b"i3-ipc" + struct.pack("=II", len(data), kind) + data
+held = [socket.socket(socket.AF_UNIX)]
+held[-1].connect(os.environ["SWAYSOCK"])
+requests = message(2, '["workspace","output"]') + message(1) + message(3)
+if not os.path.exists(os.path.join(here, "tidewm-keeps-rename")):
+    requests += message(0, "rename workspace mail to in")
+held[-1].sendall(requests)
+if not os.path.exists(os.path.join(here, "tidewm-deaf")):
+    held.append(socket.socket(socket.AF_UNIX))
+    held[-1].connect(os.environ["SWAYSOCK"])
+    held[-1].sendall(message(2, '["window","workspace","tick"]'))
+open(os.environ["XDG_RUNTIME_DIR"] + "/tidewm_client.ready", "w").close()
+parent = os.getppid()
+while os.getppid() == parent:
+    time.sleep(0.2)
+EOF
+    # tide-msg as the go stub builds it: as the real one, it asks tidewm at
+    # SWAYSOCK one thing, prints a query's reply, and exits 1 for a command
+    # tidewm refused, so a stand-in that doesn't answer at once hangs it.
+    cat >"$1/tide_msg.py" <<'EOF'
+import json, os, socket, struct, sys
+queries = {"get_workspaces": 1, "get_outputs": 3, "get_tree": 4, "get_version": 7, "get_config": 9,
+           "get_inputs": 100, "get_seats": 101, "get_bindings": 200}
+args = sys.argv[1:]
+if args[:1] == ["--type"] and len(args) == 2 and args[1] in queries:
+    kind, payload = queries[args[1]], ""
+else:
+    kind, payload = 0, " ".join(args[1:] if args[:1] == ["--"] else args)
+conn = socket.socket(socket.AF_UNIX)
+conn.connect(os.environ["SWAYSOCK"])
+data = payload.encode()
+conn.sendall(b"i3-ipc" + struct.pack("=II", len(data), kind) + data)
+def read(n):
+    data = b""
+    while len(data) < n:
+        chunk = conn.recv(n - len(data))
+        if not chunk:
+            sys.exit("tide-msg: no reply")
+        data += chunk
+    return data
+size, _ = struct.unpack("=II", read(14)[6:])
+reply = read(size).decode()
+if kind != 0:
+    print(reply)
+    sys.exit(0)
+failed = [r["error"] for r in json.loads(reply) if not r["success"]]
+if failed:
+    sys.exit(f"tide-msg: {payload}: {'; '.join(failed)}")
 EOF
     # A greeter on greetd's IPC: each password wtype types is an attempt,
     # whatever wtype types next answers greetd's next prompt, and a login
@@ -604,10 +699,12 @@ EOF
     cat >"$1/go" <<EOF
 #!/bin/sh
 # As the integration test runs it: go build -buildvcs=false -o OUT ./cmd/tide-tz,
-# then the same for ./cmd/tide-greetd, which the stand-in greeter never runs.
+# then the same for ./cmd/tide-greetd, which the stand-in greeter never runs,
+# and ./cmd/tide-msg, which is tide_msg.py.
 case "\$1 \$2 \$3 \$5" in
 "build -buildvcs=false -o ./cmd/tide-tz") printf '#!/bin/sh\n%s\n' '${8:-:}' >"\$4" ;;
 "build -buildvcs=false -o ./cmd/tide-greetd") printf '#!/bin/sh\n' >"\$4" ;;
+"build -buildvcs=false -o ./cmd/tide-msg") printf '#!/bin/sh\nexec python3 %s "\$@"\n' "\$(dirname "\$0")/tide_msg.py" >"\$4" ;;
 *) exit 2 ;;
 esac
 chmod +x "\$4"
@@ -697,6 +794,8 @@ check "and says the lock loaded" contains "$out" "ok: Quickshell loads the lock"
 check "and named a clocks.local.json it can't take" contains "$out" "ok: the lock names a clocks.local.json it can't take, and keeps its clock's settings"
 check "and a wallpaper record it can't take" contains "$out" "ok: the lock names a wallpaper record it can't take"
 check "and says the greeter loaded" contains "$out" "ok: Quickshell loads the greeter"
+check "and the shell in tidewm's session" contains "$out" "ok: Quickshell loads the shell in tidewm's session"
+check "with tidewm's files written and home named again" contains "$out" "ok: in tidewm's session, the shell writes tidewm's settings files, and names home again"
 }
 
 case_2() {
@@ -1255,7 +1354,7 @@ case_61() {
 stubs "$tmp/clean" "exit 0" "$loaded"
 run "$tmp/clean" GO=tide-test-no-such-go
 check "without Go, a run that requires Quickshell fails" test "$code" -ne 0
-check "and says so" contains "$out" "no tide-test-no-such-go (to build tide-tz, which the bar's clocks run, and tide-greetd, which the greeter talks to greetd through) on PATH"
+check "and says so" contains "$out" "no tide-test-no-such-go (to build tide-tz, which the bar's clocks run, tide-greetd, which the greeter talks to greetd through, and tide-msg, which the shell asks tidewm through) on PATH"
 }
 
 case_62() {
@@ -1522,7 +1621,7 @@ chmod +x "$tmp/shots/grim" || exit 1
 run "$tmp/shots" TIDE_SCREENSHOTS="$tmp/shots/out"
 check "a run asked for screenshots passes" test "$code" -eq 0
 # Each face shows: none is photographed behind a lock left behind.
-for _face in shell lock greeter; do
+for _face in shell tidewm lock greeter; do
     check "and takes one of the $_face" test -s "$tmp/shots/out/$_face.png"
 done
 }
@@ -1534,6 +1633,138 @@ chmod +x "$tmp/no-shot/grim" || exit 1
 run "$tmp/no-shot" TIDE_SCREENSHOTS="$tmp/no-shot/out"
 check "a screenshot that fails fails the run" test "$code" -ne 0
 check "and says so" contains "$out" "couldn't take a screenshot of the shell: no screencopy"
+}
+
+case_107() {
+stubs "$tmp/tidewm-hyprctl" "exit 0" "$loaded"
+: >"$tmp/tidewm-hyprctl/tidewm-asks-hyprland" || exit 1
+run "$tmp/tidewm-hyprctl"
+check "a shell that runs hyprctl in tidewm's session fails" test "$code" -ne 0
+check "and says what it ran" contains "$out" "the shell ran hyprctl in tidewm's session:
+hyprctl activewindow -j"
+}
+
+case_108() {
+stubs "$tmp/tidewm-hyprland" "exit 0" "$loaded"
+# What Quickshell's Hyprland module says of a request with no Hyprland to
+# ask, which the Hyprland session's shells never make.
+echo "  WARN quickshell.hyprland.ipc: Error making request: QLocalSocket::ServerNotFoundError request: j/clients" >"$tmp/tidewm-hyprland/load-shell.txt" || exit 1
+run "$tmp/tidewm-hyprland"
+check "a shell that asks Quickshell's Hyprland module in tidewm's session fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell asked Hyprland in tidewm's session:"
+check "after the Hyprland session's shell passed" contains "$out" "ok: Quickshell loads the shell"
+}
+
+case_109() {
+stubs "$tmp/tidewm-treeless" "exit 0" "$loaded"
+: >"$tmp/tidewm-treeless/tidewm-treeless" || exit 1
+run "$tmp/tidewm-treeless"
+check "a shell that never asks tidewm for its windows fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell never asked tide-msg for tidewm's windows"
+}
+
+case_110() {
+stubs "$tmp/tidewm-deaf" "exit 0" "$loaded"
+: >"$tmp/tidewm-deaf/tidewm-deaf" || exit 1
+run "$tmp/tidewm-deaf"
+check "a shell that never listens for tidewm's window events fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell never listened for the stand-in tidewm's window events"
+}
+
+case_111() {
+stubs "$tmp/tidewm-rename" "exit 0" "$loaded"
+: >"$tmp/tidewm-rename/tidewm-keeps-rename" || exit 1
+run "$tmp/tidewm-rename"
+check "a shell that leaves home renamed on tidewm fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell should name home in again once tidewm renames it mail"
+}
+
+case_112() {
+stubs "$tmp/tidewm-files" "exit 0" "$loaded"
+: >"$tmp/tidewm-files/tidewm-no-files" || exit 1
+run "$tmp/tidewm-files"
+check "a shell that writes no tidewm settings files fails" test "$code" -ne 0
+check "and says which" contains "$out" "the shell should write tidewm's tide-input.conf in"
+}
+
+case_113() {
+# The stand-in tidewm holds a listener's requests until a drain, answering
+# then with the first tick after a subscription to ticks; answers any other
+# connection at once, as tide-msg's; refuses a command tidewm doesn't know;
+# and sends each listener only the events it subscribed to.
+mkdir -p "$tmp/tidewm" || exit 1
+python3 shell/tidewm_stand_in.py serve "$tmp/tidewm/ipc" >"$tmp/tidewm/serve.log" 2>&1 &
+_serve=$!
+i=0
+until test -S "$tmp/tidewm/ipc/control.sock" || test "$i" -ge 50; do
+    sleep 0.1
+    i=$((i + 1))
+done
+out=$(SWAYSOCK="$tmp/tidewm/ipc/ipc.sock" python3 - "$tmp/tidewm/ipc" <<'EOF' 2>&1
+import json, os, socket, struct, subprocess, sys
+directory = sys.argv[1]
+def message(kind, payload=""):
+    data = payload.encode()
+    return b"i3-ipc" + struct.pack("=II", len(data), kind) + data
+def connect():
+    conn = socket.socket(socket.AF_UNIX)
+    conn.connect(os.environ["SWAYSOCK"])
+    conn.settimeout(5)
+    return conn
+def read(conn):
+    data = b""
+    while len(data) < 14:
+        data += conn.recv(14 - len(data))
+    size, kind = struct.unpack("=II", data[6:])
+    body = b""
+    while len(body) < size:
+        body += conn.recv(size - len(body))
+    return kind, json.loads(body)
+def ask(command):
+    return subprocess.run([sys.executable, "shell/tidewm_stand_in.py", command, directory],
+                          capture_output=True, text=True, check=True).stdout
+listener = connect()
+listener.sendall(message(2, '["window","tick"]') + message(1))
+# A tide-msg, while the listener waits: answered at once.
+msg = connect()
+msg.sendall(message(4))
+kind, tree = read(msg)
+print("tree:", kind, tree["type"], len(tree["nodes"][0]["nodes"]))
+msg = connect()
+msg.sendall(message(0, "[con_id=12] focus; frobnicate; [title=x] kill; persist workspace in"))
+print("commands:", [r["success"] for r in read(msg)[1]])
+listener.settimeout(0.3)
+try:
+    print("before the drain:", listener.recv(1))
+except socket.timeout:
+    print("before the drain: nothing")
+listener.settimeout(5)
+print("drained:", ask("drain").splitlines())
+print("then:", [(hex(k), b if k != 1 else len(b)) for k, b in (read(listener) for _ in range(3))])
+other = connect()
+other.sendall(message(2, '["workspace"]'))
+ask("drain")
+read(other)
+print("played to:", ask("play").strip())
+kinds = set()
+listener.settimeout(0.5)
+try:
+    while True:
+        kinds.add(hex(read(listener)[0]))
+except socket.timeout:
+    pass
+print("listener heard:", sorted(kinds))
+EOF
+)
+kill "$_serve"
+wait "$_serve"
+check "the stand-in tidewm answers a tide-msg at once, while a listener waits" contains "$out" "tree: 4 root 5"
+check "and refuses a command tidewm doesn't know, or criteria it doesn't take" contains "$out" "commands: [True, False, False, True]"
+check "and holds the listener's requests until a drain" contains "$out" "before the drain: nothing"
+check "which answers them, and says so" contains "$out" "drained: ['subscribe [\"window\",\"tick\"]', 'get_workspaces']"
+check "with the first tick after the subscription" contains "$out" "then: [('0x2', {'success': True}), ('0x80000007', {'first': True, 'payload': ''}), ('0x1', 5)]"
+check "and plays to each listener subscribed to an event" contains "$out" "played to: 2"
+check "only what it subscribed to" contains "$out" "listener heard: ['0x80000003']"
 }
 
 # --case N RESULT: run case_N alone, and write its passes and failures to
