@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, markEvents, appOf, shellWindows, activeWindow,
-    promptEvent, homeEvent, sendCommand, floatCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand,
+    promptEvent, homeEvent, sendCommand, floatCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand, shortcutCommand,
 } from "./tidewm.mjs";
 import { minimizedFrom, trayWindows } from "./minimized.mjs";
 import { promptWanted } from "./workspacenames.mjs";
@@ -269,4 +269,12 @@ test("a window is sent home without following it", () => {
 test("a window a new floating rule covers is floated by its container ID", () => {
     assert.equal(floatCommand("42"), "[con_id=42] floating enable");
     assert.equal(floatCommand("0xabc"), null);
+});
+
+test("the picker's paste is tidewm's send_shortcut, in its spelling", () => {
+    assert.equal(shortcutCommand("42", "CTRL", "V"), "[con_id=42] send_shortcut ctrl+v");
+    assert.equal(shortcutCommand("42", "CTRL SHIFT", "V"), "[con_id=42] send_shortcut ctrl+shift+v");
+    assert.equal(shortcutCommand("0xabc", "CTRL", "V"), null);
+    assert.throws(() => shortcutCommand("42", "ctrl; kill", "V"), /not modifiers/);
+    assert.throws(() => shortcutCommand("42", "CTRL", "v; kill"), /not a key/);
 });

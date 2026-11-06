@@ -2460,7 +2460,8 @@ See [`picker.png`](docs/mocks/picker.png).
   - Hyprland 0.56.2's `hl.dsp.send_shortcut({ mods, key, window })`
     sends it (`LuaBindingsDispatchers.cpp`). Given a window, it moves
     the keyboard there for the one key, then back, so it doesn't wait
-    for the picker's surface to go.
+    for the picker's surface to go. tidewm's own `send_shortcut` does
+    the same there (`[con_id=N] send_shortcut ctrl+v`).
   - With no window focused, or a failed copy, nothing is pasted; the
     copy stays on the clipboard.
   - The focused window is `FocusData.qml`'s, which the bar's title

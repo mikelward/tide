@@ -143,6 +143,17 @@ Singleton {
         root.tidewmCommand(Tw.minimizeCommand(address), `minimize window ${address}`);
     }
 
+    // Sends the window at `address` the shortcut `mods` + `key`, in
+    // Hyprland's spelling, "CTRL SHIFT" and "V", whatever has the keyboard:
+    // the picker's paste (§8.4).
+    function sendShortcut(address, mods, key) {
+        if (!root.tidewm) {
+            Hyprland.dispatch(Dispatch.sendShortcut(mods, key, address, Hyprland.usingLua));
+            return;
+        }
+        root.tidewmCommand(Tw.shortcutCommand(address, mods, key), `send window ${address} ${mods} ${key}`);
+    }
+
     // Toggles maximize on the window at `address`, which is the focused
     // one: Hyprland's dispatcher takes no address.
     function toggleMaximize(address) {

@@ -1953,8 +1953,7 @@ there once that's in. Next, in order:
    with a `;`, which tidewm's commands can't take, nor a rename one
    with " to " (sway's quoting would do); the lock's
    keyboard layout (`GET_INPUTS` and input events); the greeter's
-   displays off; the picker's paste, Hyprland's `sendshortcut`, so on
-   tidewm a choice is only copied; the share picker
+   displays off; the share picker
    (xdg-desktop-portal-wlr's chooser); the focus guard's evals; and an
    integration test against a stand-in for tidewm, as
    `shell/hyprland_stand_in.py` is Hyprland's.

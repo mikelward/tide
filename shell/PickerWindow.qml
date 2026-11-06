@@ -1,9 +1,7 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
-import "lib/dispatch.mjs" as Dispatch
 import "lib/launch.mjs" as Run
 import "lib/launcher.mjs" as Search
 import "lib/picker.mjs" as Picker
@@ -70,10 +68,7 @@ PanelWindow {
         if (visible) {
             return;
         }
-        // The paste is Hyprland's sendshortcut, which tidewm has no
-        // counterpart to yet, so on tidewm a choice is only copied.
-        pasteInto = Compositor.tidewm ? null
-            : Picker.pasteTarget(FocusData.focused ? { address: FocusData.focused.address, class: FocusData.focused.app } : null);
+        pasteInto = Picker.pasteTarget(FocusData.focused ? { address: FocusData.focused.address, class: FocusData.focused.app } : null);
         const focused = Compositor.focusedScreen;
         if (focused) {
             screen = focused;
@@ -159,7 +154,7 @@ PanelWindow {
                 return;
             }
             const keys = Picker.pasteShortcut(into.class);
-            Hyprland.dispatch(Dispatch.sendShortcut(keys.mods, keys.key, into.address, Hyprland.usingLua));
+            Compositor.sendShortcut(into.address, keys.mods, keys.key);
         };
         if (root.tab === "clipboard") {
             Launcher.run(["tide", "clipboard", "copy", row.item.id], paste);

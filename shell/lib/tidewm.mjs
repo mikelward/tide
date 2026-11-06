@@ -269,6 +269,21 @@ export function minimizeCommand(address) {
     return c === null ? null : `${c} minimize enable`;
 }
 
+// Sending the window at `address` the shortcut `mods` + `key`, as
+// dispatch.mjs's sendShortcut takes them, Hyprland's spelling, "CTRL
+// SHIFT" and "V": tidewm's own send_shortcut, the picker's paste (SPEC.md
+// §8.4).
+export function shortcutCommand(address, mods, key) {
+    const c = con(address);
+    if (!/^[A-Z]+( [A-Z]+)*$/.test(String(mods ?? ""))) {
+        throw new Error(`not modifiers: ${mods}`);
+    }
+    if (!/^[A-Za-z0-9]+$/.test(String(key ?? ""))) {
+        throw new Error(`not a key: ${key}`);
+    }
+    return c === null ? null : `${c} send_shortcut ${[...mods.split(" "), key].join("+").toLowerCase()}`;
+}
+
 export function maximizeCommand(address) {
     const c = con(address);
     return c === null ? null : `${c} maximize toggle`;
