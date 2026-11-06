@@ -133,6 +133,13 @@ if test "\$1" = ipc; then
         # Super+Return's name prompt, in its go mode, or as a move with
         # DIR/prompt-moves, until it's answered.
         *"call prompt go"*) if test -e "\$(dirname "\$0")/prompt-moves"; then echo move; else echo go; fi >"\$XDG_RUNTIME_DIR/prompt-open" ;;
+        # Super+Z in tidewm's session: the window tidewm's events focused,
+        # minimized by its container on Quickshell's own connection
+        # (tidewm_client.py), once that has sent it.
+        *"call windows minimize"*)
+            : >"\$XDG_RUNTIME_DIR/tidewm-minimize"
+            while test -e "\$XDG_RUNTIME_DIR/tidewm-minimize"; do sleep 0.1; done
+            echo minimized ;;
         *"call prompt shown"*) if test -e "\$XDG_RUNTIME_DIR/prompt-open"; then cat "\$XDG_RUNTIME_DIR/prompt-open"; fi ;;
         *"call picker open characters"*) : >"\$XDG_RUNTIME_DIR/picker-open" ;;
         *"call sharepicker pick \$XDG_RUNTIME_DIR/"*) printf '%s' "\$7" >"\$XDG_RUNTIME_DIR/sharepicker-open" && echo shown ;;
@@ -448,6 +455,16 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
 # tidewm reload them. Each of DIR/tidewm-treeless, tidewm-no-files and
 # tidewm-asks-hyprland makes it skip the tree, write no files, or run
 # hyprctl too.
+elif test -n "\$SWAYSOCK" && test "\$1" = -p; then
+    # The lock there listens only for tidewm's input events, and asks
+    # tide-msg for the keyboard as it starts and again on each input event
+    # (tidewm_client.py), unless DIR/tidewm-lock-deaf is there, when it
+    # doesn't listen, or DIR/tidewm-lock-ignores, when it listens but
+    # asks nothing more.
+    python3 "\$(dirname "\$0")/tidewm_client.py" lock &
+    until test -e "\$XDG_RUNTIME_DIR/tidewm_client.ready"; do sleep 0.1; done
+    rm "\$XDG_RUNTIME_DIR/tidewm_client.ready" || exit 1
+    tide-msg --type get_inputs >/dev/null 2>&1
 elif test -n "\$SWAYSOCK"; then
     python3 "\$(dirname "\$0")/tidewm_client.py" &
     until test -e "\$XDG_RUNTIME_DIR/tidewm_client.ready"; do sleep 0.1; done
@@ -556,13 +573,39 @@ EOF
     # workspaces and ticks, unless DIR/tidewm-deaf is there. Each holds its
     # connection, as Quickshell does, until qs is gone.
     cat >"$1/tidewm_client.py" <<'EOF'
-import os, socket, struct, time
+import os, socket, struct, sys, time
 here = os.path.dirname(os.path.abspath(__file__))
+run = os.environ["XDG_RUNTIME_DIR"]
 def message(kind, payload=""):
     data = payload.encode()
     return b"i3-ipc" + struct.pack("=II", len(data), kind) + data
 held = [socket.socket(socket.AF_UNIX)]
 held[-1].connect(os.environ["SWAYSOCK"])
+if sys.argv[1:] == ["lock"]:
+    import subprocess
+    if not os.path.exists(os.path.join(here, "tidewm-lock-deaf")):
+        held[-1].sendall(message(2, '["input"]'))
+    open(run + "/tidewm_client.ready", "w").close()
+    ignores = os.path.exists(os.path.join(here, "tidewm-lock-ignores"))
+    held[-1].settimeout(0.2)
+    data = b""
+    parent = os.getppid()
+    while os.getppid() == parent:
+        try:
+            chunk = held[-1].recv(65536)
+        except socket.timeout:
+            continue
+        if not chunk:
+            break
+        data += chunk
+        # Each message: the magic, its length and type, then its body; an
+        # input event asks for the keyboard again.
+        while len(data) >= 14 and len(data) >= 14 + struct.unpack("=I", data[6:10])[0]:
+            size, kind = struct.unpack("=II", data[6:14])
+            data = data[14 + size:]
+            if kind == 0x80000015 and not ignores:
+                subprocess.run(["tide-msg", "--type", "get_inputs"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    sys.exit(0)
 requests = message(2, '["workspace","output"]') + message(1) + message(3)
 if not os.path.exists(os.path.join(here, "tidewm-keeps-rename")):
     requests += message(0, "rename workspace mail to in")
@@ -571,10 +614,16 @@ if not os.path.exists(os.path.join(here, "tidewm-deaf")):
     held.append(socket.socket(socket.AF_UNIX))
     held[-1].connect(os.environ["SWAYSOCK"])
     held[-1].sendall(message(2, '["window","workspace","tick"]'))
-open(os.environ["XDG_RUNTIME_DIR"] + "/tidewm_client.ready", "w").close()
+open(run + "/tidewm_client.ready", "w").close()
+# Super+Z's minimize, of draft, which tidewm's events opened and focused
+# last, or of Firefox, focused before them, with DIR/tidewm-stale-focus.
+target = 11 if os.path.exists(os.path.join(here, "tidewm-stale-focus")) else 23
 parent = os.getppid()
 while os.getppid() == parent:
-    time.sleep(0.2)
+    if os.path.exists(run + "/tidewm-minimize"):
+        held[0].sendall(message(0, f"[con_id={target}] minimize enable"))
+        os.remove(run + "/tidewm-minimize")
+    time.sleep(0.1)
 EOF
     # tide-msg as the go stub builds it: as the real one, it asks tidewm at
     # SWAYSOCK one thing, prints a query's reply, and exits 1 for a command
@@ -1677,6 +1726,30 @@ stubs "$tmp/tidewm-rename" "exit 0" "$loaded"
 run "$tmp/tidewm-rename"
 check "a shell that leaves home renamed on tidewm fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell should name home in again once tidewm renames it mail"
+}
+
+case_114() {
+stubs "$tmp/tidewm-stale" "exit 0" "$loaded"
+: >"$tmp/tidewm-stale/tidewm-stale-focus" || exit 1
+run "$tmp/tidewm-stale"
+check "a shell that doesn't follow tidewm's focus events fails" test "$code" -ne 0
+check "and says so" contains "$out" "Super+Z should minimize draft ([con_id=23])"
+}
+
+case_115() {
+stubs "$tmp/tidewm-lock" "exit 0" "$loaded"
+: >"$tmp/tidewm-lock/tidewm-lock-deaf" || exit 1
+run "$tmp/tidewm-lock"
+check "a lock that doesn't follow tidewm's input events fails" test "$code" -ne 0
+check "and says so" contains "$out" "the lock never listened for the stand-in tidewm's input events"
+}
+
+case_116() {
+stubs "$tmp/tidewm-lock-ignores" "exit 0" "$loaded"
+: >"$tmp/tidewm-lock-ignores/tidewm-lock-ignores" || exit 1
+run "$tmp/tidewm-lock-ignores"
+check "a lock that listens for tidewm's input events but ignores them fails" test "$code" -ne 0
+check "and says so" contains "$out" "the lock should ask tide-msg for the keyboard again on tidewm's input event"
 }
 
 case_112() {

@@ -1949,9 +1949,10 @@ there once that's in. Next, in order:
    `GET_BINDINGS`.
 2. The rest: the greeter's
    displays off, should the greeter move to tidewm (it runs Hyprland);
-   the share picker's 16:9 slice, which xdg-desktop-portal-wlr can't
-   share (a virtual output mirroring the middle of the monitor would),
-   and its windows' icons and thumbnails; and the focus guard's evals.
+   the share picker's windows' icons and thumbnails; and the focus
+   guard's evals. Its 16:9 slice, which xdg-desktop-portal-wlr can't share
+   (a virtual output mirroring the middle of the monitor would), is
+   skipped there (2026-11-06).
 
 If the fork is adopted, machines build a pinned release tag, never a branch:
 

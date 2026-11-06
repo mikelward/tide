@@ -589,6 +589,8 @@ load() {
             started "$_load_from" "$load_runs"
         fi
         settle
+        # What the shell runs from here on, it ran for the events.
+        _play_from=$(runs) || exit 1
         _listeners=$(stand_in play) || exit 1
         settle
         shot "$_name"
@@ -638,7 +640,8 @@ load() {
     fi
 }
 
-# tidewm_asked: fails the test unless, in tidewm's session, the shell (its
+# tidewm_asked: fails the test unless, in tidewm's session, the shell, or
+# the lock as tidewm-lock, asked Hyprland for nothing, and the shell (its
 # run log from $_load_from on, and what the stand-in answered) asked
 # tidewm for its workspaces and monitors, as Quickshell's I3 module does,
 # listened for its windows' events, and asked tide-msg for its window
@@ -646,6 +649,35 @@ load() {
 # nothing, neither running hyprctl nor making a request of Quickshell's
 # Hyprland module, which has no Hyprland to ask and says so.
 tidewm_asked() {
+    if tail -n "+$((_load_from + 1))" "$tmp/helpers.log" | grep '^hyprctl ' >"$tmp/reports"; then
+        echo "FAIL: $_what ran hyprctl in tidewm's session:" >&2
+        cat "$tmp/reports" >&2
+        exit 1
+    fi
+    if grep 'quickshell\.hyprland\.ipc' "$log" >"$tmp/reports"; then
+        echo "FAIL: $_what asked Hyprland in tidewm's session:" >&2
+        cat "$tmp/reports" >&2
+        exit 1
+    fi
+    # The lock asks only for the keyboard's layout, for its badge, and
+    # again on each of tidewm's input events (LockKeymap.qml).
+    if test "$_name" = tidewm-lock; then
+        if ! grep -q '^subscribe .*"input"' "$tmp/answered"; then
+            echo "FAIL: $_what never listened for the stand-in tidewm's input events" >&2
+            exit 1
+        fi
+        if ! tail -n "+$((_load_from + 1))" "$tmp/helpers.log" | head -n "$((_play_from - _load_from))" | grep -qx 'tide-msg --type get_inputs'; then
+            echo "FAIL: $_what should ask tide-msg for the keyboard as it starts; it ran:" >&2
+            tail -n "+$((_load_from + 1))" "$tmp/helpers.log" >&2
+            exit 1
+        fi
+        if ! tail -n "+$((_play_from + 1))" "$tmp/helpers.log" | grep -qx 'tide-msg --type get_inputs'; then
+            echo "FAIL: $_what should ask tide-msg for the keyboard again on tidewm's input event; after the events it ran:" >&2
+            tail -n "+$((_play_from + 1))" "$tmp/helpers.log" >&2
+            exit 1
+        fi
+        return
+    fi
     for _request in get_workspaces get_outputs; do
         if ! grep -qx "$_request" "$tmp/answered"; then
             echo "FAIL: $_what never asked the stand-in tidewm for $_request" >&2
@@ -658,16 +690,6 @@ tidewm_asked() {
     fi
     if ! tail -n "+$((_load_from + 1))" "$tmp/helpers.log" | grep -qx 'tide-msg --type get_tree'; then
         echo "FAIL: $_what never asked tide-msg for tidewm's windows" >&2
-        exit 1
-    fi
-    if tail -n "+$((_load_from + 1))" "$tmp/helpers.log" | grep '^hyprctl ' >"$tmp/reports"; then
-        echo "FAIL: $_what ran hyprctl in tidewm's session:" >&2
-        cat "$tmp/reports" >&2
-        exit 1
-    fi
-    if grep 'quickshell\.hyprland\.ipc' "$log" >"$tmp/reports"; then
-        echo "FAIL: $_what asked Hyprland in tidewm's session:" >&2
-        cat "$tmp/reports" >&2
         exit 1
     fi
 }
@@ -802,7 +824,9 @@ reinstall() {
 # it's loaded: that its settings pages wrote tidewm's own files, which
 # conf's tidewm config includes (SPEC.md §16), and that it named home `in`
 # again once the stand-in tidewm renamed it (§6.5), by tidewm's rename
-# command. load runs it, as $after_load.
+# command, and that it followed tidewm's window events, so Super+Z (§6.7)
+# minimizes the window they opened and focused last. load runs it, as
+# $after_load.
 tidewm_loaded() {
     for _page in input appearance outputs layouts floating; do
         if ! grep -q '^# Written by tide' "$tidewm_conf/tide-$_page.conf" 2>/dev/null; then
@@ -812,6 +836,21 @@ tidewm_loaded() {
     done
     if ! grep -qxF 'run_command rename workspace mail to in' "$tmp/answered"; then
         echo "FAIL: the shell should name home in again once tidewm renames it mail; it asked tidewm:" >&2
+        cat "$tmp/answered" >&2
+        exit 1
+    fi
+    # The stand-in's events end by opening draft on workspace 1, which its
+    # fixtures keep focused (Quickshell asks for the workspaces again after
+    # a workspace event), and focusing it: Super+Z minimizes it, by its
+    # container, so the shell followed the window events.
+    _minimized=$(ipc call windows minimize) || exit 1
+    if test "$_minimized" != minimized; then
+        echo "FAIL: Super+Z should minimize the window tidewm's events focused; it answered: $_minimized" >&2
+        exit 1
+    fi
+    settle
+    if ! grep -qxF 'run_command [con_id=23] minimize enable' "$tmp/answered"; then
+        echo "FAIL: Super+Z should minimize draft ([con_id=23]), which tidewm's events opened and focused last; the shell asked tidewm:" >&2
         cat "$tmp/answered" >&2
         exit 1
     fi
@@ -1984,6 +2023,7 @@ load_compositor=
 load_runs=
 after_load=
 echo "ok: in tidewm's session, the shell writes tidewm's settings files, and names home again"
+echo "ok: in tidewm's session, the shell follows tidewm's window events"
 if test -n "$wtype_path"; then
     launch
 else
@@ -1993,6 +2033,13 @@ fi
 # unlocking, and sway then keeps the screen locked until another lock
 # unlocks it (below), so anything drawn before then, or photographed,
 # would be hidden behind it.
+# The lock in tidewm's session first: its keyboard's layout, for the
+# badge, from tidewm's inputs. It too is left holding the screen, which
+# the lock below takes over.
+load_compositor=tidewm
+load_runs='tide-msg --type get_inputs'
+load tidewm-lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
+load_compositor=
 load_runs='hyprctl devices -j
 tide keyboards
 udevadm monitor --udev --subsystem-match=input'
