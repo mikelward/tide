@@ -1438,6 +1438,19 @@ workspace it's on stays open there.
     Lua's `lower()` knows.
   - The name prompt's Esc asks the shell's own check, `pinnedOn`, which
     reads the window's class and workspace from Quickshell.
+- **How, on tidewm.** tidewm has a window state of its own, `keep_open`,
+  which the shell sets (`PinnedData.qml`).
+  - The shell keeps open exactly the windows pinned where they are, by the
+    same `pinnedOn`, as windows open and move and the settings change.
+    tidewm ends it when a window moves to another workspace, and the shell
+    sets it again if the window's pinned there too.
+  - tidewm's `kill` leaves a window kept open, and its `close_refused`
+    event is the shell's notification. conf's tidewm config binds
+    `Super+Backspace` to `kill`.
+  - It binds the app's close and quit keys with `--kept-open`, a binding
+    that counts only while you're typing in a window kept open, so every
+    other window still gets them.
+  - A minimized window closes, as tidewm doesn't keep one open.
 
 **The short name.**
 

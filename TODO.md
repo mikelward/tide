@@ -14,6 +14,15 @@ once you have agreed with it or reversed it.
   fills the page for the focused one. Reversible: `coveredNow` and its
   section in `SettingsWindow.qml`.
 
+- **Pinned windows on tidewm are its own `keep_open`, set by the shell**
+  (2026-11-06), rather than tidewm reading the Workspaces settings
+  itself. The shell already knows which windows are pinned where they
+  are, by the same check the name prompt's Esc uses. tidewm ends it on a
+  move to another workspace, so a moved window can't stay kept open
+  while the shell catches up. The app's close keys are bound
+  `--kept-open`, a binding that counts only in a window kept open,
+  rather than tidewm passing a key on from a binding as Hyprland's Lua
+  does.
 - **A floating rule is two `for_window` lines on tidewm** (2026-11-06),
   one for `app_id` and one for X11's `class`, as tidewm keeps them apart
   as sway does, rather than tidewm gaining a criterion that matches
@@ -1952,7 +1961,9 @@ there once that's in. Next, in order:
    each a `tide-*.conf` conf's tidewm config includes, as the input,
    appearance, displays and layouts pages' are, or said to be Hyprland's
    only. The keyboard shortcuts list tidewm's bindings from its
-   `GET_BINDINGS`.
+   `GET_BINDINGS`. The Workspaces page's pinned apps are tidewm's
+   `keep_open`, set by the shell (SPEC.md §6.5); conf's tidewm config
+   binds the app's close keys `--kept-open`.
 2. The rest: the greeter's
    displays off, should the greeter move to tidewm (it runs Hyprland).
    Sharing a window or a whole screen is all

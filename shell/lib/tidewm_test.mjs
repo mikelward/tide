@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, markEvents, appOf, shellWindows, activeWindow,
-    promptEvent, homeEvent, bindingFloats, keyFloated, sendCommand, floatCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand, shortcutCommand,
+    promptEvent, homeEvent, bindingFloats, keyFloated, closeRefused, keepOpenCommand, sendCommand, floatCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand, shortcutCommand,
 } from "./tidewm.mjs";
 import { minimizedFrom, trayWindows } from "./minimized.mjs";
 import { promptWanted } from "./workspacenames.mjs";
@@ -202,7 +202,8 @@ test("the shell's windows are shaped as Hyprland's", () => {
     s = windowEvent(s, event("urgent", con(13, { urgent: true, output: "HDMI-A-1", workspace: "gone" })));
     const w = shellWindows(s, workspaces);
     assert.deepEqual(w[0], { address: "10", title: "title 10", app: "app10", workspace: 30, workspaceName: "in",
-        monitor: "DP-1", urgent: false, fullscreen: 3, floating: false, focusHistoryID: -1, identifier: "" });
+        monitor: "DP-1", urgent: false, fullscreen: 3, floating: false, focusHistoryID: -1, identifier: "",
+        keepOpen: false });
     assert.equal(w[1].focusHistoryID, 0, "the focused window");
     assert.equal(w[2].floating, true);
     assert.deepEqual([w[3].urgent, w[3].workspace, w[3].workspaceName, w[3].monitor], [true, null, "gone", "HDMI-A-1"],
@@ -327,4 +328,32 @@ test("any other window event, or one with no float key before it, isn't", () => 
     assert.equal(keyFloated(true, { change: "floating", container: con(12, { type: "floating_con" }) }), null, "not the focused window");
     assert.equal(keyFloated(true, { change: "focus", container: con(12, { type: "floating_con", focused: true }) }), null);
     assert.equal(keyFloated(true, "not json"), null);
+});
+
+test("a window tidewm keeps open says so", () => {
+    let s = treeWindows(tree);
+    s = windowEvent(s, event("keep_open", con(10, { keep_open: true })));
+    assert.deepEqual(shellWindows(s, workspaces).map(w => w.keepOpen), [true, false, false, false]);
+});
+
+test("tidewm keeps open the windows pinned where they are, and no others", () => {
+    const pinned = w => w.app === "gmail";
+    const w = (address, app, keepOpen) => ({ address, app, keepOpen });
+    assert.equal(keepOpenCommand([w("10", "gmail", false), w("11", "foot", false)], pinned),
+        "[con_id=10] keep_open enable");
+    assert.equal(keepOpenCommand([w("10", "gmail", true), w("11", "foot", true)], pinned),
+        "[con_id=11] keep_open disable");
+    assert.equal(keepOpenCommand([w("10", "gmail", false), w("12", "foot", true)], pinned),
+        "[con_id=10] keep_open enable; [con_id=12] keep_open disable");
+    assert.equal(keepOpenCommand([w("10", "gmail", true), w("11", "foot", false)], pinned), "",
+        "each as it should be");
+    assert.equal(keepOpenCommand([w("x", "gmail", false)], pinned), "", "not a container ID");
+    assert.equal(keepOpenCommand([], pinned), "");
+});
+
+test("a close tidewm refused names its window", () => {
+    assert.equal(closeRefused(event("close_refused", con(10))), "10");
+    assert.equal(closeRefused(event("close", con(10))), null);
+    assert.equal(closeRefused("{not json"), null);
+    assert.equal(closeRefused({ change: "close_refused", container: { id: 3, type: "workspace" } }), null);
 });

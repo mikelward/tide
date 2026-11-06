@@ -49,6 +49,10 @@ Singleton {
     // Always float's question (FloatingData.qml).
     signal floatedByKey(var window)
 
+    // tidewm left the window at `address` open, as it's kept open: a
+    // pinned window's close (Tw.closeRefused), for PinnedData's notice.
+    signal closeRefused(string address)
+
     function treeRead(text) {
         // The focus history isn't in the tree, so the order so far is kept
         // for the windows still there (Tw.refreshed).
@@ -93,6 +97,10 @@ Singleton {
             root.windowHeard(event.data);
             if (floated !== null) {
                 root.floatedByKey(floated);
+            }
+            const refused = Tw.closeRefused(event.data);
+            if (refused !== null) {
+                root.closeRefused(refused);
             }
         }
     }
