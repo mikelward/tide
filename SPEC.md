@@ -4027,6 +4027,11 @@ stays hand-written.
     bar's layout label (§7.4) does the same from the shell: it reads the
     main keyboard afresh first, since Hyprland can make another keyboard
     main with no event, and switches once that answer is in.
+  - On tidewm (§5.3), the label, the lock's badge and the greeter's read
+    the first keyboard tidewm's `GET_INPUTS` lists, again on each of its
+    input events, and the click switches with tidewm's `input
+    type:keyboard xkb_switch_layout N`, as conf's key there does with
+    `next`.
   - `Super+Space` would be GNOME's key, but it's the launcher.
   - `hyprland.local.lua` still wins, for a single device or an input
     option it sets.

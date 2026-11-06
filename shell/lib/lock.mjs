@@ -391,6 +391,39 @@ export function mainKeyboard(text) {
 }
 
 // Just its layout's description, or null, for the lock's badge.
+// The keyboard from tidewm's GET_INPUTS (`tide-msg --type get_inputs`),
+// as mainKeyboard reads Hyprland's: sway's [{type, xkb_active_layout_name,
+// xkb_active_layout_index, xkb_layout_names}]. tidewm marks none main, and
+// the keyboards in its group share a layout, so it's the first keyboard
+// with one. null when there's none or the text isn't that JSON.
+export function tidewmKeyboard(text) {
+    let inputs;
+    try {
+        inputs = JSON.parse(text);
+    } catch (e) {
+        return null;
+    }
+    const keyboard = (Array.isArray(inputs) ? inputs : [])
+        .find((d) => d && d.type === "keyboard" && typeof d.xkb_active_layout_name === "string");
+    if (!keyboard) return null;
+    const names = Array.isArray(keyboard.xkb_layout_names) ? keyboard.xkb_layout_names : [];
+    return {
+        keymap: keyboard.xkb_active_layout_name,
+        index: Number.isInteger(keyboard.xkb_active_layout_index) ? keyboard.xkb_active_layout_index : null,
+        count: Math.max(1, names.length),
+    };
+}
+
+// The switch to layout `n` of every keyboard, as `hyprctl switchxkblayout
+// all n` is on Hyprland: on tidewm, its `input` command for every keyboard.
+export function switchLayoutCommand(n, tidewm) {
+    if (!Number.isInteger(n) || n < 0) {
+        throw new Error(`not a layout index: ${n}`);
+    }
+    return tidewm ? ["tide-msg", "input", "type:keyboard", "xkb_switch_layout", String(n)]
+        : ["hyprctl", "switchxkblayout", "all", String(n)];
+}
+
 export function mainKeymap(text) {
     return mainKeyboard(text)?.keymap ?? null;
 }

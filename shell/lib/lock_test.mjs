@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
+import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -609,6 +609,30 @@ test("the main keyboard says how many layouts it has and which is active", () =>
     assert.deepEqual(mainKeyboard(devices), { keymap: "German", index: 1, count: 2 });
     assert.deepEqual(mainKeyboard(JSON.stringify({ keyboards: [{ active_keymap: "English (US)", layout: "us" }] })), { keymap: "English (US)", index: null, count: 1 });
     assert.equal(mainKeyboard("not json"), null);
+});
+
+test("on tidewm the keyboard is the first GET_INPUTS lists with a layout", () => {
+    const inputs = JSON.stringify([
+        { identifier: "0:0:pointer", type: "pointer" },
+        { identifier: "1:1:kb", type: "keyboard", xkb_layout_names: ["English (US)", "German"],
+            xkb_active_layout_index: 1, xkb_active_layout_name: "German" },
+        { identifier: "2:2:other", type: "keyboard", xkb_layout_names: ["French"],
+            xkb_active_layout_index: 0, xkb_active_layout_name: "French" },
+    ]);
+    assert.deepEqual(tidewmKeyboard(inputs), { keymap: "German", index: 1, count: 2 });
+    assert.deepEqual(tidewmKeyboard(JSON.stringify([{ type: "keyboard", xkb_active_layout_name: "English (US)" }])),
+        { keymap: "English (US)", index: null, count: 1 });
+    // The headless backend's, with no keyboard
+    assert.equal(tidewmKeyboard("[]"), null);
+    assert.equal(tidewmKeyboard(JSON.stringify([{ type: "keyboard" }])), null);
+    assert.equal(tidewmKeyboard("not json"), null);
+});
+
+test("the layout switch is Hyprland's switchxkblayout or tidewm's input command", () => {
+    assert.deepEqual(switchLayoutCommand(1, false), ["hyprctl", "switchxkblayout", "all", "1"]);
+    assert.deepEqual(switchLayoutCommand(1, true), ["tide-msg", "input", "type:keyboard", "xkb_switch_layout", "1"]);
+    assert.throws(() => switchLayoutCommand(-1, true), /not a layout index/);
+    assert.throws(() => switchLayoutCommand("1; kill", true), /not a layout index/);
 });
 
 test("the bar's layout label is up to three letters of the badge, as tilemo's", () => {

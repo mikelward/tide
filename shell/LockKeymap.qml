@@ -1,7 +1,9 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.I3
 import Quickshell.Io
+import "lib/compositor.mjs" as Comp
 import "lib/lock.mjs" as Lock
 
 // The main keyboard's layout, for the badge by the login and lock field
@@ -11,13 +13,16 @@ import "lib/lock.mjs" as Lock
 // and the main keyboard may have changed with no event (an unplug).
 // Unknown, the badge is hidden rather than guessed. The bar's layout label
 // (KeyboardData) reads it too, with the main keyboard's layout count and
-// which is active.
+// which is active. On tidewm (§5.3) it's tidewm's GET_INPUTS, read again on
+// each of its input events.
 Scope {
     id: root
 
     // Names the process in its warnings.
     property string name: "tide-lock"
     readonly property string badge: Lock.layoutBadge(current.keymap)
+    readonly property bool tidewm: Comp.isTidewm(Quickshell.env("XDG_CURRENT_DESKTOP"))
+    readonly property string reader: root.tidewm ? "tide-msg" : "hyprctl"
 
     property var current: Lock.LAYOUT_INITIAL
 
@@ -47,14 +52,14 @@ Scope {
             running = true;
         }
 
-        command: ["hyprctl", "devices", "-j"]
+        command: root.tidewm ? ["tide-msg", "--type", "get_inputs"] : ["hyprctl", "devices", "-j"]
         Component.onCompleted: root.refresh()
 
         stdout: StdioCollector {
             onStreamFinished: {
-                const keyboard = Lock.mainKeyboard(text);
+                const keyboard = root.tidewm ? Lock.tidewmKeyboard(text) : Lock.mainKeyboard(text);
                 if (keyboard === null) {
-                    console.warn(`${root.name}: hyprctl devices gave no keyboard; the layout badge stays hidden`);
+                    console.warn(`${root.name}: ${devices.command.join(" ")} gave no keyboard; the layout badge stays hidden`);
                 }
                 devices.answered = true;
                 root.layoutEvent(Object.assign({ type: "answer", keymap: null }, keyboard));
@@ -63,7 +68,7 @@ Scope {
         onStarted: started = true
         onExited: (code, status) => {
             if (code !== 0) {
-                console.warn(`${root.name}: hyprctl devices exited ${code}`);
+                console.warn(`${root.name}: ${devices.command.join(" ")} exited ${code}`);
             }
         }
         onRunningChanged: {
@@ -71,7 +76,7 @@ Scope {
                 return;
             }
             if (!started) {
-                console.warn(`${root.name}: couldn't start hyprctl; the layout badge stays hidden`);
+                console.warn(`${root.name}: couldn't start ${root.reader}; the layout badge stays hidden`);
             }
             // No output to answer with: the read is over all the same.
             if (!answered) {
@@ -80,8 +85,21 @@ Scope {
         }
     }
 
+    // tidewm's input events: a layout switched, a keymap changed, or a
+    // keyboard came or went.
+    I3IpcListener {
+        subscriptions: root.tidewm ? ["input"] : []
+
+        onIpcEvent: event => {
+            if (event.type === "input") {
+                root.refresh();
+            }
+        }
+    }
+
     Connections {
         target: Hyprland
+        enabled: !root.tidewm
 
         // The event names a keyboard, but only hyprctl says which is main,
         // so it's only a cue to read again.
