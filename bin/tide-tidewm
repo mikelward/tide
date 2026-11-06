@@ -14,8 +14,10 @@
 # left empty. Home's name is the one tide's shell last wrote for conf's
 # hyprland.lua, or `in` before the shell has run, and the shell keeps home
 # from then on (shell/WorkspacesData.qml). A name can't hold a quote
-# (§6.5), so it goes inside single quotes whole; one with a `;`, which
-# would end tidewm's command, is left to the shell, which says why.
+# (§6.5), so it goes inside single quotes whole, and one with a `;`, which
+# would end tidewm's command, inside double quotes there too, as tidewm
+# reads a quoted name. One that does hold a quote is left to the shell,
+# which says why.
 home=in
 lua=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/tide-workspaces.lua
 if line=$(grep -m 1 '^    home = ".*",$' "$lua" 2>/dev/null); then
@@ -24,7 +26,13 @@ if line=$(grep -m 1 '^    home = ".*",$' "$lua" 2>/dev/null); then
 fi
 start='exec uwsm finalize SWAYSOCK'
 case $home in
-    *\;* | *\'* | '') ;;
-    *) start="tide-msg 'workspace number $home; persist workspace $home'; $start" ;;
+    *\"* | *\'* | '') ;;
+    *)
+        word=$home
+        case $home in
+            *\;*) word="\"$home\"" ;;
+        esac
+        start="tide-msg 'workspace number $word; persist workspace $word'; $start"
+        ;;
 esac
 exec tidewm -s "$start" "$@"

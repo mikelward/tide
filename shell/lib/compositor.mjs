@@ -86,12 +86,18 @@ export function tidewmWorkspaceEvent(data) {
 }
 
 // A name as tidewm's commands take it, or null for one they can't: tidewm
-// reads the rest of a command as the name, as written, but a `;` ends the
-// command. A name the shell allows has no quotes to go wrong (SPEC.md
-// §6.5), and is trimmed, as tidewm trims a command.
+// reads the rest of a command as the name, as written, or a name in
+// double quotes, as sway does, which one with a `;` needs, since a `;`
+// outside them ends the command. Only such a name is quoted. tidewm's
+// quotes take no escapes, so a name can't hold a `"`, which a name the
+// shell allows never does (SPEC.md §6.5); and it's trimmed, as tidewm
+// trims a command.
 export function tidewmName(name) {
     const n = String(name ?? "");
-    return n === "" || n.indexOf(";") >= 0 || n.trim() !== n ? null : n;
+    if (n === "" || n.indexOf('"') >= 0 || n.trim() !== n) {
+        return null;
+    }
+    return n.indexOf(";") >= 0 ? `"${n}"` : n;
 }
 
 // Going to the workspace named `name`, which tidewm makes if it's new.
@@ -102,16 +108,18 @@ export function tidewmGoTo(name) {
     return n === null ? null : `workspace number ${n}`;
 }
 
-// Renaming workspace `from` to `to`. tidewm splits the two at the first
-// " to ", so neither may have one, and `from` can't start with "to ",
-// which would rename the current workspace instead.
+// Renaming workspace `from` to `to`. tidewm splits an unquoted `from`
+// from `to` at the first " to ", so a `from` with one goes in quotes, as
+// does one that starts with "to ", which would rename the current
+// workspace instead; `to` may have one.
 export function tidewmRename(from, to) {
     const f = tidewmName(from);
     const t = tidewmName(to);
-    if (f === null || t === null || f.indexOf(" to ") >= 0 || /^to(\s|$)/i.test(f)) {
+    if (f === null || t === null) {
         return null;
     }
-    return `rename workspace ${f} to ${t}`;
+    const old = f.startsWith('"') || (f.indexOf(" to ") < 0 && !/^to(\s|$)/i.test(f)) ? f : `"${f}"`;
+    return `rename workspace ${old} to ${t}`;
 }
 
 // What keeps home, named `home`, on tidewm, which reads no
@@ -137,7 +145,7 @@ export function tidewmRelease(pending, home, names) {
     }
     const there = old.filter((n, i) => old.indexOf(n) === i && listed.indexOf(n) >= 0 && tidewmName(n) !== null);
     return {
-        command: there.length > 0 ? there.map(n => `unpersist workspace ${n}`).join("; ") : null,
+        command: there.length > 0 ? there.map(n => `unpersist workspace ${tidewmName(n)}`).join("; ") : null,
         pending: [],
     };
 }

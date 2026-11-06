@@ -166,7 +166,7 @@ Singleton {
 
     function tidewmCommand(command, what) {
         if (command === null) {
-            console.warn(`tide: tidewm can't be asked to ${what}: no container ID, or a name with a ;`);
+            console.warn(`tide: tidewm can't be asked to ${what}: no container ID, or a name with a ", which tidewm's quotes can't hold`);
             return;
         }
         I3.dispatch(command);
@@ -186,7 +186,7 @@ Singleton {
         }
         const command = Comp.tidewmGoTo(name);
         if (command === null) {
-            console.warn(`tide: tidewm can't be asked to go to workspace ${JSON.stringify(name)}: it reads a ; as the end of the command`);
+            console.warn(`tide: tidewm can't be asked to go to workspace ${JSON.stringify(name)}: tidewm's quotes can't hold a "`);
             return;
         }
         I3.dispatch(command);
@@ -200,7 +200,7 @@ Singleton {
         }
         const command = Comp.tidewmRename(from, to);
         if (command === null) {
-            console.warn(`tide: tidewm can't be asked to rename workspace ${JSON.stringify(from)} to ${JSON.stringify(to)}: it would read the names wrongly`);
+            console.warn(`tide: tidewm can't be asked to rename workspace ${JSON.stringify(from)} to ${JSON.stringify(to)}: tidewm's quotes can't hold a "`);
             return;
         }
         I3.dispatch(command);

@@ -1949,9 +1949,7 @@ there once that's in. Next, in order:
    `GET_BINDINGS`.
    - Always float's question, after a float key floats a window, is still
      Hyprland's: it waits on Hyprland's events.
-2. The rest: a name
-   with a `;`, which tidewm's commands can't take, nor a rename one
-   with " to " (sway's quoting would do); the greeter's
+2. The rest: the greeter's
    displays off, should the greeter move to tidewm (it runs Hyprland);
    the share picker's 16:9 slice, which xdg-desktop-portal-wlr can't
    share (a virtual output mirroring the middle of the monitor would),

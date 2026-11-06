@@ -120,7 +120,11 @@ check "the session finalizes even if tidewm refuses home" \
     test "$(printf '%s\n' "$tidewm_ran" | sed -n 3p)" = "uwsm finalize SWAYSOCK"
 printf '%s\n' 'return {' '    home = "a;b",' '}' > "$tmp/tidewm-config/hypr/tide-workspaces.lua"
 tidewm_ran=$(tidewm_start)
-check "a home tidewm's commands can't name is left to the shell" \
+check "a home with a ; goes to tidewm in quotes, as it reads a quoted name" \
+    test "$(printf '%s\n' "$tidewm_ran" | sed -n 2p)" = 'tide-msg workspace number "a;b"; persist workspace "a;b"'
+printf '%s\n' 'return {' "    home = \"it's\"," '}' > "$tmp/tidewm-config/hypr/tide-workspaces.lua"
+tidewm_ran=$(tidewm_start)
+check "a home tidewm's start can't name is left to the shell" \
     test "$tidewm_ran" = "tidewm -s exec uwsm finalize SWAYSOCK -c x
 uwsm finalize SWAYSOCK"
 check "the tidewm wrapper is executable" test -x "$tidewm_wrapper"

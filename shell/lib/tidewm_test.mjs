@@ -242,11 +242,15 @@ test("a window's commands name it by its container ID", () => {
     assert.equal(maximizeCommand("11"), "[con_id=11] maximize toggle");
 });
 
+test("a window moved to a workspace with a ; names it in quotes", () => {
+    assert.equal(moveAndFocusCommand("11", "a;b"), '[con_id=11] move to workspace number "a;b"; [con_id=11] focus');
+});
+
 test("an address that isn't a container ID, or a name tidewm can't take, sends nothing", () => {
     assert.equal(focusCommand("5a3f"), null, "a Hyprland address");
     assert.equal(focusCommand(""), null);
     assert.equal(focusCommand("1] kill; [con_id=2"), null);
-    assert.equal(moveAndFocusCommand("11", "a;b"), null);
+    assert.equal(moveAndFocusCommand("11", 'say "hi"'), null, "tidewm's quotes can't hold a \"");
     assert.equal(closeCommand("0x5a3f"), null);
     assert.equal(minimizeCommand("a;b"), null);
     assert.equal(maximizeCommand(undefined), null);
@@ -262,7 +266,8 @@ test("a window opening or closing on tidewm reads as home's apps need it", () =>
 
 test("a window is sent home without following it", () => {
     assert.equal(sendCommand("42", "in"), "[con_id=42] move to workspace number in");
-    assert.equal(sendCommand("42", "a;b"), null, "a ; would end the command");
+    assert.equal(sendCommand("42", "a;b"), '[con_id=42] move to workspace number "a;b"', "in quotes, or the ; would end the command");
+    assert.equal(sendCommand("42", 'say "hi"'), null, "tidewm's quotes can't hold a \"");
     assert.equal(sendCommand("0xabc", "in"), null, "not a container ID");
 });
 

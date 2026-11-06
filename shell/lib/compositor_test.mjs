@@ -96,8 +96,13 @@ test("going to a workspace names it whole", () => {
     assert.equal(tidewmGoTo("3"), "workspace number 3");
 });
 
-test("a name tidewm would cut short can't be sent", () => {
-    assert.equal(tidewmGoTo("a;b"), null, "a ; ends the command");
+test("a name with a ; goes in quotes, or the ; would end the command", () => {
+    assert.equal(tidewmGoTo("a;b"), 'workspace number "a;b"');
+    assert.equal(tidewmGoTo("PR-12; login"), 'workspace number "PR-12; login"');
+});
+
+test("a name tidewm can't take can't be sent", () => {
+    assert.equal(tidewmGoTo('say "hi"'), null, "tidewm's quotes take no escapes");
     assert.equal(tidewmGoTo(""), null);
     assert.equal(tidewmGoTo(" in"), null, "tidewm would trim it");
     assert.equal(tidewmGoTo(null), null);
@@ -108,14 +113,20 @@ test("a rename names both workspaces", () => {
     assert.equal(tidewmRename("my mail", "in"), "rename workspace my mail to in");
 });
 
-test("a rename tidewm would split wrongly can't be sent", () => {
-    assert.equal(tidewmRename("go to bed", "in"), null, "tidewm splits at the first \" to \"");
+test("a rename tidewm would split wrongly quotes the old name", () => {
+    assert.equal(tidewmRename("go to bed", "in"), 'rename workspace "go to bed" to in', "tidewm splits at the first \" to \"");
     assert.equal(tidewmRename("inbox", "back to in"), "rename workspace inbox to back to in",
         "the new name may have one: the first is the split");
-    assert.equal(tidewmRename("to do", "in"), null, "renames the current workspace instead");
-    assert.equal(tidewmRename("To", "in"), null);
+    assert.equal(tidewmRename("to do", "in"), 'rename workspace "to do" to in', "renames the current workspace instead");
+    assert.equal(tidewmRename("To", "in"), 'rename workspace "To" to in');
     assert.equal(tidewmRename("toast", "in"), "rename workspace toast to in", "a name that only starts with to");
-    assert.equal(tidewmRename("a;b", "in"), null);
+    assert.equal(tidewmRename("a;b", "in"), 'rename workspace "a;b" to in');
+    assert.equal(tidewmRename("in", "a;b"), 'rename workspace in to "a;b"');
+});
+
+test("a rename tidewm can't take can't be sent", () => {
+    assert.equal(tidewmRename('say "hi"', "in"), null);
+    assert.equal(tidewmRename("in", 'say "hi"'), null);
 });
 
 test("tidewm keeps home, making it if it's new", () => {
@@ -123,8 +134,12 @@ test("tidewm keeps home, making it if it's new", () => {
     assert.equal(tidewmKeepHome("my mail"), "persist workspace my mail");
 });
 
+test("a home with a ; is kept in quotes", () => {
+    assert.equal(tidewmKeepHome("a;b"), 'persist workspace "a;b"');
+});
+
 test("a home tidewm can't name can't be kept", () => {
-    assert.equal(tidewmKeepHome("a;b"), null);
+    assert.equal(tidewmKeepHome('say "hi"'), null);
     assert.equal(tidewmKeepHome(""), null);
 });
 
@@ -141,7 +156,12 @@ test("until tidewm has listed its workspaces, old homes wait", () => {
 
 test("an old home that's gone already, or that tidewm can't name, is dropped, as tidewm would refuse it", () => {
     assert.deepEqual(tidewmRelease(["in"], "mail", ["re", "mail"]), { command: null, pending: [] });
-    assert.deepEqual(tidewmRelease(["a;b"], "mail", ["a;b"]), { command: null, pending: [] });
+    assert.deepEqual(tidewmRelease(['say "hi"'], "mail", ['say "hi"']), { command: null, pending: [] });
+});
+
+test("an old home with a ; is let go in quotes", () => {
+    assert.deepEqual(tidewmRelease(["a;b", "in"], "mail", ["a;b", "in"]),
+        { command: 'unpersist workspace "a;b"; unpersist workspace in', pending: [] });
 });
 
 test("home as it is now is never let go", () => {

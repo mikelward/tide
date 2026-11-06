@@ -215,7 +215,7 @@ CRITERIA = re.compile(r"\[con_id=[0-9]+\]\s*")
 
 def commands(payload):
     """Each command in a RUN_COMMAND payload, as tidewm splits them: at
-    each ;, but an exec takes the rest."""
+    each ; outside double quotes, but an exec takes the rest."""
     out = []
     rest = payload
     while rest.strip():
@@ -223,7 +223,15 @@ def commands(payload):
         if CRITERIA.sub("", head, count=1).startswith("exec "):
             out.append(head.strip())
             break
-        command, _, rest = rest.partition(";")
+        quoted = False
+        for i, c in enumerate(rest):
+            if c == '"':
+                quoted = not quoted
+            elif c == ";" and not quoted:
+                command, rest = rest[:i], rest[i + 1:]
+                break
+        else:
+            command, rest = rest, ""
         if command.strip():
             out.append(command.strip())
     return out
