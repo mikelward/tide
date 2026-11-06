@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, markEvents, appOf, shellWindows, activeWindow,
-    promptEvent, homeEvent, sendCommand, floatCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand, shortcutCommand,
+    promptEvent, homeEvent, bindingFloats, keyFloated, sendCommand, floatCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand, shortcutCommand,
 } from "./tidewm.mjs";
 import { minimizedFrom, trayWindows } from "./minimized.mjs";
 import { promptWanted } from "./workspacenames.mjs";
@@ -282,4 +282,42 @@ test("the picker's paste is tidewm's send_shortcut, in its spelling", () => {
     assert.equal(shortcutCommand("0xabc", "CTRL", "V"), null);
     assert.throws(() => shortcutCommand("42", "ctrl; kill", "V"), /not modifiers/);
     assert.throws(() => shortcutCommand("42", "CTRL", "v; kill"), /not a key/);
+});
+
+// A binding event as tidewm sends one, before it runs the command.
+function binding(command) {
+    return { change: "run", binding: { command, event_state_mask: ["Mod4", "Shift"], input_code: 0, symbol: "f", input_type: "keyboard" } };
+}
+
+test("conf's float keys are a binding that toggles or enables floating on the focused window", () => {
+    assert.equal(bindingFloats(binding("floating toggle")), true);
+    assert.equal(bindingFloats(JSON.stringify(binding("floating enable"))), true, "its JSON too");
+    assert.equal(bindingFloats(binding("  Floating  Toggle ")), true, "as tidewm reads it, ignoring case");
+    assert.equal(bindingFloats(binding("nop; floating toggle")), true, "one of its commands");
+});
+
+test("any other binding isn't a float key", () => {
+    assert.equal(bindingFloats(binding("floating disable")), false);
+    assert.equal(bindingFloats(binding("[con_id=3] floating toggle")), false, "another window");
+    assert.equal(bindingFloats(binding("workspace \"a; floating toggle\"")), false, "a ; in quotes is the name's");
+    assert.equal(bindingFloats(binding("exec tide launcher")), false);
+    assert.equal(bindingFloats({ change: "run" }), false);
+    assert.equal(bindingFloats("not json"), false);
+});
+
+test("after a float key, the focused window's floating event with it floating is the key's", () => {
+    const floated = { change: "floating", container: con(12, { type: "floating_con", focused: true, name: "Calculator", app_id: "org.gnome.Calculator" }) };
+    assert.deepEqual(keyFloated(true, floated), { address: "12", class: "org.gnome.Calculator", title: "Calculator" });
+    assert.deepEqual(keyFloated(true, JSON.stringify(floated)), { address: "12", class: "org.gnome.Calculator", title: "Calculator" });
+    const x11 = { change: "floating", container: con(13, { type: "floating_con", focused: true, app_id: null, window_properties: { class: "XTerm" } }) };
+    assert.equal(keyFloated(true, x11).class, "XTerm", "an X11 window by its class");
+});
+
+test("any other window event, or one with no float key before it, isn't", () => {
+    const floated = { change: "floating", container: con(12, { type: "floating_con", focused: true }) };
+    assert.equal(keyFloated(false, floated), null, "no float key, as a rule's or the shell's own");
+    assert.equal(keyFloated(true, { change: "floating", container: con(12, { focused: true }) }), null, "tiled again");
+    assert.equal(keyFloated(true, { change: "floating", container: con(12, { type: "floating_con" }) }), null, "not the focused window");
+    assert.equal(keyFloated(true, { change: "focus", container: con(12, { type: "floating_con", focused: true }) }), null);
+    assert.equal(keyFloated(true, "not json"), null);
 });

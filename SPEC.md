@@ -1109,8 +1109,8 @@ in how long they last and what stays visible:
     float CLASS?*, with **Always float**, which adds the class's rule at
     once, and **Edit rule…**, which opens the page filled in for it.
     - Closing it, or letting it expire, is Not now. Its class isn't asked
-      about again until Hyprland restarts, at the next login, whatever the
-      answer.
+      about again until the compositor restarts, at the next login,
+      whatever the answer.
     - Only the keys ask. A window that floats on its own (a dialog, a
       rule, picture-in-picture), one the shell floats as a rule applies,
       and one a `Super`+drag floats for the drag alone never do.
@@ -4581,6 +4581,17 @@ stays hand-written.
       `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/tide-floating-declined.json`,
       so a restarted shell doesn't ask again, and the next login starts
       with none.
+    - In tidewm's session (§5.3), conf's float keys bind tidewm's
+      `floating toggle`, and tidewm sends a `binding` event before it runs
+      a binding's command. The shell listens for those. After one whose
+      command toggles or enables floating on the focused window, the
+      next window event decides: the focused window's `floating` event,
+      with it floating, is the keys'. Any other means the keys floated
+      nothing, so no later event is taken for theirs.
+    - A `Super`+drag runs no binding, so it never asks there either. The
+      declined classes are kept in
+      `$XDG_RUNTIME_DIR/tide-floating-declined-SOCKET.json`, `SOCKET` the
+      name of tidewm's IPC socket (`SWAYSOCK`).
   - Over IPC, `addFloating CLASS TITLE`, `moveFloating CLASS TITLE STEP`
     and `removeFloating CLASS TITLE` do what the page does, a TITLE of ""
     for none.

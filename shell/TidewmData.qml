@@ -41,6 +41,14 @@ Singleton {
     // Asked again while asking: the listener connected again meanwhile.
     property bool treeAgain: false
 
+    // Whether the last binding event was one of conf's float keys, until
+    // the next window event (Tw.keyFloated).
+    property bool floatArmed: false
+
+    // A float key left `window` ({address, class, title}) floating, for
+    // Always float's question (FloatingData.qml).
+    signal floatedByKey(var window)
+
     function treeRead(text) {
         // The focus history isn't in the tree, so the order so far is kept
         // for the windows still there (Tw.refreshed).
@@ -60,22 +68,32 @@ Singleton {
         // Subscribing sends a tick at once, so a tick with `first` is the
         // listener connected, again or for the first time. A workspace
         // renamed changes its windows' workspace name with no window event
-        // (Tw.asksForTree).
-        subscriptions: root.listening ? ["window", "workspace", "tick"] : []
+        // (Tw.asksForTree). A binding says a float key is running, before
+        // the window's own event (Tw.bindingFloats).
+        subscriptions: root.listening ? ["window", "workspace", "tick", "binding"] : []
 
         onIpcEvent: event => {
             if (Tw.asksForTree(event.type, event.data)) {
                 root.askForTree();
                 return;
             }
+            if (event.type === "binding") {
+                root.floatArmed = Tw.bindingFloats(event.data);
+                return;
+            }
             if (event.type !== "window") {
                 return;
             }
+            const floated = Tw.keyFloated(root.floatArmed, event.data);
+            root.floatArmed = false;
             if (root.heard !== null) {
                 root.heard = root.heard.concat([event.data]);
             }
             root.state = Tw.windowEvent(root.state, event.data);
             root.windowHeard(event.data);
+            if (floated !== null) {
+                root.floatedByKey(floated);
+            }
         }
     }
 
