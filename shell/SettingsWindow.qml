@@ -1191,6 +1191,30 @@ PanelWindow {
                                     anchors.verticalCenter: parent.verticalCenter
                                     spacing: 4
 
+                                    // In the bar, or only in the popover.
+                                    Rectangle {
+                                        readonly property bool on: clock.modelData.bar !== false
+
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 44
+                                        height: 26
+                                        radius: 13
+                                        color: on ? Theme.accentBg : Theme.surface2
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "Bar"
+                                            color: parent.on ? Theme.accentFg : Theme.fgDim
+                                            font.family: Theme.font
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        TapHandler {
+                                            onTapped: clocks.changed(ClockData.setBar(clock.index, clock.modelData.zone, !parent.on))
+                                        }
+                                    }
+
                                     StepButton {
                                         name: "go-up-symbolic"
                                         value: clock.index

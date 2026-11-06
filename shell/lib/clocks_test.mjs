@@ -8,7 +8,7 @@ import {
     formatTime, formatLocal, barClocks, zonesTip, scrubbed, SCRUB_STEP, zoneError,
     zoneFormError, cityLabel, editableClocks, editedClocks, movedClock, withoutClock,
     relabeledClock, withClock, DEFAULT_SWITCHES, SWITCH_ROWS, parseClocksFile, withClockSwitch,
-    loadPlan, formatWall, lockClocks, systemZoneError, systemZoneCommand,
+    loadPlan, formatWall, lockClocks, systemZoneError, systemZoneCommand, barredClock, inBar,
 } from "./clocks.mjs";
 
 function canonical(zone) {
@@ -280,24 +280,41 @@ test("the bar ends with local and marks other days", () => {
         offsetOf, abbrOf: () => "",
     });
     assert.deepEqual(bar, [
-        { text: "SF 16:30", label: "SF", time: "16:30", dayOffset: -1 },
-        { text: "NYC 19:30", label: "NYC", time: "19:30", dayOffset: -1 },
-        { text: "Oct 3 00:30", label: "Oct 3", time: "00:30", dayOffset: 0, local: true },
+        { text: "SF 16:30", label: "SF", time: "16:30", dayOffset: -1, bar: true },
+        { text: "NYC 19:30", label: "NYC", time: "19:30", dayOffset: -1, bar: true },
+        { text: "Oct 3 00:30", label: "Oct 3", time: "00:30", dayOffset: 0, local: true, bar: true },
     ]);
 });
 
-test("hovering local's clock lists the other zones on one line, marking other days", () => {
+// The dashboard and popover list every clock; the bar only those not set
+// bar: false, and local always (SPEC.md §7.3).
+test("a clock set bar: false is listed but marked out of the bar", () => {
     const bar = barClocks({
-        clocks: DEFAULT_CLOCKS, localZone: "Europe/London", instant: at("2026-10-02T23:30:00Z"),
+        clocks: [{ zone: "America/Los_Angeles", label: "SF" }, { zone: "Asia/Tokyo", label: "TYO", bar: false }],
+        localZone: "Europe/London", instant: at("2026-10-02T23:30:00Z"), offsetOf, abbrOf: () => "",
+    });
+    assert.deepEqual(bar.map((c) => [c.label, c.bar]), [["SF", true], ["TYO", false], ["Oct 3", true]]);
+});
+
+test("hovering the clocks lists the zones not in the bar on one line, marking other days", () => {
+    const off = DEFAULT_CLOCKS.map((c) => Object.assign({}, c, { bar: false }));
+    const bar = barClocks({
+        clocks: off, localZone: "Europe/London", instant: at("2026-10-02T23:30:00Z"),
         offsetOf, abbrOf: () => "",
     });
     assert.equal(zonesTip(bar), "SF 16:30 −1 · NYC 19:30 −1");
     const tokyo = barClocks({
-        clocks: [{ zone: "Asia/Tokyo", label: "TYO" }], localZone: "Europe/London",
+        clocks: [{ zone: "Asia/Tokyo", label: "TYO", bar: false }], localZone: "Europe/London",
         instant: at("2026-10-02T20:00:00Z"), offsetOf, abbrOf: () => "",
     });
     assert.equal(zonesTip(tokyo), "TYO 05:00 +1");
     assert.equal(zonesTip(bar.filter((c) => c.local)), "", "no zones, no line");
+    // One in the bar already isn't repeated in the tip.
+    const both = barClocks({
+        clocks: [{ zone: "America/Los_Angeles", label: "SF" }, { zone: "Asia/Tokyo", label: "TYO", bar: false }],
+        localZone: "Europe/London", instant: at("2026-10-02T20:00:00Z"), offsetOf, abbrOf: () => "",
+    });
+    assert.equal(zonesTip(both), "TYO 05:00 +1");
 });
 
 // The GMT+1 trap (SPEC.md §7.3): ICU's en-US names London's summer time
@@ -576,4 +593,29 @@ test("the system's time zone is a canonical zone ID, set with timedatectl", () =
     assert.match(systemZoneError("US/Pacific"), /^unknown time zone US\/Pacific; use a zone ID/, "a link name, as for a clock");
     assert.match(systemZoneError("--help"), /^unknown time zone/, "nothing that looks like an option");
     assert.deepEqual(systemZoneCommand("Asia/Kolkata"), ["timedatectl", "set-timezone", "Asia/Kolkata"]);
+});
+
+test("a clock may say it's out of the bar, and nothing else", () => {
+    assert.deepEqual(parseClocks('[{"zone": "Asia/Tokyo", "label": "TYO", "bar": false}]').clocks,
+        [{ zone: "Asia/Tokyo", label: "TYO", bar: false }]);
+    // true is the default, so it isn't kept.
+    assert.deepEqual(parseClocks('[{"zone": "Asia/Tokyo", "label": "TYO", "bar": true}]').clocks,
+        [{ zone: "Asia/Tokyo", label: "TYO" }]);
+    assert.equal(parseClocks('[{"zone": "Asia/Tokyo", "label": "TYO", "bar": "no"}]').error,
+        "entry 1: bar must be true or false");
+    assert.equal(inBar({ zone: "UTC", label: "" }), true);
+    assert.equal(inBar({ zone: "UTC", label: "", bar: false }), false);
+});
+
+test("the Clocks page puts a clock in the bar or takes it out, and a relabel keeps that", () => {
+    const list = [{ zone: "America/Los_Angeles", label: "SF" }, { zone: "Asia/Tokyo", label: "TYO" }];
+    const out = barredClock(list, 1, "Asia/Tokyo", false);
+    assert.deepEqual(out.clocks[1], { zone: "Asia/Tokyo", label: "TYO", bar: false });
+    assert.deepEqual(barredClock(out.clocks, 1, "Asia/Tokyo", true).clocks[1], { zone: "Asia/Tokyo", label: "TYO" });
+    assert.deepEqual(relabeledClock(out.clocks, 1, "Asia/Tokyo", "Tokyo").clocks[1],
+        { zone: "Asia/Tokyo", label: "Tokyo", bar: false });
+    assert.equal(barredClock(list, 0, "Asia/Tokyo", false).error, "entry 1 isn't Asia/Tokyo");
+    // Written to clocks.local.json as the other changes are.
+    const edited = editedClocks(null, null, (clocks) => barredClock(clocks, 0, "America/Los_Angeles", false));
+    assert.deepEqual(JSON.parse(edited.text)[0], { zone: "America/Los_Angeles", label: "SF", bar: false });
 });

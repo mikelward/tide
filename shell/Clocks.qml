@@ -2,11 +2,11 @@ import QtQuick
 import "lib/barclick.mjs" as Click
 import "lib/clocks.mjs" as ClockLib
 
-// The clock at the bar's right end (SPEC.md §7.3): local's alone, as
-// "MMM d HH:MM", on every screen. Hovering it shows the other zones on one
-// line, each "LABEL HH:MM" with a −1 / +1 on another date; a click opens the
-// popover; scrolling moves them all in quarter hours, until the pointer
-// leaves. An Item around the Row, so the click target isn't a Row's child
+// The clocks at the bar's right end (SPEC.md §7.3): each zone in the bar,
+// as "LABEL HH:MM", then local's, as "MMM d HH:MM". Hovering them shows the
+// zones not in the bar on one line, each with a −1 / +1 on another date; a
+// click opens the popover, which lists every zone; scrolling moves them all
+// in quarter hours, until the pointer leaves. An Item around the Row, so the click target isn't a Row's child
 // (BarHit.qml).
 Item {
     id: root
@@ -72,7 +72,7 @@ Item {
         Repeater {
             id: clocks
 
-            model: ClockData.items.filter(c => c.local)
+            model: ClockData.items.filter(c => c.local || c.bar)
 
             Item {
                 id: clock

@@ -216,7 +216,12 @@ function clockList(value, isZone) {
         if (/[\n\r\v\f\u0085\u2028\u2029]/.test(c.label)) {
             return { error: `entry ${i + 1}: label must be one line` };
         }
-        clocks.push({ zone: c.zone, label: c.label });
+        // In the bar unless it says otherwise; the dashboard and popover
+        // list every clock (SPEC.md §7.3).
+        if (c.bar !== undefined && typeof c.bar !== "boolean") {
+            return { error: `entry ${i + 1}: bar must be true or false` };
+        }
+        clocks.push(c.bar === false ? { zone: c.zone, label: c.label, bar: false } : { zone: c.zone, label: c.label });
     }
     return { clocks };
 }
@@ -442,7 +447,33 @@ export function relabeledClock(clocks, index, zone, label) {
     if (bad.error) {
         return { error: bad.error.replace(/^entry 1: /, "") };
     }
-    return { clocks: clocks.map((c, i) => i === at ? { zone: c.zone, label } : c) };
+    return { clocks: clocks.map((c, i) => i === at ? Object.assign({}, c, { label }) : c) };
+}
+
+// The list with the clock for `zone` in the bar, or out of it: `inBar`
+// true or false. Every clock still shows in the dashboard and popover.
+export function barredClock(clocks, index, zone, inBar) {
+    const at = clockIndex(clocks, index, zone);
+    if (at < 0) {
+        return missing(index, zone);
+    }
+    if (typeof inBar !== "boolean") {
+        return { error: "bar must be true or false" };
+    }
+    return {
+        clocks: clocks.map((c, i) => {
+            if (i !== at) {
+                return c;
+            }
+            return inBar ? { zone: c.zone, label: c.label } : { zone: c.zone, label: c.label, bar: false };
+        }),
+    };
+}
+
+// Whether `clock` shows in the bar: every one does unless it says
+// `bar: false` (SPEC.md §7.3).
+export function inBar(clock) {
+    return clock.bar !== false;
 }
 
 // The list with a clock for `zone` added at the end, just before local on
@@ -546,19 +577,20 @@ export function barClocks({ clocks, localZone, instant, offsetOf, abbrOf, hour24
             label,
             time,
             dayOffset: dayOffset(instant, offset, localOffset),
+            bar: inBar(c),
         };
     });
     const date = formatDate(instant, localOffset);
     const time = formatTime(instant, localOffset, hour24);
-    shown.push({ text: `${date} ${time}`, label: date, time, dayOffset: 0, local: true });
+    shown.push({ text: `${date} ${time}`, label: date, time, dayOffset: 0, local: true, bar: true });
     return shown;
 }
 
-// The line hovering local's clock shows (SPEC.md §7.3): every other zone
-// from barClocks as the bar once drew it, with its −1 or +1, in order,
-// or "" when local is the only clock.
+// The line hovering the clocks shows (SPEC.md §7.3): every zone from
+// barClocks that isn't in the bar, as the bar would draw it, with its −1 or
+// +1, in order, or "" when every clock is in the bar.
 export function zonesTip(items) {
-    return items.filter((c) => !c.local).map((c) => {
+    return items.filter((c) => !c.local && !c.bar).map((c) => {
         const day = c.dayOffset > 0 ? ` +${c.dayOffset}` : c.dayOffset < 0 ? ` −${-c.dayOffset}` : "";
         return c.text + day;
     }).join(" · ");
