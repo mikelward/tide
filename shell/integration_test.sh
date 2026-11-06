@@ -60,6 +60,10 @@
 # first and the lock to unlock and exit on the second. That needs
 # tide-lock's PAM service in /etc/pam.d (`make install-session`).
 #
+# With grim, it also clicks the bar, with a virtual pointer of its own
+# (shell/virtual_pointer.py): a right-click on the clocks, and the
+# Settings… at the foot of their dropdown, open the Clocks page.
+#
 # With wtype, it also logs in at the greeter, on a stand-in greetd
 # (shell/greetd_stand_in.py) that takes a password of the test's own: it
 # types a wrong one, then the right one, and expects the greeter to log in
@@ -70,7 +74,7 @@
 #   $GO                  the Go command, to build tide-tz, tide-greetd and
 #                        tide-msg (default: go)
 #   $TIDE_REQUIRE_QS     set (CI sets it) to fail, not skip, without qs,
-#                        sway, python3, Go, wtype or notify-send
+#                        sway, python3, Go, wtype, grim or notify-send
 #   $TIDE_STEP_WAIT      seconds to wait for each step (default: 60)
 #   $TIDE_KEEP_LOG       a file to copy Quickshell's logs to
 #   $TIDE_LOCK_PASSWORD  the running user's password, to unlock the lock with.
@@ -168,6 +172,15 @@ if ! wtype_path=$(command -v wtype); then
         exit 1
     fi
     wtype_path=
+fi
+# Without grim, the bar isn't clicked: what a click opens is found in
+# screenshots.
+if ! clicks_grim=$(command -v grim); then
+    if test -n "${TIDE_REQUIRE_QS:-}"; then
+        echo "FAIL: $prog: no grim on PATH to find what a click on the bar opens" >&2
+        exit 1
+    fi
+    clicks_grim=
 fi
 # With $TIDE_SCREENSHOTS, a picture of each loaded face goes there (CI
 # uploads them), which needs grim.
@@ -857,9 +870,144 @@ tidewm_loaded() {
     fi
 }
 
+# The bar's height (Theme.qml's barHeight).
+bar_height=36
+
+# drawn_to X: the screen's width and height, then the row under the last
+# thing drawn below the bar in column X, or 0 for nothing: under the bar,
+# the headless output is black.
+drawn_to() {
+    env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        "$clicks_grim" -t ppm - 2>"$tmp/grim.err" | "$python_path" -c '
+import re, sys
+data = sys.stdin.buffer.read()
+ppm = re.match(rb"P6\s+(\d+)\s+(\d+)\s+255\s", data)
+if not ppm:
+    sys.exit("grim gave no screenshot")
+width, height, x, bar = int(ppm[1]), int(ppm[2]), int(sys.argv[1]), int(sys.argv[2])
+column = [data[ppm.end() + (y * width + x) * 3:][:3] for y in range(height)]
+print(width, height, max((y + 1 for y in range(bar, height) if column[y] != b"\0\0\0"), default=0))
+' "$1" "$bar_height" 2>>"$tmp/grim.err"
+}
+
+# drawn X: sets $_width and $_height to the screen's, and $_drawn to
+# drawn_to X's row, failing the test if there's no screenshot.
+drawn() {
+    if ! _screen=$(drawn_to "$1"); then
+        echo "FAIL: couldn't take a screenshot of $_what: $(cat "$tmp/grim.err")" >&2
+        exit 1
+    fi
+    read -r _width _height _drawn <<EOF
+$_screen
+EOF
+}
+
+# pointer [COMMAND...]: has the virtual pointer do COMMAND (one of
+# shell/virtual_pointer.py's), and waits until the compositor has it; with
+# none, waits for it to start. A write to a pointer that's gone kills only
+# the subshell, and the read says why.
+pointer() {
+    test $# -eq 0 || (echo "$*" >&8)
+    if ! read -r _said <&9; then
+        echo "FAIL: the virtual pointer stopped: $(cat "$tmp/pointer.err")" >&2
+        exit 1
+    fi
+}
+
+# shown_page PAGE FAILURE: waits until Settings shows PAGE, failing the
+# test with FAILURE.
+shown_page() {
+    i=0
+    until test "$(ipc call settings shownPage)" = "$1"; do
+        if waited "$2" "$i"; then
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+}
+
+# nothing_below X FAILURE: closes Settings, takes the pointer off the bar,
+# and waits until nothing's drawn below the bar in column X, failing the
+# test with FAILURE.
+nothing_below() {
+    ipc call settings close >/dev/null || exit 1
+    pointer move "$((_width / 2))" "$((_height / 2))"
+    i=0
+    while :; do
+        drawn "$1"
+        test "$_drawn" != 0 || return 0
+        if waited "$2" "$i"; then
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+}
+
+# bar_clicks: fails the test unless a right-click on the bar's local clock
+# opens Settings on the Clocks page, and a click opens the clocks' dropdown,
+# whose last row, Settings…, closes it and opens that page too (SPEC.md
+# §7.1). The pointer is shell/virtual_pointer.py's. The dropdown is found in
+# screenshots, as what's drawn below the bar in a column through it, and
+# its last row is 32 px tall, 14 px above its bottom (MenuRow.qml,
+# ClocksPopover.qml).
+bar_clicks() {
+    if test -z "$clicks_grim"; then
+        echo "$prog: no grim, so the bar isn't clicked" >&2
+        return
+    fi
+    drawn 0
+    # Local's clock ends the bar, and the dropdown, 640 px wide, ends with it.
+    _clock_x=$((_width - 40)) _clock_y=$((bar_height / 2)) _column=$((_width - 200))
+    mkfifo "$tmp/pointer.in" "$tmp/pointer.out" || exit 1
+    env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        "$python_path" shell/virtual_pointer.py "$_width" "$_height" "$wait" \
+        <"$tmp/pointer.in" >"$tmp/pointer.out" 2>"$tmp/pointer.err" &
+    _pointer_pid=$!
+    exec 8>"$tmp/pointer.in" 9<"$tmp/pointer.out"
+    pointer
+
+    pointer move "$_clock_x" "$_clock_y"
+    pointer click right
+    shown_page clocks "a right-click on the clocks didn't open Settings on the Clocks page"
+    nothing_below "$_column" "Settings didn't close"
+
+    # Hovering, the clocks may show a tip below the bar: the dropdown is
+    # whatever comes once they're clicked.
+    pointer move "$_clock_x" "$_clock_y"
+    settle
+    drawn "$_column"
+    _hovered=$_drawn
+    pointer click left
+    i=0
+    until drawn "$_column" && test "$_drawn" != "$_hovered"; do
+        if waited "a click on the clocks didn't open their dropdown" "$i"; then
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    # Its first frame may come before all it shows.
+    settle
+    drawn "$_column"
+    pointer move "$_column" "$((_drawn - 14 - 32 / 2))"
+    pointer click left
+    shown_page clocks "the clocks' dropdown's Settings… didn't open Settings on the Clocks page"
+    nothing_below "$_column" "the clocks' dropdown's Settings… didn't close the dropdown"
+
+    exec 8>&- 9<&-
+    wait "$_pointer_pid" || {
+        echo "FAIL: the virtual pointer failed: $(cat "$tmp/pointer.err")" >&2
+        exit 1
+    }
+    echo "ok: a right-click on the clocks opens their settings, and so does their dropdown's Settings…"
+}
+
 # shell_loaded: what's checked of the first shell, once it's loaded.
 shell_loaded() {
     written_settings
+    bar_clicks
     reinstall
 }
 

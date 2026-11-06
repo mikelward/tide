@@ -77,6 +77,12 @@ PopupWindow {
                     }
                 }
             }
+
+            SettingsRow {
+                width: list.width
+                item: "mic"
+                popover: root
+            }
         }
     }
 

@@ -55,3 +55,40 @@ test("every bar item but the tray takes a right-click to its settings", () => {
     assert.deepEqual(missing, []);
     assert.deepEqual(Object.keys(BAR_SETTINGS).filter((item) => !used.has(item)), []);
 });
+
+// Each bar item's dropdown, but the tray's menu, which is the app's own.
+const DROPDOWNS = Object.freeze({
+    "BatteryPopover.qml": "battery",
+    "BluetoothPopover.qml": "bluetooth",
+    "ClocksPopover.qml": "clocks",
+    "MicPopover.qml": "mic",
+    "NetworkPopover.qml": "network",
+    "SessionMenu.qml": "session",
+    "SharingPopover.qml": "sharing",
+    "SysmonPopover.qml": "sysmon",
+    "VolumePopover.qml": "volume",
+});
+
+// A dropdown ends in Settings… (SettingsRow.qml), for its item's page, but
+// one whose item has none, whose right-click opens the first page: there,
+// Settings… would open a page about something else. Every dropdown is
+// listed, so a new one is too. integration_test.sh clicks the clocks'.
+test("every dropdown with a page of its own ends in Settings… for that page", () => {
+    const dropdowns = readdirSync(SHELL).filter((f) => f.endsWith(".qml")
+        && /PopoverData\.toggle\(/.test(readFileSync(join(SHELL, f), "utf8")) && f !== "TrayMenu.qml");
+    assert.deepEqual(dropdowns.sort(), Object.keys(DROPDOWNS).sort());
+    const wrong = [];
+    for (const [file, item] of Object.entries(DROPDOWNS)) {
+        const text = readFileSync(join(SHELL, file), "utf8");
+        const rows = [];
+        const row = /SettingsRow\s*\{[^}]*?\bitem:\s*"(\w+)"/g;
+        for (let m = row.exec(text); m; m = row.exec(text)) {
+            rows.push(m[1]);
+        }
+        const want = page(item) === "" ? [] : [item];
+        if (JSON.stringify(rows) !== JSON.stringify(want)) {
+            wrong.push(`${file} has Settings… for ${JSON.stringify(rows)}, not ${JSON.stringify(want)}`);
+        }
+    }
+    assert.deepEqual(wrong, []);
+});

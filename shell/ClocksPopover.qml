@@ -331,6 +331,13 @@ PopupWindow {
                     }
                 }
             }
+
+            SettingsRow {
+                Layout.topMargin: 8
+                Layout.fillWidth: true
+                item: "clocks"
+                popover: root
+            }
         }
     }
 

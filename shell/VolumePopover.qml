@@ -148,6 +148,12 @@ PopupWindow {
                         }
                     }
                 }
+
+                SettingsRow {
+                    width: list.width
+                    item: "volume"
+                    popover: root
+                }
             }
         }
     }
