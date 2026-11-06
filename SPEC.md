@@ -1599,6 +1599,7 @@ with new keys in **bold**:
 | **`Super+Home`** | go to home (§6.5) |
 | **`Super+1…9`** | go to the Nth workspace in the bar's order, so `Super+1` is home, as `Super+Home` is; past the last workspace, nothing |
 | **`Super+Shift+1…9`** | send the focused window to the Nth workspace in the bar's order, staying where you are |
+| **`Super+0`** / **`Super+Shift+0`** | go to / send the focused window to the last workspace in the bar's order, as `Super+1…9` and `Super+Shift+1…9` do |
 | **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
 | **`Super+Left`** / **`Right`** | focus the window to the left / right of the focused one; at a monitor's edge, the nearest window on the next monitor that way, or that monitor itself if it shows none; past the last monitor, nothing (as in tilemo; the rule is below) |
 | **`Super+Shift+Left`** / **`Right`** | move the focused window the same way: on its monitor it swaps with the window that way; at the edge it goes onto the next monitor, joining the workspace showing there at the edge it came in by, and keeps focus. A floating window goes straight onto the next monitor that way, still floating, at the same relative spot and its size (the rule is below), and keeps focus. Past the last monitor, nothing |
