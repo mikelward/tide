@@ -71,7 +71,7 @@ export function networkIcon({ devices, wifiEnabled, connectivity }) {
     return { visible: true, icon: hasWifi && !wifiEnabled ? "network-wireless-disabled-symbolic" : "network-offline-symbolic" };
 }
 
-// The network icon's hover text (SPEC.md §7.4), in tilemo's words: the
+// The network icon's hover text (SPEC.md §7.4), in tide for macOS's words: the
 // Wi-Fi network's name and signal, "Wired network" with its speed, a wired one
 // connecting or not connected, "Wi-Fi off" or "No network";
 // then whether it can't reach the internet, and the VPN, "on" or

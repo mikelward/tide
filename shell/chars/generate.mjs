@@ -8,7 +8,7 @@
 // `#` lines. Names are lowercase and ASCII, so a search needn't fold
 // accents: the emoji by their CLDR short names, without skin-tone
 // variants; the symbols by their Unicode names, from the blocks below.
-// tilemo copies the file unchanged.
+// tide for macOS copies the file unchanged.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

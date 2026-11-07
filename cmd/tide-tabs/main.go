@@ -20,7 +20,7 @@
 // its stdin to bring a tab up. It exits 0 when stdin closes.
 //
 // The other is the browser's end, its native-messaging host: Chrome or
-// Brave starts it for the tide connector (connector/) or tileco, the
+// Brave starts it for the tide connector (connector/) or tide for Chrome, the
 // extension that reads the tabs, passing the extension's origin, and talks to it in
 // Chrome's native-messaging frames on stdin and stdout. It passes the tabs
 // on to `serve` and the asks back, and tells the extension whether the

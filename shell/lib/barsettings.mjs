@@ -1,7 +1,7 @@
 // The settings page a right-click on each bar item opens (SPEC.md §7.1):
 // a page's id in settings.mjs's PAGES, or "" for the panel's first page
 // where no page fits. The tray isn't here: its right-click is the app's
-// own menu. tilemo copies this file as its dashboard/tide-barsettings.js.
+// own menu. tide for macOS copies this file as its dashboard/tide-barsettings.js.
 export const BAR_SETTINGS = Object.freeze({
     logo: "",
     workspaces: "workspaces",

@@ -635,7 +635,7 @@ test("the layout switch is Hyprland's switchxkblayout or tidewm's input command"
     assert.throws(() => switchLayoutCommand("1; kill", true), /not a layout index/);
 });
 
-test("the bar's layout label is up to three letters of the badge, as tilemo's", () => {
+test("the bar's layout label is up to three letters of the badge, as tide for macOS's", () => {
     assert.equal(layoutLabel("English (US)"), "US");
     assert.equal(layoutLabel("English (Dvorak)"), "DVO");
     assert.equal(layoutLabel("German"), "GER");

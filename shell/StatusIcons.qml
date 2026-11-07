@@ -12,7 +12,7 @@ import "lib/status.mjs" as Status
 import "lib/barsettings.mjs" as BarSettings
 
 // The status icons before the clocks (SPEC.md §7.4), each with hover text
-// (BarTip) in tilemo's words where tilemo has the same icon. So far: the
+// (BarTip) in tide for macOS's words where tide for macOS has the same icon. So far: the
 // keyboard layout, once there are two; keep awake;
 // Bluetooth, then one for each connected audio device; network; volume and its %, which scrolls by 5%; battery, red
 // at 20% and below; and the system monitor's CPU %, each with its popover; the
@@ -56,7 +56,7 @@ Row {
         objects: [root.sink]
     }
 
-    // The keyboard layout, as tilemo's input source: up to three letters,
+    // The keyboard layout, as tide for macOS's input source: up to three letters,
     // only once there are two layouts. A click goes to the next, as
     // Super+Alt+Space does; hovering names it in full.
     Text {

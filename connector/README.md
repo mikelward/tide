@@ -20,7 +20,7 @@ Linux. SPEC.md §8.3 is the design.
 
 ## Publishing
 
-Only if tileco can't keep its Linux tab list in the store.
+Only if tide for Chrome can't keep its Linux tab list in the store.
 
 `make connector-zip` builds `build/tide-connector.zip`. Upload it at the
 [Chrome Web Store developer dashboard](https://chrome.google.com/webstore/devconsole)

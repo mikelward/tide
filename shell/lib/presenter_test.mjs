@@ -65,7 +65,7 @@ test("a missing state reads as off", () => {
     assert.deepEqual(presenterToggled(undefined), state(true, false, false));
 });
 
-test("the Presenting pill's hover text says what it holds, as tilemo's", () => {
+test("the Presenting pill's hover text says what it holds, as tide for macOS's", () => {
     assert.equal(pillTip(true), "Presenting: Do not disturb and keep awake");
     assert.equal(pillTip(false), "Presenting: keep awake only", "no notification server, no Do not disturb");
 });

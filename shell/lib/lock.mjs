@@ -428,7 +428,7 @@ export function mainKeymap(text) {
     return mainKeyboard(text)?.keymap ?? null;
 }
 
-// The bar's layout label (SPEC.md §7.4), as tilemo's: up to three
+// The bar's layout label (SPEC.md §7.4), as tide for macOS's: up to three
 // letters of the badge's name, so "English (US)" is US, "English
 // (Dvorak)" DVO and "German" GER.
 export function layoutLabel(name) {

@@ -130,7 +130,7 @@ test("the volume's and the CPU's % each hold that room", () => {
     assert.deepEqual(rooms, ["Status.PERCENT_ROOM", "Status.PERCENT_ROOM"]);
 });
 
-test("the battery's hover text says its %, and charging, charged or time left, as tilemo's", () => {
+test("the battery's hover text says its %, and charging, charged or time left, as tide for macOS's", () => {
     const b = (fields) => batteryTip({ present: true, percentage: 0.82, state: 2, ...fields });
     assert.equal(b({}), "Battery 82%");
     assert.equal(b({ toEmpty: 2 * 3600 + 5 * 60 }), "Battery 82%, 2:05 left");
