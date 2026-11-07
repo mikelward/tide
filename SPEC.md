@@ -502,7 +502,8 @@ flowchart TD
   `PartOf=graphical-session.target`, never plainly
   `WantedBy=graphical-session.target`. Plasma also reaches that target, and
   that is exactly how swaync leaked into KDE. Nothing tide installs
-  starts in a KDE session.
+  starts in a KDE session but the launcher's own process, which
+  `setup-kde` turns on (§8.5).
 - **Owners before clients.** `tide.service` is
   `Before=xdg-desktop-autostart.target`, and it counts as started only once
   the shell says every owner it hosts is ready. hypridle, the one owner
@@ -2720,6 +2721,50 @@ instead, for the Fill tab's values (scripts' `fill-menu` on KDE).
   ships beside the list, as `shell/chars/LICENSE-UNICODE`.
 - **Cost and reliability:** nothing to pay, and no network: the list is
   read from disk when the shell first opens the Characters tab.
+
+### 8.5 The launcher on KDE Plasma
+
+Plasma stays the fallback session (§5.5), and it gets tide's launcher
+on `Super+Space`: the same overlay, search and keys, listing Plasma's
+apps and its System Settings pages. Kickoff stays on the tap of `Super`.
+
+- **Resident.** It's a second Quickshell config, `shell/kde.qml`, holding
+  only the launcher. `tide-kde.service` runs it, `WantedBy=` and
+  `PartOf=plasma-workspace.target`, so it starts with Plasma and stops at
+  logout. `setup-kde` enables it. It never starts in tide's own session.
+- **The key.** `setup-kde` binds `Meta+Space` to a `tide-launcher`
+  launcher script, as it binds `clipboard-menu` to `Meta+V`. The script
+  runs `qs -c tide-kde ipc call launcher toggle`. KWin has no global
+  shortcut Quickshell can take, unlike Hyprland's.
+- **Tabs.** Apps and Actions only. Workspaces, Windows and Attention need
+  the compositor (§5.3), and Plasma has its own for those: `Meta+Tab`,
+  the task manager and KRunner.
+- **Apps.** Every entry `XDG_CURRENT_DESKTOP=KDE` shows, so Plasma's own
+  apps and System Settings, which the `SETTINGS_APPS` list (§8.2) drops
+  only under tide.
+- **System Settings pages.** Each page ships a desktop entry with
+  `NoDisplay=true`, `X-KDE-AliasFor=systemsettings`, and an `Exec` of
+  `systemsettings` or `kcmshell6` and the page's ID (kcmutils'
+  `tools/kcmmetadatagenerator.cpp`).
+  The launcher lists those, under their names with System Settings beside
+  them, despite `NoDisplay`.
+- **Actions.** Lock (`loginctl lock-session`), log out
+  (`org.kde.LogoutPrompt`'s `promptLogout`, Plasma's own confirmation),
+  suspend, restart and shut down (`systemctl`), and screenshots
+  (Spectacle). The rest are tide's own: its settings, presenter mode,
+  keep awake and do not disturb, so they're left out.
+- **Launching.** Through the entry's own `Exec`, as Kickoff does, not
+  `tide launch`, which places windows on tide's workspaces.
+- **Theme.** Plasma's icon theme and light or dark, not the `Adwaita`
+  pragma `shell.qml` sets for tide's session.
+- **Cost:** one resident Quickshell process, for nothing to pay and no
+  network. Its memory is the launcher's alone, less than tide's whole
+  shell; it's measured on a real session before it ships.
+- **Still to check on Plasma:** that KWin opens the layer surface on the
+  focused monitor and gives it the keyboard under `setup-kde`'s
+  FocusFollowsMouse, how soon it opens after `Meta+Space`, and that an
+  app it starts gets focus under KWin's focus-stealing prevention.
+  `kdeshortcut.py` reports it if Plasma already holds `Meta+Space`.
 
 ## 9. Notifications
 
