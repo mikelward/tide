@@ -28,6 +28,12 @@ import "lib/workspaces.mjs" as Workspaces
 PanelWindow {
     id: root
 
+    // On KDE Plasma (SPEC.md §8.5), where kde.qml runs it alone: Apps and
+    // Actions, Plasma's actions, kstart, and nothing that asks Hyprland or
+    // starts tide's own state (Compositor, NotificationData and the rest).
+    readonly property bool plasma: LauncherData.plasma
+    // The tabs it has (Switcher.tabsFor).
+    readonly property var tabs: Switcher.tabsFor(root.plasma)
     property string query: ""
     property int selected: -1
     // The tab shown (Switcher.TABS).
@@ -51,7 +57,7 @@ PanelWindow {
     // reshuffle the list under the pointer.
     property var apps: []
     // The toggles' rows say whether they're on, so they follow the state.
-    readonly property var items: root.apps.concat(Search.quickActions({
+    readonly property var items: root.plasma ? root.apps.concat(Search.quickActions({ plasma: true })) : root.apps.concat(Search.quickActions({
         notifications: NotificationData.enabled,
         dnd: NotificationData.dnd,
         dark: AppearanceData.dark,
@@ -64,7 +70,7 @@ PanelWindow {
         : root.tab === "actions" ? Search.actionRows(root.items, root.query)
         : Search.search(root.items, root.query, LauncherData.frecency, root.openedAt)
     // Every window, as the Windows and Attention tabs list them.
-    readonly property var allWindows: Compositor.windows.map(w => ({
+    readonly property var allWindows: root.plasma ? [] : Compositor.windows.map(w => ({
         address: w.address,
         title: w.title,
         app: w.app,
@@ -106,18 +112,19 @@ PanelWindow {
         if (visible) {
             return;
         }
-        const focused = onScreen ?? Compositor.focusedScreen;
+        // On Plasma, KWin puts it on the monitor it chooses.
+        const focused = onScreen ?? (root.plasma ? null : Compositor.focusedScreen);
         if (focused) {
             screen = focused;
         }
         // A screenshot still waiting would catch the launcher it's opening.
         screenshotDelay.stop();
         pending = "";
-        windowAtOpen = FocusData.focused?.address ?? null;
-        outputAtOpen = Compositor.focusedMonitorName;
+        windowAtOpen = root.plasma ? null : FocusData.focused?.address ?? null;
+        outputAtOpen = root.plasma ? "" : Compositor.focusedMonitorName;
         session += 1;
         openedAt = Date.now();
-        apps = Search.launcherItems(DesktopEntries.applications.values, LauncherData.desktop);
+        apps = Search.launcherItems(LauncherData.entries(), LauncherData.desktop);
         checking = false;
         asking = "";
         blocked = [];
@@ -137,7 +144,7 @@ PanelWindow {
     }
 
     function toggle(tab, onScreen) {
-        const next = Switcher.toggled(visible, root.tab, tab ?? "apps");
+        const next = Switcher.toggled(visible, root.tab, tab ?? "apps", root.tabs);
         if (next.visible) {
             open(next.tab, onScreen);
         } else {
@@ -147,7 +154,7 @@ PanelWindow {
 
     // Shows `tab`, starting its search afresh on its top row.
     function showTab(tab) {
-        if (!Switcher.TABS.includes(tab)) {
+        if (!root.tabs.includes(tab)) {
             console.warn(`tide: the switcher has no ${tab} tab; showing Apps`);
             tab = "apps";
         }
@@ -237,7 +244,7 @@ PanelWindow {
         // Choosing it counts as using it, a blocked power action too: the
         // next opening lists it sooner either way.
         LauncherData.record(Search.rowKey(row));
-        if (row.item.kind === "quick" && Search.quickCommand(row.item.id).power) {
+        if (row.item.kind === "quick" && root.quick(row.item.id).power) {
             checkPower(row.item.id);
             return;
         }
@@ -249,11 +256,14 @@ PanelWindow {
             // prompt launches with `tide launch --workspace NAME`: the focus
             // guard takes the app's first window there as it opens. From
             // home, Enter asks the same, as `tide launch` hands it over.
-            const command = Search.launchCommand(row.item);
-            if (newWorkspace && Search.opensWindow(row.item)) {
+            // On Plasma, kstart reads an app's working directory from its
+            // entry, but a desktop action runs as a bare command, so it's
+            // started from the entry's directory as under tide.
+            const command = Search.launchCommand(row.item, root.plasma);
+            if (newWorkspace && !root.plasma && Search.opensWindow(row.item)) {
                 PromptData.askLaunch(command.slice(2), row.item.workingDirectory ?? "", Search.grantIds(row.item));
             } else {
-                Launcher.start(command, row.item.workingDirectory);
+                Launcher.start(command, root.plasma && row.item.kind === "app" ? "" : row.item.workingDirectory);
             }
         }
     }
@@ -264,7 +274,7 @@ PanelWindow {
     function checkPower(id) {
         checking = true;
         const token = session;
-        Launcher.run(Search.quickCommand(id).run, (ok, errors) => {
+        Launcher.run(root.quick(id).run, (ok, errors) => {
             if (token !== session || !visible) {
                 return;
             }
@@ -279,8 +289,14 @@ PanelWindow {
         });
     }
 
+    // What running quick action `id` takes (Search.quickCommand), on
+    // Plasma or not, with `context`.
+    function quick(id, context) {
+        return Search.quickCommand(id, Object.assign({ plasma: root.plasma }, context ?? {}));
+    }
+
     function runQuick(id) {
-        const what = Search.quickCommand(id);
+        const what = root.quick(id);
         if (what.shell === "settings") {
             SettingsData.open(what.page);
         } else if (what.shell === "dnd") {
@@ -314,7 +330,7 @@ PanelWindow {
             if (id === "") {
                 return;
             }
-            Launcher.run(Search.quickCommand(id, {
+            Launcher.run(root.quick(id, {
                 window: root.windowAtOpen,
                 output: root.outputAtOpen
             }).run, null);
@@ -355,11 +371,16 @@ PanelWindow {
 
     // The tap of Super (SPEC.md §8.2), which conf binds from Hyprland 0.57:
     // the launcher, the switcher on Apps, as Super+Space opens it.
-    GlobalShortcut {
-        appid: "tide"
-        name: "launcher"
-        description: "Open or close the launcher: the switcher on its Apps tab"
-        onPressed: root.toggle("apps")
+    // Hyprland's alone: on Plasma, setup-kde binds Meta+Space (§8.5).
+    LazyLoader {
+        active: !root.plasma
+
+        GlobalShortcut {
+            appid: "tide"
+            name: "launcher"
+            description: "Open or close the launcher: the switcher on its Apps tab"
+            onPressed: root.toggle("apps")
+        }
     }
 
     // Quickshell scans the desktop entries when DesktopEntries is first
@@ -372,7 +393,7 @@ PanelWindow {
 
         function onApplicationsChanged() {
             if (root.visible && root.apps.length === 0) {
-                root.apps = Search.launcherItems(DesktopEntries.applications.values, LauncherData.desktop);
+                root.apps = Search.launcherItems(LauncherData.entries(), LauncherData.desktop);
             }
         }
     }
@@ -416,15 +437,15 @@ PanelWindow {
         target: "switcher"
 
         function toggle(tab: string): string {
-            if (!Switcher.TABS.includes(tab)) {
-                return `no ${tab} tab; the tabs are ${Switcher.TABS.join(", ")}`;
+            if (!root.tabs.includes(tab)) {
+                return `no ${tab} tab; the tabs are ${root.tabs.join(", ")}`;
             }
             root.toggle(tab);
             return "ok";
         }
         function open(tab: string): string {
-            if (!Switcher.TABS.includes(tab)) {
-                return `no ${tab} tab; the tabs are ${Switcher.TABS.join(", ")}`;
+            if (!root.tabs.includes(tab)) {
+                return `no ${tab} tab; the tabs are ${root.tabs.join(", ")}`;
             }
             root.open(tab);
             return "ok";
@@ -469,7 +490,7 @@ PanelWindow {
                 bottomPadding: 8
 
                 Repeater {
-                    model: Switcher.TABS
+                    model: root.tabs
 
                     Rectangle {
                         id: tabChip
@@ -552,7 +573,7 @@ PanelWindow {
                         // it on.
                         if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
                             if (root.asking === "" && !root.checking) {
-                                root.showTab(Switcher.movedTab(root.tab, event.key === Qt.Key_Backtab ? -1 : 1));
+                                root.showTab(Switcher.movedTab(root.tab, event.key === Qt.Key_Backtab ? -1 : 1, root.tabs));
                             }
                             event.accepted = true;
                         } else if (event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) {
@@ -658,7 +679,7 @@ PanelWindow {
                 topPadding: 6
                 bottomPadding: 6
                 textFormat: Text.PlainText
-                text: TabsData.enabled ? Tabs.tabsNote(TabsData.running, TabsData.browsers) : ""
+                text: !root.plasma && TabsData.enabled ? Tabs.tabsNote(TabsData.running, TabsData.browsers) : ""
                 color: Theme.fgDim
                 font.family: Theme.font
                 font.pixelSize: 13
@@ -863,7 +884,7 @@ PanelWindow {
                 spacing: 16
 
                 Repeater {
-                    model: Switcher.footerKeys(root.tab)
+                    model: Switcher.footerKeys(root.tab, root.plasma)
 
                     Text {
                         required property var modelData

@@ -3,7 +3,9 @@
 # tide-doctor: what `tide doctor` runs. Checks the running
 # session for the problems SPEC.md §5.4 lists, and prints one line per
 # problem with its fix. Exits 1 if it found any, 0 if none, and 2 outside a
-# tide session, where there's nothing to check.
+# tide session or KDE Plasma, where there's nothing to check. Under Plasma,
+# it checks tide's launcher there (SPEC.md §8.5): qs, kde.qml and
+# tide-kde.service.
 #
 # This is the M2 subset, for the transitional shell (TODO.md "tide
 # doctor"):
@@ -39,8 +41,35 @@ problem() {
     problems=$((problems + 1))
 }
 
+# The launcher on Plasma (SPEC.md §8.5), all tide runs there.
+plasma() {
+    if ! command -v qs >/dev/null 2>&1; then
+        problem "qs (Quickshell) isn't installed, so tide's launcher can't run on Plasma: \`setup\` installs it"
+    fi
+    kde_qml=$HOME/.config/quickshell/tide/kde.qml
+    if ! test -f "$kde_qml"; then
+        problem "$kde_qml isn't installed, so tide-kde.service has nothing to run: run \`make install\` in the tide checkout"
+    fi
+    if ! state=$(systemctl --user show -p LoadState --value tide-kde.service 2>&1); then
+        problem "couldn't tell whether tide-kde.service is installed ($state): \`systemctl --user status tide-kde.service\` says"
+    elif test "$state" = not-found; then
+        problem "tide-kde.service isn't installed, so Meta+Space has no launcher: run \`make install\` in the tide checkout, then \`systemctl --user daemon-reload\`"
+    else
+        state=$(systemctl --user is-active tide-kde.service 2>&1)
+        if test "$state" != active; then
+            problem "tide-kde.service is ${state:-not active}, so Meta+Space has no launcher: \`systemctl --user enable --now tide-kde.service\`, as \`setup\` does; \`journalctl --user -u tide-kde.service\` says why it stopped"
+        fi
+    fi
+    if test "$problems" -gt 0; then
+        exit 1
+    fi
+    echo "No problems found."
+    exit 0
+}
+
 case ":${XDG_CURRENT_DESKTOP:-}:" in
     *:tide:*) ;;
+    *:KDE:*) plasma ;;
     *)
         echo "$prog: not in a tide session (XDG_CURRENT_DESKTOP is '${XDG_CURRENT_DESKTOP:-}'); run it from inside one" >&2
         exit 2

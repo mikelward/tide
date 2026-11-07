@@ -27,8 +27,21 @@ Singleton {
     // change. Until the first read is in, only the settings apps are left
     // out.
     readonly property var desktopNames: Search.desktopNames(Quickshell.env("XDG_CURRENT_DESKTOP"))
+    // On KDE Plasma (SPEC.md §8.5), where kde.qml runs the launcher alone.
+    readonly property bool plasma: Search.onPlasma(root.desktopNames)
     property var showIn: ({})
     readonly property var desktop: ({ names: root.desktopNames, showIn: root.showIn })
+
+    // The desktop entries the launcher lists: Quickshell's applications,
+    // and on Plasma the System Settings pages, which are NoDisplay, so the
+    // applications leave them out, looked up by ID (SPEC.md §8.5).
+    function entries() {
+        const apps = DesktopEntries.applications.values;
+        if (!root.plasma) {
+            return apps;
+        }
+        return apps.concat(Search.settingsPageIds(root.showIn).map(id => DesktopEntries.byId(id)).filter(e => e && e.noDisplay));
+    }
     // Each read's number, so an older one that ends last changes nothing.
     property int reads: 0
 
