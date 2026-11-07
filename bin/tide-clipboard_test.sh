@@ -1,7 +1,8 @@
 #!/bin/sh
 #
-# Tests for bin/tide-clipboard, against fake cliphist, wl-paste, wl-copy and
-# notify-send on PATH.
+# Tests for bin/tide-clipboard: the real openssl, with stand-ins for the
+# keyring (secret-tool), wl-paste, wl-copy, cliphist (whose history is moved
+# in), systemctl and notify-send on PATH.
 
 cd "$(dirname "$0")/.." || exit 1
 cmd=$PWD/bin/tide-clipboard
@@ -27,80 +28,53 @@ mkdir "$fake"
 log=$tmp/log
 export FAKE_LOG="$log" FAKE_DIR="$tmp"
 
-# cliphist logs its arguments, keeps what `store` and `delete` read in
-# $FAKE_DIR/stored and $FAKE_DIR/deleted, and exits $FAKE_CLIPHIST_STATUS.
-# `decode` is 0.4.0's: it refuses an argument, and decodes the "ID<TAB>"
-# line on stdin to "entry ID".
+# secret-tool, as libsecret's, on a keyring of one file, $FAKE_DIR/keyring:
+# lookup prints the secret, or nothing and exit 1 without one; store reads
+# it on stdin. With $FAKE_KEYRING_LOCKED, both fail as a locked keyring
+# does. Each call's arguments are logged.
+cat > "$fake/secret-tool" <<'FAKE'
+#!/bin/sh
+printf "secret-tool %s\n" "$*" >> "$FAKE_LOG"
+if test -n "${FAKE_KEYRING_LOCKED:-}"; then
+    echo "secret-tool: Cannot create an item in a locked collection" >&2
+    exit 1
+fi
+case "$1" in
+    lookup) test -s "$FAKE_DIR/keyring" || exit 1; cat "$FAKE_DIR/keyring" ;;
+    store) cat > "$FAKE_DIR/keyring" ;;
+esac
+FAKE
+# cliphist, with a history to move in: "ID<TAB>preview<TAB>content" lines in
+# $FAKE_DIR/cliphist, listed and decoded as the real one does, and wiped.
 cat > "$fake/cliphist" <<'FAKE'
 #!/bin/sh
 printf "cliphist %s\n" "$*" >> "$FAKE_LOG"
-for last; do :; done
-# With $FAKE_DIR/db, a history: "ID<TAB>text" lines, newest first, that
-# store adds to (moving a repeat to the top, under a new ID), list prints
-# and delete removes from.
-db=$FAKE_DIR/db
-case "$last" in
-    store)
-        cat > "$FAKE_DIR/stored"
-        # As cliphist does, a copy that's only whitespace is passed over.
-        if test -e "$db" && grep -q '[^[:space:]]' "$FAKE_DIR/stored"; then
-            text=$(cat "$FAKE_DIR/stored")
-            next=$(( $(cat "$FAKE_DIR/next" 2>/dev/null || echo 100) + 1 ))
-            echo "$next" > "$FAKE_DIR/next"
-            { printf '%s\t%s\n' "$next" "$text"; awk -F '\t' -v t="$text" '$2 != t' "$db"; } > "$db.new"
-            mv "$db.new" "$db"
-        fi
-        ;;
-    delete)
-        cat > "$FAKE_DIR/deleted"
-        # 0.4.0's delete reads only the first ID it's given.
-        if test "${FAKE_CLIPHIST_VERSION:-}" = 0.4.0; then
-            head -n 1 "$FAKE_DIR/deleted" > "$FAKE_DIR/deleted.first"
-            mv "$FAKE_DIR/deleted.first" "$FAKE_DIR/deleted"
-        fi
-        if test -e "$db"; then
-            awk -F '\t' 'FNR == NR { gone[$1] = 1; next } !($1 in gone)' "$FAKE_DIR/deleted" "$db" > "$db.new"
-            mv "$db.new" "$db"
-        fi
-        ;;
+db=$FAKE_DIR/cliphist
+case "$1" in
     list)
-        if test -n "${FAKE_NO_DB:-}"; then
-            echo "opening db: please store something first" >&2
+        # $FAKE_LIST_FAILS makes the listing fail.
+        if test -n "${FAKE_LIST_FAILS:-}"; then
+            echo "cliphist: couldn't open the database" >&2
             exit 1
         fi
-        if test -e "$db"; then
-            cat "$db"
-        else
-            printf '2\tsecond\n1\tfirst\n'
-        fi
-        ;;
-    version)
-        # 0.6.0 and later list their flags; 0.4.0 has no version command.
-        case "${FAKE_CLIPHIST_VERSION:-0.7.0}" in
-            0.4.0) echo "usage: cliphist <store|list|decode|delete|delete-query|wipe>" >&2; exit 1 ;;
-            0.5.0) printf '0.5.0\n' >&2 ;;
-            *) printf 'version\t%s\npreview-width\t100\n' "$FAKE_CLIPHIST_VERSION" >&2 ;;
-        esac
-        exit 0
+        test -e "$db" && cut -f 1,2 "$db"
         ;;
     decode)
-        if test "$1" != decode; then
-            echo "decode takes no arguments" >&2
+        IFS='	' read -r id _
+        # $FAKE_DECODE_FAILS names an entry that won't decode.
+        if test "$id" = "${FAKE_DECODE_FAILS:-}"; then
+            echo "cliphist: couldn't decode $id" >&2
             exit 1
         fi
-        IFS='	' read -r id _
-        case "$id" in
-            '' | *[!0-9]*) echo "input not prefixed with id" >&2; exit 1 ;;
-        esac
-        if test -e "$db"; then
-            awk -F '\t' -v id="$id" '$1 == id { printf "%s", $2 }' "$db"
-            exit 0
-        fi
-        printf 'entry %s' "$id"
+        awk -F '\t' -v id="$id" '$1 == id { printf "%s", $3 }' "$db"
+        ;;
+    wipe)
+        # Whether tide's own history was written by then.
+        if test -e "$XDG_STATE_HOME/tide/clipboard/index"; then echo "index written" >> "$FAKE_LOG"; fi
+        rm -f "$db"
         ;;
 esac
-test "${FAKE_CLIPHIST_STATUS:-0}" -eq 0 || echo "cliphist broke" >&2
-exit "${FAKE_CLIPHIST_STATUS:-0}"
+exit 0
 FAKE
 # wl-paste --list-types prints $FAKE_TYPES, exiting $FAKE_WLPASTE_STATUS.
 cat > "$fake/wl-paste" <<'FAKE'
@@ -141,345 +115,460 @@ cat > "$fake/notify-send" <<'FAKE'
 #!/bin/sh
 printf "notify-send %s\n" "$*" >> "$FAKE_LOG"
 FAKE
+# cat, except that with $FAKE_CAT_SHORT it reads a temporary file as
+# empty, as a full disk would leave one, and says nothing.
+cat > "$fake/cat" <<'FAKE'
+#!/bin/sh
+if test -n "${FAKE_CAT_SHORT:-}"; then
+    for arg; do
+        case "$arg" in "$XDG_RUNTIME_DIR"/*) exit 0 ;; esac
+    done
+fi
+exec "$FAKE_REAL_CAT" "$@"
+FAKE
+FAKE_REAL_CAT=$(command -v cat)
+export FAKE_REAL_CAT
+# openssl, logging each decryption, except that with $FAKE_SEAL_FAILS it
+# can't encrypt.
+cat > "$fake/openssl" <<'FAKE'
+#!/bin/sh
+test "$1 $2" != "enc -d" || echo "openssl decrypt" >> "$FAKE_LOG"
+if test -n "${FAKE_SEAL_FAILS:-}" && test "$1" = enc && test "$2" != -d; then
+    echo "openssl: no space left on device" >&2
+    exit 1
+fi
+exec "$FAKE_REAL_OPENSSL" "$@"
+FAKE
+FAKE_REAL_OPENSSL=$(command -v openssl)
+export FAKE_REAL_OPENSSL
 chmod +x "$fake"/*
-# Only the fakes, and what sh itself needs.
+# Only the fakes, and what sh and the history need.
 base=$tmp/base
 mkdir "$base"
-for t in cat grep mktemp rm printf mkfifo timeout date mkdir awk head chmod mv cut tr stat cmp flock; do
+for t in cat grep mktemp rm printf mkfifo timeout date mkdir awk head chmod mv cut tr stat cmp flock \
+    openssl od wc sed sort iconv ls sh; do
     p=$(command -v "$t") && ln -s "$p" "$base/$t"
 done
 SAVED_PATH=$PATH
-export PATH="$fake:$base" XDG_RUNTIME_DIR="$tmp" XDG_STATE_HOME="$tmp/state"
+export PATH="$fake:$base" XDG_RUNTIME_DIR="$tmp/run" XDG_STATE_HOME="$tmp/state" XDG_CONFIG_HOME="$tmp/config"
+PATH=$SAVED_PATH mkdir -p "$tmp/run" "$tmp/config/hypr"
+state=$tmp/state/tide/clipboard
+conf=$tmp/config/hypr/tide-clipboard.conf
 
 reset() {
     : > "$log"
-    rm -rf "$tmp/stored" "$tmp/deleted" "$tmp/copied" "$tmp/db" "$tmp/next" "$tmp/state"
-    unset TIDE_CLIPBOARD_NOW FAKE_CLIPHIST_VERSION FAKE_NO_DB FAKE_UNIT_STATE FAKE_WLCOPY_HOLD CLIPBOARD_STATE FAKE_TYPES FAKE_WLPASTE_STATUS FAKE_CLIPHIST_STATUS FAKE_WLCOPY_STATUS
+    PATH=$SAVED_PATH rm -rf "$tmp/state" "$tmp/copied" "$tmp/keyring" "$tmp/cliphist" "$conf"
+    unset TIDE_CLIPBOARD_NOW FAKE_SEAL_FAILS FAKE_CAT_SHORT FAKE_DECODE_FAILS FAKE_LIST_FAILS FAKE_KEYRING_LOCKED FAKE_UNIT_STATE FAKE_WLCOPY_HOLD CLIPBOARD_STATE FAKE_TYPES \
+        FAKE_WLPASTE_STATUS FAKE_WLCOPY_STATUS TIDE_CLIPBOARD_LOCK_WAIT
 }
 
-# --- store ---------------------------------------------------------------------
+DAY=86400
+# copy TEXT [AT]: stores TEXT as a text copy, at second AT if given.
+copy_text() {
+    if test -n "${2:-}"; then
+        printf '%s' "$1" | TIDE_CLIPBOARD_NOW=$2 CLIPBOARD_STATE=data "$cmd" store
+    else
+        printf '%s' "$1" | CLIPBOARD_STATE=data "$cmd" store
+    fi
+}
+# The previews, newest first, on one line.
+history() { "$cmd" list | cut -f 2 | tr '\n' '|'; }
+# How many files folder $1 holds.
+files() {
+    set -- "$1"/*
+    if test -e "$1"; then echo $#; else echo 0; fi
+}
+# Whether any file under the history holds TEXT as it was copied.
+on_disk() { grep -rqF "$1" "$state" 2>/dev/null; }
+
+# --- store and list ------------------------------------------------------------
 
 reset
-printf 'hello' | CLIPBOARD_STATE=data "$cmd" store
+copy_text "first"
+copy_text "second"
 check "store exits 0" test $? -eq 0
-check "store stores the copy" test "$(cat "$tmp/stored")" = hello
-check "store keeps the newest 100 by default" contains "$(cat "$log")" "cliphist -max-items 100 store"
+check "list shows the copies, newest first" test "$(history)" = "second|first|"
+check "with an ID before each, as the picker reads them" test -n "$("$cmd" list | grep -E '^[0-9]+	second$')"
+check "nothing copied is on disk as it was copied" sh -c "! grep -rqF -e first -e second '$state'"
+check "the history's folder is yours alone" test "$(stat -c %a "$state" 2>/dev/null || stat -f %Lp "$state")" = 700
+for f in "$state/index" "$state"/entries/*; do
+    check "$f is yours alone" test "$(stat -c %a "$f" 2>/dev/null || stat -f %Lp "$f")" = 600
+done
+check "the first copy made a key and kept it in the keyring" test "$(wc -c < "$tmp/keyring")" -eq 64
+check "the key went to secret-tool on stdin, not in its arguments" sh -c "! grep -qF '$(cat "$tmp/keyring")' '$log'"
+check "it's labeled as tide's" contains "$(cat "$log")" "secret-tool store --label=tide clipboard history application tide purpose clipboard-history"
+key=$(cat "$tmp/keyring")
+copy_text "third"
+check "later copies use the same key" test "$(cat "$tmp/keyring")" = "$key"
+leftover=no
+for f in "$tmp"/run/tide-clipboard.*; do
+    test -e "$f" && leftover=yes
+done
+check "nothing's left on the runtime directory" test "$leftover" = no
 
 reset
-printf 'hello' | "$cmd" store --max-items 50
-check "--max-items N sets the cap" contains "$(cat "$log")" "cliphist -max-items 50 store"
-reset
-printf 'hello' | "$cmd" store --max-items=7
-check "--max-items=N sets the cap" contains "$(cat "$log")" "cliphist -max-items 7 store"
-reset
-out=$(printf 'hello' | "$cmd" store --max-items=lots 2>&1)
-check "a bad --max-items exits 2" test $? -eq 2
-check "a bad --max-items names it: $out" contains "$out" "--max-items"
-check "a bad --max-items stores nothing" test ! -e "$tmp/stored"
+copy_text "a  b
+	c"
+check "a preview folds whitespace to single spaces" test "$(history)" = "a b c|"
 
-# The Clipboard page's settings, in the file the shell writes (SPEC.md §16).
-PATH=$SAVED_PATH mkdir -p "$tmp/config/hypr"
-conf=$tmp/config/hypr/tide-clipboard.conf
 reset
-printf 'history=off\nmax_items=50\n' > "$conf"
-printf 'hello' | XDG_CONFIG_HOME="$tmp/config" CLIPBOARD_STATE=data "$cmd" store
-check "history off exits 0" test $? -eq 0
-check "history off stores nothing" test ! -e "$tmp/stored"
-check "and never reaches cliphist" test -z "$(grep cliphist "$log")"
+long=$(printf '%01200d' 0)
+copy_text "$long"
+check "a preview is the first 1,000 characters" test "$("$cmd" list | cut -f 2 | wc -c)" -eq 1001
+
 reset
-printf 'history=on\nmax_items=50' > "$conf"
-printf 'hello' | XDG_CONFIG_HOME="$tmp/config" CLIPBOARD_STATE=data "$cmd" store --max-items 200
-check "the page's max_items replaces --max-items, even on a last line with no newline" contains "$(cat "$log")" "cliphist -max-items 50 store"
+copy_text "again"
+copy_text "other"
+copy_text "again"
+check "copying something again moves it to the top" test "$(history)" = "again|other|"
+
+reset
+copy_text "aaa"
+copy_text "bbb"
+copy_text "ccc"
+: > "$log"
+copy_text "ddd"
+check "a copy beside others its size decrypts only the index" test "$(grep -c "openssl decrypt" "$log")" -eq 1
+copy_text "bbb"
+check "and still finds its repeat" test "$(history)" = "bbb|ddd|ccc|aaa|"
+
+reset
+copy_text "again"
+copy_text "other"
+id=$("$cmd" list | awk -F '\t' '$2 == "again" { print $1 }')
+# The index can't be written: a folder where its new copy would go.
+PATH=$SAVED_PATH mkdir "$state/index.new"
+copy_text "again" 2>/dev/null
+check "a repeat whose store fails says so" test $? -eq 1
+PATH=$SAVED_PATH rmdir "$state/index.new"
+check "and leaves the history as it was" test "$(history)" = "other|again|"
+"$cmd" copy "$id"
+check "with the earlier copy still there to paste" test "$(cat "$tmp/copied")" = "again"
+copy_text "after"
+set -- "$state/entries"/*
+check "and the next store removes the file the failed one left" test $# -eq "$("$cmd" list | wc -l)"
+
+reset
+copy_text "first"
+copy_text "second"
+FAKE_CAT_SHORT=yes
+export FAKE_CAT_SHORT
+out=$(copy_text "third" 2>&1)
+check "a history cut short while it's rewritten fails, saying so" contains "$out" "couldn't add the copy"
+unset FAKE_CAT_SHORT
+check "and isn't written back" test "$(history)" = "second|first|"
+
+reset
+copy_text "   "
+check "a copy that's only whitespace isn't kept" test ! -e "$state/index"
+
+reset
+# A copy that never ends: read in full, it would fill the runtime
+# directory, here capped at about 20 MiB.
+(
+    ulimit -f 40000
+    PATH=$SAVED_PATH yes "a long copy" | CLIPBOARD_STATE=data "$cmd" store
+)
+check "a copy too big to keep is read only so far, then passed over" test $? -eq 0
+check "and isn't kept" test ! -e "$state/index"
+
+reset
+CLIPBOARD_STATE=sensitive
+export CLIPBOARD_STATE
+printf 'hunter2' | "$cmd" store
+check "a copy wl-clipboard calls sensitive isn't kept" test ! -e "$state/index"
+unset CLIPBOARD_STATE
+FAKE_TYPES="text/plain
+x-kde-passwordManagerHint"
+export FAKE_TYPES
+copy_text "hunter2"
+check "nor one marked with the password managers' hint" test ! -e "$state/index"
+unset FAKE_TYPES
+FAKE_WLPASTE_STATUS=1
+export FAKE_WLPASTE_STATUS
+out=$(copy_text "maybe" 2>&1)
+check "nor one whose types can't be read, saying so" contains "$out" "couldn't list the copy's types"
+unset FAKE_WLPASTE_STATUS
+
+# --- the Clipboard page's settings ---------------------------------------------
+
+reset
+printf 'history=off\n' > "$conf"
+copy_text "hello"
+check "history off keeps nothing" test ! -e "$state/index"
+reset
+printf 'max_items=2' > "$conf"
+copy_text one
+copy_text two
+copy_text three
+check "the page's max_items is how many are kept, even on a last line with no newline" test "$(history)" = "three|two|"
+check "and the ones past it leave the disk" test "$(files "$state/entries")" -eq 2
+reset
+copy_text one
+copy_text two
+printf 'tre' | CLIPBOARD_STATE=data "$cmd" store --max-items 1
+check "--max-items, with no file" test "$(history)" = "tre|"
 reset
 printf 'history=maybe\nmax_items=none\ncolour=red\n' > "$conf"
-out=$(printf 'hello' | XDG_CONFIG_HOME="$tmp/config" CLIPBOARD_STATE=data "$cmd" store 2>&1)
-check "a bad file still stores, with the default cap" contains "$(cat "$log")" "cliphist -max-items 100 store"
+out=$(copy_text "hello" 2>&1)
+check "a bad file still keeps the copy" test "$(history)" = "hello|"
 check "and says what's wrong with history" contains "$out" "history is on or off, not 'maybe'"
 check "and with max_items" contains "$out" "max_items is a whole number above 0, not 'none'"
 check "and names a setting it doesn't know" contains "$out" "colour isn't a setting (history, max_items, max_age_days)"
-rm "$conf"
+
+# --- forgetting old copies -----------------------------------------------------
 
 reset
-printf 'hunter2' | CLIPBOARD_STATE=sensitive "$cmd" store
-check "a sensitive copy exits 0" test $? -eq 0
-check "a sensitive copy isn't stored" test ! -e "$tmp/stored"
-check "a sensitive copy isn't even looked at" test ! -s "$log"
+copy_text old 1000000
+copy_text new $((1000000 + 6 * DAY))
+check "six days on, both copies are kept" test "$(TIDE_CLIPBOARD_NOW=$((1000000 + 6 * DAY)) history)" = "new|old|"
+copy_text newer $((1000000 + 7 * DAY + 1))
+check "a copy a week old goes at the next copy" test "$(TIDE_CLIPBOARD_NOW=$((1000000 + 7 * DAY + 1)) history)" = "newer|new|"
+check "and from the disk" test "$(files "$state/entries")" -eq 2
+reset
+copy_text again 1000000
+copy_text other $((1000000 + 1))
+copy_text again $((1000000 + 6 * DAY))
+check "copying something again starts its week afresh" \
+    test "$(TIDE_CLIPBOARD_NOW=$((1000000 + 8 * DAY)) history)" = "again|"
+reset
+copy_text old 1000000
+check "listing forgets a week-old copy, with nothing copied since" \
+    test "$(TIDE_CLIPBOARD_NOW=$((1000000 + 8 * DAY)) history)" = ""
+reset
+printf 'max_age_days=1\n' > "$conf"
+copy_text a 1000000
+copy_text b $((1000000 + DAY + 1))
+check "the page's days are how long a copy stays" test "$(TIDE_CLIPBOARD_NOW=$((1000000 + DAY + 1)) history)" = "b|"
+
+# --- images --------------------------------------------------------------------
 
 reset
-FAKE_TYPES='text/plain
-x-kde-passwordManagerHint
-text/plain;charset=utf-8'
+# A PNG's signature and IHDR, 640 wide and 480 high, then some bytes.
+printf '\211PNG\r\n\032\n\000\000\000\015IHDR\000\000\002\200\000\000\001\340\010\006\000\000\000xxxx' > "$tmp/image.png"
+FAKE_TYPES="image/png"
 export FAKE_TYPES
-printf 'hunter2' | CLIPBOARD_STATE=data "$cmd" store
-check "a copy marked with the hint exits 0" test $? -eq 0
-check "a copy marked with the hint isn't stored" test ! -e "$tmp/stored"
-check "a copy marked with the hint never reaches cliphist" test -z "$(grep cliphist "$log")"
+CLIPBOARD_STATE=data "$cmd" store < "$tmp/image.png"
+unset FAKE_TYPES
+check "an image shows as its size, type and dimensions, as cliphist showed it" \
+    test "$(history)" = "[[ binary data 33 B png 640x480 ]]|"
+id=$("$cmd" list | cut -f 1)
+"$cmd" copy "$id"
+check "copying an image puts its bytes back" cmp -s "$tmp/copied" "$tmp/image.png"
+check "as its type" contains "$(cat "$log")" "wl-copy --type image/png"
 
 reset
-FAKE_TYPES='x-kde-passwordManagerHint-not
-text/plain'
+# The list wl-paste gives may already be the next copy's.
+FAKE_TYPES="image/png"
 export FAKE_TYPES
-printf 'fine' | "$cmd" store
-check "only the exact hint type counts" test "$(cat "$tmp/stored")" = fine
+copy_text "words"
+check "text whose copy is replaced by an image at once stays text" test "$(history)" = "words|"
+FAKE_TYPES="text/plain"
+CLIPBOARD_STATE=data "$cmd" store < "$tmp/image.png"
+check "and an image replaced by text stays an image" \
+    test "$(history | cut -d '|' -f 1)" = "[[ binary data 33 B png 640x480 ]]"
+FAKE_TYPES="text/plain
+image/bmp"
+printf 'BM\000\000\000\000' | CLIPBOARD_STATE=data "$cmd" store
+unset FAKE_TYPES
+check "an image of a type it doesn't know takes the type offered" \
+    test "$(history | cut -d '|' -f 1)" = "[[ binary data 6 B bmp ]]"
+
+# --- copy, put, delete, wipe ---------------------------------------------------
 
 reset
-FAKE_WLPASTE_STATUS=1 FAKE_TYPES="Nothing is copied"
-export FAKE_WLPASTE_STATUS FAKE_TYPES
-out=$(printf 'maybe a password' | "$cmd" store 2>&1)
-check "unreadable types exit 1" test $? -eq 1
-check "unreadable types aren't stored" test ! -e "$tmp/stored"
-check "unreadable types say why: $out" contains "$out" "Nothing is copied"
-
-reset
-printf '' | CLIPBOARD_STATE=nil "$cmd" store
-check "an emptied clipboard stores nothing" test ! -e "$tmp/stored"
-
-reset
-FAKE_CLIPHIST_STATUS=1
-export FAKE_CLIPHIST_STATUS
-printf 'x' | "$cmd" store 2>/dev/null # the status is what's checked
-check "a cliphist failure is the exit status" test $? -eq 1
-
-# --- list, copy, delete ----------------------------------------------------------
-
-reset
-out=$("$cmd" list)
-check "list prints cliphist's list" test "$out" = "$(printf '2\tsecond\n1\tfirst')"
-check "list asks for 1,000-character previews where cliphist can" contains "$(cat "$log")" "cliphist -preview-width 1000 list"
-for v in 0.4.0 0.5.0; do
-    reset
-    out=$(FAKE_CLIPHIST_VERSION=$v "$cmd" list)
-    check "cliphist $v lists anyway" test "$out" = "$(printf '2\tsecond\n1\tfirst')"
-    check "without -preview-width, which cliphist $v lacks" test -z "$(grep -e '-preview-width' "$log")"
-done
-
-# cliphist refuses to list before its first store makes the database.
-reset
-FAKE_NO_DB=1
-export FAKE_NO_DB
-out=$("$cmd" list 2>&1)
-check "list before anything is stored exits 0" test $? -eq 0
-check "list before anything is stored prints nothing: $out" test -z "$out"
-reset
-FAKE_NO_DB=1 FAKE_UNIT_STATE=inactive
-export FAKE_NO_DB FAKE_UNIT_STATE
-out=$("$cmd" list 2>&1)
-check "list with no history and the unit stopped exits 1" test $? -eq 1
-check "list with the unit stopped says so, and how to start it: $out" contains "$out" "tide-clipboard.service is inactive, so nothing you copy is kept: systemctl --user enable --now tide-clipboard.service"
-check "list with the unit stopped doesn't pass on cliphist's words" test -n "${out##*please store*}"
-reset
-FAKE_CLIPHIST_STATUS=1
-export FAKE_CLIPHIST_STATUS
-out=$("$cmd" list 2>&1)
-check "a failed list exits 1" test $? -eq 1
-check "a failed list says why: $out" contains "$out" "cliphist broke"
-
-reset
-"$cmd" copy 41
+copy_text "copy me"
+id=$("$cmd" list | cut -f 1)
+"$cmd" copy "$id"
 check "copy exits 0" test $? -eq 0
-check "copy puts the decoded entry on the clipboard" test "$(cat "$tmp/copied")" = "entry 41"
-leftover=no
-for f in "$tmp"/tide-clipboard.*; do
-    test -e "$f" && leftover=yes
-done
-check "copy leaves no temporary file" test "$leftover" = no
-
-# wl-copy's background child keeps its stderr while it owns the clipboard,
-# so copy mustn't wait on that pipe: the picker pastes once copy exits.
-# The child is let go after; a copy that waited would only end then.
-reset
-mkfifo "$tmp/hold"
-FAKE_WLCOPY_HOLD=$tmp/hold
-export FAKE_WLCOPY_HOLD
-# Into a file, not $(...), whose pipe the child would hold too; and
-# --foreground, so a copy that waited is stopped but the child isn't.
-timeout --foreground 10 "$cmd" copy 41 >"$tmp/out" 2>&1
-code=$?
-printf '\n' 1<>"$tmp/hold"
-check "copy returns while wl-copy's child still owns the clipboard: status $code" test "$code" -eq 0
-check "and copied the entry" test "$(cat "$tmp/copied")" = "entry 41"
-rm -f "$tmp/hold"
-
-# put: text onto the clipboard, as the picker's Characters tab copies one.
-reset
-mkfifo "$tmp/hold"
-FAKE_WLCOPY_HOLD=$tmp/hold
-export FAKE_WLCOPY_HOLD
-# Into a file, not $(...), whose pipe the child would hold too; and
-# --foreground, so a copy that waited is stopped but the child isn't.
-timeout --foreground 10 "$cmd" put "é" >"$tmp/out" 2>&1
-code=$?
-printf '\n' 1<>"$tmp/hold"
-check "put returns while wl-copy's child still owns the clipboard: status $code" test "$code" -eq 0
-check "and copied the text" test "$(cat "$tmp/copied")" = "é"
-check "with the text after --, so one starting - isn't an option" contains "$(cat "$log")" "wl-copy -- é"
-rm -f "$tmp/hold"
-reset
-FAKE_WLCOPY_STATUS=1
-export FAKE_WLCOPY_STATUS
-out=$("$cmd" put x 2>&1)
-check "a failed put exits 1" test $? -eq 1
-check "a failed put says so: $out" contains "$out" "wl-copy failed"
-reset
-out=$("$cmd" put 2>&1)
-check "put needs the text" test $? -eq 2
-
-reset
+check "copy puts the entry back on the clipboard" test "$(cat "$tmp/copied")" = "copy me"
+check "as text, with no type" grep -qx "wl-copy " "$log"
+out=$("$cmd" copy 999 2>&1)
+check "copy of an entry there isn't says so" contains "$out" "there's no entry 999"
 out=$("$cmd" copy 4x1 2>&1)
 check "copy refuses a bad ID" test $? -eq 2
 check "copy names the bad ID: $out" contains "$out" "4x1"
 
-reset
-FAKE_CLIPHIST_STATUS=1
-export FAKE_CLIPHIST_STATUS
-out=$("$cmd" copy 9 2>&1)
-check "copy of a missing entry exits 1" test $? -eq 1
-check "copy of a missing entry copies nothing" test ! -e "$tmp/copied"
-check "copy of a missing entry says why: $out" contains "$out" "entry 9"
-
-reset
+# wl-copy's background child keeps its stderr while it owns the clipboard,
+# so copy mustn't wait on that pipe: the picker pastes once copy exits.
+mkfifo "$tmp/hold"
+FAKE_WLCOPY_HOLD=$tmp/hold
+export FAKE_WLCOPY_HOLD
+# Into a file, not $(...), whose pipe the child would hold too; and
+# --foreground, so a copy that waited is stopped but the child isn't.
+timeout --foreground 10 "$cmd" copy "$id" >"$tmp/out" 2>&1
+code=$?
+printf '\n' 1<>"$tmp/hold"
+check "copy returns while wl-copy's child still owns the clipboard: status $code" test "$code" -eq 0
+timeout --foreground 10 "$cmd" put "é" >"$tmp/out" 2>&1
+code=$?
+printf '\n' 1<>"$tmp/hold"
+check "so does put: status $code" test "$code" -eq 0
+check "put copies the text" test "$(cat "$tmp/copied")" = "é"
+check "with the text after --, so one starting - isn't an option" contains "$(cat "$log")" "wl-copy -- é"
+PATH=$SAVED_PATH rm -f "$tmp/hold"
+unset FAKE_WLCOPY_HOLD
 FAKE_WLCOPY_STATUS=1
 export FAKE_WLCOPY_STATUS
-out=$("$cmd" copy 9 2>&1)
-check "a wl-copy failure exits 1" test $? -eq 1
-check "a wl-copy failure says so: $out" contains "$out" "wl-copy failed"
+out=$("$cmd" put x 2>&1)
+check "a failed put says so" contains "$out" "wl-copy failed"
+unset FAKE_WLCOPY_STATUS
+"$cmd" put >/dev/null 2>&1
+check "put needs the text" test $? -eq 2
 
 reset
-"$cmd" delete 12
-check "delete exits 0" test $? -eq 0
-check "delete hands cliphist the ID" test "$(cat "$tmp/deleted")" = "$(printf '12\t')"
-
-# --- wipe ----------------------------------------------------------------------
-
-reset
-"$cmd" wipe --notify
-check "wipe exits 0" test $? -eq 0
-check "wipe runs cliphist wipe, and notifies nothing" test "$(cat "$log")" = "cliphist wipe"
+copy_text keep
+copy_text gone
+id=$("$cmd" list | head -n 1 | cut -f 1)
+"$cmd" delete "$id"
+check "delete removes the entry" test "$(history)" = "keep|"
+check "and its file" test "$(files "$state/entries")" -eq 1
+out=$("$cmd" delete "$id" 2>&1)
+check "deleting it again says it's not there" contains "$out" "there's no entry $id"
 
 reset
-FAKE_CLIPHIST_STATUS=1
-export FAKE_CLIPHIST_STATUS
-out=$("$cmd" wipe --notify 2>&1)
-check "a failed wipe exits 1" test $? -eq 1
-check "a failed wipe says why: $out" contains "$out" "cliphist broke"
-check "a failed wipe from the launcher notifies" contains "$(cat "$log")" "notify-send -a tide Clipboard history not cleared"
-reset
-FAKE_CLIPHIST_STATUS=1
-export FAKE_CLIPHIST_STATUS
-"$cmd" wipe 2>/dev/null # the status is what's checked
-check "a failed wipe without --notify doesn't notify" test -z "$(grep notify-send "$log")"
+copy_text "something"
+"$cmd" wipe
+check "wipe removes the history" test ! -e "$state"
+check "and leaves the key" test -s "$tmp/keyring"
+copy_text "after"
+check "and a copy after it gets a new ID, not one an old picker list still shows" \
+    test "$("$cmd" list | cut -f 1)" -gt 1
 
-# --- forgetting old copies ------------------------------------------------------
-
-export PATH="$fake:$base"
-
-DAY=86400
-# copy TEXT AT: stores TEXT as copied at second AT.
-copy_at() {
-    printf '%s' "$1" | TIDE_CLIPBOARD_NOW=$2 XDG_CONFIG_HOME="$tmp/noconf" CLIPBOARD_STATE=data "$cmd" store
-}
-history() { cut -f2 "$tmp/db" | tr '\n' ' '; }
+# --- the keyring ---------------------------------------------------------------
 
 reset
-: > "$tmp/db"
-copy_at old 1000000
-copy_at new $((1000000 + 6 * DAY))
-check "six days on, both copies are kept" test "$(history)" = "new old "
-copy_at newer $((1000000 + 7 * DAY + 1))
-check "a copy a week old goes at the next copy" test "$(history)" = "newer new "
-check "and its time with it" test "$(grep -c . "$tmp/state/tide/clipboard-times")" -eq 2
-check "the times are yours alone" test "$(stat -c %a "$tmp/state/tide/clipboard-times" 2>/dev/null || stat -f %Lp "$tmp/state/tide/clipboard-times")" = 600
+copy_text "before"
+FAKE_KEYRING_LOCKED=1
+export FAKE_KEYRING_LOCKED
+out=$(copy_text "while locked" 2>&1)
+check "with the keyring locked, a copy isn't kept, saying why" contains "$out" "the keyring wouldn't give the history's key"
+out=$("$cmd" list 2>&1)
+check "nor can the history be listed" test $? -eq 1
+unset FAKE_KEYRING_LOCKED
+check "and what was kept is there once it's unlocked" test "$(history)" = "before|"
 
 reset
-: > "$tmp/db"
-copy_at again 1000000
-copy_at other $((1000000 + 1))
-copy_at again $((1000000 + 6 * DAY))
-copy_at last $((1000000 + 8 * DAY))
-check "copying something again starts its week afresh" test "$(history)" = "last again "
+copy_text "before"
+PATH=$SAVED_PATH rm "$tmp/keyring"
+out=$("$cmd" list 2>&1)
+check "a history whose key is gone can't be read, saying so" contains "$out" "the keyring has no key for the history"
+check "and listing never makes one" test ! -e "$tmp/keyring"
 
 reset
-: > "$tmp/db"
-copy_at kept 1000000
-copy_at '   ' $((1000000 + 6 * DAY))
-copy_at last $((1000000 + 7 * DAY + 1))
-check "a copy cliphist passes over starts no entry's week again" test "$(history)" = "last "
+PATH=$SAVED_PATH mv "$fake/secret-tool" "$tmp/secret-tool"
+out=$(copy_text "x" 2>&1)
+check "without secret-tool, nothing's kept, naming the package" contains "$out" "install the libsecret-tools package"
+PATH=$SAVED_PATH mv "$tmp/secret-tool" "$fake/secret-tool"
+
+# --- before anything's stored --------------------------------------------------
 
 reset
-: > "$tmp/db"
-FAKE_CLIPHIST_VERSION=0.4.0
-export FAKE_CLIPHIST_VERSION
-copy_at one 1000000
-copy_at two $((1000000 + 1))
-copy_at three $((1000000 + 8 * DAY))
-check "on cliphist 0.4.0, several old copies go at once" test "$(history)" = "three "
-unset FAKE_CLIPHIST_VERSION
+out=$("$cmd" list 2>&1)
+check "list before anything is stored prints nothing" test -z "$out"
+FAKE_UNIT_STATE=inactive
+export FAKE_UNIT_STATE
+out=$("$cmd" list 2>&1)
+check "unless the unit isn't running, which it says" contains "$out" "tide-clipboard.service is inactive"
+
+# --- cliphist's history, moved in ----------------------------------------------
 
 reset
-: > "$tmp/db"
-copy_at old 1000000
-# Another tide clipboard holding the times' lock, until the FIFO's written.
+printf '7\tnewer\tnewer\n3\tolder\tolder\n9\t[[ binary data 37 B png 640x480 ]]\tPNGBYTES\n' > "$tmp/cliphist"
+copy_text "now"
+check "cliphist's history comes in, oldest first, under the new copy" \
+    test "$(history | sed 's/\[\[ binary data [^]]*\]\]/IMG/')" = "now|IMG|newer|older|"
+check "and cliphist's is wiped" test ! -e "$tmp/cliphist"
+check "only once tide's own is written" grep -q "index written" "$log"
+check "and nothing from it is on disk as it was" sh -c "! grep -rqF -e older -e newer '$state'"
+printf '1\tlater\tlater\n' > "$tmp/cliphist"
+copy_text "after"
+check "it's moved in once" sh -c "! printf '%s' '$(history)' | grep -q later"
+check "and cliphist's later history is left alone" test -e "$tmp/cliphist"
+
+reset
+printf '7\tnewer\tnewer\n3\tolder\tolder\n' > "$tmp/cliphist"
+FAKE_DECODE_FAILS=3
+export FAKE_DECODE_FAILS
+out=$(copy_text "now" 2>&1)
+check "an entry that won't come in from cliphist is said" contains "$out" "couldn't move cliphist's entry 3 in"
+check "and cliphist's history stays" test -e "$tmp/cliphist"
+unset FAKE_DECODE_FAILS
+copy_text "later"
+check "to come in at the next copy, without doubling what came before" test "$(history)" = "later|newer|older|now|"
+check "and only then is cliphist's wiped" test ! -e "$tmp/cliphist"
+
+reset
+printf '3\tolder\tolder\n' > "$tmp/cliphist"
+FAKE_LIST_FAILS=yes
+export FAKE_LIST_FAILS
+out=$(copy_text "now" 2>&1)
+check "a history cliphist can't list is said" contains "$out" "couldn't read cliphist's history"
+check "and the copy is still kept" test "$(history)" = "now|"
+unset FAKE_LIST_FAILS
+copy_text "later"
+check "and cliphist's history comes in at the next copy" test "$(history)" = "later|older|now|"
+check "and is wiped there only then" test ! -e "$tmp/cliphist"
+
+reset
+printf '3\tolder\tolder\n' > "$tmp/cliphist"
+FAKE_SEAL_FAILS=yes
+export FAKE_SEAL_FAILS
+copy_text "secret" 2>/dev/null
+unset FAKE_SEAL_FAILS
+check "a move from cliphist that fails leaves no copy in the clear behind" test -z "$(ls "$tmp/run")"
+check "and cliphist's history stays" test -e "$tmp/cliphist"
+
+reset
+copy_text "first"
+copy_text "second"
+first=$("$cmd" list | awk -F '\t' '$2 == "first" { print $1 }')
+printf 'garbage' > "$state.next"
+copy_text "third"
+check "a damaged counter never reuses an ID" test "$("$cmd" list | cut -f 1 | awk 'seen[$0]++')" = ""
+"$cmd" copy "$first"
+check "so the earlier copies are as they were" test "$(cat "$tmp/copied")" = "first"
+
+reset
+printf '3\tolder\tolder\n' > "$tmp/cliphist"
+"$cmd" wipe
+check "a wipe before the first copy clears cliphist's history too" test ! -e "$tmp/cliphist"
+copy_text "new"
+check "so the next copy doesn't bring it back" test "$(history)" = "new|"
+
+# --- one at a time -------------------------------------------------------------
+
+reset
+copy_text "first"
+# Another tide clipboard holding the history, until the FIFO's written.
 mkfifo "$tmp/release" "$tmp/locked"
-(flock 8; echo locked >"$tmp/locked"; read -r _ <"$tmp/release") 8>>"$tmp/state/tide/clipboard-times.lock" &
+(flock 8; echo locked >"$tmp/locked"; read -r _ <"$tmp/release") 8>>"$state.lock" &
 holder=$!
 read -r _ <"$tmp/locked"
-out=$(printf 'new' | TIDE_CLIPBOARD_LOCK_WAIT=0 TIDE_CLIPBOARD_NOW=$((1000000 + 8 * DAY)) XDG_CONFIG_HOME="$tmp/noconf" CLIPBOARD_STATE=data "$cmd" store 2>&1)
-check "while another holds the times, a copy is still stored" test "$(history)" = "new old "
-check "and the old one waits, saying why" contains "$out" "another tide clipboard held"
+out=$(printf 'second' | TIDE_CLIPBOARD_LOCK_WAIT=0 CLIPBOARD_STATE=data "$cmd" store 2>&1)
+check "while another holds the history, a copy waits, then says why" contains "$out" "another tide clipboard held"
+out=$(TIDE_CLIPBOARD_LOCK_WAIT=0 "$cmd" wipe 2>&1)
+check "so does a wipe, which leaves the history alone" test -e "$state/index"
 echo go > "$tmp/release"
 wait "$holder"
-rm "$tmp/release" "$tmp/locked"
-copy_at newer $((1000000 + 8 * DAY))
-check "and goes once the lock's free" test "$(history)" = "newer new "
+PATH=$SAVED_PATH rm "$tmp/release" "$tmp/locked"
+check "and the history is as the other left it" test "$(history)" = "first|"
 
 reset
-: > "$tmp/db"
 PATH=$SAVED_PATH mv "$base/flock" "$tmp/flock"
-copy_at old 1000000
-out=$(printf 'new' | TIDE_CLIPBOARD_NOW=$((1000000 + 8 * DAY)) XDG_CONFIG_HOME="$tmp/noconf" CLIPBOARD_STATE=data "$cmd" store 2>&1)
-check "without flock, copies are kept and old ones still go" test "$(history)" = "new "
+out=$(copy_text "unlocked" 2>&1)
+check "without flock, a copy is still kept" test "$(history 2>/dev/null)" = "unlocked|"
 check "saying the lock's missing" contains "$out" "flock isn't installed (util-linux)"
 PATH=$SAVED_PATH mv "$tmp/flock" "$base/flock"
 
-reset
-: > "$tmp/db"
-copy_at old 1000000
-TIDE_CLIPBOARD_NOW=$((1000000 + 8 * DAY)) XDG_CONFIG_HOME="$tmp/noconf" "$cmd" list > "$tmp/listed"
-check "listing forgets a week-old copy too, with nothing copied since" test "$(cat "$tmp/listed")" = ""
+# --- arguments -----------------------------------------------------------------
 
 reset
-: > "$tmp/db"
-mkdir -p "$tmp/agecfg/hypr"
-printf 'max_age_days=1\n' > "$tmp/agecfg/hypr/tide-clipboard.conf"
-printf 'a' | TIDE_CLIPBOARD_NOW=1000000 XDG_CONFIG_HOME="$tmp/agecfg" CLIPBOARD_STATE=data "$cmd" store
-printf 'b' | TIDE_CLIPBOARD_NOW=$((1000000 + DAY + 1)) XDG_CONFIG_HOME="$tmp/agecfg" CLIPBOARD_STATE=data "$cmd" store
-check "the Clipboard page's days are how long a copy stays" test "$(history)" = "b "
-printf 'max_age_days=soon\n' > "$tmp/agecfg/hypr/tide-clipboard.conf"
-out=$(printf 'c' | TIDE_CLIPBOARD_NOW=1000000 XDG_CONFIG_HOME="$tmp/agecfg" CLIPBOARD_STATE=data "$cmd" store 2>&1)
-check "a bad max_age_days says so, and the copy is kept" contains "$out" "max_age_days is a whole number above 0, not 'soon'"
+"$cmd" bogus >/dev/null 2>&1
+check "an unknown command is a usage error" test $? -eq 2
+"$cmd" store --max-items 0 </dev/null >/dev/null 2>&1
+check "--max-items must be above 0" test $? -eq 2
 
-reset
-: > "$tmp/db"
-copy_at x 1000000
-"$cmd" wipe
-check "wiping forgets the times too" test ! -e "$tmp/state/tide/clipboard-times"
-
-# --- without cliphist -------------------------------------------------------------
-
-reset
-rm "$fake/cliphist"
-out=$("$cmd" list 2>&1)
-check "list without cliphist exits 1" test $? -eq 1
-check "list without cliphist names the package: $out" contains "$out" "install the cliphist package"
-out=$(printf 'x' | "$cmd" store 2>&1)
-check "store without cliphist exits 1" test $? -eq 1
-out=$("$cmd" wipe 2>&1)
-check "wipe without cliphist exits 1, saying so: $out" contains "$out" "cliphist isn't installed"
-
-out=$("$cmd" frob 2>&1)
-check "an unknown subcommand exits 2" test $? -eq 2
-
-PATH=$SAVED_PATH
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh "$cmd" bin/tide-clipboard_test.sh
 fi

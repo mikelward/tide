@@ -355,7 +355,7 @@ work". The old setup shows how it fought itself:
 | Lid, power button | logind's defaults (`HandleLidSwitch=suspend`, `HandleLidSwitchDocked=ignore`), plus a Hyprland `bindl` pair on the lid switch: closing it with an external monitor attached disables the internal panel, and opening it re-enables the panel with its configured mode and returns the panel's workspaces to it | logind / Hyprland | `lid.sh`'s own suspend logic, and the `HandleLidSwitch=ignore` drop-in the old `setup-hypr` installed |
 | "Show in folder" (`org.freedesktop.FileManager1`) | Nautilus (§16.2) | D-Bus activation via tide's user-level service file → `tide-filemanager.service`, whose launcher picks Dolphin under Plasma and which stops with the session | the arbitrary pick between Dolphin's and Nautilus's system activation files |
 | Terminal for `Terminal=true` apps | kitty, via `xdg-terminal-exec` | on demand | GLib's fallback list (Konsole) |
-| Clipboard history | cliphist, fed by `tide clipboard store` (§8.4) | `tide-clipboard.service` | other clipboard managers aren't started |
+| Clipboard history | `tide clipboard store`, encrypted under a key in the keyring (§8.4) | `tide-clipboard.service` | other clipboard managers aren't started |
 | Apps | you | `tide launch` from keybinds and the launcher, which waits for the shell to be ready, then runs `uwsm app --` (§5.4) | — |
 
 **M2 transitional shell.** Until the Quickshell shell lands (M3 and M4),
@@ -2493,8 +2493,7 @@ See [`picker.png`](docs/mocks/picker.png).
     `toggle characters` opens the other tab.
 - **Search.**
   - Clipboard: each entry's one-line preview, whitespace folded: its
-    first 1,000 characters where cliphist takes `-preview-width` (0.6.0
-    and later), and its first 100 before.
+    first 1,000 bytes.
     - The launcher's fuzzy scorer reads the first 100 characters, since
       its work grows with the square of the text's length and the rows
       are built as you type. Entries that hold the query as plain text
@@ -2534,33 +2533,70 @@ See [`picker.png`](docs/mocks/picker.png).
 **The history.**
 
 - `tide-clipboard.service` runs `wl-paste --watch tide clipboard store`,
-  which hands each new copy to `cliphist store`.
+  which keeps each new copy in tide's own history, encrypted.
   - It watches the clipboard only, not the primary selection
     (middle-click).
   - It's `PartOf=graphical-session.target` and wanted by the tide
     session's target, so it stops at logout, and a Plasma session doesn't
     run it.
-  - `UMask=0077`. cliphist opens its database with mode 0644 (0.7.0's
-    `initDBOption`), so this makes the file 0600, in a 0700 directory.
-- **The database** is cliphist's default, `$XDG_CACHE_HOME/cliphist/db`,
-  so a cliphist you already ran keeps its history. It outlives a logout
-  and a reboot, like the clipboard history on a phone.
-- **Size cap: the newest 100 entries** (`cliphist -max-items 100`; its
-  own default is 750), or as many as the Settings panel's Clipboard page
-  says (§16).
+  - `UMask=0077`, so anything it writes is yours alone.
+- **Where it's kept:** `$XDG_STATE_HOME/tide/clipboard`, mode 700. It
+  outlives a logout and a reboot, like the clipboard history on a phone.
+  - Each copy is a file of its own in `entries/`, named by its ID.
+  - A copy over 5 MiB isn't kept. Only its first 5 MiB and a byte are read,
+    so even a huge one never fills the runtime directory.
+  - `index` lists them, newest first: each one's ID, when it was last
+    copied, its size, its type (`text`, or an image's MIME type), its
+    preview and its SHA-256, by which a repeat is found without decrypting
+    anything.
+  - The type comes from the copy's bytes: a PNG, JPEG, GIF or WebP by its
+    signature, and text unless there's a NUL byte. Other data takes the
+    first image type `wl-paste --list-types` offered. The list can already
+    be the next copy's, but the bytes can't.
+  - Every file is mode 600, and the index is written whole, beside the
+    last, then renamed over it. An entry's file goes only once an index
+    without it is written, so a failed store never loses a copy the index
+    still lists.
+- **Encrypted:** every entry and the index, by `openssl` (AES-256-CBC, its
+  key derived with PBKDF2), under a random 256-bit secret kept in the
+  login keyring through `secret-tool`, as "tide clipboard history"
+  (`application tide purpose clipboard-history`).
+  - The first copy makes the secret, and `secret-tool store` reads it on
+    stdin. Every run hands it to `openssl` in its environment, so it's
+    in no command's arguments.
+  - The plain text is only ever in memory and on the runtime directory's
+    tmpfs, readable by you alone, and gone when each command exits.
+  - PAM unlocks the keyring at login (§14), so nothing asks. With it
+    locked or not running, a copy isn't kept and the history can't be
+    listed, each saying why, and `tide doctor` says the keyring is locked
+    (§5.4).
+  - **What it protects:** the history in a backup, a copied disk or file,
+    another account, or a program reading files. Not from a program
+    running as you, which can ask the keyring for the secret too.
+  - **Cost:** two or three `openssl` runs and one `secret-tool` run per
+    copy, tens of milliseconds, on the unit's own time.
+- **Size cap: the newest 100 entries**, or as many as the Settings
+  panel's Clipboard page says (§16). A copy of one already kept, the same
+  type and bytes, moves it to the top rather than keeping it twice.
 - **Age: a week.** An entry last copied 7 days ago, or as many days as
-  the Clipboard page says, is forgotten. cliphist keeps no times, so
-  `tide clipboard store` keeps one per entry, "ID SECONDS", in
-  `$XDG_STATE_HOME/tide/clipboard-times`, mode 600. After each copy it
-  stores, and before each `list`, so old copies go even with nothing
-  copied since, it deletes the entries past the age from cliphist and
-  rewrites the file with the rest. An entry with no time yet, from
-  before tide kept them, starts its week when first seen. Copying
-  something again starts its week afresh. Each holds `flock` on
-  `clipboard-times.lock` from reading the history to rewriting the times,
-  so a list and a copy at once can't lose one's update; a copy that can't
-  get it within 10 seconds is still stored, and old ones go next time.
-  tilemo forgets after the same setting (tilemo SPEC.md §9.1).
+  the Clipboard page says, is forgotten: after each copy, and before each
+  `list`, so old copies go even with nothing copied since. Copying
+  something again starts its week afresh. tilemo forgets after the same
+  setting (tilemo SPEC.md §9.1).
+- **One at a time:** each command that changes the history, wiping
+  included, holds `flock` on `clipboard.lock`, beside the history's folder,
+  from reading the index to rewriting it, so a list, a copy and a wipe at
+  once can't lose one's change. One that can't get it within 10 seconds says
+  so and changes nothing. `flock` is util-linux's, on every distro tide
+  runs on; without it, the history goes on unlocked, saying so.
+- **What isn't kept,** as cliphist kept none of them: a copy that's only
+  whitespace, one over 5 MiB, and a password manager's (below).
+- **Previews,** as `cliphist list` printed them, which the picker reads:
+  a text's first 1,000 bytes, its whitespace folded, or an image's
+  `[[ binary data 240 KiB png 1280x720 ]]`, with the dimensions for a PNG.
+- **From cliphist:** the first copy after tide kept its own history moves
+  cliphist's in, oldest first, each as copied then, and wipes cliphist's,
+  so nothing's left unencrypted. It's done once.
 - **The Clipboard page** can also turn the history off: then `tide
   clipboard store` keeps no new copy, and what's kept stays until it's
   cleared or ages out. The shell writes them to
@@ -2568,23 +2604,22 @@ See [`picker.png`](docs/mocks/picker.png).
   `max_items=N`, `max_age_days=N`), which `store` reads at each copy, so
   nothing restarts. A line it can't read is said on its stderr, in the
   unit's journal, and passed over, so a bad file never stops the history.
-  - A smaller cap trims the history at the next copy, as cliphist applies
-    `-max-items` when it stores.
-  - cliphist skips a copy over 5 MB, and a copy of an entry among the
-    last 100 (0.7.0; 20 in 0.4.0) moves that entry to the top rather than
-    storing it twice.
+  A smaller cap trims the history at the next copy.
 - **Wiping it.**
   - The launcher's **Clear clipboard history** action, and `tide
-    clipboard wipe`, run `cliphist wipe`. A failure says why: on the
-    terminal, or in a notification from the launcher.
+    clipboard wipe`, remove the history's folder, under the lock, and
+    cliphist's history if it's still there, so it isn't moved in after. The
+    keyring's secret stays, for the next copy, and so does the next ID,
+    in `clipboard.next` beside the folder, so an ID a picker still lists
+    never names a newer copy. A failure says why: on the terminal, or in
+    a notification from the launcher.
   - `Shift+Delete` in the picker removes one entry.
-- **Without cliphist**, or with the unit not running, the Clipboard tab
-  says so, naming what's missing, and `tide doctor` reports it (§5.4).
-  The Characters tab still works.
-  - Before the first copy is kept there's no database, and cliphist's
-    `list` says "please store something first". `tide clipboard list`
-    reads that as an empty history while the unit runs. With the unit
-    stopped, it says so, with the command that starts it.
+- **Without `secret-tool` or `openssl`**, or with the unit not running,
+  the Clipboard tab says so, naming what's missing, and `tide doctor`
+  reports it (§5.4). The Characters tab still works.
+  - Before the first copy is kept there's no index. `tide clipboard
+    list` reads that as an empty history while the unit runs. With the
+    unit stopped, it says so, with the command that starts it.
 
 **The Fill tab.** Typing "street", "address" or "github" finds a snippet
 or a login's field; Enter types it into the window you were in.
@@ -2654,7 +2689,7 @@ instead, for the Fill tab's values (scripts' `fill-menu` on KDE).
     `meson.build`, unreleased) sets `sensitive` when the hint is offered.
   - cliphist 0.5.0 and later skip a copy whose `CLIPBOARD_STATE` is
     `sensitive`. 0.4.0, Ubuntu 24.04's, stores it.
-- **So `tide clipboard store` checks for itself**, before cliphist sees
+- **So `tide clipboard store` checks for itself**, before keeping
   the copy. It drops it when `CLIPBOARD_STATE` is `sensitive`, or when
   `wl-paste --list-types` lists the hint.
   - **The gap:** the type list is read just after the copy arrives. A
@@ -4821,7 +4856,7 @@ light/dark switch.
 | Archives | built into Nautilus | File Roller if Thunar wins |
 | Displays | nwg-displays (GTK 3) | writes Hyprland's monitor config; also linked from Settings |
 | Bluetooth pairing | blueman-manager (GTK 3) | overskride is GTK 4 but thinly packaged |
-| Clipboard history | `cliphist`, with the picker on `Super+V` (§8.4) | `tide-clipboard.service` runs `wl-paste --watch tide clipboard store`, which skips password-manager copies |
+| Clipboard history | `tide clipboard`, encrypted, with the picker on `Super+V` (§8.4) | `tide-clipboard.service` runs `wl-paste --watch tide clipboard store`, which skips password-manager copies |
 | Audio mixer | pavucontrol (GTK 4) | pwvucontrol for the libadwaita look |
 | Calculator | GNOME Calculator | qalculate-gtk for power use |
 
@@ -4866,7 +4901,7 @@ light/dark switch.
 | **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service` and its fallback, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. The tide connector, the browser extension in `connector/` (§8.3). `make install`. |
 | **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces, home's apps and each workspace's own settings), the `persistent` workspace rule for home and the pinned apps' close keys, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **tileco** | Tiling on chromeOS. On Linux it can list the browser's tabs in the Windows tab, as tide's own connector does (§8.3). |
-| **scripts** | `setup`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, cliphist, the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `tide-tabs`'s host manifest for Chrome and Brave (§8.3). `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
+| **scripts** | `setup`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, `secret-tool` (libsecret-tools), the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `tide-tabs`'s host manifest for Chrome and Brave (§8.3). `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |
 | **dwl** (exploration) | The tide fork of dwl that §21.1 is exploring, on upstream's history, under dwl's GPL-3.0-or-later license: the layouts, dimming and IPC it would add. Nothing else depends on it until §21.1's next steps are done and §3.1 is rewritten around it. |
 

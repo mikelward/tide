@@ -33,9 +33,9 @@ or swaybg (for waybar's bar; the Quickshell shell draws its own wallpaper),
 notify-send (libnotify), which the shell reports a bad settings
 file with, jq, which `tide doctor` reads Hyprland's JSON with, python3,
 which it reads the session bus's config with, and NetworkManager's nmcli,
-which the network menu lists VPNs with, and wl-clipboard and cliphist,
-which keep the clipboard history the picker on `Super+V` lists (SPEC.md
-§8.4), and wtype, which types what the picker's Fill tab on
+which the network menu lists VPNs with, and wl-clipboard, openssl and
+libsecret-tools' secret-tool, which keep the clipboard history the picker
+on `Super+V` lists, encrypted (SPEC.md §8.4), and wtype, which types what the picker's Fill tab on
 `Super+Shift+V` chooses. `setup-tide` installs them all. For Bitwarden
 logins on the Fill tab, install rbw, the unofficial Bitwarden client, and
 run `rbw config set email` and `rbw login` once.
@@ -145,7 +145,8 @@ config, Hyprland's config errors, autostart entries that run in
 tide without being on its allowlist, and a lock that couldn't work: its
 unit, `lock.qml` or PAM file missing, or the last lock failed; its
 hyprlock fallback missing or failed; and
-cliphist missing or `tide-clipboard.service` stopped. It exits 1
+secret-tool or openssl missing, the keyring locked, or
+`tide-clipboard.service` stopped. It exits 1
 if it found a problem.
 
 XDG autostart is an allowlist in tide. `make install` adds one systemd

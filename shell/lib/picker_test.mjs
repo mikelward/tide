@@ -50,6 +50,14 @@ test("the history is read from cliphist's list: text, links and images", () => {
     ]);
 });
 
+test("an image without its size in pixels is still an image", () => {
+    const { entries } = parseHistory("6\t[[ binary data 33 B jpeg ]]\n7\t[[ binary data 2 MiB gif ]]\n");
+    assert.deepEqual(entries.map((e) => [e.kind, e.sub]), [
+        ["image", "JPEG · 33 B"],
+        ["image", "GIF · 2 MiB"],
+    ]);
+});
+
 test("a history line that isn't ID<tab>preview is left out, and said so", () => {
     const { entries, errors } = parseHistory("7\tok\nnot a line\nx\tbad id\n8\t\n");
     assert.deepEqual(entries.map((e) => e.id), ["7", "8"]);

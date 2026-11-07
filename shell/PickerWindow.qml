@@ -8,7 +8,7 @@ import "lib/picker.mjs" as Picker
 
 // The picker on Super+V (SPEC.md §8.4), and on Super+Shift+V on its Fill
 // tab, which types a snippet or a Bitwarden login's field: a Clipboard tab, the history
-// tide-clipboard.service keeps with cliphist, and a Characters tab, emoji
+// tide-clipboard.service keeps, encrypted, and a Characters tab, emoji
 // and symbols from shell/chars/chars.tsv found by name. Drawn like the
 // switcher, near the top of the focused monitor over a dimmed backdrop.
 // `qs -c tide ipc call picker toggle clipboard` (conf's Super+V) opens
@@ -164,7 +164,7 @@ PanelWindow {
     }
 
     // Shift+Delete: forget the selected clipboard entry. It goes from the
-    // list at once; the history is listed again once cliphist is done, so
+    // list at once; the history is listed again once the delete is done, so
     // a delete that failed shows the entry back.
     function forget(index) {
         const row = rows[index];
@@ -473,7 +473,7 @@ PanelWindow {
                 height: 8
             }
 
-            // A tab with no rows says why: nothing copied, cliphist missing.
+            // A tab with no rows says why: nothing copied, the keyring locked.
             Text {
                 visible: root.rows.length === 0 && text !== ""
                 width: parent.width

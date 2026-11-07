@@ -1,5 +1,5 @@
 // The picker on Super+V (SPEC.md §8.4): its three tabs, the clipboard
-// history as `tide clipboard list` prints it (cliphist's list), the
+// history as `tide clipboard list` prints it (as cliphist's list was), the
 // character list in shell/chars/chars.tsv, and the snippets and Bitwarden
 // logins `tide fill list` prints, on Super+Shift+V.
 
@@ -46,12 +46,13 @@ export function movedTab(tab, step) {
     return TABS[(i + step + TABS.length) % TABS.length];
 }
 
-// cliphist's preview of an image: "[[ binary data 240 KiB png 1280x720 ]]".
-const IMAGE = /^\[\[ binary data (.+) ([A-Za-z0-9]+) (\d+)x(\d+) \]\]$/;
+// The preview of an image, as cliphist showed one: "[[ binary data 240 KiB
+// png 1280x720 ]]", the size in pixels only for a PNG.
+const IMAGE = /^\[\[ binary data (.+?) ([A-Za-z0-9.+-]+)(?: (\d+)x(\d+))? \]\]$/;
 // A preview that is one URL and nothing else.
 const LINK = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/\S+$/;
 
-// The history, newest first, from `cliphist list`: one "ID<TAB>preview"
+// The history, newest first, from `tide clipboard list`: one "ID<TAB>preview"
 // per line. Returns {entries: [{id, preview, kind, name, sub}], errors}:
 // a line that isn't that shape is left out and named in `errors`, rather
 // than shown as something Enter can't copy.
@@ -73,7 +74,8 @@ export function parseHistory(text) {
         const preview = line.slice(tab + 1);
         const image = IMAGE.exec(preview);
         if (image) {
-            entries.push({ id, preview, kind: "image", name: "Image", sub: `${image[2].toUpperCase()} · ${image[3]}×${image[4]} · ${image[1]}` });
+            const pixels = image[3] ? ` · ${image[3]}×${image[4]}` : "";
+            entries.push({ id, preview, kind: "image", name: "Image", sub: `${image[2].toUpperCase()}${pixels} · ${image[1]}` });
         } else if (LINK.test(preview)) {
             entries.push({ id, preview, kind: "link", name: preview, sub: "Link" });
         } else {
@@ -362,8 +364,8 @@ export function emptyText(tab, query, state = {}) {
 
 // The Clipboard tab's state after `tide clipboard list` finishes:
 // {entries, error, warnings}. A failed run shows its first line of stderr
-// in the tab, without the command's own prefix: "cliphist isn't
-// installed, so there's no clipboard history; install the cliphist
+// in the tab, without the command's own prefix: "secret-tool isn't
+// installed, so there's no clipboard history; install the libsecret-tools
 // package". Lines it couldn't read are `warnings`, for the log.
 export function listedHistory(failed, out, errors) {
     if (failed) {
