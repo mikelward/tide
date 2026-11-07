@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    TABS, TAB_NAMES, PLACEHOLDERS, footerKeys, movedTab, toggled, logoTapped, tabChanged, workspaceRows, windowRows, attentionRows, emptyText,
+    TABS, PLASMA_TABS, tabsFor, TAB_NAMES, PLACEHOLDERS, footerKeys, movedTab, toggled, logoTapped, tabChanged, workspaceRows, windowRows, attentionRows, emptyText,
 } from "./switcher.mjs";
 import { NO_MARKS, updateMarks, barWorkspaces } from "./workspaces.mjs";
 
@@ -158,4 +158,17 @@ test("the logo opens Apps, closes it on its own monitor, and moves it from anoth
     // Open on another monitor, on any tab: Apps, on the logo's monitor.
     assert.deepEqual(logoTapped(true, "attention", true), { visible: true, tab: "apps", move: true });
     assert.deepEqual(logoTapped(true, "apps", true), { visible: true, tab: "apps", move: true });
+});
+
+test("on Plasma, the switcher has Apps and Actions, and no workspace to open on", () => {
+    assert.deepEqual(tabsFor(true), ["apps", "actions"]);
+    assert.equal(tabsFor(false), TABS);
+    assert.equal(movedTab("apps", 1, PLASMA_TABS), "actions");
+    assert.equal(movedTab("actions", 1, PLASMA_TABS), "apps");
+    assert.equal(movedTab("apps", -1, PLASMA_TABS), "actions");
+    assert.throws(() => toggled(false, "apps", "windows", PLASMA_TABS));
+    assert.deepEqual(toggled(false, "apps", "actions", PLASMA_TABS), { visible: true, tab: "actions" });
+    const keys = footerKeys("apps", true).map(([k]) => k);
+    assert.equal(keys.includes("Ctrl+↵"), false);
+    assert.equal(keys.includes("PgDn"), true);
 });

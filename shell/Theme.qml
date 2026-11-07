@@ -11,7 +11,15 @@ import "lib/palette.mjs" as Palette
 Singleton {
     id: root
 
-    readonly property bool dark: AppearanceData.dark
+    // On KDE Plasma (SPEC.md §8.5; launcher.mjs's onPlasma), light or dark
+    // is Plasma's color scheme's, read from the palette it gives Qt apps,
+    // and AppearanceData, which is tide's, isn't started.
+    readonly property bool plasma: String(Quickshell.env("XDG_CURRENT_DESKTOP") ?? "").split(":").indexOf("KDE") >= 0
+    readonly property bool dark: root.plasma ? system.window.hslLightness < 0.5 : AppearanceData.dark
+
+    SystemPalette {
+        id: system
+    }
 
     readonly property int barHeight: 36
     readonly property int chipHeight: 26

@@ -2012,14 +2012,12 @@ If the fork is adopted, machines build a pinned release tag, never a branch:
 tide's launcher on Plasma's `Super+Space`, resident, listing Plasma's apps
 and System Settings pages. Each step is its own PR.
 
-- [ ] **`shell/kde.qml`**: only `LauncherWindow`, with Apps and Actions,
-  and no Hyprland or tidewm calls when `XDG_CURRENT_DESKTOP` is `KDE`.
-  `make install` installs it as the `tide-kde` config.
-- [ ] **System Settings pages**: list `NoDisplay` entries with
-  `X-KDE-AliasFor=systemsettings`, on KDE only, with a test over a fixture
-  `kcm_*.desktop`; keep `SETTINGS_APPS` for tide's session only.
-- [ ] **Actions on KDE**: lock, log out through `org.kde.LogoutPrompt`,
-  suspend, restart, shut down and screenshots, in `launcher.mjs`, tested.
+- [x] **`shell/kde.qml`**, the System Settings pages and Plasma's actions.
+  Tested by `launcher_test.mjs` and `switcher_test.mjs`, and the
+  integration test's kde step on sway: `launcher toggle` opens it, and it
+  runs an app and a hidden System Settings page through a stand-in
+  `kstart`, without asking Hyprland. Not checked on Plasma: Breeze icons,
+  the color scheme, Spectacle's flags and Plasma's log-out prompt.
 - [ ] **`tide-kde.service`**, `WantedBy=` and `PartOf=plasma-workspace.target`,
   and `tide doctor`'s check that it runs under Plasma.
 - [ ] **scripts**: `setup-kde` enables the unit, installs Quickshell as

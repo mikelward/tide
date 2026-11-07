@@ -9,7 +9,9 @@
 # tide-tz never ends, one whose clocks, system monitor, title, focus guard
 # calls, color scheme or VPNs warn, one whose icon won't load, a
 # notification server that records what it's sent or doesn't, a launcher
-# that runs the app typed or doesn't, a name prompt that goes to the
+# that runs the app typed or doesn't, a launcher on Plasma that runs what's
+# typed, runs the wrong thing, never takes the keyboard or asks Hyprland,
+# a name prompt that goes to the
 # workspace typed or doesn't, clocks whose right-click and dropdown's
 # Settings… open their page or don't, a settings panel that opens the
 # Network page's app or doesn't, and opens Keyboard for keys or doesn't, a lock that can't read its
@@ -48,13 +50,15 @@ trap 'rm -rf "$tmp"' EXIT
 # The calls the stub qs makes, as the shell and as the lock or the greeter.
 all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-monitor idle input devices binds layouts outputs dim workspaces floating startup clipboard lid keyboards popups"
 
-# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN [IDLE [HANDED [LABEL [LATITUDE]]]]]]]]]]]:
+# stubs DIR IPC LOAD [UNLOCK [LAUNCH [HYPRLAND [COMMANDS [TZ [LATE [LOGIN [IDLE [HANDED [LABEL [LATITUDE [KDE]]]]]]]]]]]]:
 # a sway that listens on wayland-1 until it's killed; a qs whose `ipc`
 # runs IPC, and otherwise talks to Hyprland as HYPRLAND says, then prints
 # LOAD and waits, but started as the unlock step starts the lock
 # (WAYLAND_DEBUG, -p .../lock.qml) runs UNLOCK first, as the login step
 # starts the greeter (WAYLAND_DEBUG, -p .../greeter.qml) runs LOGIN first,
-# which defaults to a greeter that logs in as it should, and as the launch
+# which defaults to a greeter that logs in as it should, as the kde step
+# starts the launcher on Plasma (WAYLAND_DEBUG, -p .../kde.qml) runs KDE
+# once loaded, which defaults to one that runs what's typed, and as the launch
 # step starts the
 # shell (WAYLAND_DEBUG, -c) prints LOAD and then runs LAUNCH, which
 # defaults to a launcher that runs the app typed; and a wtype that keeps
@@ -214,6 +218,8 @@ if test "\$1" = ipc; then
     case "\$*" in
         # The first opening, then the second, each marked.
         *"call launcher open"*) if test -e "\$XDG_RUNTIME_DIR/launcher-open"; then : >"\$XDG_RUNTIME_DIR/launcher-reopen"; else : >"\$XDG_RUNTIME_DIR/launcher-open"; fi ;;
+        # Meta+Space on Plasma, the first time and then the second.
+        *"call launcher toggle"*) if test -e "\$XDG_RUNTIME_DIR/kde-toggle"; then : >"\$XDG_RUNTIME_DIR/kde-retoggle"; else : >"\$XDG_RUNTIME_DIR/kde-toggle"; fi ;;
         # Keys' old page id, which opens Keyboard at its shortcuts, or
         # another page with DIR/keys-elsewhere.
         *"call settings openPage keys"*) if test -e "\$(dirname "\$0")/keys-elsewhere"; then echo idle; else echo keyboard; fi >"\$XDG_RUNTIME_DIR/settings-page" ;;
@@ -291,6 +297,8 @@ fi
 if test -n "\$WAYLAND_DEBUG" && test "\$1" = -p; then
     case "\$2" in
         *greeter.qml) ${10:-$greeter} ;;
+        # The launcher on Plasma does its part once loaded (below).
+        *kde.qml) ;;
         *) ${4:-:} ;;
     esac
 fi
@@ -607,7 +615,7 @@ fi
 cat "\$(dirname "\$0")/load.txt"
 # As the shell, it says it read the desktop entries' OnlyShowIn, unless
 # DIR/no-show-in is there.
-if test "\$config" = shell && ! test -e "\$(dirname "\$0")/no-show-in"; then
+if { test "\$config" = shell || test "\$config" = kde; } && ! test -e "\$(dirname "\$0")/no-show-in"; then
     echo '  INFO qml: tide: launcher: read OnlyShowIn and NotShowIn for 1 desktop entries'
 fi
 # As the lock, it names a clocks.local.json whose hour24 isn't true or
@@ -623,6 +631,9 @@ if test "\$config" = lock && test -z "\$WAYLAND_DEBUG" && ! test -e "\$(dirname 
 fi
 if test -n "\$WAYLAND_DEBUG" && test "\$1" = -c; then
     ${5:-$launcher}
+fi
+if test -n "\$WAYLAND_DEBUG" && test "\$config" = kde; then
+    ${15:-$kde_launcher}
 fi
 # As the shell, it reloads when make install-shell asks, saying so as
 # Quickshell does; gone with qs, as the idle one is.
@@ -907,6 +918,16 @@ went() {
         "$prompt_opened" "$focused" "$typed" "${2:-rm \"\$XDG_RUNTIME_DIR/prompt-open\";}" "$1"
 }
 launcher="$shared_ran; $(went notes)"
+# What the launcher on Plasma does once the kde step starts it: Meta+Space
+# opens it, it takes the keyboard, and once the query is typed, runs Café
+# Probe through kstart; then again for the System Settings page.
+kde_toggled='until test -e "$XDG_RUNTIME_DIR/kde-toggle"; do sleep 0.1; done'
+kde_retoggled='until test -e "$XDG_RUNTIME_DIR/kde-retoggle"; do sleep 0.1; done'
+kde_ran() {
+    printf '%s; %s; %s; kstart %s; %s; %s; %s; kstart %s' \
+        "$kde_toggled" "$focused" "$typed" "$1" "$kde_retoggled" "$focused" "$typed" "$2"
+}
+kde_launcher=$(kde_ran "--application tide-test-probe" "--application kcm_tidezebra")
 # What a greeter does once the login step starts it: it takes the keyboard,
 # then logs in on the passwords typed, as greeter_client.py's MODE says.
 login_as() {
@@ -992,6 +1013,9 @@ check "and a share picker that answers the window chosen passes" contains "$out"
 check "having pressed Right and Enter" test "$(sed -n 5p "$tmp/clean/typed")" = "-k Right -k Return"
 check "and a name prompt that goes to the workspace named passes" contains "$out" "ok: Super+Return's name prompt opens with no window focused, and Enter goes to a new workspace"
 check "having typed its name and Enter" test "$(sed -n 6p "$tmp/clean/typed")" = notes
+check "and a launcher on Plasma that runs what's typed passes" contains "$out" "ok: the launcher on Plasma runs an app, and a System Settings page hidden from menus, through kstart"
+check "having typed an app's query, then a settings page's" test "$(sed -n 7,8p "$tmp/clean/typed")" = "cafepro
+zebra"
 }
 
 case_8() {
@@ -1542,7 +1566,7 @@ echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
 check "a lock that unlocks on the right password passes" test "$code" -eq 0
 check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
-check "having typed a wrong password, then the right one" test "$(sed -n 7,8p "$tmp/unlocks/typed")" = "not-pw
+check "having typed a wrong password, then the right one" test "$(sed -n 9,10p "$tmp/unlocks/typed")" = "not-pw
 pw"
 check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
 }
@@ -1619,7 +1643,7 @@ run "$tmp/clean"
 check "a greeter that logs in to tide on the right password passes" \
     contains "$out" "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
 check "having typed a wrong password, then the right one, then the code" \
-    test "$(sed -n 7,9p "$tmp/clean/typed")" = "not-tide-greeter-test
+    test "$(sed -n 9,11p "$tmp/clean/typed")" = "not-tide-greeter-test
 tide-greeter-test
 246810"
 }
@@ -1966,6 +1990,34 @@ run "$tmp/dropdown-stays"
 check "a clocks dropdown that stays open after Settings… fails" test "$code" -ne 0
 check "and says so" contains "$out" "the clocks' dropdown's Settings… didn't close the dropdown"
 }
+
+# kde_stubs DIR KDE: stand-ins whose launcher on Plasma does KDE, and the
+# rest what they do by default.
+kde_stubs() {
+    stubs "$1" "exit 0" "$loaded" "" "" "" "$all_runs" "" "" "" "" "" "" "" "$2"
+}
+
+case_122() {
+kde_stubs "$tmp/kde-runs-wrong" "$(kde_ran "--application tide-test-probe" "--application other")"
+run "$tmp/kde-runs-wrong"
+check "a launcher on Plasma that runs the wrong page fails" test "$code" -ne 0
+check "and says what it ran" contains "$out" "  kstart --application other"
+}
+
+case_123() {
+kde_stubs "$tmp/kde-asks-hyprland" "echo '  WARN quickshell.hyprland.ipc: \$HYPRLAND_INSTANCE_SIGNATURE is unset'; $kde_launcher"
+run "$tmp/kde-asks-hyprland"
+check "a launcher on Plasma that asks Hyprland fails" test "$code" -ne 0
+check "and says so" contains "$out" "the launcher on Plasma asked Hyprland, which Plasma doesn't run"
+}
+
+case_124() {
+kde_stubs "$tmp/kde-unfocused" "$kde_toggled"
+run "$tmp/kde-unfocused"
+check "a launcher on Plasma that never takes the keyboard fails" test "$code" -ne 0
+check "and says so" contains "$out" "the launcher on Plasma didn't take the keyboard"
+}
+
 
 # --case N RESULT: run case_N alone, and write its passes and failures to
 # RESULT, which a case that exits early leaves unwritten.

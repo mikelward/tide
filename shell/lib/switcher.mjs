@@ -11,6 +11,15 @@ import { windowEntry, windowMuted } from "./mute.mjs";
 // The tabs, in order.
 export const TABS = Object.freeze(["apps", "workspaces", "windows", "attention", "actions"]);
 
+// The tabs on KDE Plasma (SPEC.md §8.5), which has its own ways to
+// workspaces and windows.
+export const PLASMA_TABS = Object.freeze(["apps", "actions"]);
+
+// The tabs on Plasma when `plasma`, or else tide's.
+export function tabsFor(plasma) {
+    return plasma ? PLASMA_TABS : TABS;
+}
+
 export const TAB_NAMES = Object.freeze({
     apps: "Apps",
     workspaces: "Workspaces",
@@ -31,20 +40,23 @@ export const PLACEHOLDERS = Object.freeze({
 // The footer's key hints on `tab`, as [key, what it does]. Ctrl+Enter
 // (§8.2) and PgDn's sections are the Apps tab's alone, Ctrl+M (§9) the
 // Windows and Attention tabs'; Enter runs on Apps and Actions and goes on
-// the tabs that list places.
-export function footerKeys(tab) {
+// the tabs that list places. On Plasma (`plasma`), Ctrl+Enter does what
+// Enter does: there are no tide workspaces.
+export function footerKeys(tab, plasma = false) {
     const apps = tab === "apps";
     return [["↑↓", "select"], ["↵", apps || tab === "actions" ? "run" : "go"]]
-        .concat(apps ? [["Ctrl+↵", "new workspace"], ["PgDn", "next section"]] : [])
+        .concat(apps && !plasma ? [["Ctrl+↵", "new workspace"]] : [])
+        .concat(apps ? [["PgDn", "next section"]] : [])
         .concat(tab === "windows" || tab === "attention" ? [["Ctrl+M", "mute"]] : [])
         .concat([["Tab", "next tab"], ["Esc", "close"]]);
 }
 
-// The tab `step` tabs on from `tab` (Tab is 1, Shift+Tab -1), wrapping.
-export function movedTab(tab, step) {
-    const i = TABS.indexOf(tab);
-    const n = TABS.length;
-    return TABS[(((i < 0 ? 0 : i) + step) % n + n) % n];
+// The tab `step` tabs on from `tab` (Tab is 1, Shift+Tab -1) among
+// `tabs`, wrapping.
+export function movedTab(tab, step, tabs = TABS) {
+    const i = tabs.indexOf(tab);
+    const n = tabs.length;
+    return tabs[(((i < 0 ? 0 : i) + step) % n + n) % n];
 }
 
 // The switcher after moving from its tab to `next`: {tab, asking,
@@ -62,9 +74,9 @@ export function tabChanged(state, next) {
 
 // What a key that opens the switcher on `wanted` does (SPEC.md §8.1): opens
 // it there, moving to that tab if it's open on another, and closes it if
-// it's open there already. {visible, tab}.
-export function toggled(visible, tab, wanted) {
-    if (!TABS.includes(wanted)) {
+// it's open there already. {visible, tab}. `tabs` are the ones it has.
+export function toggled(visible, tab, wanted, tabs = TABS) {
+    if (!tabs.includes(wanted)) {
         throw new Error(`not a switcher tab: ${wanted}`);
     }
     return visible && tab === wanted ? { visible: false, tab } : { visible: true, tab: wanted };
