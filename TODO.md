@@ -393,8 +393,8 @@ once you have agreed with it or reversed it.
   kitty.conf pastes on Ctrl+V and makes Ctrl+Shift+V a literal ^V. The
   alternative is a setting per class. Reversible: the list is one
   constant.
-- [ ] **Clipboard history keeps the newest 100 entries**, and survives
-  logout, in cliphist's default database. cliphist's default is 750; 100
+- [ ] **Clipboard history keeps the newest 100 entries**, each for a week,
+  and survives logout, encrypted in tide's own store (SPEC.md §8.4). 100
   is a few days of copying and keeps old secrets around for less long. The
   alternatives are another cap, or wiping at logout. It's one flag in
   `tide-clipboard.service`.

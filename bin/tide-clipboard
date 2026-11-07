@@ -1,7 +1,8 @@
 #!/bin/sh
 #
 # tide clipboard: the clipboard history behind the picker on Super+V
-# (SPEC.md §8.4), kept by cliphist.
+# (SPEC.md §8.4), kept encrypted in $XDG_STATE_HOME/tide/clipboard, under a
+# key in the login keyring.
 #
 #   tide clipboard store [--max-items N]
 #
@@ -11,28 +12,29 @@
 #     nothing, and its max_items replaces --max-items.
 #
 #     Run by tide-clipboard.service as `wl-paste --watch tide clipboard
-#     store`, with each new copy on stdin, and stores it with `cliphist
-#     store`, keeping the newest N (default 100). It then forgets entries
-#     last copied more than max_age_days ago (default 7), by the times it
-#     keeps in $XDG_STATE_HOME/tide/clipboard-times. A copy a password manager
-#     marks is never stored: one whose CLIPBOARD_STATE is `sensitive` (a
-#     wl-clipboard newer than 2.2.1 says so), or whose types, as
-#     `wl-paste --list-types` lists them, include x-kde-passwordManagerHint.
-#     If the types can't be read, the copy isn't stored, and it says why.
+#     store`, with each new copy on stdin. It keeps the newest N (default
+#     100), each for max_age_days from when it was last copied (default
+#     7); a copy of one already kept moves it to the top. A copy a
+#     password manager marks is never stored: one whose CLIPBOARD_STATE is
+#     `sensitive` (a wl-clipboard newer than 2.2.1 says so), or whose
+#     types, as `wl-paste --list-types` lists them, include
+#     x-kde-passwordManagerHint. If the types can't be read, the copy isn't
+#     stored, and it says why. A copy that's only whitespace, or over
+#     5 MiB, isn't stored either, as cliphist didn't store one.
 #
 #   tide clipboard list
 #
 #     Forgets entries past max_age_days, as store does, then prints the
-#     history, newest first, one `ID<TAB>preview` per line, as
-#     `cliphist list` does, each preview up to 1,000 characters where
-#     cliphist can (0.6.0 and later; 100 before). The picker reads it.
+#     history, newest first, one `ID<TAB>preview` per line, as `cliphist
+#     list` did: a text's first 1,000 bytes, whitespace folded, or an
+#     image's `[[ binary data SIZE TYPE WxH ]]`. The picker reads it.
 #     Before anything is stored, it prints nothing, or, with
 #     tide-clipboard.service not running, says so and exits 1.
 #
 #   tide clipboard copy ID
 #
-#     Puts entry ID back on the clipboard (`cliphist decode | wl-copy`),
-#     and exits once it's there, though wl-copy's child stays to serve it.
+#     Puts entry ID back on the clipboard, and exits once it's there,
+#     though wl-copy's child stays to serve it.
 #
 #   tide clipboard put TEXT
 #
@@ -45,16 +47,34 @@
 #
 #   tide clipboard wipe [--notify]
 #
-#     Removes the whole history (`cliphist wipe`), and its times. With
-#     --notify, as the
-#     launcher's Clear clipboard history runs it, a failure is a
-#     notification too.
+#     Removes the whole history. With --notify, as the launcher's Clear
+#     clipboard history runs it, a failure is a notification too.
 #
-# Exits 1, saying why, when cliphist or wl-clipboard fails or is missing,
-# and 2 for a bad argument.
+# How it's kept (SPEC.md §8.4): each copy in its own file, and the list of
+# them (each one's ID, when it was last copied, size, type and preview) in
+# another, each encrypted by openssl (AES-256-CBC, its key derived with
+# PBKDF2) under a random secret that `secret-tool` keeps in the login
+# keyring, which PAM unlocks at login (§14). The secret goes to openssl in
+# its environment, never its arguments. The plain text is only ever in
+# memory and on the runtime directory's tmpfs, readable by you alone. A
+# history cliphist kept before is moved in once, then wiped from cliphist.
+#
+# Exits 1, saying why, when the keyring, openssl or wl-clipboard fails or is
+# missing, and 2 for a bad argument.
 
 prog="tide clipboard"
 HINT=x-kde-passwordManagerHint
+# cliphist's own limit, so a copy it would have stored is stored here.
+MAX_BYTES=5242880
+
+state=${XDG_STATE_HOME:-$HOME/.local/state}/tide/clipboard
+index=$state/index
+entries=$state/entries
+# Beside the history's folder, not in it, so a wipe leaves both: the lock
+# that every change, wipe's included, holds, and the next entry's ID, so
+# an ID is never used twice, even across a wipe.
+lockfile=$state.lock
+counter=$state.next
 
 usage() {
     echo "usage: $prog store [--max-items N]" >&2
@@ -121,76 +141,327 @@ settings() {
     done <"$conf"
 }
 
-# When each entry was last copied, as "ID SECONDS" lines, for forgetting
-# those older than $age days (SPEC.md §8.4). cliphist keeps no times of its
-# own. In $XDG_STATE_HOME, readable by you alone.
-times=${XDG_STATE_HOME:-$HOME/.local/state}/tide/clipboard-times
+# Files on the runtime directory's tmpfs, readable by you alone: $tmp and
+# $errs, and any `scratch` makes, all removed at exit, for `sub`.
+temporaries() {
+    if ! tmp=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/tide-clipboard.XXXXXX") ||
+        ! errs=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/tide-clipboard.XXXXXX"); then
+        echo "$prog $1: couldn't make a temporary file" >&2
+        test -z "${tmp:-}" || rm -f -- "${tmp:?}"
+        exit 1
+    fi
+    scratches=
+    trap 'rm -f -- "${tmp:?}" "${errs:?}" $scratches' EXIT
+}
 
-# Holds the times' lock, on descriptor 9, until this exits: store and list
-# each read the history, then rewrite the times, and two at once would lose
-# one's update. Waits up to $TIDE_CLIPBOARD_LOCK_WAIT seconds (10), then
-# says why and returns 1.
-lock_times() {
-    if ! mkdir -p "${times%/*}" || ! exec 9>>"$times.lock"; then
-        echo "$prog: couldn't open $times.lock, so old copies aren't forgotten" >&2
-        return 1
+# Another temporary file's name into $scratch.
+scratch() {
+    if ! scratch=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/tide-clipboard.XXXXXX"); then
+        echo "$prog: couldn't make a temporary file" >&2
+        exit 1
+    fi
+    scratches="$scratches $scratch"
+}
+
+# Removes entry file $1, by its ID.
+forget_file() {
+    case "$1" in
+        '' | *[!0-9]*) return 0 ;;
+    esac
+    rm -f -- "${entries:?}/$1"
+}
+
+# Holds the history's lock, on descriptor 9, until this exits: each
+# command reads the list, then rewrites it, and two at once would lose one's
+# change. Waits up to $TIDE_CLIPBOARD_LOCK_WAIT seconds (10), then says why
+# and exits 1.
+lock() {
+    if ! mkdir -p "${lockfile%/*}" || ! exec 9>>"$lockfile"; then
+        echo "$prog $1: couldn't open $lockfile" >&2
+        exit 1
     fi
     # flock is util-linux's, on every distro tide runs on. Without it, the
     # history goes on unlocked, saying so.
     if ! command -v flock >/dev/null 2>&1; then
-        echo "$prog: flock isn't installed (util-linux), so a list and a copy at once may lose a copy's time" >&2
-        return 0
+        echo "$prog $1: flock isn't installed (util-linux), so two changes at once may lose one" >&2
+    elif ! flock -w "${TIDE_CLIPBOARD_LOCK_WAIT:-10}" 9; then
+        echo "$prog $1: another tide clipboard held $lockfile for too long" >&2
+        exit 1
     fi
-    if ! flock -w "${TIDE_CLIPBOARD_LOCK_WAIT:-10}" 9; then
-        echo "$prog: another tide clipboard held $times.lock, so old copies aren't forgotten this time" >&2
-        return 1
+    # Made once the lock's held: a wipe that held it first may have just
+    # removed it.
+    if ! mkdir -p "$entries" || ! chmod 700 "$state"; then
+        echo "$prog $1: couldn't make $entries" >&2
+        exit 1
     fi
 }
 
-# Forgets entries last copied before $age days ago, newest's time being
-# now if given; one with no time yet starts its days now. The times file
-# is rewritten to hold just the entries kept, and any whose delete failed,
-# to try again. Each is deleted on its own: cliphist 0.4.0's delete reads
-# only the first ID it's given. Says why on stderr and returns 1 if it
-# can't.
-expire() {
-    _newest=${1:-}
-    _now=${TIDE_CLIPBOARD_NOW:-$(date +%s)}
-    _cutoff=$((_now - age * 86400))
-    if ! _ids=$(cliphist list 2>&1); then
-        case "$_ids" in
-            *'please store something first'*) return 0 ;;
+# The keyring's secret into $secret. With `make`, one is made the first
+# time and kept there: secret-tool reads it on stdin, so it's in no
+# command's arguments. Exits 1, saying why, when the keyring can't give
+# one: it's locked or not running, which `tide doctor` says.
+secret() {
+    need secret-tool libsecret-tools
+    secret=$(secret-tool lookup application tide purpose clipboard-history 2>"$errs")
+    test -n "$secret" && return 0
+    if test -s "$errs"; then
+        echo "$prog $1: the keyring wouldn't give the history's key: $(cat "$errs")" >&2
+        exit 1
+    fi
+    if test "${2:-}" != make; then
+        echo "$prog $1: the keyring has no key for the history" >&2
+        exit 1
+    fi
+    if ! secret=$(openssl rand -hex 32) ||
+        ! printf '%s' "$secret" | secret-tool store --label='tide clipboard history' \
+            application tide purpose clipboard-history 2>"$errs"; then
+        echo "$prog $1: couldn't keep a key in the keyring: $(cat "$errs")" >&2
+        exit 1
+    fi
+}
+
+# seal IN OUT and unseal IN OUT: encrypt or decrypt one file into another.
+seal() {
+    TIDE_CLIPBOARD_KEY=$secret openssl enc -aes-256-cbc -pbkdf2 -md sha256 -salt \
+        -pass env:TIDE_CLIPBOARD_KEY -in "$1" -out "$2" 2>"$errs"
+}
+unseal() {
+    TIDE_CLIPBOARD_KEY=$secret openssl enc -d -aes-256-cbc -pbkdf2 -md sha256 -salt \
+        -pass env:TIDE_CLIPBOARD_KEY -in "$1" -out "$2" 2>"$errs"
+}
+
+# The list, decrypted into $list: "ID<TAB>SECONDS<TAB>SIZE<TAB>TYPE<TAB>
+# PREVIEW<TAB>SHA-256" lines, newest first, empty before the first store. Exits 1,
+# saying why, when it won't decrypt.
+read_list() {
+    scratch
+    list=$scratch
+    test -e "$index" || return 0
+    if ! unseal "$index" "$list"; then
+        echo "$prog $1: couldn't decrypt $index: $(cat "$errs")" >&2
+        exit 1
+    fi
+}
+
+# Encrypts $list back over the index, whole: written beside it, then
+# renamed over it.
+write_list() {
+    if ! seal "$list" "$index.new" || ! chmod 600 "$index.new" || ! mv "$index.new" "$index"; then
+        rm -f -- "${index:?}.new"
+        echo "$prog $1: couldn't write $index: $(cat "$errs")" >&2
+        exit 1
+    fi
+    # Only now, an entry file the index doesn't list goes: one dropped from
+    # the list, or one a failed run before left behind. So a failure never
+    # loses a copy the index lists, nor keeps one past its age or the cap.
+    _kept=" $(cut -f 1 "$list" | tr '\n' ' ') "
+    for _file in "$entries"/*; do
+        _id=${_file##*/}
+        case "$_kept" in
+            *" $_id "*) ;;
+            *) forget_file "$_id" ;;
         esac
-        echo "$prog: couldn't list the history to forget old copies: $_ids" >&2
-        return 1
-    fi
-    if ! mkdir -p "${times%/*}" || ! _new=$(mktemp "$times.XXXXXX"); then
-        echo "$prog: couldn't write $times, so old copies aren't forgotten" >&2
-        return 1
-    fi
-    test -e "$times" || : >"$times"
-    # The kept entries' times go to $_new; the old ones' IDs, one a line,
-    # to be deleted.
-    _old=$(printf '%s\n' "$_ids" | awk -F '\t' -v now="$_now" -v cutoff="$_cutoff" -v newest="$_newest" \
-        -v keep="$_new" -v kept="$times" '
-        BEGIN { while ((getline line < kept) > 0) { split(line, f, " "); t[f[1]] = f[2] } }
-        $1 == "" { next }
-        {
-            at = ($1 == newest) ? now : (($1 in t) ? t[$1] : now)
-            if (at + 0 < cutoff + 0) print $1
-            else print $1 " " at > keep
-        }')
-    _failed=0
-    for _id in $_old; do
-        if ! _err=$(printf '%s\t\n' "$_id" | cliphist delete 2>&1); then
-            echo "$prog: couldn't forget entry $_id, older than $age days: $_err" >&2
-            # Kept as old as it was, so the next try deletes it.
-            echo "$_id $_cutoff" >>"$_new"
-            _failed=1
-        fi
     done
-    chmod 600 "$_new" && mv "$_new" "$times" || return 1
-    return "$_failed"
+}
+
+# Puts the list in file $1 in place of $list, once it has $2 lines: a
+# list cut short, by a full disk say, is never written back. Exits 1,
+# saying so, otherwise.
+replace_list() {
+    _lines=$(wc -l <"$1")
+    if test "$_lines" != "$2" || ! mv "$1" "$list"; then
+        echo "$prog: couldn't rewrite the history in ${1%/*}, so it stays as it was" >&2
+        exit 1
+    fi
+}
+
+# Keeps the entries the awk condition $1, on the list's fields, holds for,
+# in $list; the others' files go once write_list has written it. Returns
+# whether any went.
+drop() {
+    scratch
+    _total=$(wc -l <"$list")
+    if ! _gone=$(awk -F '\t' -v kept="$scratch" "$1"' { print > kept; next } { print $1 }' "$list"); then
+        echo "$prog: couldn't sort out which copies to keep" >&2
+        exit 1
+    fi
+    _count=0
+    for _id in $_gone; do
+        _count=$((_count + 1))
+    done
+    replace_list "$scratch" $((_total - _count))
+    test -n "$_gone"
+}
+
+# Forgets entries last copied before $age days ago.
+expire() {
+    _now=${TIDE_CLIPBOARD_NOW:-$(date +%s)}
+    drop "\$2 + 0 >= $((_now - age * 86400))"
+}
+
+# A size as cliphist showed one: 512 B, 240 KiB, 3 MiB.
+human() {
+    if test "$1" -ge 1048576; then
+        echo "$(($1 / 1048576)) MiB"
+    elif test "$1" -ge 1024; then
+        echo "$(($1 / 1024)) KiB"
+    else
+        echo "$1 B"
+    fi
+}
+
+# The preview of the copy in $tmp, of type $1: text folded to one line of
+# at most 1,000 bytes, or other data's size, type and, for a PNG, its
+# width and height, as cliphist showed them.
+preview() {
+    case "$1" in
+        text)
+            # Every run of whitespace one space, cut to 1,000 bytes, and a
+            # character that cuts part way dropped.
+            tr -s '[:space:]' ' ' <"$tmp" | head -c 1001 | sed 's/^ //' | head -c 1000 |
+                iconv -c -f UTF-8 -t UTF-8 2>/dev/null | sed 's/ $//'
+            echo
+            ;;
+        *)
+            _sub=${1#*/}
+            _dims=
+            if test "$_sub" = png; then
+                # A PNG's width and height are big-endian at bytes 16 to 23.
+                _dims=$(od -An -tu1 -j16 -N8 "$tmp" 2>/dev/null | awk 'NF == 8 {
+                    printf " %dx%d", ((($1 * 256 + $2) * 256 + $3) * 256 + $4), ((($5 * 256 + $6) * 256 + $7) * 256 + $8) }')
+            fi
+            echo "[[ binary data $(human "$(wc -c <"$tmp")") $_sub$_dims ]]"
+            ;;
+    esac
+}
+
+# Adds the copy in $tmp, of type $1, last copied at $2, at the top of
+# $list. One already kept, the same type and bytes, goes from where it was:
+# found by its digest, kept in the index, so no entry has to be decrypted.
+add() {
+    _size=$(wc -c <"$tmp")
+    if ! _sum=$(openssl dgst -sha256 -r <"$tmp" 2>"$errs"); then
+        echo "$prog: couldn't take the copy's digest: $(cat "$errs")" >&2
+        exit 1
+    fi
+    _sum=${_sum%% *}
+    _same=$(awk -F '\t' -v sum="$_sum" -v type="$1" '$6 == sum && $4 == type { print $1 }' "$list")
+    for _id in $_same; do
+        drop "\$1 != $_id" || true
+    done
+    # The counter, but never an ID the list or the disk already has: a
+    # counter that's missing, damaged or behind starts past them.
+    _next=$(cat "$counter" 2>/dev/null)
+    case "$_next" in '' | *[!0-9]*) _next=0 ;; esac
+    _past=$(awk -F '\t' 'BEGIN { m = 0 } $1 + 0 > m { m = $1 + 0 } END { print m + 1 }' "$list")
+    test "$_next" -ge "$_past" || _next=$_past
+    while test -e "$entries/$_next"; do
+        _next=$((_next + 1))
+    done
+    if ! seal "$tmp" "$entries/$_next" || ! chmod 600 "$entries/$_next"; then
+        forget_file "$_next"
+        echo "$prog store: couldn't write $entries/$_next: $(cat "$errs")" >&2
+        exit 1
+    fi
+    # Written beside it, then renamed over it, so it's never left empty.
+    if ! echo $((_next + 1)) >"$counter.new" || ! mv "$counter.new" "$counter"; then
+        echo "$prog store: couldn't write $counter; the next copy works its ID out again" >&2
+    fi
+    scratch
+    _total=$(wc -l <"$list")
+    if ! { printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$_next" "$2" "$_size" "$1" "$(preview "$1")" "$_sum" && cat "$list"; } >"$scratch" ||
+        test "$(wc -l <"$scratch")" != $((_total + 1)); then
+        forget_file "$_next"
+        echo "$prog store: couldn't add the copy to the history in ${scratch%/*}, so it stays as it was" >&2
+        exit 1
+    fi
+    mv "$scratch" "$list"
+}
+
+# A history cliphist kept before tide kept its own: moved in once, oldest
+# first, each as copied now, then wiped from cliphist. A failure is said,
+# and tried again at the next copy.
+migrate() {
+    test -e "$state/from-cliphist" && return 0
+    if ! command -v cliphist >/dev/null 2>&1; then
+        : >"$state/from-cliphist"
+        return 0
+    fi
+    _missed=no
+    scratch
+    if ! _err=$(cliphist list 2>&1 >"$scratch"); then
+        echo "$prog: couldn't read cliphist's history, so it stays there, to move in at the next copy: $_err" >&2
+        return 0
+    fi
+    _old=$(awk -F '\t' '$1 ~ /^[0-9]+$/' "$scratch" | sort -n)
+    _now=${TIDE_CLIPBOARD_NOW:-$(date +%s)}
+    # $tmp is borrowed for each entry, so the copy's own file is cleaned
+    # up as a scratch one, whichever way this exits.
+    _copy=$tmp
+    scratches="$scratches $_copy"
+    scratch
+    tmp=$scratch
+    _tab=$(printf '\t')
+    # Not a pipe into the loop: `add` sets $list, which a subshell would lose.
+    scratch
+    if ! printf '%s\n' "$_old" >"$scratch" ||
+        test "$(wc -l <"$scratch")" != "$(printf '%s\n' "$_old" | wc -l)"; then
+        echo "$prog: couldn't hold cliphist's history in ${scratch%/*}, so it stays there, to move in at the next copy" >&2
+        tmp=$_copy
+        return 0
+    fi
+    while IFS=$_tab read -r _id _preview; do
+        test -n "$_id" || continue
+        if ! _err=$(printf '%s\t\n' "$_id" | cliphist decode 2>&1 >"$tmp"); then
+            echo "$prog: couldn't move cliphist's entry $_id in, so cliphist's history stays, to try again at the next copy: $_err" >&2
+            _missed=yes
+            continue
+        fi
+        case "$_preview" in
+            '[[ binary data '*)
+                # "[[ binary data 240 KiB png 1280x720 ]]": the type is the
+                # word before the dimensions, or before the brackets.
+                _sub=$(printf '%s\n' "$_preview" | awk '{ print ($(NF - 1) ~ /^[0-9]+x[0-9]+$/) ? $(NF - 2) : $(NF - 1) }')
+                add "image/$_sub" "$_now"
+                ;;
+            *)
+                grep -q '[^[:space:]]' "$tmp" && add text "$_now"
+                ;;
+        esac
+    done <"$scratch"
+    tmp=$_copy
+    # What came in is written before cliphist's is wiped, so a failure after
+    # this loses nothing: at worst, cliphist's is moved in again.
+    test -n "$_old" && write_list migrate
+    # One that didn't come in keeps cliphist's history, and the move, for
+    # next time; what did come in is there already, so it isn't doubled.
+    test "$_missed" = yes && return 0
+    if test -n "$_old" && ! _err=$(cliphist wipe 2>&1); then
+        echo "$prog: moved cliphist's history in, but couldn't wipe it there: $_err" >&2
+        return 0
+    fi
+    : >"$state/from-cliphist"
+}
+
+# The type of copy $1: an image's MIME type when its bytes start the way
+# that format's do, else text. One with a NUL byte isn't text either, so
+# it takes the first image type in $2, the list wl-paste offered.
+sniff() {
+    _magic=$(od -An -tx1 -N12 "$1" | tr -d ' \n')
+    case "$_magic" in
+        89504e470d0a1a0a*) echo image/png ;;
+        ffd8ff*) echo image/jpeg ;;
+        474946383[79]61*) echo image/gif ;;
+        52494646????????57454250) echo image/webp ;;
+        *)
+            if test "$(tr -d '\000' <"$1" | wc -c)" -eq "$(wc -c <"$1")"; then
+                echo text
+            else
+                _type=$(printf '%s\n' "$2" | grep -m 1 '^image/')
+                echo "${_type:-application/octet-stream}"
+            fi
+            ;;
+    esac
 }
 
 store() {
@@ -219,7 +490,7 @@ store() {
         sensitive | nil | clear) exit 0 ;;
     esac
     need wl-paste wl-clipboard
-    need cliphist cliphist
+    need openssl openssl
     # Read just after the copy arrived, so a copy replaced within that
     # moment is judged by its replacement's types (SPEC.md §8.4).
     if ! types=$(wl-paste --list-types 2>&1); then
@@ -229,77 +500,54 @@ store() {
     if printf '%s\n' "$types" | grep -qx "$HINT"; then
         exit 0
     fi
-    # Kept in a file on the runtime directory's tmpfs, readable by you
-    # alone, to tell whether cliphist stored it: it stores nothing, and
-    # still succeeds, for a copy that's only whitespace or too big.
     temporaries store
-    cat >"$tmp"
-    # From storing to rewriting the times, as one: a list meanwhile would
-    # rewrite them from before the copy, losing its time. Without the lock
-    # the copy is still stored, and old ones go next time.
-    locked=no
-    lock_times && locked=yes
-    cliphist -max-items "$max" store <"$tmp" || exit 1
-    test "$locked" = yes || exit 1
-    # The copy just stored is the newest: its days start now, even when it
-    # was in the history already. If the newest isn't the copy, cliphist
-    # skipped it, and no entry's days start again.
-    newest=$(cliphist list 2>/dev/null | head -n 1)
-    newest=${newest%%	*}
-    # $errs, temporaries' second file, holds the newest entry to compare.
-    if test -n "$newest" && printf '%s\t\n' "$newest" | cliphist decode 2>/dev/null >"$errs" &&
-        cmp -s "$tmp" "$errs"; then
-        expire "$newest" || exit 1
-    else
-        expire || exit 1
+    # No more than one byte past the most kept, so a huge copy never fills
+    # the runtime directory.
+    if ! head -c $((MAX_BYTES + 1)) >"$tmp"; then
+        echo "$prog store: couldn't hold the copy in ${tmp%/*}, so it isn't stored" >&2
+        exit 1
     fi
+    test "$(wc -c <"$tmp")" -le "$MAX_BYTES" || exit 0
+    # The type is read from the bytes, which belong to the copy that arrived,
+    # not from the list, which may already be a later copy's.
+    type=$(sniff "$tmp" "$types")
+    if test "$type" = text && ! grep -q '[^[:space:]]' "$tmp"; then
+        exit 0
+    fi
+    lock store
+    secret store make
+    read_list store
+    migrate
+    add "$type" "${TIDE_CLIPBOARD_NOW:-$(date +%s)}"
+    drop "NR <= $max" || true
+    expire || true
+    write_list store
 }
 
 list() {
     test $# -eq 0 || usage
-    need cliphist cliphist
-    # Old copies go even if nothing's been copied since they aged. A
-    # failure is said, and the history listed as it is.
-    age=7
-    settings 2>/dev/null
-    { lock_times && expire; } >&2 || true
-    # Each preview is what the picker searches, and cliphist cuts it at 100
-    # characters. 0.6.0 added -preview-width, which `version` lists among
-    # its flags; older ones refuse the flag (0.4.0 has no `version` either),
-    # and list at 100.
-    if cliphist version 2>&1 | grep -q '^preview-width'; then
-        set -- -preview-width 1000
-    fi
-    # Newer cliphists refuse to list before the first store makes
-    # the database: "opening db: please store something first". That's an
-    # empty history, unless the unit that stores isn't running (§8.4).
-    if err=$(cliphist "$@" list 2>&1 >&3); then
-        return 0
-    fi 3>&1
-    case "$err" in
-        *'please store something first'*)
-            state=$(systemctl --user is-active tide-clipboard.service 2>/dev/null)
-            case "$state" in
-                active | activating | reloading) return 0 ;;
-            esac
-            echo "$prog: tide-clipboard.service is ${state:-not running}, so nothing you copy is kept: systemctl --user enable --now tide-clipboard.service" >&2
-            exit 1
-            ;;
-    esac
-    printf '%s\n' "$err" >&2
-    exit 1
-}
-
-# Two files on the runtime directory's tmpfs, $tmp and $errs, removed at
-# exit, for `sub`.
-temporaries() {
-    if ! tmp=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/tide-clipboard.XXXXXX") ||
-        ! errs=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/tide-clipboard.XXXXXX"); then
-        echo "$prog $1: couldn't make a temporary file" >&2
-        rm -f "${tmp:-}"
+    need openssl openssl
+    temporaries list
+    if ! test -e "$index"; then
+        # Nothing stored yet: an empty history, unless the unit that
+        # stores isn't running (§8.4).
+        unit=$(systemctl --user is-active tide-clipboard.service 2>/dev/null)
+        case "$unit" in
+            active | activating | reloading) return 0 ;;
+        esac
+        echo "$prog: tide-clipboard.service is ${unit:-not running}, so nothing you copy is kept: systemctl --user enable --now tide-clipboard.service" >&2
         exit 1
     fi
-    trap 'rm -f "$tmp" "$errs"' EXIT
+    age=7
+    settings 2>/dev/null
+    lock list
+    secret list
+    read_list list
+    # Old copies go even if nothing's been copied since they aged.
+    if expire; then
+        write_list list
+    fi
+    cut -f 1,5 "$list"
 }
 
 # wl-copy with its arguments, its stdin this one's, its stderr in $errs:
@@ -320,18 +568,20 @@ wl_copy() {
 copy() {
     test $# -eq 1 || usage
     entry_id "$1"
-    need cliphist cliphist
+    need openssl openssl
     need wl-copy wl-clipboard
-    # Through a file, so both halves' failures are seen: plain sh has no
-    # pipefail.
     temporaries copy
-    # The ID on stdin, as `list` printed it: cliphist 0.4.0's decode takes
-    # no argument, and later ones read stdin when given none.
-    if ! err=$(printf '%s\t\n' "$1" | cliphist decode 2>&1 >"$tmp"); then
-        echo "$prog copy: cliphist couldn't find entry $1: $err" >&2
+    secret copy
+    read_list copy
+    _type=$(awk -F '\t' -v id="$1" '$1 == id { print $4 }' "$list")
+    if test -z "$_type" || ! unseal "$entries/$1" "$tmp"; then
+        echo "$prog copy: there's no entry $1" >&2
         exit 1
     fi
-    wl_copy copy <"$tmp"
+    case "$_type" in
+        text) wl_copy copy <"$tmp" ;;
+        *) wl_copy copy --type "$_type" <"$tmp" ;;
+    esac
 }
 
 # TEXT onto the clipboard, as the picker's Characters tab copies one.
@@ -345,12 +595,16 @@ put() {
 delete() {
     test $# -eq 1 || usage
     entry_id "$1"
-    need cliphist cliphist
-    # cliphist delete reads the lines `list` printed; the ID is all it uses.
-    if ! err=$(printf '%s\t\n' "$1" | cliphist delete 2>&1); then
-        echo "$prog delete: cliphist couldn't delete entry $1: $err" >&2
+    need openssl openssl
+    temporaries delete
+    lock delete
+    secret delete
+    read_list delete
+    if ! drop "\$1 != $1"; then
+        echo "$prog delete: there's no entry $1" >&2
         exit 1
     fi
+    write_list delete
 }
 
 wipe() {
@@ -360,13 +614,21 @@ wipe() {
         --notify) notify=yes; test $# -eq 1 || usage ;;
         *) usage ;;
     esac
-    if ! command -v cliphist >/dev/null 2>&1; then
-        err="cliphist isn't installed, so there's no clipboard history to clear"
-    elif err=$(cliphist wipe 2>&1); then
-        rm -f "$times"
-        exit 0
+    # Under the lock, so a copy being stored can't write the old history
+    # back after. The key stays in the keyring, for the next copy, and the
+    # IDs go on from where they were.
+    temporaries wipe
+    lock wipe
+    if err=$(rm -rf -- "${state:?}" 2>&1); then
+        # A history cliphist kept before, not yet moved in, goes too, or the
+        # next copy would move it in again.
+        if command -v cliphist >/dev/null 2>&1 && ! err=$(cliphist wipe 2>&1); then
+            err="cleared tide's history, but couldn't wipe cliphist's: $err"
+        else
+            exit 0
+        fi
     else
-        err="cliphist wipe failed: $err"
+        err="couldn't remove $state: $err"
     fi
     echo "$prog wipe: $err" >&2
     if test "$notify" = yes; then

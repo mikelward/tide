@@ -364,13 +364,13 @@ bus_conf() {
 
 # run ENV...: runs the doctor in a tide session unless ENV says
 # otherwise, with the given fakes' answers. Any command that's there, sh,
-# stands in for cliphist, tide-lock and hyprlock.
+# stands in for secret-tool, openssl, tide-lock and hyprlock.
 run() {
     env PATH="$fake:$tmp/qs-bin:$PATH" FAKE_OWNED="$tmp/owned" FAKE_TMP="$tmp" \
         XDG_CURRENT_DESKTOP=tide:Hyprland XDG_CONFIG_HOME="$tmp/config" TIDE_PROC="$tmp/proc" HOME="$tmp/home" \
         XDG_CONFIG_DIRS="$tmp/etc" XDG_DATA_HOME="$tmp/no-data-home" XDG_DATA_DIRS="$tmp/share" \
         XDG_RUNTIME_DIR="$tmp/runtime" TIDE_DATADIR="$tmp/datadir" TIDE_SYSCONFDIR="$tmp/sysconf" TIDE_SYSFS="$tmp/sys" \
-        FAKE_PROCS="hypridle swaync waybar hyprpolkitagent nm-applet" FAKE_PID_hypridle=101 TIDE_CLIPHIST=sh \
+        FAKE_PROCS="hypridle swaync waybar hyprpolkitagent nm-applet" FAKE_PID_hypridle=101 TIDE_SECRET_TOOL=sh TIDE_OPENSSL=sh \
         TIDE_LOCK_PROGRAM=sh TIDE_HYPRLOCK=sh \
         "$@" sh "$doctor" > "$tmp/out" 2> "$tmp/err"
     status=$?
@@ -530,11 +530,15 @@ check "the same condition in two drop-ins names both" \
     contains "$out" "which each of these has: $d/quickspace.conf $d/quickspace-copy.conf, so idle, suspend and Super+L don't lock the session: remove it from those no other session needs"
 rm -rf "$tmp/units"
 
-# The clipboard history (§8.4): cliphist, and the unit that feeds it.
-run TIDE_CLIPHIST=no-such-cliphist
-check "no cliphist is a problem" test "$status" -eq 1
-check "no cliphist is named, with the fix" \
-    contains "$out" "cliphist isn't installed, so Super+V keeps no clipboard history: install the cliphist package"
+# The clipboard history (§8.4): secret-tool and openssl, and the unit that
+# feeds it.
+run TIDE_SECRET_TOOL=no-such-secret-tool
+check "no secret-tool is a problem" test "$status" -eq 1
+check "no secret-tool is named, with its package" \
+    contains "$out" "no-such-secret-tool isn't installed, so Super+V keeps no clipboard history: install the libsecret-tools package"
+run TIDE_OPENSSL=no-such-openssl
+check "no openssl is named, with its package" \
+    contains "$out" "no-such-openssl isn't installed, so Super+V keeps no clipboard history: install the openssl package"
 run FAKE_INACTIVE="tide-clipboard.service=inactive"
 check "a stopped history unit is a problem" test "$status" -eq 1
 check "a stopped history unit is named, with the fix" \

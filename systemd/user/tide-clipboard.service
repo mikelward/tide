@@ -1,6 +1,6 @@
 # The clipboard history behind the picker on Super+V (SPEC.md §8.4): each
-# new copy goes to cliphist through `tide clipboard store`, which skips one
-# a password manager marks.
+# new copy goes to `tide clipboard store`, which keeps it encrypted, and
+# skips one a password manager marks.
 [Unit]
 Description=tide clipboard history
 Documentation=https://github.com/mikelward/tide
@@ -12,7 +12,7 @@ After=wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target gr
 [Service]
 # The clipboard only, not the primary selection (middle-click).
 ExecStart=wl-paste --watch tide clipboard store --max-items 100
-# cliphist creates its database with mode 0644; this makes it 0600.
+# Anything it writes is yours alone.
 UMask=0077
 Restart=on-failure
 RestartSec=1

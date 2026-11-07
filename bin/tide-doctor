@@ -12,7 +12,8 @@
 #     didn't fail;
 #   - tide-lock and the lock's hyprlock fallback are installed, and the
 #     fallback didn't fail;
-#   - cliphist is installed and tide-clipboard.service runs;
+#   - secret-tool and openssl are installed and tide-clipboard.service
+#     runs;
 #   - the keyring is unlocked, as logging in should leave it;
 #   - qs, where it's installed, is a Quickshell that loads tide's shell;
 #   - each D-Bus name in §5.2 is owned by the unit that should own it, and
@@ -209,13 +210,15 @@ if test "$(systemctl --user is-active tide-lock-fallback.service 2>&1)" = failed
 fi
 
 # The clipboard history behind Super+V (§8.4): tide-clipboard.service
-# hands each copy to cliphist. Without either, the picker's Clipboard tab
-# says so only when it's opened. $TIDE_CLIPHIST stands in for cliphist in
-# the tests.
-cliphist=${TIDE_CLIPHIST:-cliphist}
-if ! command -v "$cliphist" >/dev/null 2>&1; then
-    problem "cliphist isn't installed, so Super+V keeps no clipboard history: install the cliphist package (scripts' \`setup\` does), then \`systemctl --user restart tide-clipboard.service\`"
-fi
+# hands each copy to `tide clipboard store`, which keeps it encrypted with
+# openssl under a key secret-tool keeps in the keyring. Without either, or
+# the unit, the picker's Clipboard tab says so only when it's opened.
+# $TIDE_SECRET_TOOL and $TIDE_OPENSSL stand in for them in the tests.
+for pair in "${TIDE_SECRET_TOOL:-secret-tool}=libsecret-tools" "${TIDE_OPENSSL:-openssl}=openssl"; do
+    if ! command -v "${pair%%=*}" >/dev/null 2>&1; then
+        problem "${pair%%=*} isn't installed, so Super+V keeps no clipboard history: install the ${pair#*=} package (scripts' \`setup\` does)"
+    fi
+done
 state=$(systemctl --user is-active tide-clipboard.service 2>&1)
 if test "$state" != active; then
     problem "tide-clipboard.service is ${state:-not active}, so what you copy doesn't reach Super+V's history: \`systemctl --user enable --now tide-clipboard.service\`, and \`journalctl --user -u tide-clipboard.service\` if it doesn't stay up"
