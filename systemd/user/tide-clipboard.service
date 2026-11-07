@@ -11,7 +11,7 @@ After=wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target gr
 
 [Service]
 # The clipboard only, not the primary selection (middle-click).
-ExecStart=wl-paste --watch tide clipboard store --max-items 200
+ExecStart=wl-paste --watch tide clipboard store --max-items 100
 # cliphist creates its database with mode 0644; this makes it 0600.
 UMask=0077
 Restart=on-failure
