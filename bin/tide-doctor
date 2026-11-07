@@ -13,6 +13,7 @@
 #   - tide-lock and the lock's hyprlock fallback are installed, and the
 #     fallback didn't fail;
 #   - cliphist is installed and tide-clipboard.service runs;
+#   - the keyring is unlocked, as logging in should leave it;
 #   - qs, where it's installed, is a Quickshell that loads tide's shell;
 #   - each D-Bus name in §5.2 is owned by the unit that should own it, and
 #     no D-Bus activation file can start a rival for it;
@@ -219,6 +220,24 @@ state=$(systemctl --user is-active tide-clipboard.service 2>&1)
 if test "$state" != active; then
     problem "tide-clipboard.service is ${state:-not active}, so what you copy doesn't reach Super+V's history: \`systemctl --user enable --now tide-clipboard.service\`, and \`journalctl --user -u tide-clipboard.service\` if it doesn't stay up"
 fi
+
+# The keyring (§5.2, §14): gnome-keyring's login collection, which the
+# login manager's PAM stack unlocks with the password you log in with:
+# pam_gnome_keyring in greetd's (scripts' `setup --greeter` adds it), or
+# any other display manager's own. Locked, Chrome, the network agent and
+# anything else that keeps a secret ask for the password again. Asked
+# through the Secret Service, so it's whichever keyring answers there.
+locked=$(busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/aliases/default \
+    org.freedesktop.Secret.Collection Locked 2>&1)
+case $locked in
+    "b false") ;;
+    "b true")
+        problem "the keyring is locked, so Chrome and saved Wi-Fi passwords ask for it again: logging in unlocks it only if the login manager's PAM stack has pam_gnome_keyring (scripts' \`setup --greeter\` adds it to greetd's) and the keyring's password is your login password; Passwords and Keys (seahorse) changes it"
+        ;;
+    *)
+        problem "couldn't ask the keyring whether it's unlocked ($(printf '%s\n' "$locked" | tail -n 1)), so Chrome and saved Wi-Fi passwords may ask for one: is gnome-keyring running? \`systemctl --user status gnome-keyring-daemon.service\`"
+        ;;
+esac
 
 # Quickshell. tide-shell runs waybar when qs is too old for tide's shell,
 # and tide-lock leaves the lock to hyprlock. Without qs, waybar is M2's bar and no

@@ -650,6 +650,10 @@ flowchart TD
     rule, with the shell's `tide-workspaces.lua` naming it;
   - the network agent (§5.6): `tide-agent` registered, or what holds
     the job instead; and, with a Bluetooth adapter, its pairing agent.
+  - the keyring unlocked, asked through the Secret Service: logging in
+    leaves it locked when the login manager's PAM stack lacks
+    `pam_gnome_keyring`, or the keyring's password isn't the login
+    password, and every app that keeps a secret then asks again (§14).
 
   It prints one line per problem, with the fix. Each feature that leans on
   something outside tide adds its check here, by principle 6 (§1).
@@ -3238,7 +3242,10 @@ talk, a demo, or a meeting room's screen.
 - **Keyring.** PAM unlocks gnome-keyring with the login password, so Chrome
   and other secret users don't prompt again. This needs
   `pam_gnome_keyring` in greetd's PAM stack, which `setup --greeter` adds
-  (mikelward/scripts#288).
+  (mikelward/scripts#288) to the distro's own `greetd` file rather than
+  shipping one. Any other display manager whose PAM stack unlocks the
+  keyring works too: tide needs no GDM. `tide doctor` says when the
+  keyring is locked (§5.4).
 - **PAM messages** (faillock countdowns, fingerprint prompts) show verbatim
   under the field. greetd reports a failure only as PAM's return code
   (`pam_authenticate: AUTH_ERR`, greetd 0.10.3). So a wrong password and
