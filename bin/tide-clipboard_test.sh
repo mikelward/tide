@@ -35,15 +35,44 @@ cat > "$fake/cliphist" <<'FAKE'
 #!/bin/sh
 printf "cliphist %s\n" "$*" >> "$FAKE_LOG"
 for last; do :; done
+# With $FAKE_DIR/db, a history: "ID<TAB>text" lines, newest first, that
+# store adds to (moving a repeat to the top, under a new ID), list prints
+# and delete removes from.
+db=$FAKE_DIR/db
 case "$last" in
-    store) cat > "$FAKE_DIR/stored" ;;
-    delete) cat > "$FAKE_DIR/deleted" ;;
+    store)
+        cat > "$FAKE_DIR/stored"
+        # As cliphist does, a copy that's only whitespace is passed over.
+        if test -e "$db" && grep -q '[^[:space:]]' "$FAKE_DIR/stored"; then
+            text=$(cat "$FAKE_DIR/stored")
+            next=$(( $(cat "$FAKE_DIR/next" 2>/dev/null || echo 100) + 1 ))
+            echo "$next" > "$FAKE_DIR/next"
+            { printf '%s\t%s\n' "$next" "$text"; awk -F '\t' -v t="$text" '$2 != t' "$db"; } > "$db.new"
+            mv "$db.new" "$db"
+        fi
+        ;;
+    delete)
+        cat > "$FAKE_DIR/deleted"
+        # 0.4.0's delete reads only the first ID it's given.
+        if test "${FAKE_CLIPHIST_VERSION:-}" = 0.4.0; then
+            head -n 1 "$FAKE_DIR/deleted" > "$FAKE_DIR/deleted.first"
+            mv "$FAKE_DIR/deleted.first" "$FAKE_DIR/deleted"
+        fi
+        if test -e "$db"; then
+            awk -F '\t' 'FNR == NR { gone[$1] = 1; next } !($1 in gone)' "$FAKE_DIR/deleted" "$db" > "$db.new"
+            mv "$db.new" "$db"
+        fi
+        ;;
     list)
         if test -n "${FAKE_NO_DB:-}"; then
             echo "opening db: please store something first" >&2
             exit 1
         fi
-        printf '2\tsecond\n1\tfirst\n'
+        if test -e "$db"; then
+            cat "$db"
+        else
+            printf '2\tsecond\n1\tfirst\n'
+        fi
         ;;
     version)
         # 0.6.0 and later list their flags; 0.4.0 has no version command.
@@ -63,6 +92,10 @@ case "$last" in
         case "$id" in
             '' | *[!0-9]*) echo "input not prefixed with id" >&2; exit 1 ;;
         esac
+        if test -e "$db"; then
+            awk -F '\t' -v id="$id" '$1 == id { printf "%s", $2 }' "$db"
+            exit 0
+        fi
         printf 'entry %s' "$id"
         ;;
 esac
@@ -112,16 +145,16 @@ chmod +x "$fake"/*
 # Only the fakes, and what sh itself needs.
 base=$tmp/base
 mkdir "$base"
-for t in cat grep mktemp rm printf mkfifo timeout; do
+for t in cat grep mktemp rm printf mkfifo timeout date mkdir awk head chmod mv cut tr stat cmp flock; do
     p=$(command -v "$t") && ln -s "$p" "$base/$t"
 done
 SAVED_PATH=$PATH
-export PATH="$fake:$base" XDG_RUNTIME_DIR="$tmp"
+export PATH="$fake:$base" XDG_RUNTIME_DIR="$tmp" XDG_STATE_HOME="$tmp/state"
 
 reset() {
     : > "$log"
-    rm -f "$tmp/stored" "$tmp/deleted" "$tmp/copied"
-    unset FAKE_CLIPHIST_VERSION FAKE_NO_DB FAKE_UNIT_STATE FAKE_WLCOPY_HOLD CLIPBOARD_STATE FAKE_TYPES FAKE_WLPASTE_STATUS FAKE_CLIPHIST_STATUS FAKE_WLCOPY_STATUS
+    rm -rf "$tmp/stored" "$tmp/deleted" "$tmp/copied" "$tmp/db" "$tmp/next" "$tmp/state"
+    unset TIDE_CLIPBOARD_NOW FAKE_CLIPHIST_VERSION FAKE_NO_DB FAKE_UNIT_STATE FAKE_WLCOPY_HOLD CLIPBOARD_STATE FAKE_TYPES FAKE_WLPASTE_STATUS FAKE_CLIPHIST_STATUS FAKE_WLCOPY_STATUS
 }
 
 # --- store ---------------------------------------------------------------------
@@ -163,7 +196,7 @@ out=$(printf 'hello' | XDG_CONFIG_HOME="$tmp/config" CLIPBOARD_STATE=data "$cmd"
 check "a bad file still stores, with the default cap" contains "$(cat "$log")" "cliphist -max-items 100 store"
 check "and says what's wrong with history" contains "$out" "history is on or off, not 'maybe'"
 check "and with max_items" contains "$out" "max_items is a whole number above 0, not 'none'"
-check "and names a setting it doesn't know" contains "$out" "colour isn't a setting (history, max_items)"
+check "and names a setting it doesn't know" contains "$out" "colour isn't a setting (history, max_items, max_age_days)"
 rm "$conf"
 
 reset
@@ -335,6 +368,101 @@ FAKE_CLIPHIST_STATUS=1
 export FAKE_CLIPHIST_STATUS
 "$cmd" wipe 2>/dev/null # the status is what's checked
 check "a failed wipe without --notify doesn't notify" test -z "$(grep notify-send "$log")"
+
+# --- forgetting old copies ------------------------------------------------------
+
+export PATH="$fake:$base"
+
+DAY=86400
+# copy TEXT AT: stores TEXT as copied at second AT.
+copy_at() {
+    printf '%s' "$1" | TIDE_CLIPBOARD_NOW=$2 XDG_CONFIG_HOME="$tmp/noconf" CLIPBOARD_STATE=data "$cmd" store
+}
+history() { cut -f2 "$tmp/db" | tr '\n' ' '; }
+
+reset
+: > "$tmp/db"
+copy_at old 1000000
+copy_at new $((1000000 + 6 * DAY))
+check "six days on, both copies are kept" test "$(history)" = "new old "
+copy_at newer $((1000000 + 7 * DAY + 1))
+check "a copy a week old goes at the next copy" test "$(history)" = "newer new "
+check "and its time with it" test "$(grep -c . "$tmp/state/tide/clipboard-times")" -eq 2
+check "the times are yours alone" test "$(stat -c %a "$tmp/state/tide/clipboard-times" 2>/dev/null || stat -f %Lp "$tmp/state/tide/clipboard-times")" = 600
+
+reset
+: > "$tmp/db"
+copy_at again 1000000
+copy_at other $((1000000 + 1))
+copy_at again $((1000000 + 6 * DAY))
+copy_at last $((1000000 + 8 * DAY))
+check "copying something again starts its week afresh" test "$(history)" = "last again "
+
+reset
+: > "$tmp/db"
+copy_at kept 1000000
+copy_at '   ' $((1000000 + 6 * DAY))
+copy_at last $((1000000 + 7 * DAY + 1))
+check "a copy cliphist passes over starts no entry's week again" test "$(history)" = "last "
+
+reset
+: > "$tmp/db"
+FAKE_CLIPHIST_VERSION=0.4.0
+export FAKE_CLIPHIST_VERSION
+copy_at one 1000000
+copy_at two $((1000000 + 1))
+copy_at three $((1000000 + 8 * DAY))
+check "on cliphist 0.4.0, several old copies go at once" test "$(history)" = "three "
+unset FAKE_CLIPHIST_VERSION
+
+reset
+: > "$tmp/db"
+copy_at old 1000000
+# Another tide clipboard holding the times' lock, until the FIFO's written.
+mkfifo "$tmp/release" "$tmp/locked"
+(flock 8; echo locked >"$tmp/locked"; read -r _ <"$tmp/release") 8>>"$tmp/state/tide/clipboard-times.lock" &
+holder=$!
+read -r _ <"$tmp/locked"
+out=$(printf 'new' | TIDE_CLIPBOARD_LOCK_WAIT=0 TIDE_CLIPBOARD_NOW=$((1000000 + 8 * DAY)) XDG_CONFIG_HOME="$tmp/noconf" CLIPBOARD_STATE=data "$cmd" store 2>&1)
+check "while another holds the times, a copy is still stored" test "$(history)" = "new old "
+check "and the old one waits, saying why" contains "$out" "another tide clipboard held"
+echo go > "$tmp/release"
+wait "$holder"
+rm "$tmp/release" "$tmp/locked"
+copy_at newer $((1000000 + 8 * DAY))
+check "and goes once the lock's free" test "$(history)" = "newer new "
+
+reset
+: > "$tmp/db"
+PATH=$SAVED_PATH mv "$base/flock" "$tmp/flock"
+copy_at old 1000000
+out=$(printf 'new' | TIDE_CLIPBOARD_NOW=$((1000000 + 8 * DAY)) XDG_CONFIG_HOME="$tmp/noconf" CLIPBOARD_STATE=data "$cmd" store 2>&1)
+check "without flock, copies are kept and old ones still go" test "$(history)" = "new "
+check "saying the lock's missing" contains "$out" "flock isn't installed (util-linux)"
+PATH=$SAVED_PATH mv "$tmp/flock" "$base/flock"
+
+reset
+: > "$tmp/db"
+copy_at old 1000000
+TIDE_CLIPBOARD_NOW=$((1000000 + 8 * DAY)) XDG_CONFIG_HOME="$tmp/noconf" "$cmd" list > "$tmp/listed"
+check "listing forgets a week-old copy too, with nothing copied since" test "$(cat "$tmp/listed")" = ""
+
+reset
+: > "$tmp/db"
+mkdir -p "$tmp/agecfg/hypr"
+printf 'max_age_days=1\n' > "$tmp/agecfg/hypr/tide-clipboard.conf"
+printf 'a' | TIDE_CLIPBOARD_NOW=1000000 XDG_CONFIG_HOME="$tmp/agecfg" CLIPBOARD_STATE=data "$cmd" store
+printf 'b' | TIDE_CLIPBOARD_NOW=$((1000000 + DAY + 1)) XDG_CONFIG_HOME="$tmp/agecfg" CLIPBOARD_STATE=data "$cmd" store
+check "the Clipboard page's days are how long a copy stays" test "$(history)" = "b "
+printf 'max_age_days=soon\n' > "$tmp/agecfg/hypr/tide-clipboard.conf"
+out=$(printf 'c' | TIDE_CLIPBOARD_NOW=1000000 XDG_CONFIG_HOME="$tmp/agecfg" CLIPBOARD_STATE=data "$cmd" store 2>&1)
+check "a bad max_age_days says so, and the copy is kept" contains "$out" "max_age_days is a whole number above 0, not 'soon'"
+
+reset
+: > "$tmp/db"
+copy_at x 1000000
+"$cmd" wipe
+check "wiping forgets the times too" test ! -e "$tmp/state/tide/clipboard-times"
 
 # --- without cliphist -------------------------------------------------------------
 
