@@ -7,6 +7,16 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **The KDE launcher is a second Quickshell config, with Apps and Actions
+  only** (2026-11-07, SPEC.md §8.5), rather than `shell.qml` with a KDE
+  mode, or a KWin backend in `Compositor.qml` for the Windows tab. Plasma
+  has its own window switching, and a separate config can't start the
+  bar or anything else tide's session owns. Reversible: a Windows tab can
+  come later through a KWin script.
+- **Its apps start through their own `Exec`, and log out asks through
+  Plasma's prompt** (2026-11-07), not `tide launch` and not straight
+  out, as Kickoff does both.
+
 - **A dropdown's Settings… opens Tide Settings** (2026-11-06), on the
   page its item's right-click opens, rather than the app another row
   already opens (nm-connection-editor, blueman-manager).
@@ -1996,6 +2006,28 @@ If the fork is adopted, machines build a pinned release tag, never a branch:
   immutable, since a moved tag would silently change what machines build.
   The repository is public, so nothing secret ever goes in it, on any
   branch: per-machine settings stay in an untracked local file.
+
+## Launcher on KDE Plasma (SPEC.md §8.5)
+
+tide's launcher on Plasma's `Super+Space`, resident, listing Plasma's apps
+and System Settings pages. Each step is its own PR.
+
+- [ ] **`shell/kde.qml`**: only `LauncherWindow`, with Apps and Actions,
+  and no Hyprland or tidewm calls when `XDG_CURRENT_DESKTOP` is `KDE`.
+  `make install` installs it as the `tide-kde` config.
+- [ ] **System Settings pages**: list `NoDisplay` entries with
+  `X-KDE-AliasFor=systemsettings`, on KDE only, with a test over a fixture
+  `kcm_*.desktop`; keep `SETTINGS_APPS` for tide's session only.
+- [ ] **Actions on KDE**: lock, log out through `org.kde.LogoutPrompt`,
+  suspend, restart, shut down and screenshots, in `launcher.mjs`, tested.
+- [ ] **`tide-kde.service`**, `WantedBy=` and `PartOf=plasma-workspace.target`,
+  and `tide doctor`'s check that it runs under Plasma.
+- [ ] **scripts**: `setup-kde` enables the unit, installs Quickshell as
+  `setup-tide` does, adds a `tide-launcher` script, and binds `Meta+Space`
+  to it with `add_app_shortcut`.
+- [ ] **On a real Plasma 6 session**: the surface opens on the focused
+  monitor with the keyboard, how long `Meta+Space` takes, that a started
+  app gets focus, and the process's memory.
 
 ## Edit a clipboard entry before pasting
 
