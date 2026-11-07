@@ -40,6 +40,7 @@ lock=systemd/user/tide-lock.service
 lockfallback=systemd/user/tide-lock-fallback.service
 clipboard=systemd/user/tide-clipboard.service
 lidinhibit=systemd/user/tide-lid-inhibit.service
+kdelauncher=systemd/user/tide-kde.service
 
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
@@ -338,6 +339,20 @@ check "nothing starts the lid action but the shell" lacks_line_matching "$lidinh
 check "make install installs the lid action's unit" \
     grep -q 'systemd/user/tide-lid-inhibit.service' Makefile
 
+# --- tide-kde.service ----------------------------------------------------------
+# tide's launcher on KDE Plasma (SPEC.md §8.5): kde.qml, resident, only in
+# Plasma's session and never in tide's.
+check "the launcher on Plasma runs kde.qml alone" \
+    has_line "$kdelauncher" "ExecStart=qs -p %h/.config/quickshell/tide/kde.qml"
+check "it starts with Plasma" has_line "$kdelauncher" "WantedBy=plasma-workspace.target"
+check "and stops with it" has_line "$kdelauncher" "PartOf=plasma-workspace.target"
+check "it is WantedBy= nothing else" test "$(grep -c '^WantedBy=' "$kdelauncher")" -eq 1
+check "it runs only where Plasma's session says KDE" \
+    has_line "$kdelauncher" "ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE"
+check "it never starts in tide's session" \
+    lacks_line_matching "$kdelauncher" '(graphical-session|wayland-session@tide)'
+check "make install installs it" grep -q 'systemd/user/tide-kde.service' Makefile
+
 # --- systemd-analyze verify ---------------------------------------------------
 # Resolves the units as systemd would. tide-shell and hypridle aren't
 # installed here, so the copies point ExecStart at a stub; everything else is
@@ -362,7 +377,8 @@ if command -v systemd-analyze >/dev/null 2>&1; then
     sed "s|^ExecStart=tide-lock\$|ExecStart=$tmp/stub|" "$lock" > "$tmp/units/tide-lock.service"
     sed "s|^ExecStart=hyprlock\$|ExecStart=$tmp/stub|" "$lockfallback" > "$tmp/units/tide-lock-fallback.service"
     sed "s|^ExecStart=wl-paste .*\$|ExecStart=$tmp/stub|" "$clipboard" > "$tmp/units/tide-clipboard.service"
-    for u in tide.service tide-lock.service tide-lock-fallback.service tide-clipboard.service hypridle.service "$agent_unit"; do
+    sed "s|^ExecStart=qs .*\$|ExecStart=$tmp/stub|" "$kdelauncher" > "$tmp/units/tide-kde.service"
+    for u in tide.service tide-lock.service tide-lock-fallback.service tide-clipboard.service tide-kde.service hypridle.service "$agent_unit"; do
         out=$(cd "$tmp/units" && XDG_RUNTIME_DIR="$tmp/run" \
             systemd-analyze verify --user --man=no "$u" 2>&1)
         status=$?

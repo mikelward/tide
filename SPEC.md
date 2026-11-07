@@ -2737,7 +2737,10 @@ apps and its System Settings pages. Kickoff stays on the tap of `Super`.
 - **Resident.** It's a second Quickshell config, `shell/kde.qml`, holding
   only the launcher. `tide-kde.service` runs it, `WantedBy=` and
   `PartOf=plasma-workspace.target`, so it starts with Plasma and stops at
-  logout. `setup-kde` enables it. It never starts in tide's own session.
+  logout. `setup` enables it. It never starts in tide's own session:
+  it's `ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE`.
+- **Without it,** `Meta+Space` opens KRunner: scripts' `tide-launcher`
+  falls back to it when no launcher answers, as with `setup --no-tide`.
 - **The key.** `setup-kde` binds `Meta+Space` to a `tide-launcher`
   launcher script, as it binds `clipboard-menu` to `Meta+V`. The script
   runs `qs -p ~/.config/quickshell/tide/kde.qml ipc call launcher
