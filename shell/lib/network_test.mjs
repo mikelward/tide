@@ -123,7 +123,7 @@ test("an unknown prompt event is an error", () => {
     assert.throws(() => prompt(NO_PROMPT, { type: "scan" }), /unknown prompt event: scan/);
 });
 
-test("the network's hover text names the network, as tilemo's, then the internet and the VPN", () => {
+test("the network's hover text names the network, as tide for macOS's, then the internet and the VPN", () => {
     const home = net("home", { connected: true, signalStrength: 0.9 });
     const tip = (devices, fields = {}) => networkTip({ devices, wifiEnabled: true, connectivity: 4, ...fields });
     assert.equal(tip([wifi([home])]), "home, 90%", "with its signal");

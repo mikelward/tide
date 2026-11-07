@@ -3,7 +3,7 @@
 -- window, and where a moved window lands on the next monitor, tiled or
 -- floating. Pure geometry
 -- on { x, y, w, h } boxes, with no Hyprland API, so it tests in plain Lua
--- with made-up monitors. tilemo's direction.lua is the same rule.
+-- with made-up monitors. tide for macOS's direction.lua is the same rule.
 --
 -- One rule picks both a window and a monitor: of the boxes on that side,
 -- the one sharing the most height with where you are, then the one whose

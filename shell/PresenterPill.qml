@@ -6,7 +6,7 @@ import "lib/barsettings.mjs" as BarSettings
 // The Presenting pill (SPEC.md §7.4): shown while presenter mode is on
 // (PresenterData), in the accent color, so it reads as something you
 // turned on rather than a warning. A click turns presenter mode off;
-// hovering says what it's holding, as tilemo's does.
+// hovering says what it's holding, as tide for macOS's does.
 Rectangle {
     id: root
 

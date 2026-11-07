@@ -3,7 +3,7 @@
 // Adwaita has; the QML tints them to the bar's palette.
 
 // At or below this charge the battery shows red, unless it's charging, as
-// tilemo's does.
+// tide for macOS's does.
 export const LOW_BATTERY = 0.2;
 // One scroll notch over the volume icon changes it by this much.
 export const VOLUME_STEP = 0.05;
@@ -38,14 +38,14 @@ export function batteryView({ present, percentage, state }) {
     };
 }
 
-// Seconds as tilemo writes a battery's time, "h:mm".
+// Seconds as tide for macOS writes a battery's time, "h:mm".
 function hoursMinutes(seconds) {
     const minutes = Math.floor(seconds / 60);
     const m = minutes % 60;
     return `${Math.floor(minutes / 60)}:${m < 10 ? "0" : ""}${m}`;
 }
 
-// The battery's hover text (SPEC.md §7.4), as tilemo's: its %, then
+// The battery's hover text (SPEC.md §7.4), as tide for macOS's: its %, then
 // charged, charging and how long until full, or how long it has left.
 // `toFull` and `toEmpty` are UPower's estimates in seconds, 0 when it has
 // none. "" with no battery.

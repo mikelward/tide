@@ -1,8 +1,8 @@
 // The tide connector hands this browser's tabs to tide's switcher (SPEC.md
 // §8.3). It talks to tide's `tide-tabs` native-messaging host, which Chrome
 // starts and which relays to tide's shell, on this machine only. Each message
-// is one JSON object; Chrome does the framing. Copied from tileco's
-// src/tabsbridge.js (mikelward/tileco 97ae30c), which does the same on
+// is one JSON object; Chrome does the framing. Copied from tide for Chrome's
+// src/tabsbridge.js (mikelward/tideco 97ae30c), which does the same on
 // Linux.
 //
 // Extension to host:

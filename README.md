@@ -42,7 +42,7 @@ run `rbw config set email` and `rbw login` once.
 jq and python3 are free distro packages that run locally, with no network
 calls; without one, the doctor reports the check it skipped.
 
-For your browser tabs in the switcher, add tileco (mikelward/tileco) or
+For your browser tabs in the switcher, add tide for Chrome (mikelward/tideco) or
 the tide connector to Chrome or Brave. The connector loads unpacked from
 `connector/` (`connector/README.md`).
 

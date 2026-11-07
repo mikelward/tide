@@ -1299,7 +1299,7 @@ in how long they last and what stays visible:
   `askForName` that isn't `true` or `false`, or a `pinnedApps` that isn't a
   list of text, is an error at load naming it. The last good settings
   stay.
-- tilemo reads the same key from the same file.
+- tide for macOS reads the same key from the same file.
 
 **A new window on a workspace that asks goes to a workspace.**
 
@@ -1518,7 +1518,7 @@ workspace it's on stays open there.
 - `conf`'s shpool and tmux startup would name its session from it. That's
   `conf`'s work, not done yet (TODO.md).
 
-**Monitors.** A workspace spans every monitor, as in tilemo, and each
+**Monitors.** A workspace spans every monitor, as in tide for macOS, and each
 monitor has its own part of it, with its own windows and layout.
 
 - **Switching** shows that workspace on every monitor at once. Every
@@ -1619,7 +1619,7 @@ with new keys in **bold**:
 | **`Super+Shift+1…9`** | send the focused window to the Nth workspace in the bar's order, staying where you are |
 | **`Super+0`** / **`Super+Shift+0`** | go to / send the focused window to the last workspace in the bar's order, as `Super+1…9` and `Super+Shift+1…9` do |
 | **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
-| **`Super+Left`** / **`Right`** | focus the window to the left / right of the focused one; at a monitor's edge, the nearest window on the next monitor that way, or that monitor itself if it shows none; past the last monitor, nothing (as in tilemo; the rule is below) |
+| **`Super+Left`** / **`Right`** | focus the window to the left / right of the focused one; at a monitor's edge, the nearest window on the next monitor that way, or that monitor itself if it shows none; past the last monitor, nothing (as in tide for macOS; the rule is below) |
 | **`Super+Shift+Left`** / **`Right`** | move the focused window the same way: on its monitor it swaps with the window that way; at the edge it goes onto the next monitor, joining the workspace showing there at the edge it came in by, and keeps focus. A floating window goes straight onto the next monitor that way, still floating, at the same relative spot and its size (the rule is below), and keeps focus. Past the last monitor, nothing |
 | `Super+PgUp` / `PgDn` | previous / next workspace in the bar's order that has a window, wrapping from the last to home and back. An empty one, standing or made, is passed over, and so is one whose only windows are minimized (§6.7): Hyprland has none on it. With no other that has a window, nothing |
 | **`Super+Shift+PgUp`** / **`PgDn`** | move the window to the previous / next workspace in the bar's order, empty or not, wrapping as `Super+PgUp` does, and follow it |
@@ -1630,7 +1630,7 @@ with new keys in **bold**:
 | `Super+\` / `Super+/` | grow / shrink master (`mfact` ±0.025) |
 | `Super+=` / `Super+-` | add / remove a master |
 | `Super+.` / `Super+,` | next / previous layout |
-| ``Super+` ``, **`Super+O`** | toggle monocle (`O` as in one window, and the key tileco uses on ChromeOS, where Chrome can't bind a backtick) |
+| ``Super+` ``, **`Super+O`** | toggle monocle (`O` as in one window, and the key tide for Chrome uses on ChromeOS, where Chrome can't bind a backtick) |
 | **`Super+Up`** / **`Super+Shift+Up`** / **`Super+Down`** | maximize / fullscreen / restore the current window |
 | `Super+Shift+F`, `Super+Insert` | toggle floating |
 | **`Super+Alt+F`** | open the Floating settings (§16) with a rule filled in for the focused window, its class and exact title, the title selected to trim; Enter adds it, Esc doesn't |
@@ -1644,7 +1644,7 @@ with new keys in **bold**:
 | **`XF86AudioMicMute`**, **`Super+Shift+M`** | toggle microphone mute (system-wide) |
 | media, brightness, volume keys | as today, with OSD |
 
-Left and right use one rule, tilemo's, in the layout's `direction.lua`
+Left and right use one rule, tide for macOS's, in the layout's `direction.lua`
 (§20). Of the windows or monitors whose center is on that side, it takes
 the one sharing the most height with where you are, then the one whose
 center is nearest, then the first in layout order. The next monitor is
@@ -1898,7 +1898,7 @@ See [`bar.png`](docs/mocks/bar.png).
   icon in its workspace is its own small target. Reach is apart from the
   visual spacing (`shell/lib/barclick.mjs`, `shell/BarHit.qml`).
 - **A right-click opens that item's settings page** (§16), on any
-  platform: tide, tilemo and tileco share the map
+  platform: tide for Linux, macOS and Chrome share the map
   (`shell/lib/barsettings.mjs`), each naming its own pages.
 
   | Item | Page |
@@ -1984,7 +1984,7 @@ See [`bar.png`](docs/mocks/bar.png).
   `MMM d HH:MM`. Every zone is in the bar unless its entry says
   `"bar": false` (below), and the popover lists them all, so a machine can
   keep several zones a click away and two or three on the bar. tide,
-  tilemo and tileco read the same setting and show it the same way. It
+  tide for macOS and tide for Chrome read the same setting and show it the same way. It
   used to show local's clock alone, by the maintainer's choice after using
   it on a laptop; untick the zones there to get that back.
 - **Zones:** America/Los_Angeles, America/New_York, Europe/London. They show as
@@ -2082,11 +2082,11 @@ See [`bar.png`](docs/mocks/bar.png).
 
 | Icon | Shows | Click | Scroll / other |
 |---|---|---|---|
-| **Presenting** (accent) | presenter mode is on (§10) | turns presenter mode off | hover: "Presenting: Do not disturb and keep awake", as tilemo's |
+| **Presenting** (accent) | presenter mode is on (§10) | turns presenter mode off | hover: "Presenting: Do not disturb and keep awake", as tide for macOS's |
 | Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen or window), and the app reading it; stop it from the app | — |
 | Privacy: mic (orange) | any app is capturing the microphone; the mic slashed while every mic being recorded from is muted (`Super+Shift+M` mutes them all), so a headset an app picked still shows live | per-app list with mute | hover: "Mic on" or "Mic off", as the OSD says, and how many apps are recording |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
-| Keyboard layout | up to three letters of the main keyboard's layout (US, DVO, GER), as tilemo's; only once there are two layouts | the next layout, as `Super+Alt+Space` (§16) | hover: the layout's full name |
+| Keyboard layout | up to three letters of the main keyboard's layout (US, DVO, GER), as tide for macOS's; only once there are two layouts | the next layout, as `Super+Alt+Space` (§16) | hover: the layout's full name |
 | Keep awake: a cup of coffee | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off; the OSD says which | hover: what it's doing, in the OSD's words |
 | Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | hover: "Bluetooth off", or "Bluetooth on" with what's connected: one or two by name, else how many, or "nothing connected" |
 | Bluetooth audio | one icon per connected headphones, headset or speakers, beside Bluetooth | the Bluetooth popover | hover: its name and battery |
@@ -2111,8 +2111,8 @@ that comes from the same `nmcli connection show` as the VPNs. Its own
 `connectWithSettings` does nothing on a network that's already connected.
 
 **Hover text.** Every status icon says what it shows when the pointer
-is over its click target, % included, in one line under it, as tilemo's
-bar does and in tilemo's words where it has the same icon. It stays away
+is over its click target, % included, in one line under it, as tide for macOS's
+bar does and in tide for macOS's words where it has the same icon. It stays away
 while a popover or the notification center is open, so it never covers
 one. It's one component, `BarTip`, so they all look alike.
 
@@ -2226,7 +2226,7 @@ See [`switcher.png`](docs/mocks/switcher.png).
 - `↑`/`↓` or `Ctrl+N`/`Ctrl+P` move the selection, on every tab.
 - `Ctrl+M` on the Windows and Attention tabs mutes or unmutes the
   selected row's app (§9, *Muted apps*): M for mute, decided by the
-  maintainer. The footer shows it there. tilemo's is `Cmd+M`, the same
+  maintainer. The footer shows it there. tide for macOS's is `Cmd+M`, the same
   physical key on a Mac.
 - **The footer** names only the keys that work on the tab you're on:
   `Ctrl+↵` and `PgDn` on Apps, `Ctrl+M` on Windows and Attention, and
@@ -2242,8 +2242,8 @@ See [`switcher.png`](docs/mocks/switcher.png).
 - **Open.** `Super+Space`, or `Tab` from another tab.
   - The tap of `Super` is a release bind on `SUPER_L` that fires a Hyprland
     global shortcut, `tide:launcher`, handled by Quickshell's
-    `GlobalShortcut`; it opens the switcher on Apps, as on tilemo and
-    tileco. That is faster than spawning `qs ipc` per keypress.
+    `GlobalShortcut`; it opens the switcher on Apps, as on tide for macOS and
+    tide for Chrome. That is faster than spawning `qs ipc` per keypress.
   - **Caveat:** on Hyprland 0.56.x a release bind on `SUPER_L` fires on
     *every* Super release, including after `Super+T`. The keybind refactor
     that fixes this (hyprwm/Hyprland#15568, then #15904) is in 0.57.0.
@@ -2355,19 +2355,19 @@ See [`switcher.png`](docs/mocks/switcher.png).
   windows are toplevels; its tabs aren't, and no Wayland or D-Bus
   interface names them.
 - So it needs a browser extension: the **tide connector**, in
-  `connector/`, or tileco (mikelward/tileco, tileco §14.6), which does the
+  `connector/`, or tide for Chrome (mikelward/tideco, tideco SPEC.md §14.6), which does the
   same on Linux. Either reads the tabs with the `chrome.tabs` API and hands
   them to the shell through native messaging, a host program Chrome starts
   that talks over stdio. Enter on a tab asks the extension to activate it,
   then the shell focuses its window.
   - The connector is an extension of its own, for a store listing with one
-    purpose. tileco tiles on chromeOS and lists tabs on Linux, two purposes
+    purpose. tide for Chrome tiles on chromeOS and lists tabs on Linux, two purposes
     on a listing about tiling; the connector only lists tabs. Which one
     Linux uses is still open.
   - Chrome's remote debugging port would list tabs with no extension, but
     lets any local process drive the browser, so it isn't used.
   - Firefox has the same extension and native-messaging shape, later.
-- **The connector's permissions: three, and no site access.** tileco asks
+- **The connector's permissions: three, and no site access.** tide for Chrome asks
   for the first two as optional ones, only on Linux.
   - `tabs`, for each tab's title and URL; without it `chrome.tabs`
     leaves both out. Chrome warns "Read your browsing history".
@@ -2380,19 +2380,19 @@ See [`switcher.png`](docs/mocks/switcher.png).
     would need site access, so a tab's row shows its browser's icon.
 - **The connector** (`connector/`, Manifest V3, JavaScript):
   - `bridge.js` connects, sends the tabs, and brings a tab up when asked.
-    It is a copy of tileco's `src/tabsbridge.js`, whose tests came with it.
+    It is a copy of tide for Chrome's `src/tabsbridge.js`, whose tests came with it.
   - `background.js` asks the platform once per worker. Off Linux it does
     nothing. On Linux it connects at startup and on every window and tab
     event.
   - The toolbar popup says whether it's connected, waiting for tide's
     shell, or missing its host, and what to do.
   - `make connector-zip` packages it for the Chrome Web Store, its version
-    the commit count, as tileco's is. `connector/README.md` has the store
+    the commit count, as tide for Chrome's is. `connector/README.md` has the store
     listing.
 - **`tide-tabs`** (`cmd/tide-tabs`, Go) has two ends, which meet on
   `$XDG_RUNTIME_DIR/tide/tabs.sock`, in a directory only you can enter.
   - **The host**, `io.github.mikelward.tide.tabs`: Chrome or Brave starts
-    it for the connector or tileco, with that extension's origin. It reads and writes Chrome's
+    it for the connector or tide for Chrome, with that extension's origin. It reads and writes Chrome's
     frames (a 4-byte length in the machine's byte order, then JSON), and
     passes them on as lines over the socket, keeping only the fields below.
   - **The relay**, `tide-tabs serve`: the shell starts it, as it does
@@ -2413,7 +2413,7 @@ See [`switcher.png`](docs/mocks/switcher.png).
   - Any process of yours could reach the socket, as it could `qs ipc`; a
     process that can already do that gains nothing. Nothing else can.
 - **Each tab goes under its window by the window's title,** which is its
-  active tab's, as tilemo places tabs (tilemo §9). Two windows showing
+  active tab's, as tide for macOS places tabs (tidemo SPEC.md §9). Two windows showing
   the same title can't be told apart; their tabs go under the first.
 - **In the Windows tab** (`shell/TabsData.qml`, `shell/lib/tabs.mjs`):
   - A window's title matches when it is its active tab's title, then
@@ -2433,15 +2433,15 @@ See [`switcher.png`](docs/mocks/switcher.png).
     focuses its window, which a browser can't do for itself on Wayland.
   - With no browser connected, the tab says "Browser tabs aren't listed",
     and why: `tide-tabs` isn't running, or no browser has the tide
-    connector or tileco connected. `TIDE_TABS=0` in the session's environment turns it off.
+    connector or tide for Chrome connected. `TIDE_TABS=0` in the session's environment turns it off.
   - The relay restarts with the polkit agent's backoff (5 s, doubling to
     a minute), as `tide-agent` does.
-- **It's only for Linux.** tileco reads tabs itself on chromeOS (tileco
-  §9.4), and tilemo asks Chrome, Brave and Safari through AppleScript
-  (tilemo §9). Neither needs a host.
+- **It's only for Linux.** tide for Chrome reads tabs itself on chromeOS (tideco SPEC.md
+  §9.4), and tide for macOS asks Chrome, Brave and Safari through AppleScript
+  (tidemo SPEC.md §9). Neither needs a host.
 - **Installing:** the tide connector unpacked from `connector/` in a
   checkout, for Chrome and Brave, which load the same extension; developer
-  mode has to stay on for unpacked. Or tileco, from the Chrome Web Store or
+  mode has to stay on for unpacked. Or tide for Chrome, from the Chrome Web Store or
   a checkout. `setup` installs the host's manifest for each browser it
   finds, allowing each extension's IDs.
 - **Cost:** nothing to run. Publishing the connector would be a second
@@ -2452,7 +2452,7 @@ See [`switcher.png`](docs/mocks/switcher.png).
     can break when Chrome changes its extension rules.
   - An open native-messaging port keeps a Manifest V3 service worker
     running from Chrome 105. On Chromium 153.0.8010.12 with the real host
-    the worker was still running after 70 s idle (tileco §14.6). The
+    the worker was still running after 70 s idle (tideco SPEC.md §14.6). The
     connector, loaded in Chromium 153 with the real host, connected, sent
     its tabs, and brought one up when the relay asked (2026-11-01).
   - The host keeps trying the socket, from 250 ms doubling to 5 s, so a
@@ -2581,8 +2581,8 @@ See [`picker.png`](docs/mocks/picker.png).
 - **Age: a week.** An entry last copied 7 days ago, or as many days as
   the Clipboard page says, is forgotten: after each copy, and before each
   `list`, so old copies go even with nothing copied since. Copying
-  something again starts its week afresh. tilemo forgets after the same
-  setting (tilemo SPEC.md §9.1).
+  something again starts its week afresh. tide for macOS forgets after the same
+  setting (tidemo SPEC.md §9.1).
 - **One at a time:** each command that changes the history, wiping
   included, holds `flock` on `clipboard.lock`, beside the history's folder,
   from reading the index to rewriting it, so a list, a copy and a wipe at
@@ -2713,7 +2713,7 @@ instead, for the Fill tab's values (scripts' `fill-menu` on KDE).
   - A symbol that is also an emoji is listed once, as the emoji.
   - Names are lowercase ASCII, so `cote` finds Côte d'Ivoire's flag.
 - `shell/chars/generate.mjs` builds it from Unicode 16.0's
-  `emoji-test.txt` and `UnicodeData.txt`. tilemo copies the file
+  `emoji-test.txt` and `UnicodeData.txt`. tide for macOS copies the file
   unchanged.
 - **License:** Unicode's data files are under the Unicode License v3,
   which allows copying and redistribution with its notice. The notice
@@ -2859,7 +2859,7 @@ those can't quiet it.
     subdomain, in `x-kde-origin-name`, and that site's `--app` windows.
     Another app naming the site in that hint isn't covered, since any app
     can send it.
-  - tilemo reads the same key from the same `workspaces.json` and
+  - tide for macOS reads the same key from the same `workspaces.json` and
     `workspaces.local.json`, so a list reads the same on both.
 - **What muting does.**
   - **No popups.** A muted app's notifications don't pop up, critical
@@ -3039,13 +3039,13 @@ one of them:
   audio-only call with no video on screen doesn't blank.
 - **`Super+S`** toggles it as a click on the bar's icon does, and so does
   the switcher's Keep awake. Each time, the OSD (§9) says "Keeping awake"
-  or "Not keeping awake", as tilemo's alert does, since the bar's icon may
+  or "Not keeping awake", as tide for macOS's alert does, since the bar's icon may
   be on another monitor. When something else holds it, it says what:
   "Keeping awake while the mic is live" or "Keeping awake while
   presenting", since a toggle can't turn that off. Hovering over the bar's
   icon says the same.
 - **Its icon is a cup of coffee,** on the bar, the OSD and the switcher, as
-  on tilemo. It was the sun, which is brightness's icon too.
+  on tide for macOS. It was the sun, which is brightness's icon too.
 
 **Presenter mode** is Do not disturb (§9) and keep awake together, for a
 talk, a demo, or a meeting room's screen.
@@ -3819,7 +3819,7 @@ to be focused.
 - **An unread count isn't attention.** A title's count, such as Gmail's
   "(3) Inbox", rises with every message, wanted or not. A window wants
   attention when it notifies, rings the bell or activates itself.
-  tilemo and tileco follow the same rules.
+  tide for macOS and tide for Chrome follow the same rules.
 - **Who actually asks**, checked in each project's source:
 
   | Client | Raises urgency on Wayland? |
@@ -4031,7 +4031,7 @@ to be focused.
     a square chip with pins on four sides for the CPU, and a module with
     contacts along one edge for memory, the shapes people already read as
     a processor and RAM; and keep awake's cup of coffee with steam, as
-    tilemo's bar draws it.
+    tide for macOS's bar draws it.
   - The cursor theme and size are set once, in the uwsm environment, for
     every toolkit.
 
@@ -4375,7 +4375,7 @@ stays hand-written.
   - `muted` is the list of muted apps and sites (§9, *Muted apps*): app
     IDs, or `site:HOST`, empty by default. A bad entry is an error at load
     naming it, and the rest of the list still applies, unlike the other
-    settings here. tilemo reads the same key.
+    settings here. tide for macOS reads the same key.
   - `workspaceSettings` is each workspace's `askForName` and `pinnedApps`
     (§6.5). With neither file setting it, home asks for a name and nothing
     is pinned. `conf`'s shared file pins mail, chat and calendar on `in`,
@@ -4900,7 +4900,7 @@ light/dark switch.
 |---|---|
 | **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service` and its fallback, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. The tide connector, the browser extension in `connector/` (§8.3). `make install`. |
 | **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces, home's apps and each workspace's own settings), the `persistent` workspace rule for home and the pinned apps' close keys, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
-| **tileco** | Tiling on chromeOS. On Linux it can list the browser's tabs in the Windows tab, as tide's own connector does (§8.3). |
+| **tideco** | tide for Chrome: tiling on chromeOS. On Linux it can list the browser's tabs in the Windows tab, as tide's own connector does (§8.3). |
 | **scripts** | `setup`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, `secret-tool` (libsecret-tools), the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `tide-tabs`'s host manifest for Chrome and Brave (§8.3). `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |
 | **dwl** (exploration) | The tide fork of dwl that §21.1 is exploring, on upstream's history, under dwl's GPL-3.0-or-later license: the layouts, dimming and IPC it would add. Nothing else depends on it until §21.1's next steps are done and §3.1 is rewritten around it. |
@@ -5125,7 +5125,7 @@ in `TODO.md`.
 - **Workspaces across several monitors.** **Decided** (2026-11-01): a
   workspace spans every monitor, each with its own part, and a part with
   nothing on it shows the wallpaper and the bar (§6.5). Moving between
-  monitors uses tilemo's keys (§6.6, mikelward/tilemo#90). Until it's
+  monitors uses tide for macOS's keys (§6.6, mikelward/tidemo#90). Until it's
   built, extra monitors keep Hyprland's model: each shows one workspace
   from a shared pool, and a second monitor gets a numbered one.
 - **More workspaces than the bar's left side holds.** The bar cuts names at

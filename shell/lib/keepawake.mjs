@@ -11,12 +11,12 @@
 export const OFF = Object.freeze({ on: false, until: 0 });
 
 // Its icon everywhere it's shown: the bar, the OSD and the switcher. A
-// cup of coffee, as on tilemo, and not the sun, which is brightness's.
+// cup of coffee, as on tide for macOS, and not the sun, which is brightness's.
 // One of tide's own (shell/icons), since icon themes have none.
 export const ICON = "keep-awake-symbolic.svg";
 
 // What it's doing, in the words the OSD, the bar icon's hover text and
-// the switcher all use, as tilemo's do: whether it's keeping the screen
+// the switcher all use, as tide for macOS's do: whether it's keeping the screen
 // awake, and if you didn't ask, what is.
 export function sign({ on, asked, presenting }) {
     if (!on) {

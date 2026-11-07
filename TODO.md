@@ -84,7 +84,7 @@ once you have agreed with it or reversed it.
   minimized** (2026-11-04), as over an empty one, since there's nothing to
   see there and Hyprland has no window on it (§6.7); `Super+Shift+PgUp`/
   `PgDn` still take the window to the very next, empty or not. The same on
-  tilemo and tileco. The alternative is counting minimized windows, as the
+  tide for macOS and tide for Chrome. The alternative is counting minimized windows, as the
   bar's tray does. Reversible: conf's `with_windows` in `hyprland.lua`.
 - **A local `workspaceSettings` replaces the shared one whole**
   (2026-11-04), as the lists do, rather than merging per workspace: the
@@ -115,12 +115,12 @@ once you have agreed with it or reversed it.
   places, which the shell would read from `hyprctl clients`.
   Reversible: `HOME_LAUNCH_SECONDS` and `homeLaunchWindow`.
 - **On the next monitor, Super+Left and Right pick a window at the edge you
-  come in by** (2026-11-01), then tilemo's rule (most shared height,
-  nearest center, first in order) among those. tilemo's rule alone, over
+  come in by** (2026-11-01), then tide for macOS's rule (most shared height,
+  nearest center, first in order) among those. tide for macOS's rule alone, over
   all that monitor's windows, can skip past the nearer stack to a taller
   master on the far side, which isn't the "nearest window" asked for.
-  The alternative is tilemo's rule as is. Reversible: `direction.at_edge`
-  in `hypr/tide/direction.lua`; tilemo may want the same change.
+  The alternative is tide for macOS's rule as is. Reversible: `direction.at_edge`
+  in `hypr/tide/direction.lua`; tide for macOS may want the same change.
 - **Super+Left and Right are the layout's, not Hyprland's `movefocus`**
   (2026-11-01), so focus and move share one rule and nothing wraps past
   the last monitor (`movefocus` wraps to the far side of the same monitor
@@ -132,7 +132,7 @@ once you have agreed with it or reversed it.
 - **A moved window lands in the place nearest the edge it came in by**
   (2026-11-01), sharing the most height with where it was, then the first:
   moving right onto a monitor in tile makes it the master; moving left puts
-  it in the stack. tilemo lands it next to the picked window on that side,
+  it in the stack. tide for macOS lands it next to the picked window on that side,
   which in tide's layouts would shuffle the others between sides.
   Reversible: `direction.landing`.
 - **The work area a float is placed in is the monitor less what layers
@@ -153,9 +153,9 @@ once you have agreed with it or reversed it.
   `switcher.mjs`'s `TABS` and `launcher.mjs`'s `actionRows`.
 
 - **The tide connector is its own extension** (2026-11-01), in
-  `connector/`, beside tileco's Linux mode: a fallback in case the store
-  won't list tileco while it does both tiling on chromeOS and tabs on
-  Linux. Its icon is tileco's waves for now, and it's named "tide
+  `connector/`, beside tide for Chrome's Linux mode: a fallback in case the store
+  won't list tide for Chrome while it does both tiling on chromeOS and tabs on
+  Linux. Its icon is tide for Chrome's waves for now, and it's named "tide
   connector". Reversible: `connector/`.
 - **`tide-tabs` is one binary with two ends** (2026-11-01): the host Chrome
   starts and `tide-tabs serve`, the shell's child, meeting on
@@ -177,7 +177,7 @@ once you have agreed with it or reversed it.
   `visible` in `LauncherWindow.qml`.
 - **Each browser's tabs go whole on every change** (2026-11-01), not as
   diffs, so a reconnect needs no catching up. Reversible: the protocol, in
-  tileco and here.
+  tide for Chrome and here.
 - [ ] **Keyboard's shortcuts sit below its settings, under a Shortcuts
   heading,** on the one scrolling page (SPEC.md §16). The alternative was a
   second view on the page, Settings and Shortcuts, switched by ‹ and › or a
@@ -301,7 +301,7 @@ once you have agreed with it or reversed it.
 - [ ] **Start at login has a file of its own, `startup.json`
   (`commands`)**, not a `startup` key in `workspaces.json` beside `muted`.
   A bad workspaces file stops home's rules from applying, and a startup
-  list has nothing to do with them; tilemo reads one more file either way.
+  list has nothing to do with them; tide for macOS reads one more file either way.
   Reversible by moving the key before many machines have a local file.
 - [ ] **A command at login is words, with no shell.** Quotes, backslashes
   and `$` are refused rather than read as `sh -c` would, so what the page
@@ -330,7 +330,7 @@ once you have agreed with it or reversed it.
 - [ ] **The muted list lives on the Notifications page**, writing
   `workspaces.local.json` beside the switcher's and the center's mute
   actions, not on a Workspaces page. Muting is about being told; the key
-  stays where tilemo reads it. Reversible by moving the rows.
+  stays where tide for macOS reads it. Reversible by moving the rows.
 
 - [ ] **A laptop's pointing stick and its touchpad's I2C nodes are
   touchpads** (SPEC.md §16): listed on the Touchpad page and given its
@@ -1889,18 +1889,18 @@ or workspace goes there.
 - **The tap of `Super`** opens the switcher on Workspaces (its `tide:launcher`
   global shortcut does), once the pinned Hyprland passes SPEC.md §8.2's
   three tap checks; until then `conf` binds no tap.
-- **Browser tabs (M9).** tileco on Linux lists tabs with `chrome.tabs`,
+- **Browser tabs (M9).** tide for Chrome on Linux lists tabs with `chrome.tabs`,
   and `tide-tabs` hands them to the shell (SPEC.md §8.3).
   - [x] An open native-messaging port keeps a Manifest V3 service worker
     running: Chrome 105+, and checked on Chromium 153.0.8010.12 with the
     real host (still running after 70 s idle). Recheck on the Chrome the
     machines run, since none is pinned.
   - [x] **The tide connector**, the extension in `connector/` (SPEC.md
-    §8.3), a single-purpose alternative to tileco's Linux tab list.
+    §8.3), a single-purpose alternative to tide for Chrome's Linux tab list.
   - [ ] **`setup` allows the connector**: its checkout's ID in the host
-    manifest, beside tileco's (scripts). Until then it loads, but its
+    manifest, beside tide for Chrome's (scripts). Until then it loads, but its
     popup says `tide-tabs` doesn't know it.
-  - [ ] **Publish the connector**, if tileco can't keep its Linux tab
+  - [ ] **Publish the connector**, if tide for Chrome can't keep its Linux tab
     list: a new Chrome Web Store item from `make connector-zip`
     (`connector/README.md`), then its ID in `setup`'s host manifest.
   - [ ] **Release artifacts for the connector**, if it goes ahead: a CI job
@@ -2008,7 +2008,7 @@ entry before it's copied, so a paste needs no tidying afterward. Ideas so far:
   into `key=value`, with quoting where the value needs it.
 
 Each would be an action on the highlighted row, with a single-modifier key.
-The same actions would suit tilemo's picker on the Mac.
+The same actions would suit tide for macOS's picker on the Mac.
 
 ## More matchers for float rules
 
