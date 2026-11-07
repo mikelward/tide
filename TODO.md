@@ -2022,9 +2022,9 @@ and System Settings pages. Each step is its own PR.
   and `tide doctor`'s check under Plasma: qs, `kde.qml` and the unit.
   Tested by `session_test.sh` (with `systemd-analyze verify`) and
   `tide-doctor_test.sh`; not yet started by a real Plasma.
-- [ ] **scripts**: `setup-kde` enables the unit, installs Quickshell as
-  `setup-tide` does, adds a `tide-launcher` script, and binds `Meta+Space`
-  to it with `add_app_shortcut`.
+- [x] **scripts** (mikelward/scripts#411): `setup-tide` enables the
+  unit, and `setup-kde` binds `Meta+Space` to `tide-launcher`, which opens
+  KRunner when no launcher answers.
 - [ ] **On a real Plasma 6 session**: the surface opens on the focused
   monitor with the keyboard, how long `Meta+Space` takes, that a started
   app gets focus, and the process's memory.
