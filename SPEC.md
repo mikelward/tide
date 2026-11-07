@@ -2734,8 +2734,9 @@ apps and its System Settings pages. Kickoff stays on the tap of `Super`.
   logout. `setup-kde` enables it. It never starts in tide's own session.
 - **The key.** `setup-kde` binds `Meta+Space` to a `tide-launcher`
   launcher script, as it binds `clipboard-menu` to `Meta+V`. The script
-  runs `qs -c tide-kde ipc call launcher toggle`. KWin has no global
-  shortcut Quickshell can take, unlike Hyprland's.
+  runs `qs -p ~/.config/quickshell/tide/kde.qml ipc call launcher
+  toggle`. KWin has no global shortcut Quickshell can take, unlike
+  Hyprland's.
 - **Tabs.** Apps and Actions only. Workspaces, Windows and Attention need
   the compositor (§5.3), and Plasma has its own for those: `Meta+Tab`,
   the task manager and KRunner.
@@ -2751,12 +2752,19 @@ apps and its System Settings pages. Kickoff stays on the tap of `Super`.
 - **Actions.** Lock (`loginctl lock-session`), log out
   (`org.kde.LogoutPrompt`'s `promptLogout`, Plasma's own confirmation),
   suspend, restart and shut down (`systemctl`), and screenshots
-  (Spectacle). The rest are tide's own: its settings, presenter mode,
+  (Spectacle, onto the clipboard). The rest are tide's own: its settings, presenter mode,
   keep awake and do not disturb, so they're left out.
-- **Launching.** Through the entry's own `Exec`, as Kickoff does, not
-  `tide launch`, which places windows on tide's workspaces.
-- **Theme.** Plasma's icon theme and light or dark, not the `Adwaita`
-  pragma `shell.qml` sets for tide's session.
+- **Launching.** Through KDE's `kstart`, as Kickoff does, not `tide
+  launch`, which places windows on tide's workspaces: an app by its
+  desktop ID (`--application`), which reads its terminal and working
+  directory itself, and a desktop action by its command.
+- **Nothing of tide's own.** Hyprland, the notification server, the
+  appearance schedule and the rest of tide's state aren't asked or
+  started: `launcher.mjs`'s `onPlasma` says it's Plasma, from
+  `XDG_CURRENT_DESKTOP`.
+- **Theme.** Plasma's icon theme, as `kde.qml` names none, unlike the
+  `Adwaita` pragma `shell.qml` sets for tide's session. Light or dark
+  follows Plasma's color scheme, from the palette it gives Qt apps.
 - **Cost:** one resident Quickshell process, for nothing to pay and no
   network. Its memory is the launcher's alone, less than tide's whole
   shell; it's measured on a real session before it ships.
