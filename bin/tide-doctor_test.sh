@@ -131,6 +131,16 @@ FAKE
 # $FAKE_OWNED holding "COMM UNIT".
 cat > "$fake/busctl" <<'FAKE'
 #!/bin/sh
+# busctl --user get-property ... Locked: the keyring's answer, $FAKE_KEYRING
+# ("b false", unlocked, by default), or fails with $FAKE_KEYRING_FAILS.
+if test "$2" = get-property; then
+    if test -n "$FAKE_KEYRING_FAILS"; then
+        echo "$FAKE_KEYRING_FAILS" >&2
+        exit 1
+    fi
+    echo "${FAKE_KEYRING:-b false}"
+    exit 0
+fi
 # busctl --user call ... ListActivatableNames: the names in
 # $FAKE_ACTIVATABLE, or fails with $FAKE_ACTIVATABLE_FAILS.
 if test "$2" = call; then
@@ -374,7 +384,17 @@ check "a healthy session says so" test "$out" = "No problems found."
 
 run XDG_CURRENT_DESKTOP=KDE
 check "outside tide it exits 2" test "$status" -eq 2
+
 check "outside tide it says why" contains "$(cat "$tmp/err")" "not in a tide session"
+
+healthy
+run FAKE_KEYRING="b true"
+check "a locked keyring is a problem" test "$status" -eq 1
+check "and says how logging in unlocks it" contains "$out" "the keyring is locked, so Chrome and saved Wi-Fi passwords ask for it again: logging in unlocks it only if the login manager's PAM stack has pam_gnome_keyring"
+healthy
+run FAKE_KEYRING_FAILS="Failed to get property Locked: The name org.freedesktop.secrets was not provided by any .service files"
+check "no keyring is a problem" test "$status" -eq 1
+check "and says busctl's error and how to look" contains "$out" "couldn't ask the keyring whether it's unlocked (Failed to get property Locked: The name org.freedesktop.secrets was not provided by any .service files)"
 
 # The home workspace (SPEC.md §6.5).
 rm "$tmp/config/hypr/tide-workspaces.lua"
