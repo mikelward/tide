@@ -6,13 +6,15 @@
 #   tide clipboard store [--max-items N]
 #
 #     The Settings panel's Clipboard page writes
-#     ~/.config/hypr/tide-clipboard.conf (history=on or off, and
-#     max_items=N), which store reads at each copy: off, it stores nothing,
-#     and its max_items replaces --max-items.
+#     ~/.config/hypr/tide-clipboard.conf (history=on or off, max_items=N
+#     and max_age_days=N), which store reads at each copy: off, it stores
+#     nothing, and its max_items replaces --max-items.
 #
 #     Run by tide-clipboard.service as `wl-paste --watch tide clipboard
 #     store`, with each new copy on stdin, and stores it with `cliphist
-#     store`, keeping the newest N (default 200). A copy a password manager
+#     store`, keeping the newest N (default 100). It then forgets entries
+#     last copied more than max_age_days ago (default 7), by the times it
+#     keeps in $XDG_STATE_HOME/tide/clipboard-times. A copy a password manager
 #     marks is never stored: one whose CLIPBOARD_STATE is `sensitive` (a
 #     wl-clipboard newer than 2.2.1 says so), or whose types, as
 #     `wl-paste --list-types` lists them, include x-kde-passwordManagerHint.
@@ -20,7 +22,8 @@
 #
 #   tide clipboard list
 #
-#     Prints the history, newest first, one `ID<TAB>preview` per line, as
+#     Forgets entries past max_age_days, as store does, then prints the
+#     history, newest first, one `ID<TAB>preview` per line, as
 #     `cliphist list` does, each preview up to 1,000 characters where
 #     cliphist can (0.6.0 and later; 100 before). The picker reads it.
 #     Before anything is stored, it prints nothing, or, with
@@ -42,7 +45,8 @@
 #
 #   tide clipboard wipe [--notify]
 #
-#     Removes the whole history (`cliphist wipe`). With --notify, as the
+#     Removes the whole history (`cliphist wipe`), and its times. With
+#     --notify, as the
 #     launcher's Clear clipboard history runs it, a failure is a
 #     notification too.
 #
@@ -79,11 +83,12 @@ entry_id() {
 }
 
 # The Clipboard page's settings, from the file the shell writes (SPEC.md
-# §16): sets history (on or off) and max, if the file sets them. A line it
-# can't read is said on stderr and passed over, so a bad file never stops
-# the history.
+# §16): sets history (on or off), max and age (days), if the file sets
+# them. A line it can't read is said on stderr and passed over, so a bad
+# file never stops the history.
 settings() {
     history=on
+    age=7
     conf=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/tide-clipboard.conf
     test -e "$conf" || return 0
     if ! test -r "$conf"; then
@@ -105,9 +110,87 @@ settings() {
                     *) max=$value ;;
                 esac
                 ;;
-            *) echo "$prog store: $conf: $key isn't a setting (history, max_items)" >&2 ;;
+            max_age_days)
+                case "$value" in
+                    '' | *[!0-9]* | 0) echo "$prog store: $conf: max_age_days is a whole number above 0, not '$value'" >&2 ;;
+                    *) age=$value ;;
+                esac
+                ;;
+            *) echo "$prog store: $conf: $key isn't a setting (history, max_items, max_age_days)" >&2 ;;
         esac
     done <"$conf"
+}
+
+# When each entry was last copied, as "ID SECONDS" lines, for forgetting
+# those older than $age days (SPEC.md §8.4). cliphist keeps no times of its
+# own. In $XDG_STATE_HOME, readable by you alone.
+times=${XDG_STATE_HOME:-$HOME/.local/state}/tide/clipboard-times
+
+# Holds the times' lock, on descriptor 9, until this exits: store and list
+# each read the history, then rewrite the times, and two at once would lose
+# one's update. Waits up to $TIDE_CLIPBOARD_LOCK_WAIT seconds (10), then
+# says why and returns 1.
+lock_times() {
+    if ! mkdir -p "${times%/*}" || ! exec 9>>"$times.lock"; then
+        echo "$prog: couldn't open $times.lock, so old copies aren't forgotten" >&2
+        return 1
+    fi
+    # flock is util-linux's, on every distro tide runs on. Without it, the
+    # history goes on unlocked, saying so.
+    if ! command -v flock >/dev/null 2>&1; then
+        echo "$prog: flock isn't installed (util-linux), so a list and a copy at once may lose a copy's time" >&2
+        return 0
+    fi
+    if ! flock -w "${TIDE_CLIPBOARD_LOCK_WAIT:-10}" 9; then
+        echo "$prog: another tide clipboard held $times.lock, so old copies aren't forgotten this time" >&2
+        return 1
+    fi
+}
+
+# Forgets entries last copied before $age days ago, newest's time being
+# now if given; one with no time yet starts its days now. The times file
+# is rewritten to hold just the entries kept, and any whose delete failed,
+# to try again. Each is deleted on its own: cliphist 0.4.0's delete reads
+# only the first ID it's given. Says why on stderr and returns 1 if it
+# can't.
+expire() {
+    _newest=${1:-}
+    _now=${TIDE_CLIPBOARD_NOW:-$(date +%s)}
+    _cutoff=$((_now - age * 86400))
+    if ! _ids=$(cliphist list 2>&1); then
+        case "$_ids" in
+            *'please store something first'*) return 0 ;;
+        esac
+        echo "$prog: couldn't list the history to forget old copies: $_ids" >&2
+        return 1
+    fi
+    if ! mkdir -p "${times%/*}" || ! _new=$(mktemp "$times.XXXXXX"); then
+        echo "$prog: couldn't write $times, so old copies aren't forgotten" >&2
+        return 1
+    fi
+    test -e "$times" || : >"$times"
+    # The kept entries' times go to $_new; the old ones' IDs, one a line,
+    # to be deleted.
+    _old=$(printf '%s\n' "$_ids" | awk -F '\t' -v now="$_now" -v cutoff="$_cutoff" -v newest="$_newest" \
+        -v keep="$_new" -v kept="$times" '
+        BEGIN { while ((getline line < kept) > 0) { split(line, f, " "); t[f[1]] = f[2] } }
+        $1 == "" { next }
+        {
+            at = ($1 == newest) ? now : (($1 in t) ? t[$1] : now)
+            if (at + 0 < cutoff + 0) print $1
+            else print $1 " " at > keep
+        }')
+    _failed=0
+    for _id in $_old; do
+        if ! _err=$(printf '%s\t\n' "$_id" | cliphist delete 2>&1); then
+            echo "$prog: couldn't forget entry $_id, older than $age days: $_err" >&2
+            # Kept as old as it was, so the next try deletes it.
+            echo "$_id $_cutoff" >>"$_new"
+            _failed=1
+        fi
+    done
+    chmod 600 "$_new" && mv "$_new" "$times" || return 1
+    return "$_failed"
 }
 
 store() {
@@ -146,12 +229,40 @@ store() {
     if printf '%s\n' "$types" | grep -qx "$HINT"; then
         exit 0
     fi
-    exec cliphist -max-items "$max" store
+    # Kept in a file on the runtime directory's tmpfs, readable by you
+    # alone, to tell whether cliphist stored it: it stores nothing, and
+    # still succeeds, for a copy that's only whitespace or too big.
+    temporaries store
+    cat >"$tmp"
+    # From storing to rewriting the times, as one: a list meanwhile would
+    # rewrite them from before the copy, losing its time. Without the lock
+    # the copy is still stored, and old ones go next time.
+    locked=no
+    lock_times && locked=yes
+    cliphist -max-items "$max" store <"$tmp" || exit 1
+    test "$locked" = yes || exit 1
+    # The copy just stored is the newest: its days start now, even when it
+    # was in the history already. If the newest isn't the copy, cliphist
+    # skipped it, and no entry's days start again.
+    newest=$(cliphist list 2>/dev/null | head -n 1)
+    newest=${newest%%	*}
+    # $errs, temporaries' second file, holds the newest entry to compare.
+    if test -n "$newest" && printf '%s\t\n' "$newest" | cliphist decode 2>/dev/null >"$errs" &&
+        cmp -s "$tmp" "$errs"; then
+        expire "$newest" || exit 1
+    else
+        expire || exit 1
+    fi
 }
 
 list() {
     test $# -eq 0 || usage
     need cliphist cliphist
+    # Old copies go even if nothing's been copied since they aged. A
+    # failure is said, and the history listed as it is.
+    age=7
+    settings 2>/dev/null
+    { lock_times && expire; } >&2 || true
     # Each preview is what the picker searches, and cliphist cuts it at 100
     # characters. 0.6.0 added -preview-width, which `version` lists among
     # its flags; older ones refuse the flag (0.4.0 has no `version` either),
@@ -252,6 +363,7 @@ wipe() {
     if ! command -v cliphist >/dev/null 2>&1; then
         err="cliphist isn't installed, so there's no clipboard history to clear"
     elif err=$(cliphist wipe 2>&1); then
+        rm -f "$times"
         exit 0
     else
         err="cliphist wipe failed: $err"

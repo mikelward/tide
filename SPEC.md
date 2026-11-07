@@ -2548,11 +2548,25 @@ See [`picker.png`](docs/mocks/picker.png).
 - **Size cap: the newest 100 entries** (`cliphist -max-items 100`; its
   own default is 750), or as many as the Settings panel's Clipboard page
   says (§16).
+- **Age: a week.** An entry last copied 7 days ago, or as many days as
+  the Clipboard page says, is forgotten. cliphist keeps no times, so
+  `tide clipboard store` keeps one per entry, "ID SECONDS", in
+  `$XDG_STATE_HOME/tide/clipboard-times`, mode 600. After each copy it
+  stores, and before each `list`, so old copies go even with nothing
+  copied since, it deletes the entries past the age from cliphist and
+  rewrites the file with the rest. An entry with no time yet, from
+  before tide kept them, starts its week when first seen. Copying
+  something again starts its week afresh. Each holds `flock` on
+  `clipboard-times.lock` from reading the history to rewriting the times,
+  so a list and a copy at once can't lose one's update; a copy that can't
+  get it within 10 seconds is still stored, and old ones go next time.
+  tilemo forgets after the same setting (tilemo SPEC.md §9.1).
 - **The Clipboard page** can also turn the history off: then `tide
   clipboard store` keeps no new copy, and what's kept stays until it's
-  cleared. The shell writes both to `~/.config/hypr/tide-clipboard.conf`
-  (`history=on` or `off`, `max_items=N`), which `store` reads at each copy,
-  so nothing restarts. A line it can't read is said on its stderr, in the
+  cleared or ages out. The shell writes them to
+  `~/.config/hypr/tide-clipboard.conf` (`history=on` or `off`,
+  `max_items=N`, `max_age_days=N`), which `store` reads at each copy, so
+  nothing restarts. A line it can't read is said on its stderr, in the
   unit's journal, and passed over, so a bad file never stops the history.
   - A smaller cap trims the history at the next copy, as cliphist applies
     `-max-items` when it stores.
@@ -4474,6 +4488,9 @@ stays hand-written.
   - `maxItems` is how many it keeps, 100 by default, from 1 to 10,000. − and
     + step through 25, 50, 100, 200, 500, 750 and 1,000; one set between
     marks by hand goes to the nearest one that way first.
+  - `maxAgeDays` is how many days an entry stays after it was last
+    copied, 7 by default, from 1 to 3,650. − and + step through 1, 2, 3,
+    7, 14, 30, 90 and 365, the same way.
   - A value that isn't one is refused, and the page says why. In the
     files, it's an error at load naming the setting, and the last good
     settings stay.

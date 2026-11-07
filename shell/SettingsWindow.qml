@@ -301,10 +301,10 @@ PanelWindow {
         }
 
         // Sets one of the Clipboard page's settings, as it does: `qs -c
-        // tide ipc call settings setClipboard maxItems 500`, or history
-        // true or false. Answers why not, or "".
+        // tide ipc call settings setClipboard maxItems 500`, maxAgeDays 30,
+        // or history true or false. Answers why not, or "".
         function setClipboard(key: string, value: string): string {
-            return ClipboardSettingsData.set(key, key === "maxItems" ? Number(value) : value === "true" ? true : value === "false" ? false : value);
+            return ClipboardSettingsData.set(key, key === "maxItems" || key === "maxAgeDays" ? Number(value) : value === "true" ? true : value === "false" ? false : value);
         }
         // Clears the clipboard history, as the page's Clear history does.
         function clearClipboard(): void {
@@ -2941,6 +2941,54 @@ PanelWindow {
                                     value: clipboard.settings.maxItems
                                     next: Clip.steppedMax(clipboard.settings.maxItems, 1)
                                     onActivated: clipboard.changed(ClipboardSettingsData.set("maxItems", next))
+                                }
+                            }
+                        }
+
+                        Item {
+                            visible: clipboard.settings.history
+                            width: clipboard.width
+                            implicitHeight: visible ? 32 : 0
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Days to keep"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+
+                                StepButton {
+                                    name: "list-remove-symbolic"
+                                    value: clipboard.settings.maxAgeDays
+                                    next: Clip.steppedAge(clipboard.settings.maxAgeDays, -1)
+                                    onActivated: clipboard.changed(ClipboardSettingsData.set("maxAgeDays", next))
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 92
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: Clip.ageText(clipboard.settings.maxAgeDays)
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                    font.features: ({ "tnum": 1 })
+                                }
+
+                                StepButton {
+                                    name: "list-add-symbolic"
+                                    value: clipboard.settings.maxAgeDays
+                                    next: Clip.steppedAge(clipboard.settings.maxAgeDays, 1)
+                                    onActivated: clipboard.changed(ClipboardSettingsData.set("maxAgeDays", next))
                                 }
                             }
                         }

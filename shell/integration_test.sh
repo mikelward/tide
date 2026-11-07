@@ -1419,7 +1419,7 @@ written_settings() {
     # The Clipboard page: the defaults written for tide clipboard store at
     # startup, then a cap set over a hand edit turning history off, and a
     # cap of none refused.
-    if test "$(cat "$clipboard_conf" 2>/dev/null)" != "$(printf '%s\n' "# Written by tide's settings panel (SPEC.md §16); edit clipboard.local.json instead." history=on max_items=100)"; then
+    if test "$(cat "$clipboard_conf" 2>/dev/null)" != "$(printf '%s\n' "# Written by tide's settings panel (SPEC.md §16); edit clipboard.local.json instead." history=on max_items=100 max_age_days=7)"; then
         echo "FAIL: the shell should write the clipboard history's defaults to $clipboard_conf; it has: $(cat "$clipboard_conf" 2>&1)" >&2
         exit 1
     fi
