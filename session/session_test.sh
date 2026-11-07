@@ -315,7 +315,7 @@ check "the lock asks PAM for its own service" \
 # store, which skips a password manager's, capped at 200; the database
 # private to you; stopped with the session, and only in tide's.
 check "the history watches the clipboard through tide clipboard store" \
-    has_line "$clipboard" "ExecStart=wl-paste --watch tide clipboard store --max-items 200"
+    has_line "$clipboard" "ExecStart=wl-paste --watch tide clipboard store --max-items 100"
 check "the history's database is private" has_line "$clipboard" "UMask=0077"
 check "the history stops with the session" has_line "$clipboard" "PartOf=graphical-session.target"
 check "the history runs only in the tide sessions" \

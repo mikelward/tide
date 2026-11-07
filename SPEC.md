@@ -2541,7 +2541,7 @@ See [`picker.png`](docs/mocks/picker.png).
 - **The database** is cliphist's default, `$XDG_CACHE_HOME/cliphist/db`,
   so a cliphist you already ran keeps its history. It outlives a logout
   and a reboot, like the clipboard history on a phone.
-- **Size cap: the newest 200 entries** (`cliphist -max-items 200`; its
+- **Size cap: the newest 100 entries** (`cliphist -max-items 100`; its
   own default is 750), or as many as the Settings panel's Clipboard page
   says (§16).
 - **The Clipboard page** can also turn the history off: then `tide
@@ -4464,7 +4464,7 @@ stays hand-written.
   `clipboard.local.json`.
   - `history` turns keeping new copies on or off, on by default. A click
     on its switch turns it.
-  - `maxItems` is how many it keeps, 200 by default, from 1 to 10,000. − and
+  - `maxItems` is how many it keeps, 100 by default, from 1 to 10,000. − and
     + step through 25, 50, 100, 200, 500, 750 and 1,000; one set between
     marks by hand goes to the nearest one that way first.
   - A value that isn't one is refused, and the page says why. In the

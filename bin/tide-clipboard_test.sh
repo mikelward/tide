@@ -130,7 +130,7 @@ reset
 printf 'hello' | CLIPBOARD_STATE=data "$cmd" store
 check "store exits 0" test $? -eq 0
 check "store stores the copy" test "$(cat "$tmp/stored")" = hello
-check "store keeps the newest 200 by default" contains "$(cat "$log")" "cliphist -max-items 200 store"
+check "store keeps the newest 100 by default" contains "$(cat "$log")" "cliphist -max-items 100 store"
 
 reset
 printf 'hello' | "$cmd" store --max-items 50
@@ -160,7 +160,7 @@ check "the page's max_items replaces --max-items, even on a last line with no ne
 reset
 printf 'history=maybe\nmax_items=none\ncolour=red\n' > "$conf"
 out=$(printf 'hello' | XDG_CONFIG_HOME="$tmp/config" CLIPBOARD_STATE=data "$cmd" store 2>&1)
-check "a bad file still stores, with the default cap" contains "$(cat "$log")" "cliphist -max-items 200 store"
+check "a bad file still stores, with the default cap" contains "$(cat "$log")" "cliphist -max-items 100 store"
 check "and says what's wrong with history" contains "$out" "history is on or off, not 'maybe'"
 check "and with max_items" contains "$out" "max_items is a whole number above 0, not 'none'"
 check "and names a setting it doesn't know" contains "$out" "colour isn't a setting (history, max_items)"

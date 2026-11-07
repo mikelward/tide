@@ -6,8 +6,8 @@
 
 import { jsonError } from "./clocks.mjs";
 
-// cliphist's own default is 750; tide keeps 200 (§8.4).
-export const DEFAULTS = Object.freeze({ history: true, maxItems: 200 });
+// cliphist's own default is 750; tide keeps 100 (§8.4).
+export const DEFAULTS = Object.freeze({ history: true, maxItems: 100 });
 
 // The marks − and + step the cap through.
 export const MAX_MARKS = Object.freeze([25, 50, 100, 200, 500, 750, 1000]);

@@ -472,7 +472,7 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
         esac
         case " ${7-$all_runs} " in
             # The clipboard history's settings, for tide clipboard store.
-            *" clipboard "*) mkdir -p "\$HOME/.config/hypr" && printf '%s\n' "# Written by tide's settings panel (SPEC.md §16); edit clipboard.local.json instead." history=on max_items=200 >"\$HOME/.config/hypr/tide-clipboard.conf" ;;
+            *" clipboard "*) mkdir -p "\$HOME/.config/hypr" && printf '%s\n' "# Written by tide's settings panel (SPEC.md §16); edit clipboard.local.json instead." history=on max_items=100 >"\$HOME/.config/hypr/tide-clipboard.conf" ;;
         esac
         case " ${7-$all_runs} " in
             # Start at login's empty list, run and recorded.

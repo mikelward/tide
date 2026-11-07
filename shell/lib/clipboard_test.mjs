@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { DEFAULTS, historySummary, loadClipboardSettings, steppedMax, storeConf, withSetting } from "./clipboard.mjs";
 
 test("history on, keeping the picker's 200, by default", () => {
-    assert.deepEqual(loadClipboardSettings(null, null), { settings: { history: true, maxItems: 200 }, errors: [] });
-    assert.equal(storeConf(DEFAULTS), "# Written by tide's settings panel (SPEC.md §16); edit clipboard.local.json instead.\nhistory=on\nmax_items=200\n");
+    assert.deepEqual(loadClipboardSettings(null, null), { settings: { history: true, maxItems: 100 }, errors: [] });
+    assert.equal(storeConf(DEFAULTS), "# Written by tide's settings panel (SPEC.md §16); edit clipboard.local.json instead.\nhistory=on\nmax_items=100\n");
 });
 
 test("the local file overrides key by key, and a bad one names the setting and keeps the last good", () => {
@@ -46,5 +46,5 @@ test("the cap steps through its marks, landing on one from between them", () => 
 test("storeConf writes off and the cap as tide clipboard store reads them", () => {
     assert.match(storeConf({ history: false, maxItems: 50 }), /\nhistory=off\nmax_items=50\n$/);
     assert.equal(historySummary({ history: false, maxItems: 50 }), "Off: new copies aren't kept");
-    assert.equal(historySummary(DEFAULTS), "Keeps the newest 200 copies");
+    assert.equal(historySummary(DEFAULTS), "Keeps the newest 100 copies");
 });
