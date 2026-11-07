@@ -429,11 +429,9 @@ Singleton {
     // Each minute, and at once after a suspend: the schedule is read
     // against the wall clock, so a change missed while asleep shows on
     // waking.
-    SystemClock {
+    WallClock {
         id: clock
 
         readonly property real minute: date.getTime()
-
-        precision: SystemClock.Minutes
     }
 }

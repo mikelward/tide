@@ -129,9 +129,9 @@ Item {
     // The greeter has no session to show a battery for.
     readonly property var battery: login ? null : UPower.displayDevice
 
-    SystemClock {
+    // Each minute, and at once on waking from sleep.
+    WallClock {
         id: clock
-        precision: SystemClock.Minutes
     }
 
     // Takes every key, on either face. It's never hidden: Qt drops focus

@@ -347,14 +347,19 @@ Singleton {
         }
         root.table = table;
         root.update();
-        refresh.interval = Math.max(1000, Tz.refreshAt(table, Date.now()) - Date.now());
-        refresh.restart();
+        root.scheduleRefresh(Tz.refreshAt(table, Date.now()));
     }
 
     // Any failed run keeps the last table and tries again shortly, so a
     // missed refresh can't leave a stale offset up until the next restart.
     function retry() {
-        refresh.interval = 60 * 1000;
+        root.scheduleRefresh(Date.now() + 60 * 1000);
+    }
+
+    // Looks the zones up again at `at`, on the wall clock.
+    function scheduleRefresh(at) {
+        refresh.due = at;
+        refresh.interval = Math.max(1000, at - Date.now());
         refresh.restart();
     }
 
@@ -531,11 +536,21 @@ Singleton {
     Timer {
         id: refresh
 
+        // When it's due, on the wall clock: its own timer stops while the
+        // machine sleeps, so a resume sets it again from this.
+        property real due: 0
+
         onTriggered: root.lookUp(root.good, "")
     }
 
-    SystemClock {
-        precision: SystemClock.Minutes
+    // Each minute, and at once after a resume or the time being set.
+    WallClock {
         onDateChanged: root.update()
+        onJumped: {
+            if (refresh.running) {
+                root.scheduleRefresh(refresh.due);
+            }
+            root.update();
+        }
     }
 }
