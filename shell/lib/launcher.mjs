@@ -27,11 +27,18 @@ export function desktopNames(value) {
     return names.length > 0 ? names : DESKTOP.split(":");
 }
 
+// Whether the launcher runs on KDE Plasma (SPEC.md §8.5), from
+// desktopNames': Plasma's session says KDE, and tide's never does.
+export function onPlasma(names) {
+    return names.indexOf("KDE") >= 0;
+}
+
 // Quickshell 0.3's DesktopEntry has no OnlyShowIn or NotShowIn, so
 // LauncherData runs this with `sh -c` as the shell starts, and again when
 // the entries change. For each .desktop file in the directories Quickshell
 // scans, in its order, it prints "@<path under applications/>", then
-// those two keys from the [Desktop Entry] group, each with "|" in front.
+// those two keys and X-KDE-AliasFor from the [Desktop Entry] group, each
+// with "|" in front.
 // It exits 1 if a directory or file couldn't be read, having said why.
 export const SHOW_IN_SCRIPT = [
     "status=0",
@@ -42,7 +49,7 @@ export const SHOW_IN_SCRIPT = [
     "    find -L \"$apps\" -name '*.desktop' -type f -exec awk -v root=\"$apps\" '",
     '        FNR == 1 { group = ""; print "@" substr(FILENAME, length(root) + 2) }',
     '        /^[ \\t]*\\[/ { group = $0; sub(/^[ \\t]+/, "", group); sub(/[ \\t\\r]+$/, "", group); next }',
-    '        group == "[Desktop Entry]" && /^[ \\t]*(OnlyShowIn|NotShowIn)[ \\t]*=/ { print "|" $0 }',
+    '        group == "[Desktop Entry]" && /^[ \\t]*(OnlyShowIn|NotShowIn|X-KDE-AliasFor)[ \\t]*=/ { print "|" $0 }',
     "    ' {} + || status=1",
     "done",
     "exit $status",
@@ -54,15 +61,16 @@ function showInList(value) {
 
 // SHOW_IN_SCRIPT's output, keyed by desktop file ID as Quickshell gives
 // it (the path with "/" as "-", less ".desktop"): {only, not}, `only` null
-// when the entry has no OnlyShowIn. The first file with an ID counts, as
-// in Quickshell's scan, and the first of a repeated key.
+// when the entry has no OnlyShowIn, and `alias` when it has an
+// X-KDE-AliasFor, as a System Settings page's has. The first file with an
+// ID counts, as in Quickshell's scan, and the first of a repeated key.
 export function parseShowIn(output) {
     const showIn = {};
     let current = null;
     for (const raw of String(output || "").split("\n")) {
         if (raw.startsWith("@")) {
             const id = raw.slice(1).replace(/\.desktop$/, "").split("/").join("-");
-            current = Object.prototype.hasOwnProperty.call(showIn, id) ? null : { only: null, not: null };
+            current = Object.prototype.hasOwnProperty.call(showIn, id) ? null : { only: null, not: null, alias: null };
             if (current !== null) {
                 showIn[id] = current;
             }
@@ -79,12 +87,26 @@ export function parseShowIn(output) {
             current.only = value;
         } else if (key === "NotShowIn" && current.not === null) {
             current.not = value;
+        } else if (key === "X-KDE-AliasFor" && current.alias === null) {
+            current.alias = line.slice(eq + 1).trim();
         }
     }
     for (const id in showIn) {
-        showIn[id] = Object.freeze({ only: showIn[id].only, not: showIn[id].not ?? [] });
+        const keys = { only: showIn[id].only, not: showIn[id].not ?? [] };
+        if (showIn[id].alias !== null) {
+            keys.alias = showIn[id].alias;
+        }
+        showIn[id] = Object.freeze(keys);
     }
     return showIn;
+}
+
+// The desktop IDs of the System Settings pages parseShowIn found (an
+// X-KDE-AliasFor of systemsettings), which are NoDisplay, so Quickshell's
+// applications leave them out: LauncherData looks each up by ID for
+// Plasma's launcher (SPEC.md §8.5).
+export function settingsPageIds(showIn) {
+    return Object.keys(showIn ?? {}).filter(id => showIn[id].alias === "systemsettings");
 }
 
 // Whether an entry with these keys (parseShowIn's) shows on a desktop
@@ -139,25 +161,29 @@ export function otherDesktopSettings(entry) {
 // NoDisplay, or with nothing to run, are left out, and so are those for
 // other desktops: their OnlyShowIn and NotShowIn (`desktop.showIn`, from
 // parseShowIn) against `desktop.names` (desktopNames'), and their settings
-// apps (otherDesktopSettings). `entries` are Quickshell DesktopEntry
-// objects or anything with their properties.
+// apps (otherDesktopSettings). On Plasma (onPlasma), its settings apps
+// stay, and so do its System Settings pages, though NoDisplay: entries
+// that are an alias for systemsettings (SPEC.md §8.5). `entries` are
+// Quickshell DesktopEntry objects or anything with their properties.
 export function launcherItems(entries, desktop = {}) {
     const names = desktop.names ?? desktopNames("");
+    const plasma = onPlasma(names);
     const showIn = desktop.showIn ?? {};
     const items = [];
     for (const e of entries) {
-        if (!e || e.noDisplay || !e.command || e.command.length === 0) {
+        if (!e || !e.command || e.command.length === 0) {
             continue;
         }
         const keys = Object.prototype.hasOwnProperty.call(showIn, e.id) ? showIn[e.id] : null;
-        if (!shownIn(keys, names) || otherDesktopSettings(e)) {
+        const page = plasma && keys?.alias === "systemsettings";
+        if ((e.noDisplay && !page) || !shownIn(keys, names) || (!plasma && otherDesktopSettings(e))) {
             continue;
         }
         const app = {
             kind: "app",
             id: e.id,
             name: e.name || e.id,
-            sub: e.genericName || e.comment || "",
+            sub: page ? "System Settings" : e.genericName || e.comment || "",
             icon: e.icon || "",
             keywords: [...(e.keywords ?? [])],
             exec: basename(e.command[0]),
@@ -187,6 +213,15 @@ export function launcherItems(entries, desktop = {}) {
     return items;
 }
 
+// What else finds each session action.
+const SESSION_KEYWORDS = Object.freeze({
+    lock: ["screen"],
+    logout: ["exit", "sign out", "quit"],
+    suspend: ["sleep"],
+    reboot: ["reboot"],
+    poweroff: ["power off", "halt"],
+});
+
 // The built-in quick actions (§8), as rows like the apps', with symbolic
 // icons the launcher colors like the bar's: `hint` is the
 // key that does the same, so the launcher teaches the bindings. Do not
@@ -202,7 +237,9 @@ export function launcherItems(entries, desktop = {}) {
 // on that page, as each section that opens on its own does ("Keyboard
 // shortcuts"). The settings rows (`settings`) are listed among the apps,
 // not the actions; the pages' are found by a query only (`queryOnly`), so
-// the empty query doesn't list a dozen of them.
+// the empty query doesn't list a dozen of them. On Plasma (`state.plasma`,
+// SPEC.md §8.5) there are just the screenshots and the session's actions,
+// without tide's keys: the rest are tide's own.
 export function quickActions(state = {}) {
     const quick = (id, name, sub, icon, keywords, hint = "") => ({
         kind: "quick",
@@ -219,17 +256,22 @@ export function quickActions(state = {}) {
     for (const a of SESSION) {
         session[a.id] = a;
     }
+    if (state.plasma) {
+        return [
+            quick("screenshot-window", "Screenshot window", "The window you were in", "camera-photo-symbolic", ["capture", "print"]),
+            quick("screenshot-screen", "Screenshot screen", "The monitor you were on", "camera-photo-symbolic", ["capture", "print"]),
+            quick("screenshot-region", "Screenshot region", "Drag to select", "camera-photo-symbolic", ["capture", "print", "area"]),
+            ...SESSION.map(a => quick(a.id, a.label, "Session", a.icon, SESSION_KEYWORDS[a.id])),
+        ].map((q, rank) => Object.assign({}, q, { rank }));
+    }
     // Listed in this order, which also breaks ties between them: window
     // first, so "scr" and Enter is a window screenshot (§8).
     return [
         quick("screenshot-window", "Screenshot window", "The window you were in", "camera-photo-symbolic", ["capture", "print"], "Alt+Print"),
         quick("screenshot-screen", "Screenshot screen", "The monitor you were on", "camera-photo-symbolic", ["capture", "print"], "Print"),
         quick("screenshot-region", "Screenshot region", "Drag to select", "camera-photo-symbolic", ["capture", "print", "area"], "Shift+Print"),
-        quick("lock", session.lock.label, "Session", session.lock.icon, ["screen"], "Super+L"),
-        quick("logout", session.logout.label, "Session", session.logout.icon, ["exit", "sign out", "quit"]),
-        quick("suspend", session.suspend.label, "Session", session.suspend.icon, ["sleep"]),
-        quick("reboot", session.reboot.label, "Session", session.reboot.icon, ["reboot"]),
-        quick("poweroff", session.poweroff.label, "Session", session.poweroff.icon, ["power off", "halt"]),
+        quick("lock", session.lock.label, "Session", session.lock.icon, SESSION_KEYWORDS.lock, "Super+L"),
+        ...["logout", "suspend", "reboot", "poweroff"].map(id => quick(id, session[id].label, "Session", session[id].icon, SESSION_KEYWORDS[id])),
         Object.assign(quick("settings", "Tide Settings", "Sound, network, mouse, keyboard and more", "preferences-system-symbolic", ["settings", "preferences", "control panel"]), { settings: true }),
         ...PAGES.map(p => Object.assign(quick(`settings-${p.id}`, `${p.label} settings`, "Tide Settings", p.icon, p.keywords), { settings: true, queryOnly: true })),
         ...SECTIONS.map(s => Object.assign(quick(`settings-${s.id}`, s.label, "Tide Settings", s.icon, s.keywords), { settings: true, queryOnly: true })),
@@ -263,6 +305,21 @@ export function windowScreenshot(address) {
     return address ? ["sh", "-c", WINDOW_SCREENSHOT, "sh", address] : ["screenshot", "--window"];
 }
 
+// Plasma's commands for the quick actions that differ there (quickCommand).
+const spectacle = mode => Object.freeze({ run: ["spectacle", "--background", "--copy-image", mode], afterClose: true });
+
+const PLASMA_COMMANDS = Object.freeze({
+    "screenshot-window": spectacle("--activewindow"),
+    "screenshot-screen": spectacle("--current"),
+    "screenshot-region": spectacle("--region"),
+    lock: Object.freeze({ run: ["loginctl", "lock-session"], afterClose: false, power: false }),
+    logout: Object.freeze({
+        run: ["busctl", "--user", "call", "org.kde.LogoutPrompt", "/LogoutPrompt", "org.kde.LogoutPrompt", "promptLogout"],
+        afterClose: false,
+        power: false,
+    }),
+});
+
 // What running a quick action takes: a command to run (`run`), with a
 // pause first for the launcher to leave the screen (`afterClose`, so a
 // screenshot doesn't catch it), or something the shell does itself
@@ -273,8 +330,16 @@ export function windowScreenshot(address) {
 // Hyprland address; windowScreenshot), and "Screenshot screen" the monitor
 // it opened on (`context.output`, Hyprland's name for it), so a focus change
 // while it closes can't swap either; with none, the script finds the focused
-// one itself.
+// one itself. On Plasma (`context.plasma`, SPEC.md §8.5), Spectacle takes
+// the screenshots, onto the clipboard with its own notification, logind
+// locks, and log out asks through Plasma's own prompt.
 export function quickCommand(id, context = {}) {
+    if (context.plasma) {
+        const plasma = PLASMA_COMMANDS[id];
+        if (plasma) {
+            return plasma;
+        }
+    }
     switch (id) {
     case "screenshot-window":
         return { run: windowScreenshot(context.window), afterClose: true };
@@ -519,7 +584,19 @@ export function grantIds(item) {
 // The `tide launch` command that runs `item`, granting focus to the
 // classes grantIds lists. Ctrl+Enter gives the name prompt what follows
 // `tide launch`, which it runs with `--workspace NAME` (SPEC.md §6.5).
-export function launchCommand(item) {
+// On Plasma (`plasma`, SPEC.md §8.5), KDE's kstart runs it as Kickoff
+// does: an app by its desktop ID, which reads the entry's terminal and
+// working directory itself, and a desktop action by its command, after
+// `--` so kstart takes none of its options. kstart can't tell that command
+// wants a terminal, so a terminal app's action runs in one through
+// xdg-terminal-exec, as under tide.
+export function launchCommand(item, plasma = false) {
+    if (plasma) {
+        if (item.kind === "app") {
+            return ["kstart", "--application", item.entryId];
+        }
+        return ["kstart", "--"].concat(item.terminal ? ["xdg-terminal-exec"] : [], item.command);
+    }
     const command = ["tide", "launch"];
     for (const id of grantIds(item)) {
         command.push("--app", id);

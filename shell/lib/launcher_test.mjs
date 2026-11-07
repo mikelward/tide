@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initial, record } from "./frecency.mjs";
 import { PAGES, SECTIONS } from "./settings.mjs";
-import { SHOW_IN_SCRIPT, actionRows, blockedHeading, confirmRows, desktopNames, highlighted, grantIds, launchCommand, launcherItems, moved, otherDesktopSettings, parseShowIn, shownIn, nextSection, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
+import { SHOW_IN_SCRIPT, actionRows, onPlasma, settingsPageIds, blockedHeading, confirmRows, desktopNames, highlighted, grantIds, launchCommand, launcherItems, moved, otherDesktopSettings, parseShowIn, shownIn, nextSection, opensWindow, quickActions, quickCommand, reselect, rowKey, scoreItem, search, startsSection, windowScreenshot } from "./launcher.mjs";
 
 // Array.prototype.at and Object.fromEntries, which the shell's engine lacks
 // (qtjs_env_test.mjs).
@@ -674,4 +674,95 @@ test("a launch asks for no workspace itself: the name prompt adds --workspace", 
     assert.deepEqual(command.slice(0, 2), ["tide", "launch"]);
     assert.ok(!command.includes("--new-workspace"));
     assert.ok(!command.includes("--workspace"));
+});
+
+// On KDE Plasma (SPEC.md §8.5).
+const plasmaNames = desktopNames("KDE");
+const kcmBluetooth = Object.assign(entry("kcm_bluetooth", ["systemsettings", "kcm_bluetooth"], undefined), { name: "Bluetooth", icon: "preferences-system-bluetooth", noDisplay: true });
+const kcmFonts = Object.assign(entry("kcm_fonts", ["kcmshell6", "kcm_fonts"], undefined), { name: "Fonts", noDisplay: true });
+const plasmaShowIn = parseShowIn([
+    "@systemsettings.desktop", "|OnlyShowIn=KDE;",
+    "@kdesystemsettings.desktop", "|NotShowIn=KDE;",
+    "@kdesystemsettings5.desktop", "|NotShowIn=KDE;",
+    "@kcm_bluetooth.desktop", "|X-KDE-AliasFor=systemsettings",
+    "@kcm_fonts.desktop", "|X-KDE-AliasFor = systemsettings ",
+    "@hidden.desktop", "|X-KDE-AliasFor=dolphin",
+].join("\n"));
+
+test("the launcher knows Plasma by the session's desktop names, and tide's session isn't it", () => {
+    assert.equal(onPlasma(desktopNames("KDE")), true);
+    assert.equal(onPlasma(desktopNames("tide:Hyprland")), false);
+    assert.equal(onPlasma(desktopNames("")), false);
+    assert.equal(onPlasma(desktopNames("GNOME")), false);
+});
+
+test("on Plasma, System Settings and each of its pages has a row, hidden from menus or not", () => {
+    const rows = launcherItems([kdeSettings, kdeElsewhere, kcmBluetooth, kcmFonts, hidden, browser1], { names: plasmaNames, showIn: plasmaShowIn });
+    assert.deepEqual(rows.map(r => r.id), ["systemsettings", "kcm_bluetooth", "kcm_fonts", "browser1"]);
+    const page = rows.find(r => r.id === "kcm_bluetooth");
+    assert.equal(page.name, "Bluetooth");
+    assert.equal(page.sub, "System Settings");
+    assert.equal(page.icon, "preferences-system-bluetooth");
+    // Under tide, none of them: Plasma's settings don't work there.
+    assert.deepEqual(appIds([kdeSettings, kdeElsewhere, kcmBluetooth, kcmFonts], { names: desktopNames("tide:Hyprland"), showIn: plasmaShowIn }), []);
+});
+
+test("the System Settings pages are found by their alias, for a lookup by ID", () => {
+    // Quickshell's applications leave out NoDisplay entries, so these are
+    // looked up one by one.
+    assert.deepEqual(settingsPageIds(plasmaShowIn), ["kcm_bluetooth", "kcm_fonts"]);
+    assert.deepEqual(settingsPageIds({}), []);
+    assert.deepEqual(settingsPageIds(undefined), []);
+});
+
+test("X-KDE-AliasFor is read with the show-in keys, and only when there", () => {
+    assert.deepEqual(plasmaShowIn.kcm_fonts, { only: null, not: [], alias: "systemsettings" });
+    assert.deepEqual(plasmaShowIn.systemsettings, { only: ["KDE"], not: [] });
+});
+
+test("the show-in script reads X-KDE-AliasFor from the desktop entry's group", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tide-alias-"));
+    mkdirSync(join(dir, "applications"), { recursive: true });
+    writeFileSync(join(dir, "applications", "kcm_mouse.desktop"), "[Desktop Entry]\nType=Application\nNoDisplay=true\nX-KDE-AliasFor=systemsettings\nExec=systemsettings kcm_mouse\n");
+    writeFileSync(join(dir, "applications", "other.desktop"), "[Desktop Entry]\nName=Other\n[Desktop Action x]\nX-KDE-AliasFor=systemsettings\n");
+    const run = spawnSync("sh", ["-c", SHOW_IN_SCRIPT], {
+        env: { PATH: process.env.PATH, HOME: join(dir, "nohome"), XDG_DATA_HOME: join(dir, "nohome"), XDG_DATA_DIRS: dir },
+        encoding: "utf8",
+    });
+    assert.equal(run.status, 0, run.stderr);
+    const showIn = parseShowIn(run.stdout);
+    assert.equal(showIn.kcm_mouse.alias, "systemsettings");
+    assert.equal("alias" in showIn.other, false);
+});
+
+test("on Plasma, kstart runs an app by its desktop ID and an action by its command", () => {
+    const [app, , incognito] = launcherItems([chrome]);
+    assert.deepEqual(launchCommand(app, true), ["kstart", "--application", "google-chrome"]);
+    assert.deepEqual(launchCommand(incognito, true), ["kstart", "--", "/usr/bin/google-chrome-stable", "--incognito"]);
+    // A terminal app is the entry's to run: kstart reads Terminal itself.
+    assert.deepEqual(launchCommand(launcherItems([htop])[0], true), ["kstart", "--application", "htop"]);
+    // A terminal app's action, which kstart runs as a bare command, gets
+    // its terminal from xdg-terminal-exec.
+    const top = Object.assign({}, htop, { id: "top", actions: [{ id: "tree", name: "Tree", command: ["htop", "--tree"] }] });
+    assert.deepEqual(launchCommand(launcherItems([top])[1], true), ["kstart", "--", "xdg-terminal-exec", "htop", "--tree"]);
+});
+
+test("on Plasma, the actions are the screenshots and the session's, without tide's keys", () => {
+    const actions = quickActions({ plasma: true });
+    assert.deepEqual(actions.map(a => a.id), ["screenshot-window", "screenshot-screen", "screenshot-region", "lock", "logout", "suspend", "reboot", "poweroff"]);
+    assert.equal(actions.every(a => a.hint === ""), true);
+    assert.deepEqual(actions.map(a => a.rank), [0, 1, 2, 3, 4, 5, 6, 7]);
+    // The same words find them as under tide.
+    assert.deepEqual(actions.find(a => a.id === "logout").keywords, quickActions().find(a => a.id === "logout").keywords);
+});
+
+test("on Plasma, Spectacle takes the screenshots, logind locks, and Plasma asks before logging out", () => {
+    const plasma = { plasma: true };
+    assert.deepEqual(quickCommand("screenshot-window", plasma), { run: ["spectacle", "--background", "--copy-image", "--activewindow"], afterClose: true });
+    assert.deepEqual(quickCommand("screenshot-screen", plasma), { run: ["spectacle", "--background", "--copy-image", "--current"], afterClose: true });
+    assert.deepEqual(quickCommand("screenshot-region", plasma), { run: ["spectacle", "--background", "--copy-image", "--region"], afterClose: true });
+    assert.deepEqual(quickCommand("lock", plasma), { run: ["loginctl", "lock-session"], afterClose: false, power: false });
+    assert.deepEqual(quickCommand("logout", plasma).run, ["busctl", "--user", "call", "org.kde.LogoutPrompt", "/LogoutPrompt", "org.kde.LogoutPrompt", "promptLogout"]);
+    // Power checks logind's inhibitors as under tide.
+    assert.deepEqual(quickCommand("reboot", plasma), quickCommand("reboot"));
 });

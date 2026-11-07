@@ -53,6 +53,8 @@
 #
 # With wtype, it also types into them. It opens the launcher, types the
 # name of an app only it installs, and expects Enter to run that app. It
+# starts the launcher on Plasma (kde.qml) and expects it to run an app and
+# a System Settings page through kstart, without asking Hyprland. It
 # opens Super+Return's name prompt, with no window focused, and expects a
 # name and Enter to go to that workspace. Given
 # the password of the user running it, it also unlocks the lock: it types a
@@ -1782,6 +1784,94 @@ launch() {
     echo "ok: the picker finds a character by name and copies it"
 }
 
+# kde: starts the launcher on KDE Plasma (SPEC.md §8.5), kde.qml, alone, as
+# Plasma's session does (XDG_CURRENT_DESKTOP=KDE), and fails the test
+# unless Meta+Space's `launcher toggle` opens it, "cafepro" and Enter run
+# Café Probe through kstart by its desktop ID, and "zebra" and Enter open a
+# System Settings page that's hidden from menus. A stand-in kstart on its
+# PATH keeps each command. It must not ask Hyprland, which Plasma doesn't
+# run, or report from its files. Its icons are Plasma's theme, which isn't
+# here, so a placeholder icon passes. Its log is $tmp/kde.qs.log.
+kde() {
+    _what="the launcher on Plasma"
+    log=$tmp/kde.qs.log
+    : >"$log" || exit 1
+    printf '[Desktop Entry]\nType=Application\nName=Zebra\nIcon=preferences-system\nExec=systemsettings kcm_tidezebra\nNoDisplay=true\nX-KDE-AliasFor=systemsettings\n' \
+        >"$tmp/home/.local/share/applications/kcm_tidezebra.desktop" || exit 1
+    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s/kstarted"\n' "$tmp" >"$tmp/bin/kstart" || exit 1
+    chmod +x "$tmp/bin/kstart" || exit 1
+    keyboard
+    env -i PATH="$tmp/bin:$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
+        ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
+        LANG=C.UTF-8 QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-1 \
+        XDG_CURRENT_DESKTOP=KDE QS_DISABLE_FILE_WATCHER=1 WAYLAND_DEBUG=client \
+        "$qs_path" -p "$tmp/home/.config/quickshell/tide/kde.qml" >"$log" 2>&1 &
+    qs_pid=$!
+    i=0
+    until grep -q 'Configuration Loaded' "$log"; do
+        if ! kill -0 "$qs_pid" 2>/dev/null || waited "the launcher on Plasma didn't start" "$i"; then
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    i=0
+    until grep -q 'read OnlyShowIn and NotShowIn' "$log"; do
+        if waited "the launcher on Plasma didn't read the desktop entries' OnlyShowIn" "$i"; then
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    for _ in 1 2; do
+        ipc show >/dev/null || exit 1
+    done
+    _kstarts=0
+    for _query in cafepro zebra; do
+        _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
+        ipc call launcher toggle >/dev/null || exit 1
+        focused "$_focus"
+        timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+            LANG=C.UTF-8 "$wtype_path" "$_query
+" >"$tmp/wtype.log" 2>&1
+        typed $? "the launcher on Plasma"
+        _kstarts=$((_kstarts + 1))
+        i=0
+        until test -f "$tmp/kstarted" && test "$(wc -l <"$tmp/kstarted")" -ge "$_kstarts"; do
+            if waited "the launcher on Plasma didn't run what \"$_query\" found" "$i"; then
+                grep -v '^\[' "$log" >&2
+                exit 1
+            fi
+            sleep 0.1
+            i=$((i + 1))
+        done
+    done
+    _started=$(cat "$tmp/kstarted")
+    _expected='--application tide-test-probe
+--application kcm_tidezebra'
+    if test "$_started" != "$_expected"; then
+        echo "FAIL: the launcher on Plasma should run \`kstart --application tide-test-probe\`, then \`kstart --application kcm_tidezebra\`; it ran:" >&2
+        sed 's/^/  kstart /' "$tmp/kstarted" >&2
+        exit 1
+    fi
+    kill "$qs_pid"
+    wait "$qs_pid"
+    qs_pid=
+    if grep -v '^\[' "$log" | grep -i hyprland >"$tmp/reports"; then
+        echo "FAIL: the launcher on Plasma asked Hyprland, which Plasma doesn't run:" >&2
+        cat "$tmp/reports" >&2
+        exit 1
+    fi
+    if grep -E '@[A-Za-z]+\.qml|@lib/[a-z_]+\.mjs' "$log" >"$tmp/reports"; then
+        echo "FAIL: the launcher on Plasma ran apps, but its files reported:" >&2
+        cat "$tmp/reports" >&2
+        exit 1
+    fi
+    echo "ok: the launcher on Plasma runs an app, and a System Settings page hidden from menus, through kstart"
+}
+
 # share: on the shell launch() started, asks the share picker for a share
 # as tide-share-picker does, with one of the stand-in's windows in xdph's
 # list, and fails the test unless Right and Enter answer that window, with
@@ -2175,6 +2265,7 @@ echo "ok: in tidewm's session, the shell writes tidewm's settings files, and nam
 echo "ok: in tidewm's session, the shell follows tidewm's window events"
 if test -n "$wtype_path"; then
     launch
+    kde
 else
     echo "$prog: no wtype, so nothing is typed into the launcher; CI types into it" >&2
 fi
