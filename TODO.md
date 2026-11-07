@@ -2032,3 +2032,20 @@ match, each once a real window needs it, and check it against Hyprland
 
 Size, aspect ratio and parent aren't matchable: Hyprland's rules set a
 size but don't match one, and it already floats windows with a parent.
+
+## Hold a key for its accents
+
+On a Mac, holding a letter shows a row of its accented forms, picked by
+number or click; the user wants the same here. Each Mac stays as it is.
+To work out:
+
+- **Where to catch the hold.** Key repeat starts after 600 ms (SPEC.md §16,
+  Keyboard), so the hold has to be seen before then, by the compositor or
+  an input method, and its repeats held back.
+- **Which keys.** Letters with accented forms, from the Compose table
+  (`/usr/share/X11/locale/en_US.UTF-8/Compose`) or Unicode's
+  decompositions, so it needs no table of its own. Other keys keep
+  repeating, as games and editors expect.
+- **Where the row shows.** Under the text cursor needs the app's caret
+  through text-input-v3, which not every app gives; under the window's
+  middle otherwise.
