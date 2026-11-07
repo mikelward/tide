@@ -382,10 +382,28 @@ run
 check "a healthy session exits 0" test "$status" -eq 0
 check "a healthy session says so" test "$out" = "No problems found."
 
-run XDG_CURRENT_DESKTOP=KDE
+run XDG_CURRENT_DESKTOP=GNOME
 check "outside tide it exits 2" test "$status" -eq 2
 
 check "outside tide it says why" contains "$(cat "$tmp/err")" "not in a tide session"
+
+# On KDE Plasma, only tide's launcher there (SPEC.md §8.5).
+healthy
+cp shell/kde.qml "$tmp/home/.config/quickshell/tide/"
+run XDG_CURRENT_DESKTOP=KDE
+check "on Plasma, a running launcher exits 0" test "$status" -eq 0
+check "and says so" test "$out" = "No problems found."
+run XDG_CURRENT_DESKTOP=KDE FAKE_INACTIVE="tide-kde.service=inactive"
+check "on Plasma, a launcher that isn't running is a problem" test "$status" -eq 1
+check "and says how to start it, and nothing of tide's own units" test "$out" = "tide-kde.service is inactive, so Meta+Space has no launcher: \`systemctl --user enable --now tide-kde.service\`, as \`setup\` does; \`journalctl --user -u tide-kde.service\` says why it stopped"
+run XDG_CURRENT_DESKTOP=KDE FAKE_LOADSTATE="tide-kde.service=not-found"
+check "on Plasma, a launcher unit that isn't installed is a problem" \
+    test "$out" = "tide-kde.service isn't installed, so Meta+Space has no launcher: run \`make install\` in the tide checkout, then \`systemctl --user daemon-reload\`"
+rm "$tmp/home/.config/quickshell/tide/kde.qml"
+run XDG_CURRENT_DESKTOP=KDE
+check "on Plasma, a missing kde.qml is a problem" test "$status" -eq 1
+check "and names it, with the fix" \
+    test "$out" = "$tmp/home/.config/quickshell/tide/kde.qml isn't installed, so tide-kde.service has nothing to run: run \`make install\` in the tide checkout"
 
 healthy
 run FAKE_KEYRING="b true"
@@ -1331,7 +1349,7 @@ run FAKE_AUTOSTART_UNITS="app-x@autostart.service=1" FAKE_SHOW_FAILS="Access den
 check "systemctl failing to show the units is a problem" \
     contains "$out" "systemctl couldn't read the autostart units (Access denied)"
 
-doctor_out=$(env PATH="$fake:$PATH" XDG_CURRENT_DESKTOP=KDE sh bin/tide doctor 2>&1)
+doctor_out=$(env PATH="$fake:$PATH" XDG_CURRENT_DESKTOP=GNOME sh bin/tide doctor 2>&1)
 check "tide doctor runs it" contains "$doctor_out" "tide-doctor: not in a tide session"
 
 if command -v shellcheck >/dev/null 2>&1; then

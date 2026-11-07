@@ -2018,8 +2018,10 @@ and System Settings pages. Each step is its own PR.
   runs an app and a hidden System Settings page through a stand-in
   `kstart`, without asking Hyprland. Not checked on Plasma: Breeze icons,
   the color scheme, Spectacle's flags and Plasma's log-out prompt.
-- [ ] **`tide-kde.service`**, `WantedBy=` and `PartOf=plasma-workspace.target`,
-  and `tide doctor`'s check that it runs under Plasma.
+- [x] **`tide-kde.service`**, `WantedBy=` and `PartOf=plasma-workspace.target`,
+  and `tide doctor`'s check under Plasma: qs, `kde.qml` and the unit.
+  Tested by `session_test.sh` (with `systemd-analyze verify`) and
+  `tide-doctor_test.sh`; not yet started by a real Plasma.
 - [ ] **scripts**: `setup-kde` enables the unit, installs Quickshell as
   `setup-tide` does, adds a `tide-launcher` script, and binds `Meta+Space`
   to it with `add_app_shortcut`.

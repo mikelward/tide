@@ -1,0 +1,22 @@
+# tide's launcher on KDE Plasma (SPEC.md §8.5): shell/kde.qml, resident,
+# so Meta+Space opens it at once. setup's setup-kde enables it and binds
+# the key.
+[Unit]
+Description=tide launcher on KDE Plasma
+Documentation=https://github.com/mikelward/tide
+# Plasma's alone: its session reaches plasma-workspace.target, and tide's
+# never does. Stops with Plasma at logout.
+PartOf=plasma-workspace.target
+After=plasma-workspace.target
+# Plasma's own environment, so a start from elsewhere (`enable --now` in
+# tide's session) leaves it be: kde.qml is the launcher on Plasma only.
+ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE
+
+[Service]
+Type=simple
+ExecStart=qs -p %h/.config/quickshell/tide/kde.qml
+Restart=on-failure
+RestartSec=1
+
+[Install]
+WantedBy=plasma-workspace.target
