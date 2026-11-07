@@ -1991,6 +1991,12 @@ See [`bar.png`](docs/mocks/bar.png).
 - **Zones:** America/Los_Angeles, America/New_York, Europe/London. They show as
   **`SF HH:MM`**, **`NYC HH:MM`** and **`LON HH:MM`** in 24-hour time with
   tabular figures.
+- **The time is right within a second of waking from sleep,** on the
+  bar, the popover and the lock, and after the time is set. Quickshell's
+  `SystemClock` waits for the next minute on a timer that stops while the
+  machine sleeps, so on its own it shows the time from before a suspend
+  for up to a minute. `WallClock.qml` checks the wall clock each second
+  and redraws at once when it has jumped.
 - **Hovering the clocks** shows each zone that isn't in the bar on one
   line, in order, such as `SF 09:41 · NYC 12:41 · LON 17:41`, in the bar's
   hover text (§7.4). With every zone in the bar, there's no hover text.
