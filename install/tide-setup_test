@@ -22,8 +22,14 @@ teardown
 setup; mkdir -p "$T/home/.config/hypr"; echo mine > "$T/home/.config/hypr/hypridle.conf"; ARGS=(); run
 check "keeps your hypridle config" test "$(cat "$T/home/.config/hypr/hypridle.conf")" = mine
 teardown
-setup; mkdir -p "$T/home/.config/hypr"; ln -s "$T/elsewhere" "$T/home/.config/hypr/hypridle.conf"; ARGS=(); run
-check "keeps a link to one, even dangling" test -L "$T/home/.config/hypr/hypridle.conf"
+setup; mkdir -p "$T/home/.config/hypr"; echo mine > "$T/linked"; ln -s "$T/linked" "$T/home/.config/hypr/hypridle.conf"; ARGS=(); run
+check "keeps a link to one of yours" test "$(readlink "$T/home/.config/hypr/hypridle.conf")" = "$T/linked"
+teardown
+# A link to a file that's gone, as conf's once it dropped its copy, is
+# replaced with tide's.
+setup; mkdir -p "$T/home/.config/hypr"; ln -s "$T/gone" "$T/home/.config/hypr/hypridle.conf"; ARGS=(); run
+check "replaces a link to a file that's gone" test ! -L "$T/home/.config/hypr/hypridle.conf"
+check "with tide's hypridle config" cmp -s "$T/src/tide/hypr/hypridle.conf" "$T/home/.config/hypr/hypridle.conf"
 teardown
 
 setup; ARGS=(); run
