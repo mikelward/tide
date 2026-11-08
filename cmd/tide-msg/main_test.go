@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mikelward/quickspace/internal/swayipc/swayipctest"
+	"github.com/mikelward/tide/internal/swayipc/swayipctest"
 )
 
 func tideMsg(env []string, args ...string) (int, string, string) {
