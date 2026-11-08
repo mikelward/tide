@@ -4525,38 +4525,51 @@ PanelWindow {
                 font.pixelSize: 12
             }
 
-            // Opens free wallpapers on Unsplash in the browser, closing the
+            // Find more wallpapers on Unsplash (free ones) or Wallhaven (your
+            // widest monitor's size and shape) in the browser, closing the
             // panel first so the browser isn't under it. Save one to
             // ~/Pictures/wallpapers and it shows here.
-            Rectangle {
+            Row {
                 id: findMore
 
                 x: parent.width - width - 12
                 y: 8
-                width: findMoreText.implicitWidth + 16
-                height: 24
-                radius: 6
-                color: findMoreHover.hovered ? Theme.surface2 : "transparent"
-                Accessible.name: findMoreText.text
+                spacing: 4
 
-                Text {
-                    id: findMoreText
+                Repeater {
+                    model: Appearance.moreWallpapers(wallpaperGrid.screens)
 
-                    anchors.centerIn: parent
-                    text: "Find more"
-                    color: Theme.accent
-                    font.family: Theme.font
-                    font.pixelSize: 12
-                }
+                    delegate: Rectangle {
+                        id: site
 
-                HoverHandler {
-                    id: findMoreHover
-                }
+                        required property var modelData
 
-                TapHandler {
-                    onTapped: {
-                        root.close();
-                        Launcher.launch(Appearance.moreWallpapersCommand());
+                        width: siteText.implicitWidth + 16
+                        height: 24
+                        radius: 6
+                        color: siteHover.hovered ? Theme.surface2 : "transparent"
+                        Accessible.name: `Find more on ${modelData.site}`
+
+                        Text {
+                            id: siteText
+
+                            anchors.centerIn: parent
+                            text: site.modelData.site
+                            color: Theme.accent
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+
+                        HoverHandler {
+                            id: siteHover
+                        }
+
+                        TapHandler {
+                            onTapped: {
+                                root.close();
+                                Launcher.launch(Appearance.openCommand(site.modelData.url));
+                            }
+                        }
                     }
                 }
             }
