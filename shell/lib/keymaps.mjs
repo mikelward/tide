@@ -29,7 +29,7 @@ export const PRESETS = Object.freeze({
             home_or_back: [S("Tab")],
             close: [SS("C")],
             monocle: [S("M")],
-            next_layout: [S("Space")],
+            last_layout: [S("Space")],
             float: [SS("Space")],
             focus_left: [S("comma")],
             focus_right: [S("period")],

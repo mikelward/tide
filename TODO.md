@@ -64,11 +64,15 @@ once you have agreed with it or reversed it.
   view-previous-tag is Super+Tab's home or back, dwm's focusmon is focus
   left and right, i3's tabbed layout is monocle, i3's toggle split is the
   next layout, xmonad's sink is float or tile, bspwm's swap with the
-  biggest is swap with the master, and dwm's Super+Space, the layout
-  before, is the next layout. Every other key matches each one's shipped
+  biggest is swap with the master. Every other key matches each one's shipped
   config as of 2026-11-08: dwm's `config.def.h`, i3's `etc/config`, sway's
   `config.in`, xmonad's `XMonad/Config.hs` and bspwm's example `sxhkdrc`.
   It's `PRESETS` in `shell/lib/keymaps.mjs`.
+- **"The layout used last" names dwm's Super+Space** (2026-11-08,
+  SPEC.md §6.6): the binding `last_layout`, beside "Previous layout",
+  which is the one before in the cycle. "Most recent layout" read as the
+  one showing. It has no key of tide's own. Reversible: conf's
+  `bind("last_layout", ...)` and `last_mode` in `hypr/tide/layout.lua`.
 - **sway is a preset of its own** (2026-11-08): its default config moves
   with h/j/k/l where i3's uses j/k/l/;.
 - **KeysData writes and applies as FloatingData does, copied** (2026-11-08):
