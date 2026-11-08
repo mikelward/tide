@@ -356,7 +356,7 @@ work". The old setup shows how it fought itself:
 | "Show in folder" (`org.freedesktop.FileManager1`) | Nautilus (§16.2) | D-Bus activation via tide's user-level service file → `tide-filemanager.service`, whose launcher picks Dolphin under Plasma and which stops with the session | the arbitrary pick between Dolphin's and Nautilus's system activation files |
 | Terminal for `Terminal=true` apps | kitty, via `xdg-terminal-exec` | on demand | GLib's fallback list (Konsole) |
 | Clipboard history | `tide clipboard store`, encrypted under a key in the keyring (§8.4) | `tide-clipboard.service` | other clipboard managers aren't started |
-| Input method, for accents on a held letter | fcitx5 with Schnelle Umlaute (§8.6) | `tide-fcitx5.service`, unless `TIDE_IME=0` | fcitx5's own autostart entry, which `setup-tide` hides |
+| Input method, for accents on a held letter | fcitx5 with `tide-accents` (§8.6) | `tide-fcitx5.service`, unless `TIDE_IME=0` | fcitx5's own autostart entry, which `setup-tide` hides |
 | Apps | you | `tide launch` from keybinds and the launcher, which waits for the shell to be ready, then runs `uwsm app --` (§5.4) | — |
 
 **M2 transitional shell.** Until the Quickshell shell lands (M3 and M4),
@@ -2788,15 +2788,14 @@ apps and its System Settings pages. Kickoff stays on the tap of `Super`.
 ### 8.6 Accents on a held letter
 
 An accent is typed on the letter itself, as on macOS, rather than through
-Compose or the picker. That's fcitx5, the input method framework, with an
-add-on. Today the add-on is
-[Schnelle Umlaute](https://github.com/Maik-0000FF/schnelle-umlaute): hold a
-letter and press Space, and Space again for the next accent (é, then è,
-ê, ë). Its timeout types the plain letter, so it has no plain long press.
+Compose or the picker. That's fcitx5, the input method framework, with
+tide's own add-on, `tide-accents` (`fcitx5/`), for a plain long press.
 
-tide's own add-on, `tide-accents` (`fcitx5/`), gives the plain long press.
-It replaces Schnelle Umlaute once `setup-tide` builds and installs it and
-points fcitx5's profile at it (TODO).
+It replaced
+[Schnelle Umlaute](https://github.com/Maik-0000FF/schnelle-umlaute), which
+`setup-tide` built at first: hold a letter and press Space, and Space again
+for the next accent. Its timeout types the plain letter, so it has no
+plain long press.
 
 **The long press** (`tide-accents`):
 
@@ -2894,16 +2893,21 @@ points fcitx5's profile at it (TODO).
   fcitx5's own XDG autostart entry would start a second one there, so
   `setup-tide` hides it, and tide's unit is the only thing that starts it.
 - **Setup.** `setup-tide` installs fcitx5 and its GTK and Qt modules,
-  builds a pinned Schnelle Umlaute release, and writes fcitx5's profile
-  and config where there are none: Schnelle Umlaute active by default,
-  the session's keyboard layout as fcitx5's, and no hotkeys of fcitx5's
-  own, so Ctrl+Space and the rest reach apps.
+  builds `tide-accents` from its tide checkout and installs it into
+  fcitx5's directories, and writes fcitx5's profile and config where
+  there are none: `tide-accents` active by default, the session's keyboard
+  layout as fcitx5's, and no hotkeys of fcitx5's own, so Ctrl+Space,
+  Ctrl+Alt+P and the rest reach apps. A profile exactly as it was written
+  for Schnelle Umlaute is switched over; any other is left alone. Nothing
+  points at `tide-accents` until it's installed. `setup-kde` gives Plasma
+  Keyboard the same table (as its `base.json` override) and the same
+  300 ms hold.
 - **Gaps.** Chrome and Electron apps reach an input method on Wayland only
   with `--enable-wayland-ime`. Schnelle Umlaute's troubleshooting guide
-  says an X11 app can break input in Chromium and WezTerm until a reboot.
+  says an X11 app can break fcitx5 input in Chromium and WezTerm until a
+  reboot, which may hold for `tide-accents` too.
 - **Cost and reliability:** free and local. fcitx5 is packaged by Debian,
-  Ubuntu and Fedora; Schnelle Umlaute is one author's GPL-3.0 project,
-  released about monthly, built from source. `tide-accents` is ours,
+  Ubuntu and Fedora. `tide-accents` is ours,
   Apache-2.0, built from this repository; it links fcitx5's LGPL-2.1+
   libraries. A failing input method can
   hold up typing in every app; stopping `tide-fcitx5.service` gives the
