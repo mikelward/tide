@@ -164,7 +164,7 @@ install: build install-shell
 	install -d "$(HYPR_DIR)"
 	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/span.lua hypr/tide/layout.lua hypr/tide/focus.lua hypr/tide/pinned.lua "$(HYPR_DIR)/"
 	install -d "$(SYSTEMD_USER_DIR)/hypridle.service.d" "$(SYSTEMD_USER_DIR)/app-.service.d"
-	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service systemd/user/tide-lock-fallback.service systemd/user/tide-clipboard.service systemd/user/tide-lid-inhibit.service systemd/user/tide-kde.service "$(SYSTEMD_USER_DIR)/"
+	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service systemd/user/tide-lock-fallback.service systemd/user/tide-clipboard.service systemd/user/tide-fcitx5.service systemd/user/tide-lid-inhibit.service systemd/user/tide-kde.service "$(SYSTEMD_USER_DIR)/"
 	install -m 644 systemd/user/hypridle.service.d/tide.conf "$(SYSTEMD_USER_DIR)/hypridle.service.d/"
 	install -m 644 systemd/user/app-.service.d/tide-autostart.conf "$(SYSTEMD_USER_DIR)/app-.service.d/"
 	@# rmdir only removes a directory this emptied.

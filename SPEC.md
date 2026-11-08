@@ -356,6 +356,7 @@ work". The old setup shows how it fought itself:
 | "Show in folder" (`org.freedesktop.FileManager1`) | Nautilus (§16.2) | D-Bus activation via tide's user-level service file → `tide-filemanager.service`, whose launcher picks Dolphin under Plasma and which stops with the session | the arbitrary pick between Dolphin's and Nautilus's system activation files |
 | Terminal for `Terminal=true` apps | kitty, via `xdg-terminal-exec` | on demand | GLib's fallback list (Konsole) |
 | Clipboard history | `tide clipboard store`, encrypted under a key in the keyring (§8.4) | `tide-clipboard.service` | other clipboard managers aren't started |
+| Input method, for accents on a held letter | fcitx5 with Schnelle Umlaute (§8.6) | `tide-fcitx5.service`, unless `TIDE_IME=0` | fcitx5's own autostart entry, which `setup-tide` hides |
 | Apps | you | `tide launch` from keybinds and the launcher, which waits for the shell to be ready, then runs `uwsm app --` (§5.4) | — |
 
 **M2 transitional shell.** Until the Quickshell shell lands (M3 and M4),
@@ -2783,6 +2784,54 @@ apps and its System Settings pages. Kickoff stays on the tap of `Super`.
   FocusFollowsMouse, how soon it opens after `Meta+Space`, and that an
   app it starts gets focus under KWin's focus-stealing prevention.
   `kdeshortcut.py` reports it if Plasma already holds `Meta+Space`.
+
+### 8.6 Accents on a held letter
+
+An accent is typed on the letter itself, as on macOS, rather than through
+Compose or the picker. For now that's fcitx5, the input method framework,
+with [Schnelle Umlaute](https://github.com/Maik-0000FF/schnelle-umlaute),
+its add-on: hold a letter and press Space, and Space again for the next
+accent (é, then è, ê, ë).
+
+- **Not yet a plain long press.** Schnelle Umlaute has no hold-only mode:
+  its timeout types the plain letter. A press-and-wait strip, as on macOS,
+  needs an add-on of our own on fcitx5, or a change to this one (TODO).
+- **Letters with accents wait.** A mapped letter is typed when it's
+  released, or when another key is pressed, not when it's pressed. The
+  others are typed at once.
+- **Compositor-neutral.** fcitx5 reaches apps through the input-method
+  and text-input protocols, which Hyprland and tidewm (its `ime.h`) both
+  relay, so the switch in §21.1 leaves it as it is.
+- **Session.** `tide-fcitx5.service` runs `fcitx5 --replace` in either
+  tide session, before autostarted apps, and is skipped where fcitx5 isn't
+  installed. `QT_IM_MODULE=fcitx` and `XMODIFIERS=@im=fcitx` point Qt and
+  X11 apps at it. The compositor's wrapper (`tide-hyprland`,
+  `tide-tidewm`) sets them where fcitx5 is installed, so every app the
+  compositor starts has them: `uwsm app` keeps its caller's environment.
+  Once fcitx5 owns `org.fcitx.Fcitx5` on the session bus, the unit puts
+  them in the user manager's environment too, for autostarted apps and
+  other units. Each autostarted app's service is ordered after it by
+  `tide-autostart.conf`, since ordering before `xdg-desktop-autostart.target`
+  doesn't reach the services that target wants. GTK apps, and Qt apps on Wayland, reach it through
+  text-input without them. `TIDE_IME=0` in the session's environment
+  turns all of it off.
+- **Not under KDE.** Plasma runs its own input method, Plasma Keyboard,
+  which offers a held key's accents from Plasma 6.7 (`setup-kde`).
+  fcitx5's own XDG autostart entry would start a second one there, so
+  `setup-tide` hides it, and tide's unit is the only thing that starts it.
+- **Setup.** `setup-tide` installs fcitx5 and its GTK and Qt modules,
+  builds a pinned Schnelle Umlaute release, and writes fcitx5's profile
+  and config where there are none: Schnelle Umlaute active by default,
+  the session's keyboard layout as fcitx5's, and no hotkeys of fcitx5's
+  own, so Ctrl+Space and the rest reach apps.
+- **Gaps.** Chrome and Electron apps reach an input method on Wayland only
+  with `--enable-wayland-ime`. Schnelle Umlaute's troubleshooting guide
+  says an X11 app can break input in Chromium and WezTerm until a reboot.
+- **Cost and reliability:** free and local. fcitx5 is packaged by Debian,
+  Ubuntu and Fedora; Schnelle Umlaute is one author's GPL-3.0 project,
+  released about monthly, built from source. A failing input method can
+  hold up typing in every app; stopping `tide-fcitx5.service` gives the
+  keyboard straight back.
 
 ## 9. Notifications
 
