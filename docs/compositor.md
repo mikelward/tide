@@ -153,9 +153,18 @@ rest need only tide, conf or scripts.
 
 - `setup --tidewm` builds the pinned tag, `v0.0.1460`, at the commit
   `deps.lock` names.
-- It builds only where the distro packages wlroots 0.20: Debian testing
-  and Arch. Ubuntu 26.04 has 0.19 and Debian 13 has no 0.20, so there
-  tidewm needs wlroots built from a pin, as §21.1 first proposed.
+- It uses the distro's wlroots 0.20 on Debian testing and Arch. Where
+  `pkg-config` finds no `wlroots-0.20` on Debian or Ubuntu (Ubuntu 26.04 has
+  0.19, Debian 13 none), `install/wlroots` builds `deps.lock`'s wlroots group
+  with meson into tidewm's own build directory, as §21.1 first proposed:
+  wlroots 0.20.2, after whichever of wayland, wayland-protocols, libdrm,
+  xkbcommon and pixman the distro has older than wlroots needs (all five on
+  Debian 13, none on Ubuntu 26.04). tidewm builds against it through
+  `PKG_CONFIG_PATH`, and it and each library carry a run path to that
+  directory's `lib`, so only tidewm loads them. A new wlroots pin rebuilds
+  tidewm. meson never downloads wlroots' own wraps, which follow each
+  project's `HEAD`.
+- Fedora isn't built on yet.
 - It installs xdg-desktop-portal-wlr, which `setup`'s purge of obsolete
   packages keeps while tide is set up.
 - `wlopm` isn't needed: tidewm turns outputs off itself (tidewm #61).

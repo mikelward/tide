@@ -98,11 +98,81 @@ check "failed build dependencies are named" \
 check "and tidewm isn't built" lacks "$calls" "$clone"
 teardown
 
-# Ubuntu 26.04 has no wlroots 0.20, so tidewm isn't built there.
+# Debian testing's wlroots is used as it is.
+setup; ARGS=(--tidewm); run
+check "with the distro's wlroots 0.20, wlroots isn't built" lacks "$calls" "wlroots.git"
+check "and tidewm links with no run path of its own" lacks "$calls" "make env:"
+teardown
+
+# Ubuntu 26.04 and Debian 13 have no wlroots 0.20: it's built from its pin
+# into tidewm's build, and tidewm against it.
+wl_tag=$("$SCRIPT_DIR/pins" --env wlroots | sed -n 's/^PIN_TAG=//p')
+# line_of TEXT: the first line of $calls that has TEXT, or 0.
+line_of() { printf '%s\n' "$calls" | grep -nF -e "$1" | head -n 1 | cut -d: -f1 | grep . || echo 0; }
 setup; ARGS=(--tidewm); run FAKE_MISSING=libwlroots-0.20-dev
-check "without wlroots 0.20, setup still succeeds" test "$status" -eq 0
-check "without wlroots 0.20, tidewm isn't built" lacks "$calls" "$clone"
-check "without wlroots 0.20, it says why" has "$output" "apt has no libwlroots-0.20-dev here (Ubuntu 26.04 has only 0.19)"
+check "without wlroots 0.20, setup succeeds" test "$status" -eq 0
+check "the pin is a 0.20 release" has "$wl_tag" "0.20."
+check "the build doesn't ask apt for wlroots" lacks "$calls" "libwlroots-0.20-dev"
+check "it installs wlroots' build dependencies with tidewm's" \
+    has "$calls" "apt-get install -y build-essential pkgconf git libwayland-dev wayland-protocols"
+check "among them meson, and Xwayland's xcb libraries" has "$calls" "meson ninja-build bison"
+check "and the xcb libraries Xwayland needs" has "$calls" "libxcb-res0-dev libxcb-xfixes0-dev libxcb-errors-dev xwayland"
+check "it asks pkg-config whether the distro has wlroots 0.20" has "$calls" "pkg-config --modversion wlroots-0.20"
+check "it clones the pinned wlroots tag" \
+    has "$calls" "git clone -c advice.detachedHead=false --quiet --depth 1 --branch $wl_tag https://gitlab.freedesktop.org/wlroots/wlroots.git $T/src/tidewm-build/wlroots"
+check "and checks the tag names the pinned commit" has "$calls" "git -C $T/src/tidewm-build/wlroots rev-parse HEAD"
+check "it builds wlroots with meson into tidewm's build" \
+    has "$calls" "meson setup $T/src/tidewm-build/wlroots/build $T/src/tidewm-build/wlroots --prefix=$(build) --libdir=lib --buildtype=release --wrap-mode=nodownload -Dexamples=false -Dxwayland=enabled"
+check "with a run path to its lib" has "$calls" "meson env: PKG_CONFIG_PATH=$(build)/lib/pkgconfig:$(build)/share/pkgconfig"
+check "and installs it there" has "$calls" "meson install -C $T/src/tidewm-build/wlroots/build"
+check "with the distro's new enough, nothing else of the group is built" lacks "$calls" "wayland.git"
+check "tidewm builds against it, with a run path to it" \
+    has "$calls" "make env: PKG_CONFIG_PATH=$(build)/lib/pkgconfig:$(build)/share/pkgconfig"
+check "the run path is to the build's own lib" has "$calls" "LDFLAGS=-Wl,-rpath,$(build)/lib"
+w=$(line_of "meson install -C $T/src/tidewm-build/wlroots/build")
+m=$(line_of "make -C $T/src/tidewm-build/tidewm XWAYLAND")
+check "wlroots is installed before tidewm is built" test "$w" -gt 0 -a "$w" -lt "$m"
+check "tidewm is linked" test "$(readlink "$T/usr-local-bin/tidewm")" = "$T/opt/tidewm/current/bin/tidewm"
+check "the build records wlroots' pins" has "$(cat "$(build)/setup-tide-build")" "wlroots $(sed -n 's/^wlroots wlroots //p' "$SCRIPT_DIR/../deps.lock" | cut -d' ' -f1)"
+# A second run doesn't rebuild either.
+: > "$CALLS"
+run FAKE_MISSING=libwlroots-0.20-dev
+check "the same pins don't rebuild wlroots" lacks "$calls" "meson setup"
+check "nor tidewm" lacks "$calls" "make -C $T/src/tidewm-build"
+teardown
+
+# Debian 13's wayland, libdrm, xkbcommon and pixman are older than wlroots
+# 0.20 needs: they build first, in deps.lock's order, then wlroots.
+setup; ARGS=(--tidewm); run FAKE_MISSING=libwlroots-0.20-dev FAKE_PKG_OLD="wayland-server libdrm xkbcommon pixman-1"
+check "old dependencies, setup succeeds" test "$status" -eq 0
+check "it asks pkg-config for wlroots' least versions" has "$calls" "pkg-config --atleast-version=1.24.0 wayland-server wayland-scanner"
+for dep in wayland libdrm libxkbcommon pixman; do
+    check "an old $dep is built" has "$calls" "meson install -C $T/src/tidewm-build/$dep/build"
+done
+check "a new enough wayland-protocols isn't" lacks "$calls" "$T/src/tidewm-build/wayland-protocols"
+check "xkbcommon reads the system's keymaps" has "$calls" "-Dxkb-config-root=/usr/share/X11/xkb -Dx-locale-root=/usr/share/X11/locale"
+order=
+for dep in wayland libdrm libxkbcommon pixman wlroots; do
+    order="$order $(line_of "meson setup $T/src/tidewm-build/$dep/build")"
+done
+check "they build in deps.lock's order, wlroots last" test "$(printf '%s\n' $order | sort -n | tr '\n' ' ')" = "${order# } "
+teardown
+
+# A moved wlroots tag isn't built, and nor is tidewm.
+setup; ARGS=(--tidewm); run FAKE_MISSING=libwlroots-0.20-dev FAKE_MOVED_PIN=wlroots
+check "a moved wlroots tag doesn't fail setup" test "$status" -eq 0
+check "a moved wlroots tag says so" has "$output" "wlroots's $wl_tag tag is commit 0000000000000000000000000000000000000000"
+check "a moved wlroots tag isn't built" lacks "$calls" "meson setup $T/src/tidewm-build/wlroots"
+check "and nor is tidewm" lacks "$calls" "make -C $T/src/tidewm-build/tidewm"
+check "nothing is linked" test ! -e "$T/usr-local-bin/tidewm"
+teardown
+
+# A failed wlroots build leaves tidewm unbuilt, and nothing linked.
+setup; ARGS=(--tidewm); run FAKE_MISSING=libwlroots-0.20-dev FAKE_MESON_FAILS=wlroots
+check "a failed wlroots build doesn't fail setup" test "$status" -eq 0
+check "a failed wlroots build is reported" has "$output" "building wlroots failed, so tidewm isn't built"
+check "and tidewm isn't built" lacks "$calls" "make -C $T/src/tidewm-build/tidewm"
+check "a failed wlroots build leaves no marker" test -z "$(find "$T/opt/tidewm" -name setup-tide-build 2>/dev/null)"
 teardown
 
 # Arch packages wlroots 0.20.
@@ -110,12 +180,14 @@ setup; ARGS=(--tidewm); run SETUP_OS=arch
 check "on Arch, tidewm's dependencies come from pacman" has "$calls" "pacman -S --needed --noconfirm base-devel git wlroots0.20"
 check "on Arch, wlroots' portal is installed, for screen sharing" has "$calls" "xorg-xwayland xdg-desktop-portal-wlr"
 check "on Arch, tidewm is built" has "$calls" "make -C $T/src/tidewm-build/tidewm install PREFIX="
+check "on Arch, wlroots isn't built" lacks "$calls" "wlroots.git"
 teardown
 
 # Fedora isn't built on yet.
 setup; ARGS=(--tidewm); run SETUP_OS=redhat
 check "on Fedora, tidewm isn't built" lacks "$calls" "$clone"
 check "on Fedora, it says why" has "$output" "tidewm isn't built on redhat"
+check "on Fedora, wlroots isn't built" lacks "$calls" "wlroots.git"
 teardown
 
 # A tidewm on PATH that setup didn't link is left alone.

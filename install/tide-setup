@@ -41,8 +41,10 @@
 #   tag, checked against its commit, into /opt/tidewm and links it onto
 #   PATH, and installs wlroots' portal for screen sharing, so the tide
 #   (tidewm) session, an option beside Hyprland's, shows at the login
-#   screen (see build_tidewm). Only where the distro packages wlroots 0.20, which it
-#   builds against: Debian testing and Arch;
+#   screen (see build_tidewm). It builds against wlroots 0.20: the distro's
+#   on Debian testing and Arch, and where Debian and Ubuntu have none
+#   (Ubuntu 26.04, Debian 13), one built from pinned tags into tidewm's own
+#   build (see install/wlroots);
 # - runs this checkout's `make install` (the
 #   layout, the focus guard, the user units, the portal config) and, with
 #   sudo, `make install-session PREFIX=/usr` (the display manager's session
@@ -231,12 +233,16 @@ TIDEWM_XLIBS="xcb xcb-icccm"
 # What the build needs, from tidewm's CI, plus Xwayland to run X11 apps
 # and wlroots' portal, without which sharing a screen or window (in Meet,
 # say) fails. It builds against wlroots 0.20, which Debian testing and
-# Arch package and Ubuntu 26.04 doesn't (it has 0.19).
+# Arch package; where apt has none (Ubuntu 26.04 has 0.19), install/wlroots
+# builds it.
 TIDEWM_APT_DEPS="build-essential pkgconf git libwlroots-0.20-dev libwayland-dev wayland-protocols
     libinput-dev libxkbcommon-dev libxcb1-dev libxcb-icccm4-dev libjson-c-dev libpcre2-dev xwayland
     xdg-desktop-portal-wlr"
 TIDEWM_PACMAN_DEPS="base-devel git wlroots0.20 wayland wayland-protocols libinput libxkbcommon
     libxcb xcb-util-wm json-c pcre2 pkgconf xorg-xwayland xdg-desktop-portal-wlr"
+# wlroots 0.20 from source, where the distro has none.
+# shellcheck source-path=SCRIPTDIR source=wlroots
+. "$(cd "$(dirname "$0")" && pwd)/wlroots"
 
 # What build_tide_accents needs to build tide's fcitx5 add-on
 # (tide's fcitx5/CMakeLists.txt), beside fcitx5 itself.
@@ -520,8 +526,9 @@ Options:
                    On Debian and Ubuntu, don't build Hyprland from source when
                    apt's is older than 0.57 (the build takes 10-20 minutes)
   --tidewm         Also build tidewm, tide's fork of dwl, for the tide
-                   (tidewm) session, an option beside Hyprland's: on Debian
-                   testing and Arch, which package the wlroots 0.20 it needs
+                   (tidewm) session, an option beside Hyprland's: on Debian,
+                   Ubuntu and Arch, building the wlroots 0.20 it needs where
+                   the distro has none
   --dm DM          The login screen from the next boot: tide (greetd with
                    tide's greeter), sddm, gdm, or keep the one there is (the
                    default). SDDM and GDM are installed if they aren't
@@ -1827,9 +1834,9 @@ unlink_quickshell() {
 
 # --- tidewm from source ---
 
-# tidewm_build_deps prints the packages tidewm's build needs here, or
-# nothing on a distro it isn't built on, and fails, saying why, on one
-# whose apt has no wlroots 0.20.
+# tidewm_build_deps prints the packages tidewm's build needs here, with
+# what building wlroots needs where apt has no wlroots 0.20, or fails,
+# saying why, on a distro it isn't built on.
 tidewm_build_deps() {
     case "$(detect_os)" in
         debian)
@@ -1840,14 +1847,15 @@ tidewm_build_deps() {
             case "$_cand" in
                 "libwlroots-0.20-dev "[0-9]*) echo "$TIDEWM_APT_DEPS" ;;
                 *)
-                    warn "apt has no libwlroots-0.20-dev here (Ubuntu 26.04 has only 0.19), and tidewm builds against wlroots 0.20, so it isn't built"
-                    return 1
+                    detail "apt has no libwlroots-0.20-dev here (Ubuntu 26.04 has only 0.19), so wlroots is built for tidewm"
+                    echo "$TIDEWM_APT_DEPS" | sed 's/ libwlroots-0\.20-dev / /'
+                    echo "$WLROOTS_APT_DEPS"
                     ;;
             esac
             ;;
         arch) echo "$TIDEWM_PACMAN_DEPS" ;;
         *)
-            warn "tidewm isn't built on $(detect_os): setup builds it only where the distro packages wlroots 0.20 (Debian testing and Arch)"
+            warn "tidewm isn't built on $(detect_os): setup builds it only on Debian, Ubuntu and Arch"
             return 1
             ;;
     esac
@@ -1871,7 +1879,12 @@ build_tidewm() {
         warn "could not install tidewm's build dependencies:$(printf ' %s' $not_installed)"
         return 1
     fi
-    tw_record=$(printf '%s\n' "$TIDEWM_REPO $TIDEWM_TAG $TIDEWM_COMMIT" "make XWAYLAND=$TIDEWM_XWAYLAND XLIBS=$TIDEWM_XLIBS")
+    tw_wlroots=no
+    if wlroots_wanted; then
+        tw_wlroots=yes
+    fi
+    tw_record=$(printf '%s\n' "$TIDEWM_REPO $TIDEWM_TAG $TIDEWM_COMMIT" "make XWAYLAND=$TIDEWM_XWAYLAND XLIBS=$TIDEWM_XLIBS"
+        test "$tw_wlroots" = no || wlroots_record)
     tw_sum=$(printf '%s\n' "$tw_record" | cksum | cut -d' ' -f1)
     tw_dir="$TIDEWM_PREFIX/$TIDEWM_TAG-$tw_sum"
     tw_marker="$tw_dir/setup-tide-build"
@@ -1898,8 +1911,16 @@ build_tidewm() {
             rm -rf "$src" || warn "couldn't remove the rejected clone in $src"
             return 1
         fi
-        build_logged tidewm make -C "$src" XWAYLAND="$TIDEWM_XWAYLAND" XLIBS="$TIDEWM_XLIBS" \
-            && build_logged tidewm make -C "$src" install PREFIX="$tw_dir" || return 1
+        # Built into tidewm's own directory, so it's sealed and replaced
+        # with it.
+        tw_make="make"
+        if test "$tw_wlroots" = yes; then
+            build_wlroots "$tw_dir" "$TIDEWM_SRC" || return 1
+            tw_make="wlroots_env $tw_dir make"
+        fi
+        # shellcheck disable=SC2086  # $tw_make is a command, split on purpose
+        build_logged tidewm $tw_make -C "$src" XWAYLAND="$TIDEWM_XWAYLAND" XLIBS="$TIDEWM_XLIBS" \
+            && build_logged tidewm $tw_make -C "$src" install PREFIX="$tw_dir" || return 1
         info "Built tidewm $TIDEWM_TAG; the build's output is in $build_log"
         printf '%s\n' "$tw_record" > "$tw_marker" || {
             warn "couldn't write $tw_marker"

@@ -10,11 +10,25 @@ once you have agreed with it or reversed it.
 - **The installer builds tidewm only with `--tidewm`** (2026-11-05), since
   tide's tidewm session is an option beside Hyprland's, not the default,
   and the build costs a run's time on every machine. It pins a release
-  tag and checks the commit it named, as the other pins do. Only Debian
-  testing and Arch, which package the wlroots 0.20 it builds against;
-  Ubuntu 26.04 (0.19) and Fedora say so and carry on.
-  The alternatives are building it by default, or building wlroots too.
-  Reversible.
+  tag and checks the commit it named, as the other pins do. Debian testing
+  and Arch use their wlroots 0.20; Fedora says so and carries on.
+  The alternative is building it by default. Reversible.
+- **Where apt has no wlroots 0.20, the installer builds it into tidewm's
+  own build** (2026-11-08), not a prefix of its own, so a new pin of either
+  rebuilds both and an old tidewm keeps its wlroots. Sub-choices, each
+  reversible in `install/wlroots`:
+  - wayland, wayland-protocols, libdrm, xkbcommon and pixman are pinned and
+    built separately, each only where `pkg-config` says the distro's is
+    older than wlroots 0.20.2 needs, rather than through wlroots' Meson
+    wraps, which follow `HEAD`. meson runs with `--wrap-mode=nodownload`.
+  - Run paths (`-Wl,-rpath`) on tidewm and every library built, not a
+    wrapper setting `LD_LIBRARY_PATH`, which apps tidewm starts would
+    inherit.
+  - wlroots builds with `-Dxwayland=enabled`, so a missing Xwayland
+    dependency fails at configure, and without the X11 backend
+    (`-Dbackends=drm,libinput`), which runs wlroots inside an X server.
+  - Debian 13's xdg-desktop-portal-wlr 0.7.1 can't share a window (SPEC.md
+    §21.1); it isn't built from source yet.
 - **The installer writes tide-tabs's host manifest for Chrome and Brave**
   (2026-11-01), in each one's `NativeMessagingHosts`, when its config
   directory exists or its command is on `PATH`. It allows the Web Store's
@@ -2257,7 +2271,7 @@ history; tide's changes go on top of v0.9 there. Before rewriting §3.1 around i
 **A session on it**, as an option beside Hyprland's, never the default
 until it's done (SPEC.md §5.3). The entry, the wrapper, the units' target
 and the portals are in, `setup --tidewm` (scripts) builds tidewm at a
-pinned release tag, where the distro packages wlroots 0.20, and conf has a
+pinned release tag, building wlroots 0.20 where the distro has none, and conf has a
 tidewm config with tide's keys and inputs. `tide`'s grants, focused
 workspace and `prompt-focus`, and `tide doctor`'s bar, config-error
 and home checks, read tidewm's IPC, and so does the shell:
