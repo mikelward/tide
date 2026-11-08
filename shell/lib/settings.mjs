@@ -10,6 +10,15 @@ export const GROUPS = Object.freeze([
     { id: "general", label: "General" },
 ]);
 
+// A page's link out in this session: none on tidewm for an app that only
+// writes Hyprland's config (`hyprlandOnly`). nwg-displays takes tidewm's
+// sway socket for sway's and saves to ~/.config/sway/outputs, which
+// tidewm never reads, so its arrangement would be lost at the next login.
+export function advancedFor(page, tidewm) {
+    const link = page?.advanced ?? null;
+    return link !== null && tidewm && link.hyprlandOnly ? null : link;
+}
+
 // Its pages, in the sidebar's order, each in its `group`, and a group's
 // pages together. Each has the words that find it in the launcher
 // (`keywords`, beside its label), and says what to know first (`about`, or
@@ -24,7 +33,7 @@ export const PAGES = Object.freeze([
         icon: "video-display-symbolic",
         keywords: ["monitors", "scale", "resolution"],
         about: "Scale and position for each monitor.",
-        advanced: { label: "Arrange displays", command: ["nwg-displays"] },
+        advanced: { label: "Arrange displays", command: ["nwg-displays"], hyprlandOnly: true },
     },
     {
         id: "sound",

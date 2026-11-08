@@ -73,7 +73,7 @@ maintainer deferred.
 | §6.5: home is the first workspace after a login, stays while empty, and home's apps open there | `tide-workspaces.lua`, which conf's hyprland.lua reads: home's name, a persistent workspace and a rule for its apps | Built: `tide-tidewm` starts tidewm on home and keeps it with `persist workspace` (tidewm #8, #60); the shell keeps it from then on and sends home's apps there (`shell/WorkspacesData.qml`) | After a login home is current; it stays while empty; a home app opened elsewhere goes home |
 | §6.7: Super+Z minimizes the focused window, which leaves the layout; the tray, the bar and the switcher show it, and a click or Enter, or anything else that focuses it, brings it back | A special workspace per workspace, `special:minimized:NAME`, which nothing shows; a silent move there, and a move back with `follow` (`Dispatch.minimizeWindow`) | Built: tidewm's own `minimize`, which hides the window on its workspace until anything focuses it (tidewm #51), the container's `minimized`, and the `minimize` window event; the shell reads a minimized window as on the minimize workspace (`lib/tidewm.mjs`'s `shellWindows`) | Super+Z hides a window and focuses the one before; its icon shows in the tray, and a click brings it back focused |
 | §6.6: every binding works, including `locked` ones on the lock, release binds and submaps; `Super`+drag moves and resizes a floating window; dragging the master/stack edge, and a lone window's sides, with no key held | Binds in `conf`'s `hyprland.lua` | Built: the config file with `reload` (tidewm #12), submaps (#13), `--release` and `--locked` (#14) and `GET_BINDINGS` (#56). `floating_modifier` and button bindings, `focus` and `move` by direction, `resize`, `movestack`, and `workspace next` and `prev` (tidewm #65), which conf binds. Dragging the master/stack edge, with `resize_grab` and `single_width`, and `Super`+right-drag on a tile moving it (tidewm #68); tidewm sees a press on the bar's popovers itself, so the shell tells it nothing. The bar's nth workspace, `Super+Home`, `Super+Tab` and `Super+End` are the shell's, which keeps the bar's order and the workspaces used: conf binds them to `qs -c tide ipc call workspaces …` (`shell/WorkspaceKeys.qml`) | Every binding in §6.6 does its action, and keys work on the lock; a plain drag on the master/stack edge, and `Super`+right-drag on a tiled window, move the master split |
-| §16: each output gets its configured mode, scale, position and single-window width, at login and when plugged in; the *advanced* Displays action edits it | `hl.monitor`, `monitor.added`; nwg-displays writes Hyprland's monitor config | Built: `output` lines with mode, scale, position and power, named by connector or description, `position auto` and the like, applied at plug-in and on reload (tidewm #16, #54, #61); the Displays page writes `tide-outputs.conf` (`lib/outputs.mjs`'s `outputsConf`) and lists `GET_OUTPUTS`. Left: the *advanced* action still runs nwg-displays (`lib/settings.mjs`), which doesn't know tidewm | An output plugged in gets its settings; an advanced edit applies and survives a reload |
+| §16: each output gets its configured mode, scale, position and single-window width, at login and when plugged in; the *advanced* Displays action edits it | `hl.monitor`, `monitor.added`; nwg-displays writes Hyprland's monitor config | Built: `output` lines with mode, scale, position and power, named by connector or description, `position auto` and the like, applied at plug-in and on reload (tidewm #16, #54, #61); the Displays page writes `tide-outputs.conf` (`lib/outputs.mjs`'s `outputsConf`) and lists `GET_OUTPUTS`. The *advanced* action is Hyprland's only: nwg-displays would save to sway's file, which tidewm doesn't read (`lib/settings.mjs`'s `advancedFor`) | An output plugged in gets its settings; an advanced edit applies and survives a reload |
 | §17: apps are sharp at fractional scale, X11 ones included | Hyprland's fractional-scale-v1 and viewporter; `xwayland:force_zero_scaling` | Part: `xwayland_scaling disable` puts X11 windows in their outputs' own pixels (tidewm #45, #46), and conf's tidewm config sets it. Left: an X11 app's own cursor is still scaled (tidewm's *Known bugs*) | At 1.25, a native Wayland app and an X11 app are both sharp and the right size |
 
 ## Bar (§7)
@@ -127,16 +127,15 @@ maintainer deferred.
 Checked 2026-11-08, against tidewm `v0.0.1462` and the repositories named
 above. Nothing was run in a real login.
 
-Of the 48 rows, 38 are built on both sides, 6 in part and 4 not at all.
+Of the 48 rows, 39 are built on both sides, 5 in part and 4 not at all.
 On 2026-11-02, dwl 0.9 met 5 of the 39 rows there were then, 21 in part
 and 13 not at all; that table, with dwl's line numbers, is in this file's
-history. Of the 10 rows left, tidewm itself lacks something in 5; the
+history. Of the 9 rows left, tidewm itself lacks something in 5; the
 rest need only tide, conf or scripts.
 
 | Row | tidewm | tide, conf, scripts | Left |
 |---|---|---|---|
 | §11 greeter | done | tide: no | The greeter on tidewm, with its displays off by `output * power` |
-| §16 outputs | done | tide: part | The *advanced* action on tidewm, or hidden there |
 | §17 fractional scale | part | conf: done | X11 cursors at a fractional scale |
 | §10 lock restore | done | tide: done | M5's crash walk |
 | §12 share | done | scripts: done | A share in Chrome; the restore flag waits on xdpw |

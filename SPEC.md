@@ -4335,7 +4335,7 @@ tide's own, and links out for the rest:
 | Page | Contents |
 |---|---|
 | **Hardware** | |
-| Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
+| Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays`, on Hyprland only |
 | Sound | output and input devices; *advanced* opens `pavucontrol` |
 | Network | *advanced* opens `nm-connection-editor` |
 | Bluetooth | *advanced* opens `blueman-manager` |
@@ -4761,7 +4761,9 @@ stays hand-written.
     the nearest one that way first. A scale set past either end by hand
     stays put on a press that would move it back across.
   - ‹ and › step its place: automatic, to the right, to the left, above or
-    below the others. An exact position is nwg-displays' (*advanced*).
+    below the others. An exact position is nwg-displays' (*advanced*), on
+    Hyprland. tidewm's session has no *advanced*: nwg-displays would save to
+    sway's `~/.config/sway/outputs`, which tidewm doesn't read.
   - Reset clears what `outputs.local.json` sets for a monitor. It shows
     only when there's something there to clear. A setting in
     `outputs.json` still applies, as the panel never writes that file.
@@ -5294,7 +5296,7 @@ light/dark switch.
 | Images | Loupe | swayimg if you want a keyboard-driven gallery |
 | PDFs | Papers | GNOME's replacement for Evince; zathura for keyboard use |
 | Archives | built into Nautilus | File Roller if Thunar wins |
-| Displays | nwg-displays (GTK 3) | writes Hyprland's monitor config; also linked from Settings |
+| Displays | nwg-displays (GTK 3) | writes Hyprland's monitor config; also linked from Settings, on Hyprland |
 | Bluetooth pairing | blueman-manager (GTK 3) | overskride is GTK 4 but thinly packaged |
 | Clipboard history | `tide clipboard`, encrypted, with the picker on `Super+V` (§8.4) | `tide-clipboard.service` runs `wl-paste --watch tide clipboard store`, which skips password-manager copies |
 | Audio mixer | pavucontrol (GTK 4) | pwvucontrol for the libadwaita look |
