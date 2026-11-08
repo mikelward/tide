@@ -779,7 +779,8 @@ EOF
     cat >"$1/tide_msg.py" <<'EOF'
 import json, os, socket, struct, sys
 queries = {"get_workspaces": 1, "get_outputs": 3, "get_tree": 4, "get_version": 7, "get_config": 9,
-           "get_inputs": 100, "get_seats": 101, "get_bindings": 200}
+           "get_inputs": 100, "get_seats": 101, "get_bindings": 200,
+           "get_named_bindings": 201}
 args = sys.argv[1:]
 if args[:1] == ["--type"] and len(args) == 2 and args[1] in queries:
     kind, payload = queries[args[1]], ""

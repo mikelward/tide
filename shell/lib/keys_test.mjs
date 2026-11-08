@@ -329,3 +329,99 @@ test("reset, off and starting from a preset", () => {
     assert.deepEqual(withPreset(yours({ lock: [] }), "i3"), { state: { preset: "i3", keys: {} } }, "your own go");
     assert.ok(withPreset(NO_KEYS, "awesome").error);
 });
+
+// Editing the keys on tidewm (SPEC.md §5.3, §16).
+import { fromTidewmKeys, tidewmKeys, nameLabel, parseTidewmCatalog, listedTidewmCatalog, keysConf } from "./keys.mjs";
+
+// One named binding as tidewm's GET_NAMED_BINDINGS gives it.
+function named(fields) {
+    return Object.assign({
+        name: "terminal", type: "key", keys: ["Mod4+t"], default_keys: ["Mod4+t"], command: "exec foot",
+        mode: "default", release: false, locked: false, kept_open: false,
+    }, fields);
+}
+
+test("tidewm's keys read as Hyprland writes them, and back", () => {
+    assert.equal(fromTidewmKeys("Mod4+Shift+t"), "SUPER + SHIFT + t");
+    assert.equal(fromTidewmKeys("Shift+Control+Mod1+Super+Return"), "SUPER + CTRL + ALT + SHIFT + Return");
+    assert.equal(fromTidewmKeys("Lock+Print"), "Print");
+    assert.equal(fromTidewmKeys("Hyper+x"), null);
+    assert.equal(tidewmKeys("SUPER + SHIFT + G"), "Mod4+Shift+G");
+    assert.equal(tidewmKeys("CTRL + ALT + Delete"), "Ctrl+Mod1+Delete");
+    assert.equal(tidewmKeys("Print"), "Print");
+    assert.equal(tidewmKeys("SUPER + code:28"), null, "tidewm binds by keysym alone");
+    assert.equal(tidewmKeys("SUPER + mouse:272"), null);
+    assert.equal(tidewmKeys("HYPER + x"), null);
+    // As the page compares them.
+    assert.equal(keysId(fromTidewmKeys("Mod4+period")), keysLabel(0, "Mod4+period"));
+});
+
+test("a name says what a tidewm binding does", () => {
+    assert.equal(nameLabel("next_keyboard_layout"), "Next keyboard layout");
+    assert.equal(nameLabel("terminal"), "Terminal");
+});
+
+test("tidewm's named bindings parse to the page's list, the top level's keys alone", () => {
+    const text = JSON.stringify([
+        named({ keys: ["Mod4+Return"] }),
+        named({ name: "float", keys: [], default_keys: ["Mod4+Shift+f", "Mod4+Insert"], command: "floating toggle" }),
+        named({ name: "grow", mode: "resize", keys: ["l"], default_keys: ["l"] }),
+        named({ name: "maximize", type: "mouse", keys: ["Mod4+button2"], default_keys: ["Mod4+button2"] }),
+    ]);
+    assert.deepEqual(parseTidewmCatalog(text).binds, [
+        { name: "terminal", does: "Terminal", defaults: ["SUPER + t"], keys: ["SUPER + Return"] },
+        { name: "float", does: "Float", defaults: ["SUPER + SHIFT + f", "SUPER + Insert"], keys: [] },
+    ]);
+});
+
+test("tidewm's named bindings that can't be read are none, and why", () => {
+    assert.deepEqual(listedTidewmCatalog(true, ""), { binds: [], error: "couldn't run tide-msg --type get_named_bindings" });
+    assert.equal(listedTidewmCatalog(false, '{"success": false, "error": "unsupported message type"}').error,
+        "tide-msg --type get_named_bindings: unsupported message type; is tidewm too old to change them?");
+    assert.match(listedTidewmCatalog(false, "nope").error, /not JSON/);
+    assert.match(listedTidewmCatalog(false, "{}").error, /expected a list/);
+    assert.match(listedTidewmCatalog(false, '[{"name": "x"}]').error, /without its name, keys or default keys/);
+    assert.match(listedTidewmCatalog(false, JSON.stringify([named({ keys: ["Hyper+x"] })])).error, /terminal's keys/);
+});
+
+test("the page's rows and edits work on tidewm's list", () => {
+    const catalog = parseTidewmCatalog(JSON.stringify([
+        named({}), named({ name: "lock", keys: ["Mod4+l"], default_keys: ["Mod4+l"], command: "exec lock" }),
+    ])).binds;
+    const binds = parseTidewmBinds(JSON.stringify([
+        { type: "key", keys: "Mod4+t", command: "exec foot", mode: "default", name: "terminal" },
+        { type: "key", keys: "Mod4+l", command: "exec lock", mode: "default", name: "lock" },
+        { type: "key", keys: "Mod4+x", command: "kill", mode: "default", name: "" },
+    ])).binds;
+    const rows = shortcutRows(catalog, binds, NO_KEYS);
+    assert.deepEqual(rows.named.map(r => [r.name, r.label, r.changed]), [["terminal", "Super+T", false], ["lock", "Super+L", false]]);
+    assert.deepEqual(rows.fixed.map(b => b.keys), ["Super+X"]);
+    assert.deepEqual(withKeys(NO_KEYS, catalog, "terminal", "SUPER + L", false, []).clash, { name: "lock", does: "Lock" });
+    // A swap gives lock terminal's keys, as Hyprland writes them.
+    assert.deepEqual(withKeys(NO_KEYS, catalog, "terminal", "SUPER + L", true, []).state.keys,
+        { terminal: ["SUPER + L"], lock: ["SUPER + t"] });
+    assert.deepEqual(withKeys(NO_KEYS, catalog, "terminal", "SUPER + T", false, []).state.keys, {}, "back at its default");
+});
+
+test("tide-keys.conf rebinds each binding you changed, and the preset's", () => {
+    assert.deepEqual(keysConf(yours({ terminal: ["SUPER + Return", "SUPER + CTRL + T"], lock: [] })), {
+        text: "# Written by tide's Keyboard shortcuts (SPEC.md §16); changes here are lost.\n" +
+            "rebind lock none\nrebind terminal Mod4+Return Mod4+Ctrl+T\n",
+        errors: [],
+    });
+    assert.deepEqual(keysConf(NO_KEYS).text, "# Written by tide's Keyboard shortcuts (SPEC.md §16); changes here are lost.\n");
+    assert.match(keysConf({ preset: "dwm", keys: {} }).text, /^rebind terminal Mod4\+Shift\+Return$/m);
+    // Keys tidewm can't bind are left out, and with none left it keeps its own.
+    assert.deepEqual(keysConf(yours({ terminal: ["SUPER + code:28"], lock: ["SUPER + code:29", "SUPER + K"] })), {
+        text: "# Written by tide's Keyboard shortcuts (SPEC.md §16); changes here are lost.\nrebind lock Mod4+K\n",
+        errors: ["lock: tidewm can't bind SUPER + code:29", "terminal: tidewm can't bind SUPER + code:28"],
+    });
+});
+
+import { keysWritable } from "./keys.mjs";
+
+test("on tidewm, your keys are written only once it's said it takes rebind lines", () => {
+    assert.equal(keysWritable(false, false), true, "Hyprland's conf reads tide-keys.lua whatever it is");
+    assert.equal(keysWritable(true, false), false, "a tidewm from before named bindings would reject the file");
+    assert.equal(keysWritable(true, true), true);
+});

@@ -4510,7 +4510,7 @@ stays hand-written.
   shows, below its settings under a Shortcuts heading. On tidewm (§5.3)
   they're its config file's, from its own `GET_BINDINGS`, through
   `tide-msg --type get_bindings`, each doing its command, as its lines
-  have no descriptions.
+  have no descriptions; a named one says what it does by its name.
   - They were a Keys page of their own. Keyboard has them now, as macOS's
     Keyboard settings have its shortcuts.
   - `openPage keys`, and the launcher's Keyboard shortcuts, open Keyboard
@@ -4535,10 +4535,18 @@ stays hand-written.
     and its keys now in `tide-keys.json`, in its instance's runtime
     directory. The rest, which can't change, follow: the mouse, the media
     and brightness keys, `Super+0…9`, the Super tap, a pinned window's app
-    keys, and the resize submap's. On tidewm, and with a `conf` from before
-    named bindings, the whole list stays read-only.
+    keys, and the resize submap's. With a `conf` from before named
+    bindings, the whole list stays read-only.
+  - On tidewm, `conf` names them with `bindsym --name`, by the same names,
+    and tidewm's `GET_NAMED_BINDINGS`, through `tide-msg --type
+    get_named_bindings`, lists each one's default keys and its keys now.
+    The page says what each does by its name (`next_keyboard_layout` is
+    "Next keyboard layout"). A mode's named bindings, and the mouse's,
+    stay fixed. With a tidewm from before named bindings, the list stays
+    read-only.
   - A click on a binding's keys records new ones. The page puts Hyprland
-    in `conf`'s `tide-keys` submap, where no binding but Esc takes a key,
+    in `conf`'s `tide-keys` submap, or tidewm in its `tide-keys` mode,
+    where no binding but Esc takes a key,
     so the keys pressed reach the page, not the bindings. The next key
     pressed with Super, Ctrl or Alt replaces the binding's keys; a
     function key, Print and Pause need none. Esc, a second click, leaving
@@ -4565,6 +4573,16 @@ stays hand-written.
     runs `hyprctl eval 'conf_keys.reload()'`, which binds them, then lists the bindings again.
     With no keys of yours and no file, it writes nothing, so an older
     `conf` is left alone.
+  - On tidewm, they're written to `~/.config/tidewm/tide-keys.conf`, a
+    `rebind NAME KEYS...` line each, `rebind NAME none` for off, which
+    `conf`'s tidewm config includes last, and `tide-msg reload` applies
+    them. Keys are kept as Hyprland writes them, so the same files serve
+    both; a key tidewm can't bind, as a keycode, is left out and logged.
+    tidewm skips a name its config doesn't have. The file is written only
+    once tidewm has answered `GET_NAMED_BINDINGS`, as a tidewm from before
+    named bindings would reject its config over a `rebind` line. As with the other files
+    tidewm reads, a shell start reloads it only if this session's record
+    says tidewm hasn't read the file as it is.
   - Keys are recorded by what the keyboard layout says the key is, as
     Hyprland binds them. With Shift, Qt reports the shifted symbol, which
     is turned back into its key on a US layout's symbols (`!` is `1`).

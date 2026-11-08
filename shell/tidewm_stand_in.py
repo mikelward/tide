@@ -43,6 +43,7 @@ REQUESTS = {
     0: "run_command", 1: "get_workspaces", 2: "subscribe", 3: "get_outputs", 4: "get_tree",
     7: "get_version", 8: "get_binding_modes", 9: "get_config", 10: "send_tick",
     12: "get_binding_state", 100: "get_inputs", 101: "get_seats", 200: "get_bindings",
+    201: "get_named_bindings",
 }
 EVENT_TYPES = {
     "workspace": 0x80000000, "output": 0x80000001, "mode": 0x80000002, "window": 0x80000003,
@@ -139,12 +140,21 @@ TOUCHPAD = {
                  "accel_speed": 0.0},
 }
 
-# Two of conf's tidewm key bindings, as tidewm's GET_BINDINGS gives them.
+# Two of conf's tidewm key bindings, as tidewm's GET_BINDINGS gives them,
+# each named as conf names it.
 BINDINGS = [
     {"type": "key", "keys": "Mod4+t", "command": "exec tide terminal", "mode": "default",
-     "release": False, "locked": False},
+     "release": False, "locked": False, "name": "terminal"},
     {"type": "key", "keys": "Mod4+backslash", "command": "layout toggle", "mode": "default",
-     "release": False, "locked": False},
+     "release": False, "locked": False, "name": "grow_master"},
+]
+# The same two by name, as tidewm's GET_NAMED_BINDINGS gives them, each at
+# its default keys.
+NAMED_BINDINGS = [
+    {"name": "terminal", "type": "key", "mode": "default", "command": "exec tide terminal",
+     "default_keys": ["Mod4+t"], "keys": ["Mod4+t"]},
+    {"name": "grow_master", "type": "key", "mode": "default", "command": "layout toggle",
+     "default_keys": ["Mod4+backslash"], "keys": ["Mod4+backslash"]},
 ]
 
 CONFIG = "include ~/.config/tidewm/tide-*.conf\n"
@@ -162,6 +172,7 @@ ANSWERS = {
     "get_seats": [{"name": "seat0", "capabilities": 3, "focus": 11, "devices": [KEYBOARD, TOUCHPAD],
                    "last_input": None, "prompt_may_focus": False}],
     "get_bindings": BINDINGS,
+    "get_named_bindings": NAMED_BINDINGS,
 }
 
 

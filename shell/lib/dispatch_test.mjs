@@ -1,7 +1,7 @@
 // Tests for dispatch.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, moveWindowToNamed, closeWindow, minimizeWindow, sendWindowTo, floatWindow, sendShortcut, recordingKeys } from "./dispatch.mjs";
+import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, moveWindowToNamed, closeWindow, minimizeWindow, sendWindowTo, floatWindow, sendShortcut, recordingKeys, tidewmRecordingKeys } from "./dispatch.mjs";
 
 test("a Lua config gets hl.dsp calls", () => {
     assert.equal(focusWorkspace(3, true), "hl.dsp.focus({ workspace = 3 })");
@@ -106,4 +106,9 @@ test("recording a shortcut goes to conf's tide-keys submap and back", () => {
     assert.equal(recordingKeys(false, true), 'hl.dsp.submap("reset")');
     assert.equal(recordingKeys(true, false), "submap tide-keys");
     assert.equal(recordingKeys(false, false), "submap reset");
+});
+
+test("on tidewm, recording a shortcut goes to conf's tide-keys mode and back", () => {
+    assert.equal(tidewmRecordingKeys(true), "mode tide-keys");
+    assert.equal(tidewmRecordingKeys(false), "mode default");
 });
