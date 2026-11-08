@@ -17,7 +17,10 @@ clone="git clone -c advice.detachedHead=false --quiet --depth 1 --branch $tag ht
 # Without --tidewm, nothing of tidewm's is touched.
 setup; ARGS=(); run
 check "without --tidewm, setup succeeds" test "$status" -eq 0
-check "without --tidewm, tidewm isn't built" lacks "$calls" "tidewm"
+# Its session's target is only asked about, as tide's other one is.
+check "without --tidewm, tidewm isn't cloned" lacks "$calls" "tidewm.git"
+check "without --tidewm, tidewm isn't built" lacks "$calls" "tidewm-build"
+check "without --tidewm, nothing of it is installed" lacks "$calls" "libwlroots"
 check "without --tidewm, nothing is linked" test ! -e "$T/usr-local-bin/tidewm"
 teardown
 
