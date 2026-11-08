@@ -9,7 +9,7 @@ import {
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
-    expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, fitsScreens, galleryRows, MORE_WALLPAPERS, moreWallpapersCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
+    expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, MORE_WALLPAPERS, moreWallpapersCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
     POSITIONS, POSITION_CHOICES, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf,
@@ -725,7 +725,6 @@ test("the wallpaper grid shows each Plasma wallpaper once, at its largest, by na
         "1920\t1080\t/usr/share/wallpapers/Mountain/contents/images/1920x1080.png",
         "5120\t2880\t/usr/share/wallpapers/Mountain/contents/images/5120x2880.png",
         "3840\t2160\t/usr/share/wallpapers/Mountain/contents/images/3840x2160.png",
-        "5120\t2880\t/usr/share/wallpapers/Mountain/contents/images_dark/5120x2880.png",
         "400\t250\t/usr/share/wallpapers/Mountain/contents/screenshot.png",
         "4096\t4096\t/usr/share/backgrounds/gnome/blobs-l.jxl",
         "0\t0\t/usr/share/backgrounds/gnome/adwaita.xml",
@@ -735,14 +734,102 @@ test("the wallpaper grid shows each Plasma wallpaper once, at its largest, by na
         "/usr/share/backgrounds/no-size.jpg",
         "",
     ].join("\n");
-    assert.deepEqual(galleryImages(text), [
-        { path: "/home/u/Pictures/wallpapers/Aurora.JPG", name: "Aurora", width: 0, height: 0 },
-        { path: "/usr/share/backgrounds/gnome/blobs-l.jxl", name: "blobs-l", width: 4096, height: 4096 },
-        { path: "/usr/share/wallpapers/Mountain/contents/images/5120x2880.png", name: "Mountain", width: 5120, height: 2880 },
-        { path: "/usr/share/backgrounds/gnome/pills-l.svg", name: "pills-l", width: 1920, height: 1080 },
+    assert.deepEqual(galleryImages(text, "/home/u", "Ubuntu"), [
+        { path: "/home/u/Pictures/wallpapers/Aurora.JPG", name: "Aurora", width: 0, height: 0, mode: "", collection: "Yours" },
+        { path: "/usr/share/backgrounds/gnome/blobs-l.jxl", name: "blobs-l", width: 4096, height: 4096, mode: "", collection: "GNOME" },
+        { path: "/usr/share/wallpapers/Mountain/contents/images/5120x2880.png", name: "Mountain", width: 5120, height: 2880, mode: "", collection: "Plasma" },
+        { path: "/usr/share/backgrounds/gnome/pills-l.svg", name: "pills-l", width: 1920, height: 1080, mode: "", collection: "GNOME" },
     ]);
     assert.deepEqual(galleryImages(""), []);
     assert.deepEqual(galleryImages(undefined), []);
+});
+
+test("the wallpaper grid knows the light and the dark one of a pair", () => {
+    const text = [
+        "/usr/share/wallpapers/Mountain/contents/images/1920x1080.png",
+        "/usr/share/wallpapers/Mountain/contents/images_dark/1920x1080.png",
+        "/usr/share/wallpapers/Mountain/contents/images_dark/3840x2160.png",
+        "/usr/share/backgrounds/gnome/blobs-l.svg",
+        "/usr/share/backgrounds/gnome/blobs-d.svg",
+        // No partner, so -l is just its name.
+        "/usr/share/backgrounds/gnome/lonely-l.png",
+        "/usr/share/backgrounds/Fuwafuwa_by_amaral-dark.png",
+        "/usr/share/backgrounds/Fuwafuwa_by_amaral-light.png",
+        "/usr/share/backgrounds/Numbat_wallpaper_dimmed_3480x2160.png",
+        "/usr/share/backgrounds/Numbat_wallpaper_light_3480x2160.png",
+        "/usr/share/backgrounds/f40/default/f40-01-day.jxl",
+        "/usr/share/backgrounds/f40/default/f40-01-night.jxl",
+        "/usr/share/backgrounds/Clouds.jpg",
+        // Alone, a name that says dark, light, night or day is just its
+        // name, so it shows for either.
+        "/home/u/Pictures/wallpapers/city-night.jpg",
+        "/home/u/Pictures/wallpapers/sea_light.png",
+        "/home/u/Pictures/wallpapers/hills-day.jpg",
+    ].map(p => `1\t1\t${p}`).join("\n");
+    const modes = {};
+    for (const i of galleryImages(text, "/home/u")) {
+        modes[i.path] = i.mode;
+    }
+    assert.deepEqual(modes, {
+        "/usr/share/wallpapers/Mountain/contents/images/1920x1080.png": "light",
+        "/usr/share/wallpapers/Mountain/contents/images_dark/3840x2160.png": "dark",
+        "/usr/share/backgrounds/gnome/blobs-l.svg": "light",
+        "/usr/share/backgrounds/gnome/blobs-d.svg": "dark",
+        "/usr/share/backgrounds/gnome/lonely-l.png": "",
+        "/usr/share/backgrounds/Fuwafuwa_by_amaral-dark.png": "dark",
+        "/usr/share/backgrounds/Fuwafuwa_by_amaral-light.png": "light",
+        "/usr/share/backgrounds/Numbat_wallpaper_dimmed_3480x2160.png": "dark",
+        "/usr/share/backgrounds/Numbat_wallpaper_light_3480x2160.png": "light",
+        "/usr/share/backgrounds/f40/default/f40-01-day.jxl": "light",
+        "/usr/share/backgrounds/f40/default/f40-01-night.jxl": "dark",
+        "/usr/share/backgrounds/Clouds.jpg": "",
+        "/home/u/Pictures/wallpapers/city-night.jpg": "",
+        "/home/u/Pictures/wallpapers/sea_light.png": "",
+        "/home/u/Pictures/wallpapers/hills-day.jpg": "",
+    });
+});
+
+test("each wallpaper is in a collection, for the grid's chips", () => {
+    assert.equal(galleryCollection("/home/u/Pictures/wallpapers/a/b.jpg", "/home/u", "Ubuntu"), "Yours");
+    assert.equal(galleryCollection("/usr/share/wallpapers/Next/contents/images/1x1.png", "/home/u", "Ubuntu"), "Plasma");
+    assert.equal(galleryCollection("/usr/share/backgrounds/gnome/blobs-l.svg", "/home/u", "Ubuntu"), "GNOME");
+    assert.equal(galleryCollection("/usr/share/backgrounds/f40/default/f40-01-day.jxl", "/home/u"), "Fedora 40");
+    assert.equal(galleryCollection("/usr/share/backgrounds/fedora-workstation/x.png", "/home/u"), "Fedora Workstation");
+    // Ubuntu puts its own loose in backgrounds.
+    assert.equal(galleryCollection("/usr/share/backgrounds/Clouds.jpg", "/home/u", "Ubuntu"), "Ubuntu");
+    assert.equal(galleryCollection("/usr/share/backgrounds/Clouds.jpg", "/home/u", ""), "Other");
+    assert.equal(galleryCollection("/srv/x.jpg", "/home/u", "Ubuntu"), "Other");
+    // Not /home/uv, which only starts like home.
+    assert.equal(galleryCollection("/home/uv/Pictures/wallpapers/x.jpg", "/home/u", "Ubuntu"), "Other");
+
+    assert.equal(distroName('ID=ubuntu\nNAME="Ubuntu"\n'), "Ubuntu");
+    assert.equal(distroName('NAME="Fedora Linux"\n'), "Fedora");
+    assert.equal(distroName("NAME='Debian GNU/Linux'\n"), "Debian");
+    assert.equal(distroName("NAME=Arch Linux\n"), "Arch");
+    assert.equal(distroName("ID=x\n"), "");
+    assert.equal(distroName(undefined), "");
+
+    const pic = collection => ({ collection });
+    assert.deepEqual(galleryCollections([pic("Yours"), pic("Ubuntu"), pic("GNOME"), pic("Ubuntu")]), ["GNOME", "Ubuntu", "Yours"]);
+    // One collection needs no chips.
+    assert.deepEqual(galleryCollections([pic("GNOME"), pic("GNOME")]), []);
+    assert.deepEqual(galleryCollections([]), []);
+});
+
+test("the wallpaper grid filters by light or dark, opening on the setting's", () => {
+    assert.deepEqual(GALLERY_MODES, ["light", "dark", "any"]);
+    assert.equal(galleryModeFor("lightWallpaper"), "light");
+    assert.equal(galleryModeFor("darkWallpaper"), "dark");
+    assert.equal(galleryModeFor(""), "any");
+    const pic = (name, mode, collection) => ({ name, mode, collection });
+    const images = [pic("a", "light", "GNOME"), pic("b", "dark", "GNOME"), pic("c", "", "GNOME"), pic("d", "dark", "Yours")];
+    const names = list => list.map(i => i.name);
+    // One that isn't one of a pair shows for either.
+    assert.deepEqual(names(galleryFiltered(images, "light", "")), ["a", "c"]);
+    assert.deepEqual(names(galleryFiltered(images, "dark", "")), ["b", "c", "d"]);
+    assert.deepEqual(names(galleryFiltered(images, "any", "")), ["a", "b", "c", "d"]);
+    assert.deepEqual(names(galleryFiltered(images, "dark", "Yours")), ["d"]);
+    assert.deepEqual(names(galleryFiltered(images, "any", "Plasma")), []);
 });
 
 test("a picture fits a monitor of its shape, near enough", () => {

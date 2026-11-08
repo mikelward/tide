@@ -4305,6 +4305,7 @@ PanelWindow {
 
             function close() {
                 key = "";
+                modeMenu.visible = false;
                 hovered = "";
             }
 
@@ -4436,11 +4437,17 @@ PanelWindow {
             // The pictures, galleryImages's, and whether the listing is
             // still running or what it said went wrong.
             property var images: []
+            // The filters: light, dark or any (GALLERY_MODES), opening on
+            // the setting's; and a collection's chip, "" for all.
+            property string mode: "any"
+            property string collection: ""
+            readonly property var collections: Appearance.galleryCollections(images)
+            readonly property var shown: Appearance.galleryFiltered(images, mode, collection)
             // Each size of monitor connected, previewScreens's, whose
             // shape the grid puts first.
             readonly property var screens: Appearance.previewScreens(Quickshell.screens)
             readonly property int columns: 4
-            readonly property var rows: Appearance.galleryRows(images, screens, columns)
+            readonly property var rows: Appearance.galleryRows(shown, screens, columns)
             property bool listing: false
             property string failed: ""
             // The picture under the pointer, by its name.
@@ -4451,6 +4458,9 @@ PanelWindow {
             function show(key, label) {
                 wallpaperGrid.key = key;
                 wallpaperGrid.label = label;
+                mode = Appearance.galleryModeFor(key);
+                collection = "";
+                modeMenu.visible = false;
                 images = [];
                 failed = "";
                 if (!listing) {
@@ -4468,7 +4478,7 @@ PanelWindow {
                 if (key === "") {
                     return;
                 }
-                images = Appearance.galleryImages(output);
+                images = Appearance.galleryImages(output, Quickshell.env("HOME") ?? "", Appearance.distroName(osRelease.text()));
                 if (!ok) {
                     failed = `couldn't list every wallpaper: ${errors.trim().split("\n")[0] || "find didn't start"}`;
                 }
@@ -4476,6 +4486,7 @@ PanelWindow {
 
             function close() {
                 key = "";
+                modeMenu.visible = false;
                 hovered = "";
                 images = [];
             }
@@ -4550,6 +4561,123 @@ PanelWindow {
                 }
             }
 
+            // The distro's name, for the chip of the pictures it installs
+            // loose in /usr/share/backgrounds, as Ubuntu does.
+            FileView {
+                id: osRelease
+
+                path: "/etc/os-release"
+                blockLoading: true
+                printErrors: false
+                onLoadFailed: error => console.log(`tide: wallpaper grid: no distro name from ${path}: ${FileViewError.toString(error)}`)
+            }
+
+            // Light, dark or both, opening on the setting's: a picture that
+            // isn't one of a light and dark pair shows for either.
+            Rectangle {
+                id: modeButton
+
+                readonly property var labels: ({
+                        light: "Light",
+                        dark: "Dark",
+                        any: "Light and dark"
+                    })
+
+                x: 12
+                y: gridTitle.y + gridTitle.height + 8
+                width: modeText.implicitWidth + 28
+                height: 24
+                radius: 6
+                color: modeHover.hovered || modeMenu.visible ? Theme.surface2 : "transparent"
+                border.color: Theme.edge
+                Accessible.name: `Show ${modeText.text}`
+
+                Text {
+                    id: modeText
+
+                    x: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modeButton.labels[wallpaperGrid.mode]
+                    color: Theme.fg
+                    font.family: Theme.font
+                    font.pixelSize: 12
+                }
+
+                Text {
+                    x: parent.width - width - 7
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "▾"
+                    color: Theme.fgDim
+                    font.family: Theme.font
+                    font.pixelSize: 10
+                }
+
+                HoverHandler {
+                    id: modeHover
+                }
+
+                TapHandler {
+                    onTapped: modeMenu.visible = !modeMenu.visible
+                }
+            }
+
+            // A chip for each collection, when there's more than one.
+            Flickable {
+                id: chips
+
+                x: modeButton.x + modeButton.width + 8
+                y: modeButton.y
+                width: parent.width - x - 12
+                height: modeButton.height
+                clip: true
+                contentWidth: chipRow.implicitWidth
+                flickableDirection: Flickable.HorizontalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                visible: wallpaperGrid.collections.length > 0
+
+                Row {
+                    id: chipRow
+
+                    spacing: 6
+
+                    Repeater {
+                        model: [""].concat(wallpaperGrid.collections)
+
+                        delegate: Rectangle {
+                            id: chip
+
+                            required property string modelData
+                            readonly property bool chosen: wallpaperGrid.collection === modelData
+
+                            width: chipText.implicitWidth + 20
+                            height: chips.height
+                            radius: height / 2
+                            color: chosen ? Theme.accent : chipHover.hovered ? Theme.surface2 : "transparent"
+                            border.color: chosen ? Theme.accent : Theme.edge
+                            Accessible.name: chipText.text
+
+                            Text {
+                                id: chipText
+
+                                anchors.centerIn: parent
+                                text: chip.modelData === "" ? "All" : chip.modelData
+                                color: chip.chosen ? Theme.accentFg : Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 12
+                            }
+
+                            HoverHandler {
+                                id: chipHover
+                            }
+
+                            TapHandler {
+                                onTapped: wallpaperGrid.collection = chip.modelData
+                            }
+                        }
+                    }
+                }
+            }
+
             Text {
                 anchors.centerIn: thumbs
                 width: thumbs.width - 24
@@ -4558,6 +4686,7 @@ PanelWindow {
                 visible: thumbs.count === 0
                 text: wallpaperGrid.failed !== "" ? wallpaperGrid.failed
                     : wallpaperGrid.listing ? "Finding wallpapers…"
+                    : wallpaperGrid.images.length > 0 ? "No wallpapers match these filters."
                     : "No wallpapers found. Add some to ~/Pictures/wallpapers."
                 color: Theme.fgDim
                 font.family: Theme.font
@@ -4575,7 +4704,7 @@ PanelWindow {
                 readonly property real cellHeight: Math.round(cellWidth * 10 / 16)
 
                 x: 12
-                y: gridTitle.y + gridTitle.height + 8
+                y: modeButton.y + modeButton.height + 8
                 width: parent.width - 24
                 height: parent.height - y - 12
                 clip: true
@@ -4676,6 +4805,65 @@ PanelWindow {
 
                                 TapHandler {
                                     onTapped: wallpaperGrid.choose(thumb.modelData.path)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // The light and dark filter's choices, over the grid.
+            Rectangle {
+                id: modeMenu
+
+                visible: false
+                x: modeButton.x
+                y: modeButton.y + modeButton.height + 4
+                width: modeColumn.implicitWidth + 8
+                height: modeColumn.implicitHeight + 8
+                radius: 8
+                color: Theme.surface
+                border.color: Theme.edge
+
+                Column {
+                    id: modeColumn
+
+                    x: 4
+                    y: 4
+
+                    Repeater {
+                        model: Appearance.GALLERY_MODES
+
+                        delegate: Rectangle {
+                            id: modeItem
+
+                            required property string modelData
+
+                            width: Math.max(140, modeItemText.implicitWidth + 24)
+                            height: 26
+                            radius: 6
+                            color: modeItemHover.hovered ? Theme.surface2 : "transparent"
+                            Accessible.name: modeItemText.text
+
+                            Text {
+                                id: modeItemText
+
+                                x: 12
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modeButton.labels[modeItem.modelData]
+                                color: wallpaperGrid.mode === modeItem.modelData ? Theme.accent : Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 12
+                            }
+
+                            HoverHandler {
+                                id: modeItemHover
+                            }
+
+                            TapHandler {
+                                onTapped: {
+                                    wallpaperGrid.mode = modeItem.modelData;
+                                    modeMenu.visible = false;
                                 }
                             }
                         }

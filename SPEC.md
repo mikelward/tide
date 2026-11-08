@@ -4529,8 +4529,21 @@ stays hand-written.
     - `tide-pick --list` lists them, reading each one's size from its
       header, not decoding it. One whose size it can't read goes under
       Other shapes.
+    - **A dropdown above the grid** shows Light, Dark, or Light and dark.
+      It opens on the setting's own mode. A picture that's one of a light
+      and dark pair shows only for its mode; any other shows for either.
+      The pairs are GNOME's `-l` and `-d`, Ubuntu's `-light` with `-dark`
+      or `dimmed`, Fedora's `-day` and `-night`, and a Plasma wallpaper's
+      `images` and `images_dark`.
+    - **Chips beside it** pick a collection, or All. A collection is
+      Yours (`~/Pictures/wallpapers`), Plasma (`/usr/share/wallpapers`),
+      a folder of `/usr/share/backgrounds` such as GNOME or Fedora 40, or
+      the distro's name, from `/etc/os-release`, for pictures loose in it,
+      as Ubuntu installs its own. With one collection there are no chips.
+    - Both filters reset each time the grid opens.
     - A Plasma wallpaper is a folder of one picture at several sizes. It
-      shows once, named for its folder, and sets its largest size.
+      shows once, named for its folder, and sets its largest size; its
+      dark version, if it has one, shows too.
     - The thumbnails are decoded small and in the background, so a few
       hundred pictures don't stall the panel. One Qt can't decode, such as
       JPEG XL without kimageformats, shows its name instead.
