@@ -3,11 +3,12 @@
 // its config file's, read from its GET_BINDINGS, as pure functions the QML
 // binds to.
 //
-// That needs Hyprland 0.56.2, tide's pin: 0.56.0's JSON gives each value
-// one field late from has_description on (src/debug/HyprCtl.cpp's
-// bindsRequest), so it doesn't parse, and the page says so. Every Lua
-// binding's dispatcher is "__lua", so what one does is only its
-// description, which conf gives in hl.bind's `description` option.
+// That needs Hyprland 0.56.2 or later; tide pins 0.57.1. 0.56.0's JSON
+// gives each value one field late from has_description on
+// (src/debug/HyprCtl.cpp's bindsRequest), so it doesn't parse, and the page
+// says so. A Lua binding's dispatcher says nothing of what it does, so what
+// one does is only its description, which conf gives in hl.bind's
+// `description` option.
 
 import { PRESETS, PRESET_NAMES } from "./keymaps.mjs";
 
@@ -58,9 +59,9 @@ export function keyLabel(key) {
 
 // A binding's keys, as "Super+Shift+T". A key given as the whole string
 // it was written as ("SUPER + code:28") is read as Hyprland reads it. A
-// Lua binding by keycode has neither a key nor a keycode in 0.56.2's
-// listing (parseKeyString keeps the code to itself), so all it can say is
-// that it's one.
+// Lua binding by keycode has its keycode in 0.57.1's listing, but neither a
+// key nor a keycode in 0.56.2's (parseKeyString keeps the code to itself),
+// so there all it can say is that it's one.
 export function keysLabel(modmask, key, keycode = 0) {
     if (key.includes("+")) {
         return key.split("+").map(k => k.trim()).filter(k => k !== "").map(k => {
@@ -76,6 +77,13 @@ export function keysLabel(modmask, key, keycode = 0) {
         last = `code:${keycode}`;
     }
     return mods.concat([last]).join("+");
+}
+
+// Whether a binding's dispatcher is a Lua value: "__lua" in 0.56.2, and in
+// 0.57.1 the value's name, "HL.Dispatcher(NAME)" for an hl.dsp one or
+// "function: ADDRESS" for a plain function (hlBind's luaL_tolstring).
+function isLuaDispatcher(dispatcher) {
+    return dispatcher === "__lua" || dispatcher.startsWith("HL.Dispatcher(") || dispatcher.startsWith("function: ");
 }
 
 // Parses `hyprctl binds -j`. Returns {binds} as [{keys, does, submap}], in
@@ -102,7 +110,7 @@ export function parseBinds(text) {
         let does = "";
         if (b.has_description === true && typeof b.description === "string") {
             does = b.description.replace(/\s+/g, " ").trim();
-        } else if (b.dispatcher !== "__lua") {
+        } else if (!isLuaDispatcher(b.dispatcher)) {
             does = `${b.dispatcher} ${typeof b.arg === "string" ? b.arg : ""}`.trim();
         }
         binds.push({
