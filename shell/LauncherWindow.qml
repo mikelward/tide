@@ -97,11 +97,12 @@ PanelWindow {
     property real openedAt: 0
     // A screenshot waiting for the launcher to leave the screen, and the
     // window you were in when it opened, which "Screenshot window" takes
-    // (§8): the address of Hyprland's focused window, which the launcher's
-    // layer surface doesn't change. Only the address is kept; the window is
-    // looked up when the screenshot runs (Search.windowScreenshot), so a
-    // window that moved meanwhile is taken where it is. "Screenshot screen"
-    // takes the monitor it opened on, by Hyprland's name for it.
+    // (§8): the address of the focused window, Hyprland's or tidewm's
+    // container ID, which the launcher's layer surface doesn't change.
+    // Only the address is kept; the window is looked up when the
+    // screenshot runs (Search.windowScreenshot), so a window that moved
+    // meanwhile is taken where it is. "Screenshot screen" takes the
+    // monitor it opened on, by its output's name.
     property string pending: ""
     property var windowAtOpen: null
     property string outputAtOpen: ""
@@ -292,7 +293,7 @@ PanelWindow {
     // What running quick action `id` takes (Search.quickCommand), on
     // Plasma or not, with `context`.
     function quick(id, context) {
-        return Search.quickCommand(id, Object.assign({ plasma: root.plasma }, context ?? {}));
+        return Search.quickCommand(id, Object.assign({ plasma: root.plasma, tidewm: Compositor.tidewm }, context ?? {}));
     }
 
     function runQuick(id) {
