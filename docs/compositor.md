@@ -17,7 +17,7 @@ The "Today" column was read from this repository and `mikelward/conf`'s
 `config/hypr` on 2026-10-05. The "Fork" column says what the fork,
 [tidewm](https://github.com/mikelward/tidewm), and tide's tidewm session
 have built, and what's left. It was checked on 2026-11-08 against tidewm
-`v0.0.1448` (`f925896`, the commit `setup --tidewm` pins), this repository,
+`v0.0.1460` (`324b9ec`, the commit `setup --tidewm` pins), this repository,
 and conf's `config/tidewm`. "tidewm #N" is a tidewm pull request. "Built"
 means built and tested headless, by tidewm's own tests and tide's stand-in
 (`shell/tidewm_stand_in.py`): nothing has run in a real login yet. The
@@ -62,7 +62,7 @@ maintainer deferred.
 
 | Requirement | Today | Fork | Check |
 |---|---|---|---|
-| §6.1: tile, three-column, two columns + stack and monocle, set per workspace; new windows join the end of the stack and the master stays put | `hl.layout.register("tide", …)` and its messages (`next`, `prev`, `monocle`, `mfact`, `addmaster`, `removemaster`, `mode`); the `tide-layout` event | Built: tidewm's layouts, per workspace part, the `layout` event, and the config's `default_layout`, `ultrawide_aspect`, `layout_defaults`, `single_window` and `new_window` lines (tidewm #19, #20, #21, #37, #55); the Layouts page writes `tide-layouts.conf` (`lib/layouts.mjs`'s `layoutsConf`); the bar's layout symbol, from the `layout` event and its own window count (`LayoutData.qml`, `lib/tidewm.mjs`). Left: `Super+.` and `Super+,`, as the pin's `layout` takes a name or `toggle`; tidewm's `layout next` and `prev` came after it (tidewm #65), and conf binds them | `layout_test.lua`'s cases, ported; opening three windows in turn keeps the first as master; the layout symbol follows `Super+.` and a workspace switch |
+| §6.1: tile, three-column, two columns + stack and monocle, set per workspace; new windows join the end of the stack and the master stays put | `hl.layout.register("tide", …)` and its messages (`next`, `prev`, `monocle`, `mfact`, `addmaster`, `removemaster`, `mode`); the `tide-layout` event | Built: tidewm's layouts, per workspace part, the `layout` event, and the config's `default_layout`, `ultrawide_aspect`, `layout_defaults`, `single_window` and `new_window` lines (tidewm #19, #20, #21, #37, #55); the Layouts page writes `tide-layouts.conf` (`lib/layouts.mjs`'s `layoutsConf`); the bar's layout symbol, from the `layout` event and its own window count (`LayoutData.qml`, `lib/tidewm.mjs`), and `layout next` and `prev` (tidewm #65), which conf binds to `Super+.` and `Super+,` | `layout_test.lua`'s cases, ported; opening three windows in turn keeps the first as master; the layout symbol follows `Super+.` and a workspace switch |
 | §6.2: dim the inactive window, nothing else; never dim a lone window, picture-in-picture, video or a screen-share preview | `dim_inactive` 0.12, no gaps or borders; `no_dim` rules | Built: tidewm's `dim_inactive`, with the exceptions built in (tidewm #33); the Appearance page writes it to `tide-appearance.conf` (`lib/appearance.mjs`'s `appearanceConf`) and applies it with `tide-msg reload` | Only the focused window is undimmed, and the exceptions hold |
 | §6.3: monocle, maximize and fullscreen as three states; maximize keeps the bar and ends when another window on the workspace takes focus; popups show over fullscreen but are held while it plays video | Hyprland's maximize and fullscreen, dispatched from the bar | Built: monocle; tidewm's own `maximize`, which ends when another window on the workspace takes focus (tidewm #26); fullscreen. The bar title's double-click and the switcher maximize through it (`Compositor.qml`'s `toggleMaximize`), and conf binds `Super+Up` | §6.3 as written; the bar title's double-click maximizes (§7.1) |
 | §6.3, §14.3: a window that asks for fullscreen as it opens (a game, a video player with `--fullscreen`) opens fullscreen once the guard lets it take focus | Not yet: under `no_initial_focus` Hyprland 0.56 drops the request, and Lua can't see it, so it opens tiled (TODO.md, *Fullscreen on open*) | Built: the guard holds a window's fullscreen until it has focus (tidewm #27). An X11 window that sets `_NET_WM_STATE` before it maps can lose it, a wlroots race (tidewm's TODO.md, *Known bugs*) | A granted `mpv --fullscreen` opens fullscreen; a refused one stays unfocused, and goes fullscreen once you switch to it |
@@ -72,9 +72,9 @@ maintainer deferred.
 | §6.5: a window pinned where it is stays open: Super+Backspace and the app's own close and quit keys leave it open, and say where it's pinned; every other window gets those keys | `hypr/tide/pinned.lua`, handed `tide-workspaces.lua`'s pinned list: a close bind and a bind for each app key that passes the key on for any other window | Built: tidewm's own `keep_open` (tidewm #62), set by the shell for each pinned window (`shell/PinnedData.qml`); `kill` leaves such a window open with a `close_refused` event, and conf binds the app's keys `--kept-open`, counted only in a window kept open | Super+Backspace and Ctrl+W leave a pinned window open with a notification, and Ctrl+W reaches every other window |
 | §6.5: home is the first workspace after a login, stays while empty, and home's apps open there | `tide-workspaces.lua`, which conf's hyprland.lua reads: home's name, a persistent workspace and a rule for its apps | Built: `tide-tidewm` starts tidewm on home and keeps it with `persist workspace` (tidewm #8, #60); the shell keeps it from then on and sends home's apps there (`shell/WorkspacesData.qml`) | After a login home is current; it stays while empty; a home app opened elsewhere goes home |
 | §6.7: Super+Z minimizes the focused window, which leaves the layout; the tray, the bar and the switcher show it, and a click or Enter, or anything else that focuses it, brings it back | A special workspace per workspace, `special:minimized:NAME`, which nothing shows; a silent move there, and a move back with `follow` (`Dispatch.minimizeWindow`) | Built: tidewm's own `minimize`, which hides the window on its workspace until anything focuses it (tidewm #51), the container's `minimized`, and the `minimize` window event; the shell reads a minimized window as on the minimize workspace (`lib/tidewm.mjs`'s `shellWindows`) | Super+Z hides a window and focuses the one before; its icon shows in the tray, and a click brings it back focused |
-| §6.6: every binding works, including `locked` ones on the lock, release binds and submaps; `Super`+drag moves and resizes a floating window; §21.1 and TODO: dragging the master split, not built yet | Binds in `conf`'s `hyprland.lua` | Part: the config file with `reload` (tidewm #12), submaps (#13), `--release` and `--locked` (#14) and `GET_BINDINGS` (#56). After the pin, tidewm #65 adds `floating_modifier` and button bindings, `focus` and `move` by direction, `resize`, `movestack`, and `workspace next` and `prev`, and conf binds them. Left: a pin with those; dragging the master split, which the bar's popovers also wait on (`PopupsData.qml`); and the bar's nth workspace (conf's TODO.md). `Super+Tab` is `workspace back_and_forth` there, not home or back, and `Super+Home` and `Super+End` are unbound | Every binding in §6.6 does its action, and keys work on the lock; `Super`+drag on a tiled window moves the master split once that's built |
+| §6.6: every binding works, including `locked` ones on the lock, release binds and submaps; `Super`+drag moves and resizes a floating window; §21.1 and TODO: dragging the master split, not built yet | Binds in `conf`'s `hyprland.lua` | Part: the config file with `reload` (tidewm #12), submaps (#13), `--release` and `--locked` (#14) and `GET_BINDINGS` (#56). `floating_modifier` and button bindings, `focus` and `move` by direction, `resize`, `movestack`, and `workspace next` and `prev` (tidewm #65), which conf binds. Left: dragging the master split, which the bar's popovers also wait on (`PopupsData.qml`); and the bar's nth workspace (conf's TODO.md). `Super+Tab` is `workspace back_and_forth` there, not home or back, and `Super+Home` and `Super+End` are unbound | Every binding in §6.6 does its action, and keys work on the lock; `Super`+drag on a tiled window moves the master split once that's built |
 | §16: each output gets its configured mode, scale, position and single-window width, at login and when plugged in; the *advanced* Displays action edits it | `hl.monitor`, `monitor.added`; nwg-displays writes Hyprland's monitor config | Built: `output` lines with mode, scale, position and power, named by connector or description, `position auto` and the like, applied at plug-in and on reload (tidewm #16, #54, #61); the Displays page writes `tide-outputs.conf` (`lib/outputs.mjs`'s `outputsConf`) and lists `GET_OUTPUTS`. Left: the *advanced* action still runs nwg-displays (`lib/settings.mjs`), which doesn't know tidewm | An output plugged in gets its settings; an advanced edit applies and survives a reload |
-| §17: apps are sharp at fractional scale, X11 ones included | Hyprland's fractional-scale-v1 and viewporter; `xwayland:force_zero_scaling` | Built in tidewm: `xwayland_scaling disable` puts X11 windows in their outputs' own pixels (tidewm #45, #46). Left: conf's tidewm config doesn't set it yet, tidewm's `docs/config.md` doesn't list it, and an X11 app's own cursor is still scaled (tidewm's *Known bugs*) | At 1.25, a native Wayland app and an X11 app are both sharp and the right size |
+| §17: apps are sharp at fractional scale, X11 ones included | Hyprland's fractional-scale-v1 and viewporter; `xwayland:force_zero_scaling` | Part: `xwayland_scaling disable` puts X11 windows in their outputs' own pixels (tidewm #45, #46), and conf's tidewm config sets it. Left: an X11 app's own cursor is still scaled (tidewm's *Known bugs*) | At 1.25, a native Wayland app and an X11 app are both sharp and the right size |
 
 ## Bar (§7)
 
@@ -93,7 +93,7 @@ maintainer deferred.
 | §8, R14: tapping Super opens the launcher; `Super+T`, `Super`+drag and `Super`+click don't | A release bind on `SUPER_L`, then Hyprland's global shortcut `tide:launcher` | Built: a `--release` binding is a tap only with no button or scroll meanwhile (tidewm #14, #34); conf binds `--release Super_L` to the launcher | §8's three checks |
 | §8, §9: the launcher, share picker, region picker and lock keep the keyboard while a window opens beneath them or the pointer crosses one; clicking a notification's inline-reply field gives it the keyboard | wlr-layer-shell exclusive and on-demand keyboard focus | Built: dwl keeps an exclusive layer's keyboard; an on-demand layer, a notification's reply field, keeps it once clicked until you move focus (tidewm #40) | Typing in each, and in a notification's reply field, is never lost to a window |
 | §8, §14.3: `Ctrl+Enter` runs an app on the workspace you name in the name prompt: its first window moves there as it opens and focus follows; nothing moves if the grant is canceled, and a quick action behaves as `Enter` | A grant option naming the workspace, which the guard reads (`tide launch`) | Built: `grant --workspace NAME` takes the first window there with focus (tidewm #22), and `tide launch` passes the name prompt's answer (`bin/tide`) | `Ctrl+Enter` opens the app on an empty workspace with focus there; a canceled grant moves nothing |
-| §8: Screenshot window and Screenshot screen capture what the launcher opened over | `hyprctl clients -j` (`stableId`, `at`, `size`); the launcher remembers the monitor | Part: `GET_TREE` gives each window's `foreign_toplevel_identifier`, `rect` and `output` (tidewm #7). The launcher's Screenshot window reads `GET_TREE` on tidewm and shoots the recorded window's `rect` (`lib/launcher.mjs`). Left: scripts' `screenshot` reads only `hyprctl` | Each captures the window or monitor the launcher opened over, even after focus moves |
+| §8: Screenshot window and Screenshot screen capture what the launcher opened over | `hyprctl clients -j` (`stableId`, `at`, `size`); the launcher remembers the monitor | Built: `GET_TREE` gives each window's `foreign_toplevel_identifier`, `rect` and `output` (tidewm #7). The launcher's Screenshot window reads `GET_TREE` on tidewm and shoots the recorded window's `rect` (`lib/launcher.mjs`), and scripts' `screenshot` asks tidewm through `tide-msg` where `SWAYSOCK` is set | Each captures the window or monitor the launcher opened over, even after focus moves |
 | §9: a click outside the notification center closes it; moving the pointer across doesn't | `HyprlandFocusGrab` (`hyprland_focus_grab_v1`) | Built: tidewm takes hyprland-focus-grab-v1 (tidewm #44), so the center's `HyprlandFocusGrab` works unchanged | A click outside closes it; crossing it doesn't |
 | §8.4: the picker pastes into the window it opened over, which keeps focus | Hyprland's `send_shortcut` dispatcher | Built: tidewm's own `send_shortcut` (tidewm #59), through `Compositor.qml`'s `sendShortcut` | A picked entry pastes into that window |
 | §8.6: holding a letter offers its accents, through fcitx5 | text-input and input-method protocols | Built: dwl 0.9's text-input and input-method (tidewm's `ime.h`); `tide-tidewm` sets fcitx5's variables for every app | Holding a letter in a GTK and a Qt app offers its accents |
@@ -104,10 +104,10 @@ maintainer deferred.
 
 | Requirement | Today | Fork | Check |
 |---|---|---|---|
-| §12: share a window or a monitor in Meet, through tide's picker with live thumbnails | xdg-desktop-portal-hyprland with `tide-share-picker`; `tide-portals.conf` names `hyprland;gtk`; Quickshell's `ScreencopyView` | Built: xdg-desktop-portal-wlr with `tide-share-picker --dmenu` as its chooser (conf's `xdg-desktop-portal-wlr/tidewm`), `tidewm-portals.conf` naming `wlr;gtk` (tidewm #47, and tide installs its own). A window or a whole screen is all the picker needs (2026-11-06), so no thumbnails of windows. Doctor checks for xdg-desktop-portal-wlr on tidewm. Left: `setup --tidewm` doesn't install it; the restore flag waits on xdpw being patched, so every share prompts (decided 2026-11-02); not yet run in Chrome | §21.1 step 1; the picker shows live outputs; ticking "reuse the choice" restores a window share and a monitor share, and leaving it unticked restores neither; a file chooser and OpenURI still work through GTK |
+| §12: share a window or a monitor in Meet, through tide's picker with live thumbnails | xdg-desktop-portal-hyprland with `tide-share-picker`; `tide-portals.conf` names `hyprland;gtk`; Quickshell's `ScreencopyView` | Built: xdg-desktop-portal-wlr with `tide-share-picker --dmenu` as its chooser (conf's `xdg-desktop-portal-wlr/tidewm`), `tidewm-portals.conf` naming `wlr;gtk` (tidewm #47, and tide installs its own). A window or a whole screen is all the picker needs (2026-11-06), so no thumbnails of windows. `setup --tidewm` installs xdg-desktop-portal-wlr, and doctor checks for it. Left: the restore flag waits on xdpw being patched, so every share prompts (decided 2026-11-02); not yet run in Chrome | §21.1 step 1; the picker shows live outputs; ticking "reuse the choice" restores a window share and a monitor share, and leaving it unticked restores neither; a file chooser and OpenURI still work through GTK |
 | §12, §9: the Sharing pill shows during a share and not for a screenshot; popups are held for a screen or region share but not a window share | `ShareData.qml` watches PipeWire's `xdph-streaming-*` nodes and pairs each new one with the picker's recorded choice; the `screencast` event, not read yet, is kept as a prompt to re-check | Built: `lib/share.mjs` also matches xdg-desktop-portal-wlr's `xdpw-stream-*` nodes, which `ShareData.qml` pairs with the picker's choice as on Hyprland. tidewm's `capture` event (tidewm #41) isn't used, since a `grim -T` screenshot fires it too | The pill shows for a Meet share and not for a `grim` shot; a window share holds no popups, and a screen or region share does |
 | §12: the notifications and the launcher show black to the far end of a share | `no_screen_share` on `tide-notifications`, `tide-launcher` and `tide-share-picker`, in `conf`'s `hyprland.lua` | Not built: deferred by the maintainer (2026-11-04, tidewm's TODO.md, *Decided*). It needs an output source rendered without those namespaces, or wlr-screencopy dropped | A popup, the center or the launcher during a share shows black to the far end |
-| §13: window, screen and region screenshots; `Alt+Print` captures the focused window, falling back to its geometry if `grim -T` fails | ext-foreign-toplevel-list and ext-image-copy-capture; wlr-screencopy; `hyprctl activewindow -j` (`stableId`, `at`, `size`) | tidewm has it: the protocols, and each window's identifier and `rect` in `GET_TREE` (tidewm #7). Left: scripts' `screenshot` asks `hyprctl` for the focused monitor and window, so even `Print` fails on tidewm, and conf's tidewm config doesn't bind `Alt+Print` | Each screenshot captures; with `grim -T` made to fail, `Alt+Print` falls back to `grim -g` |
+| §13: window, screen and region screenshots; `Alt+Print` captures the focused window, falling back to its geometry if `grim -T` fails | ext-foreign-toplevel-list and ext-image-copy-capture; wlr-screencopy; `hyprctl activewindow -j` (`stableId`, `at`, `size`) | Built: the protocols, and each window's identifier and `rect` in `GET_TREE` (tidewm #7), which scripts' `screenshot` reads on tidewm; conf's tidewm config binds `Alt+Print` | Each screenshot captures; with `grim -T` made to fail, `Alt+Print` falls back to `grim -g` |
 | §13, §16.2: a screenshot pastes into another app, and copying adds a clipboard-history entry | wl-data-device and a data-control protocol, for `wl-copy` and `wl-paste --watch cliphist store` | Built: dwl has wl-data-device and both wlr- and ext-data-control | A screenshot pastes as `image/png`; copying text adds a history entry, with the distro's packaged wl-clipboard |
 
 ## Focus and attention (§14)
@@ -124,13 +124,13 @@ maintainer deferred.
 
 ## tidewm today
 
-Checked 2026-11-08, against tidewm `v0.0.1448` and the repositories named
+Checked 2026-11-08, against tidewm `v0.0.1460` and the repositories named
 above. Nothing was run in a real login.
 
-Of the 48 rows, 32 are built on both sides, 12 in part and 4 not at all.
+Of the 48 rows, 35 are built on both sides, 9 in part and 4 not at all.
 On 2026-11-02, dwl 0.9 met 5 of the 39 rows there were then, 21 in part
 and 13 not at all; that table, with dwl's line numbers, is in this file's
-history. Of the 16 rows left, tidewm itself lacks something in 7; the
+history. Of the 13 rows left, tidewm itself lacks something in 6; the
 rest need only tide, conf or scripts.
 
 | Row | tidewm | tide, conf, scripts | Left |
@@ -138,15 +138,12 @@ rest need only tide, conf or scripts.
 | `conf` per-mouse settings | done | conf: no | `apply-input.sh`'s settings as `input` blocks in conf's tidewm config |
 | §16 shortcuts | done | tide, conf: part | Changing a binding: named bindings in conf's tidewm config, and a file the page writes |
 | §11 greeter | done | tide: no | The greeter on tidewm, with its displays off by `output * power` |
-| §6.1 layouts | part | tide: done | A pin with `layout next\|prev` (tidewm #65), which conf binds |
-| §6.6 bindings | part | conf: part | A pin with tidewm #65's mouse bindings, `resize`, direction, `movestack` and `workspace next\|prev`, which conf binds; the master split drag; the bar's nth workspace, `Super+Tab`, `Super+Home` and `Super+End` |
+| §6.6 bindings | part | conf: part | The master split drag; the bar's nth workspace, `Super+Tab`, `Super+Home` and `Super+End` |
 | §16 outputs | done | tide: part | The *advanced* action on tidewm, or hidden there |
-| §17 fractional scale | part | conf: no | `xwayland_scaling disable` in conf's tidewm config and tidewm's `docs/config.md`; X11 cursors at a fractional scale |
-| §8 screenshot target | done | scripts: no | scripts' `screenshot` reads `GET_TREE` on tidewm |
+| §17 fractional scale | part | conf: done | X11 cursors at a fractional scale |
 | §10 lock restore | done | tide: done | M5's crash walk |
-| §12 share | done | scripts: part | `setup --tidewm` installs xdg-desktop-portal-wlr; a share in Chrome; the restore flag waits on xdpw |
+| §12 share | done | scripts: done | A share in Chrome; the restore flag waits on xdpw |
 | §12 hide from capture | no | — | Deferred by the maintainer: an output source without the shell's surfaces (L) |
-| §13 screenshots | done | scripts, conf: no | scripts' `screenshot` asks tidewm on tidewm; conf binds `Alt+Print` |
 | §14.1 polkit | done | tide: part | The requester check: whether it descends from the focused window's process, unbuilt on Hyprland too |
 | §14.2 rules | part | — | A window opening on the workspace it was launched from; focus under the pointer on close |
 | §14.3 marks | part | — | A notice for a held window with no shell running, which tidewm decided against |
@@ -154,14 +151,13 @@ rest need only tide, conf or scripts.
 
 **Getting tidewm onto a machine** (scripts' `setup-tide`):
 
-- `setup --tidewm` builds the pinned commit, which is tag `v0.0.1448`. Its
-  comment still says the fork has no release, and it pins the commit, not
-  the tag that TODO.md says it pins.
+- `setup --tidewm` builds the pinned tag, `v0.0.1460`, at the commit
+  `deps.lock` names.
 - It builds only where the distro packages wlroots 0.20: Debian testing
   and Arch. Ubuntu 26.04 has 0.19 and Debian 13 has no 0.20, so there
   tidewm needs wlroots built from a pin, as §21.1 first proposed.
-- It doesn't install xdg-desktop-portal-wlr, and `setup`'s purge of
-  obsolete packages lists it, so screen sharing can be missing (§12 above).
+- It installs xdg-desktop-portal-wlr, which `setup`'s purge of obsolete
+  packages keeps while tide is set up.
 - `wlopm` isn't needed: tidewm turns outputs off itself (tidewm #61).
 
 **tidewm's own plan**, after tide's rows: gestures (in progress),
@@ -172,7 +168,5 @@ wlroots race that loses an X11 window's state set before it maps, and a
 136-byte leak in dwl's output management.
 
 **Before tidewm can be the default**, beyond a first real login: the
-greeter, the share portal from setup, scripts' screenshots,
-`xwayland_scaling` in conf, a pin with tidewm #65's keys and mouse, and
-the keys conf's tidewm config still leaves out. Hiding the shell from capture is the one
+greeter and the keys conf's tidewm config still leaves out. Hiding the shell from capture is the one
 row where tidewm would do less than Hyprland on purpose, until it's built.
