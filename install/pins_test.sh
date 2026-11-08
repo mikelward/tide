@@ -69,11 +69,26 @@ printf '%s\n' "g x https://e/x v1 $c1 cmake" "g x https://e/y v1 $c1 cmake" > "$
 run "$tmp/bad.lock" g
 check "a name pinned twice is named" contains "$err" ":2: x is pinned twice"
 
+printf '%s\n' "g x https://e/x v1 $c1 cmake" "h x https://e/x v1 $c1 cmake" > "$tmp/shared.lock"
+run "$tmp/shared.lock" h
+check "a name pinned the same in two groups is in both" test "$out" = "x https://e/x v1 $c1 cmake"
+run "$tmp/shared.lock" --env x
+check "and --env prints it once" test "$out" = "PIN_REPO=https://e/x
+PIN_TAG=v1
+PIN_COMMIT=$c1"
+printf '%s\n' "g x https://e/x v1 $c1 cmake" "h x https://e/x v2 $c2 cmake" > "$tmp/bad.lock"
+run "$tmp/bad.lock" g
+check "a name pinned differently in two groups fails" test "$status" -ne 0
+check "and is named, with both groups" contains "$err" ":2: x is pinned differently in groups g and h"
+
 # tide's own file.
 run "${TIDE_DEPS_LOCK:-deps.lock}" --check
 check "deps.lock is well formed${err:+: $err}" test "$status" -eq 0
 run deps.lock hyprland
 check "Hyprland builds last in its group" contains "$(printf '%s\n' "$out" | tail -n 1)" "Hyprland https://github.com/hyprwm/Hyprland.git"
+run deps.lock wlroots
+check "wlroots builds last in its group" contains "$(printf '%s\n' "$out" | tail -n 1)" "wlroots https://gitlab.freedesktop.org/wlroots/wlroots.git 0.20."
+check "wayland builds first in it, as the rest need its scanner" contains "$(printf '%s\n' "$out" | head -n 1)" "wayland https://gitlab.freedesktop.org/wayland/wayland.git"
 run deps.lock --env quickshell
 check "Quickshell is pinned" contains "$out" "PIN_COMMIT="
 
