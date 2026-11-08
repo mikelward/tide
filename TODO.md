@@ -72,6 +72,16 @@ once you have agreed with it or reversed it.
   grim and slurp for screenshots, a notification when the launcher can't
   open. Reversible: the options block at the top of `hypr/hyprland.lua`.
 
+- **On tidewm, a pointing stick copies the first touchpad's settings**
+  (2026-11-08, SPEC.md §16): its handedness, natural scrolling, speed and
+  wheel speed as `GET_INPUTS` gives them, own settings and all, where
+  Hyprland gives it the Touchpad page's every-touchpad settings. Without a
+  touchpad it's right-handed at libinput's speed and wheel speed. Copying
+  needs no parsing of conf's config or `tide-input.conf`; the cost is a
+  `GET_INPUTS` after each reload. `tide-devices.conf` is named to sort
+  before `tide-input.conf` in conf's `include tide-*.conf`, so the pages'
+  settings win. Reversible: `apply_tidewm` in `hypr/tide/apply-input.sh`.
+
 - **A right-click on the wallpaper opens Appearance, not a menu**
   (2026-11-08, SPEC.md §15), as the bar's right-clicks open their pages.
   A menu (Change wallpaper, Settings) is the alternative. Reversible:
@@ -499,8 +509,8 @@ once you have agreed with it or reversed it.
   settings, right-handed, so a ThinkPad's buttons above the touchpad aren't
   swapped with the mice. The alternatives were a Pointing stick page of its
   own, or asking udev, which calls the touchpad's `-mouse` node a mouse.
-  It's `deviceKind` in `input.mjs` and `is_touchpad` in `conf`'s
-  `apply-input.sh`, kept in step by hand.
+  It's `deviceKind` in `input.mjs` and `is_touchpad` in
+  `hypr/tide/apply-input.sh`, kept in step by hand.
 - [ ] **A short name's first word loses `.` `,` `:` `;` `!` `?` `|` `…` and
   dashes from its end, and a word with no letter or digit is passed over**
   (SPEC.md §6.5). That makes `ABC-123:` `ABC-123` and skips a lone `—`.

@@ -73,7 +73,7 @@ const VARIANT = /^[A-Za-z0-9_-]*(,[A-Za-z0-9_-]*){0,3}$/;
 // quote or backslash, so it needs no escapes in the Lua file.
 const DEVICE_NAME = /^[ !#-[\]-~]{1,128}$/;
 
-// Which kind of device a pointer's name is, as conf's apply-input.sh
+// Which kind of device a pointer's name is, as tide's apply-input.sh
 // (is_touchpad) decides. A touchpad is one that says so (Apple's bcm5974
 // doesn't), and so is the rest of a laptop's built-in pointing: a pointing
 // stick, whose buttons sit above the touchpad, and anything named by an ACPI
@@ -532,7 +532,9 @@ function luaValue(value) {
 // each setting's: what tide writes to ~/.config/tidewm/tide-input.conf,
 // which conf's tidewm config includes. tidewm's pointer is a mouse, and a
 // touchpad is a pointer that can tap, so a pointing stick, a touchpad's
-// on Hyprland here (deviceKind), is a mouse there.
+// on Hyprland here (deviceKind), is a pointer there: apply-input.sh gives
+// it the touchpad's settings in tide-devices.conf, which comes before this
+// file, so its own settings here still win.
 const TIDEWM_INPUTS = Object.freeze({ mouse: "type:pointer", touchpad: "type:touchpad", keyboard: "type:keyboard" });
 const TIDEWM_SETTINGS = Object.freeze({
     speed: "pointer_accel",

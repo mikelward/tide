@@ -387,12 +387,14 @@ to once a minute, so it takes over when the other agent goes and comes
 back after a crash; `doctor` names the other agent. With waybar's bar it
 also runs the wallpaper (swww, or swaybg where swww isn't packaged;
 supervised but not waited for); the Quickshell shell draws its own (§15).
-It runs `conf`'s `apply-input.sh` once, which Hyprland's autostart ran
-before it shrank to `uwsm finalize`. Then it starts `conf`'s
+It runs tide's `apply-input.sh` once, which Hyprland's autostart ran
+before it shrank to `uwsm finalize`. Then it starts tide's
 `watch-input.sh` for the session. Hyprland has no event for a new device,
 so that listens to udev and runs `apply-input.sh` again when a mouse,
-touchpad or keyboard is plugged in, such as through a KVM switch. Either
-script missing is logged, with what it costs; the session goes on.
+touchpad or keyboard is plugged in, such as through a KVM switch. In
+tidewm's session it follows tidewm's `input` event instead, through
+`tide-msg --subscribe input` (§16). Either script missing is logged, with
+what it costs; the session goes on.
 
 With `TIDE_POLKIT=1` the shell is the polkit agent
 (`Quickshell.Services.Polkit`), opt-in until it has run in a live session,
@@ -472,6 +474,9 @@ flowchart TD
   flat at 0, since tidewm has no curve. A device's own settings are an
   `input` block naming it as Hyprland does, which tidewm takes too, and
   the pages list tidewm's devices by those names, from its `GET_INPUTS`.
+  tidewm's `type:pointer` is anything that can't tap, a laptop's pointing
+  stick included, so `apply-input.sh` gives those the touchpad's settings
+  in `tide-devices.conf` (§16).
   The Appearance page's dim strength (§6.2) is
   `tide-appearance.conf`'s `dim_inactive`, applied the same way. The
   Displays page (§16) writes `tide-outputs.conf`, an `output` line for
@@ -4390,6 +4395,20 @@ stays hand-written.
     device's settings of its own are a touchpad's whether or not it's
     plugged in. udev's `ID_INPUT_POINTINGSTICK` would find the stick, but
     it calls the `-mouse` node a mouse.
+  - On tidewm (§5.3) the config's `input type:pointer` lines are every
+    mouse's, and `type:touchpad`'s every touchpad's; conf's tidewm config
+    makes mice left-handed there. tidewm's pointer is anything that can't
+    tap, so a pointing stick or a `-mouse` node would take the mice's.
+    `apply-input.sh` writes `~/.config/tidewm/tide-devices.conf` instead:
+    an `input` block for each of those, by the name Hyprland gives it, with
+    the handedness, natural scrolling, speed and wheel speed `GET_INPUTS`
+    gives the first touchpad, else libinput's defaults; and
+    `HYPR_MOUSE_SCROLL_FACTOR` as `type:pointer`'s `scroll_factor`. It
+    sorts before `tide-input.conf`, so the pages' settings win, and tidewm
+    reloads only when it changes. `watch-input.sh` runs it again on
+    tidewm's `input` event: when a device is added or removed, as the
+    touchpad it copies may be, and when a reload sets every device's
+    settings, so a change to the touchpad's reaches the stick.
   - Hyprland 0.56.2 leaves a keyboard whose options haven't changed alone
     (`applyConfigToKeyboard`). So applying the settings again doesn't put
     a keyboard back on its first layout.
