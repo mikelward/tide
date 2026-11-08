@@ -96,6 +96,8 @@ test-fast:
 	$(LUA) hypr/tide/focus_test.lua
 	$(LUA) hypr/tide/pinned_test.lua
 	$(LUA) greeter/hyprland_test.lua
+	$(LUA) hypr/hyprland_test.lua
+	sh hypr/tide/input_test.sh
 	sh session/session_test.sh
 	sh bin/tide_test.sh
 	sh bin/tide-clipboard_test.sh
@@ -181,7 +183,8 @@ build/tide-kwin-paste: go.mod $(wildcard cmd/tide-kwin-paste/*.go)
 # session's target, is `setup`'s job (scripts repo).
 install: build install-shell
 	install -d "$(HYPR_DIR)"
-	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/span.lua hypr/tide/layout.lua hypr/tide/focus.lua hypr/tide/pinned.lua "$(HYPR_DIR)/"
+	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/span.lua hypr/tide/layout.lua hypr/tide/focus.lua hypr/tide/pinned.lua hypr/hyprland.lua hypr/hyprland.local.lua.template "$(HYPR_DIR)/"
+	install -m 755 hypr/tide/apply-input.sh hypr/tide/watch-input.sh hypr/tide/next-layout.sh "$(HYPR_DIR)/"
 	install -d "$(SYSTEMD_USER_DIR)/hypridle.service.d" "$(SYSTEMD_USER_DIR)/app-.service.d"
 	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service systemd/user/tide-lock-fallback.service systemd/user/tide-clipboard.service systemd/user/tide-fcitx5.service systemd/user/tide-lid-inhibit.service systemd/user/tide-kde.service "$(SYSTEMD_USER_DIR)/"
 	install -m 644 systemd/user/hypridle.service.d/tide.conf "$(SYSTEMD_USER_DIR)/hypridle.service.d/"

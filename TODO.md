@@ -7,6 +7,18 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **tide's Hyprland config installs per user** (2026-11-08, SPEC.md
+  §6.8), in `~/.config/hypr/tide/` beside the layout it loads, not in
+  `/usr/share/tide`, and `tide-hyprland` passes `--config` only when you
+  have none. Your own config passes options to it rather than tide reading
+  an override file, so `apps` binds in the same place conf's did, before
+  tide's Keyboard shortcuts and `hyprland.local.lua`.
+- **The default config's defaults** (2026-11-08): a US layout,
+  right-handed mice at Hyprland's wheel speed (apply-input.sh's 3 is now
+  conf's `mouse` option), `xdg-terminal-exec`, `xdg-open ~` for files,
+  grim and slurp for screenshots, a notification when the launcher can't
+  open. Reversible: the options block at the top of `hypr/hyprland.lua`.
+
 - **A right-click on the wallpaper opens Appearance, not a menu**
   (2026-11-08, SPEC.md §15), as the bar's right-clicks open their pages.
   A menu (Change wallpaper, Settings) is the alternative. Reversible:
@@ -1066,14 +1078,10 @@ once you have agreed with it or reversed it.
 tide should install without mikelward/scripts or mikelward/conf: `setup`
 runs tide's installer, then its owner's extras, and `conf` layers its
 owner's preferences over tide's defaults. Done: `deps.lock` holds the pins
-(`install/pins`), and `tide-shell` starts without conf's theme daemon.
+(`install/pins`), `tide-shell` starts without conf's theme daemon, and
+tide ships its own Hyprland config (SPEC.md §6.8), which conf's loads.
 Next, one PR each:
 
-- **A default Hyprland config.** Ship `hypr/hyprland.lua`, installed to
-  `$(PREFIX)/share/tide/hyprland.lua`: it loads the layout and focus guard,
-  binds tide's keys and holds the window rules. conf's `hyprland.lua` then
-  loads it and changes only what its owner prefers, as
-  `hyprland.local.lua` does now. Much of conf's config is tide's.
 - **The installer.** Move setup-tide's generic half here, as
   `install/tide-setup`: distro packages, the pinned builds (reading
   `deps.lock`), units, fcitx5, greetd and the tabs host manifest, with

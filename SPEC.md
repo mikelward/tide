@@ -1866,6 +1866,32 @@ not taken.
   workspace stays while it waits, so one whose windows are all minimized
   stays on the bar, with no icons, where Hyprland's is gone.
 
+### 6.8 The Hyprland config
+
+tide ships its own Hyprland config, `hypr/hyprland.lua`, so it runs
+without `conf`. It holds tide's keys (§6.6), window rules, look and input
+defaults, loads the layout, focus guard, span and pinned modules, and
+reads the settings files the shell writes (`tide-*.lua`).
+
+- **Where.** `make install` puts it in `~/.config/hypr/tide/`, beside
+  the layout and the input scripts it runs (`apply-input.sh`,
+  `watch-input.sh`, `next-layout.sh`).
+- **Who reads it.** With no `~/.config/hypr/hyprland.lua` or
+  `hyprland.conf`, `tide-hyprland` starts Hyprland with `--config` on it.
+  `TIDE_HYPRLAND_CONFIG` names another.
+- **Your own on top.** Your `hyprland.lua` can load it with `loadfile` and
+  pass it a table of options: the terminal, the file manager, a command
+  helper scripts run under, input options (a keyboard variant), each
+  mouse's handedness and wheel speed, your own app keys (`apps`, a
+  function given tide's `bind`), what a plain Hyprland login also starts,
+  the launcher's fallback and the screenshot command. An unknown option,
+  or one of the wrong type, fails the load by name. `conf` does this with
+  its owner's preferences.
+- **Its defaults.** A US layout, right-handed mice at Hyprland's speed,
+  `xdg-terminal-exec` on `Super+T`, `xdg-open` on your home folder on
+  `Super+E`, grim and slurp for screenshots, and a notification where the
+  shell isn't running to open the launcher.
+- `hyprland.local.lua` still loads last, so a machine's settings win.
 ## 7. Bar
 
 See [`bar.png`](docs/mocks/bar.png).
@@ -5265,8 +5291,8 @@ light/dark switch.
 
 | Repo | Gets |
 |---|---|
-| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service` and its fallback, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. The tide connector, the browser extension in `connector/` (§8.3). `make install`. `deps.lock`, the pins of what's built from source (Quickshell, tidewm, Hyprland and its libraries), which the installer and CI read through `install/pins`. |
-| **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces, home's apps and each workspace's own settings), the `persistent` workspace rule for home and the pinned apps' close keys, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
+| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service` and its fallback, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. The default Hyprland config, with tide's keys, rules and input scripts (§6.8). The tide connector, the browser extension in `connector/` (§8.3). `make install`. `deps.lock`, the pins of what's built from source (Quickshell, tidewm, Hyprland and its libraries), which the installer and CI read through `install/pins`. |
+| **conf** | The personal config: Hyprland in Lua, loading tide's with its owner's preferences (§6.8): the Dvorak layout, left-handed mice, kitty, the app keys for the launcher scripts, `runenv`, waybar, swaync and fuzzel outside tide; `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces, home's apps and each workspace's own settings), the `persistent` workspace rule for home and the pinned apps' close keys, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **tideco** | tide for Chrome: tiling on chromeOS. On Linux it can list the browser's tabs in the Windows tab, as tide's own connector does (§8.3). |
 | **scripts** | `setup`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, `secret-tool` (libsecret-tools), the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `tide-tabs`'s host manifest for Chrome and Brave (§8.3). `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |

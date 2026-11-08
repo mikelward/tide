@@ -52,10 +52,10 @@
 #   $TIDE_WALLPAPER     the wallpaper swww or swaybg shows with waybar's
 #                             bar, or the Quickshell shell's fallback
 #                             (default: conf's)
-#   $TIDE_INPUT_SETUP   a one-shot input setup (default: conf's
+#   $TIDE_INPUT_SETUP   a one-shot input setup (default: tide's
 #                             apply-input.sh), run once Hyprland is up
 #   $TIDE_INPUT_WATCH   what sets up a device plugged in later, run for
-#                             the session (default: conf's watch-input.sh)
+#                             the session (default: tide's watch-input.sh)
 
 prog=${0##*/}
 # KDE's agent is always installed, since tide runs beside Plasma
@@ -81,8 +81,8 @@ shell_config=${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/tide/shell.qml
 # setup-tide check the same.
 min_quickshell=0.3
 wallpaper=${TIDE_WALLPAPER:-$HOME/.config/hypr/wallpaper.jpg}
-input_setup=${TIDE_INPUT_SETUP:-$HOME/.config/hypr/scripts/apply-input.sh}
-input_watch=${TIDE_INPUT_WATCH:-$HOME/.config/hypr/scripts/watch-input.sh}
+input_setup=${TIDE_INPUT_SETUP:-$HOME/.config/hypr/tide/apply-input.sh}
+input_watch=${TIDE_INPUT_WATCH:-$HOME/.config/hypr/tide/watch-input.sh}
 
 log() {
     echo "$prog: $*" >&2
@@ -447,7 +447,7 @@ set_wallpaper() {
 
 # Input devices, once (Hyprland is up: this unit starts after uwsm
 # finalize). A failure is reported and the session goes on with defaults.
-# Without the setting, conf's script is optional: no conf, no input setup.
+# Without the setting, tide's script is optional: not installed, no input setup.
 # It's said, though, as one that should be there and isn't leaves devices
 # with their defaults and no other sign of why.
 if is_program "$input_setup"; then
@@ -456,7 +456,7 @@ else
     log "no $input_setup, so input devices keep their defaults"
 fi
 # And a device plugged in later, such as a mouse a KVM switch hands back:
-# Hyprland has no event for one, so conf's watcher runs for the session, in
+# Hyprland has no event for one, so tide's watcher runs for the session, in
 # this unit's cgroup, which stopping the unit ends. It logs its own failures.
 if is_program "$input_watch"; then
     "$input_watch" &
