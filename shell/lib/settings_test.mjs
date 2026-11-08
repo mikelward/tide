@@ -1,7 +1,7 @@
 // Tests for settings.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { GROUPS, PAGES, SECTIONS, keptPages, movedPage, opened, pageIndex, pageTerms, searchedSection, searchedSidebar, sidebarRows } from "./settings.mjs";
+import { GROUPS, PAGES, SECTIONS, advancedFor, keptPages, movedPage, opened, pageIndex, pageTerms, searchedSection, searchedSidebar, sidebarRows } from "./settings.mjs";
 
 test("the pages come in the sidebar's order, each with a label and an icon", () => {
     assert.deepEqual(PAGES.map(p => p.id), [
@@ -146,4 +146,13 @@ test("a page found only by a section scrolls to it", () => {
     assert.equal(searchedSection(keyboard, "layout"), "");
     assert.equal(searchedSection(keyboard, ""), "");
     assert.equal(searchedSection(pageIndex("sound"), "shortcuts"), "");
+});
+
+test("on tidewm, Displays links out to nothing, as nwg-displays saves only where Hyprland or sway read it", () => {
+    const page = id => PAGES.find(p => p.id === id);
+    assert.deepEqual(advancedFor(page("displays"), false).command, ["nwg-displays"]);
+    assert.equal(advancedFor(page("displays"), true), null);
+    assert.deepEqual(advancedFor(page("sound"), true).command, ["pavucontrol"]);
+    assert.equal(advancedFor(page("idle"), true), null);
+    assert.equal(advancedFor(undefined, true), null);
 });

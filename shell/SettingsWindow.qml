@@ -38,6 +38,7 @@ PanelWindow {
 
     property int page: 0
     readonly property var current: Settings.PAGES[page]
+    readonly property var advancedLink: Settings.advancedFor(current, Compositor.tidewm)
     // The section of the page to scroll to, by its id (settings.mjs's
     // SECTIONS, or floating-add for the Floating page's fields), or "": set
     // as one opens, and cleared by another page or a flick.
@@ -164,10 +165,10 @@ PanelWindow {
 
     // Closes first, so the app opens over the desktop, not under the panel.
     function advanced() {
-        if (current.advanced === null) {
+        if (advancedLink === null) {
             return;
         }
-        const command = current.advanced.command;
+        const command = advancedLink.command;
         close();
         Launcher.launch(command);
     }
@@ -4570,11 +4571,11 @@ PanelWindow {
 
                 anchors.bottom: parent.bottom
                 width: parent.width
-                visible: root.current.advanced !== null
+                visible: root.advancedLink !== null
                 // Taking no room when hidden, so the page runs to the foot.
                 height: visible ? implicitHeight : 0
                 icon: "window-new-symbolic"
-                label: root.current.advanced?.label ?? ""
+                label: root.advancedLink?.label ?? ""
                 onClicked: root.advanced()
             }
         }
