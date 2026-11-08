@@ -9,7 +9,7 @@ import {
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
-    expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, MORE_WALLPAPERS, moreWallpapersCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
+    expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, fitsScreens, galleryRows, MORE_WALLPAPERS, moreWallpapersCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
     POSITIONS, POSITION_CHOICES, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf,
@@ -706,31 +706,10 @@ test("the wallpaper grid shows the distro's collections, then yours", () => {
         ["/usr/share/backgrounds", "/usr/share/wallpapers", "/home/u/Pictures/wallpapers"]);
 });
 
-test("the wallpaper grid lists pictures, passing over a folder that isn't there", () => {
-    const dir = mkdtempSync(join(tmpdir(), "gallery-"));
-    try {
-        mkdirSync(join(dir, "gnome"));
-        writeFileSync(join(dir, "gnome", "blobs-l.JPG"), "");
-        writeFileSync(join(dir, "gnome", "blobs.xml"), "");
-        mkdirSync(join(dir, "Mountain", "contents", "images"), { recursive: true });
-        writeFileSync(join(dir, "Mountain", "contents", "images", "1920x1080.png"), "");
-        const [cmd, ...args] = galleryCommand([join(dir, "missing"), dir]);
-        const ok = spawnSync(cmd, args, { encoding: "utf8" });
-        assert.equal(ok.status, 0);
-        assert.equal(ok.stderr, "");
-        assert.deepEqual(ok.stdout.trim().split("\n").sort(),
-            [join(dir, "Mountain", "contents", "images", "1920x1080.png"), join(dir, "gnome", "blobs-l.JPG")].sort());
-        // A folder it can't read all of fails, saying why, and still
-        // lists what it could.
-        symlinkSync(join(dir, "loop"), join(dir, "loop"));
-        const [cmd2, ...args2] = galleryCommand([dir]);
-        const bad = spawnSync(cmd2, args2, { encoding: "utf8" });
-        assert.notEqual(bad.status, 0);
-        assert.match(bad.stderr, /loop/);
-        assert.match(bad.stdout, /blobs-l\.JPG/);
-    } finally {
-        rmSync(dir, { recursive: true, force: true });
-    }
+test("the wallpaper grid lists its pictures with their sizes", () => {
+    // tide-pick --list itself is tested in cmd/tide-pick.
+    assert.deepEqual(galleryCommand(["/usr/share/backgrounds", "/home/u/Pictures/wallpapers"]),
+        ["tide-pick", "--list", "/usr/share/backgrounds", "/home/u/Pictures/wallpapers"]);
 });
 
 test("Find more opens Unsplash's free landscape wallpapers in the browser", () => {
@@ -743,24 +722,68 @@ test("Find more opens Unsplash's free landscape wallpapers in the browser", () =
 
 test("the wallpaper grid shows each Plasma wallpaper once, at its largest, by name", () => {
     const text = [
-        "/usr/share/wallpapers/Mountain/contents/images/1920x1080.png",
-        "/usr/share/wallpapers/Mountain/contents/images/5120x2880.png",
-        "/usr/share/wallpapers/Mountain/contents/images/3840x2160.png",
-        "/usr/share/wallpapers/Mountain/contents/images_dark/5120x2880.png",
-        "/usr/share/wallpapers/Mountain/contents/screenshot.png",
-        "/usr/share/backgrounds/gnome/blobs-l.jxl",
-        "/usr/share/backgrounds/gnome/adwaita.xml",
-        "/home/u/Pictures/wallpapers/Aurora.JPG",
-        "relative.jpg",
+        "1920\t1080\t/usr/share/wallpapers/Mountain/contents/images/1920x1080.png",
+        "5120\t2880\t/usr/share/wallpapers/Mountain/contents/images/5120x2880.png",
+        "3840\t2160\t/usr/share/wallpapers/Mountain/contents/images/3840x2160.png",
+        "5120\t2880\t/usr/share/wallpapers/Mountain/contents/images_dark/5120x2880.png",
+        "400\t250\t/usr/share/wallpapers/Mountain/contents/screenshot.png",
+        "4096\t4096\t/usr/share/backgrounds/gnome/blobs-l.jxl",
+        "0\t0\t/usr/share/backgrounds/gnome/adwaita.xml",
+        "1920\t1080\t/usr/share/backgrounds/gnome/pills-l.svg",
+        "0\t0\t/home/u/Pictures/wallpapers/Aurora.JPG",
+        "1\t1\trelative.jpg",
+        "/usr/share/backgrounds/no-size.jpg",
         "",
     ].join("\n");
     assert.deepEqual(galleryImages(text), [
-        { path: "/home/u/Pictures/wallpapers/Aurora.JPG", name: "Aurora" },
-        { path: "/usr/share/backgrounds/gnome/blobs-l.jxl", name: "blobs-l" },
-        { path: "/usr/share/wallpapers/Mountain/contents/images/5120x2880.png", name: "Mountain" },
+        { path: "/home/u/Pictures/wallpapers/Aurora.JPG", name: "Aurora", width: 0, height: 0 },
+        { path: "/usr/share/backgrounds/gnome/blobs-l.jxl", name: "blobs-l", width: 4096, height: 4096 },
+        { path: "/usr/share/wallpapers/Mountain/contents/images/5120x2880.png", name: "Mountain", width: 5120, height: 2880 },
+        { path: "/usr/share/backgrounds/gnome/pills-l.svg", name: "pills-l", width: 1920, height: 1080 },
     ]);
     assert.deepEqual(galleryImages(""), []);
     assert.deepEqual(galleryImages(undefined), []);
+});
+
+test("a picture fits a monitor of its shape, near enough", () => {
+    const wide = [{ name: "DP-1", width: 3440, height: 1440 }];
+    assert.equal(fitsScreens({ width: 3440, height: 1440 }, wide), true);
+    assert.equal(fitsScreens({ width: 6880, height: 2880 }, wide), true);
+    // 2560×1080 trims under 1% of it.
+    assert.equal(fitsScreens({ width: 2560, height: 1080 }, wide), true);
+    assert.equal(fitsScreens({ width: 3840, height: 2160 }, wide), false);
+    assert.equal(fitsScreens({ width: 1440, height: 3440 }, wide), false);
+    // 16:10 on 16:9 trims 10%.
+    assert.equal(fitsScreens({ width: 2560, height: 1600 }, [{ width: 1920, height: 1080 }]), false);
+    assert.equal(fitsScreens({ width: 1366, height: 768 }, [{ width: 1920, height: 1080 }]), true);
+    // Any one monitor will do.
+    assert.equal(fitsScreens({ width: 3840, height: 2160 }, [...wide, { width: 1920, height: 1080 }]), true);
+    // A size unknown fits none, as nothing fits no monitors.
+    assert.equal(fitsScreens({ width: 0, height: 0 }, wide), false);
+    assert.equal(fitsScreens({ width: 3440, height: 1440 }, []), false);
+});
+
+test("the wallpaper grid puts your monitors' shape first, in rows", () => {
+    const screens = [{ name: "DP-1", width: 3440, height: 1440 }];
+    const pic = (name, width, height) => ({ path: `/p/${name}.jpg`, name, width, height });
+    const images = [pic("a", 3840, 2160), pic("b", 3440, 1440), pic("c", 0, 0), pic("d", 5120, 2160), pic("e", 1920, 1080), pic("f", 2560, 1080)];
+    const rows = galleryRows(images, screens, 2);
+    assert.deepEqual(rows.map(r => [r.section, r.heading, r.images.map(i => i.name)]), [
+        ["fits", "Fits your screen", ["b", "d"]],
+        ["fits", "", ["f"]],
+        ["others", "Other shapes", ["a", "c"]],
+        ["others", "", ["e"]],
+    ]);
+    const two = [...screens, { name: "eDP-1", width: 1920, height: 1080 }];
+    assert.deepEqual(galleryRows(images, two, 4).map(r => [r.heading, r.images.map(i => i.name)]), [
+        ["Fits one of your screens", ["a", "b", "d", "e"]],
+        ["", ["f"]],
+        ["Other shapes", ["c"]],
+    ]);
+    // One section alone has no heading.
+    assert.deepEqual(galleryRows([pic("a", 3840, 2160)], screens, 4),
+        [{ section: "others", heading: "", images: [pic("a", 3840, 2160)] }]);
+    assert.deepEqual(galleryRows([], screens, 4), []);
 });
 
 test("the chosen file is the setting, from ~/ when it's home's", () => {
