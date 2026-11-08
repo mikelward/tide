@@ -25,6 +25,19 @@ type Fake struct {
 	mu      sync.Mutex
 	sent    []Message
 	replies []string
+	// What a subscription gets after its reply, before the fake closes it.
+	eventKind uint32
+	events    []string
+}
+
+// Events has each subscription (a message of type 2) get these events, of
+// type kind, after its reply, and then the connection close, as when
+// tidewm exits.
+func (f *Fake) Events(kind uint32, payloads ...string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.eventKind = kind
+	f.events = payloads
 }
 
 // New starts a fake on a socket in a temporary directory, stopped when
@@ -70,10 +83,20 @@ func (f *Fake) answer(conn net.Conn) {
 	f.mu.Lock()
 	reply := f.replies[min(len(f.sent), len(f.replies)-1)]
 	f.sent = append(f.sent, Message{kind, string(payload)})
+	eventKind, events := f.eventKind, f.events
 	f.mu.Unlock()
-	out := append([]byte("i3-ipc"), binary.NativeEndian.AppendUint32(nil, uint32(len(reply)))...)
+	write(conn, kind, reply)
+	if kind == 2 {
+		for _, e := range events {
+			write(conn, eventKind, e)
+		}
+	}
+}
+
+func write(conn net.Conn, kind uint32, payload string) {
+	out := append([]byte("i3-ipc"), binary.NativeEndian.AppendUint32(nil, uint32(len(payload)))...)
 	out = binary.NativeEndian.AppendUint32(out, kind)
-	conn.Write(append(out, reply...))
+	conn.Write(append(out, payload...))
 }
 
 // Sent is every message the fake has answered, in order.

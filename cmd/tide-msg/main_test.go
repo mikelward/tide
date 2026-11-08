@@ -109,9 +109,33 @@ func TestPromptMayFocusIsTheExitStatus(t *testing.T) {
 
 func TestUsage(t *testing.T) {
 	for _, args := range [][]string{nil, {"--focused-workspace", "nop"}, {"--nope"}, {"--prompt-may-focus", "--focused-workspace"},
-		{"--type", "get_marks"}, {"--type", "get_config", "nop"}, {"--type", "get_config", "--focused-workspace"}} {
+		{"--type", "get_marks"}, {"--type", "get_config", "nop"}, {"--type", "get_config", "--focused-workspace"},
+		{"--subscribe", "input", "nop"}, {"--subscribe", "input", "--type", "get_inputs"}, {"--subscribe", "input,"}} {
 		if status, _, _ := tideMsg([]string{"SWAYSOCK=/x"}, args...); status != 2 {
 			t.Errorf("%q: status %d", args, status)
 		}
+	}
+}
+
+func TestSubscribePrintsEachEventALineUntilTidewmExits(t *testing.T) {
+	tidewm := swayipctest.New(t, `{"success":true}`)
+	tidewm.Events(0x80000015, `{"change":"added","input":{}}`, `{"change":"libinput_config","input":{}}`)
+	status, out, errOut := tideMsg([]string{"SWAYSOCK=" + tidewm.Socket}, "--subscribe", "input,shutdown")
+	if status != 0 || errOut != "" {
+		t.Fatalf("status %d, err %q", status, errOut)
+	}
+	if want := `{"change":"added","input":{}}` + "\n" + `{"change":"libinput_config","input":{}}` + "\n"; out != want {
+		t.Fatalf("out %q", out)
+	}
+	if got := tidewm.Sent(); len(got) != 1 || got[0].Type != 2 || got[0].Payload != `["input","shutdown"]` {
+		t.Fatalf("sent %v, not SUBSCRIBE", got)
+	}
+}
+
+func TestARefusedSubscriptionExits1(t *testing.T) {
+	tidewm := swayipctest.New(t, `{"success":false,"error":"unknown event"}`)
+	status, out, errOut := tideMsg([]string{"SWAYSOCK=" + tidewm.Socket}, "--subscribe", "nope")
+	if status != 1 || out != "" || !strings.Contains(errOut, "refused a subscription to nope: unknown event") {
+		t.Fatalf("status %d, out %q, err %q", status, out, errOut)
 	}
 }
