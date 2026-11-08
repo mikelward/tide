@@ -8,7 +8,9 @@
 cmake_minimum_required(VERSION 3.16)
 project(tide-accents LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+# C++20: newer fcitx5 headers' logging macros, such as FCITX_ERROR, use
+# std::source_location, which is C++20's; older ones build either way.
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(ECM REQUIRED 1.0.0)
