@@ -57,6 +57,17 @@ once you have agreed with it or reversed it.
 - **A recorded key replaces all of a shortcut's keys**, so Monocle's two
   become one (2026-11-08). The alternative was an Add keys button beside
   each. It's `withKeys` in `shell/lib/keys.mjs`.
+- **Presets use Super, not their own Alt** (2026-11-08, SPEC.md §16):
+  dwm's and xmonad's defaults are Alt, which would take keys apps use.
+  It's `S()` in `shell/lib/keymaps.mjs`.
+- **Each preset's keys map onto tide's nearest action** (2026-11-08): dwm's
+  view-previous-tag is Super+Tab's home or back, dwm's focusmon is focus
+  left and right, i3's tabbed layout is monocle, i3's toggle split is the
+  next layout, xmonad's sink is float or tile, bspwm's swap with the
+  biggest is swap with the master. Not checked against the real window
+  managers. It's `PRESETS` in `shell/lib/keymaps.mjs`.
+- **sway is a preset of its own** (2026-11-08): its default config moves
+  with h/j/k/l where i3's uses j/k/l/;.
 - **KeysData writes and applies as FloatingData does, copied** (2026-11-08):
   the target, apply process and retry are the same in both, and in
   LayoutsData's and WorkspacesData's. A shared `AppliedFile` component would

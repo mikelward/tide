@@ -146,15 +146,17 @@ test("a tidewm listing that can't be read says why", () => {
 
 // Editing the keys (SPEC.md §16).
 import {
-    catalogPath, keysId, parseCatalog, parseKeysFile, loadKeys, editedKeys, keysLua,
-    recordedKeys, shortcutRows, withKeys, withDefault, withOff,
+    catalogPath, keysId, parseCatalog, parseKeysFile, loadKeys, editedKeys, keysLua, mergedKeys, presetDefaults,
+    recordedKeys, shortcutRows, withKeys, withDefault, withOff, withPreset, NO_KEYS,
 } from "./keys.mjs";
 
 const CATALOG = [
     { name: "terminal", does: "Terminal", defaults: ["SUPER + T"], keys: ["SUPER + T"] },
     { name: "monocle", does: "Monocle", defaults: ["SUPER + grave", "SUPER + O"], keys: ["SUPER + grave", "SUPER + O"] },
     { name: "lock", does: "Lock", defaults: ["SUPER + L"], keys: ["SUPER + L"] },
+    { name: "launcher", does: "Launcher", defaults: ["SUPER + Space"], keys: ["SUPER + Space"] },
 ];
+const yours = keys => ({ preset: "tide", keys });
 
 test("conf's list is in the instance's runtime directory", () => {
     assert.equal(catalogPath("/run/user/1000", "abc"), "/run/user/1000/hypr/abc/tide-keys.json");
@@ -178,39 +180,61 @@ test("conf's list parses to its bindings in order", () => {
     assert.ok(parseCatalog(JSON.stringify([])).error);
 });
 
-test("your keys files take a binding's keys, or none for off", () => {
-    assert.deepEqual(parseKeysFile('{"keys": {"terminal": ["SUPER + D"], "lock": []}}'),
-        { keys: { terminal: ["SUPER + D"], lock: [] } });
+test("your keys files take a preset and a binding's keys, or none for off", () => {
+    assert.deepEqual(parseKeysFile('{"preset": "dwm", "keys": {"terminal": ["SUPER + D"], "lock": []}}'),
+        { preset: "dwm", keys: { terminal: ["SUPER + D"], lock: [] } });
     assert.deepEqual(parseKeysFile(""), {});
     assert.deepEqual(parseKeysFile("{}"), {});
     for (const bad of ["nope", "[]", '{"other": 1}', '{"keys": []}', '{"keys": {"Bad Name": []}}',
         '{"keys": {"lock": "SUPER + L"}}', '{"keys": {"lock": [""]}}', '{"keys": {"lock": [1]}}',
-        '{"keys": {"lock": ["SUPER + \\"L"]}}',
+        '{"keys": {"lock": ["SUPER + \\"L"]}}', '{"preset": "awesome"}', '{"preset": "constructor"}',
         JSON.stringify({ keys: { lock: Array(9).fill("SUPER + L") } })]) {
         assert.ok(parseKeysFile(bad).error, bad);
     }
 });
 
-test("keys.local.json's keys replace keys.json's whole, and a broken file keeps the last good", () => {
-    assert.deepEqual(loadKeys('{"keys": {"lock": []}}', '{"keys": {"terminal": ["SUPER + D"]}}'),
-        { keys: { terminal: ["SUPER + D"] }, errors: [] });
-    assert.deepEqual(loadKeys('{"keys": {"lock": []}}', null), { keys: { lock: [] }, errors: [] });
-    const r = loadKeys(null, "nope", { lock: [] });
-    assert.deepEqual(r.keys, { lock: [] });
+test("keys.local.json's keys and preset replace keys.json's, and a broken file keeps the last good", () => {
+    assert.deepEqual(loadKeys('{"preset": "i3", "keys": {"lock": []}}', '{"keys": {"terminal": ["SUPER + D"]}}'),
+        { state: { preset: "i3", keys: { terminal: ["SUPER + D"] } }, errors: [] });
+    assert.deepEqual(loadKeys('{"keys": {"lock": []}}', '{"preset": "dwm"}'),
+        { state: { preset: "dwm", keys: { lock: [] } }, errors: [] });
+    assert.deepEqual(loadKeys(null, null), { state: { preset: "tide", keys: {} }, errors: [] });
+    const r = loadKeys(null, "nope", yours({ lock: [] }));
+    assert.deepEqual(r.state, yours({ lock: [] }));
     assert.deepEqual(r.errors, ["keys.local.json: not JSON"]);
 });
 
 test("an edit writes keys.local.json, building on the keys in effect", () => {
-    const r = editedKeys('{"keys": {"lock": []}}', null, keys => withKeys(keys, CATALOG, "terminal", "SUPER + D"));
-    assert.deepEqual(r.keys, { lock: [], terminal: ["SUPER + D"] });
-    assert.deepEqual(JSON.parse(r.text), { keys: { lock: [], terminal: ["SUPER + D"] } });
-    assert.ok(editedKeys(null, "nope", keys => ({ keys })).error, "a broken file isn't overwritten");
+    const r = editedKeys('{"keys": {"lock": []}}', null, state => withKeys(state, CATALOG, "terminal", "SUPER + D"));
+    assert.deepEqual(r.state, yours({ lock: [], terminal: ["SUPER + D"] }));
+    assert.deepEqual(JSON.parse(r.text), { preset: "tide", keys: { lock: [], terminal: ["SUPER + D"] } });
+    const p = editedKeys(null, null, state => withPreset(state, "dwm"));
+    assert.deepEqual(JSON.parse(p.text), { preset: "dwm", keys: {} });
+    const back = editedKeys('{"preset": "dwm"}', null, state => withPreset(state, "tide"));
+    assert.deepEqual(loadKeys('{"preset": "dwm"}', back.text).state.preset, "tide", "tide's overrides keys.json's");
+    assert.ok(editedKeys(null, "nope", state => ({ state })).error, "a broken file isn't overwritten");
+    assert.deepEqual(editedKeys(null, null, state => withKeys(state, CATALOG, "lock", "SUPER + T")).clash.name, "terminal");
 });
 
-test("tide-keys.lua lists your keys for conf to read", () => {
-    assert.equal(keysLua({ terminal: ["SUPER + D", "SUPER + CTRL + T"], lock: [] }),
+test("tide-keys.lua lists your keys over the preset's for conf to read", () => {
+    assert.equal(keysLua(yours({ terminal: ["SUPER + D", "SUPER + CTRL + T"], lock: [] })),
         "-- Written by tide's Keyboard shortcuts (SPEC.md §16); changes here are lost.\n"
         + "return { keys = {\n    lock = {  },\n    terminal = { \"SUPER + D\", \"SUPER + CTRL + T\" },\n} }\n");
+    const merged = mergedKeys({ preset: "dwm", keys: { terminal: ["SUPER + T"] } });
+    assert.deepEqual(merged.terminal, ["SUPER + T"], "yours over the preset's");
+    assert.deepEqual(merged.launcher, ["SUPER + P"], "the preset's");
+    const taken = mergedKeys({ preset: "i3", keys: { lock: ["SUPER + Return"] } });
+    assert.deepEqual(taken.lock, ["SUPER + Return"]);
+    assert.deepEqual(taken.terminal, [], "i3's terminal gives up the key you gave lock");
+});
+
+test("a preset's keys are a binding's defaults, and a binding it takes keys from goes without them", () => {
+    const d = presetDefaults("dwm", CATALOG);
+    assert.deepEqual(d.launcher, ["SUPER + P"]);
+    assert.deepEqual(d.terminal, ["SUPER + SHIFT + Return"]);
+    assert.deepEqual(d.lock, [], "dwm's Super+L grows the master");
+    assert.deepEqual(d.monocle, ["SUPER + M"]);
+    assert.deepEqual(presetDefaults("tide", CATALOG).lock, ["SUPER + L"]);
 });
 
 test("a key press records the keys as Hyprland writes them", () => {
@@ -247,32 +271,45 @@ test("the list has the named bindings, which can change, then the rest", () => {
     ];
     const rows = shortcutRows(catalog, binds);
     assert.deepEqual(rows.named.map(r => [r.name, r.label, r.changed]),
-        [["terminal", "Super+T", false], ["monocle", "Super+` or Super+O", false], ["lock", "Off", true]]);
+        [["terminal", "Super+T", false], ["monocle", "Super+` or Super+O", false], ["lock", "Off", true], ["launcher", "Super+Space", false]]);
     assert.deepEqual(rows.fixed.map(b => b.does), ["Workspace 1 on the bar", "Leave resize mode"]);
+    const dwm = shortcutRows(catalog, binds, { preset: "dwm", keys: {} });
+    assert.equal(dwm.named.find(r => r.name === "lock").changed, false, "dwm takes Super+L from lock");
+    assert.equal(dwm.named.find(r => r.name === "launcher").changed, true, "until conf binds Super+P");
 });
 
 test("new keys replace a binding's, and a binding back at its defaults leaves your file", () => {
-    assert.deepEqual(withKeys({}, CATALOG, "terminal", "SUPER + D"), { keys: { terminal: ["SUPER + D"] } });
-    assert.deepEqual(withKeys({ terminal: ["SUPER + D"] }, CATALOG, "terminal", "SUPER + T"), { keys: {} });
-    assert.deepEqual(withKeys({}, CATALOG, "monocle", "SUPER + O"), { keys: { monocle: ["SUPER + O"] } }, "one of two");
-    assert.ok(withKeys({}, CATALOG, "teleport", "SUPER + D").error);
+    assert.deepEqual(withKeys(NO_KEYS, CATALOG, "terminal", "SUPER + D"), { state: yours({ terminal: ["SUPER + D"] }) });
+    assert.deepEqual(withKeys(yours({ terminal: ["SUPER + D"] }), CATALOG, "terminal", "SUPER + T"), { state: yours({}) });
+    assert.deepEqual(withKeys(NO_KEYS, CATALOG, "monocle", "SUPER + O"), { state: yours({ monocle: ["SUPER + O"] }) }, "one of two");
+    assert.deepEqual(withKeys({ preset: "dwm", keys: {} }, CATALOG, "launcher", "SUPER + P"), { state: { preset: "dwm", keys: {} } }, "dwm's");
+    assert.ok(withKeys(NO_KEYS, CATALOG, "teleport", "SUPER + D").error);
 });
 
 test("keys another binding has are a clash, and a swap gives it the old keys", () => {
-    assert.deepEqual(withKeys({}, CATALOG, "lock", "SUPER + T"), { clash: { name: "terminal", does: "Terminal" } });
-    assert.deepEqual(withKeys({}, CATALOG, "lock", "super+t"), { clash: { name: "terminal", does: "Terminal" } });
-    assert.deepEqual(withKeys({}, CATALOG, "lock", "SUPER + T", true),
-        { keys: { lock: ["SUPER + T"], terminal: ["SUPER + L"] } });
-    assert.deepEqual(withKeys({}, CATALOG, "lock", "SUPER + O", true),
-        { keys: { lock: ["SUPER + O"], monocle: ["SUPER + grave", "SUPER + L"] } }, "monocle keeps its other");
+    assert.deepEqual(withKeys(NO_KEYS, CATALOG, "lock", "SUPER + T"), { clash: { name: "terminal", does: "Terminal" } });
+    assert.deepEqual(withKeys(NO_KEYS, CATALOG, "lock", "super+t"), { clash: { name: "terminal", does: "Terminal" } });
+    assert.deepEqual(withKeys(NO_KEYS, CATALOG, "lock", "SUPER + T", true),
+        { state: yours({ lock: ["SUPER + T"], terminal: ["SUPER + L"] }) });
+    assert.deepEqual(withKeys(NO_KEYS, CATALOG, "lock", "SUPER + O", true),
+        { state: yours({ lock: ["SUPER + O"], monocle: ["SUPER + grave", "SUPER + L"] }) }, "monocle keeps its other");
 });
 
 test("keys a fixed binding has can't be given", () => {
-    const r = withKeys({}, CATALOG, "lock", "SUPER + 1", false, ["Super+1"]);
+    const r = withKeys(NO_KEYS, CATALOG, "lock", "SUPER + 1", false, ["Super+1"]);
     assert.equal(r.error, "Super+1 can't change, so it can't be Lock");
 });
 
-test("reset and off", () => {
-    assert.deepEqual(withDefault({ lock: [], terminal: ["SUPER + D"] }, "lock"), { keys: { terminal: ["SUPER + D"] } });
-    assert.deepEqual(withOff({}, "lock"), { keys: { lock: [] } });
+test("reset, off and starting from a preset", () => {
+    assert.deepEqual(withDefault(yours({ lock: [], terminal: ["SUPER + D"] }), "lock"), { state: yours({ terminal: ["SUPER + D"] }) });
+    // Reset after a swap: both go back.
+    const swapped = withKeys(NO_KEYS, CATALOG, "lock", "SUPER + T", true).state;
+    assert.deepEqual(swapped.keys, { lock: ["SUPER + T"], terminal: ["SUPER + L"] });
+    assert.deepEqual(withDefault(swapped, "lock", CATALOG), { state: yours({}) });
+    // One that keeps other keys keeps those.
+    assert.deepEqual(withDefault(yours({ monocle: ["SUPER + grave", "SUPER + L"], lock: ["SUPER + D"] }), "lock", CATALOG),
+        { state: yours({ monocle: ["SUPER + grave"] }) });
+    assert.deepEqual(withOff(NO_KEYS, "lock"), { state: yours({ lock: [] }) });
+    assert.deepEqual(withPreset(yours({ lock: [] }), "i3"), { state: { preset: "i3", keys: {} } }, "your own go");
+    assert.ok(withPreset(NO_KEYS, "awesome").error);
 });
