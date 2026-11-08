@@ -333,6 +333,10 @@ healthy() {
     echo "0::/user.slice/user-1000.slice/user@1000.service/session.slice/hypridle.service" > "$tmp/proc/101/cgroup"
     printf 'HOME=/home/user\0' > "$tmp/proc/100/environ"
     cp xdg-desktop-portal/tide-portals.conf xdg-desktop-portal/tidewm-portals.conf "$tmp/config/xdg-desktop-portal/"
+    # xdg-desktop-portal-wlr, which tidewm's session shares screens through,
+    # as its package installs it.
+    mkdir -p "$tmp/share/xdg-desktop-portal/portals"
+    printf '[portal]\nDBusName=org.freedesktop.impl.portal.desktop.wlr\n' > "$tmp/share/xdg-desktop-portal/portals/wlr.portal"
     # Home's name, as the shell writes it.
     mkdir -p "$tmp/config/hypr"
     printf '%s\n' 'return {' '    home = "in",' '    in_apps = {},' '}' > "$tmp/config/hypr/tide-workspaces.lua"
@@ -1236,6 +1240,30 @@ cp xdg-desktop-portal/tide-portals.conf "$tmp/config/xdg-desktop-portal/tidewm-p
 run XDG_CURRENT_DESKTOP=tidewm:tide
 check "Hyprland's choice in tidewm's portal config is a problem" \
     contains "$out" "$tmp/config/xdg-desktop-portal/tidewm-portals.conf isn't the one tide ships (default=wlr;gtk under [preferred])"
+
+# xdg-desktop-portal-wlr, which tidewm-portals.conf names (SPEC.md §12):
+# xdg-desktop-portal finds it by its wlr.portal file.
+healthy
+rm "$tmp/share/xdg-desktop-portal/portals/wlr.portal"
+run XDG_CURRENT_DESKTOP=tidewm:tide
+check "no xdg-desktop-portal-wlr in tidewm's session is a problem" \
+    contains "$out" "xdg-desktop-portal-wlr isn't installed, so sharing a screen or window fails: install your distro's xdg-desktop-portal-wlr package"
+run
+check "Hyprland's session doesn't need it" test "$status" -eq 0
+mkdir -p "$tmp/no-data-home/xdg-desktop-portal/portals"
+printf '[portal]\n' > "$tmp/no-data-home/xdg-desktop-portal/portals/wlr.portal"
+run XDG_CURRENT_DESKTOP=tidewm:tide
+check "one under XDG_DATA_HOME counts" lacks "$out" "xdg-desktop-portal-wlr"
+rm -r "$tmp/no-data-home"
+mkdir -p "$tmp/portals"
+printf '[portal]\n' > "$tmp/portals/wlr.portal"
+run XDG_CURRENT_DESKTOP=tidewm:tide XDG_DESKTOP_PORTAL_DIR="$tmp/portals"
+check "and so does one in XDG_DESKTOP_PORTAL_DIR, which xdg-desktop-portal reads instead" lacks "$out" "xdg-desktop-portal-wlr"
+printf '[portal]\n' > "$tmp/share/xdg-desktop-portal/portals/wlr.portal"
+rm "$tmp/portals/wlr.portal"
+run XDG_CURRENT_DESKTOP=tidewm:tide XDG_DESKTOP_PORTAL_DIR="$tmp/portals"
+check "where it's read alone" contains "$out" "xdg-desktop-portal-wlr isn't installed"
+rm -r "$tmp/portals"
 
 healthy
 run FAKE_CONFIGERRORS="$(printf 'line 3: bad keyword\nline 9: bad value\n')"

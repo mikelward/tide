@@ -23,6 +23,7 @@
 #   - no daemon runs twice, and no rival to an owner runs at all;
 #   - the session's portal config (tide-portals.conf, or tidewm's
 #     tidewm-portals.conf) is installed and XDG_CURRENT_DESKTOP selects it;
+#   - in tidewm's session, xdg-desktop-portal-wlr is installed;
 #   - Hyprland reports no config errors;
 #   - the home workspace (SPEC.md §6.5) exists and is persistent, which
 #     takes the shell's tide-workspaces.lua and conf's rule for it;
@@ -999,6 +1000,37 @@ elif ! installed=$(cat "$found" 2>&1); then
     problem "couldn't read $found ($installed): check its permissions, or reinstall it with \`make install\` in the tide checkout"
 elif test "$installed" != "$(shipped_portals_conf "$first")"; then
     problem "$found isn't the one tide ships ($backends under [preferred]), so portals may pick the wrong backend: reinstall it with \`make install\` in the tide checkout"
+fi
+
+# tidewm's portal config names xdg-desktop-portal-wlr, which shares
+# screens and windows there (SPEC.md §12). xdg-desktop-portal finds a
+# backend by its .portal file: only in XDG_DESKTOP_PORTAL_DIR where that's
+# set, otherwise in each data directory.
+if test "$compositor" = tidewm; then
+    if test -n "${XDG_DESKTOP_PORTAL_DIR:-}"; then
+        portal_dirs=$XDG_DESKTOP_PORTAL_DIR
+    else
+        portal_dirs=
+        IFS_save=$IFS
+        IFS=:
+        for dir in "${XDG_DATA_HOME:-$HOME/.local/share}" ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do
+            portal_dirs=${portal_dirs:+$portal_dirs:}$dir/xdg-desktop-portal/portals
+        done
+        IFS=$IFS_save
+    fi
+    wlr_portal=
+    IFS_save=$IFS
+    IFS=:
+    for dir in $portal_dirs; do
+        if test -f "$dir/wlr.portal"; then
+            wlr_portal=$dir/wlr.portal
+            break
+        fi
+    done
+    IFS=$IFS_save
+    if test -z "$wlr_portal"; then
+        problem "xdg-desktop-portal-wlr isn't installed, so sharing a screen or window fails: install your distro's xdg-desktop-portal-wlr package"
+    fi
 fi
 
 # In tidewm's session, the bars, the config errors and home are tidewm's
