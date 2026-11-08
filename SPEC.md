@@ -368,8 +368,15 @@ runs waybar, and `doctor` reports it. Once swaync owns the notification
 name, the shell also sends a critical notification: "tide's bar couldn't
 start", with the version and the fix. If it can't send it, it logs why. It
 starts `conf`'s theme daemon, which runs swaync, and waybar when that's the
-bar, and the first polkit agent it finds. It reports ready once swaync
-owns `org.freedesktop.Notifications` and the bar's tray owns
+bar, and the first polkit agent it finds. tide doesn't need `conf`: with no
+theme daemon, the shell logs so and starts swaync, and waybar when that's
+the bar, itself, in their default style. With the Quickshell bar, light
+and dark still switch, as the Quickshell shell sets them (§15); with
+waybar's, they don't. With `TIDE_NOTIFICATIONS=1` and the
+Quickshell bar, the shell is the notification server, and no swaync starts.
+A `TIDE_THEME_DAEMON` that isn't there, or no swaync or waybar where one is
+needed, fails the start. It reports ready once swaync (or the shell) owns
+`org.freedesktop.Notifications` and the bar's tray owns
 `org.kde.StatusNotifierWatcher`. The polkit agent's registration isn't
 observable from a script, so it isn't waited for. Its exit doesn't fail the
 unit, either: an agent exits at once when another already holds the

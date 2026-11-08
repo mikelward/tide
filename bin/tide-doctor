@@ -335,7 +335,8 @@ done
 #   - it activates through a systemd unit that's masked or not installed:
 #     with a unit, the unit is what starts, whatever the Exec line says.
 #     `setup` masks the packaged swaync's this way; the shell's own
-#     swaync is run by the theme daemon, not by its unit;
+#     swaync is run by the theme daemon, or by tide-shell without one, not
+#     by its unit;
 #   - with no unit, its command is false itself (an override: `false`,
 #     /bin/false or /usr/bin/false, not a script of that name), or
 #     plasma_waitforname, KDE's: that waits for plasmashell, which owns the

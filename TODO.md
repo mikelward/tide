@@ -1067,7 +1067,8 @@ once you have agreed with it or reversed it.
 because the Quickshell shell can't be built or tested in the sandbox and the
 MVP comes first. The bar and tray watcher are the Quickshell shell's
 (`qs -c tide`) when it's installed, else waybar's; swaync (notifications)
-is run by `conf`'s theme daemon, as waybar is when that's the bar; plus the
+is run by `conf`'s theme daemon, as waybar is when that's the bar, or by
+`tide-shell` itself without `conf`; plus the
 first polkit agent found and swww for the wallpaper (swaybg where swww isn't
 packaged). It also runs
 `conf`'s `apply-input.sh` once, since Hyprland's config starts nothing but

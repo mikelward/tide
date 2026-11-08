@@ -101,7 +101,8 @@ Until the Quickshell shell is complete, `tide.service` runs
 `tide-shell`, a transitional shell. It runs the Quickshell bar
 (`qs -c tide`) when Quickshell and the shell are installed, and waybar
 otherwise; conf's theme daemon, which runs swaync (and waybar, when that's
-the bar); a polkit agent; and, with waybar, swww (or swaybg where swww
+the bar), or without conf, swaync (and waybar) in their default style; a
+polkit agent; and, with waybar, swww (or swaybg where swww
 isn't packaged) for the wallpaper, which the Quickshell shell draws itself.
 It also runs conf's input setup once. It reports ready once
 swaync owns the notification name and the bar's tray owns the watcher (see
