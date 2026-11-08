@@ -109,6 +109,16 @@ Singleton {
         root.tidewmCommand(Tw.moveAndFocusCommand(address, name), `move window ${address} to workspace ${JSON.stringify(name)}`);
     }
 
+    // Moves the window at `address` to the workspace named `name` without
+    // following it: a home app's window sent home, and Super+Shift+1…9.
+    function sendWindowTo(address, name) {
+        if (!root.tidewm) {
+            Hyprland.dispatch(Dispatch.sendWindowTo(address, name, Hyprland.usingLua));
+            return;
+        }
+        root.tidewmCommand(Tw.sendCommand(address, name), `send window ${address} to workspace ${JSON.stringify(name)}`);
+    }
+
     // Moves the window at `address` to tide's workspace named `name`, made
     // if it's new, and follows it there, focused: the name prompt's Enter
     // (§6.5). On Hyprland it goes through conf's move, which puts it in
