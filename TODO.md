@@ -7,6 +7,23 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **tide-accents' keys with the list up** (2026-11-08, SPEC.md §8.6).
+  Nothing is highlighted at first; Right starts at the first accent, Left
+  at the last, and both stop at the ends rather than wrap. Enter with
+  nothing highlighted closes the list and goes to the app. A digit past
+  the list does the same. More than nine accents show only the first
+  nine. Reversible: `Machine::press` in `fcitx5/accents_core.cpp`.
+- **tide-accents ignores an app's reset while a letter is held**
+  (2026-11-08, SPEC.md §8.6). Schnelle Umlaute's notes say Chromium resets
+  the input method after every commit, which would end every hold at once.
+  A reset with the list up still closes it. Reversible:
+  `Machine::appReset`.
+- **A bad accents.conf is refused whole, not failed** (2026-11-08,
+  SPEC.md §8.6): each bad setting is logged by name and the settings in
+  use stay (the defaults at start), rather than the add-on failing to
+  load, which would leave no accents at all. Reversible: `reloadConfig`.
+- **ẞ for a held capital S** (2026-11-08): the capital of ß, unchecked
+  against macOS.
 - **Enter does nothing while the settings search has text**
   (2026-11-08, SPEC.md §16). With it empty, Enter still opens the page's
   app, as before the field. The alternative, Enter always opening it,
@@ -1956,14 +1973,55 @@ on macOS: hold a letter, and a strip of its accents appears at the text
 cursor; a number, the arrows and Enter, or a click picks one, and Esc
 keeps the letter.
 
-- [ ] Choose: an fcitx5 add-on of our own in this repo, or a change to
-      Schnelle Umlaute (GPL-3.0, so a fork lives in its own repository).
-- [ ] Type the letter on press, as macOS does, and replace it through
+- [x] Choose: an fcitx5 add-on of our own in this repo (`fcitx5/`,
+      `tide-accents`), not a change to Schnelle Umlaute.
+- [x] Type the letter on press, as macOS does, and replace it through
       text-input's delete-surrounding-text, with Backspace where an app
       lacks it, rather than holding the letter until release.
-- [ ] Candidates in fcitx5's own list at the caret; the accents from
-      `shell/chars/chars.tsv`'s Latin letters, so no second table.
-- [ ] No key repeat for a letter with accents, as on macOS.
+- [x] Candidates in fcitx5's own list at the caret.
+- [x] One table, `fcitx5/accents.json`, in Plasma Keyboard's format, so
+      KDE can read the same file; a user's
+      `~/.config/tide/accents.json` overrides it letter by letter. (Not
+      `shell/chars/chars.tsv`, as first planned: Plasma Keyboard can't
+      read that.)
+- [x] No key repeat for a letter with accents, as on macOS.
+- [ ] Try it in a real session: GTK, Qt, Chrome with
+      `--enable-wayland-ime`, foot, an X11 app. Only its core is tested;
+      the fcitx5 glue is only compiled. Check that Backspace and the
+      accent arrive in order where an app lacks surrounding text.
+- [ ] `setup-tide` (scripts repo) builds and installs it, and switches
+      fcitx5's profile from Schnelle Umlaute to `tide-accents`. Then drop
+      Schnelle Umlaute from §8.6, §5's table and the README.
+- [ ] KDE: `setup-kde` installs the shared table at
+      `~/.local/share/plasma/keyboard/diacritics/base.json` and sets
+      `plasmakeyboardrc` `[General]` `diacriticsHoldThresholdMs=300`.
+- [ ] macOS: turn `ApplePressAndHoldEnabled` off per terminal app, if the
+      user decides terminals shouldn't have accents (tilemo).
+- [ ] Verify the accents' order on a Mac, and the capital ß (ẞ), and fix
+      `fcitx5/accents.json` to match.
+- [ ] One hold time everywhere. On the Mac, measure when the
+      press-and-hold strip appears: it's believed to follow
+      `InitialKeyRepeat`, which tilemo sets to 40 (600 ms), unverified.
+      Then align tide (300 ms), KDE and the Mac on one time. Lowering the
+      Mac's delay also makes every key repeat sooner.
+      - An idea to try, not decided: change the key-repeat delay
+        everywhere together, so the hold time and the repeat delay match
+        on every machine: tide's Hyprland `input` `repeat_delay`
+        (600 in conf's `hyprland.lua` and tidewm's config), KDE's, and the Mac's
+        `InitialKeyRepeat`.
+- [ ] An idea, not built: the accent hold time beside the repeat delay and
+      rate in Settings, on every platform tide's settings reach. The
+      Keyboard page (SPEC.md §16) already has repeat delay and rate, so
+      the hold time goes under them.
+      - tide on Hyprland and tidewm: repeat in `tide-input.lua` and
+        tidewm's input lines, as now; the hold time as `hold_ms` in
+        `~/.config/tide/accents.conf`, then restart
+        `tide-fcitx5.service` (the add-on reads it at start).
+      - KDE: `kcminputrc`'s repeat delay and rate, and
+        `plasmakeyboardrc`'s `diacriticsHoldThresholdMs`.
+      - The Mac, through tilemo: `InitialKeyRepeat` and `KeyRepeat`. Its
+        accent delay may follow the repeat delay, so it may have no
+        setting of its own.
 
 ## Later: our own window manager on river (SPEC.md §21.2)
 
