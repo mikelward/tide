@@ -1,7 +1,7 @@
 // Tests for settings.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { GROUPS, PAGES, SECTIONS, movedPage, opened, pageIndex, sidebarRows } from "./settings.mjs";
+import { GROUPS, PAGES, SECTIONS, keptPages, movedPage, opened, pageIndex, pageTerms, searchedSection, searchedSidebar, sidebarRows } from "./settings.mjs";
 
 test("the pages come in the sidebar's order, each with a label and an icon", () => {
     assert.deepEqual(PAGES.map(p => p.id), [
@@ -96,4 +96,54 @@ test("a page's id opens it, and keys, Keys' old page, opens Keyboard at its shor
         assert.equal(pageIndex(section.id), -1, `${section.id} isn't a page's id too`);
         assert.ok(section.icon.endsWith("-symbolic"), `${section.id}'s icon is symbolic`);
     }
+});
+
+// The ids and headings a search's sidebar shows, top to bottom.
+function shown(query) {
+    return searchedSidebar(query).map(r => (r.heading !== "" ? `# ${r.heading}` : PAGES[r.page].id));
+}
+
+test("a page is found by its label and keywords, and its sections'", () => {
+    assert.deepEqual(pageTerms(pageIndex("sound")), ["Sound", "audio", "volume", "speakers", "headphones", "microphone"]);
+    assert.ok(pageTerms(pageIndex("keyboard")).includes("Keyboard shortcuts"));
+    assert.ok(pageTerms(pageIndex("keyboard")).includes("hotkeys"));
+    // A page with no keywords is found by its label.
+    for (const [index, page] of PAGES.entries()) {
+        assert.ok(pageTerms(index).includes(page.label), `${page.id} is found by its label`);
+    }
+});
+
+test("searching keeps the pages found, under their headings, and drops headings left empty", () => {
+    assert.deepEqual(shown("sound"), ["# Hardware", "sound"]);
+    assert.deepEqual(shown("shortcuts"), ["# Hardware", "keyboard"]);
+    assert.deepEqual(shown("CLIP"), ["# General", "clipboard"]);
+    assert.deepEqual(shown("zzz"), []);
+    // An empty or blank query shows every page.
+    assert.deepEqual(searchedSidebar(""), sidebarRows());
+    assert.deepEqual(searchedSidebar("  "), sidebarRows());
+});
+
+test("Up and Down move among the pages a search keeps, stopping at either end", () => {
+    const kept = keptPages(searchedSidebar("c"));
+    assert.deepEqual(kept.map(i => PAGES[i].id), ["touchpad", "clipboard", "clocks"]);
+    assert.equal(movedPage(kept[0], 1, kept), kept[1]);
+    assert.equal(movedPage(kept[1], -1, kept), kept[0]);
+    assert.equal(movedPage(kept[0], -1, kept), kept[0]);
+    assert.equal(movedPage(kept[kept.length - 1], 1, kept), kept[kept.length - 1]);
+    const two = [pageIndex("sound"), pageIndex("clocks")];
+    assert.equal(movedPage(pageIndex("sound"), 1, two), pageIndex("clocks"));
+    // From a page the search dropped, the first kept; with none kept, stay.
+    assert.equal(movedPage(pageIndex("mouse"), 1, two), pageIndex("sound"));
+    assert.equal(movedPage(pageIndex("mouse"), 1, []), pageIndex("mouse"));
+});
+
+test("a page found only by a section scrolls to it", () => {
+    const keyboard = pageIndex("keyboard");
+    assert.equal(searchedSection(keyboard, "shortcuts"), "keys");
+    assert.equal(searchedSection(keyboard, "keyboard bindings"), "keys");
+    assert.equal(searchedSection(keyboard, "repeat shortcuts"), "keys", "a page's word and a section's together find the section");
+    assert.equal(searchedSection(keyboard, "keyboard"), "");
+    assert.equal(searchedSection(keyboard, "layout"), "");
+    assert.equal(searchedSection(keyboard, ""), "");
+    assert.equal(searchedSection(pageIndex("sound"), "shortcuts"), "");
 });

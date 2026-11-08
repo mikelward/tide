@@ -7,6 +7,17 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **Enter does nothing while the settings search has text**
+  (2026-11-08, SPEC.md §16). With it empty, Enter still opens the page's
+  app, as before the field. The alternative, Enter always opening it,
+  would run an app the query never named. Reversible: the field's
+  `Keys.onReturnPressed` in `shell/SettingsWindow.qml`.
+- **The settings search field holds the panel's keyboard** (2026-11-08,
+  SPEC.md §16): a page's field hands the keyboard back to it, and a click
+  on the card focuses it, so typing anywhere but a field searches. The
+  alternative, a field that's focused only as the panel opens, leaves
+  Up, Down and Escape with nowhere to go after a page's field. Reversible:
+  `id: keys` in `shell/SettingsWindow.qml`.
 - **The light face's colors** (2026-11-08, SPEC.md §11): a pale teal to
   lavender gradient (`#d9edf1` to `#e8e0f3`), the light palette's text and
   accent, a dark red for warnings, and a wallpaper lightened 25% behind

@@ -1,5 +1,7 @@
 // The settings panel (SPEC.md §16), as pure functions the QML binds to.
 
+import { matches, searchedRows } from "./settingssearch.mjs";
+
 // The sidebar's groups, in its order, each under a heading that can't be
 // chosen.
 export const GROUPS = Object.freeze([
@@ -221,7 +223,55 @@ export function sidebarRows() {
     return rows;
 }
 
-// The page after moving `step` pages from `index`, stopping at either end.
-export function movedPage(index, step) {
-    return Math.max(0, Math.min(PAGES.length - 1, index + step));
+// The page after moving `step` pages from `index` through `kept`, the
+// pages the sidebar shows (every page by default), stopping at either end.
+// From a page not in `kept`, the first kept; with none kept, `index`.
+export function movedPage(index, step, kept = PAGES.map((_, i) => i)) {
+    if (kept.length === 0) {
+        return index;
+    }
+    const at = kept.indexOf(index);
+    if (at < 0) {
+        return kept[0];
+    }
+    return kept[Math.max(0, Math.min(kept.length - 1, at + step))];
+}
+
+// What finds the page at `index` in the sidebar's search (SPEC.md §16):
+// its label and keywords, and those of its sections, so "shortcuts" finds
+// Keyboard.
+export function pageTerms(index) {
+    const page = PAGES[index];
+    const terms = [page.label, ...(page.keywords ?? [])];
+    for (const s of SECTIONS) {
+        if (s.page === page.id) {
+            terms.push(s.label, ...(s.keywords ?? []));
+        }
+    }
+    return terms;
+}
+
+// The sidebar's rows that `query` keeps: sidebarRows() less the pages it
+// doesn't find and the headings left with none.
+export function searchedSidebar(query) {
+    return searchedRows(sidebarRows(), query, r => r.heading !== "", r => pageTerms(r.page));
+}
+
+// The pages among `rows` (sidebar rows), in order.
+export function keptPages(rows) {
+    return rows.filter(r => r.heading === "").map(r => r.page);
+}
+
+// The section of the page at `index` that `query` found it by, when the
+// page's own label and keywords don't find it, so the panel scrolls
+// there; else "". The query's words may be the page's and the section's
+// together, as "repeat shortcuts" is Keyboard's and its shortcuts'.
+export function searchedSection(index, query) {
+    const page = PAGES[index];
+    const own = [page.label, ...(page.keywords ?? [])];
+    if (matches(query, own)) {
+        return "";
+    }
+    const found = SECTIONS.find(s => s.page === page.id && matches(query, [...own, s.label, ...(s.keywords ?? [])]));
+    return found ? found.id : "";
 }

@@ -4857,10 +4857,31 @@ stays hand-written.
     the headings, and stop at the first and last pages.
   - The groups and each page's group are data in `settings.mjs`, so a new
     page names its group. Floating's joins Windows, after Workspaces.
-  - The card is tall enough for every page and heading.
+  - The card is tall enough for every page and heading, and stays that
+    tall while a search drops some.
 - A page's link out sits at its foot, and Enter opens it. A page with
   nothing of its own yet is only that link, with a line saying what the
   bar already does.
+- **Search:** a field tops the sidebar, saying *Search settings*. It has
+  the keyboard as the panel opens, and starts empty each time, from
+  `openPage` too.
+  - The sidebar keeps the pages the query finds, under their headings. A
+    heading left with no page hides.
+  - A page is found by its label and keywords, and its sections' (so
+    *shortcuts* finds Keyboard). Each word typed must start a word of
+    them, in any order. `settingssearch.mjs` matches, the same file tide
+    for macOS and tide for Chrome use, so a query finds the same pages on
+    each.
+  - If the page showing is dropped, the first page kept shows. A page
+    found only by a section opens scrolled to it.
+  - Up and Down move among the kept pages. A click on a page keeps the
+    keyboard in the field.
+  - Escape empties the field, then closes the panel.
+  - Enter opens the page's app only with the field empty: mid-search it
+    would run an app the query never named.
+  - Finding nothing, the sidebar says *No settings match*, and the page
+    showing stays. Emptying the field shows every page, and the page
+    showing stays.
 
 ### 16.1 Shared config and per-machine `.local` overrides
 

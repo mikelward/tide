@@ -26,8 +26,11 @@ import "lib/workspacepage.mjs" as WsPage
 // chosen beside them, and at its foot the app that does the rest, if any.
 // The pages are grouped under headings, which can't be chosen.
 // The launcher's Settings action or `qs -c tide ipc call settings toggle`
-// opens and closes it; Escape or a click on the backdrop closes it. Up and
-// Down change the page, past the headings, and Enter opens its app.
+// opens and closes it; Escape or a click on the backdrop closes it. The
+// field over the sidebar keeps the pages a search finds, and has the
+// keyboard: Up and Down change the page, past the headings and the pages
+// it dropped, Escape empties it first, and Enter, with it empty, opens the
+// page's app.
 PanelWindow {
     id: root
 
@@ -37,6 +40,11 @@ PanelWindow {
     // SECTIONS, or floating-add for the Floating page's fields), or "": set
     // as one opens, and cleared by another page or a flick.
     property string section: ""
+    // What's typed in the sidebar's search field, the rows it keeps, and
+    // their pages (settings.mjs's searchedSidebar).
+    property string query: ""
+    readonly property var rows: Settings.searchedSidebar(query)
+    readonly property var kept: Settings.keptPages(rows)
 
     // Another page starts at its top.
     onPageChanged: {
@@ -47,6 +55,29 @@ PanelWindow {
     }
     onSectionChanged: pageFlick.scrolled()
 
+    // A search that drops the page showing shows the first it keeps, and
+    // one that finds a page by a section only scrolls there. Finding
+    // nothing, or nothing typed, leaves the page as it is.
+    onQueryChanged: {
+        const pages = Settings.keptPages(Settings.searchedSidebar(query));
+        if (pages.length > 0 && pages.indexOf(page) < 0) {
+            page = pages[0];
+        }
+        const found = Settings.searchedSection(page, query);
+        if (found !== "") {
+            section = found;
+        }
+    }
+
+    // Shows the page at `index`, at the section the search found it by.
+    function show(index) {
+        page = index;
+        const found = Settings.searchedSection(index, query);
+        if (found !== "") {
+            section = found;
+        }
+    }
+
     // Opens on page `id`, or at section `id`, or on the first page with
     // none (settings.mjs's); one already open moves there. Answers why
     // not, or "".
@@ -55,6 +86,8 @@ PanelWindow {
         if (to === null) {
             return `no ${id} page; the pages are ${[...Settings.PAGES, ...Settings.SECTIONS].map(p => p.id).join(", ")}`;
         }
+        // Each opening starts with every page.
+        keys.text = "";
         if (visible) {
             if (id) {
                 page = to.index;
@@ -499,11 +532,14 @@ PanelWindow {
     Rectangle {
         id: card
 
+        // The sidebar at its tallest, with every page and heading, so the
+        // card doesn't shrink as a search drops some.
+        property real tallest: 0
+
         x: Math.round((parent.width - width) / 2)
         y: Math.round((parent.height - height) / 3)
         width: 640
-        // Tall enough for every page and heading in the sidebar.
-        height: Math.max(440, sidebar.implicitHeight + 12)
+        height: Math.max(440, tallest + 12)
         radius: 12
         color: Theme.surface
         border.color: Theme.edge
@@ -516,18 +552,6 @@ PanelWindow {
             onPressed: keys.forceActiveFocus()
         }
 
-        // Holds the keyboard while it's open.
-        Item {
-            id: keys
-
-            focus: true
-            Keys.onEscapePressed: root.close()
-            Keys.onUpPressed: root.page = Settings.movedPage(root.page, -1)
-            Keys.onDownPressed: root.page = Settings.movedPage(root.page, 1)
-            Keys.onReturnPressed: root.advanced()
-            Keys.onEnterPressed: root.advanced()
-        }
-
         Column {
             id: sidebar
 
@@ -536,10 +560,90 @@ PanelWindow {
             anchors.margins: 6
             width: 180
             spacing: 2
+            onImplicitHeightChanged: card.tallest = Math.max(card.tallest, implicitHeight)
 
-            // Each group's heading, then its pages.
+            Rectangle {
+                width: sidebar.width
+                height: 32
+                radius: 7
+                color: Theme.surface2
+
+                SymbolicIcon {
+                    id: glass
+
+                    anchors.left: parent.left
+                    anchors.leftMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    implicitWidth: 16
+                    implicitHeight: 16
+                    name: "system-search-symbolic"
+                    color: Theme.fgDim
+                }
+
+                // The search field, which holds the keyboard while the
+                // panel's open: a page's field hands it back when done.
+                TextInput {
+                    id: keys
+
+                    anchors.left: glass.right
+                    anchors.leftMargin: 10
+                    anchors.right: parent.right
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    focus: true
+                    clip: true
+                    color: Theme.fg
+                    selectionColor: Theme.accentBg
+                    font.family: Theme.font
+                    font.pixelSize: 13
+                    onTextChanged: root.query = text
+
+                    Keys.onEscapePressed: {
+                        if (text !== "") {
+                            text = "";
+                        } else {
+                            root.close();
+                        }
+                    }
+                    Keys.onUpPressed: root.show(Settings.movedPage(root.page, -1, root.kept))
+                    Keys.onDownPressed: root.show(Settings.movedPage(root.page, 1, root.kept))
+                    // Enter mid-search would open an app the query never
+                    // named, so only an empty field opens the page's.
+                    Keys.onReturnPressed: {
+                        if (text === "") {
+                            root.advanced();
+                        }
+                    }
+                    Keys.onEnterPressed: {
+                        if (text === "") {
+                            root.advanced();
+                        }
+                    }
+
+                    Text {
+                        visible: keys.text === ""
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Search settings"
+                        color: Theme.fgFaint
+                        font: keys.font
+                    }
+                }
+            }
+
+            Text {
+                visible: root.rows.length === 0
+                width: sidebar.width
+                leftPadding: 10
+                topPadding: 6
+                text: "No settings match"
+                color: Theme.fgDim
+                font.family: Theme.font
+                font.pixelSize: 13
+            }
+
+            // Each group's heading, then its pages, as the search keeps them.
             Repeater {
-                model: Settings.sidebarRows()
+                model: root.rows
 
                 Item {
                     id: sideRow
@@ -564,7 +668,7 @@ PanelWindow {
                         icon: sideRow.modelData.page >= 0 ? Settings.PAGES[sideRow.modelData.page].icon : ""
                         label: sideRow.modelData.page >= 0 ? Settings.PAGES[sideRow.modelData.page].label : ""
                         highlighted: sideRow.modelData.page === root.page
-                        onClicked: root.page = sideRow.modelData.page
+                        onClicked: root.show(sideRow.modelData.page)
                     }
                 }
             }
