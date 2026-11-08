@@ -38,7 +38,10 @@ libsecret-tools' secret-tool, which keep the clipboard history the picker
 on `Super+V` lists, encrypted (SPEC.md §8.4), and wtype, which types what the picker's Fill tab on
 `Super+Shift+V` chooses. `setup-tide` installs them all. For Bitwarden
 logins on the Fill tab, install rbw, the unofficial Bitwarden client, and
-run `rbw config set email` and `rbw login` once.
+run `rbw config set email` and `rbw login` once. For accents on a held
+letter (hold it, then press Space), `setup-tide` installs fcitx5 and builds
+Schnelle Umlaute, its add-on, which `tide-fcitx5.service` runs in the tide
+session (SPEC.md §8.6).
 jq and python3 are free distro packages that run locally, with no network
 calls; without one, the doctor reports the check it skipped.
 

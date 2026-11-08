@@ -10,6 +10,13 @@
 # Hyprland 0.53 and later start through start-hyprland, a watchdog that
 # restarts a crashed Hyprland in safe mode; without it, Hyprland warns at
 # every login. An older install without it still gets Hyprland directly.
+# The input method's variables (SPEC.md §8.6) go to the compositor, so
+# every app it starts has them, not only those started after
+# tide-fcitx5.service. Where fcitx5 isn't installed, or TIDE_IME=0, they're
+# left as they were.
+if test "${TIDE_IME:-}" != 0 && command -v fcitx5 >/dev/null 2>&1; then
+    export QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx
+fi
 if command -v start-hyprland >/dev/null 2>&1; then
     exec start-hyprland -- "$@"
 fi

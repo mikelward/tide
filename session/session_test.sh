@@ -39,6 +39,7 @@ autostart=systemd/user/app-.service.d/tide-autostart.conf
 lock=systemd/user/tide-lock.service
 lockfallback=systemd/user/tide-lock-fallback.service
 clipboard=systemd/user/tide-clipboard.service
+fcitx5=systemd/user/tide-fcitx5.service
 lidinhibit=systemd/user/tide-lid-inhibit.service
 kdelauncher=systemd/user/tide-kde.service
 
@@ -66,6 +67,28 @@ check "the wrapper starts Hyprland through its watchdog" \
     test "$(PATH="$tmp/wrapper-bin" /bin/sh "$wrapper" --config x)" = "start-hyprland -- --config x"
 check "the wrapper falls back to Hyprland without start-hyprland" \
     test "$(PATH="$tmp/wrapper-bin-old" /bin/sh "$wrapper" --config x)" = "Hyprland --config x"
+# The input method's variables (SPEC.md §8.6) are the compositor's, so every
+# app it starts has them: set where fcitx5 is installed, unless TIDE_IME=0,
+# and left as they were otherwise.
+mkdir -p "$tmp/ime-bin" "$tmp/ime-bin-none"
+for cmd in start-hyprland tidewm; do
+    # shellcheck disable=SC2016 # the stub expands them when it runs
+    printf '#!/bin/sh\necho "$QT_IM_MODULE|$XMODIFIERS"\n' > "$tmp/ime-bin/$cmd"
+done
+printf '#!/bin/sh\n' > "$tmp/ime-bin/fcitx5"
+chmod +x "$tmp/ime-bin"/*
+cp "$tmp/ime-bin/start-hyprland" "$tmp/ime-bin/tidewm" "$tmp/ime-bin-none/"
+# Only the stubs and grep, so a host with a real fcitx5 can't count.
+for d in ime-bin ime-bin-none; do ln -s "$(command -v grep)" "$tmp/$d/grep"; done
+for w in "$wrapper" "$tidewm_wrapper"; do
+    name=$(basename "$w")
+    check "$name points Qt and X11 apps at fcitx5" \
+        test "$(env -u QT_IM_MODULE -u XMODIFIERS PATH="$tmp/ime-bin" XDG_CONFIG_HOME="$tmp/none" /bin/sh "$w" | tail -n 1)" = "fcitx|@im=fcitx"
+    check "$name leaves them alone with TIDE_IME=0" \
+        test "$(env -u QT_IM_MODULE -u XMODIFIERS TIDE_IME=0 PATH="$tmp/ime-bin" XDG_CONFIG_HOME="$tmp/none" /bin/sh "$w" | tail -n 1)" = "|"
+    check "$name leaves them alone without fcitx5" \
+        test "$(env -u QT_IM_MODULE -u XMODIFIERS PATH="$tmp/ime-bin-none" XDG_CONFIG_HOME="$tmp/none" /bin/sh "$w" | tail -n 1)" = "|"
+done
 check "the wrapper is executable" test -x "$wrapper"
 check "the wrapper parses as sh" sh -n "$wrapper"
 
@@ -326,6 +349,29 @@ check "and is ordered after either one's target" \
 check "make install installs the history's unit" \
     grep -q 'systemd/user/tide-clipboard.service' Makefile
 
+# --- tide-fcitx5.service --------------------------------------------------------
+# Accents on a held letter (SPEC.md §8.6): fcitx5 in either tide session,
+# never Plasma's, skipped where it isn't installed or TIDE_IME=0, and its
+# variables in the manager's environment only while it runs.
+check "the input method is fcitx5, replacing any already running" \
+    has_line "$fcitx5" "ExecStart=fcitx5 --replace"
+check "it's ready once it owns its bus name" has_line "$fcitx5" "BusName=org.fcitx.Fcitx5"
+check "and is skipped where fcitx5 isn't installed" \
+    has_line "$fcitx5" "ExecCondition=/bin/sh -c 'command -v fcitx5 >/dev/null'"
+check "TIDE_IME=0 turns it off" has_line "$fcitx5" "ConditionEnvironment=!TIDE_IME=0"
+check "apps started after it get the input method's variables" \
+    has_line "$fcitx5" "ExecStartPost=systemctl --user set-environment QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx"
+check "which go once it stops" \
+    has_line "$fcitx5" "ExecStopPost=systemctl --user unset-environment QT_IM_MODULE XMODIFIERS"
+check "it starts before autostarted apps" has_line "$fcitx5" "Before=xdg-desktop-autostart.target"
+check "and each autostarted app's service waits for it, not only their target" \
+    has_line "$autostart" "After=tide-fcitx5.service"
+check "it stops with the session" has_line "$fcitx5" "PartOf=graphical-session.target"
+check "it runs only in the tide sessions, not Plasma's" \
+    has_line "$fcitx5" "WantedBy=wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target"
+check "make install installs the input method's unit" \
+    grep -q 'systemd/user/tide-fcitx5.service' Makefile
+
 # --- tide-lid-inhibit.service -------------------------------------------------
 # The Power page's Lock and Do nothing (SPEC.md §16): logind's lid switch
 # held while it runs, stopped with the session, and started only by the
@@ -378,7 +424,8 @@ if command -v systemd-analyze >/dev/null 2>&1; then
     sed "s|^ExecStart=hyprlock\$|ExecStart=$tmp/stub|" "$lockfallback" > "$tmp/units/tide-lock-fallback.service"
     sed "s|^ExecStart=wl-paste .*\$|ExecStart=$tmp/stub|" "$clipboard" > "$tmp/units/tide-clipboard.service"
     sed "s|^ExecStart=qs .*\$|ExecStart=$tmp/stub|" "$kdelauncher" > "$tmp/units/tide-kde.service"
-    for u in tide.service tide-lock.service tide-lock-fallback.service tide-clipboard.service tide-kde.service hypridle.service "$agent_unit"; do
+    sed "s|^ExecStart=fcitx5 .*\$|ExecStart=$tmp/stub|" "$fcitx5" > "$tmp/units/tide-fcitx5.service"
+    for u in tide.service tide-lock.service tide-lock-fallback.service tide-clipboard.service tide-kde.service tide-fcitx5.service hypridle.service "$agent_unit"; do
         out=$(cd "$tmp/units" && XDG_RUNTIME_DIR="$tmp/run" \
             systemd-analyze verify --user --man=no "$u" 2>&1)
         status=$?

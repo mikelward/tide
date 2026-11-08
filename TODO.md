@@ -1949,6 +1949,22 @@ or workspace goes there.
   - [ ] On a live session: Chrome and Brave both connected, a shell
     restart, and Enter on a tab in a window on another workspace.
 
+## Accents on a plain long press (SPEC.md §8.6)
+
+Schnelle Umlaute needs Space after the held letter. A plain long press, as
+on macOS: hold a letter, and a strip of its accents appears at the text
+cursor; a number, the arrows and Enter, or a click picks one, and Esc
+keeps the letter.
+
+- [ ] Choose: an fcitx5 add-on of our own in this repo, or a change to
+      Schnelle Umlaute (GPL-3.0, so a fork lives in its own repository).
+- [ ] Type the letter on press, as macOS does, and replace it through
+      text-input's delete-surrounding-text, with Backspace where an app
+      lacks it, rather than holding the letter until release.
+- [ ] Candidates in fcitx5's own list at the caret; the accents from
+      `shell/chars/chars.tsv`'s Latin letters, so no second table.
+- [ ] No key repeat for a letter with accents, as on macOS.
+
 ## Later: our own window manager on river (SPEC.md §21.2)
 
 Not started, and not to start until river exposes xdg-activation to window
