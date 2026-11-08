@@ -867,19 +867,20 @@ export function fitsScreens(image, screens) {
 // pictures your monitors' shape, then the rest, each in galleryImages's
 // order. Each row is { section, heading, images }, section "fits" or
 // "others"; heading is the section's, on its first row, and "" on the
-// rest, and on every row when all the pictures are in the one section.
+// rest. With none your monitors' shape, the rest's first row says so;
+// with every picture fitting, there's no heading.
 export function galleryRows(images, screens, columns) {
     const fits = images.filter(i => fitsScreens(i, screens));
     const others = images.filter(i => !fitsScreens(i, screens));
-    const both = fits.length > 0 && others.length > 0;
+    const one = screens.length === 1 ? screens[0] : null;
     const headings = {
-        fits: screens.length > 1 ? "Fits one of your screens" : "Fits your screen",
-        others: "Other shapes",
+        fits: others.length === 0 ? "" : one ? "Fits your screen" : "Fits one of your screens",
+        others: fits.length > 0 ? "Other shapes" : screens.length === 0 ? "" : one ? `None of these fit your ${one.width}×${one.height} screen` : "None of these fit your screens",
     };
     const rows = [];
     for (const [section, list] of [["fits", fits], ["others", others]]) {
         for (let i = 0; i < list.length; i += columns) {
-            rows.push({ section, heading: both && i === 0 ? headings[section] : "", images: list.slice(i, i + columns) });
+            rows.push({ section, heading: i === 0 ? headings[section] : "", images: list.slice(i, i + columns) });
         }
     }
     return rows;
