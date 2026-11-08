@@ -1972,53 +1972,47 @@ history; tide's changes go on top of v0.9 there. Before rewriting §3.1 around i
 **A session on it**, as an option beside Hyprland's, never the default
 until it's done (SPEC.md §5.3). The entry, the wrapper, the units' target
 and the portals are in, `setup --tidewm` (scripts) builds tidewm at a
-pinned commit, where the distro packages wlroots 0.20, and conf has a
+pinned release tag, where the distro packages wlroots 0.20, and conf has a
 tidewm config with tide's keys and inputs. `tide`'s grants, focused
 workspace and `prompt-focus`, and `tide doctor`'s bar, config-error
-and home checks, read tidewm's IPC. What's left is the shell, which reads
-Hyprland's: `Compositor.qml` asks whichever compositor the session runs,
-and so far says which monitor has focus, for the popups, prompts, OSD
+and home checks, read tidewm's IPC, and so does the shell:
+`Compositor.qml` asks whichever compositor the session runs, and says
+which monitor has focus, for the popups, prompts, OSD
 and launcher; which workspaces there are, for the bar, the switcher's
 Workspaces tab and the name prompt, which go to them and keep home's
 name and home itself, which tidewm starts on; and which windows there
 are and which has focus, from tidewm's tree and window events, for the
 bar's icons and title, the switcher's Windows tab, the marks, the
 guard's and notifications', the name prompt, which moves and closes
-them, and minimizing, with tidewm's own `minimize`. conf binds Super+Z
-there once that's in. Next, in order:
+them, and minimizing, with tidewm's own `minimize`, which conf binds to
+Super+Z. Every settings page is in too: each writes a
+`tide-*.conf` conf's tidewm config includes, or says it's Hyprland's
+only; the keyboard shortcuts list tidewm's `GET_BINDINGS`; and pinned
+apps are tidewm's `keep_open`, set by the shell (SPEC.md §6.5), with the
+app's close keys bound `--kept-open`. Sharing a window or a whole screen
+is all the share picker needs there (maintainer, 2026-11-06), so its
+windows need no thumbnails. What's left:
 
-1. The settings pages that write `tide-*.lua` for conf's hyprland.lua:
-   each a `tide-*.conf` conf's tidewm config includes, as the input,
-   appearance, displays and layouts pages' are, or said to be Hyprland's
-   only. The keyboard shortcuts list tidewm's bindings from its
-   `GET_BINDINGS`. The Workspaces page's pinned apps are tidewm's
-   `keep_open`, set by the shell (SPEC.md §6.5); conf's tidewm config
-   binds the app's close keys `--kept-open`.
-2. The rest: the greeter's
-   displays off, should the greeter move to tidewm (it runs Hyprland).
-   Sharing a window or a whole screen is all
-   the share picker needs there (maintainer, 2026-11-06), so its windows
-   need no thumbnails.
+- A first real login: everything so far ran headless, against tidewm's
+  own tests and tide's stand-in.
+- The greeter's displays off, should the greeter move to tidewm (it runs
+  Hyprland), which is part of the switch.
 
-If the fork is adopted, machines build a pinned release tag, never a branch:
+Machines build a pinned release tag, never a branch:
 
-- **Tags.** `tide-<upstream base>-<n>`, cut from the fork's `main`
-  once it is in a state to run (`tide-0.9-1` is dwl 0.9 plus our
-  changes, release 1). Upstream's own `v*` tags stay as they are, so a tag
-  says at a glance whether it carries our code and which base it sits on.
-  Moving to a new upstream release rebases our changes onto it and starts
-  the count again (`tide-0.10-1`).
-- **`setup-tide` pins one.** A line in the same shape as the Hyprland
-  pins, `tidewm https://github.com/mikelward/tidewm.git tide-0.9-1 make`,
-  so every machine builds the same reviewed code, and moving them all is a
-  one-line scripts pull request that CI checks first. Not `main`, which
-  moves under a later run; not `v0.9`, which is upstream's code without
-  ours.
+- **Tags.** `v0.MINOR.PATCH` on the fork's `main`, PATCH being the
+  commits on `main` at the tag, as tidewm's README says. The first is
+  `v0.0.1448`. MINOR goes up for a change that breaks a config or an IPC
+  client, and 1.x waits on the maintainer. Upstream dwl's own tags stop
+  at `v0.9`, so they can't collide.
+- **`setup-tide` pins one** with the commit it named, as it pins
+  Quickshell, and refuses a tag that has moved. Moving every machine is a
+  one-line scripts pull request that CI checks first.
 - **Protection.** `main` gets the fleet ruleset from `repo setup`, like
-  every other repository. A tag ruleset makes `tide-*` and `v*`
-  immutable, since a moved tag would silently change what machines build.
-  The repository is public, so nothing secret ever goes in it, on any
-  branch: per-machine settings stay in an untracked local file.
+  every other repository, and so does a tag ruleset, `release tags`, that
+  stops anyone moving or deleting a `v*` tag. The repository is public, so
+  nothing secret ever goes in it, on any branch: per-machine settings stay
+  in an untracked local file.
 
 ## Launcher on KDE Plasma (SPEC.md §8.5)
 
