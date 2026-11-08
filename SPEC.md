@@ -3426,9 +3426,10 @@ talk, a demo, or a meeting room's screen.
   actually locked, so you always wake to the lock.
 - **Crash safety.**
   - If the lock process dies, Hyprland keeps the session locked (the
-    "lockscreen dead" screen).
+    "lockscreen dead" screen). tidewm does too, with the screen covered.
   - `misc:allow_session_lock_restore` lets systemd's restart of
-    `tide-lock.service` take the lock back. You then unlock with your
+    `tide-lock.service` take the lock back. tidewm lets a new locker take
+    it over with no setting. You then unlock with your
     password as usual. Once the restarts run out, it lets hyprlock take
     the lock (above).
   - `loginctl unlock-session` is **not** a way out. It changes only logind's
@@ -3439,12 +3440,16 @@ talk, a demo, or a meeting room's screen.
        switch back to the session and unlock with your password;
     2. Hyprland 0.56's `hl.clear_crashed_lockscreen()` via
        `hyprctl --instance 0 eval`, if M5 confirms it works from outside
-       the session;
+       the session. On tidewm it's tidewm's own `unlock` command, sent
+       with tide's `tide-msg`:
+       `SWAYSOCK=$(echo "$XDG_RUNTIME_DIR"/tidewm-ipc.*.sock) tide-msg unlock`.
+       It drops only a lock whose locker has gone, and keeps the session;
     3. `loginctl terminate-session <id>`, which loses the session. The id
        of the graphical session is
        `loginctl show-user "$USER" -p Display --value`.
 
-    M5 crashes the lock on purpose and walks all three.
+    M5 crashes the lock on purpose and walks all three, on each
+    compositor.
 - **Remote desktop.** Inside a Chrome Remote Desktop session the lock is
   skipped, as `lock-screensaver` does today.
 
