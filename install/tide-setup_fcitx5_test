@@ -55,6 +55,7 @@ check "fcitx5: after building it" \
 check "fcitx5: says so" has "$output" "Built and installed tide's accents; the build's output is in $T/home/.local/state/setup-tide/tide-accents-build.log"
 check "fcitx5: the build's output stays in its log" has "$(cat "$T/home/.local/state/setup-tide/tide-accents-build.log")" "+ make -C $T/src/tide fcitx5"
 check "fcitx5: the stamp records the tide commit" has "$(cat "$(ta_stamp)")" "tide 7e57000000000000000000000000000000000000"
+check "fcitx5: a checkout's commit is git's" has "$calls" "git -C $T/src/tide rev-parse HEAD"
 check "fcitx5: and the fcitx5 it was built for" has "$(cat "$(ta_stamp)")" "fcitx5 5.1.12"
 check "fcitx5: enables tide's fcitx5 unit" has "$calls" "systemctl --user enable tide-fcitx5.service"
 check "fcitx5: makes tide's accents the input method, over the session's layout" \
@@ -290,6 +291,14 @@ ARGS=(--no-install); run
 check "fcitx5: one that isn't hidden is left" test "$(cat "$(fx_autostart)")" = "[Desktop Entry]
 Exec=fcitx5 -d"
 check "fcitx5: with a warning" has "$output" "Warning: $(fx_autostart) is yours, so it's left as it is, and fcitx5 may start in KDE Plasma too; add Hidden=true to it to keep it out"
+teardown
+
+# A release's source has no .git: its commit is the one git archive wrote
+# into install/revision, and git isn't asked.
+setup; fake_fcitx5; rm -r "$T/src/tide/.git"; mkdir -p "$T/src/tide/install"; echo 3333333333333333333333333333333333333333 > "$T/src/tide/install/revision"; ARGS=(); run
+check "fcitx5: a release's source still builds tide's accents" has "$calls" "make -C $T/src/tide fcitx5"
+check "fcitx5: with its commit from install/revision" has "$(cat "$(ta_stamp)")" "tide 3333333333333333333333333333333333333333"
+check "fcitx5: and git isn't asked" lacks "$calls" "git -C $T/src/tide rev-parse"
 teardown
 
 finish

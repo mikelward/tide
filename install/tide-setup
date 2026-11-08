@@ -2036,7 +2036,7 @@ build_tide_accents() {
         warn "couldn't ask fcitx5 which version it is, which tide's accents have to be built for: $(printf '%s\n' "$_ta_fcitx5" | tail -n 1)"
         return 1
     fi
-    if ! _ta_commit=$(git -C "$TIDE_DIR" rev-parse HEAD 2>&1); then
+    if ! _ta_commit=$(tide_revision); then
         warn "couldn't tell which tide commit is in $TIDE_DIR: $(printf '%s\n' "$_ta_commit" | tail -n 1)"
         return 1
     fi
@@ -2579,6 +2579,22 @@ install_hypridle_config() {
         return 0
     fi
     info "Installed tide's idle settings (dim, lock, screen off, suspend) in $_hc_file"
+}
+
+# tide_revision: the commit this tide is: the one `git archive` wrote into
+# install/revision for a release's source, which has no .git, or else git's.
+# A checkout's install/revision still says $Format:%H$, git's placeholder,
+# and a release's isn't asked of git, which could answer for a repository
+# around it.
+tide_revision() {
+    _tr=$(cat "$TIDE_DIR/install/revision" 2>/dev/null) || _tr=
+    case $_tr in
+        [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*)
+            printf '%s\n' "$_tr"
+            return 0
+            ;;
+    esac
+    git -C "$TIDE_DIR" rev-parse HEAD 2>&1
 }
 
 # make_look_dir: makes LOOK_ROOT/<you>, owned by you and readable by all,
