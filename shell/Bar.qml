@@ -14,7 +14,8 @@ PanelWindow {
     id: bar
 
     required property var modelData
-    readonly property var monitor: Hyprland.monitorFor(bar.screen)
+    // This bar's HyprlandMonitor, or null on tidewm, which isn't asked.
+    readonly property var monitor: Compositor.tidewm ? null : Hyprland.monitorFor(bar.screen)
 
     // How far each click target on the right reaches past its ends: the
     // gaps between them split, so none is dead, whatever their spacing.
@@ -84,6 +85,7 @@ PanelWindow {
         anchors.leftMargin: 7
         anchors.verticalCenter: parent.verticalCenter
         monitor: bar.monitor
+        screenName: bar.screen?.name ?? ""
     }
 
     // Centered on the bar, and no wider than the room between the left and

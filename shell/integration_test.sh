@@ -704,6 +704,11 @@ tidewm_asked() {
         echo "FAIL: $_what never listened for the stand-in tidewm's window events" >&2
         exit 1
     fi
+    # The bar's layout symbol (LayoutData.qml).
+    if ! grep -q '^subscribe .*"layout"' "$tmp/answered"; then
+        echo "FAIL: $_what never listened for the stand-in tidewm's layout events" >&2
+        exit 1
+    fi
     if ! tail -n "+$((_load_from + 1))" "$tmp/helpers.log" | grep -qx 'tide-msg --type get_tree'; then
         echo "FAIL: $_what never asked tide-msg for tidewm's windows" >&2
         exit 1

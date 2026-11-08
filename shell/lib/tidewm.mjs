@@ -10,6 +10,7 @@
 
 import { tidewmName } from "./compositor.mjs";
 import { minimizedWorkspace } from "./minimized.mjs";
+import { DEFAULT_LAYOUTS, defaultMode, layoutSymbol } from "./layouts.mjs";
 
 export const NO_WINDOWS = Object.freeze({ list: Object.freeze([]), order: Object.freeze([]) });
 
@@ -363,4 +364,60 @@ export function keepOpenCommand(windows, pinned) {
 export function closeRefused(data) {
     const event = parsed(data);
     return event?.change === "close_refused" && isWindow(event.container) ? String(event.container.id) : null;
+}
+
+// The bar's layout symbol (SPEC.md §6.1, §7.1) on tidewm, which keeps a
+// layout for each workspace's part on each monitor and says it in its
+// own layout event, for a monitor as its part changes layout or the
+// current workspace changes. What's heard is {OUTPUT: {workspace,
+// layout}}, the last event for each output. The event's own symbol
+// isn't kept: monocle's `[n]` in it is stale once a window opens or
+// closes, which sends no layout event.
+
+// `heard` with the layout event in `data`, its JSON or already parsed;
+// `heard` itself for anything else.
+export function heardLayout(heard, data) {
+    const event = parsed(data);
+    if (event?.change !== "layout" || typeof event.output !== "string" || event.output === ""
+        || typeof event.workspace !== "string" || typeof event.layout !== "string") {
+        return heard;
+    }
+    return Object.assign({}, heard, { [event.output]: { workspace: event.workspace, layout: event.layout } });
+}
+
+// config.h's symbol for tidewm's floating layout, which Hyprland's tide
+// has no mode for.
+const FLOATING_SYMBOL = "><>";
+
+// What the bar on `output` (its GET_OUTPUTS object) shows for the
+// current workspace, `current` (its GET_WORKSPACES object), with `tiled`
+// tiled windows on its part: the layout tidewm last said for it, or
+// until it says, as after the shell restarts, GET_WORKSPACES' `layout`
+// on the focused monitor, which is that one's part, and on another the
+// layout tidewm starts a part in for its shape, by `layouts` (the
+// Layouts page's settings in effect, which tidewm reads too). That
+// shape is GET_OUTPUTS' `rect`, already rotated, and all of it, as
+// tidewm judges it. "" before there's an output or a current workspace.
+export function barSymbol({ heard, output, current, tiled, layouts = DEFAULT_LAYOUTS }) {
+    if (!output || typeof output.name !== "string" || !current || typeof current.name !== "string") {
+        return "";
+    }
+    const said = heard?.[output.name];
+    let layout;
+    if (said && said.workspace === current.name) {
+        layout = said.layout;
+    } else if (output.focused === true && typeof current.layout === "string") {
+        layout = current.layout;
+    } else {
+        layout = defaultMode({ width: output.rect?.width ?? 0, height: output.rect?.height ?? 0 }, 0, layouts);
+    }
+    return layout === "floating" ? FLOATING_SYMBOL : layoutSymbol(layout, tiled);
+}
+
+// How many of `windows` (shellWindows) are tiled on `output`'s part of
+// the workspace named `workspace`: not floating, and not minimized,
+// which leaves them on no workspace.
+export function tiledOn(windows, workspace, output) {
+    return Array.from(windows ?? []).filter(w => w.workspace !== null && w.workspaceName === workspace
+        && w.monitor === output && !w.floating).length;
 }

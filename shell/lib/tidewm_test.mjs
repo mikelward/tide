@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, markEvents, appOf, shellWindows, activeWindow,
+    heardLayout, barSymbol, tiledOn,
     promptEvent, homeEvent, bindingFloats, keyFloated, closeRefused, keepOpenCommand, sendCommand, floatCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand, shortcutCommand,
 } from "./tidewm.mjs";
 import { minimizedFrom, trayWindows } from "./minimized.mjs";
@@ -356,4 +357,73 @@ test("a close tidewm refused names its window", () => {
     assert.equal(closeRefused(event("close", con(10))), null);
     assert.equal(closeRefused("{not json"), null);
     assert.equal(closeRefused({ change: "close_refused", container: { id: 3, type: "workspace" } }), null);
+});
+
+test("a layout event is heard for its output, replacing what that output said before", () => {
+    let heard = heardLayout({}, JSON.stringify({ change: "layout", workspace: "1", output: "DP-1", layout: "tile", symbol: "[]=" }));
+    heard = heardLayout(heard, { change: "layout", workspace: "1", output: "HDMI-A-1", layout: "threecol", symbol: "|M|" });
+    heard = heardLayout(heard, { change: "layout", workspace: "2", output: "DP-1", layout: "monocle", symbol: "[2]" });
+    assert.deepEqual(heard, {
+        "DP-1": { workspace: "2", layout: "monocle" },
+        "HDMI-A-1": { workspace: "1", layout: "threecol" },
+    });
+});
+
+test("anything but a layout event leaves what's heard as it was", () => {
+    const heard = { "DP-1": { workspace: "1", layout: "tile" } };
+    assert.equal(heardLayout(heard, "not json"), heard);
+    assert.equal(heardLayout(heard, { change: "focus", output: "DP-1" }), heard);
+    assert.equal(heardLayout(heard, { change: "layout", workspace: "1", layout: "tile" }), heard);
+});
+
+const output = (name, fields = {}) => Object.assign({ name, focused: false, transform: "normal",
+    rect: { x: 0, y: 0, width: 2560, height: 1440 } }, fields);
+
+test("the bar's symbol is the layout tidewm last said for its monitor's part of the current workspace", () => {
+    const heard = { "DP-1": { workspace: "1", layout: "twocol" } };
+    assert.equal(barSymbol({ heard, output: output("DP-1"), current: { name: "1", layout: "tile" }, tiled: 3 }), "||=");
+});
+
+test("monocle's symbol counts the windows it hides, from the windows the shell keeps", () => {
+    const heard = { "DP-1": { workspace: "1", layout: "monocle" } };
+    assert.equal(barSymbol({ heard, output: output("DP-1"), current: { name: "1" }, tiled: 4 }), "[3]");
+    assert.equal(barSymbol({ heard, output: output("DP-1"), current: { name: "1" }, tiled: 1 }), "[M]");
+});
+
+test("the floating layout shows tidewm's floating symbol", () => {
+    const heard = { "DP-1": { workspace: "1", layout: "floating" } };
+    assert.equal(barSymbol({ heard, output: output("DP-1"), current: { name: "1" }, tiled: 0 }), "><>");
+});
+
+test("before a layout event, the focused monitor shows the current workspace's layout from GET_WORKSPACES", () => {
+    const heard = { "DP-1": { workspace: "2", layout: "monocle" } };
+    assert.equal(barSymbol({ heard, output: output("DP-1", { focused: true }), current: { name: "1", layout: "twocol" }, tiled: 2 }), "||=");
+});
+
+test("before a layout event, another monitor shows the default for its shape, as tidewm picks it", () => {
+    const current = { name: "1", layout: "twocol" };
+    assert.equal(barSymbol({ heard: {}, output: output("DP-1"), current, tiled: 2 }), "[]=");
+    const wide = output("DP-2", { rect: { x: 0, y: 0, width: 5120, height: 1440 } });
+    assert.equal(barSymbol({ heard: {}, output: wide, current, tiled: 2 }), "|M|");
+    const layouts = { ultrawideAspect: 2.1, defaultMode: { normal: "monocle", ultrawide: "twocol" } };
+    assert.equal(barSymbol({ heard: {}, output: wide, current, tiled: 1, layouts }), "||=");
+});
+
+test("a rotated ultrawide's fallback is by its rotated shape, which GET_OUTPUTS' rect already has", () => {
+    const rotated = output("DP-2", { transform: "90", rect: { x: 0, y: 0, width: 1440, height: 5120 } });
+    assert.equal(barSymbol({ heard: {}, output: rotated, current: { name: "1" }, tiled: 2 }), "[]=");
+});
+
+test("with no output or no current workspace yet, the bar shows no symbol", () => {
+    assert.equal(barSymbol({ heard: {}, output: null, current: { name: "1" }, tiled: 0 }), "");
+    assert.equal(barSymbol({ heard: {}, output: output("DP-1"), current: null, tiled: 0 }), "");
+});
+
+test("a monitor's tiled windows are those on its part of the current workspace, not floating or minimized", () => {
+    const windows = shellWindows({ list: [
+        con(10), con(11, { output: "HDMI-A-1" }), con(12, { type: "floating_con" }),
+        con(13, { minimized: true }), con(14, { workspace: "2" }), con(15),
+    ], order: [] }, [{ id: 1, name: "in" }, { id: 2, name: "2" }]);
+    assert.equal(tiledOn(windows, "in", "DP-1"), 2);
+    assert.equal(tiledOn(windows, "in", "HDMI-A-1"), 1);
 });
