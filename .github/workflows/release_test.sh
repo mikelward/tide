@@ -56,6 +56,10 @@ src=build/dist/tide-$tag.tar.gz
 check "dist has the source" test -f "$src"
 check "the source has the installer" sh -c 'tar -tzf "$1" | grep -qx "tide-$2/install/tide-setup"' sh "$src" "$tag"
 check "the source has the pins" sh -c 'tar -tzf "$1" | grep -qx "tide-$2/deps.lock"' sh "$src" "$tag"
+# git archive fills in install/revision (.gitattributes' export-subst), so
+# the installer knows a release's commit without its .git. It archives
+# HEAD, so that's the commit.
+check "the source names its commit" sh -c 'test "$(tar -xzOf "$1" "tide-$2/install/revision")" = "$(git rev-parse HEAD)"' sh "$src" "$tag"
 # GNU's sha256sum, or macOS's shasum, as make dist picks.
 if command -v sha256sum >/dev/null 2>&1; then sums="sha256sum"; else sums="shasum -a 256"; fi
 # shellcheck disable=SC2086 # $sums is a command and its options
