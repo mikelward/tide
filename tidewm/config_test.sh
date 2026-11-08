@@ -72,8 +72,8 @@ done
 nogrant=$(grep 'exec tide launch' "$cfg" | grep -v 'tide launch --app ' || true)
 check "every tide launch names the app its window grant is for" empty "$nogrant"
 
-check "the settings tide's shell writes are included, last, so they win" \
-    test "$(printf '%s\n' "$lines" | tail -n 1)" = "include tide-*.conf"
+check "the settings tide's shell writes are included, then nwg-displays' outputs, last, so they win" \
+    test "$(printf '%s\n' "$lines" | tail -n 2 | tr '\n' '|')" = "include tide-*.conf|include ~/.config/sway/outputs|"
 check "the focus guard is on" contains "$(cat "$cfg")" "focus_guard enable"
 # shellcheck disable=SC2016 # $mod is the config's, not the shell's
 check "the session locks through logind" contains "$(cat "$cfg")" 'bindsym --name=lock $mod+l exec loginctl lock-session'

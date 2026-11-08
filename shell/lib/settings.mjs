@@ -10,13 +10,23 @@ export const GROUPS = Object.freeze([
     { id: "general", label: "General" },
 ]);
 
-// A page's link out in this session: none on tidewm for an app that only
-// writes Hyprland's config (`hyprlandOnly`). nwg-displays takes tidewm's
-// sway socket for sway's and saves to ~/.config/sway/outputs, which
-// tidewm never reads, so its arrangement would be lost at the next login.
-export function advancedFor(page, tidewm) {
+// A page's link out in this session, given the home directory and
+// XDG_CONFIG_HOME ("" for unset). On tidewm, nwg-displays takes tidewm's
+// sway socket for sway's (`sway`): it quits unless sway's directory under
+// the config home is there, and saves where tide's and conf's tidewm configs include
+// it, ~/.config/sway/outputs, named so it doesn't follow XDG_CONFIG_HOME
+// where the include doesn't. Both directories are made first (`dirs`).
+export function advancedFor(page, tidewm, home, configHome = "") {
     const link = page?.advanced ?? null;
-    return link !== null && tidewm && link.hyprlandOnly ? null : link;
+    if (link === null || !tidewm || !link.sway) {
+        return link;
+    }
+    const dir = `${home}/.config/sway`;
+    const dirs = [dir];
+    if (configHome !== "" && `${configHome}/sway` !== dir) {
+        dirs.push(`${configHome}/sway`);
+    }
+    return { label: link.label, command: link.command.concat(["--outputs_path", `${dir}/outputs`]), dirs: dirs };
 }
 
 // Its pages, in the sidebar's order, each in its `group`, and a group's
@@ -33,7 +43,7 @@ export const PAGES = Object.freeze([
         icon: "video-display-symbolic",
         keywords: ["monitors", "scale", "resolution"],
         about: "Scale and position for each monitor.",
-        advanced: { label: "Arrange displays", command: ["nwg-displays"], hyprlandOnly: true },
+        advanced: { label: "Arrange displays", command: ["nwg-displays"], sway: true },
     },
     {
         id: "sound",

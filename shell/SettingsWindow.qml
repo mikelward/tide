@@ -38,7 +38,7 @@ PanelWindow {
 
     property int page: 0
     readonly property var current: Settings.PAGES[page]
-    readonly property var advancedLink: Settings.advancedFor(current, Compositor.tidewm)
+    readonly property var advancedLink: Settings.advancedFor(current, Compositor.tidewm, Quickshell.env("HOME") ?? "", Quickshell.env("XDG_CONFIG_HOME") ?? "")
     // The section of the page to scroll to, by its id (settings.mjs's
     // SECTIONS, or floating-add for the Floating page's fields), or "": set
     // as one opens, and cleared by another page or a flick.
@@ -169,8 +169,15 @@ PanelWindow {
             return;
         }
         const command = advancedLink.command;
+        const dirs = advancedLink.dirs ?? [];
         close();
-        Launcher.launch(command);
+        if (dirs.length > 0) {
+            // Launched either way: a failed mkdir is logged, and the app
+            // says itself what it lacks
+            Launcher.run(["mkdir", "-p", "--"].concat(dirs), () => Launcher.launch(command));
+        } else {
+            Launcher.launch(command);
+        }
     }
 
     visible: false

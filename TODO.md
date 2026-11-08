@@ -7,13 +7,13 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
-- **Displays has no *advanced* on tidewm** (2026-11-08). nwg-displays reads
-  tidewm's sway socket as sway's, so it would show and apply an
-  arrangement, but it saves to `~/.config/sway/outputs`, which tidewm never
-  reads, and the next login or reload would undo it. The alternative is
-  conf's tidewm config including that file, once tidewm is checked to read
-  nwg-displays' `output` blocks; then the link comes back. Reversible, in
-  `lib/settings.mjs`'s `advancedFor`.
+- **Arrange displays on tidewm saves sway's file** (2026-11-08):
+  nwg-displays runs as on sway, with `--outputs_path
+  ~/.config/sway/outputs`, the file tide's and conf's tidewm configs
+  include after tide-outputs.conf, so an arrangement there wins. The shell makes
+  `~/.config/sway` first, and `$XDG_CONFIG_HOME/sway` where that's set,
+  since nwg-displays quits unless sway's directory under its config home
+  is there. Reversible, in `lib/settings.mjs`'s `advancedFor`.
 - **The installer builds tidewm only with `--tidewm`** (2026-11-05), since
   tide's tidewm session is an option beside Hyprland's, not the default,
   and the build costs a run's time on every machine. It pins a release
