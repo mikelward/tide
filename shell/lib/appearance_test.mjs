@@ -12,10 +12,11 @@ import {
     expandHome, pickCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
-    POSITIONS, POSITION_CHOICES, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf
+    POSITIONS, POSITION_CHOICES, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf,
+    LOOK_ROOT, lookDir, lookCommand, lookWriteCommand, lookCopied, lookJson, parseLook, lookAt
 } from "./appearance.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, statSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -941,4 +942,129 @@ test("tidewm's file has the dim strength as its dim_inactive, and only what's se
     assert.ok(text.endsWith("\ndim_inactive 0.12\n"), text);
     assert.ok(appearanceConf({ mode: "dark" }).split("\n").every(line => line === "" || line.startsWith("#")));
     assert.ok(appearanceConf({ dimStrength: 0 }).includes("\ndim_inactive 0\n"), "none at all");
+});
+
+// The greeter's copy of the look (SPEC.md §11).
+test("the look's folder is the user's under the root, and none for a name that couldn't be one", () => {
+    assert.equal(lookDir("", "mikel"), `${LOOK_ROOT}/mikel`);
+    assert.equal(LOOK_ROOT, "/var/lib/tide/look");
+    assert.equal(lookDir("/tmp/look", "mikel"), "/tmp/look/mikel");
+    for (const bad of ["", ".", "..", "a/b", undefined]) {
+        assert.equal(lookDir("", bad), "");
+    }
+});
+
+function runLook(dir, light, dark) {
+    const [cmd, ...args] = lookCommand(dir, light, dark);
+    return spawnSync(cmd, args, { encoding: "utf8" });
+}
+
+test("the look's copies are each mode's first readable picture, and none goes when there's none", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "tide-look-"));
+    try {
+        const dir = join(tmp, "look");
+        mkdirSync(dir);
+        writeFileSync(join(tmp, "day.jpg"), "day");
+        writeFileSync(join(tmp, "night.png"), "night");
+        mkdirSync(join(tmp, "folder.jpg"));
+        let r = runLook(dir, [join(tmp, "missing.jpg"), join(tmp, "folder.jpg"), join(tmp, "day.jpg")], [join(tmp, "night.png")]);
+        assert.equal(r.status, 0, r.stderr);
+        assert.deepEqual(lookCopied(r.stdout), { light: true, dark: true });
+        assert.equal(readFileSync(join(dir, "light"), "utf8"), "day");
+        assert.equal(readFileSync(join(dir, "dark"), "utf8"), "night");
+        // Readable by the greeter's user.
+        assert.equal(statSync(join(dir, "dark")).mode & 0o777, 0o644);
+        // A color for dark, now: nothing to copy, and the old copy goes.
+        r = runLook(dir, [join(tmp, "day.jpg")], ["#102030"]);
+        assert.equal(r.status, 0, r.stderr);
+        assert.deepEqual(lookCopied(r.stdout), { light: true, dark: false });
+        assert.equal(spawnSync("test", ["-e", join(dir, "dark")]).status, 1);
+        assert.deepEqual(lookCommand(dir, ["#abcdef"], []).slice(4), [dir, "--"]);
+    } finally {
+        rmSync(tmp, { recursive: true });
+    }
+});
+
+test("with no look folder, setup hasn't made one, which the script says by its status", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "tide-look-"));
+    try {
+        const r = runLook(join(tmp, "none"), [], []);
+        assert.equal(r.status, 2);
+        assert.equal(r.stdout, "");
+    } finally {
+        rmSync(tmp, { recursive: true });
+    }
+});
+
+test("the look file has the schedule's settings and each mode's wallpaper, and reads back", () => {
+    const settings = Object.assign({}, DEFAULTS, {
+        mode: "sun", latitude: 40.7, longitude: -74, dimStrength: 0.2,
+        darkWallpaper: "#102030", lightWallpaper: "~/day.jpg", lightWallpaperPosition: "fit",
+    });
+    const text = lookJson(settings, ["/home/u/day.jpg"], ["#102030"], { light: true, dark: false });
+    const json = JSON.parse(text);
+    // Only what the greeter needs: no dim, no paths into the home.
+    assert.deepEqual(Object.keys(json).sort(), ["dark", "darkWallpaper", "latitude", "light", "lightWallpaper", "longitude", "mode"]);
+    assert.deepEqual(json.lightWallpaper, { color: "", image: true, position: "fit" });
+    assert.deepEqual(json.darkWallpaper, { color: "#102030", image: false, position: "fill" });
+    const read = parseLook(text);
+    assert.equal(read.error, undefined);
+    assert.equal(read.look.settings.mode, "sun");
+    assert.deepEqual(read.look.darkWallpaper, { color: "#102030", image: false, position: "fill" });
+    // No picture found for light: the greeter draws its own background.
+    assert.equal(JSON.parse(lookJson(settings, ["/home/u/day.jpg"], ["#102030"], { light: false, dark: false })).lightWallpaper.image, false);
+});
+
+test("a look file that's wrong is an error, not a look", () => {
+    assert.match(parseLook("{").error, /./);
+    assert.match(parseLook("[]").error, /object/);
+    assert.match(parseLook('{"mode": "sun"}').error, /latitude/);
+    assert.match(parseLook('{"lightWallpaper": {"color": "red"}}').error, /lightWallpaper.color/);
+    assert.match(parseLook('{"darkWallpaper": {"position": "tile"}}').error, /darkWallpaper.position/);
+    // An empty one is the default schedule and no wallpaper.
+    assert.deepEqual(parseLook("{}").look.lightWallpaper, { color: "", image: false, position: "fill" });
+});
+
+test("the greeter shows the mode the user's schedule gives now, with that mode's wallpaper", () => {
+    const look = parseLook(lookJson(DEFAULTS, ["/h/day.jpg"], ["#102030"], { light: true, dark: false })).look;
+    const noon = lookAt(look, at(2026, 6, 1, 12), "/var/lib/tide/look/u");
+    assert.equal(noon.dark, false);
+    assert.equal(noon.path, "/var/lib/tide/look/u/light");
+    assert.equal(noon.next, at(2026, 6, 1, 19));
+    const night = lookAt(look, at(2026, 6, 1, 22), "/var/lib/tide/look/u");
+    assert.equal(night.dark, true);
+    assert.equal(night.path, "");
+    assert.equal(night.color, "#102030");
+});
+
+test("the lock's record says light or dark, which the lock's face follows", () => {
+    assert.equal(wallpaperRecord("/srv/day.jpg", "fit", false), "/srv/day.jpg\nfit\nlight\n");
+    assert.deepEqual(recordedWallpaper(wallpaperRecord("/srv/day.jpg", "fit", false)), { path: "/srv/day.jpg", color: "", position: "fit", dark: false });
+    assert.deepEqual(recordedWallpaper(wallpaperRecord("", "fill", true)), { path: "", color: "", position: "fill", dark: true });
+    // An older record says neither, and the lock stays dark.
+    assert.equal("dark" in recordedWallpaper("/srv/day.jpg\nfill\n"), false);
+    assert.match(recordedWallpaper("/srv/day.jpg\nfill\ndusk\n").error, /dark or light/);
+});
+
+test("a color wallpaper is lightened behind the light face, as it's darkened behind the dark one", () => {
+    assert.equal(lockColor("#808080", true), "#404040");
+    assert.equal(lockColor("#808080", false), "#c0c0c0");
+    assert.equal(lockColor("#f0f0f0", false), "#ffffff", "held at white");
+});
+
+test("look.json is written readable by all, whatever the umask, and replaced whole", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "tide-look-"));
+    try {
+        const [cmd, ...args] = lookWriteCommand(tmp, '{"mode": "schedule"}\n');
+        const r = spawnSync("sh", ["-c", 'umask 077; exec "$@"', "sh", cmd, ...args], { encoding: "utf8" });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(readFileSync(join(tmp, "look.json"), "utf8"), '{"mode": "schedule"}\n');
+        assert.equal(statSync(join(tmp, "look.json")).mode & 0o777, 0o644);
+        assert.equal(spawnSync("test", ["-e", join(tmp, ".look.json.tmp")]).status, 1);
+        // A folder it can't write is a failure.
+        const [c2, ...a2] = lookWriteCommand(join(tmp, "none"), "{}");
+        assert.notEqual(spawnSync(c2, a2).status, 0);
+    } finally {
+        rmSync(tmp, { recursive: true });
+    }
 });

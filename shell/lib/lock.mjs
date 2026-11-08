@@ -534,15 +534,28 @@ export function hasKeyboard(state) {
     return !state.watching || state.count === null || state.count > 0;
 }
 
+// The face's colors, light or dark (SPEC.md §10, §11): the background's
+// gradient, the text, the red that warns, a failed attempt's border, the
+// accent and a quiet border, and `ink`, the color the face's
+// see-through whites are mixed from: white on the dark face, black on the
+// light one. `wash` is how far a wallpaper is darkened (dark) or
+// lightened (light) behind it, so the text reads on any picture.
+export function facePalette(dark = true) {
+    return dark
+        ? Object.freeze({ dark: true, top: "#13303a", bottom: "#241a3a", text: "#f2f2f6", warn: "#ff9e8a", error: "#ff7b63", accent: PALETTE.dark.accent, quiet: "#29ffffff", ink: 1 })
+        : Object.freeze({ dark: false, top: "#d9edf1", bottom: "#e8e0f3", text: "#1f1f24", warn: "#b3261e", error: "#c62828", accent: PALETTE.light.accent, quiet: "#29000000", ink: 0 });
+}
+
 // The password field's border, and whether its caret shows (SPEC.md §10):
-// in the dark palette's accent while its face takes keys and there's a
+// in the palette's accent while its face takes keys and there's a
 // keyboard to type with; quieter, with no caret, otherwise, so a face
 // whose keys go elsewhere (another monitor's) or nowhere (the KVM switched
 // away) doesn't look ready. A failed attempt's red wins over either.
-export function fieldLook({ focused, keyboard, error }) {
+export function fieldLook({ focused, keyboard, error, dark = true }) {
     const ready = Boolean(focused && keyboard);
+    const face = facePalette(dark);
     return {
-        border: error ? "#ff7b63" : ready ? PALETTE.dark.accent : "#29ffffff",
+        border: error ? face.error : ready ? face.accent : face.quiet,
         borderWidth: error || ready ? 1.5 : 1,
         caret: ready,
     };

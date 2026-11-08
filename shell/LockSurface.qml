@@ -14,6 +14,7 @@ WlSessionLockSurface {
     property string wallpaper: ""
     property string wallpaperColor: ""
     property string wallpaperPosition: "fill"
+    property bool dark: true
     property string powerMessage: ""
     property bool powerBusy: false
     property int unread: 0
@@ -35,6 +36,7 @@ WlSessionLockSurface {
         wallpaper: surface.wallpaper
         wallpaperColor: surface.wallpaperColor
         wallpaperPosition: surface.wallpaperPosition
+        dark: surface.dark
         powerMessage: surface.powerMessage
         powerBusy: surface.powerBusy
         unread: surface.unread

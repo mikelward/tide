@@ -6,6 +6,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import "lib/appearance.mjs" as Appearance
 import "lib/greeter.mjs" as Greeter
 import "lib/lock.mjs" as Lock
 
@@ -282,6 +283,42 @@ ShellRoot {
         }
     }
 
+    // The look of the user picked (SPEC.md §11): their light and dark
+    // schedule and wallpapers, as their shell keeps them in the folder
+    // `setup` makes for them (Appearance.lookDir), since their home is
+    // theirs alone. None there, or one that can't be read, is the face's
+    // own dark gradient. Light or dark is worked out again each minute.
+    readonly property string lookDir: Appearance.lookDir(Quickshell.env("TIDE_LOOK_DIR") || "", root.user)
+    property var look: null
+    property real lookNow: Date.now()
+    readonly property var shown: root.look === null ? null : Appearance.lookAt(root.look, root.lookNow, root.lookDir)
+
+    FileView {
+        path: root.lookDir === "" ? "" : `${root.lookDir}/look.json`
+        printErrors: false
+        onLoaded: {
+            const r = Appearance.parseLook(text());
+            if (r.error) {
+                console.warn(`tide-greeter: ${path}: ${r.error}; the greeter shows its own look`);
+            }
+            root.look = r.look ?? null;
+            root.lookNow = Date.now();
+        }
+        onLoadFailed: error => {
+            if (error !== FileViewError.FileNotFound) {
+                console.warn(`tide-greeter: ${path}: ${FileViewError.toString(error)}; the greeter shows its own look`);
+            }
+            root.look = null;
+        }
+    }
+
+    Timer {
+        interval: 60 * 1000
+        repeat: true
+        running: root.look !== null
+        onTriggered: root.lookNow = Date.now()
+    }
+
     FileView {
         id: remember
 
@@ -404,6 +441,10 @@ ShellRoot {
                 lockState: root.face
                 hostname: root.hostname
                 user: root.userLabel
+                dark: root.shown?.dark ?? true
+                wallpaper: root.shown?.path ?? ""
+                wallpaperColor: root.shown?.color ?? ""
+                wallpaperPosition: root.shown?.position ?? "fill"
                 status: Greeter.statusText(root.face, root.chosen?.name ?? "", Lock.statusLine(root.face, keyboards.present).text)
                 powerMessage: powerActions.message
                 powerBusy: powerActions.busy

@@ -586,16 +586,17 @@ export const WALLPAPER_COLORS = Object.freeze([
 
 // The lock's backdrop for a color wallpaper: `color` darkened as the
 // lock's MultiEffect darkens a picture (brightness -0.25, each channel a
-// quarter down), so the face's light text reads on a light color too.
+// quarter down), so the face's light text reads on a light color too. On
+// the light face (`dark` false), lightened as much, for its dark text.
 export const LOCK_DARKEN = 0.25;
 
-export function lockColor(color) {
+export function lockColor(color, dark = true) {
     const c = wallpaperColor(color);
     if (c === "") {
         return "";
     }
-    const down = Math.round(LOCK_DARKEN * 255);
-    return "#" + [1, 3, 5].map(i => Math.max(0, parseInt(c.slice(i, i + 2), 16) - down).toString(16).padStart(2, "0")).join("");
+    const by = Math.round(LOCK_DARKEN * 255) * (dark ? -1 : 1);
+    return "#" + [1, 3, 5].map(i => Math.min(255, Math.max(0, parseInt(c.slice(i, i + 2), 16) + by)).toString(16).padStart(2, "0")).join("");
 }
 
 // `path` with a leading ~/ as `home`.
@@ -664,16 +665,20 @@ export function drawableCandidates(candidates, undrawable) {
 // What the shell writes for the lock to draw (SPEC.md §15): the wallpaper
 // it draws now, on a line: a file's path, which the lock blurs, a color as
 // #rrggbb, or an empty line for none; then the position (POSITIONS) on a
-// line of its own, so the lock frames a picture as the shell does. Never
+// line of its own, so the lock frames a picture as the shell does; then,
+// when `dark` is given, "dark" or "light", which the lock's face follows
+// (SPEC.md §10). Never
 // empty: Quickshell 0.3.1's FileView.setText skips text equal to what it
 // holds, and a file that doesn't exist holds "", so it could never be
 // written empty.
-export function wallpaperRecord(wallpaper, position = "fill") {
-    return `${wallpaper}\n${position}\n`;
+export function wallpaperRecord(wallpaper, position = "fill", dark = undefined) {
+    const mode = dark === undefined ? "" : `${dark ? "dark" : "light"}\n`;
+    return `${wallpaper}\n${position}\n${mode}`;
 }
 
 // The wallpaper a record the shell wrote names: {path, color, position},
-// path and color each "" but the one it is, both "" for none. One that's
+// path and color each "" but the one it is, both "" for none, and `dark`
+// when the record says light or dark (absent from older records). One that's
 // neither a file's absolute path nor a color on a line, or whose position
 // isn't one, is none, with an error. A record from before positions, the
 // wallpaper's line alone, is "fill", as the shell drew it then; one from
@@ -681,24 +686,25 @@ export function wallpaperRecord(wallpaper, position = "fill") {
 export function recordedWallpaper(text) {
     const lines = (text.endsWith("\n") ? text.slice(0, -1) : text).split("\n");
     const none = error => ({ path: "", color: "", position: "fill", error });
-    if (lines.length > 2) {
-        return none("expected a file's absolute path or a color, on a line of its own, then a position");
+    if (lines.length > 3 || (lines.length === 3 && !["dark", "light"].includes(lines[2]))) {
+        return none("expected a file's absolute path or a color, on a line of its own, then a position, then dark or light");
     }
     const line = lines[0];
     const position = lines.length > 1 ? lines[1] : "fill";
     if (!POSITIONS.includes(position)) {
         return none(`expected a position, one of ${POSITIONS.join(", ")}, on the line after the wallpaper`);
     }
+    const withMode = r => (lines.length === 3 ? Object.assign(r, { dark: lines[2] === "dark" }) : r);
     if (line === "") {
-        return { path: "", color: "", position };
+        return withMode({ path: "", color: "", position });
     }
     if (wallpaperColor(line) !== "") {
-        return { path: "", color: wallpaperColor(line), position };
+        return withMode({ path: "", color: wallpaperColor(line), position });
     }
     if (!line.startsWith("/") || /[\r\0]/.test(line)) {
         return none("expected a file's absolute path or a color, on a line of its own");
     }
-    return { path: line, color: "", position };
+    return withMode({ path: line, color: "", position });
 }
 
 // A file's path as a file: URL, each part escaped, so a name with a space,
@@ -931,3 +937,166 @@ export function positionAt(settings, dark) {
 export function steppedPositionAt(at, steps) {
     return Math.max(0, Math.min(POSITION_CHOICES.length - 1, at + steps));
 }
+
+// The greeter's copy of a user's look (SPEC.md §11, §15): what the shell
+// keeps in LOOK_ROOT/<user>/ for the greeter, which runs as greetd's own
+// user and can't read the user's home. `setup` makes the folder, owned by
+// the user and readable by all. TIDE_LOOK_DIR names another root, for the
+// tests.
+export const LOOK_ROOT = "/var/lib/tide/look";
+
+// The folder for `user`'s look, under `root` (LOOK_ROOT when ""), or "" when
+// the user's name couldn't be a folder's.
+export function lookDir(root, user) {
+    const name = String(user ?? "");
+    if (name === "" || name === "." || name === ".." || name.includes("/")) {
+        return "";
+    }
+    return `${root || LOOK_ROOT}/${name}`;
+}
+
+// The command that copies each mode's wallpaper into the look folder `dir`
+// as the file `light` or `dark`: the first of that mode's candidates that's
+// a regular file it can read, as findCommand takes them. The light ones
+// come first, then "--", then the dark ones (candidates are absolute paths,
+// so never "--"). A copy that's already the same is left be, and a mode
+// with none has its file removed. It prints each mode it has a file for, a
+// line apiece, and exits 2 when `dir` isn't a folder it can write, which
+// `setup` hasn't made yet, or 1 when a copy failed, having said why.
+export const LOOK_SCRIPT = [
+    'dir=$1',
+    'shift',
+    'test -d "$dir" && test -w "$dir" || exit 2',
+    'status=0',
+    // copy MODE CANDIDATE... [-- ...]: the first readable file before any
+    // "--", copied in as MODE unless it's there already.
+    'copy() {',
+    '    mode=$1',
+    '    shift',
+    '    found=',
+    '    for f; do',
+    '        test "$f" = -- && break',
+    '        if test -z "$found" && test -f "$f" && test -r "$f"; then found=$f; fi',
+    '    done',
+    '    if test -z "$found"; then',
+    '        rm -f -- "$dir/$mode" || status=1',
+    '        return',
+    '    fi',
+    '    if ! cmp -s -- "$found" "$dir/$mode" 2>/dev/null; then',
+    '        if ! { cp -- "$found" "$dir/.$mode.tmp" && chmod 644 "$dir/.$mode.tmp" && mv -f -- "$dir/.$mode.tmp" "$dir/$mode"; }; then',
+    '            rm -f -- "$dir/.$mode.tmp"',
+    '            status=1',
+    '            return',
+    '        fi',
+    '    fi',
+    '    echo "$mode"',
+    '}',
+    'copy light "$@"',
+    'while test $# -gt 0 && test "$1" != --; do shift; done',
+    'test $# -gt 0 && shift',
+    'copy dark "$@"',
+    'exit $status',
+].join("\n");
+
+// LOOK_SCRIPT's command: `light` and `dark` are each mode's candidates
+// (wallpaperCandidates'), a color being none to copy.
+export function lookCommand(dir, light, dark) {
+    const files = list => list.filter(c => wallpaperColor(c) === "");
+    return ["sh", "-c", LOOK_SCRIPT, "sh", dir].concat(files(light), ["--"], files(dark));
+}
+
+// Which modes LOOK_SCRIPT has a file for, from what it printed.
+export function lookCopied(text) {
+    const lines = String(text ?? "").split("\n");
+    return { light: lines.includes("light"), dark: lines.includes("dark") };
+}
+
+// The command that writes `json` as `dir`/look.json, by rename, readable
+// by all whatever the umask: the greeter reads it as greetd's user.
+export function lookWriteCommand(dir, json) {
+    return ["sh", "-c", 'printf %s "$2" >"$1/.look.json.tmp" && chmod 644 "$1/.look.json.tmp" && mv -f -- "$1/.look.json.tmp" "$1/look.json" || { rm -f -- "$1/.look.json.tmp"; exit 1; }', "sh", dir, json];
+}
+
+// The look the greeter shows (SPEC.md §11), as the JSON the shell writes
+// beside the copies: the settings that decide light or dark, and for each
+// mode its color, or whether there's a file, and its position. `settings`
+// are AppearanceData's, `light` and `dark` each mode's candidates, and
+// `copied` lookCopied's.
+export function lookJson(settings, light, dark, copied) {
+    const look = {};
+    for (const key of THEME_KEYS) {
+        if (settings[key] !== undefined) {
+            look[key] = settings[key];
+        }
+    }
+    const mode = (candidates, isDark) => {
+        const color = candidates.length === 1 ? wallpaperColor(candidates[0]) : "";
+        return {
+            color,
+            image: color === "" && Boolean(isDark ? copied.dark : copied.light),
+            position: wallpaperPosition(settings, isDark),
+        };
+    };
+    look.lightWallpaper = mode(light, false);
+    look.darkWallpaper = mode(dark, true);
+    return JSON.stringify(look, null, 2) + "\n";
+}
+
+// A look file's text as {look} or {error}: its settings checked as
+// appearance.json's are, and each mode's wallpaper.
+export function parseLook(text) {
+    let value;
+    try {
+        value = JSON.parse(text);
+    } catch (e) {
+        return { error: jsonError(text) };
+    }
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+        return { error: "expected an object" };
+    }
+    const theme = {};
+    for (const key of THEME_KEYS) {
+        if (value[key] !== undefined) {
+            theme[key] = value[key];
+        }
+    }
+    const parsed = parseAppearance(JSON.stringify(theme));
+    if (parsed.error) {
+        return { error: parsed.error };
+    }
+    const settings = Object.assign({}, DEFAULTS, parsed.settings);
+    const wrong = checkSettings(settings);
+    if (wrong) {
+        return { error: wrong };
+    }
+    const look = { settings };
+    for (const name of ["lightWallpaper", "darkWallpaper"]) {
+        const w = value[name] ?? {};
+        const color = w.color ? wallpaperColor(w.color) : "";
+        if (w.color && color === "") {
+            return { error: `${name}.color must be a color as #rrggbb` };
+        }
+        const position = w.position ?? "fill";
+        if (!POSITIONS.includes(position)) {
+            return { error: `${name}.position must be one of ${POSITIONS.join(", ")}` };
+        }
+        look[name] = { color, image: w.image === true && color === "", position };
+    }
+    return { look };
+}
+
+// What the greeter draws at `now` for a look parseLook gave, kept in
+// `dir`: {dark, next, path, color, position}, `path` the mode's copy or "",
+// and `next` the instant of the next change or null.
+export function lookAt(look, now, dir, clock = LOCAL) {
+    const plan = scheduled(look.settings, now, clock);
+    const w = plan.dark ? look.darkWallpaper : look.lightWallpaper;
+    return {
+        dark: plan.dark,
+        next: plan.next,
+        path: w.image ? `${dir}/${plan.dark ? "dark" : "light"}` : "",
+        color: w.color,
+        position: w.position,
+    };
+}
+

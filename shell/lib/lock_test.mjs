@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
+import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, facePalette, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -672,4 +672,17 @@ test("a layout click switches only once a fresh read has settled, never on an ol
     r = layoutNext(r.state, { type: "answer", keymap: "German", index: 1, count: 2 });
     assert.equal(layoutSettled(r.state), true);
     assert.equal(nextLayout(r.state), 0, "the main keyboard now, at index 1, goes on to 0");
+});
+
+test("the face is light or dark, its ink white on dark and black on light", () => {
+    const dark = facePalette(true);
+    const light = facePalette(false);
+    assert.deepEqual(facePalette(), dark, "dark unless told");
+    assert.deepEqual([dark.top, dark.bottom, dark.text, dark.ink], ["#13303a", "#241a3a", "#f2f2f6", 1]);
+    assert.equal(light.ink, 0);
+    assert.notEqual(light.top, dark.top);
+    assert.equal(light.text, "#1f1f24");
+    // The field's border follows: the light palette's accent and a dark hairline.
+    assert.deepEqual(fieldLook({ focused: true, keyboard: true, error: false, dark: false }), { border: "#1c71d8", borderWidth: 1.5, caret: true });
+    assert.equal(fieldLook({ focused: false, keyboard: true, error: false, dark: false }).border, "#29000000");
 });

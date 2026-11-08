@@ -133,6 +133,9 @@ ShellRoot {
     property string wallpaper: ""
     property string wallpaperColor: ""
     property string wallpaperPosition: "fill"
+    // Light or dark, as the shell is now (SPEC.md §10); dark when the
+    // record doesn't say, as an older shell's doesn't.
+    property bool dark: true
 
     FileView {
         path: root.runtimeDir === "" ? "" : `${root.runtimeDir}/tide-wallpaper`
@@ -147,6 +150,7 @@ ShellRoot {
             root.wallpaper = r.path;
             root.wallpaperColor = r.color;
             root.wallpaperPosition = r.position;
+            root.dark = r.dark ?? true;
         }
         onLoadFailed: error => {
             if (error !== FileViewError.FileNotFound) {
@@ -155,6 +159,7 @@ ShellRoot {
             root.wallpaper = "";
             root.wallpaperColor = "";
             root.wallpaperPosition = "fill";
+            root.dark = true;
         }
     }
 
@@ -277,6 +282,7 @@ ShellRoot {
             wallpaper: root.wallpaper
             wallpaperColor: root.wallpaperColor
             wallpaperPosition: root.wallpaperPosition
+            dark: root.dark
             powerMessage: powerActions.message
             powerBusy: powerActions.busy
             layout: keymap.badge
