@@ -4518,6 +4518,17 @@ stays hand-written.
       Ubuntu's and Fedora's collections), `/usr/share/wallpapers`
       (Plasma's) and `~/Pictures/wallpapers`, sorted by name. `setup`
       installs the distro's collections.
+    - Pictures your monitors' shape come first, under Fits your screen,
+      cropped as the monitor would be. The rest follow under Other shapes,
+      shown whole so their shape shows. A shape within 2% fits, so a
+      2560×1080 picture fits a 3440×1440 monitor. With every picture in
+      one section, there's no heading.
+    - JPEG, PNG, WebP, JPEG XL and SVG are shown. An SVG is drawn at the
+      monitor's size, so it stays sharp at any size; its shape is its
+      `viewBox`'s.
+    - `tide-pick --list` lists them, reading each one's size from its
+      header, not decoding it. One whose size it can't read goes under
+      Other shapes.
     - A Plasma wallpaper is a folder of one picture at several sizes. It
       shows once, named for its folder, and sets its largest size.
     - The thumbnails are decoded small and in the background, so a few
@@ -4532,8 +4543,9 @@ stays hand-written.
       the panel. One saved to `~/Pictures/wallpapers` shows in the grid.
     - Choosing one sets it as the file chooser would, and closes the grid.
       Escape, or a click anywhere else, closes it with nothing set.
-    - **Cost and reliability:** nothing new to install; one `find` over
-      three folders each time it opens.
+    - **Cost and reliability:** nothing new to install; one walk of
+      three folders each time it opens, reading a few bytes of each
+      picture.
   - **Each picture's position** is a row under its wallpaper, Light
     wallpaper position and Dark wallpaper position, each stepping through
     the positions with ‹ and ›: Fill, centered; Fill, keep top; Fill, keep

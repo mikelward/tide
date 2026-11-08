@@ -666,30 +666,37 @@ export function moreWallpapersCommand() {
 }
 
 // The pictures the grid can show: Qt decodes these, JPEG XL where
-// kimageformats is installed. One it can't decode isn't shown.
-const GALLERY_TYPES = ["jpg", "jpeg", "png", "webp", "jxl"];
+// kimageformats is installed and SVG with Qt's SVG plugin. One it can't
+// decode shows its name. tide-pick --list lists the same types.
+const GALLERY_TYPES = ["jpg", "jpeg", "png", "webp", "jxl", "svg"];
 
-// The command that lists every picture under `folders`, a line each,
-// passing over a folder that isn't there. One it can't read all of, a
-// subfolder it may not open say, is find's error and status, with what it
-// could read still listed.
+// The command that lists every picture under `folders` with its size:
+// tide-pick --list, which reads each one's header, passes over a folder
+// that isn't there, and fails, still listing what it could, when it can't
+// read all of one, a subfolder it may not open say.
 export function galleryCommand(folders) {
-    const names = GALLERY_TYPES.map(t => `-iname '*.${t}'`).join(" -o ");
-    return ["sh", "-c", `s=0; for d; do if test -d "$d"; then find -L "$d" -maxdepth 6 -type f \\( ${names} \\) -print || s=$?; fi; done; exit $s`, "sh"].concat(folders);
+    return ["tide-pick", "--list"].concat(folders);
 }
 
-// The grid's pictures from what galleryCommand printed, `text`, as
-// `{ path, name }` sorted by name. A Plasma wallpaper is a folder of the
-// same picture at several sizes (contents/images/WxH.ext): it's one
-// picture, its largest, named for its folder, and its dark set, preview
-// and the rest of contents/ aren't shown.
+// The grid's pictures from what galleryCommand printed, `text`, a line
+// each of width, height and path, tab-separated, as
+// `{ path, name, width, height }` sorted by name; a size unknown is 0. A
+// Plasma wallpaper is a folder of the same picture at several sizes
+// (contents/images/WxH.ext): it's one picture, its largest, named for its
+// folder, and its dark set, preview and the rest of contents/ aren't shown.
 export function galleryImages(text) {
     const plain = new Map();
     const plasma = new Map();
     for (const line of String(text ?? "").split("\n")) {
-        const path = line.trim();
+        const fields = /^(\d+(?:\.\d+)?)\t(\d+(?:\.\d+)?)\t(\/.*)$/.exec(line);
+        if (!fields) {
+            continue;
+        }
+        const width = Number(fields[1]);
+        const height = Number(fields[2]);
+        const path = fields[3];
         const type = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
-        if (!path.startsWith("/") || !GALLERY_TYPES.includes(type)) {
+        if (!GALLERY_TYPES.includes(type)) {
             continue;
         }
         const sized = /^(.*\/([^/]+))\/contents\/images\/(\d+)x(\d+)\.[^./]+$/.exec(path);
@@ -697,15 +704,52 @@ export function galleryImages(text) {
             const area = Number(sized[3]) * Number(sized[4]);
             const had = plasma.get(sized[1]);
             if (!had || area > had.area) {
-                plasma.set(sized[1], { path, name: sized[2], area });
+                plasma.set(sized[1], { path, name: sized[2], width, height, area });
             }
         } else if (!path.includes("/contents/")) {
             const base = path.slice(path.lastIndexOf("/") + 1);
-            plain.set(path, { path, name: base.slice(0, base.lastIndexOf(".")) });
+            plain.set(path, { path, name: base.slice(0, base.lastIndexOf(".")), width, height });
         }
     }
-    const all = [...plain.values(), ...[...plasma.values()].map(p => ({ path: p.path, name: p.name }))];
+    const all = [...plain.values(), ...[...plasma.values()].map(p => ({ path: p.path, name: p.name, width: p.width, height: p.height }))];
     return all.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }) || a.path.localeCompare(b.path));
+}
+
+// How far a picture's shape, width over height, may be from a monitor's
+// and still fit it: 2%, so 2560×1080 fits 3440×1440, trimming under 1%,
+// where 16:10 on 16:9 trims 10%.
+const SHAPE_TOLERANCE = 0.02;
+
+// Whether `image`, {width, height}, is the shape of one of `screens`,
+// previewScreens's. One whose size is unknown isn't.
+export function fitsScreens(image, screens) {
+    if (!(image?.width > 0 && image?.height > 0)) {
+        return false;
+    }
+    const shape = image.width / image.height;
+    return screens.some(s => s.width > 0 && s.height > 0 && Math.abs(shape / (s.width / s.height) - 1) <= SHAPE_TOLERANCE);
+}
+
+// The grid's rows, `columns` pictures to a row at most (SPEC.md §16): the
+// pictures your monitors' shape, then the rest, each in galleryImages's
+// order. Each row is { section, heading, images }, section "fits" or
+// "others"; heading is the section's, on its first row, and "" on the
+// rest, and on every row when all the pictures are in the one section.
+export function galleryRows(images, screens, columns) {
+    const fits = images.filter(i => fitsScreens(i, screens));
+    const others = images.filter(i => !fitsScreens(i, screens));
+    const both = fits.length > 0 && others.length > 0;
+    const headings = {
+        fits: screens.length > 1 ? "Fits one of your screens" : "Fits your screen",
+        others: "Other shapes",
+    };
+    const rows = [];
+    for (const [section, list] of [["fits", fits], ["others", others]]) {
+        for (let i = 0; i < list.length; i += columns) {
+            rows.push({ section, heading: both && i === 0 ? headings[section] : "", images: list.slice(i, i + columns) });
+        }
+    }
+    return rows;
 }
 
 // The command that prints the first of `paths` that's a regular file it

@@ -4436,6 +4436,11 @@ PanelWindow {
             // The pictures, galleryImages's, and whether the listing is
             // still running or what it said went wrong.
             property var images: []
+            // Each size of monitor connected, previewScreens's, whose
+            // shape the grid puts first.
+            readonly property var screens: Appearance.previewScreens(Quickshell.screens)
+            readonly property int columns: 4
+            readonly property var rows: Appearance.galleryRows(images, screens, columns)
             property bool listing: false
             property string failed: ""
             // The picture under the pointer, by its name.
@@ -4559,88 +4564,121 @@ PanelWindow {
                 font.pixelSize: 13
             }
 
-            GridView {
+            // A row of pictures at a time, so a few hundred stay cheap and
+            // the sections can have headings: your monitors' shape first,
+            // cropped as a monitor would; then the rest, whole, so their
+            // shape shows.
+            ListView {
                 id: thumbs
+
+                readonly property real cellWidth: Math.floor(width / wallpaperGrid.columns)
+                readonly property real cellHeight: Math.round(cellWidth * 10 / 16)
 
                 x: 12
                 y: gridTitle.y + gridTitle.height + 8
                 width: parent.width - 24
                 height: parent.height - y - 12
                 clip: true
-                cellWidth: Math.floor(width / 4)
-                cellHeight: Math.round(cellWidth * 10 / 16)
-                model: wallpaperGrid.images
+                model: wallpaperGrid.rows
                 boundsBehavior: Flickable.StopAtBounds
                 Keys.onEscapePressed: {
                     wallpaperGrid.close();
                     keys.forceActiveFocus();
                 }
 
-                delegate: Item {
-                    id: thumb
+                delegate: Column {
+                    id: row
 
                     required property var modelData
-                    readonly property bool chosen: modelData.path === wallpaperGrid.current
+                    required property int index
 
-                    width: thumbs.cellWidth
-                    height: thumbs.cellHeight
-
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: 3
-                        radius: 7
-                        color: Theme.surface2
-                        clip: true
-
-                        // Decoded small and off the UI thread, so a few
-                        // hundred 4K pictures don't stall the panel.
-                        Image {
-                            id: thumbImage
-
-                            anchors.fill: parent
-                            source: Appearance.fileUrl(thumb.modelData.path)
-                            sourceSize.width: 320
-                            sourceSize.height: 200
-                            fillMode: Image.PreserveAspectCrop
-                            asynchronous: true
-                            smooth: true
-                        }
-
-                        // One Qt can't decode, JPEG XL without
-                        // kimageformats say, shows its name instead.
-                        Text {
-                            anchors.fill: parent
-                            anchors.margins: 6
-                            visible: thumbImage.status === Image.Error
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            wrapMode: Text.Wrap
-                            elide: Text.ElideRight
-                            text: thumb.modelData.name
-                            color: Theme.fgDim
-                            font.family: Theme.font
-                            font.pixelSize: 11
-                        }
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: 7
-                            color: "transparent"
-                            border.width: thumb.chosen || thumbHover.hovered ? 2 : 1
-                            border.color: thumb.chosen || thumbHover.hovered ? Theme.accent : Theme.edge
-                        }
+                    // The section's heading, on its first row.
+                    Text {
+                        width: thumbs.width
+                        visible: row.modelData.heading !== ""
+                        leftPadding: 3
+                        topPadding: row.index === 0 ? 0 : 8
+                        bottomPadding: 4
+                        text: row.modelData.heading
+                        color: Theme.fgDim
+                        font.family: Theme.font
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
                     }
 
-                    Accessible.name: modelData.name
+                    Row {
+                        Repeater {
+                            model: row.modelData.images
 
-                    HoverHandler {
-                        id: thumbHover
+                            delegate: Item {
+                                id: thumb
 
-                        onHoveredChanged: wallpaperGrid.hovered = hovered ? thumb.modelData.name : ""
-                    }
+                                required property var modelData
+                                readonly property bool chosen: modelData.path === wallpaperGrid.current
 
-                    TapHandler {
-                        onTapped: wallpaperGrid.choose(thumb.modelData.path)
+                                width: thumbs.cellWidth
+                                height: thumbs.cellHeight
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.margins: 3
+                                    radius: 7
+                                    color: Theme.surface2
+                                    clip: true
+
+                                    // Decoded small and off the UI thread, so a
+                                    // few hundred 4K pictures don't stall the
+                                    // panel.
+                                    Image {
+                                        id: thumbImage
+
+                                        anchors.fill: parent
+                                        source: Appearance.fileUrl(thumb.modelData.path)
+                                        sourceSize.width: 320
+                                        sourceSize.height: 200
+                                        fillMode: row.modelData.section === "fits" ? Image.PreserveAspectCrop : Image.PreserveAspectFit
+                                        asynchronous: true
+                                        smooth: true
+                                    }
+
+                                    // One Qt can't decode, JPEG XL without
+                                    // kimageformats say, shows its name instead.
+                                    Text {
+                                        anchors.fill: parent
+                                        anchors.margins: 6
+                                        visible: thumbImage.status === Image.Error
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                        wrapMode: Text.Wrap
+                                        elide: Text.ElideRight
+                                        text: thumb.modelData.name
+                                        color: Theme.fgDim
+                                        font.family: Theme.font
+                                        font.pixelSize: 11
+                                    }
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 7
+                                        color: "transparent"
+                                        border.width: thumb.chosen || thumbHover.hovered ? 2 : 1
+                                        border.color: thumb.chosen || thumbHover.hovered ? Theme.accent : Theme.edge
+                                    }
+                                }
+
+                                Accessible.name: modelData.name
+
+                                HoverHandler {
+                                    id: thumbHover
+
+                                    onHoveredChanged: wallpaperGrid.hovered = hovered ? thumb.modelData.name : ""
+                                }
+
+                                TapHandler {
+                                    onTapped: wallpaperGrid.choose(thumb.modelData.path)
+                                }
+                            }
+                        }
                     }
                 }
             }
