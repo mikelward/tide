@@ -130,6 +130,7 @@ test-lua:
 
 test-fast: test-lua
 	sh hypr/tide/input_test.sh
+	sh hypr/hypridle_test.sh
 	sh tidewm/config_test.sh
 	sh session/session_test.sh
 	sh bin/tide_test.sh
