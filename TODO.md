@@ -7,6 +7,12 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **The wallpaper grid's collections come from folders** (2026-11-08,
+  SPEC.md §16). Everything in `/usr/share/wallpapers` is Plasma, even
+  Debian's own wallpapers there; pictures loose in `/usr/share/backgrounds`
+  take the distro's name from `/etc/os-release`, as Ubuntu's are.
+- **A shape within 2% fits your screen** (2026-11-08, SPEC.md §16), so
+  2560×1080 fits 3440×1440 but 16:10 doesn't fit 16:9.
 - **tide-accents' keys with the list up** (2026-11-08, SPEC.md §8.6).
   Nothing is highlighted at first; Right starts at the first accent, Left
   at the last, and both stop at the ends rather than wrap. Enter with

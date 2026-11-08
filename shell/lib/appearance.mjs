@@ -679,12 +679,15 @@ export function galleryCommand(folders) {
 }
 
 // The grid's pictures from what galleryCommand printed, `text`, a line
-// each of width, height and path, tab-separated, as
-// `{ path, name, width, height }` sorted by name; a size unknown is 0. A
-// Plasma wallpaper is a folder of the same picture at several sizes
-// (contents/images/WxH.ext): it's one picture, its largest, named for its
-// folder, and its dark set, preview and the rest of contents/ aren't shown.
-export function galleryImages(text) {
+// each of width, height and path, tab-separated, as `{ path, name, width,
+// height, collection, mode }` sorted by name; a size unknown is 0.
+// - collection is galleryCollection's.
+// - mode is "light" or "dark" for one of a light and dark pair, else "".
+// A Plasma wallpaper is a folder of the same picture at several sizes
+// (contents/images/WxH.ext), with its dark version in images_dark: it's
+// one picture, or a light one and a dark one, each its largest, named for
+// its folder. Its preview and the rest of contents/ aren't shown.
+export function galleryImages(text, home = "", distro = "") {
     const plain = new Map();
     const plasma = new Map();
     for (const line of String(text ?? "").split("\n")) {
@@ -699,20 +702,128 @@ export function galleryImages(text) {
         if (!GALLERY_TYPES.includes(type)) {
             continue;
         }
-        const sized = /^(.*\/([^/]+))\/contents\/images\/(\d+)x(\d+)\.[^./]+$/.exec(path);
+        const sized = /^(.*\/([^/]+))\/contents\/(images|images_dark)\/(\d+)x(\d+)\.[^./]+$/.exec(path);
         if (sized) {
-            const area = Number(sized[3]) * Number(sized[4]);
-            const had = plasma.get(sized[1]);
+            const key = `${sized[1]}\n${sized[3]}`;
+            const area = Number(sized[4]) * Number(sized[5]);
+            const had = plasma.get(key);
             if (!had || area > had.area) {
-                plasma.set(sized[1], { path, name: sized[2], width, height, area });
+                plasma.set(key, { path, name: sized[2], width, height, folder: sized[1], dark: sized[3] === "images_dark", area });
             }
         } else if (!path.includes("/contents/")) {
             const base = path.slice(path.lastIndexOf("/") + 1);
             plain.set(path, { path, name: base.slice(0, base.lastIndexOf(".")), width, height });
         }
     }
-    const all = [...plain.values(), ...[...plasma.values()].map(p => ({ path: p.path, name: p.name, width: p.width, height: p.height }))];
+    const all = [];
+    for (const p of plasma.values()) {
+        const paired = plasma.has(`${p.folder}\n${p.dark ? "images" : "images_dark"}`);
+        all.push({ path: p.path, name: p.name, width: p.width, height: p.height, mode: paired ? (p.dark ? "dark" : "light") : "" });
+    }
+    const modes = pictureModes([...plain.keys()]);
+    for (const p of plain.values()) {
+        all.push(Object.assign({}, p, { mode: modes.get(p.path) }));
+    }
+    for (const p of all) {
+        p.collection = galleryCollection(p.path, home, distro);
+    }
     return all.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }) || a.path.localeCompare(b.path));
+}
+
+// A picture's pair, by its name, a size at its end aside: { base, mode }
+// for one named as the light or dark one of a pair (GNOME's -l and -d,
+// Ubuntu's -light, -dark and dimmed, Fedora's -day and -night), else null.
+function pairName(path) {
+    const stem = path.slice(0, path.lastIndexOf(".")).replace(/[-_ ]\d+x\d+$/, "");
+    const word = /^(.*[-_ ])(dark|dimmed|night|light|day)$/i.exec(stem);
+    if (word) {
+        return { base: word[1].toLowerCase(), mode: /^(light|day)$/i.test(word[2]) ? "light" : "dark" };
+    }
+    const letter = /^(.*-)([ld])$/.exec(stem);
+    return letter ? { base: `${letter[1]}\n`, mode: letter[2] === "l" ? "light" : "dark" } : null;
+}
+
+// Each picture's mode among `paths`: "light" or "dark" when it's named as
+// one of a pair and its partner is there too, else "", so a lone
+// city-night.jpg shows for either.
+function pictureModes(paths) {
+    const pairs = new Map();
+    for (const path of paths) {
+        const p = pairName(path);
+        if (p) {
+            pairs.set(p.base, (pairs.get(p.base) ?? new Set()).add(p.mode));
+        }
+    }
+    const modes = new Map();
+    for (const path of paths) {
+        const p = pairName(path);
+        modes.set(path, p && pairs.get(p.base).size === 2 ? p.mode : "");
+    }
+    return modes;
+}
+
+// Which collection a picture is in, for the grid's chips: Yours under
+// `home`'s ~/Pictures/wallpapers; Plasma's in /usr/share/wallpapers; one
+// in a folder of /usr/share/backgrounds by that folder (gnome is GNOME,
+// f40 Fedora 40); and one loose in it the distro's, `distro`, as Ubuntu
+// installs its own, or Other with none.
+export function galleryCollection(path, home, distro = "") {
+    if (home !== "" && path.startsWith(`${home}/Pictures/wallpapers/`)) {
+        return "Yours";
+    }
+    if (path.startsWith("/usr/share/wallpapers/")) {
+        return "Plasma";
+    }
+    const sub = /^\/usr\/share\/backgrounds\/(?:([^/]+)\/)?[^/]+$|^\/usr\/share\/backgrounds\/([^/]+)\//.exec(path);
+    if (!sub) {
+        return "Other";
+    }
+    const folder = sub[1] ?? sub[2];
+    if (folder === undefined) {
+        return distro || "Other";
+    }
+    if (/^gnome$/i.test(folder)) {
+        return "GNOME";
+    }
+    const fedora = /^f(\d+)$/i.exec(folder);
+    if (fedora) {
+        return `Fedora ${fedora[1]}`;
+    }
+    return folder.split(/[-_ ]+/).filter(w => w !== "").map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
+}
+
+// The distro's name for the grid's chips, from /etc/os-release's `text`:
+// its NAME, less a trailing "Linux" or "GNU/Linux", so Fedora Linux is
+// Fedora; "" with none.
+export function distroName(text) {
+    const m = /^NAME=(?:"([^"\n]*)"|'([^'\n]*)'|([^\n]*))$/m.exec(String(text ?? ""));
+    const name = m ? (m[1] ?? m[2] ?? m[3] ?? "") : "";
+    return name.replace(/\s+(GNU\/)?Linux$/, "").trim();
+}
+
+// The collections among `images`, for the grid's chips, by name with
+// Yours last; none when there's only one.
+export function galleryCollections(images) {
+    const names = [...new Set(images.map(i => i.collection))];
+    if (names.length < 2) {
+        return [];
+    }
+    return names.sort((a, b) => (a === "Yours") - (b === "Yours") || a.localeCompare(b, "en", { sensitivity: "base" }));
+}
+
+// The grid's light and dark filter's choices, and the one it opens on for
+// a setting, `key`: Light for lightWallpaper, Dark for darkWallpaper.
+export const GALLERY_MODES = ["light", "dark", "any"];
+
+export function galleryModeFor(key) {
+    return key === "darkWallpaper" ? "dark" : key === "lightWallpaper" ? "light" : "any";
+}
+
+// The pictures `images` the grid shows with its filters: `mode` (one of
+// GALLERY_MODES) keeps a pair's picture for that mode, and every picture
+// that isn't one of a pair; `collection`, "" for all, keeps that one's.
+export function galleryFiltered(images, mode, collection) {
+    return images.filter(i => (mode === "any" || i.mode === "" || i.mode === mode) && (collection === "" || i.collection === collection));
 }
 
 // How far a picture's shape, width over height, may be from a monitor's
