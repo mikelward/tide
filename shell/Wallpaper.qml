@@ -18,9 +18,6 @@ PanelWindow {
     WlrLayershell.namespace: "tide-wallpaper"
     WlrLayershell.layer: WlrLayer.Background
     exclusionMode: ExclusionMode.Ignore
-    // Click-through, as swaybg's is: a click on bare desktop isn't the
-    // shell's.
-    mask: Region {}
     anchors {
         top: true
         bottom: true
@@ -32,6 +29,18 @@ PanelWindow {
     // A color wallpaper, or under an image that hasn't loaded, or couldn't,
     // or the bars beside one fitted whole.
     color: WallpaperData.color !== "" ? WallpaperData.color : Theme.barBg
+
+    // A right-click on bare desktop opens Appearance (SPEC.md §15), as a
+    // right-click on the bar opens its item's page. Other clicks do
+    // nothing: the window takes no keyboard focus, so a window keeps it.
+    Item {
+        anchors.fill: parent
+
+        TapHandler {
+            acceptedButtons: Qt.RightButton
+            onTapped: SettingsData.open("appearance")
+        }
+    }
 
     Image {
         anchors.fill: parent

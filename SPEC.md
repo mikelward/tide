@@ -1918,6 +1918,7 @@ See [`bar.png`](docs/mocks/bar.png).
   | keep-awake, session | Idle |
   | notifications, Presenting pill | Notifications |
   | logo, sharing pill, system monitor | the first page, since none fits |
+  | the wallpaper, on bare desktop (§15) | Appearance |
 
   The first page opens even with the panel open on another. A tray
   icon's right-click stays the app's own menu, its only way in. The
@@ -4173,6 +4174,9 @@ to be focused.
 
 - **Wallpaper.** Optional light and dark images or colors, drawn by the
   shell on the background layer, and shown by the lock.
+  - **A right-click on it opens Appearance** (§16), as a right-click on
+    the bar opens its item's page. Other clicks do nothing, and a window
+    keeps the keyboard. With no wallpaper there's nothing to click.
   - Each of `lightWallpaper` and `darkWallpaper` in `appearance.json` is a
     file's path, absolute or from `~/`, or a color as `#rrggbb`. `#rgb` is
     taken too, as `#rrggbb` with each digit doubled. Case doesn't matter.
