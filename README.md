@@ -24,6 +24,13 @@ manager as it is, with tide as one more session. By hand, it's:
     systemctl --user daemon-reload
     systemctl --user enable tide.service tide-clipboard.service tide-fcitx5.service tide-kde.service
 
+`make install` also puts tide's Hyprland config, with its keys and rules,
+in `~/.config/hypr/tide/hyprland.lua`. Without a
+`~/.config/hypr/hyprland.lua` of your own, the session runs it. To keep
+yours and still have tide's keys, load it from yours with your own
+options, such as your keyboard layout, terminal and app keys; its first
+lines list them (SPEC.md §6.8).
+
 By hand, also install what the session runs: Hyprland 0.57 or later,
 Quickshell 0.3 (`qs`, which draws the bar; without it `tide-shell`
 falls back to waybar, and with an older one it says so in a
@@ -107,7 +114,7 @@ otherwise; conf's theme daemon, which runs swaync (and waybar, when that's
 the bar), or without conf, swaync (and waybar) in their default style; a
 polkit agent; and, with waybar, swww (or swaybg where swww
 isn't packaged) for the wallpaper, which the Quickshell shell draws itself.
-It also runs conf's input setup once. It reports ready once
+It also runs tide's input setup once. It reports ready once
 swaync owns the notification name and the bar's tray owns the watcher (see
 `TODO.md`). `TIDE_BAR=waybar` in `~/.config/uwsm/env` keeps waybar.
 

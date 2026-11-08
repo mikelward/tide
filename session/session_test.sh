@@ -67,6 +67,19 @@ check "the wrapper starts Hyprland through its watchdog" \
     test "$(PATH="$tmp/wrapper-bin" /bin/sh "$wrapper" --config x)" = "start-hyprland -- --config x"
 check "the wrapper falls back to Hyprland without start-hyprland" \
     test "$(PATH="$tmp/wrapper-bin-old" /bin/sh "$wrapper" --config x)" = "Hyprland --config x"
+# Without a config of your own, Hyprland gets tide's; with one, or a
+# --config given, it's left to Hyprland.
+mkdir -p "$tmp/hyprhome/.config/hypr/tide"
+: > "$tmp/hyprhome/.config/hypr/tide/hyprland.lua"
+check "the wrapper runs tide's config when you have none" \
+    test "$(HOME="$tmp/hyprhome" XDG_CONFIG_HOME='' PATH="$tmp/wrapper-bin" /bin/sh "$wrapper")" = "start-hyprland -- --config $tmp/hyprhome/.config/hypr/tide/hyprland.lua"
+check "a --config given wins over tide's" \
+    test "$(HOME="$tmp/hyprhome" XDG_CONFIG_HOME='' PATH="$tmp/wrapper-bin" /bin/sh "$wrapper" --config x)" = "start-hyprland -- --config x"
+check "TIDE_HYPRLAND_CONFIG names another" \
+    test "$(HOME="$tmp/hyprhome" XDG_CONFIG_HOME='' TIDE_HYPRLAND_CONFIG=/y PATH="$tmp/wrapper-bin" /bin/sh "$wrapper")" = "start-hyprland -- --config /y"
+: > "$tmp/hyprhome/.config/hypr/hyprland.lua"
+check "your own hyprland.lua is Hyprland's to read" \
+    test "$(HOME="$tmp/hyprhome" XDG_CONFIG_HOME='' PATH="$tmp/wrapper-bin" /bin/sh "$wrapper")" = "start-hyprland --"
 # The input method's variables (SPEC.md §8.6) are the compositor's, so every
 # app it starts has them: set where fcitx5 is installed, unless TIDE_IME=0,
 # and left as they were otherwise.

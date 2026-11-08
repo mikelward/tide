@@ -33,8 +33,10 @@ and full width below that. See SPEC.md §6 for the design.
 
 ## Using it
 
-`make install` copies the modules to `~/.config/hypr/tide/`. Then,
-in `hyprland.lua`:
+`make install` copies the modules to `~/.config/hypr/tide/`, with tide's
+own Hyprland config, `hyprland.lua` (from `hypr/`, SPEC.md §6.8), which
+does all of this. To use the layout from a config of your own, in
+`hyprland.lua`:
 
 ```lua
 local qs = dofile(os.getenv("HOME") .. "/.config/hypr/tide/layout.lua")
