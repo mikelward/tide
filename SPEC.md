@@ -1906,6 +1906,14 @@ reads the settings files the shell writes (`tide-*.lua`).
   `Super+E`, grim and slurp for screenshots, and a notification where the
   shell isn't running to open the launcher.
 - `hyprland.local.lua` still loads last, so a machine's settings win.
+- **tidewm's.** The tidewm session's keys are the same, in tidewm's own
+  syntax: `tidewm/tide.conf`, which `make install` puts in
+  `~/.config/tidewm/`, and `tide-tidewm` passes with `-c` when you have no
+  `~/.config/tidewm/config`. Yours can `include tide.conf` and bind keys
+  again, since tidewm's later binding of the same keys replaces the
+  earlier one, then end with `include tide-*.conf` so the settings pages
+  still win. `tidewm/config_test.sh` checks that it binds every name
+  `hyprland.lua` does, so `keys.json` serves both.
 ## 7. Bar
 
 See [`bar.png`](docs/mocks/bar.png).

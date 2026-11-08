@@ -164,6 +164,29 @@ tidewm_ran=$(tidewm_start)
 check "a home tidewm's start can't name is left to the shell" \
     test "$tidewm_ran" = "tidewm -s exec uwsm finalize SWAYSOCK -c x
 uwsm finalize SWAYSOCK"
+# Without a config of your own, tidewm gets tide's; with one, or a -c,
+# it's tidewm's to read.
+rm -f "$tmp/tidewm-config/hypr/tide-workspaces.lua"
+mkdir -p "$tmp/tidewm-config/tidewm"
+: > "$tmp/tidewm-config/tidewm/tide.conf"
+tidewm_bare() {
+    env PATH="$tmp/tidewm-bin:/usr/bin:/bin" HOME="$tmp/tidewm-home" XDG_CONFIG_HOME="$tmp/tidewm-config" /bin/sh "$tidewm_wrapper"
+}
+check "with no config of yours, tidewm runs tide's" \
+    test "$(tidewm_bare | head -n 1)" = "tidewm -s tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c $tmp/tidewm-config/tidewm/tide.conf"
+check "a -c given wins over tide's" \
+    test "$(tidewm_start | head -n 1)" = "tidewm -s tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c x"
+: > "$tmp/tidewm-config/tidewm/config"
+check "your own config is tidewm's to read" \
+    test "$(tidewm_bare | head -n 1)" = "tidewm -s tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK"
+# make install puts tide.conf where the wrapper looks: XDG_CONFIG_HOME's
+# tidewm, else ~/.config's.
+# shellcheck disable=SC2016 # sh -c's own $1
+check "make install puts tide.conf in XDG_CONFIG_HOME's tidewm" \
+    sh -c 'make -n install XDG_CONFIG_HOME="$1" 2>/dev/null | grep -qF "tidewm/tide.conf \"$1/tidewm/\""' sh "$tmp/xdg"
+# shellcheck disable=SC2016 # and here
+check "and without it, in ~/.config's" \
+    sh -c 'env -u XDG_CONFIG_HOME HOME="$1" make -n install 2>/dev/null | grep -qF "tidewm/tide.conf \"$1/.config/tidewm/\""' sh "$tmp/home"
 check "the tidewm wrapper is executable" test -x "$tidewm_wrapper"
 check "the tidewm wrapper parses as sh" sh -n "$tidewm_wrapper"
 if command -v shellcheck >/dev/null 2>&1; then

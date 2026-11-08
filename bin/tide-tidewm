@@ -42,4 +42,15 @@ case $home in
         start="tide-msg 'workspace number $word; persist workspace $word'; $start"
         ;;
 esac
+# Without a config of your own, tide's, which `make install` puts beside
+# where yours would be (tidewm/tide.conf). A -c given here wins.
+config_dir=${XDG_CONFIG_HOME:-$HOME/.config}/tidewm
+given=no
+for arg; do
+    case $arg in -c) given=yes ;; esac
+done
+if test "$given" = no && ! test -e "$config_dir/config" && ! test -e "$HOME/.config/tidewm/config" \
+    && test -f "$config_dir/tide.conf"; then
+    set -- -c "$config_dir/tide.conf" "$@"
+fi
 exec tidewm -s "$start" "$@"
