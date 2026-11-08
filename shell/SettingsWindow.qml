@@ -12,6 +12,7 @@ import "lib/dnd.mjs" as Dnd
 import "lib/floating.mjs" as FloatRules
 import "lib/idle.mjs" as Idle
 import "lib/input.mjs" as Input
+import "lib/keys.mjs" as Shortcuts
 import "lib/launch.mjs" as Run
 import "lib/layouts.mjs" as Layouts
 import "lib/outputs.mjs" as Outputs
@@ -107,6 +108,7 @@ PanelWindow {
     }
 
     function close() {
+        KeysData.stop();
         wallpaperColors.close();
         wallpaperGrid.close();
         visible = false;
@@ -414,6 +416,40 @@ PanelWindow {
         font.pixelSize: 11
         font.weight: Font.Bold
         font.letterSpacing: 0.5
+    }
+
+    // A small button with a word on it, as Reset is on the device pages.
+    component PillButton: Rectangle {
+        id: pill
+
+        property string text
+
+        signal activated
+
+        anchors.verticalCenter: parent.verticalCenter
+        width: pillText.implicitWidth + 24
+        height: 24
+        radius: 12
+        color: pillHover.hovered ? Theme.edge : Theme.surface2
+
+        Text {
+            id: pillText
+
+            anchors.centerIn: parent
+            text: pill.text
+            color: Theme.fg
+            font.family: Theme.font
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+        }
+
+        HoverHandler {
+            id: pillHover
+        }
+
+        TapHandler {
+            onTapped: pill.activated()
+        }
     }
 
     // A page's − or +: dimmed when it wouldn't move `value`, and a click
@@ -1500,14 +1536,22 @@ PanelWindow {
 
                     // Keyboard's shortcuts: each binding's keys and what it
                     // does, below the keyboard's settings, listed again as
-                    // they show.
+                    // they show. conf's named ones come first, and a click
+                    // on one's keys records new ones (SPEC.md §16).
                     Column {
                         id: keyList
 
+                        // Why the last change made here was refused, until
+                        // the next one or another page.
+                        property string refused: ""
+
                         onVisibleChanged: {
+                            refused = "";
                             if (visible) {
                                 KeysData.list();
                                 pageFlick.scrolled();
+                            } else {
+                                KeysData.stop();
                             }
                         }
                         onYChanged: pageFlick.scrolled()
@@ -1527,14 +1571,180 @@ PanelWindow {
                             rightPadding: 10
                             bottomPadding: 4
                             wrapMode: Text.WordWrap
-                            text: Settings.section("keys").about
+                            text: KeysData.editable ? "Click a shortcut's keys to change them." : Settings.section("keys").about
                             color: Theme.fgDim
                             font.family: Theme.font
                             font.pixelSize: 13
                         }
 
+                        // Takes the keys pressed while one is recording.
+                        // Hyprland's other bindings are off then, and Esc
+                        // leaves its submap, which ends the recording; Esc
+                        // here is for when that didn't start.
+                        Item {
+                            id: recorder
+
+                            // The shortcut recording: a click on another's
+                            // keys while one records moves the card's focus,
+                            // so each new one takes it back.
+                            readonly property string name: KeysData.recording
+
+                            onNameChanged: {
+                                if (name !== "") {
+                                    forceActiveFocus();
+                                } else if (activeFocus) {
+                                    keys.forceActiveFocus();
+                                }
+                            }
+                            width: 0
+                            height: 0
+                            Keys.onPressed: event => {
+                                event.accepted = true;
+                                if (event.key === Qt.Key_Escape) {
+                                    KeysData.stop();
+                                    return;
+                                }
+                                keyList.refused = KeysData.pressed(event.key, event.modifiers);
+                                root.report(keyList.refused);
+                            }
+                        }
+
                         Repeater {
-                            model: KeysData.binds
+                            model: KeysData.editable ? KeysData.rows.named : []
+
+                            Rectangle {
+                                id: named
+
+                                required property var modelData
+                                readonly property bool recording: KeysData.recording === named.modelData.name
+
+                                width: keyList.width
+                                implicitHeight: 28
+                                radius: 6
+                                color: namedHover.hovered || named.recording ? Theme.surface2 : "transparent"
+
+                                HoverHandler {
+                                    id: namedHover
+                                }
+
+                                Text {
+                                    id: namedKeys
+
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 170
+                                    elide: Text.ElideRight
+                                    textFormat: Text.PlainText
+                                    text: named.recording ? "Press keys…" : named.modelData.label
+                                    color: named.recording ? Theme.accent : named.modelData.keys.length === 0 ? Theme.fgFaint : Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+
+                                    TapHandler {
+                                        onTapped: {
+                                            keyList.refused = "";
+                                            if (named.recording) {
+                                                KeysData.stop();
+                                            } else {
+                                                KeysData.record(named.modelData.name);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    anchors.left: namedKeys.right
+                                    anchors.leftMargin: 10
+                                    anchors.right: namedButtons.left
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    textFormat: Text.PlainText
+                                    text: named.modelData.does
+                                    color: Theme.fgDim
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Row {
+                                    id: namedButtons
+
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    height: parent.height
+                                    spacing: 4
+
+                                    PillButton {
+                                        visible: named.modelData.keys.length > 0 && (namedHover.hovered || named.recording)
+                                        text: "Off"
+                                        onActivated: {
+                                            KeysData.stop();
+                                            keyList.refused = KeysData.off(named.modelData.name);
+                                            root.report(keyList.refused);
+                                        }
+                                    }
+
+                                    PillButton {
+                                        visible: named.modelData.changed
+                                        text: "Reset"
+                                        onActivated: {
+                                            KeysData.stop();
+                                            keyList.refused = KeysData.reset(named.modelData.name);
+                                            root.report(keyList.refused);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Keys another shortcut has: swap them, or not.
+                        Item {
+                            visible: KeysData.pending !== null
+                            width: keyList.width
+                            implicitHeight: 32
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.right: clashButtons.left
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                elide: Text.ElideRight
+                                textFormat: Text.PlainText
+                                text: KeysData.pending === null ? "" : `${Shortcuts.keysId(KeysData.pending.keys)} is ${KeysData.pending.clash.does}. Swap them?`
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                id: clashButtons
+
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                height: parent.height
+                                spacing: 4
+
+                                PillButton {
+                                    text: "Swap"
+                                    onActivated: {
+                                        keyList.refused = KeysData.swap();
+                                        root.report(keyList.refused);
+                                    }
+                                }
+
+                                PillButton {
+                                    text: "Cancel"
+                                    onActivated: KeysData.pending = null
+                                }
+                            }
+                        }
+
+                        Repeater {
+                            model: KeysData.rows.fixed
 
                             Item {
                                 id: binding
@@ -1577,18 +1787,25 @@ PanelWindow {
                             }
                         }
 
-                        // Why there are none, if they couldn't be listed.
-                        Text {
-                            visible: KeysData.error !== ""
-                            x: 10
-                            width: keyList.width - 20
-                            topPadding: 4
-                            wrapMode: Text.Wrap
-                            textFormat: Text.PlainText
-                            text: KeysData.error
-                            color: Theme.danger
-                            font.family: Theme.font
-                            font.pixelSize: 12
+                        // Why there are none, if they couldn't be listed,
+                        // why a change was refused, or why yours aren't in
+                        // effect.
+                        Repeater {
+                            model: [KeysData.error, keyList.refused, KeysData.failure].filter(t => t !== "")
+
+                            Text {
+                                required property string modelData
+
+                                x: 10
+                                width: keyList.width - 20
+                                topPadding: 4
+                                wrapMode: Text.Wrap
+                                textFormat: Text.PlainText
+                                text: modelData
+                                color: Theme.danger
+                                font.family: Theme.font
+                                font.pixelSize: 12
+                            }
                         }
                     }
 

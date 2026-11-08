@@ -4266,7 +4266,7 @@ tide's own, and links out for the rest:
 | Bluetooth | *advanced* opens `blueman-manager` |
 | Mouse | for every mouse, or one by name: speed, acceleration, scroll speed, natural scrolling, left-handed |
 | Touchpad | for every touchpad, or one by name: the mouse's but acceleration, plus tap to click and off while typing |
-| Keyboard | for every keyboard, or one by name: layouts and their variants, repeat delay and rate; below them, its shortcuts, a read-only list of the current bindings, generated from the config |
+| Keyboard | for every keyboard, or one by name: layouts and their variants, repeat delay and rate; below them, its shortcuts: the current bindings, generated from the config, where a click on one's keys records new ones |
 | Power | the battery, the power profile, and what closing the lid does |
 | **Windows** | |
 | Layouts | default layout per aspect ratio, `mfact`, master count, the rule for new windows |
@@ -4438,6 +4438,35 @@ stays hand-written.
     listing includes it and says nothing of it, and `conf` turns none off.
   - A Lua binding by keycode (`SUPER + code:28`) shows only that it is
     one: 0.56.2's listing gives neither its key nor its code.
+  - On Hyprland, `conf` names most bindings, and those come first and can
+    change. `conf` lists each one's name, what it does, its default keys
+    and its keys now in `tide-keys.json`, in its instance's runtime
+    directory. The rest, which can't change, follow: the mouse, the media
+    and brightness keys, `Super+0…9`, the Super tap, a pinned window's app
+    keys, and the resize submap's. On tidewm, and with a `conf` from before
+    named bindings, the whole list stays read-only.
+  - A click on a binding's keys records new ones. The page puts Hyprland
+    in `conf`'s `tide-keys` submap, where no binding but Esc takes a key,
+    so the keys pressed reach the page, not the bindings. The next key
+    pressed with Super, Ctrl or Alt replaces the binding's keys; a
+    function key, Print and Pause need none. Esc, a second click, leaving
+    the page or 15 seconds with no key all stop it, and give the keys back.
+  - Keys another binding has are asked about: Swap gives that one this
+    one's old keys, and Cancel changes nothing. Keys that can't change
+    can't be given, and the page says whose they are.
+  - Off takes a binding's keys away; Reset, shown once a binding's keys
+    aren't its defaults, gives them back.
+  - Your keys are in `keys.json` and `keys.local.json` (§16.1), as
+    `{ "keys": { "terminal": ["SUPER + D"], "lock": [] } }`, a binding's
+    keys in place of its defaults, an empty list for off; a binding back at
+    its defaults leaves the file. The shell writes them to
+    `~/.config/hypr/tide-keys.lua` and runs `hyprctl eval
+    'conf_keys.reload()'`, which binds them, then lists the bindings again.
+    With no keys of yours and no file, it writes nothing, so an older
+    `conf` is left alone.
+  - Keys are recorded by what the keyboard layout says the key is, as
+    Hyprland binds them. With Shift, Qt reports the shifted symbol, which
+    is turned back into its key on a US layout's symbols (`!` is `1`).
 
 - **Layouts** sets §6's: where ultrawide begins, the mode a new workspace
   starts in on an ultrawide and on any other monitor, each mode's `mfact`

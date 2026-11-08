@@ -173,3 +173,11 @@ export function sendShortcut(mods, key, address, lua) {
         ? `hl.dsp.send_shortcut({ mods = ${luaString(mods)}, key = ${luaString(key)}, window = ${luaString(w)} })`
         : `sendshortcut ${mods}, ${key}, ${w}`;
 }
+
+// Start or stop recording a shortcut's keys (SPEC.md §16): conf's
+// tide-keys submap, where no binding but Esc takes a key, so the page sees
+// the keys pressed; and back to Hyprland's own bindings.
+export function recordingKeys(on, lua) {
+    const submap = on ? "tide-keys" : "reset";
+    return lua ? `hl.dsp.submap("${submap}")` : `submap ${submap}`;
+}

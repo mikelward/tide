@@ -41,6 +41,27 @@ once you have agreed with it or reversed it.
   alternative, a field that's focused only as the panel opens, leaves
   Up, Down and Escape with nowhere to go after a page's field. Reversible:
   `id: keys` in `shell/SettingsWindow.qml`.
+- **Swap gives the other shortcut this one's old keys** (2026-11-08,
+  SPEC.md §16): recording keys another shortcut has asks Swap or Cancel,
+  and Swap moves this one's old keys to it. The alternative was taking the
+  keys and leaving the other off, which the conf loader already does for a
+  hand-edited file. It's `withKeys` in `shell/lib/keys.mjs`.
+- **A recording gives the keys back after 15 seconds** (2026-11-08): with
+  Hyprland's bindings off in the `tide-keys` submap, a page left recording
+  would leave every key dead. Esc leaves the submap too, as `conf` binds it
+  there. It's `stopRecording` in `shell/KeysData.qml`.
+- **A recorded key needs Super, Ctrl or Alt**, except the function keys,
+  Print and Pause (2026-11-08), so a shortcut never takes a key you type.
+  Shift with a symbol is turned back into its key on a US layout's symbols.
+  It's `recordedKeys` in `shell/lib/keys.mjs`.
+- **A recorded key replaces all of a shortcut's keys**, so Monocle's two
+  become one (2026-11-08). The alternative was an Add keys button beside
+  each. It's `withKeys` in `shell/lib/keys.mjs`.
+- **KeysData writes and applies as FloatingData does, copied** (2026-11-08):
+  the target, apply process and retry are the same in both, and in
+  LayoutsData's and WorkspacesData's. A shared `AppliedFile` component would
+  hold them once.
+
 - **The light face's colors** (2026-11-08, SPEC.md §11): a pale teal to
   lavender gradient (`#d9edf1` to `#e8e0f3`), the light palette's text and
   accent, a dark red for warnings, and a wallpaper lightened 25% behind
