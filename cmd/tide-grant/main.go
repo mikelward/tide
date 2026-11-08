@@ -58,7 +58,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mikelward/quickspace/internal/swayipc"
+	"github.com/mikelward/tide/internal/swayipc"
 	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/syntax"
 )

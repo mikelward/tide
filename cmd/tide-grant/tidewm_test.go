@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mikelward/quickspace/internal/swayipc/swayipctest"
+	"github.com/mikelward/tide/internal/swayipc/swayipctest"
 )
 
 // In tidewm's session (SPEC.md §5.3) a terminal command's grant goes

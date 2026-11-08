@@ -36,7 +36,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mikelward/quickspace/internal/swayipc"
+	"github.com/mikelward/tide/internal/swayipc"
 )
 
 func main() {
