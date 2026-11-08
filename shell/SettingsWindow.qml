@@ -41,6 +41,7 @@ PanelWindow {
     // Another page starts at its top.
     onPageChanged: {
         wallpaperColors.close();
+        wallpaperGrid.close();
         section = "";
         pageFlick.contentY = 0;
     }
@@ -74,6 +75,7 @@ PanelWindow {
 
     function close() {
         wallpaperColors.close();
+        wallpaperGrid.close();
         visible = false;
     }
 
@@ -412,6 +414,42 @@ PanelWindow {
         TapHandler {
             enabled: button.moves
             onTapped: button.activated()
+        }
+    }
+
+    // The wallpaper grid's listing (galleryCommand), tracked as every
+    // command the shell runs is, waiting for its stdout too.
+    Component {
+        id: gallery
+
+        Process {
+            id: list
+
+            property var tracker: null
+
+            function handle(event) {
+                if (tracker.on(event)) {
+                    destroy();
+                }
+            }
+
+            Component.onCompleted: tracker = Run.track(command, (ok, errors, output) => wallpaperGrid.listed(ok, errors, output), {
+                warn: m => console.warn(m),
+                log: m => console.log(m)
+            }, true)
+            stdout: StdioCollector {
+                onStreamFinished: list.handle({ type: "stdout", text: text })
+            }
+            stderr: StdioCollector {
+                onStreamFinished: list.handle({ type: "stderr", text: text })
+            }
+            onStarted: handle({ type: "started" })
+            onRunningChanged: {
+                if (!running) {
+                    handle({ type: "stopped" });
+                }
+            }
+            onExited: (exitCode, status) => handle({ type: "exited", code: exitCode })
         }
     }
 
@@ -1959,7 +1997,7 @@ PanelWindow {
 
                                         readonly property string shows: Appearance.wallpaperColor(wallpaper.shown())
 
-                                        anchors.right: chooseButton.left
+                                        anchors.right: gridButton.left
                                         anchors.rightMargin: 4
                                         anchors.verticalCenter: parent.verticalCenter
                                         width: 26
@@ -1989,6 +2027,37 @@ PanelWindow {
 
                                         TapHandler {
                                             onTapped: wallpaperColors.show(wallpaper.modelData.key, wallpaper.modelData.label, swatch)
+                                        }
+                                    }
+
+                                    // Opens the wallpaper grid, the
+                                    // installed pictures and yours.
+                                    Rectangle {
+                                        id: gridButton
+
+                                        anchors.right: chooseButton.left
+                                        anchors.rightMargin: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 26
+                                        height: 26
+                                        radius: 7
+                                        color: gridHover.hovered || wallpaperGrid.key === wallpaper.modelData.key ? Theme.surface2 : "transparent"
+                                        Accessible.name: "Wallpapers"
+
+                                        SymbolicIcon {
+                                            anchors.centerIn: parent
+                                            name: "view-grid-symbolic"
+                                        }
+
+                                        HoverHandler {
+                                            id: gridHover
+                                        }
+
+                                        TapHandler {
+                                            onTapped: {
+                                                wallpaperColors.close();
+                                                wallpaperGrid.show(wallpaper.modelData.key, wallpaper.modelData.label);
+                                            }
                                         }
                                     }
 
@@ -4097,9 +4166,10 @@ PanelWindow {
         // anywhere else closes them, and goes no further.
         MouseArea {
             anchors.fill: parent
-            visible: wallpaperColors.visible
+            visible: wallpaperColors.visible || wallpaperGrid.visible
             onPressed: {
                 wallpaperColors.close();
+                wallpaperGrid.close();
                 keys.forceActiveFocus();
             }
         }
@@ -4244,6 +4314,193 @@ PanelWindow {
                             color: Theme.fgFaint
                             font: hex.font
                         }
+                    }
+                }
+            }
+        }
+
+        // The wallpaper grid (§16): every picture installed in the distro's
+        // collections and in ~/Pictures/wallpapers, as thumbnails over the
+        // page. Choosing one sets it as the file chooser would, and closes
+        // it; Escape, or a click anywhere else, closes it with nothing set.
+        Rectangle {
+            id: wallpaperGrid
+
+            // The setting, lightWallpaper or darkWallpaper, or "" when shut.
+            property string key: ""
+            property string label: ""
+            // The pictures, galleryImages's, and whether the listing is
+            // still running or what it said went wrong.
+            property var images: []
+            property bool listing: false
+            property string failed: ""
+            // The picture under the pointer, by its name.
+            property string hovered: ""
+            readonly property string current: Appearance.expandHome(AppearanceData.settings[key] ?? "", Quickshell.env("HOME") ?? "")
+
+            // Lists the pictures afresh each time, so a download shows.
+            function show(key, label) {
+                wallpaperGrid.key = key;
+                wallpaperGrid.label = label;
+                images = [];
+                failed = "";
+                if (!listing) {
+                    listing = true;
+                    const run = gallery.createObject(root, { command: Appearance.galleryCommand(Appearance.galleryFolders(Quickshell.env("HOME") ?? "")) });
+                    run.running = true;
+                }
+                thumbs.forceActiveFocus();
+            }
+
+            // Shows what was listed even when some of it couldn't be, with
+            // why over the grid (Run.track has logged it).
+            function listed(ok, errors, output) {
+                listing = false;
+                if (key === "") {
+                    return;
+                }
+                images = Appearance.galleryImages(output);
+                if (!ok) {
+                    failed = `couldn't list every wallpaper: ${errors.trim().split("\n")[0] || "find didn't start"}`;
+                }
+            }
+
+            function close() {
+                key = "";
+                hovered = "";
+                images = [];
+            }
+
+            function choose(path) {
+                const key = wallpaperGrid.key;
+                close();
+                keys.forceActiveFocus();
+                appearance.set(key, Appearance.pickedWallpaper(path, Quickshell.env("HOME") ?? ""));
+            }
+
+            visible: key !== ""
+            x: 12
+            y: 12
+            width: card.width - 24
+            height: card.height - 24
+            radius: 12
+            color: Theme.surface
+            border.color: Theme.edge
+
+            // Takes its own presses, so they don't close it.
+            MouseArea {
+                anchors.fill: parent
+            }
+
+            Text {
+                id: gridTitle
+
+                x: 12
+                y: 12
+                width: parent.width - 24
+                elide: Text.ElideRight
+                text: wallpaperGrid.hovered !== "" ? wallpaperGrid.hovered : wallpaperGrid.failed !== "" && thumbs.count > 0 ? wallpaperGrid.failed : wallpaperGrid.label
+                color: wallpaperGrid.hovered === "" && wallpaperGrid.failed !== "" && thumbs.count > 0 ? Theme.danger : Theme.fgDim
+                font.family: Theme.font
+                font.pixelSize: 12
+            }
+
+            Text {
+                anchors.centerIn: thumbs
+                width: thumbs.width - 24
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                visible: thumbs.count === 0
+                text: wallpaperGrid.failed !== "" ? wallpaperGrid.failed
+                    : wallpaperGrid.listing ? "Finding wallpapers…"
+                    : "No wallpapers found. Add some to ~/Pictures/wallpapers."
+                color: Theme.fgDim
+                font.family: Theme.font
+                font.pixelSize: 13
+            }
+
+            GridView {
+                id: thumbs
+
+                x: 12
+                y: gridTitle.y + gridTitle.height + 8
+                width: parent.width - 24
+                height: parent.height - y - 12
+                clip: true
+                cellWidth: Math.floor(width / 4)
+                cellHeight: Math.round(cellWidth * 10 / 16)
+                model: wallpaperGrid.images
+                boundsBehavior: Flickable.StopAtBounds
+                Keys.onEscapePressed: {
+                    wallpaperGrid.close();
+                    keys.forceActiveFocus();
+                }
+
+                delegate: Item {
+                    id: thumb
+
+                    required property var modelData
+                    readonly property bool chosen: modelData.path === wallpaperGrid.current
+
+                    width: thumbs.cellWidth
+                    height: thumbs.cellHeight
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 3
+                        radius: 7
+                        color: Theme.surface2
+                        clip: true
+
+                        // Decoded small and off the UI thread, so a few
+                        // hundred 4K pictures don't stall the panel.
+                        Image {
+                            id: thumbImage
+
+                            anchors.fill: parent
+                            source: Appearance.fileUrl(thumb.modelData.path)
+                            sourceSize.width: 320
+                            sourceSize.height: 200
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            smooth: true
+                        }
+
+                        // One Qt can't decode, JPEG XL without
+                        // kimageformats say, shows its name instead.
+                        Text {
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            visible: thumbImage.status === Image.Error
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            wrapMode: Text.Wrap
+                            elide: Text.ElideRight
+                            text: thumb.modelData.name
+                            color: Theme.fgDim
+                            font.family: Theme.font
+                            font.pixelSize: 11
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 7
+                            color: "transparent"
+                            border.width: thumb.chosen || thumbHover.hovered ? 2 : 1
+                            border.color: thumb.chosen || thumbHover.hovered ? Theme.accent : Theme.edge
+                        }
+                    }
+
+                    Accessible.name: modelData.name
+
+                    HoverHandler {
+                        id: thumbHover
+
+                        onHoveredChanged: wallpaperGrid.hovered = hovered ? thumb.modelData.name : ""
+                    }
+
+                    TapHandler {
+                        onTapped: wallpaperGrid.choose(thumb.modelData.path)
                     }
                 }
             }
