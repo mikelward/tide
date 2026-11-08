@@ -1245,12 +1245,13 @@ install_packages() {
     # and python3 is how `tide doctor` reads the session bus's XML config.
     # tide-shell shows the wallpaper with swww, or with swaybg where
     # the distro has no swww (Ubuntu 26.04), so both are asked for.
-    # make runs this checkout's install, and xdg-terminal-exec is the
-    # terminal tide's Hyprland config and launcher open; neither comes with
-    # every desktop.
+    # make runs this checkout's install, xdg-terminal-exec is the terminal
+    # tide's Hyprland config and launcher open, and hyprpolkitagent, the
+    # first polkit agent tide-shell looks for, asks for passwords; none
+    # comes with every desktop.
     common="hypridle hyprlock uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
             waybar swww swaybg fuzzel grim slurp wl-clipboard wtype brightnessctl playerctl jq \
-            make xdg-terminal-exec"
+            make xdg-terminal-exec hyprpolkitagent"
     # A source build replaces the distro's Hyprland rather than sitting
     # beside it.
     if test "$BUILD_NOW" = no; then

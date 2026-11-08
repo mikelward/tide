@@ -29,6 +29,7 @@ teardown
 setup; ARGS=(); run
 check "installs make, which runs tide's install" has "$calls" " make "
 check "installs the terminal tide's keys open" has "$calls" "xdg-terminal-exec"
+check "installs a polkit agent, which tide-shell starts" has "$calls" "hyprpolkitagent"
 teardown
 
 # Run on its own, it says to run itself again; under setup, setup.
@@ -611,7 +612,7 @@ check "nor warned about" lacks "$output" "Warning:"
 check "nor a failure" lacks "$output" "Failed:"
 check "swaybg is installed in its place" has "$output" " swaybg "
 check "the rest install in one go" has "$calls" "apt-get install -y hyprland hypridle hyprlock uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk waybar swaybg fuzzel"
-check "the rest install in one go, notify-send, Go and python3 too" has "$calls" "playerctl jq make xdg-terminal-exec sway-notification-center libnotify-bin golang python3"
+check "the rest install in one go, notify-send, Go and python3 too" has "$calls" "playerctl jq make xdg-terminal-exec hyprpolkitagent sway-notification-center libnotify-bin golang python3"
 check "satty is asked for, for the screenshot's Annotate" has "$calls" "apt-get install -y satty"
 check "Debian gets nm-connection-editor from network-manager-gnome" has "$calls" "apt-get install -y network-manager-gnome"
 check "a missing package is never asked for" lacks "$calls" "swww"
