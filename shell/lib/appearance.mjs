@@ -534,7 +534,7 @@ export function appearanceConf(settings) {
     const lines = [
         "# Written by tide from appearance.json and appearance.local.json (tide SPEC.md §16).",
         "# Change those, or the Appearance page of tide's settings, not this file. Only",
-        "# what's set is here; conf's tidewm config has the rest.",
+        "# what's set is here; tidewm's config has the rest.",
     ];
     if (settings.dimStrength !== undefined) {
         lines.push(`dim_inactive ${settings.dimStrength}`);
@@ -606,8 +606,8 @@ export function expandHome(path, home) {
 
 // The wallpapers to try, in order, for light or `dark` (SPEC.md §15): the
 // one set for it, then $TIDE_WALLPAPER (`env`, "" when it's unset), then
-// conf's per-mode image and its one for both, as theme.sh and tide-shell
-// have them. The shell shows the first that can be read. A color set for
+// a picture you put in ~/.config/hypr, the mode's own or one for both, as
+// tide-shell looks for it. The shell shows the first that can be read. A color set for
 // the mode is the only one: it can always be drawn.
 export function wallpaperCandidates(settings, dark, home, env = "") {
     const mode = dark ? "dark" : "light";

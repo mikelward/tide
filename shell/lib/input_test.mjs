@@ -123,7 +123,7 @@ test("only what's set reaches hyprland.lua, in Hyprland's option names", () => {
     assert.equal(inputLua({}), [
         "-- Written by tide from input.json and input.local.json (tide SPEC.md §16).",
         "-- Change those, or the Mouse, Touchpad and Keyboard pages of tide's",
-        "-- settings, not this file. Only what's set is here; conf's hyprland.lua",
+        "-- settings, not this file. Only what's set is here; tide's hyprland.lua",
         "-- has the rest.",
         "return {",
         "    mouse = {},",

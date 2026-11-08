@@ -573,7 +573,7 @@ export function inputConf(input) {
     const lines = [
         "# Written by tide from input.json and input.local.json (tide SPEC.md §16).",
         "# Change those, or the Mouse, Touchpad and Keyboard pages of tide's",
-        "# settings, not this file. Only what's set is here; conf's tidewm config",
+        "# settings, not this file. Only what's set is here; tidewm's config",
         "# has the rest.",
     ];
     for (const section of Object.keys(SECTIONS)) {
@@ -608,7 +608,7 @@ export function inputLua(input) {
     const lines = [
         "-- Written by tide from input.json and input.local.json (tide SPEC.md §16).",
         "-- Change those, or the Mouse, Touchpad and Keyboard pages of tide's",
-        "-- settings, not this file. Only what's set is here; conf's hyprland.lua",
+        "-- settings, not this file. Only what's set is here; tide's hyprland.lua",
         "-- has the rest.",
         "return {",
     ];

@@ -522,7 +522,7 @@ test("a wallpaper is a file's path, absolute or from ~/, or empty for the defaul
     assert.deepEqual(JSON.parse(withSetting('{"dark": "20:00"}', "darkWallpaper", "~/night.jpg").text), { dark: "20:00", darkWallpaper: "~/night.jpg" });
 });
 
-test("the wallpaper is the mode's own, then $TIDE_WALLPAPER, then conf's", () => {
+test("the wallpaper is the mode's own, then $TIDE_WALLPAPER, then ~/.config/hypr's", () => {
     const home = "/home/user";
     assert.deepEqual(wallpaperCandidates({ lightWallpaper: "~/day.jpg", darkWallpaper: "/srv/night.png" }, true, home), [
         "/srv/night.png",
