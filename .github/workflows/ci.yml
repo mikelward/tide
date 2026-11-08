@@ -107,6 +107,23 @@ jobs:
           persist-credentials: false
       - run: make test-selftest
 
+  # The installer's tests (install/), apart from `test` because they take a
+  # few minutes each even side by side. They mock every package manager,
+  # sudo and git; tide-setup_pam_test builds a PAM module with gcc against
+  # the runner's own libpam.
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: classify
+    if: needs.classify.outputs.docs_only != 'true'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      # Each test is its own target, so -j runs them side by side; -O keeps
+      # each one's output together.
+      - run: make -j"$(nproc)" --output-sync=target test-install
+
   # Loads the shell in Quickshell (shell/integration_test.sh): the release
   # deps.lock pins, which the installer builds on Ubuntu 26.04, against the
   # same distro Qt. The build is cached per pin and Qt version, so only a pin
@@ -204,7 +221,7 @@ jobs:
     name: lanes
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [classify, test, selftest, integration]
+    needs: [classify, test, selftest, install, integration]
     if: always()
     steps:
       - uses: actions/checkout@v5
@@ -216,4 +233,4 @@ jobs:
           pr: ${{ github.event.pull_request.number }}
           classify-result: ${{ needs.classify.result }}
           base-sha: ${{ needs.classify.outputs.base_sha }}
-          results: test=${{ needs.test.result }} selftest=${{ needs.selftest.result }} integration=${{ needs.integration.result }}
+          results: test=${{ needs.test.result }} selftest=${{ needs.selftest.result }} install=${{ needs.install.result }} integration=${{ needs.integration.result }}

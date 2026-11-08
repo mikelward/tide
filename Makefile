@@ -1,6 +1,7 @@
 # tide
 #
-#   make test             run the tests: test-fast and test-selftest
+#   make test             run the tests: test-fast, test-selftest and
+#                         test-install
 #   make test-fast        all but the integration test's self-tests (CI's test
 #                         job)
 #   make test-lua         the Lua Hyprland runs, on $(LUA): LUA=lua5.4 for 5.4
@@ -10,6 +11,9 @@
 #                         (needs cmake, extra-cmake-modules and fcitx5's
 #                         headers); `sudo cmake --install build/fcitx5`
 #                         installs it (SPEC.md §8.6)
+#   make test-install     the installer's tests (install/), a few minutes
+#                         each; run them side by side with -j (CI's install
+#                         job)
 #   make test-selftest    the integration test's self-tests,
 #                         shell/integration_test_test.sh, about a minute and a
 #                         half on four CPUs (CI's selftest job)
@@ -80,8 +84,26 @@ QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test test-fast test-lua test-selftest test-accents fcitx5 build install install-shell install-session mocks palette chars unicode connector-zip unshallow-check
-test: test-fast test-selftest
+.PHONY: test test-fast test-lua test-selftest test-install test-accents fcitx5 build install install-shell install-session mocks palette chars unicode connector-zip unshallow-check
+test: test-fast test-selftest test-install
+
+# install/tide-setup's tests, one target each, so -j runs them side by side.
+INSTALL_TESTS = \
+	install/tide-setup_test \
+	install/tide-setup_hyprland_test \
+	install/tide-setup_tidewm_test \
+	install/tide-setup_fcitx5_test \
+	install/tide-setup_greeter_test \
+	install/tide-setup_greeter_pam_test \
+	install/tide-setup_greeter_pam_modules_test \
+	install/tide-setup_greetd_unit_test \
+	install/tide-setup_greetd_test \
+	install/tide-setup_pam_test
+# Phony here, below the list: a .PHONY above it would see it empty.
+.PHONY: $(INSTALL_TESTS)
+test-install: $(INSTALL_TESTS)
+$(INSTALL_TESTS):
+	./$@
 
 # The integration test's self-tests run the whole integration test against
 # stand-ins for each of their cases, which takes minutes, so CI runs them as

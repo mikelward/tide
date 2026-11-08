@@ -15,9 +15,20 @@ The mocks are in [`docs/mocks/`](docs/mocks/).
 
 ## Installing
 
-`setup` in the scripts repo does all of this: it installs the packages,
-runs both installs below, and enables `tide.service`. It leaves the display
-manager as it is, with tide as one more session. By hand, it's:
+Clone this repo and run its installer as yourself (it asks sudo for the
+rest) on Debian, Ubuntu, Fedora or Arch:
+
+    git clone https://github.com/mikelward/tide.git
+    tide/install/tide-setup
+
+It installs the distro packages, builds what the distro lacks or has too
+old from the pins in `deps.lock` (Quickshell, and Hyprland on Debian and
+Ubuntu), runs both installs below, enables tide's units, sets up fcitx5
+for accents and the browser tabs' host, and checks the session will start.
+It leaves the display manager as it is, with tide as one more session;
+`--greeter` makes greetd, with tide's greeter, the login screen, and
+`--no-greeter` puts back the one it replaced. `--help` lists the rest.
+`git pull` and run it again to update. By hand, it's:
 
     make install                       # builds tide-grant, tide-msg, tide-tz, tide-greetd, tide-agent, tide-tabs, tide-pick and tide-kwin-paste (needs Go 1.22+); layout, user units, portal config under ~/.config
     sudo make install-session          # session entry, compositor wrapper, `tide` and the other tide-* commands under /usr/local
@@ -43,10 +54,10 @@ which it reads the session bus's config with, and NetworkManager's nmcli,
 which the network menu lists VPNs with, and wl-clipboard, openssl and
 libsecret-tools' secret-tool, which keep the clipboard history the picker
 on `Super+V` lists, encrypted (SPEC.md §8.4), and wtype, which types what the picker's Fill tab on
-`Super+Shift+V` chooses. `setup-tide` installs them all. For Bitwarden
+`Super+Shift+V` chooses. `install/tide-setup` installs them all. For Bitwarden
 logins on the Fill tab, install rbw, the unofficial Bitwarden client, and
 run `rbw config set email` and `rbw login` once. For accents on a held
-letter, `setup-tide` installs fcitx5 and builds tide's own add-on,
+letter, `install/tide-setup` installs fcitx5 and builds tide's own add-on,
 `tide-accents`, which `tide-fcitx5.service` runs in the tide session
 (SPEC.md §8.6). By hand, it builds with `make fcitx5` (fcitx5's headers,
 CMake and extra-cmake-modules) and installs with
@@ -65,8 +76,8 @@ login (SPEC.md §5.3). If the display manager doesn't list the session,
 install it with `sudo make install-session PREFIX=/usr`.
 
 **tide (tidewm)** is the same session on tidewm, tide's fork of dwl
-(mikelward/tidewm), listed only where tidewm is installed: scripts'
-`setup --tidewm` builds it, on Debian testing and Arch. The shell reads
+(mikelward/tidewm), listed only where tidewm is installed:
+`install/tide-setup --tidewm` builds it, on Debian testing and Arch. The shell reads
 tidewm's IPC there: the bar's workspaces, windows, title and layout
 symbol, the switcher, the launcher's screenshots and the Sharing pill
 all work, and screen sharing goes through xdg-desktop-portal-wlr, which
@@ -77,8 +88,8 @@ scripts' `Print` keys still ask Hyprland. Hyprland's stays the default.
 §11): `tide-greeter`, which runs Hyprland with its own config and the
 greeter on the lock's face, plus a copy of the shell for it and a greetd
 config template in `$(PREFIX)/share/tide/greeter/greetd.toml`.
-`setup --greeter` in the scripts repo switches your display manager to it,
-and `setup --no-greeter` switches back. By hand, as root:
+`install/tide-setup --greeter` switches your display manager to it, and
+`--no-greeter` switches back. By hand, as root:
 
 - install greetd, and copy the template to `/etc/greetd/config.toml` with
   `user` set to the greeter account your greetd package created;
