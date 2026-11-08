@@ -27,6 +27,8 @@ setup() {
     # commit for its stamp.
     mkdir -p "$T/src/tide/.git" "$T/src/tide/fcitx5"
     : > "$T/src/tide/fcitx5/CMakeLists.txt"
+    mkdir -p "$T/src/tide/hypr"
+    echo "# tide's hypridle.conf" > "$T/src/tide/hypr/hypridle.conf"
     # tide-accents, as installed, unless a test points SETUP_TIDE_ACCENTS_IM_CONFS
     # elsewhere.
     : > "$T/fcitx5-im/tide-accents.conf"

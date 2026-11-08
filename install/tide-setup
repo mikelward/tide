@@ -2536,6 +2536,23 @@ install_tide() {
     fi
 }
 
+# install_hypridle_config: copies tide's hypridle.conf to where hypridle
+# reads it, unless there's one already, which is yours to keep. Without one,
+# idle never dims, locks or suspends, and the Idle settings, which it
+# sources, do nothing (SPEC.md §10).
+install_hypridle_config() {
+    _hc_file=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/hypridle.conf
+    if test -e "$_hc_file" || test -L "$_hc_file"; then
+        detail "Keeping your hypridle config, $_hc_file"
+        return 0
+    fi
+    if ! mkdir -p "${_hc_file%/*}" || ! cp "$TIDE_DIR/hypr/hypridle.conf" "$_hc_file"; then
+        warn "couldn't copy tide's hypridle config to $_hc_file, so the session won't dim, lock or suspend when idle"
+        return 0
+    fi
+    info "Installed tide's idle settings (dim, lock, screen off, suspend) in $_hc_file"
+}
+
 # make_look_dir: makes LOOK_ROOT/<you>, owned by you and readable by all,
 # where tide's shell copies your wallpaper and light and dark settings for
 # the greeter, which runs as greetd's own user and can't read your home
@@ -6552,6 +6569,7 @@ else
 fi
 check_hyprland_version
 install_tide
+install_hypridle_config
 # tide-accents is built from the tide checkout, so only once it's fetched.
 if test "$INSTALL" != no && test "$SUDO" != no && is_command fcitx5; then
     build_tide_accents || warn "tide's accents weren't built, so a held letter offers no accents in tide; rerun $SETUP_COMMAND to retry"

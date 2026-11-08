@@ -14,6 +14,19 @@ check "installs Hyprland, hypridle and uwsm" has "$calls" "hyprland hypridle hyp
 check "installs hyprlock, the lock screen Super+L and hypridle run" has "$calls" " hyprlock "
 check "installs the transitional owners" has "$calls" "waybar"
 check "clones nothing of tide's" lacks "$calls" "tide.git"
+check "a fresh account gets tide's hypridle config" cmp -s "$T/src/tide/hypr/hypridle.conf" "$T/home/.config/hypr/hypridle.conf"
+check "and is told" has "$output" "Installed tide's idle settings"
+teardown
+
+# Your own hypridle config is kept, a link to one too.
+setup; mkdir -p "$T/home/.config/hypr"; echo mine > "$T/home/.config/hypr/hypridle.conf"; ARGS=(); run
+check "keeps your hypridle config" test "$(cat "$T/home/.config/hypr/hypridle.conf")" = mine
+teardown
+setup; mkdir -p "$T/home/.config/hypr"; ln -s "$T/elsewhere" "$T/home/.config/hypr/hypridle.conf"; ARGS=(); run
+check "keeps a link to one, even dangling" test -L "$T/home/.config/hypr/hypridle.conf"
+teardown
+
+setup; ARGS=(); run
 check "installs make, which runs tide's install" has "$calls" " make "
 check "installs the terminal tide's keys open" has "$calls" "xdg-terminal-exec"
 teardown
