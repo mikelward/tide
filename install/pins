@@ -25,7 +25,8 @@ if ! test -r "$lock"; then
 fi
 
 # Every line but comments and blank ones: six fields, a 40-digit commit, and
-# a build system the installer knows. Names are unique.
+# a build system the installer knows. A name is in a group once, and pinned
+# the same in every group it's in.
 if ! err=$(awk '
     /^[ \t]*(#|$)/ { next }
     {
@@ -34,8 +35,11 @@ if ! err=$(awk '
         if ($5 !~ /^[0-9a-f]+$/ || length($5) != 40) { print where ": " $2 "'"'"'s commit isn'"'"'t a full 40-digit hash: " $5; bad = 1 }
         if ($6 != "cmake" && $6 != "meson" && $6 != "make") { print where ": " $2 "'"'"'s build is " $6 ", not cmake, meson or make"; bad = 1 }
         if ($3 !~ /^https:\/\//) { print where ": " $2 "'"'"'s repository isn'"'"'t https: " $3; bad = 1 }
-        if ($2 in seen) { print where ": " $2 " is pinned twice"; bad = 1 }
-        seen[$2] = 1
+        pin = $3 " " $4 " " $5 " " $6
+        if (($1, $2) in grouped) { print where ": " $2 " is pinned twice"; bad = 1 }
+        else if ($2 in seen && seen[$2] != pin) { print where ": " $2 " is pinned differently in groups " group[$2] " and " $1; bad = 1 }
+        grouped[$1, $2] = 1
+        if (!($2 in seen)) { seen[$2] = pin; group[$2] = $1 }
     }
     END { exit bad }
 ' "$lock"); then
@@ -49,7 +53,7 @@ case ${1-} in
     ;;
 --env)
     test $# -eq 2 || usage
-    out=$(awk -v name="$2" '!/^[ \t]*(#|$)/ && $2 == name { printf "PIN_REPO=%s\nPIN_TAG=%s\nPIN_COMMIT=%s\n", $3, $4, $5 }' "$lock")
+    out=$(awk -v name="$2" '!/^[ \t]*(#|$)/ && $2 == name { printf "PIN_REPO=%s\nPIN_TAG=%s\nPIN_COMMIT=%s\n", $3, $4, $5; exit }' "$lock")
     if test -z "$out"; then
         echo "$prog: nothing called $2 is pinned in $lock" >&2
         exit 1
