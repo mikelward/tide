@@ -16,7 +16,7 @@ quickshell quickshell https://github.com/quickshell-mirror/quickshell.git v0.3.1
 
 # tidewm, tide's fork of dwl, for the tide (tidewm) session. A release tag,
 # numbered as tidewm's README says.
-tidewm tidewm https://github.com/mikelward/tidewm.git v0.0.1448 f925896ffbc1b3d44f8117116cc23f51ceeefe0a make
+tidewm tidewm https://github.com/mikelward/tidewm.git v0.0.1460 324b9ecfe27dc05068111ac8b352fae304014ae7 make
 
 # Hyprland, where the distro's is older than the 0.56 the Lua config needs
 # (Debian, Ubuntu), and what it needs that those distros lack or have too
