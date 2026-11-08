@@ -148,11 +148,21 @@ test("a page found only by a section scrolls to it", () => {
     assert.equal(searchedSection(pageIndex("sound"), "shortcuts"), "");
 });
 
-test("on tidewm, Displays links out to nothing, as nwg-displays saves only where Hyprland or sway read it", () => {
+test("on tidewm, nwg-displays saves where conf's tidewm config reads it, its directory made first", () => {
     const page = id => PAGES.find(p => p.id === id);
-    assert.deepEqual(advancedFor(page("displays"), false).command, ["nwg-displays"]);
-    assert.equal(advancedFor(page("displays"), true), null);
-    assert.deepEqual(advancedFor(page("sound"), true).command, ["pavucontrol"]);
-    assert.equal(advancedFor(page("idle"), true), null);
-    assert.equal(advancedFor(undefined, true), null);
+    assert.deepEqual(advancedFor(page("displays"), false, "/home/u").command, ["nwg-displays"]);
+    assert.equal(advancedFor(page("displays"), false, "/home/u").dirs, undefined);
+    assert.deepEqual(advancedFor(page("displays"), true, "/home/u"), {
+        label: "Arrange displays",
+        command: ["nwg-displays", "--outputs_path", "/home/u/.config/sway/outputs"],
+        dirs: ["/home/u/.config/sway"],
+    });
+    // nwg-displays looks for sway's directory under XDG_CONFIG_HOME
+    assert.deepEqual(advancedFor(page("displays"), true, "/home/u", "/cfg").dirs,
+        ["/home/u/.config/sway", "/cfg/sway"]);
+    assert.deepEqual(advancedFor(page("displays"), true, "/home/u", "/home/u/.config").dirs,
+        ["/home/u/.config/sway"]);
+    assert.deepEqual(advancedFor(page("sound"), true, "/home/u").command, ["pavucontrol"]);
+    assert.equal(advancedFor(page("idle"), true, "/home/u"), null);
+    assert.equal(advancedFor(undefined, true, "/home/u"), null);
 });
