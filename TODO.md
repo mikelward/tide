@@ -7,6 +7,10 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **A right-click on the wallpaper opens Appearance, not a menu**
+  (2026-11-08, SPEC.md §15), as the bar's right-clicks open their pages.
+  A menu (Change wallpaper, Settings) is the alternative. Reversible:
+  `shell/Wallpaper.qml`.
 - **The wallpaper grid's collections come from folders** (2026-11-08,
   SPEC.md §16). Everything in `/usr/share/wallpapers` is Plasma, even
   Debian's own wallpapers there; pictures loose in `/usr/share/backgrounds`
