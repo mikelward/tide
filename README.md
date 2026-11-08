@@ -59,9 +59,12 @@ install it with `sudo make install-session PREFIX=/usr`.
 
 **tide (tidewm)** is the same session on tidewm, tide's fork of dwl
 (mikelward/tidewm), listed only where tidewm is installed: scripts'
-`setup --tidewm` builds it, on Debian testing and Arch. It's still being
-built: the shell reads only Hyprland's IPC so far, so its bar has no
-workspaces there yet. Hyprland's stays the default.
+`setup --tidewm` builds it, on Debian testing and Arch. The shell reads
+tidewm's IPC there: the bar's workspaces, windows, title and layout
+symbol, the switcher, the launcher's screenshots and the Sharing pill
+all work, and screen sharing goes through xdg-desktop-portal-wlr, which
+`tide doctor` checks for. It hasn't had a real login yet, and the
+scripts' `Print` keys still ask Hyprland. Hyprland's stays the default.
 
 `make install-session` also installs tide's greeter, for greetd (SPEC.md
 §11): `tide-greeter`, which runs Hyprland with its own config and the
