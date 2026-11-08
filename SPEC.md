@@ -3168,8 +3168,9 @@ today's `hypridle.conf`:
   `suspend`, in seconds, in `idle.json` and `idle.local.json` (§16.1), and
   the settings panel's Idle page changes them.
   - The shell writes them to `~/.config/hypr/tide-idle.conf` as hyprlang
-    variables. `conf`'s `hypridle.conf` sets the numbers above first, then
-    sources that file (`source`, hypridle 0.1.7), so its commands stay
+    variables. tide's `hypr/hypridle.conf`, which the installer copies to
+    `~/.config/hypr/hypridle.conf` when there's none, sets the numbers above
+    first, then sources that file (`source`, hypridle 0.1.7), so its commands stay
     hand-written and a missing file leaves today's timeline.
   - hypridle reads its config only as it starts (its source, 0.1.8), so the
     shell restarts it after writing. A restart drops the idle inhibits apps
