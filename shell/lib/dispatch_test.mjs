@@ -1,7 +1,7 @@
 // Tests for dispatch.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, moveWindowToNamed, closeWindow, minimizeWindow, sendWindowTo, floatWindow, sendShortcut } from "./dispatch.mjs";
+import { focusWorkspace, focusWorkspaceName, renameWorkspace, focusWindow, toggleMaximize, moveWindowToWorkspace, moveWindowToNamed, closeWindow, minimizeWindow, sendWindowTo, floatWindow, sendShortcut, recordingKeys } from "./dispatch.mjs";
 
 test("a Lua config gets hl.dsp calls", () => {
     assert.equal(focusWorkspace(3, true), "hl.dsp.focus({ workspace = 3 })");
@@ -99,4 +99,11 @@ test("the picker's paste sends the window it opened over a shortcut, in either c
     assert.throws(() => sendShortcut("CTRL", "V", "not-hex", true), /not a window address/);
     assert.throws(() => sendShortcut('CTRL" })', "V", "55aa01", true), /not modifiers/);
     assert.throws(() => sendShortcut("CTRL", "V, x", "55aa01", false), /not a key/);
+});
+
+test("recording a shortcut goes to conf's tide-keys submap and back", () => {
+    assert.equal(recordingKeys(true, true), 'hl.dsp.submap("tide-keys")');
+    assert.equal(recordingKeys(false, true), 'hl.dsp.submap("reset")');
+    assert.equal(recordingKeys(true, false), "submap tide-keys");
+    assert.equal(recordingKeys(false, false), "submap reset");
 });

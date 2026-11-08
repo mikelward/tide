@@ -143,3 +143,136 @@ test("a tidewm listing that can't be read says why", () => {
     assert.match(listedTidewmBinds(false, "{}").error, /expected a list of bindings/);
     assert.match(listedTidewmBinds(false, '[{"keys": "Mod4+x"}]').error, /without its keys or command/);
 });
+
+// Editing the keys (SPEC.md §16).
+import {
+    catalogPath, keysId, parseCatalog, parseKeysFile, loadKeys, editedKeys, keysLua,
+    recordedKeys, shortcutRows, withKeys, withDefault, withOff,
+} from "./keys.mjs";
+
+const CATALOG = [
+    { name: "terminal", does: "Terminal", defaults: ["SUPER + T"], keys: ["SUPER + T"] },
+    { name: "monocle", does: "Monocle", defaults: ["SUPER + grave", "SUPER + O"], keys: ["SUPER + grave", "SUPER + O"] },
+    { name: "lock", does: "Lock", defaults: ["SUPER + L"], keys: ["SUPER + L"] },
+];
+
+test("conf's list is in the instance's runtime directory", () => {
+    assert.equal(catalogPath("/run/user/1000", "abc"), "/run/user/1000/hypr/abc/tide-keys.json");
+    assert.equal(catalogPath("", "abc"), "");
+    assert.equal(catalogPath("/run/user/1000", ""), "");
+});
+
+test("the same keys written any way compare the same", () => {
+    assert.equal(keysId("SHIFT + SUPER + period"), "Super+Shift+.");
+    assert.equal(keysId("super+shift+period"), "Super+Shift+.");
+    assert.equal(keysId("SUPER + Page_Up"), "Super+PgUp");
+    assert.equal(keysId("Print"), "Print");
+    // As the listing labels Hyprland's own.
+    assert.equal(keysId("SUPER + SHIFT + G"), keysLabel(64 | 1, "G"));
+});
+
+test("conf's list parses to its bindings in order", () => {
+    assert.deepEqual(parseCatalog(JSON.stringify({ keys: CATALOG })), { binds: CATALOG });
+    assert.ok(parseCatalog("nope").error);
+    assert.ok(parseCatalog(JSON.stringify({ keys: [{ name: "x", does: "X", defaults: ["A"] }] })).error);
+    assert.ok(parseCatalog(JSON.stringify([])).error);
+});
+
+test("your keys files take a binding's keys, or none for off", () => {
+    assert.deepEqual(parseKeysFile('{"keys": {"terminal": ["SUPER + D"], "lock": []}}'),
+        { keys: { terminal: ["SUPER + D"], lock: [] } });
+    assert.deepEqual(parseKeysFile(""), {});
+    assert.deepEqual(parseKeysFile("{}"), {});
+    for (const bad of ["nope", "[]", '{"other": 1}', '{"keys": []}', '{"keys": {"Bad Name": []}}',
+        '{"keys": {"lock": "SUPER + L"}}', '{"keys": {"lock": [""]}}', '{"keys": {"lock": [1]}}',
+        '{"keys": {"lock": ["SUPER + \\"L"]}}',
+        JSON.stringify({ keys: { lock: Array(9).fill("SUPER + L") } })]) {
+        assert.ok(parseKeysFile(bad).error, bad);
+    }
+});
+
+test("keys.local.json's keys replace keys.json's whole, and a broken file keeps the last good", () => {
+    assert.deepEqual(loadKeys('{"keys": {"lock": []}}', '{"keys": {"terminal": ["SUPER + D"]}}'),
+        { keys: { terminal: ["SUPER + D"] }, errors: [] });
+    assert.deepEqual(loadKeys('{"keys": {"lock": []}}', null), { keys: { lock: [] }, errors: [] });
+    const r = loadKeys(null, "nope", { lock: [] });
+    assert.deepEqual(r.keys, { lock: [] });
+    assert.deepEqual(r.errors, ["keys.local.json: not JSON"]);
+});
+
+test("an edit writes keys.local.json, building on the keys in effect", () => {
+    const r = editedKeys('{"keys": {"lock": []}}', null, keys => withKeys(keys, CATALOG, "terminal", "SUPER + D"));
+    assert.deepEqual(r.keys, { lock: [], terminal: ["SUPER + D"] });
+    assert.deepEqual(JSON.parse(r.text), { keys: { lock: [], terminal: ["SUPER + D"] } });
+    assert.ok(editedKeys(null, "nope", keys => ({ keys })).error, "a broken file isn't overwritten");
+});
+
+test("tide-keys.lua lists your keys for conf to read", () => {
+    assert.equal(keysLua({ terminal: ["SUPER + D", "SUPER + CTRL + T"], lock: [] }),
+        "-- Written by tide's Keyboard shortcuts (SPEC.md §16); changes here are lost.\n"
+        + "return { keys = {\n    lock = {  },\n    terminal = { \"SUPER + D\", \"SUPER + CTRL + T\" },\n} }\n");
+});
+
+test("a key press records the keys as Hyprland writes them", () => {
+    const SUPER = 0x10000000, SHIFT = 0x02000000, CTRL = 0x04000000, ALT = 0x08000000;
+    assert.deepEqual(recordedKeys(0x54, SUPER), { keys: "SUPER + T" });
+    assert.deepEqual(recordedKeys(0x47, SUPER | SHIFT), { keys: "SUPER + SHIFT + G" });
+    assert.deepEqual(recordedKeys(0x2e, SUPER | CTRL | ALT), { keys: "SUPER + CTRL + ALT + period" });
+    assert.deepEqual(recordedKeys(0x21, SUPER | SHIFT), { keys: "SUPER + SHIFT + 1" }, "Shift+1 is !");
+    assert.deepEqual(recordedKeys(0x01000002, SUPER | SHIFT), { keys: "SUPER + SHIFT + Tab" }, "Backtab");
+    assert.deepEqual(recordedKeys(0x2b, SUPER), { keys: "SUPER + plus" }, "German's own + key, no Shift");
+    const KEYPAD = 0x20000000;
+    assert.deepEqual(recordedKeys(0x31, CTRL | KEYPAD), { keys: "CTRL + KP_1" }, "the keypad's 1");
+    assert.deepEqual(recordedKeys(0x2b, SUPER | KEYPAD), { keys: "SUPER + KP_Add" });
+    assert.deepEqual(recordedKeys(0x01000005, SUPER | KEYPAD), { keys: "SUPER + KP_Enter" });
+    assert.equal(keysId("SUPER + KP_Add"), "Super+Keypad +");
+    assert.equal(keysId("CTRL + KP_1"), "Ctrl+Keypad 1");
+    assert.equal(keysId("SUPER + plus"), "Super++");
+    assert.deepEqual(recordedKeys(0x01000016, SUPER), { keys: "SUPER + Page_Up" });
+    assert.deepEqual(recordedKeys(0x01000033, 0), { keys: "F4" });
+    assert.deepEqual(recordedKeys(0x01000009, 0), { keys: "Print" });
+    assert.deepEqual(recordedKeys(0x01000022, SUPER), { wait: true }, "Super alone");
+    assert.ok(recordedKeys(0x54, 0).error, "a bare T is typing");
+    assert.ok(recordedKeys(0x54, SHIFT).error, "so is Shift+T");
+    assert.ok(recordedKeys(0x01000100, SUPER).error, "a key a binding can't name");
+});
+
+test("the list has the named bindings, which can change, then the rest", () => {
+    const catalog = CATALOG.map(b => b.name === "lock" ? Object.assign({}, b, { keys: [] }) : b);
+    const binds = [
+        { keys: "Super+T", does: "Terminal", submap: "" },
+        { keys: "Super+1", does: "Workspace 1 on the bar", submap: "" },
+        { keys: "Escape", does: "Stop recording a shortcut", submap: "tide-keys" },
+        { keys: "Escape", does: "Leave resize mode", submap: "resize" },
+    ];
+    const rows = shortcutRows(catalog, binds);
+    assert.deepEqual(rows.named.map(r => [r.name, r.label, r.changed]),
+        [["terminal", "Super+T", false], ["monocle", "Super+` or Super+O", false], ["lock", "Off", true]]);
+    assert.deepEqual(rows.fixed.map(b => b.does), ["Workspace 1 on the bar", "Leave resize mode"]);
+});
+
+test("new keys replace a binding's, and a binding back at its defaults leaves your file", () => {
+    assert.deepEqual(withKeys({}, CATALOG, "terminal", "SUPER + D"), { keys: { terminal: ["SUPER + D"] } });
+    assert.deepEqual(withKeys({ terminal: ["SUPER + D"] }, CATALOG, "terminal", "SUPER + T"), { keys: {} });
+    assert.deepEqual(withKeys({}, CATALOG, "monocle", "SUPER + O"), { keys: { monocle: ["SUPER + O"] } }, "one of two");
+    assert.ok(withKeys({}, CATALOG, "teleport", "SUPER + D").error);
+});
+
+test("keys another binding has are a clash, and a swap gives it the old keys", () => {
+    assert.deepEqual(withKeys({}, CATALOG, "lock", "SUPER + T"), { clash: { name: "terminal", does: "Terminal" } });
+    assert.deepEqual(withKeys({}, CATALOG, "lock", "super+t"), { clash: { name: "terminal", does: "Terminal" } });
+    assert.deepEqual(withKeys({}, CATALOG, "lock", "SUPER + T", true),
+        { keys: { lock: ["SUPER + T"], terminal: ["SUPER + L"] } });
+    assert.deepEqual(withKeys({}, CATALOG, "lock", "SUPER + O", true),
+        { keys: { lock: ["SUPER + O"], monocle: ["SUPER + grave", "SUPER + L"] } }, "monocle keeps its other");
+});
+
+test("keys a fixed binding has can't be given", () => {
+    const r = withKeys({}, CATALOG, "lock", "SUPER + 1", false, ["Super+1"]);
+    assert.equal(r.error, "Super+1 can't change, so it can't be Lock");
+});
+
+test("reset and off", () => {
+    assert.deepEqual(withDefault({ lock: [], terminal: ["SUPER + D"] }, "lock"), { keys: { terminal: ["SUPER + D"] } });
+    assert.deepEqual(withOff({}, "lock"), { keys: { lock: [] } });
+});

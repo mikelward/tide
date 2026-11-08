@@ -100,6 +100,8 @@ ShellRoot {
         InputData.load();
         InputData.listDevices();
         KeysData.list();
+        // Your shortcuts, applied from the start.
+        KeysData.load();
         LayoutsData.load();
         WorkspacesData.load();
         // The floating rules, applied from the start.
