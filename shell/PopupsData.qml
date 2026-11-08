@@ -15,7 +15,8 @@ import "lib/popups.mjs" as Pop
 // resync, since a lazy singleton would otherwise wait for the first
 // popover), as one that exited with a popover open left it thinking one
 // still is, and after a Hyprland config load, which starts the layout
-// afresh. tidewm has no edge drag yet (docs/compositor.md), so in its
+// afresh. tidewm finds a press on a popover itself, and passes every
+// press while one grabs the pointer (docs/compositor.md), so in its
 // session (§5.3) there's nothing to tell.
 Singleton {
     id: root
