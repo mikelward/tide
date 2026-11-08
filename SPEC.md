@@ -4387,6 +4387,23 @@ stays hand-written.
       names its own path, can't answer first.
     - **Cost and reliability:** nothing new to install, since the portal is
       tide's file chooser already; one D-Bus call a choice.
+  - **Each has a grid button,** which opens the wallpapers installed, as
+    thumbnails over the page, so you can see them together.
+    - It shows every picture in `/usr/share/backgrounds` (GNOME's,
+      Ubuntu's and Fedora's collections), `/usr/share/wallpapers`
+      (Plasma's) and `~/Pictures/wallpapers`, sorted by name. `setup`
+      installs the distro's collections.
+    - A Plasma wallpaper is a folder of one picture at several sizes. It
+      shows once, named for its folder, and sets its largest size.
+    - The thumbnails are decoded small and in the background, so a few
+      hundred pictures don't stall the panel. One Qt can't decode, such as
+      JPEG XL without kimageformats, shows its name instead.
+    - It lists the folders afresh each time it opens, so a picture you've
+      just downloaded shows.
+    - Choosing one sets it as the file chooser would, and closes the grid.
+      Escape, or a click anywhere else, closes it with nothing set.
+    - **Cost and reliability:** nothing new to install; one `find` over
+      three folders each time it opens.
   - **Each picture's position** is a row under its wallpaper, Light
     wallpaper position and Dark wallpaper position, each stepping through
     the positions with ‹ and ›: Fill, centered; Fill, keep top; Fill, keep

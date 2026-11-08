@@ -9,7 +9,7 @@ import {
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
-    expandHome, pickCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
+    expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
     POSITIONS, POSITION_CHOICES, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf,
@@ -699,6 +699,49 @@ test("a wallpaper's chooser offers images, opening where its file is", () => {
     assert.deepEqual(pickCommand("Dark wallpaper", undefined, home), ["tide-pick", "--images", "--title", "Dark wallpaper"]);
     // Nor does a color, which has no folder.
     assert.deepEqual(pickCommand("Dark wallpaper", "#1a1d2e", home), ["tide-pick", "--images", "--title", "Dark wallpaper"]);
+});
+
+test("the wallpaper grid shows the distro's collections, then yours", () => {
+    assert.deepEqual(galleryFolders("/home/u"),
+        ["/usr/share/backgrounds", "/usr/share/wallpapers", "/home/u/Pictures/wallpapers"]);
+});
+
+test("the wallpaper grid lists pictures, passing over a folder that isn't there", () => {
+    const dir = mkdtempSync(join(tmpdir(), "gallery-"));
+    try {
+        mkdirSync(join(dir, "gnome"));
+        writeFileSync(join(dir, "gnome", "blobs-l.JPG"), "");
+        writeFileSync(join(dir, "gnome", "blobs.xml"), "");
+        mkdirSync(join(dir, "Mountain", "contents", "images"), { recursive: true });
+        writeFileSync(join(dir, "Mountain", "contents", "images", "1920x1080.png"), "");
+        const out = execFileSync(galleryCommand([join(dir, "missing"), dir])[0], galleryCommand([join(dir, "missing"), dir]).slice(1), { encoding: "utf8" });
+        assert.deepEqual(out.trim().split("\n").sort(),
+            [join(dir, "Mountain", "contents", "images", "1920x1080.png"), join(dir, "gnome", "blobs-l.JPG")].sort());
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("the wallpaper grid shows each Plasma wallpaper once, at its largest, by name", () => {
+    const text = [
+        "/usr/share/wallpapers/Mountain/contents/images/1920x1080.png",
+        "/usr/share/wallpapers/Mountain/contents/images/5120x2880.png",
+        "/usr/share/wallpapers/Mountain/contents/images/3840x2160.png",
+        "/usr/share/wallpapers/Mountain/contents/images_dark/5120x2880.png",
+        "/usr/share/wallpapers/Mountain/contents/screenshot.png",
+        "/usr/share/backgrounds/gnome/blobs-l.jxl",
+        "/usr/share/backgrounds/gnome/adwaita.xml",
+        "/home/u/Pictures/wallpapers/Aurora.JPG",
+        "relative.jpg",
+        "",
+    ].join("\n");
+    assert.deepEqual(galleryImages(text), [
+        { path: "/home/u/Pictures/wallpapers/Aurora.JPG", name: "Aurora" },
+        { path: "/usr/share/backgrounds/gnome/blobs-l.jxl", name: "blobs-l" },
+        { path: "/usr/share/wallpapers/Mountain/contents/images/5120x2880.png", name: "Mountain" },
+    ]);
+    assert.deepEqual(galleryImages(""), []);
+    assert.deepEqual(galleryImages(undefined), []);
 });
 
 test("the chosen file is the setting, from ~/ when it's home's", () => {
