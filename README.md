@@ -83,8 +83,11 @@ Debian 13). The shell reads
 tidewm's IPC there: the bar's workspaces, windows, title and layout
 symbol, the switcher, the launcher's screenshots and the Sharing pill
 all work, and screen sharing goes through xdg-desktop-portal-wlr, which
-`tide doctor` checks for. It hasn't had a real login yet, and the
-scripts' `Print` keys still ask Hyprland. Hyprland's stays the default.
+`tide doctor` checks for. It hasn't had a real login yet. Hyprland's
+stays the default. tidewm's keys are tide's own config,
+`~/.config/tidewm/tide.conf`, which `make install` puts there and the
+session runs when you have no `~/.config/tidewm/config`; yours can
+`include tide.conf` and rebind what it likes (SPEC.md §6.8).
 
 `make install-session` also installs tide's greeter, for greetd (SPEC.md
 §11): `tide-greeter`, which runs Hyprland with its own config and the

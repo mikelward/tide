@@ -52,6 +52,9 @@
 # distributions package today.
 LUA ?= $(shell command -v lua5.5 || command -v lua5.4 || command -v lua)
 HYPR_DIR ?= $(HOME)/.config/hypr/tide
+# tidewm's own directory, where tide-tidewm looks for tide.conf and tide's
+# shell writes the tide-*.conf it includes: $XDG_CONFIG_HOME's, as both have it.
+TIDEWM_DIR ?= $(or $(XDG_CONFIG_HOME),$(HOME)/.config)/tidewm
 SYSTEMD_USER_DIR ?= $(HOME)/.config/systemd/user
 PORTAL_DIR ?= $(HOME)/.config/xdg-desktop-portal
 SHELL_DIR ?= $(HOME)/.config/quickshell/tide
@@ -125,6 +128,7 @@ test-lua:
 
 test-fast: test-lua
 	sh hypr/tide/input_test.sh
+	sh tidewm/config_test.sh
 	sh session/session_test.sh
 	sh bin/tide_test.sh
 	sh bin/tide-clipboard_test.sh
@@ -212,6 +216,8 @@ install: build install-shell
 	install -d "$(HYPR_DIR)"
 	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/span.lua hypr/tide/layout.lua hypr/tide/focus.lua hypr/tide/pinned.lua hypr/hyprland.lua hypr/hyprland.local.lua.template "$(HYPR_DIR)/"
 	install -m 755 hypr/tide/apply-input.sh hypr/tide/watch-input.sh hypr/tide/next-layout.sh "$(HYPR_DIR)/"
+	install -d "$(TIDEWM_DIR)"
+	install -m 644 tidewm/tide.conf "$(TIDEWM_DIR)/"
 	install -d "$(SYSTEMD_USER_DIR)/hypridle.service.d" "$(SYSTEMD_USER_DIR)/app-.service.d"
 	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service systemd/user/tide-lock-fallback.service systemd/user/tide-clipboard.service systemd/user/tide-fcitx5.service systemd/user/tide-lid-inhibit.service systemd/user/tide-kde.service "$(SYSTEMD_USER_DIR)/"
 	install -m 644 systemd/user/hypridle.service.d/tide.conf "$(SYSTEMD_USER_DIR)/hypridle.service.d/"
