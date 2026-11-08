@@ -1632,6 +1632,7 @@ with new keys in **bold**:
 | `Super+\` / `Super+/` | grow / shrink master (`mfact` ±0.025) |
 | `Super+=` / `Super+-` | add / remove a master |
 | `Super+.` / `Super+,` | next / previous layout |
+| none by default | **the layout used last**: the workspace's mode before this one, so two presses come back, as dwm's `Super+Space` does; dwm's preset (§16) puts it there, and Keyboard's shortcuts can give it any key |
 | ``Super+` ``, **`Super+O`** | toggle monocle (`O` as in one window, and the key tide for Chrome uses on ChromeOS, where Chrome can't bind a backtick) |
 | **`Super+Up`** / **`Super+Shift+Up`** / **`Super+Down`** | maximize / fullscreen / restore the current window |
 | `Super+Shift+F`, `Super+Insert` | toggle floating |

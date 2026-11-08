@@ -355,7 +355,12 @@ local function cycle(st, delta)
     return list[((i - 1 + delta) % #list) + 1]
 end
 
+-- `last` is the mode a workspace was in before this one, whatever changed
+-- it, for the layout used last (dwm's Super+Space).
 local function set_mode(st, mode)
+    if mode ~= st.mode then
+        st.last = st.mode
+    end
     if mode ~= "monocle" then
         st.previous = nil
     elseif st.mode ~= "monocle" then
@@ -366,6 +371,8 @@ end
 
 -- `layoutmsg` commands:
 --   mode <tile|threecol|twocol|monocle>, next, prev, monocle (toggle),
+--   last (the mode before this one, so two presses come back; none yet,
+--   nothing),
 --   mfact <+d|-d|value>, addmaster, removemaster, reset, single
 --   <value|reset> (a lone window's width on this workspace, 0.1 to 1, or
 --   the config's rule again), and refresh, which changes nothing so the
@@ -386,6 +393,10 @@ local function layout_msg(ctx, msg)
         set_mode(st, arg)
     elseif cmd == "next" or cmd == "prev" then
         set_mode(st, cycle(st, cmd == "next" and 1 or -1))
+    elseif cmd == "last" then
+        if st.last then
+            set_mode(st, st.last)
+        end
     elseif cmd == "monocle" then
         set_mode(st, st.mode == "monocle" and (st.previous or config.cycle[1]) or "monocle")
     elseif cmd == "mfact" then
@@ -420,7 +431,7 @@ local function layout_msg(ctx, msg)
     elseif cmd == "refresh" then
         return true
     else
-        return "tide: expected mode, next, prev, monocle, mfact, addmaster, removemaster, reset, single or refresh"
+        return "tide: expected mode, next, prev, last, monocle, mfact, addmaster, removemaster, reset, single or refresh"
     end
     return true
 end
@@ -456,6 +467,7 @@ end
 
 M.cycle_next = msg("next")
 M.cycle_prev = msg("prev")
+M.last_mode = msg("last")
 M.toggle_monocle = msg("monocle")
 M.grow = function()
     msg("mfact +" .. config.mfact_step)()

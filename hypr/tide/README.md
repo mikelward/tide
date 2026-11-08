@@ -44,6 +44,7 @@ hl.config({ general = { layout = "lua:tide" } })
 
 hl.bind("SUPER + period", qs.cycle_next)
 hl.bind("SUPER + comma", qs.cycle_prev)
+-- qs.last_mode: the mode used before this one (conf gives it no key)
 hl.bind("SUPER + grave", qs.toggle_monocle)
 hl.bind("SUPER + O", qs.toggle_monocle)
 hl.bind("SUPER + backslash", qs.grow, { repeating = true })
@@ -98,7 +99,7 @@ The mode-changing helpers announce the new mode on Hyprland's event socket
 as `custom>>tide-layout>>WORKSPACE,MODE`, which the bar follows, and
 `setup()` adds a `workspace.active` handler that announces each workspace's
 mode as it becomes active, so a bar that started later catches up. The
-same commands also work as plain `layoutmsg`s (`mode <name>`, `next`, `prev`,
+same commands also work as plain `layoutmsg`s (`mode <name>`, `next`, `prev`, `last`,
 `monocle`, `mfact <+d|-d|value>`, `addmaster`, `removemaster`, `reset`,
 `single <value|reset>`), but
 those don't announce.
