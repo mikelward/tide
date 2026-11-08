@@ -1165,9 +1165,8 @@ Next:
 - **Fedora's and Arch's packages are unpinned.** Accept them with a
   minimum-version check, as `tide doctor` does for Quickshell, or build the
   pinned sources there too.
-- **Later: releases and packages.** Tagged `v0.N` releases with the Go
-  binaries (amd64, arm64), the installer and the connector ZIP; then an
-  AUR PKGBUILD, a COPR and OBS for Debian and Ubuntu. No prebuilt
+- **Later: packages.** An AUR PKGBUILD, a COPR and OBS for Debian and
+  Ubuntu, from the releases (one per push to main). No prebuilt
   Quickshell or Hyprland: Quickshell is tied to the exact Qt it was built
   with, and Hyprland on Ubuntu needs GCC 16.
 

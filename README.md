@@ -28,7 +28,14 @@ for accents and the browser tabs' host, and checks the session will start.
 It leaves the display manager as it is, with tide as one more session;
 `--greeter` makes greetd, with tide's greeter, the login screen, and
 `--no-greeter` puts back the one it replaced. `--help` lists the rest.
-`git pull` and run it again to update. By hand, it's:
+`git pull` and run it again to update.
+
+Each push to main is also a release, tagged `v0.MINOR.<commits>`, on the
+repo's Releases page: the source (`tide-TAG.tar.gz`, which the installer
+runs from), and the Go commands built for Linux on amd64 and arm64, with
+their SHA-256 sums. `make dist` makes the same files in `build/dist`.
+
+By hand, it's:
 
     make install                       # builds tide-grant, tide-msg, tide-tz, tide-greetd, tide-agent, tide-tabs, tide-pick and tide-kwin-paste (needs Go 1.22+); layout, user units, portal config under ~/.config
     sudo make install-session          # session entry, compositor wrapper, `tide` and the other tide-* commands under /usr/local

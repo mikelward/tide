@@ -33,6 +33,8 @@
 #                         config template) under $(PREFIX), and the lock's
 #                         PAM service in /etc/pam.d (root; see README.md;
 #                         run `make build` as yourself first)
+#   make dist             a release's files, in build/dist: the source and
+#                         the Go commands for amd64 and arm64
 #   make connector-zip    package the tide connector, the browser extension
 #                         that lists tabs in the switcher, for the Chrome Web
 #                         Store, into build/ (connector/README.md)
@@ -87,7 +89,7 @@ QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test test-fast test-lua test-selftest test-install test-accents fcitx5 build install install-shell install-session mocks palette chars unicode connector-zip unshallow-check
+.PHONY: test test-fast test-lua test-selftest test-install test-accents fcitx5 build install install-shell install-session mocks palette chars unicode connector-zip unshallow-check release-tag dist
 test: test-fast test-selftest test-install
 
 # install/tide-setup's tests, one target each, so -j runs them side by side.
@@ -142,6 +144,7 @@ test-fast: test-lua
 	sh shell/install_test.sh
 	sh shell/integration_test.sh
 	sh .github/workflows/ci_test.sh
+	sh .github/workflows/release_test.sh
 	sh install/pins_test.sh
 	$(MAKE) test-accents
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
@@ -211,7 +214,7 @@ build/tide-kwin-paste: go.mod $(wildcard cmd/tide-kwin-paste/*.go)
 	$(GO) build -o $@ ./cmd/tide-kwin-paste
 
 # Copies only. Enabling tide.service, which hangs it off the tide
-# session's target, is `setup`'s job (scripts repo).
+# session's target, is the installer's job (install/tide-setup).
 install: build install-shell
 	install -d "$(HYPR_DIR)"
 	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/span.lua hypr/tide/layout.lua hypr/tide/focus.lua hypr/tide/pinned.lua hypr/hyprland.lua hypr/hyprland.local.lua.template "$(HYPR_DIR)/"
@@ -294,8 +297,9 @@ install-session:
 # requires; a shallow clone would count too few.
 CONNECTOR_FILES = manifest.json background.js bridge.js popup.html popup.css popup.js \
 	icons/tide-16.png icons/tide-32.png icons/tide-48.png icons/tide-128.png
+# SHALLOW_OK=yes skips it, for a test in a shallow clone.
 unshallow-check:
-	@if test "$$(git rev-parse --is-shallow-repository)" != false; then \
+	@test "$(SHALLOW_OK)" = yes || if test "$$(git rev-parse --is-shallow-repository)" != false; then \
 		echo "the history is shallow, so the commit count is wrong; run git fetch --unshallow" >&2; exit 1; fi
 connector-zip: unshallow-check
 	rm -rf build/connector && install -d build/connector/icons
@@ -310,3 +314,32 @@ connector-zip: unshallow-check
 # found through NODE_PATH; a project-local one works without it.
 mocks:
 	NODE_PATH="$$(npm root -g)" node docs/mocks/render.js
+
+# Releases (.github/workflows/release.yml): every push to main is one,
+# tagged v0.MINOR.<commits on main>, as tidewm's and tideco's are. Bump
+# MINOR for a change that breaks an installed setup.
+RELEASE_MINOR = 0
+# GNU's sha256sum, or macOS's shasum, which writes and checks the same lines.
+SHA256SUM ?= $(shell command -v sha256sum 2>/dev/null || echo shasum -a 256)
+GO_COMMANDS = tide-grant tide-msg tide-tz tide-greetd tide-agent tide-tabs tide-pick tide-kwin-paste
+release-tag: unshallow-check
+	@echo v0.$(RELEASE_MINOR).`git rev-list --count HEAD`
+
+# A release's files, in build/dist: the source, which the installer runs
+# from (install/tide-setup), and the Go commands, built for Linux on amd64
+# and arm64 with no C, with their SHA-256 sums.
+dist: unshallow-check
+	rm -rf build/dist
+	mkdir -p build/dist
+	tag=$$($(MAKE) -s release-tag) || exit 1; \
+	git archive --format=tar.gz --prefix=tide-$$tag/ -o build/dist/tide-$$tag.tar.gz HEAD || exit 1; \
+	for arch in amd64 arm64; do \
+		dir=tide-$$tag-linux-$$arch; \
+		mkdir -p build/dist/$$dir || exit 1; \
+		for cmd in $(GO_COMMANDS); do \
+			CGO_ENABLED=0 GOOS=linux GOARCH=$$arch $(GO) build -trimpath -o build/dist/$$dir/$$cmd ./cmd/$$cmd || exit 1; \
+		done; \
+		tar -C build/dist -czf build/dist/$$dir.tar.gz $$dir || exit 1; \
+		rm -r build/dist/$$dir; \
+	done; \
+	cd build/dist && $(SHA256SUM) -- *.tar.gz > SHA256SUMS
