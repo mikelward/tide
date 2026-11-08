@@ -3,6 +3,7 @@
 #   make test             run the tests: test-fast and test-selftest
 #   make test-fast        all but the integration test's self-tests (CI's test
 #                         job)
+#   make test-lua         the Lua Hyprland runs, on $(LUA): LUA=lua5.4 for 5.4
 #   make test-accents     the accents add-on's core (fcitx5/), with only a C++
 #                         compiler
 #   make fcitx5           build the accents add-on for fcitx5 into build/fcitx5
@@ -79,7 +80,7 @@ QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test test-fast test-selftest test-accents fcitx5 build install install-shell install-session mocks palette chars unicode connector-zip unshallow-check
+.PHONY: test test-fast test-lua test-selftest test-accents fcitx5 build install install-shell install-session mocks palette chars unicode connector-zip unshallow-check
 test: test-fast test-selftest
 
 # The integration test's self-tests run the whole integration test against
@@ -88,7 +89,9 @@ test: test-fast test-selftest
 test-selftest:
 	sh shell/integration_test_test.sh
 
-test-fast:
+# The Lua that Hyprland runs, on $(LUA): CI runs it on 5.5, Hyprland's,
+# and again on 5.4, which most distributions package.
+test-lua:
 	@test -n "$(LUA)" || { echo "make test: no lua5.5, lua5.4 or lua on PATH" >&2; exit 1; }
 	$(LUA) hypr/tide/layout_test.lua
 	$(LUA) hypr/tide/direction_test.lua
@@ -97,6 +100,8 @@ test-fast:
 	$(LUA) hypr/tide/pinned_test.lua
 	$(LUA) greeter/hyprland_test.lua
 	$(LUA) hypr/hyprland_test.lua
+
+test-fast: test-lua
 	sh hypr/tide/input_test.sh
 	sh session/session_test.sh
 	sh bin/tide_test.sh

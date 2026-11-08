@@ -46,8 +46,10 @@ jobs:
           mode: classify
           pr: ${{ github.event.pull_request.number }}
 
-  # Tests run on Lua 5.4, which Ubuntu packages; Hyprland embeds 5.5 and the
-  # layout uses nothing that differs between them. `make test-fast` takes
+  # Hyprland embeds Lua 5.5, which Ubuntu doesn't package and Lua publishes
+  # only as source, so the job builds it from lua/lua's v5.5.1 tag, pinned
+  # by its commit, and runs the tests on it; the Lua tests then run again
+  # on Ubuntu's 5.4, which most distributions package. `make test-fast` takes
   # about a minute and a half, and installing Lua and qmllint has taken four and a half
   # on a slow mirror, so the limit leaves room for both. A mirror that
   # stalls mid-download is given up on after 30 s and tried again, rather
@@ -69,10 +71,25 @@ jobs:
           sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3 install -y --no-install-recommends lua5.4 qt6-declarative-dev-tools dbus-daemon
       # The oldest Go go.mod allows, so a newer-only API fails here and not
       # on a distro's Go.
+      # onelua.c is the whole interpreter in one file, so no makefile is
+      # needed. It's checked by commit, as a tag can move.
+      - name: Build Lua 5.5, Hyprland's
+        env:
+          LUA_COMMIT: 7579fc9d7ed90240487251dfb69168f8e64e9294
+        run: |
+          git init -q "$RUNNER_TEMP/lua"
+          cd "$RUNNER_TEMP/lua"
+          git fetch -q --depth 1 https://github.com/lua/lua "$LUA_COMMIT"
+          git checkout -q FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$LUA_COMMIT"
+          cc -O2 -DLUA_USE_LINUX -o lua5.5 onelua.c -lm
+          sudo install -m 755 lua5.5 /usr/local/bin/lua5.5
+          lua5.5 -e 'assert(_VERSION == "Lua 5.5", _VERSION)'
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - run: make test-fast
+      - run: make test-fast LUA=lua5.5
+      - run: make test-lua LUA=lua5.4
 
   # The integration test's self-tests (shell/integration_test_test.sh),
   # apart from `test` because they take about a minute and a half even with
