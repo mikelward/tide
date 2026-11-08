@@ -1,0 +1,41 @@
+# What tide builds from source, pinned: one place for the installer and CI
+# (install/pins reads it). Each line is
+#
+#   group name repository tag commit build
+#
+# A group's lines build in order. The commit is the one the tag named when
+# it was pinned: a tag can be moved, so a clone must be at exactly this
+# commit before its build files run. A tag of - pins the commit alone.
+# Update a pin in its own PR, and check its build on every distro that uses
+# it.
+
+# Quickshell, which draws tide's shell, where the distro has none new
+# enough (Ubuntu 26.04, Debian), from the GitHub mirror SPEC.md cites. CI's
+# integration job loads the shell in this one.
+quickshell quickshell https://github.com/quickshell-mirror/quickshell.git v0.3.1 1a4716cde794a59928d9d9fc15f2afc7a95de360 cmake
+
+# tidewm, tide's fork of dwl, for the tide (tidewm) session. A release tag,
+# numbered as tidewm's README says.
+tidewm tidewm https://github.com/mikelward/tidewm.git v0.0.1448 f925896ffbc1b3d44f8117116cc23f51ceeefe0a make
+
+# Hyprland, where the distro's is older than the 0.56 the Lua config needs
+# (Debian, Ubuntu), and what it needs that those distros lack or have too
+# old. Hyprland's own libraries are at the commits its flake.lock names for
+# this Hyprland, the ones it's built and tested with upstream: their last
+# tags can lack what it calls, and its CMakeLists.txt minimums don't say so.
+# wayland-protocols and hyprland-protocols are here because Ubuntu 26.04's
+# are older than Hyprland needs; glaze because Hyprland would otherwise
+# fetch its own as it configures, past any pin; re2 because a distro's can
+# lag its abseil, and then Hyprland can't link it.
+hyprland wayland-protocols https://gitlab.freedesktop.org/wayland/wayland-protocols.git 1.49 ee78491a237eaff9389a0ccf8680521d074407d3 meson
+hyprland hyprwayland-scanner https://github.com/hyprwm/hyprwayland-scanner.git - 62e62c1ca23da17612c6890d4ad2064f575643db cmake
+hyprland hyprland-protocols https://github.com/hyprwm/hyprland-protocols.git - cd1aba6bd78775825eb230b3a4274c48b6705eb7 cmake
+hyprland hyprutils https://github.com/hyprwm/hyprutils.git - 7e1f69209cd910615d0573a93fa970408f643539 cmake
+hyprland hyprwire https://github.com/hyprwm/hyprwire.git - a546e42d45e161682f729ebf52375bd4800d7041 cmake
+hyprland hyprlang https://github.com/hyprwm/hyprlang.git - 9508458be316a0d70d37ebed1ab725ccd10411ff cmake
+hyprland hyprcursor https://github.com/hyprwm/hyprcursor.git - e4ed7c08123df5af460a0a70961380cbfb872f76 cmake
+hyprland hyprgraphics https://github.com/hyprwm/hyprgraphics.git v0.6.0 ade4ef0a887d2740efb9c9af2ddb175633365e1b cmake
+hyprland aquamarine https://github.com/hyprwm/aquamarine.git - ad4484335fc327a6cf010f455ae258c397861ee0 cmake
+hyprland re2 https://github.com/google/re2.git 2025-08-05 85c7c0fb1163b0bd83a7951f5a205ee7b489e33e cmake
+hyprland glaze https://github.com/stephenberry/glaze.git v7.2.0 b518eec7a22e56ffa238b072c07f47efa7cea97f cmake
+hyprland Hyprland https://github.com/hyprwm/Hyprland.git v0.57.1 acc1aa0bfd4bd575dcb0f76c35ccf12b660a1ab9 cmake

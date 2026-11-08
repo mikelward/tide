@@ -1,0 +1,69 @@
+#!/bin/sh
+#
+# pins: prints the pins in tide's deps.lock, checking each line first.
+#
+#   pins GROUP        each of GROUP's pins, in order, as
+#                     "name repository tag commit build"
+#   pins --env NAME   the pin called NAME as shell assignments: PIN_REPO=,
+#                     PIN_TAG= and PIN_COMMIT=, for CI's $GITHUB_ENV
+#   pins --check      only check the file
+#
+# $TIDE_DEPS_LOCK is the file (default: deps.lock beside this directory).
+# A malformed line fails, naming the line, before anything is printed.
+
+prog=${0##*/}
+lock=${TIDE_DEPS_LOCK:-$(dirname "$0")/../deps.lock}
+
+usage() {
+    echo "usage: $prog GROUP | --env NAME | --check" >&2
+    exit 2
+}
+
+if ! test -r "$lock"; then
+    echo "$prog: can't read $lock" >&2
+    exit 1
+fi
+
+# Every line but comments and blank ones: six fields, a 40-digit commit, and
+# a build system the installer knows. Names are unique.
+if ! err=$(awk '
+    /^[ \t]*(#|$)/ { next }
+    {
+        where = FILENAME ":" FNR
+        if (NF != 6) { print where ": wants 6 fields (group name repository tag commit build), has " NF; bad = 1; next }
+        if ($5 !~ /^[0-9a-f]+$/ || length($5) != 40) { print where ": " $2 "'"'"'s commit isn'"'"'t a full 40-digit hash: " $5; bad = 1 }
+        if ($6 != "cmake" && $6 != "meson" && $6 != "make") { print where ": " $2 "'"'"'s build is " $6 ", not cmake, meson or make"; bad = 1 }
+        if ($3 !~ /^https:\/\//) { print where ": " $2 "'"'"'s repository isn'"'"'t https: " $3; bad = 1 }
+        if ($2 in seen) { print where ": " $2 " is pinned twice"; bad = 1 }
+        seen[$2] = 1
+    }
+    END { exit bad }
+' "$lock"); then
+    printf '%s: %s\n' "$prog" "$err" >&2
+    exit 1
+fi
+
+case ${1-} in
+--check)
+    test $# -eq 1 || usage
+    ;;
+--env)
+    test $# -eq 2 || usage
+    out=$(awk -v name="$2" '!/^[ \t]*(#|$)/ && $2 == name { printf "PIN_REPO=%s\nPIN_TAG=%s\nPIN_COMMIT=%s\n", $3, $4, $5 }' "$lock")
+    if test -z "$out"; then
+        echo "$prog: nothing called $2 is pinned in $lock" >&2
+        exit 1
+    fi
+    printf '%s\n' "$out"
+    ;;
+'' | -*) usage ;;
+*)
+    test $# -eq 1 || usage
+    out=$(awk -v group="$1" '!/^[ \t]*(#|$)/ && $1 == group { print $2, $3, $4, $5, $6 }' "$lock")
+    if test -z "$out"; then
+        echo "$prog: no group $1 in $lock" >&2
+        exit 1
+    fi
+    printf '%s\n' "$out"
+    ;;
+esac

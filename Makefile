@@ -109,6 +109,7 @@ test-fast:
 	sh shell/install_test.sh
 	sh shell/integration_test.sh
 	sh .github/workflows/ci_test.sh
+	sh install/pins_test.sh
 	$(MAKE) test-accents
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
 	$(QMLLINT) $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs))

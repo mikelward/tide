@@ -90,11 +90,10 @@ jobs:
           persist-credentials: false
       - run: make test-selftest
 
-  # Loads the shell in Quickshell (shell/integration_test.sh): the release that
-  # `setup` builds on Ubuntu 26.04 (scripts repo), at the same
-  # commit, against the same distro Qt. Keep the pin in step with
-  # setup-tide's QUICKSHELL_TAG and QUICKSHELL_COMMIT. The build is cached
-  # per pin and Qt version, so only a pin or Qt update rebuilds it.
+  # Loads the shell in Quickshell (shell/integration_test.sh): the release
+  # deps.lock pins, which the installer builds on Ubuntu 26.04, against the
+  # same distro Qt. The build is cached per pin and Qt version, so only a pin
+  # or Qt update rebuilds it.
   #
   # Cost and reliability: GitHub-hosted runners are free for this public
   # repository. A cold build takes about 20 minutes, a cached run a few.
@@ -107,9 +106,6 @@ jobs:
     needs: classify
     if: needs.classify.outputs.docs_only != 'true'
     env:
-      QUICKSHELL_REPO: https://github.com/quickshell-mirror/quickshell.git
-      QUICKSHELL_TAG: v0.3.1
-      QUICKSHELL_COMMIT: 1a4716cde794a59928d9d9fc15f2afc7a95de360
       QUICKSHELL_PREFIX: /opt/quickshell
       # root's password in this throwaway container, which the test types
       # into the lock; it guards nothing.
@@ -145,6 +141,10 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: Read Quickshell's pin
+        run: |
+          pin=$(install/pins --env quickshell)
+          printf '%s\n' "$pin" | sed 's/^PIN_/QUICKSHELL_/' >> "$GITHUB_ENV"
       - uses: actions/cache@v4
         id: cache
         with:
