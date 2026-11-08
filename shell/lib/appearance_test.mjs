@@ -9,7 +9,7 @@ import {
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
-    expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, MORE_WALLPAPERS, moreWallpapersCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
+    expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
     POSITIONS, POSITION_CHOICES, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf,
@@ -712,12 +712,37 @@ test("the wallpaper grid lists its pictures with their sizes", () => {
         ["tide-pick", "--list", "/usr/share/backgrounds", "/home/u/Pictures/wallpapers"]);
 });
 
-test("Find more opens Unsplash's free landscape wallpapers in the browser", () => {
-    const url = new URL(MORE_WALLPAPERS);
-    assert.equal(url.hostname, "unsplash.com");
-    assert.equal(url.searchParams.get("license"), "free");
-    assert.equal(url.searchParams.get("orientation"), "landscape");
-    assert.deepEqual(moreWallpapersCommand(), ["xdg-open", MORE_WALLPAPERS]);
+test("the grid finds more wallpapers on Unsplash and Wallhaven", () => {
+    const [unsplash, wallhaven] = moreWallpapers([{ name: "DP-1", width: 3440, height: 1440 }, { name: "eDP-1", width: 2880, height: 1800 }]);
+    assert.equal(unsplash.site, "Unsplash");
+    assert.equal(unsplash.url, UNSPLASH);
+    const u = new URL(UNSPLASH);
+    assert.equal(u.hostname, "unsplash.com");
+    assert.equal(u.searchParams.get("license"), "free");
+    assert.equal(u.searchParams.get("orientation"), "landscape");
+
+    assert.equal(wallhaven.site, "Wallhaven");
+    const w = new URL(wallhaven.url);
+    assert.equal(w.hostname, "wallhaven.cc");
+    // General and safe for work only.
+    assert.equal(w.searchParams.get("categories"), "100");
+    assert.equal(w.searchParams.get("purity"), "100");
+    // The widest monitor's size and shape, though the laptop has more
+    // pixels: 3440×1440 is 21:9.
+    assert.equal(w.searchParams.get("atleast"), "3440x1440");
+    assert.equal(w.searchParams.get("ratios"), "21x9");
+    const ratios = screen => new URL(moreWallpapers([screen])[1].url).searchParams.get("ratios");
+    assert.equal(ratios({ width: 1920, height: 1080 }), "16x9");
+    assert.equal(ratios({ width: 2560, height: 1600 }), "16x10");
+    assert.equal(ratios({ width: 1440, height: 2560 }), "9x16");
+    // A shape it doesn't name is landscape or portrait.
+    assert.equal(ratios({ width: 2560, height: 1700 }), "3x2");
+    assert.equal(ratios({ width: 3000, height: 1200 }), "landscape");
+    // No monitor, no size.
+    const none = new URL(moreWallpapers([])[1].url);
+    assert.equal(none.searchParams.get("atleast"), null);
+    assert.equal(none.searchParams.get("ratios"), null);
+    assert.deepEqual(openCommand(UNSPLASH), ["xdg-open", UNSPLASH]);
 });
 
 test("the wallpaper grid shows each Plasma wallpaper once, at its largest, by name", () => {

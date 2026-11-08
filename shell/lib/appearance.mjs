@@ -656,13 +656,35 @@ export function galleryFolders(home) {
     return ["/usr/share/backgrounds", "/usr/share/wallpapers", `${home}/Pictures/wallpapers`];
 }
 
-// Where the grid's Find more button sends you: Unsplash's desktop
-// wallpapers, landscape, free ones only (Unsplash+ asks you to pay).
-export const MORE_WALLPAPERS = "https://unsplash.com/s/photos/desktop?orientation=landscape&license=free";
+// Where the grid's buttons find more wallpapers, each opened in your
+// browser (SPEC.md §16), as [{ site, url }]:
+// - Unsplash's desktop wallpapers, landscape, free ones only (Unsplash+
+//   asks you to pay). It can't search by size.
+// - Wallhaven's, general and safe for work only, at least the size of
+//   your widest monitor in pixels, `screens` being previewScreens's, and
+//   of its shape when it's one Wallhaven names, else landscape or
+//   portrait. Its pictures are uploads, with licenses that vary.
+export const UNSPLASH = "https://unsplash.com/s/photos/desktop?orientation=landscape&license=free";
 
-// The command that opens MORE_WALLPAPERS in your browser.
-export function moreWallpapersCommand() {
-    return ["xdg-open", MORE_WALLPAPERS];
+// The shapes Wallhaven searches by.
+const WALLHAVEN_RATIOS = [[16, 9], [16, 10], [21, 9], [32, 9], [48, 9], [9, 16], [10, 16], [9, 18], [1, 1], [3, 2], [4, 3], [5, 4]];
+
+export function moreWallpapers(screens) {
+    let url = "https://wallhaven.cc/search?categories=100&purity=100&sorting=toplist";
+    const widest = screens.reduce((a, s) => (a === null || s.width > a.width || (s.width === a.width && s.height > a.height) ? s : a), null);
+    if (widest !== null && widest.width > 0 && widest.height > 0) {
+        url += `&atleast=${widest.width}x${widest.height}`;
+        // 3440×1440, called 21:9, is 2.39 to 21:9's 2.33.
+        const shape = widest.width / widest.height;
+        const ratio = WALLHAVEN_RATIOS.find(([w, h]) => Math.abs(shape / (w / h) - 1) <= 0.03);
+        url += ratio ? `&ratios=${ratio[0]}x${ratio[1]}` : `&ratios=${widest.width >= widest.height ? "landscape" : "portrait"}`;
+    }
+    return [{ site: "Unsplash", url: UNSPLASH }, { site: "Wallhaven", url }];
+}
+
+// The command that opens `url` in your browser.
+export function openCommand(url) {
+    return ["xdg-open", url];
 }
 
 // The pictures the grid can show: Qt decodes these, JPEG XL where
