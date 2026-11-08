@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.I3
 import Quickshell.Io
 import "lib/dispatch.mjs" as Dispatch
 import "lib/keys.mjs" as Keys
@@ -19,21 +20,27 @@ import "lib/writes.mjs" as Writes
 // and those can be given other keys: yours are kept in keys.json and
 // keys.local.json (§16.1), written to ~/.config/hypr/tide-keys.lua, which
 // conf reads, and `hyprctl eval conf_keys.reload()` has it bind them, as
-// the shell starts too. One that can't be written or applied is tried again
-// until it is (shell/lib/writes.mjs).
+// the shell starts too. On tidewm, conf names them with `bindsym --name`,
+// tidewm's GET_NAMED_BINDINGS lists them, and yours are written to
+// ~/.config/tidewm/tide-keys.conf as `rebind` lines, which conf's tidewm
+// config includes, and `tide-msg reload` applies. One that can't be written
+// or applied is tried again until it is (shell/lib/writes.mjs).
 Singleton {
     id: root
 
     // The bindings as last listed, as [{keys, does, submap}].
     property var binds: []
     // conf's named bindings as last listed, [] when there are none to change
-    // (tidewm, or a conf from before them).
+    // (a conf or tidewm from before them).
     property var catalog: []
+    // Whether tidewm has answered GET_NAMED_BINDINGS, so it takes the
+    // rebind lines your keys are written as (Keys.keysWritable).
+    property bool named: false
     // Why the last listing has none, or "".
     property string error: ""
     // The page's rows: {named, fixed} (Keys.shortcutRows).
     readonly property var rows: Keys.shortcutRows(root.catalog, root.binds, root.yours)
-    readonly property bool editable: !Compositor.tidewm && root.catalog.length > 0
+    readonly property bool editable: root.catalog.length > 0
 
     // Your keys in effect, {preset, keys} (Keys.loadKeys), and why they
     // aren't saved or applied, or "".
@@ -59,7 +66,11 @@ Singleton {
 
     // conf's list, read after each listing and apply.
     function readCatalog() {
-        if (Compositor.tidewm || root.catalogPath === "") {
+        if (Compositor.tidewm) {
+            catalogLister.createObject(root).running = true;
+            return;
+        }
+        if (root.catalogPath === "") {
             root.catalog = [];
             return;
         }
@@ -83,7 +94,8 @@ Singleton {
     // applies your keys. Run at the start, whenever a file changes on disk,
     // and after the page's changes.
     function load() {
-        if (Compositor.tidewm) {
+        if (!Keys.keysWritable(Compositor.tidewm, root.named)) {
+            // Loaded again once tidewm says it has named bindings.
             return;
         }
         const sharedText = shared.readNow();
@@ -110,8 +122,20 @@ Singleton {
         }
         // Hyprland outlives the shell, so the first read applies what's
         // wanted, as FloatingData does: the same keys again change nothing.
-        root.target = Writes.readTarget(root.target, writtenText, null).state;
-        root.stepped(Writes.wantTarget(root.target, Keys.keysLua(root.yours)));
+        // tidewm's reload starts every output and device over, so a shell
+        // start leaves tidewm with what this session's record says it read
+        // (AppliedRecord), as InputData does.
+        if (!Compositor.tidewm) {
+            root.target = Writes.readTarget(root.target, writtenText, null).state;
+            root.stepped(Writes.wantTarget(root.target, Keys.keysLua(root.yours)));
+            return;
+        }
+        root.target = Writes.readTarget(root.target, writtenText, root.target.known ? writtenText : applied.firstApplied(writtenText, root.target.failure)).state;
+        const conf = Keys.keysConf(root.yours);
+        for (const error of conf.errors) {
+            console.warn(`tide: ${error}`);
+        }
+        root.stepped(Writes.wantTarget(root.target, conf.text));
     }
 
     function stepped(r) {
@@ -160,7 +184,7 @@ Singleton {
     function record(name) {
         root.pending = null;
         root.recording = name;
-        Hyprland.dispatch(Dispatch.recordingKeys(true, Hyprland.usingLua));
+        root.recordingKeys(true);
         stopRecording.restart();
     }
 
@@ -170,7 +194,15 @@ Singleton {
         }
         root.recording = "";
         stopRecording.stop();
-        Hyprland.dispatch(Dispatch.recordingKeys(false, Hyprland.usingLua));
+        root.recordingKeys(false);
+    }
+
+    function recordingKeys(on) {
+        if (Compositor.tidewm) {
+            I3.dispatch(Dispatch.tidewmRecordingKeys(on));
+        } else {
+            Hyprland.dispatch(Dispatch.recordingKeys(on, Hyprland.usingLua));
+        }
     }
 
     // A key pressed while recording: "" once it's taken or still waiting
@@ -228,6 +260,18 @@ Singleton {
         }
     }
 
+    // On tidewm, leaving the mode any other way ends it too.
+    I3IpcListener {
+        subscriptions: Compositor.tidewm ? ["mode"] : []
+
+        onIpcEvent: event => {
+            if (event.type === "mode" && event.data?.change !== "tide-keys" && root.recording !== "") {
+                root.recording = "";
+                stopRecording.stop();
+            }
+        }
+    }
+
     // A recording left running gives the keys back.
     Timer {
         id: stopRecording
@@ -259,12 +303,21 @@ Singleton {
         onFileChanged: root.load()
     }
 
-    // What hyprland.lua reads. Written only when it would say something
-    // else.
+    // What hyprland.lua reads, or on tidewm what its config includes.
+    // Written only when it would say something else.
     SettingsFile {
         id: written
 
-        path: `${root.configHome}/hypr/tide-keys.lua`
+        path: Compositor.tidewm ? `${root.configHome}/tidewm/tide-keys.conf` : `${root.configHome}/hypr/tide-keys.lua`
+    }
+
+    // This session's record of what tidewm last read.
+    AppliedRecord {
+        id: applied
+
+        name: "tide-keys-tidewm-applied"
+        unsure: "reloading tidewm to be sure it has your shortcuts"
+        again: "tidewm may be reloaded again to be sure it has your shortcuts"
     }
 
     SettingsFile {
@@ -274,7 +327,9 @@ Singleton {
     }
 
     // Has hyprland.lua bind what was written: `hyprctl eval` answers "ok",
-    // or why not, on stdout. Then the list is read again.
+    // or why not, on stdout. On tidewm, `tide-msg reload` exits 0, or says
+    // why not, as tidewm's errors in its config, on stderr. Then the list
+    // is read again.
     Component {
         id: applier
 
@@ -305,19 +360,23 @@ Singleton {
                 if (!state.started) {
                     console.warn(state.report.message);
                     error = state.report.message.replace(/^tide: /, "");
-                } else if (state.code !== 0 || reply.trim() !== "ok") {
+                } else if (state.code !== 0 || (!Compositor.tidewm && reply.trim() !== "ok")) {
                     // A conf from before named bindings has no conf_keys.
                     error = `couldn't apply the shortcuts: ${(reply + state.errors).trim()}`;
                     console.warn(`tide: ${error}`);
                 } else if (state.report?.level === "log") {
                     console.log(state.report.message);
                 }
-                root.stepped(Writes.targetApplied(root.target, error));
+                const done = Writes.targetApplied(root.target, error);
+                if (Compositor.tidewm && error === "") {
+                    applied.record(Writes.recordOf(done.state.applied));
+                }
+                root.stepped(done);
                 root.list();
                 destroy();
             }
 
-            command: ["hyprctl", "eval", "conf_keys.reload()"]
+            command: Compositor.tidewm ? ["tide-msg", "reload"] : ["hyprctl", "eval", "conf_keys.reload()"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     run.reply = text;
@@ -399,6 +458,79 @@ Singleton {
                     listing.errors = text;
                     listing.errorsRead = true;
                     listing.streamed();
+                }
+            }
+            onStarted: handle({ type: "started" })
+            onRunningChanged: {
+                if (!running) {
+                    handle({ type: "stopped" });
+                }
+            }
+            onExited: (code, status) => handle({ type: "exited", code: code })
+        }
+    }
+    // tidewm's named bindings, `tide-msg --type get_named_bindings`, read
+    // as the list is.
+    Component {
+        id: catalogLister
+
+        Process {
+            id: catalogListing
+
+            property var state: Run.initial()
+            property string out: ""
+            property bool outRead: false
+            property string errors: ""
+            property bool errorsRead: false
+
+            function streamed() {
+                if (outRead && errorsRead) {
+                    handle({ type: "stderr", text: errors });
+                }
+            }
+
+            function handle(event) {
+                if (state.done) {
+                    return;
+                }
+                state = Run.step(state, event, command);
+                if (!state.done) {
+                    return;
+                }
+                if (state.report?.level === "warn") {
+                    console.warn(state.report.message);
+                } else if (state.report?.level === "log") {
+                    console.log(state.report.message);
+                }
+                // A tidewm from before named bindings lists none: the list
+                // stays read-only.
+                const r = Keys.listedTidewmCatalog(state.report?.level === "warn", out);
+                if (r.error !== "") {
+                    console.warn(`tide: ${r.error}`);
+                }
+                root.catalog = r.binds;
+                // The first answer has your keys written, as Hyprland's
+                // are as the shell starts.
+                if (r.error === "" && !root.named) {
+                    root.named = true;
+                    root.load();
+                }
+                destroy();
+            }
+
+            command: ["tide-msg", "--type", "get_named_bindings"]
+            stdout: StdioCollector {
+                onStreamFinished: {
+                    catalogListing.out = text;
+                    catalogListing.outRead = true;
+                    catalogListing.streamed();
+                }
+            }
+            stderr: StdioCollector {
+                onStreamFinished: {
+                    catalogListing.errors = text;
+                    catalogListing.errorsRead = true;
+                    catalogListing.streamed();
                 }
             }
             onStarted: handle({ type: "started" })

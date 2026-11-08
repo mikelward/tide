@@ -60,6 +60,15 @@ once you have agreed with it or reversed it.
   the masks cover only the user who ran setup. It's reversible with
   `systemctl --user unmask waybar.service swaync.service`, or by bringing back
   a `sudo systemctl --global disable`.
+- **tidewm's shortcuts change by name, with `rebind` lines** (2026-11-08,
+  SPEC.md §16): conf names bindings with tidewm's `bindsym --name`, and the
+  page writes `rebind NAME KEYS...` to `tide-keys.conf`, as Hyprland's
+  page writes names and keys to `tide-keys.lua`. Two alternatives were
+  rejected: an `unbindsym` plus a repeated `bindsym`, which would have the
+  page copy each binding's command, and one include file per binding. A
+  named row says what it does by its name ("Next keyboard layout"),
+  since tidewm's lines have no descriptions. A `--description` flag is the
+  alternative. Reversible: `nameLabel` in `shell/lib/keys.mjs`.
 - **tide's Hyprland config installs per user** (2026-11-08, SPEC.md
   §6.8), in `~/.config/hypr/tide/` beside the layout it loads, not in
   `/usr/share/tide`, and `tide-hyprland` passes `--config` only when you

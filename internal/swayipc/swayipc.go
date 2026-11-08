@@ -30,18 +30,22 @@ const (
 	GetSeats      = 101
 	// GetBindings is tidewm's own: the config file's bindings.
 	GetBindings = 200
+	// GetNamedBindings is tidewm's own: the bindings the config names,
+	// with their default keys and their keys now.
+	GetNamedBindings = 201
 )
 
 // Queries are the queries by the names swaymsg gives them.
 var Queries = map[string]uint32{
-	"get_workspaces": GetWorkspaces,
-	"get_outputs":    GetOutputs,
-	"get_tree":       GetTree,
-	"get_version":    GetVersion,
-	"get_config":     GetConfig,
-	"get_inputs":     GetInputs,
-	"get_seats":      GetSeats,
-	"get_bindings":   GetBindings,
+	"get_workspaces":     GetWorkspaces,
+	"get_outputs":        GetOutputs,
+	"get_tree":           GetTree,
+	"get_version":        GetVersion,
+	"get_config":         GetConfig,
+	"get_inputs":         GetInputs,
+	"get_seats":          GetSeats,
+	"get_bindings":       GetBindings,
+	"get_named_bindings": GetNamedBindings,
 }
 
 var magic = []byte("i3-ipc")

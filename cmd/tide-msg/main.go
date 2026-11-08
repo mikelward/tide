@@ -21,8 +21,9 @@
 //
 // prints the reply to a query, as JSON: get_workspaces, get_outputs,
 // get_tree, get_version, get_config, get_inputs or get_seats, as swaymsg
-// names them, or tidewm's own get_bindings. tide doctor reads tidewm's
-// outputs and config errors so, and the shell its bindings.
+// names them, or tidewm's own get_bindings and get_named_bindings. tide
+// doctor reads tidewm's outputs and config errors so, and the shell its
+// bindings.
 //
 //	tide-msg --subscribe EVENTS
 //
@@ -73,7 +74,7 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "usage: tide-msg [--] COMMAND...")
 		fmt.Fprintln(stderr, "       tide-msg --focused-workspace")
 		fmt.Fprintln(stderr, "       tide-msg --prompt-may-focus")
-		fmt.Fprintln(stderr, "       tide-msg --type get_workspaces|get_outputs|get_tree|get_version|get_config|get_inputs|get_seats|get_bindings")
+		fmt.Fprintln(stderr, "       tide-msg --type get_workspaces|get_outputs|get_tree|get_version|get_config|get_inputs|get_seats|get_bindings|get_named_bindings")
 		fmt.Fprintln(stderr, "       tide-msg --subscribe EVENT[,EVENT...]")
 		return 2
 	}

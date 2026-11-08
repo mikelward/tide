@@ -416,6 +416,164 @@ export function keysLua(state) {
     return lines.join("\n") + "\n";
 }
 
+// On tidewm (SPEC.md §5.3), conf names bindings with `bindsym --name`,
+// tidewm's GET_NAMED_BINDINGS lists them, and your keys are written to
+// ~/.config/tidewm/tide-keys.conf as `rebind NAME KEYS...` lines, which
+// conf's config includes last, and `tide-msg reload` applies. Keys are
+// kept as Hyprland writes them, so keys.json serves both; tidewm's are
+// read into that form and written back out of it.
+
+// tidewm's modifiers, by how a binding written for Hyprland names them.
+// Caps Lock is ignored there, so it's dropped.
+const TIDEWM_MODIFIERS = {
+    SUPER: "Mod4", WIN: "Mod4", LOGO: "Mod4", MOD4: "Mod4", META: "Mod4", CTRL: "Ctrl", CONTROL: "Ctrl",
+    ALT: "Mod1", MOD1: "Mod1", SHIFT: "Shift", MOD2: "Mod2", MOD3: "Mod3", MOD5: "Mod5", CAPS: "",
+};
+// Hyprland's, by how tidewm's lines may name them.
+const FROM_TIDEWM = {
+    SHIFT: "SHIFT", CONTROL: "CTRL", CTRL: "CTRL", MOD1: "ALT", ALT: "ALT", MOD2: "MOD2", MOD3: "MOD3",
+    MOD4: "SUPER", SUPER: "SUPER", LOGO: "SUPER", MOD5: "MOD5", LOCK: "",
+};
+// Written modifiers in the order Hyprland's bindings name them.
+const WRITTEN_ORDER = ["SUPER", "CTRL", "ALT", "SHIFT", "MOD2", "MOD3", "MOD5"];
+// A keysym's name, as tidewm's lines take one.
+const TIDEWM_KEY = /^[A-Za-z0-9_]+$/;
+
+// tidewm's keys ("Mod4+Shift+t") as Hyprland writes them ("SUPER + SHIFT +
+// t"), or null for a modifier it doesn't know.
+export function fromTidewmKeys(keys) {
+    const parts = String(keys).split("+");
+    const last = parts.pop();
+    const mods = [];
+    for (const p of parts) {
+        const upper = p.toUpperCase();
+        const m = Object.prototype.hasOwnProperty.call(FROM_TIDEWM, upper) ? FROM_TIDEWM[upper] : undefined;
+        if (m === undefined) {
+            return null;
+        }
+        if (m !== "" && !mods.includes(m)) {
+            mods.push(m);
+        }
+    }
+    mods.sort((a, b) => WRITTEN_ORDER.indexOf(a) - WRITTEN_ORDER.indexOf(b));
+    return mods.concat([last]).join(" + ");
+}
+
+// Keys as Hyprland writes them as tidewm's lines take them: "Mod4+Shift+t",
+// or null for keys tidewm can't bind by name, as a keycode or the mouse.
+export function tidewmKeys(keys) {
+    const parts = String(keys).split("+").map(k => k.trim());
+    const last = parts.pop();
+    if (!TIDEWM_KEY.test(last ?? "") || last.toLowerCase().startsWith("mouse")) {
+        return null;
+    }
+    const mods = [];
+    for (const p of parts) {
+        const upper = p.toUpperCase();
+        const m = Object.prototype.hasOwnProperty.call(TIDEWM_MODIFIERS, upper) ? TIDEWM_MODIFIERS[upper] : undefined;
+        if (m === undefined) {
+            return null;
+        }
+        if (m !== "" && !mods.includes(m)) {
+            mods.push(m);
+        }
+    }
+    return mods.concat([last]).join("+");
+}
+
+// What a binding named `name` does, from its name, as tidewm's lines say
+// no more: "next_keyboard_layout" is "Next keyboard layout".
+export function nameLabel(name) {
+    const words = name.replace(/_/g, " ");
+    return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+// Parses tidewm's GET_NAMED_BINDINGS (`tide-msg --type
+// get_named_bindings`) as parseCatalog parses conf's tide-keys.json:
+// {binds: [{name, does, defaults, keys}]}, the top level's keys in the
+// config's order, or {error}. A mode's, or the mouse's, aren't recorded on
+// the page, so they're left out.
+export function parseTidewmCatalog(text) {
+    const what = "tide-msg --type get_named_bindings";
+    let value;
+    try {
+        value = JSON.parse(text);
+    } catch (e) {
+        return { error: `${what}: not JSON` };
+    }
+    // A tidewm from before named bindings doesn't know the request.
+    if (value !== null && typeof value === "object" && typeof value.error === "string") {
+        return { error: `${what}: ${value.error}; is tidewm too old to change them?` };
+    }
+    if (!Array.isArray(value)) {
+        return { error: `${what}: expected a list of bindings` };
+    }
+    const binds = [];
+    for (const b of value) {
+        if (b === null || typeof b !== "object" || typeof b.name !== "string" || !stringList(b.keys) ||
+            !stringList(b.default_keys)) {
+            return { error: `${what}: a binding without its name, keys or default keys` };
+        }
+        if (b.type !== "key" || b.mode !== "default" || !NAME.test(b.name)) {
+            continue;
+        }
+        const keys = b.keys.map(fromTidewmKeys);
+        const defaults = b.default_keys.map(fromTidewmKeys);
+        if (keys.includes(null) || defaults.includes(null)) {
+            return { error: `${what}: ${b.name}'s keys have a modifier tide doesn't know` };
+        }
+        binds.push({ name: b.name, does: nameLabel(b.name), defaults, keys });
+    }
+    return { binds };
+}
+
+// What the page can change from a run of `tide-msg --type
+// get_named_bindings`, as listedTidewmBinds.
+export function listedTidewmCatalog(failed, text) {
+    if (failed) {
+        return { binds: [], error: "couldn't run tide-msg --type get_named_bindings" };
+    }
+    const r = parseTidewmCatalog(text);
+    return r.error ? { binds: [], error: r.error } : { binds: r.binds, error: "" };
+}
+
+// Whether your keys may be written for the compositor: always for
+// Hyprland's conf, and on tidewm only once its GET_NAMED_BINDINGS has
+// answered (`named`), as a tidewm from before named bindings would reject
+// the whole config over a rebind line.
+export function keysWritable(tidewm, named) {
+    return !tidewm || named;
+}
+
+// tide-keys.conf, which conf's tidewm config includes last: the preset's
+// keys with yours over them, as keysLua's, a `rebind` line each, `none`
+// for none. {text, errors}: keys tidewm can't bind are left out, and a
+// binding left with none of its keys keeps its own. tidewm skips a name
+// its config doesn't have.
+export function keysConf(state) {
+    const keys = mergedKeys(state);
+    const lines = ["# Written by tide's Keyboard shortcuts (SPEC.md §16); changes here are lost."];
+    const errors = [];
+    for (const name of Object.keys(keys).sort()) {
+        const list = keys[name];
+        const written = [];
+        for (const k of list) {
+            const t = tidewmKeys(k);
+            if (t === null) {
+                errors.push(`${name}: tidewm can't bind ${k}`);
+            } else {
+                written.push(t);
+            }
+        }
+        if (list.length === 0) {
+            lines.push(`rebind ${name} none`);
+        } else if (written.length > 0) {
+            lines.push(`rebind ${name} ${written.join(" ")}`);
+        }
+    }
+    return { text: lines.join("\n") + "\n", errors };
+}
+
 // Qt's key codes for the keys a binding can name, by their XKB names.
 const QT_KEYS = {
     0x20: "Space", 0x27: "apostrophe", 0x2c: "comma", 0x2d: "minus", 0x2e: "period", 0x2f: "slash",

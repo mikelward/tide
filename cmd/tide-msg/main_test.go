@@ -90,6 +90,17 @@ func TestGetBindingsIsTidewmsOwnQuery(t *testing.T) {
 	}
 }
 
+func TestGetNamedBindingsIsTidewmsOwnQuery(t *testing.T) {
+	tidewm := swayipctest.New(t, `[{"name":"terminal","keys":["Mod4+t"],"default_keys":["Mod4+t"]}]`)
+	status, out, _ := tideMsg([]string{"SWAYSOCK=" + tidewm.Socket}, "--type", "get_named_bindings")
+	if status != 0 || !strings.Contains(out, `"terminal"`) {
+		t.Fatalf("status %d, out %q", status, out)
+	}
+	if got := tidewm.Sent(); len(got) != 1 || got[0].Type != 201 || got[0].Payload != "" {
+		t.Fatalf("sent %v, not GET_NAMED_BINDINGS", got)
+	}
+}
+
 func TestPromptMayFocusIsTheExitStatus(t *testing.T) {
 	for reply, want := range map[string]int{
 		`[{"name":"seat0","prompt_may_focus":true}]`:  0,

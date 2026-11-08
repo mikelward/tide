@@ -181,3 +181,9 @@ export function recordingKeys(on, lua) {
     const submap = on ? "tide-keys" : "reset";
     return lua ? `hl.dsp.submap("${submap}")` : `submap ${submap}`;
 }
+
+// The same on tidewm (SPEC.md §5.3): conf's tide-keys mode, and back to
+// the top level.
+export function tidewmRecordingKeys(on) {
+    return on ? "mode tide-keys" : "mode default";
+}
