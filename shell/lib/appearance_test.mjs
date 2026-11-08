@@ -9,7 +9,7 @@ import {
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
-    expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
+    expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, MORE_WALLPAPERS, moreWallpapersCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
     POSITIONS, POSITION_CHOICES, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf,
@@ -731,6 +731,14 @@ test("the wallpaper grid lists pictures, passing over a folder that isn't there"
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
+});
+
+test("Find more opens Unsplash's free landscape wallpapers in the browser", () => {
+    const url = new URL(MORE_WALLPAPERS);
+    assert.equal(url.hostname, "unsplash.com");
+    assert.equal(url.searchParams.get("license"), "free");
+    assert.equal(url.searchParams.get("orientation"), "landscape");
+    assert.deepEqual(moreWallpapersCommand(), ["xdg-open", MORE_WALLPAPERS]);
 });
 
 test("the wallpaper grid shows each Plasma wallpaper once, at its largest, by name", () => {

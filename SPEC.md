@@ -4402,6 +4402,9 @@ stays hand-written.
       just downloaded shows.
     - A folder it can't read all of, a subfolder it may not open say,
       still shows what it could, with why over the grid.
+    - **Find more** opens Unsplash's free landscape desktop wallpapers in
+      your browser (`license=free`, so none asks you to pay), and closes
+      the panel. One saved to `~/Pictures/wallpapers` shows in the grid.
     - Choosing one sets it as the file chooser would, and closes the grid.
       Escape, or a click anywhere else, closes it with nothing set.
     - **Cost and reliability:** nothing new to install; one `find` over
