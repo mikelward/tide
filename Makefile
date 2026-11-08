@@ -3,6 +3,12 @@
 #   make test             run the tests: test-fast and test-selftest
 #   make test-fast        all but the integration test's self-tests (CI's test
 #                         job)
+#   make test-accents     the accents add-on's core (fcitx5/), with only a C++
+#                         compiler
+#   make fcitx5           build the accents add-on for fcitx5 into build/fcitx5
+#                         (needs cmake, extra-cmake-modules and fcitx5's
+#                         headers); `sudo cmake --install build/fcitx5`
+#                         installs it (SPEC.md §8.6)
 #   make test-selftest    the integration test's self-tests,
 #                         shell/integration_test_test.sh, about a minute and a
 #                         half on four CPUs (CI's selftest job)
@@ -73,7 +79,7 @@ QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test test-fast test-selftest build install install-shell install-session mocks palette chars unicode connector-zip unshallow-check
+.PHONY: test test-fast test-selftest test-accents fcitx5 build install install-shell install-session mocks palette chars unicode connector-zip unshallow-check
 test: test-fast test-selftest
 
 # The integration test's self-tests run the whole integration test against
@@ -103,6 +109,7 @@ test-fast:
 	sh shell/install_test.sh
 	sh shell/integration_test.sh
 	sh .github/workflows/ci_test.sh
+	$(MAKE) test-accents
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
 	$(QMLLINT) $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs))
 	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/span_test.mjs shell/lib/minimized_test.mjs shell/lib/mute_test.mjs shell/lib/workspacenames_test.mjs shell/lib/switcher_test.mjs shell/lib/tabs_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/settings_test.mjs shell/lib/settingssearch_test.mjs shell/lib/steps_test.mjs shell/lib/idle_test.mjs shell/lib/writes_test.mjs shell/lib/input_test.mjs shell/lib/keys_test.mjs shell/lib/outputs_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/sysmon_test.mjs shell/lib/keepawake_test.mjs shell/lib/wallclock_test.mjs shell/lib/presenter_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs shell/lib/vpn_test.mjs shell/lib/mic_test.mjs shell/lib/fuzzy_test.mjs shell/lib/frecency_test.mjs shell/lib/launcher_test.mjs shell/lib/lock_test.mjs shell/lib/greeter_test.mjs shell/lib/greetd_test.mjs shell/lib/unplug_test.mjs shell/lib/polkit_test.mjs shell/lib/agent_test.mjs shell/lib/sharepicker_test.mjs shell/lib/picker_test.mjs shell/lib/startup_test.mjs shell/lib/barclick_test.mjs shell/lib/barhit_test.mjs shell/lib/barsettings_test.mjs shell/lib/dnd_test.mjs shell/lib/clipboard_test.mjs shell/lib/power_test.mjs shell/lib/workspacepage_test.mjs shell/lib/floating_test.mjs shell/lib/unicode_test.mjs shell/lib/popups_test.mjs shell/lib/persist_test.mjs shell/lib/compositor_test.mjs shell/lib/tidewm_test.mjs
@@ -113,6 +120,17 @@ test-fast:
 	$(NODE) theme/generate.mjs --check
 	$(GO) vet ./...
 	$(GO) test ./...
+
+test-accents: build/accents_core_test
+	build/accents_core_test fcitx5/accents.json
+
+build/accents_core_test: fcitx5/accents_core.cpp fcitx5/accents_core.h fcitx5/accents_core_test.cpp
+	@mkdir -p build
+	$(CXX) -std=c++17 -Wall -Wextra -Werror -o $@ fcitx5/accents_core.cpp fcitx5/accents_core_test.cpp
+
+fcitx5:
+	cmake -S fcitx5 -B build/fcitx5 -DCMAKE_BUILD_TYPE=Release
+	cmake --build build/fcitx5
 
 palette:
 	$(NODE) theme/generate.mjs

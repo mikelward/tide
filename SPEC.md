@@ -2788,17 +2788,91 @@ apps and its System Settings pages. Kickoff stays on the tap of `Super`.
 ### 8.6 Accents on a held letter
 
 An accent is typed on the letter itself, as on macOS, rather than through
-Compose or the picker. For now that's fcitx5, the input method framework,
-with [Schnelle Umlaute](https://github.com/Maik-0000FF/schnelle-umlaute),
-its add-on: hold a letter and press Space, and Space again for the next
-accent (é, then è, ê, ë).
+Compose or the picker. That's fcitx5, the input method framework, with an
+add-on. Today the add-on is
+[Schnelle Umlaute](https://github.com/Maik-0000FF/schnelle-umlaute): hold a
+letter and press Space, and Space again for the next accent (é, then è,
+ê, ë). Its timeout types the plain letter, so it has no plain long press.
 
-- **Not yet a plain long press.** Schnelle Umlaute has no hold-only mode:
-  its timeout types the plain letter. A press-and-wait strip, as on macOS,
-  needs an add-on of our own on fcitx5, or a change to this one (TODO).
-- **Letters with accents wait.** A mapped letter is typed when it's
-  released, or when another key is pressed, not when it's pressed. The
-  others are typed at once.
+tide's own add-on, `tide-accents` (`fcitx5/`), gives the plain long press.
+It replaces Schnelle Umlaute once `setup-tide` builds and installs it and
+points fcitx5's profile at it (TODO).
+
+**The long press** (`tide-accents`):
+
+- **The letter comes at once.** A letter with accents is typed when it's
+  pressed. The key itself goes no further, so the app never repeats it,
+  and its repeats are dropped while it's held. Other keys are left alone.
+  So is any key with Ctrl, Alt or Super. Shift gives capitals.
+- **Held, its accents show.** Held for the hold time (300 ms), the
+  letter's accents appear in fcitx5's own candidate list at the caret,
+  across, numbered 1 to 9.
+- **Picking one.** A digit picks; Left and Right move the highlight and
+  Enter picks it; a click picks. The accent replaces the letter. Esc
+  closes the list and keeps the letter. Any other key closes it, keeps the
+  letter, and then does what it does. Letting go of the letter leaves the
+  list up, as on macOS.
+- **A quick tap** is just the letter. Another key before the hold time
+  ends the hold too.
+- **Replacing the letter.** Where the app reports its surrounding text,
+  the letter is deleted through text-input's delete-surrounding-text.
+  Elsewhere a Backspace press and release is sent first. Both are followed
+  by the accent's commit.
+- **Not everywhere.** Never in a password field (fcitx5's `Password` or
+  `Sensitive`): every key goes straight through. Off in the programs
+  listed in `accents.conf`, by fcitx5's name for the program. fcitx5
+  knows that name for X11 and Qt apps, but often not for Wayland apps it
+  reaches through text-input. The list is empty by default, so it's on in
+  terminals too. A held `l` opened a list in Vim, so `l` has no accents
+  by default.
+- **The table.** One file, `accents.json`, in Plasma Keyboard's format:
+  `{"version": 1, "map": {"e": ["è", "é", ...]}}`. Plasma Keyboard can
+  read the same file. Capitals are listed too (`"E"`), for Shift. Plasma
+  Keyboard looks letters up in lower case, so it never reads them. A
+  capital the table leaves out gets its small letter's accents in
+  capitals. The order is macOS's, as best known, unchecked on a Mac: a:
+  à á â ä æ ã å ā; c: ç ć č; e: è é ê ë ē ė ę; i: î ï í ī į ì; n: ñ ń;
+  o: ô ö ò ó œ ø ō õ; s: ß ś š; u: û ü ù ú ū; y: ÿ; z: ž ź ż. The
+  capital of ß is listed as ẞ, also unchecked.
+- **Your own accents.** `${XDG_CONFIG_HOME:-~/.config}/tide/accents.json`,
+  in the same format, overrides the installed table letter by letter.
+  Your small letter replaces both cases from the default, unless you give
+  the capital too. Add `"l": ["ł"]` there to get ł back. A file that
+  doesn't parse is logged and ignored: the default table is used.
+- **Settings.** `${XDG_CONFIG_HOME:-~/.config}/tide/accents.conf`, one
+  `key = value` per line, `#` for comments:
+
+  ```
+  hold_ms = 300           # 50 to 5000
+  off = kitty, foot       # programs it's off in, by space or comma
+  ```
+
+  A file with a bad line is refused whole, each bad setting named in the
+  log, and the settings already in use stay (the defaults, at start), so
+  a typo can't leave accents on in a program meant to be off. The files are read when fcitx5 starts the add-on; restart
+  `tide-fcitx5.service` after changing them.
+- **Build.** `make fcitx5` builds it with CMake against fcitx5's headers
+  (Debian and Ubuntu: `libfcitx5core-dev`, `fcitx5-modules-dev`,
+  `extra-cmake-modules`, `cmake`, `g++`). `sudo cmake --install
+  build/fcitx5` installs the add-on, its two `.conf` files and the
+  default table into fcitx5's own directories.
+- **Tests.** The keys, the table and the settings are decided in
+  `accents_core.cpp`, which has no fcitx5 in it.
+  `accents_core_test.cpp` covers it, from `make test`. fcitx5 can't run
+  here, so the glue, `tide_accents.cpp`, is only compiled.
+
+| | macOS | Plasma Keyboard | Schnelle Umlaute | tide-accents |
+|---|---|---|---|---|
+| Trigger | hold | hold (600 ms by default) | hold, then Space | hold (300 ms by default) |
+| The letter | typed on press | typed on press | typed on release or the next key | typed on press |
+| Its repeats | none | none | not checked | none |
+| The accents | a strip at the caret | an overlay | typed in place, Space again for the next | fcitx5's list at the caret |
+| Picking | digit, arrows and Return, click | digit, arrows and Return, click | Space | digit, arrows and Enter, click |
+| Letting go | the strip stays | the overlay stays | the accent stays | the list stays |
+| Table | built in | `base.json`, per locale | its own presets | `accents.json`, Plasma's format |
+
+**Either add-on:**
+
 - **Compositor-neutral.** fcitx5 reaches apps through the input-method
   and text-input protocols, which Hyprland and tidewm (its `ime.h`) both
   relay, so the switch in §21.1 leaves it as it is.
@@ -2829,7 +2903,9 @@ accent (é, then è, ê, ë).
   says an X11 app can break input in Chromium and WezTerm until a reboot.
 - **Cost and reliability:** free and local. fcitx5 is packaged by Debian,
   Ubuntu and Fedora; Schnelle Umlaute is one author's GPL-3.0 project,
-  released about monthly, built from source. A failing input method can
+  released about monthly, built from source. `tide-accents` is ours,
+  Apache-2.0, built from this repository; it links fcitx5's LGPL-2.1+
+  libraries. A failing input method can
   hold up typing in every app; stopping `tide-fcitx5.service` gives the
   keyboard straight back.
 
@@ -5115,6 +5191,10 @@ are what "done" means.
   (schedule, sunrise and sunset, manual flip expiry), and config loading (`.local`
   merge rules; a bad file keeps the last good settings). The QML only binds
   to them.
+- **The accents add-on's logic in plain C++.** `fcitx5/accents_core.cpp`
+  decides what each key does, and reads the table and settings, with no
+  fcitx5 in it. `make test-accents` builds `accents_core_test.cpp` with
+  the C++ compiler alone and runs it, from `make test` (§8.6).
 - **Qt's JavaScript, not Node's.** Quickshell runs those modules in Qt's
   QML engine, which (checked on Qt 6.11) has no object spread and none of
   the built-ins newer than ECMAScript 2016, such as `flatMap`, `at` or
