@@ -42,7 +42,8 @@ Item {
     // §7.3); the greeter, with no one's settings to read, keeps 24-hour.
     property bool hour24: true
     // The wallpaper's path, drawn blurred behind the password face (SPEC.md
-    // §15), or "" for the face's own gradient; the greeter has none.
+    // §15), or "" for the face's own gradient: the shell's on the lock, the
+    // last user's copy (lookDir) on the greeter.
     property string wallpaper: ""
     // A color wallpaper, #rrggbb, drawn darkened instead (no blur), or "".
     property string wallpaperColor: ""
@@ -63,10 +64,21 @@ Item {
     // Whether there's a keyboard to type with (LockKeyboards.present).
     property bool keyboard: true
 
+    // Light or dark (SPEC.md §10, §11): the lock's follows the shell's
+    // mode, the greeter's the last user's. The screensaver stays black.
+    property bool dark: true
+    readonly property var palette: Lock.facePalette(face.dark)
+
+    // The face's see-through ink at `alpha`: white on dark, black on light.
+    function ink(alpha) {
+        return Qt.rgba(face.palette.ink, face.palette.ink, face.palette.ink, alpha);
+    }
+
     readonly property var look: Lock.fieldLook({
         focused: keys.activeFocus,
         keyboard: face.keyboard,
         error: face.lockState.error,
+        dark: face.dark,
     })
     // Half-periods of the caret's blink since the last key or the focus
     // arriving (Lock.caretShown).
@@ -210,13 +222,13 @@ Item {
             visible: !face.lockState.saver
             gradient: Gradient {
                 orientation: Gradient.Horizontal
-                GradientStop { position: 0.0; color: "#13303a" }
-                GradientStop { position: 1.0; color: "#241a3a" }
+                GradientStop { position: 0.0; color: face.palette.top }
+                GradientStop { position: 1.0; color: face.palette.bottom }
             }
 
             // The wallpaper, over the gradient once it has loaded: drawn
-            // through the blur, and darkened, so the face's light text
-            // reads on a light picture. Decoded at the face's size, which
+            // through the blur, and darkened (lightened on the light face),
+            // so the face's text reads on any picture. Decoded at the face's size, which
             // the blur leaves no detail to spare.
             Image {
                 id: backdrop
@@ -247,7 +259,7 @@ Item {
                 blurEnabled: true
                 blur: 1.0
                 blurMax: 64
-                brightness: -Appearance.LOCK_DARKEN
+                brightness: face.dark ? -Appearance.LOCK_DARKEN : Appearance.LOCK_DARKEN
             }
 
             // A color wallpaper: plain, with nothing to blur, darkened as
@@ -255,7 +267,7 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 visible: face.wallpaperColor !== ""
-                color: face.wallpaperColor === "" ? "transparent" : Appearance.lockColor(face.wallpaperColor)
+                color: face.wallpaperColor === "" ? "transparent" : Appearance.lockColor(face.wallpaperColor, face.dark)
             }
 
             // The battery and the notification count, top right, in the
@@ -281,13 +293,13 @@ Item {
                     SymbolicIcon {
                         anchors.verticalCenter: parent.verticalCenter
                         name: parent.view.icon
-                        color: parent.view.low ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.55)
+                        color: parent.view.low ? face.palette.warn : face.ink(0.55)
                     }
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: parent.view.text
-                        color: parent.view.low ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.55)
+                        color: parent.view.low ? face.palette.warn : face.ink(0.55)
                         font.family: "Inter"
                         font.pixelSize: 12
                     }
@@ -300,13 +312,13 @@ Item {
                     SymbolicIcon {
                         anchors.verticalCenter: parent.verticalCenter
                         name: "preferences-system-notifications-symbolic"
-                        color: Qt.rgba(1, 1, 1, 0.55)
+                        color: face.ink(0.55)
                     }
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: face.unread
-                        color: Qt.rgba(1, 1, 1, 0.55)
+                        color: face.ink(0.55)
                         font.family: "Inter"
                         font.pixelSize: 12
                     }
@@ -323,6 +335,7 @@ Item {
                 visible: !face.login
 
                 LockButton {
+                    dark: face.dark
                     icon: "weather-clear-night-symbolic"
                     label: "Suspend"
                     enabled: !face.powerBusy
@@ -337,6 +350,7 @@ Item {
                 spacing: 8
 
                 LockButton {
+                    dark: face.dark
                     icon: "system-reboot-symbolic"
                     tip: "Restart"
                     enabled: !face.powerBusy
@@ -344,6 +358,7 @@ Item {
                 }
 
                 LockButton {
+                    dark: face.dark
                     icon: "system-shutdown-symbolic"
                     tip: "Shut down"
                     enabled: !face.powerBusy
@@ -363,7 +378,7 @@ Item {
                 // Inhibitor names come from other programs: never markup.
                 textFormat: Text.PlainText
                 text: face.powerMessage
-                color: "#ff9e8a"
+                color: face.palette.warn
                 font.family: "Inter"
                 font.pixelSize: 12
             }
@@ -381,7 +396,7 @@ Item {
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: face.hostname
-                    color: "#f2f2f6"
+                    color: face.palette.text
                     font.family: "Inter"
                     font.pixelSize: 32
                     font.weight: Font.Bold
@@ -390,7 +405,7 @@ Item {
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: `${Qt.formatDate(clock.date, "ddd MMM d")}  ${Clocks.formatWall(clock.date.getHours(), clock.date.getMinutes(), face.hour24)}`
-                    color: Qt.rgba(1, 1, 1, 0.7)
+                    color: face.ink(0.7)
                     font.family: "Inter"
                     font.pixelSize: 13
                     font.features: { "tnum": 1 }
@@ -403,7 +418,7 @@ Item {
                     // A GECOS name is anyone's to set: never markup.
                     textFormat: Text.PlainText
                     text: face.user
-                    color: "#f2f2f6"
+                    color: face.palette.text
                     font.family: "Inter"
                     font.pixelSize: 20
                     font.weight: Font.DemiBold
@@ -417,7 +432,7 @@ Item {
                     width: 270
                     height: 38
                     radius: 10
-                    color: Qt.rgba(1, 1, 1, 0.1)
+                    color: face.ink(0.1)
                     border.width: face.look.borderWidth
                     border.color: face.look.border
 
@@ -434,7 +449,7 @@ Item {
                         text: field.shown || "Password"
                         // A visible answer and PAM's prompt: never markup.
                         textFormat: Text.PlainText
-                        color: typed ? "#f2f2f6" : Qt.rgba(1, 1, 1, 0.45)
+                        color: typed ? face.palette.text : face.ink(0.45)
                         font.family: "Inter"
                         font.pixelSize: typed ? 14 : 13
                         // Spaced out for dots, not for a visible answer.
@@ -450,7 +465,7 @@ Item {
                         height: 18
                         radius: 1
                         visible: face.look.caret && Lock.caretShown(face.caretTicks)
-                        color: "#f2f2f6"
+                        color: face.palette.text
                     }
 
                     // The keyboard layout, so a failed password isn't a
@@ -467,7 +482,7 @@ Item {
                         width: Math.min(badge.implicitWidth + 12, 108, room)
                         height: 20
                         radius: 5
-                        color: Qt.rgba(1, 1, 1, 0.14)
+                        color: face.ink(0.14)
 
                         Text {
                             id: badge
@@ -478,7 +493,7 @@ Item {
                             // Hyprland's text, never markup.
                             textFormat: Text.PlainText
                             text: face.layout
-                            color: Qt.rgba(1, 1, 1, 0.85)
+                            color: face.ink(0.85)
                             font.family: "Inter"
                             font.pixelSize: 11
                             font.weight: Font.Bold
@@ -501,7 +516,7 @@ Item {
                     // PAM's and greetd's words: never markup.
                     textFormat: Text.PlainText
                     text: face.status
-                    color: face.line.error ? "#ff9e8a" : Qt.rgba(1, 1, 1, 0.7)
+                    color: face.line.error ? face.palette.warn : face.ink(0.7)
                     font.family: "Inter"
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
@@ -524,6 +539,7 @@ Item {
                     spacing: 8
 
                     LockButton {
+                        dark: face.dark
                         icon: "computer-symbolic"
                         label: face.sessionName
                         trailing: "pan-down-symbolic"
@@ -543,6 +559,7 @@ Item {
                     }
 
                     LockButton {
+                        dark: face.dark
                         icon: "avatar-default-symbolic"
                         label: "Other user"
                         trailing: "pan-down-symbolic"

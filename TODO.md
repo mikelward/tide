@@ -7,6 +7,16 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **The light face's colors** (2026-11-08, SPEC.md §11): a pale teal to
+  lavender gradient (`#d9edf1` to `#e8e0f3`), the light palette's text and
+  accent, a dark red for warnings, and a wallpaper lightened 25% behind
+  it. Picked to mirror the dark face, not from a mock. Reversible:
+  `facePalette` in `shell/lib/lock.mjs`.
+- **The greeter follows the schedule, not a flip**, and the lock follows
+  whatever the shell shows, flip included (2026-11-08). The flip lasts
+  only until the next scheduled change, and the greeter runs before it
+  could matter. Reversible: write the flip into `look.json`.
+
 - **The KDE launcher is a second Quickshell config, with Apps and Actions
   only** (2026-11-07, SPEC.md §8.5), rather than `shell.qml` with a KDE
   mode, or a KWin backend in `Compositor.qml` for the Windows tab. Plasma
@@ -1645,8 +1655,11 @@ back. The checks it doesn't make yet are in `scripts`' TODO.md, under
 - On a real machine, check the greeter's idle (SPEC.md §11): the
   screensaver after 5 minutes, the displays off at 5 minutes 30 seconds,
   and a key, a move and a click each turn them back on.
-- SPEC.md §15 has the greeter follow the default light/dark schedule. Its
-  face is the lock's, which is dark only, like the lock.
+- On a real machine, check the greeter's look (SPEC.md §11): with
+  `/var/lib/tide/look/<you>/` made by setup and a session logged in once,
+  the greeter shows your wallpaper, light by day and dark at night, and
+  the lock's face is light by day too. Only the unit tests and the
+  integration test's `look.json` check have run it.
 
 - [ ] **Keep a last-login line off the lock and the greeter** (SPEC.md
   §11: nothing under the user's name). The faces draw none of their own

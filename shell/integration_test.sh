@@ -1046,9 +1046,23 @@ shell_loaded() {
 # runs it, as $after_load.
 written_settings() {
     i=0
-    # None is an empty line, then the position: fill, with none set.
-    until test -e "$wallpaper_record" && test "$(cat "$wallpaper_record")" = "$(printf '\nfill')"; do
+    # None is an empty line, then the position: fill, with none set, then
+    # light or dark, as the shell is now (SPEC.md §10).
+    until test -e "$wallpaper_record" && { test "$(cat "$wallpaper_record")" = "$(printf '\nfill\ndark')" ||
+        test "$(cat "$wallpaper_record")" = "$(printf '\nfill\nlight')"; }; do
         if waited "the shell didn't record no wallpaper for the lock in $wallpaper_record" "$i"; then
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    # The greeter's copy of the look (SPEC.md §11), in the folder setup
+    # makes for the user: the default schedule, and no wallpaper to copy.
+    i=0
+    until test -s "$look_json" && grep -qF '"mode": "schedule"' "$look_json" &&
+        grep -qF '"darkWallpaper"' "$look_json"; do
+        if waited "the shell didn't keep its look for the greeter in $look_json" "$i"; then
+            cat "$look_json" >&2 2>/dev/null
             exit 1
         fi
         sleep 0.1
@@ -2205,7 +2219,12 @@ workspaces_conf=$tmp/home/.config/hypr/tide-workspaces.lua
 floating_local=$tmp/home/.config/tide/floating.local.json
 floating_conf=$tmp/home/.config/hypr/tide-floating.lua
 after_load=shell_loaded
+# The folder setup makes for the user's look, for the greeter (§11).
+mkdir -p "$tmp/look/tide-test" || exit 1
+look_json=$tmp/look/tide-test/look.json
+load_env="TIDE_LOOK_DIR=$tmp/look USER=tide-test"
 load shell "the shell" -c tide
+load_env=
 after_load=
 # Gone again, so the next shell starts from the defaults, writes them, and
 # restarts hypridle and reapplies the devices, too.

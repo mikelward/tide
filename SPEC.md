@@ -3313,6 +3313,29 @@ talk, a demo, or a meeting room's screen.
   user can't read anyone's `~/.config`) and a greetd config template.
 - **Same face as the lock.** Login and lock are one QML component with two
   modes ([`lock.png`](docs/mocks/lock.png)): `shell/LockFace.qml`.
+- **Light or dark, with a wallpaper.** The face has a light palette as
+  well as its dark one: a pale gradient, dark text, the light accent, and
+  a wallpaper lightened behind it rather than darkened. The screensaver
+  face stays black.
+  - **The lock** follows the shell's mode as it shows now, from the
+    wallpaper record (§15).
+  - **The greeter** shows the look of the user it has picked: that user's
+    light and dark schedule (`schedule`, `sun` or fixed) and wallpapers,
+    worked out again each minute. It switches with the user.
+  - It reads them from `/var/lib/tide/look/<user>/`, since it runs as
+    greetd's user, which can't read anyone's home. The user's shell keeps
+    that folder current: `look.json`, the settings that decide light or
+    dark and each mode's color, position and whether there's a picture,
+    and the pictures copied in as `light` and `dark`, readable by all.
+    It copies them again whenever the settings or the candidates change.
+  - `setup` makes the folder, owned by the user (mikelward/scripts). With
+    none there, the shell says so once in its log and the greeter shows its
+    own dark gradient, as it does for a look it can't read.
+  - What's shown before login is no more than the lock already shows, and
+    the latitude and longitude for `sun` say where the machine is, which
+    anyone at it knows (maintainer, 2026-11-08).
+  - A flip from the launcher (§15) isn't copied: the greeter follows the
+    schedule.
 - **Hostname.** It leads with the short hostname: the first label, with a
   leading `<user>-` removed, the same rule as `i3statusdwm`. It's only a
   size above the user's name (32 px to 20), so neither dwarfs the other.
@@ -4072,8 +4095,10 @@ to be focused.
     - A record whose position isn't one is refused as a bad path is: the
       lock logs it and shows none.
     - With no record, or none in it, the lock keeps its own gradient.
-  - The greeter runs before anyone logs in, with no one's wallpaper to
-    show, so it keeps its gradient too.
+  - The greeter shows the last user's wallpaper, light or dark by their
+    schedule, from the copy their shell keeps for it (§11). The record also
+    says light or dark, on a third line, which the lock's face follows; an
+    older record without it is dark.
 - **Fonts and icons:**
   - **Inter** for UI and **Ubuntu Mono** (roughly 11 pt) for code. That is
     one setting in `appearance.json`, handed to GTK (`font-name`,

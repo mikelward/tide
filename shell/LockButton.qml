@@ -1,4 +1,5 @@
 import QtQuick
+import "lib/lock.mjs" as Lock
 
 // A button on the login and lock faces (docs/mocks/lock.png): a translucent
 // pill with an icon and, for Suspend and the greeter's pickers, a label,
@@ -13,13 +14,20 @@ Rectangle {
     property string tip: ""
     // After the label: a picker's arrow.
     property string trailing: ""
+    // On the light face or the dark one (Lock.facePalette).
+    property bool dark: true
+    readonly property var palette: Lock.facePalette(root.dark)
+
+    function ink(alpha) {
+        return Qt.rgba(root.palette.ink, root.palette.ink, root.palette.ink, alpha);
+    }
 
     signal clicked
 
     implicitWidth: label !== "" ? row.implicitWidth + 24 : 32
     implicitHeight: label !== "" ? 28 : 32
     radius: height / 2
-    color: mouse.pressed ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.1)
+    color: mouse.pressed ? root.ink(0.2) : root.ink(0.1)
     opacity: enabled ? 1 : 0.5
 
     Accessible.role: Accessible.Button
@@ -34,7 +42,7 @@ Rectangle {
         SymbolicIcon {
             anchors.verticalCenter: parent.verticalCenter
             name: root.icon
-            color: "#f2f2f6"
+            color: root.palette.text
         }
 
         Text {
@@ -43,7 +51,7 @@ Rectangle {
             // A session's name comes from its file: never markup.
             textFormat: Text.PlainText
             text: root.label
-            color: "#f2f2f6"
+            color: root.palette.text
             font.family: "Inter"
             font.pixelSize: 12
             font.weight: Font.DemiBold
@@ -53,7 +61,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             visible: root.trailing !== ""
             name: root.trailing
-            color: Qt.rgba(1, 1, 1, 0.7)
+            color: root.ink(0.7)
         }
     }
 

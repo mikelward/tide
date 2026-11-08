@@ -106,7 +106,8 @@ all_runs="tide-tz tide-sysmon title replay order scheme scheme-monitor vpns vpn-
 # Its lock names a clocks.local.json with a bad hour24, unless
 # DIR/lock-takes-any-clocks is there, and a wallpaper record naming a
 # relative path, unless DIR/lock-takes-any-wallpaper is. Its shell records
-# no wallpaper for the lock, unless DIR/no-wallpaper-record is there, and
+# no wallpaper for the lock, and dark, unless DIR/no-wallpaper-record is
+# there, and its look for the greeter, unless DIR/no-look is, and
 # says it read the desktop entries' OnlyShowIn, unless DIR/no-show-in is.
 # DIR/load-CONFIG.txt, if it's there, is printed
 # before LOAD by that config alone: shell (-c), lock or greeter.
@@ -605,9 +606,15 @@ if test "\$config" = lock; then
         echo \$\$ >"\$XDG_RUNTIME_DIR/locked"
     fi
 fi
-# As the shell, with no wallpaper to draw, it records none for the lock.
+# As the shell, with no wallpaper to draw, it records none for the lock,
+# and dark.
 if test "\$config" = shell && ! test -e "\$(dirname "\$0")/no-wallpaper-record"; then
-    printf '\nfill\n' >"\$XDG_RUNTIME_DIR/tide-wallpaper"
+    printf '\nfill\ndark\n' >"\$XDG_RUNTIME_DIR/tide-wallpaper"
+fi
+# And, given a folder for it, its look for the greeter, unless DIR/no-look
+# is there.
+if test "\$config" = shell && test -n "\$TIDE_LOOK_DIR" && ! test -e "\$(dirname "\$0")/no-look"; then
+    printf '{\n  "mode": "schedule",\n  "darkWallpaper": {}\n}\n' >"\$TIDE_LOOK_DIR/\$USER/look.json"
 fi
 if test -f "\$(dirname "\$0")/load-\$config.txt"; then
     cat "\$(dirname "\$0")/load-\$config.txt"
@@ -1237,6 +1244,14 @@ stubs "$tmp/lock-takes-any-wallpaper" "exit 0" "$loaded"
 run "$tmp/lock-takes-any-wallpaper"
 check "a lock that doesn't name a wallpaper record it can't take fails" test "$code" -ne 0
 check "and says so" contains "$out" "and the relative path in"
+}
+
+case_125() {
+stubs "$tmp/no-look" "exit 0" "$loaded"
+: >"$tmp/no-look/no-look" || exit 1
+run "$tmp/no-look"
+check "a shell that keeps no look for the greeter fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell didn't keep its look for the greeter in"
 }
 
 case_33() {
