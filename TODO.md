@@ -811,7 +811,7 @@ once you have agreed with it or reversed it.
   `withClock` and `cityLabel` in `shell/lib/clocks.mjs`.
 
 - [ ] **Keyboard's shortcuts list a binding turned off with
-  `set_enabled(false)` as if it were on.** Hyprland 0.56.2's `hyprctl binds -j` lists every
+  `set_enabled(false)` as if it were on.** Hyprland 0.57.1's `hyprctl binds -j` lists every
   binding and has no enabled field, and `conf` turns none off. The
   alternative is reading the bindings through `hyprctl eval` from Lua,
   whose binding objects know `is_enabled()`, which needs `conf` to define
@@ -1414,7 +1414,7 @@ from the keyboard (`shell/integration_test.sh`).
 - Keys (`shell/lib/keys.mjs`, `shell/KeysData.qml`) lists `hyprctl
   binds -j` as the shell starts and as the page shows. CI checks the shell
   lists them. Still to do:
-  - On a live session, check the listing parses as 0.56.2 gives it, and
+  - On a live session, check the listing parses as 0.57.1 gives it, and
     that a binding added to `hyprland.local.lua` shows after a reload.
 - Layouts (`shell/lib/layouts.mjs`, `shell/LayoutsData.qml`,
   `hypr/tide/layout.lua`) sets where ultrawide begins, each monitor shape's
@@ -1959,7 +1959,7 @@ or workspace goes there.
     says;
   - a window dragged to the other monitor with the mouse is noted there
     only if Hyprland fires `window.move_to_workspace` for it.
-- **Check the left and right keys live on Hyprland 0.56.2** (SPEC.md §6.6).
+- **Check the left and right keys live on Hyprland 0.57.1** (SPEC.md §6.6).
   Tested only against a stub `hl`: on two monitors side by side,
   `Super+Left`/`Right` walk the windows and cross at the edge, stop past
   the last monitor, and focus an empty monitor; `Super+Shift+Left`/`Right`
@@ -1973,7 +1973,7 @@ or workspace goes there.
   notification doesn't pop up but is in the center; its windows lose
   their chip icons and Attention rows; the center's **Mute APP** and
   **Unmute** work; a bad entry is a notification naming it.
-- **Check minimizing live on Hyprland 0.56.2** (SPEC.md §6.7; conf's
+- **Check minimizing live on Hyprland 0.57.1** (SPEC.md §6.7; conf's
   `Super+Z` is mikelward/conf#440). Tested only against stubs: `Super+Z`
   hides the window and focus goes to the one under it; the corner tray
   appears on that monitor with the app's icon, shows the title on hover,
@@ -1982,7 +1982,7 @@ or workspace goes there.
   shows on its chip and a click there restores it.
 - **Decide what the bar does when named workspaces outgrow its left side**
   (SPEC.md §7.3, §21).
-- **Check home in `conf` on 0.56.2** (mikelward/conf#434): home exists
+- **Check home in `conf` on 0.57.1** (mikelward/conf#434): home exists
   from the first frame, as the first monitor's workspace, and survives a
   config reload; home's apps open there without switching. Shell sessions
   named from `TIDE_WORKSPACE` (conf#435): a terminal launched on a named

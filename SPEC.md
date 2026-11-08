@@ -136,11 +136,11 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 
 ## 3. Decisions
 
-### 3.1 Compositor: Hyprland 0.56+, configured in Lua
+### 3.1 Compositor: Hyprland 0.57+, configured in Lua
 
 | | tile | three-col | two cols + stack | lone window 80% / 100% | per-workspace layout | urgency | fit |
 |---|---|---|---|---|---|---|---|
-| **Hyprland 0.56** | master | master `orientation center` | Lua layout (~50 lines) | Lua layout, or a `w[tv1] m[…]` gaps rule | yes (0.54+) | `urgent>>` event, per-window flag | **chosen** |
+| **Hyprland 0.57** | master | master `orientation center` | Lua layout (~50 lines) | Lua layout, or a `w[tv1] m[…]` gaps rule | yes (0.54+) | `urgent>>` event, per-window flag | **chosen** |
 | river 0.4 + kwm / river-classic + filtile | yes | yes | own generator | filtile `smart-padding-h` | per tag | none in river 0.4's protocol | runner-up |
 | MangoWC 0.17 | tile | `center_tile` | C patch | `center_tile` at mfact | per tag | yes | close |
 | niri 26.04 | — | — | — | `default-column-width 0.8` | — | yes | scrolling, not dwm |
@@ -162,10 +162,11 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 
 **What it costs.** Hyprland breaks config often: window rules changed syntax
 in 0.53, layouts were rewritten in 0.54, Lua arrived in 0.55, `.conf` was
-deprecated in 0.56.1 and is due to be removed in 0.57. The mitigations are:
+deprecated in 0.56.1 and removed in 0.57. The mitigations are:
 
 - Write the config in Lua now.
-- Pin the Hyprland version `setup` installs.
+- Pin the Hyprland version `setup` installs: 0.57.1, which is also the
+  oldest tide supports.
 - Make CI load the config under the pinned Hyprland (`hypr_test.sh` already
   exists in `conf`).
 - Treat each Hyprland upgrade as its own PR.
@@ -4371,7 +4372,7 @@ stays hand-written.
     page says why; in the files, it's an error at load.
   - `Super+Alt+Space` moves every keyboard to the layout after the main
     keyboard's (§6.6), on the lock screen too. Setting one layout on all
-    of them keeps them in step. Hyprland 0.56.2's own `switchxkblayout all
+    of them keeps them in step. Hyprland 0.57.1's own `switchxkblayout all
     next` moves each on from its own layout, so a keyboard plugged in after
     a switch would stay out of step.
   - Hyprland 0.56.2's Lua has no dispatcher or query for layouts, so
@@ -4438,18 +4439,21 @@ stays hand-written.
     Keyboard settings have its shortcuts.
   - `openPage keys`, and the launcher's Keyboard shortcuts, open Keyboard
     scrolled to them; `shownPage` says `keyboard`.
-  - That needs Hyprland 0.56.2, the pinned version. 0.56.0 gives each
-    value one field late from `has_description` on, so its JSON doesn't
-    parse, and the page says so.
-  - Every Lua binding's dispatcher is `__lua`, so what one does is only
-    its `description`, which `conf` gives in `hl.bind`'s options. One
-    without says so.
+  - That needs Hyprland 0.56.2 or later; tide pins 0.57.1. 0.56.0 gives
+    each value one field late from `has_description` on, so its JSON
+    doesn't parse, and the page says so.
+  - A Lua binding's dispatcher says nothing of what it does: `__lua` on
+    0.56.2, and on 0.57.1 `HL.Dispatcher(NAME)` or `function: ADDRESS`,
+    with a registry number as its argument. So what one does is only its
+    `description`, which `conf` gives in `hl.bind`'s options. One without
+    says so.
   - Each shows its keys as they're printed on the keyboard (`Super+\`,
     `Super+PgUp`), in the config's order, with its submap if it has one.
-  - A binding turned off with `set_enabled(false)` still shows. 0.56.2's
+  - A binding turned off with `set_enabled(false)` still shows. 0.57.1's
     listing includes it and says nothing of it, and `conf` turns none off.
-  - A Lua binding by keycode (`SUPER + code:28`) shows only that it is
-    one: 0.56.2's listing gives neither its key nor its code.
+  - A Lua binding by keycode (`SUPER + code:28`) shows its code. 0.56.2's
+    listing gave neither its key nor its code, so there it shows only that
+    it is one.
   - On Hyprland, `conf` names most bindings, and those come first and can
     change. `conf` lists each one's name, what it does, its default keys
     and its keys now in `tide-keys.json`, in its instance's runtime
@@ -5482,14 +5486,14 @@ Hyprland stays the baseline M1 accepted.
 
 ### 21.1 Deferred exploration: a dwl fork instead of Hyprland
 
-Hyprland 0.56 stays the plan (§3.1). Getting it onto Ubuntu 26.04,
+Hyprland 0.57 stays the plan (§3.1). Getting it onto Ubuntu 26.04,
 though, means building it from source, since Ubuntu ships 0.53.3. That takes
-GCC 16 (0.56 is C++26, and uses libstdc++ 16's `std::ranges::starts_with`)
+GCC 16 (0.57.1 is C++26, and uses libstdc++ 16's `std::ranges::starts_with`)
 and ten pinned projects: `wayland-protocols`, seven hyprwm libraries and
 tools, re2 and Hyprland itself. re2 joined on 2026-11-02, when Debian
 testing's libre2, built against an older abseil than its headers, stopped
 Hyprland linking. Debian 13 can't build it at all (GCC 14, xkbcommon 1.7 and
-no Lua 5.5, against 0.56's GCC 16, xkbcommon 1.11 and Lua 5.5). Debian
+no Lua 5.5, against 0.57.1's GCC 16, xkbcommon 1.11 and Lua 5.5). Debian
 testing has packaged Hyprland 0.56.2 since 2026-08-11. Hyprland also changes
 and regresses often. The alternative under consideration is **a tide fork of
 dwl**, the dwm-style wlroots compositor (about 3,400 lines of C), built on a
@@ -5639,7 +5643,7 @@ per share, every share prompts, since the restore flag has nothing to set.
 
 **Step 3, Debian** (checked 2026-11-03, under Sources):
 
-- **Debian 13** can't build Hyprland 0.56 (above). For a dwl fork, its
+- **Debian 13** can't build Hyprland 0.57 (above). For a dwl fork, its
   packages fall short of five wlroots 0.20.2 minimums: wayland 1.23.1
   (needs 1.24.0), wayland-protocols 1.44 (1.47), libdrm 2.4.124 (2.4.129),
   xkbcommon 1.7.0 (1.8.0) and pixman 0.44.0 (0.46.0). wlroots carries a Meson

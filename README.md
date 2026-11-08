@@ -24,7 +24,7 @@ manager as it is, with tide as one more session. By hand, it's:
     systemctl --user daemon-reload
     systemctl --user enable tide.service tide-clipboard.service
 
-By hand, also install what the session runs: Hyprland 0.56 or later,
+By hand, also install what the session runs: Hyprland 0.57 or later,
 Quickshell 0.3 (`qs`, which draws the bar; without it `tide-shell`
 falls back to waybar, and with an older one it says so in a
 notification), hypridle, hyprlock

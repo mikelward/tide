@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { keyLabel, keysLabel, parseBinds, listedBinds, parseTidewmBinds, listedTidewmBinds } from "./keys.mjs";
 
 // One binding as Hyprland 0.56.2's `hyprctl binds -j` gives it
-// (src/debug/HyprCtl.cpp's bindsRequest).
+// (src/debug/HyprCtl.cpp's bindsRequest). 0.57.1's has the same fields.
 function bind(fields) {
     return Object.assign({
         locked: false, mouse: false, release: false, repeat: false, longPress: false,
@@ -70,6 +70,22 @@ test("a Lua binding without a description says nothing it does", () => {
     // Its dispatcher is __lua and its argument a registry reference.
     assert.deepEqual(parseBinds(listing(bind({ modmask: 64, key: "L", arg: "42" }))).binds,
                      [{ keys: "Super+L", does: "", submap: "" }]);
+});
+
+test("so does one as 0.57.1 lists it", () => {
+    // 0.57.1's dispatcher is the Lua value's name (src/ipc/s1/Commands.cpp's
+    // bindsRequest, and hlBind's luaL_tolstring): an hl.dsp dispatcher's or
+    // a plain function's.
+    const binds = parseBinds(listing(
+        bind({ modmask: 64, key: "L", dispatcher: "HL.Dispatcher(exec_cmd)", arg: "42" }),
+        bind({ modmask: 64, key: "M", dispatcher: "function: 0x55d0c0ffee00", arg: "43" }),
+        bind({ modmask: 64, key: "", keycode: 28, dispatcher: "HL.Dispatcher(window.close)", arg: "44" }))).binds;
+    assert.deepEqual(binds, [
+        { keys: "Super+L", does: "", submap: "" },
+        { keys: "Super+M", does: "", submap: "" },
+        // 0.57.1 gives a binding by keycode its code.
+        { keys: "Super+code:28", does: "", submap: "" },
+    ]);
 });
 
 test("a dispatcher binding says its dispatcher", () => {
