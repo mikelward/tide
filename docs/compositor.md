@@ -17,7 +17,7 @@ The "Today" column was read from this repository and `mikelward/conf`'s
 `config/hypr` on 2026-10-05. The "Fork" column says what the fork,
 [tidewm](https://github.com/mikelward/tidewm), and tide's tidewm session
 have built, and what's left. It was checked on 2026-11-08 against tidewm
-`v0.0.1462` (`785d84e`, the commit `setup --tidewm` pins), this repository,
+`v0.0.1464` (`3a93cd5`, the commit `setup --tidewm` pins), this repository,
 and conf's `config/tidewm`. "tidewm #N" is a tidewm pull request. "Built"
 means built and tested headless, by tidewm's own tests and tide's stand-in
 (`shell/tidewm_stand_in.py`): nothing has run in a real login yet. The
@@ -117,14 +117,14 @@ maintainer deferred.
 | §14.1, §9: a new window takes focus only with a grant (launcher, terminal, notification click, the app you're in); the rest open unfocused and marked urgent; a notification click that opens nothing focuses the app's most recent window | `no_initial_focus` on every window; `focus.lua` on `window.open`, `window.urgent`, `window.active`, `window.close`; grants over `hyprctl eval 'tide_focus.grant(…)'` and friends | Built: tidewm's guard, `focus_guard enable` in conf's config, and `grant`, `grant extend` and `grant --or-recent` (tidewm #22, #23); `tide`, `tide-grant` and the shell grant through `tide-msg` | `focus_test.lua`, `tide_test.sh` and `tide-grant`'s tests, ported; a launched app's first window takes focus, and a background app's doesn't |
 | §14.1: a polkit prompt takes focus only when its requester descends from the focused window's process and your last input, key or click, went to that window within 2 s; otherwise a notification offers **Authenticate** | `focus.lua`'s `prompt_may_focus`, which sees only key presses and not the requester, so a click takes the notification path: agent windows (`prompt_classes`) ask it as they open, and the shell's agent (`TIDE_POLKIT=1`) through `tide prompt-focus` (`hyprctl repl`) | Part: `GET_SEATS`' `last_input` and `prompt_may_focus` (tidewm #25, #49), which `tide prompt-focus` and the shell's agent ask (`lib/agent.mjs`). Left: the requester check. As on Hyprland, nothing asks whether the requester descends from the focused window's process: `shell/PolkitData.qml` calls `tide prompt-focus` without the requester, and `PromptMayFocus` (`internal/swayipc`) reads only the seat's answer | A `pkexec` typed in a terminal, or an app's Unlock click, opens the prompt with focus; `sleep 30; pkexec …` left idle, or a request from a background process, gives the notification instead |
 | §14.1: an app's own activation request, Wayland or X11, marks it rather than focusing it | `focus_on_activate = false`; xdg-activation; `_NET_ACTIVE_WINDOW` through Xwayland | Built: Wayland's and X11's activation are marked unless a grant names the app (tidewm #22) | An app's activation is marked, not obeyed |
-| §14.2: an app launched on workspace 2 that maps after you move to 3 opens on 2, unfocused, and 2 turns urgent; the other focus rules there (`follow_mouse`, no warps, focus on close) | `initial_workspace_tracking` (Hyprland's default) and the `hl.config` focus options | Part: no warps and focus follows the pointer, as in dwl. Left: a window maps on the current workspace, not the one it was launched from, and a workspace switch cancels its grant; and closing a window focuses the most recent one, not the one under the pointer (tidewm's *A held window waits for you*) | §14.2's cases |
+| §14.2: an app launched on workspace 2 that maps after you move to 3 opens on 2, unfocused, and 2 turns urgent; the other focus rules there (`follow_mouse`, no warps, focus on close) | `initial_workspace_tracking` (Hyprland's default) and the `hl.config` focus options | Part: no warps and focus follows the pointer, as in dwl. A grant remembers the workspace it was made on, and its window opens there, unfocused and urgent, once you've moved on (tidewm #70). Left: closing a window focuses the most recent one, not the one under the pointer (tidewm's *A held window waits for you*) | §14.2's cases |
 | §14.3: a grant lapses once you type or click elsewhere; a stale one expires; a grant matches a window from a child process | `input.keyboard.key` (mouse buttons aren't exposed yet); `hl.timer`; `hl.get_windows()` with `pid`, and `/proc` ancestry | Built: a key, a click or a focus move cancels a grant, a grant lapses after `grant_seconds`, and `--pid` matches a child process (tidewm #22) | A slow window opens unfocused after you type, or after you click inside the window you're already in; a stale grant expires; `nautilus .` from a terminal takes focus |
 | §14.3, §14.4: refused windows are marked on the bar, `Super+A` lists them on the switcher's Attention tab, and the marks survive a shell restart; with no shell running, a refused window is still announced | `tide-attention` events; `announce_waiting()` and `set_order()`; `hl.notification.create` | Built: a held window is `urgent`, with `urgent_order` (tidewm #22, #24), so a restarted shell reads the marks from the tree; conf binds `Super+A`. Left: with no shell, a held window shows only its urgent border, as tidewm decided (*No notice without a shell*), against this row | `Super+A` lists the marks; marks match the guard after a restart; with the shell stopped, a refused window is announced |
 | §6.4, §14.1: X11 apps run, their dialogs float over their parent, and their window types are honored | Xwayland | Part: built with Xwayland by `setup --tidewm`, X11 windows sharp at a fractional scale (tidewm #45, #46), dialogs floating over their parent. Left: an X11 window sometimes never maps, a dialog right after its window four times in ten, which keeps that test out of tidewm's suite (tidewm's *Known bugs*) | An X11 app runs and its dialog floats over its parent |
 
 ## tidewm today
 
-Checked 2026-11-08, against tidewm `v0.0.1462` and the repositories named
+Checked 2026-11-08, against tidewm `v0.0.1464` and the repositories named
 above. Nothing was run in a real login.
 
 Of the 48 rows, 39 are built on both sides, 5 in part and 4 not at all.
@@ -141,13 +141,13 @@ rest need only tide, conf or scripts.
 | §12 share | done | scripts: done | A share in Chrome; the restore flag waits on xdpw |
 | §12 hide from capture | no | — | Deferred by the maintainer: an output source without the shell's surfaces (L) |
 | §14.1 polkit | done | tide: part | The requester check: whether it descends from the focused window's process, unbuilt on Hyprland too |
-| §14.2 rules | part | — | A window opening on the workspace it was launched from; focus under the pointer on close |
+| §14.2 rules | part | — | Focus under the pointer on close |
 | §14.3 marks | part | — | A notice for a held window with no shell running, which tidewm decided against |
 | §6.4 X11 | part | done | X11 windows that sometimes never map, a dialog after its window most of all, in wlroots and Xwayland |
 
 **Getting tidewm onto a machine** (scripts' `setup-tide`):
 
-- `setup --tidewm` builds the pinned tag, `v0.0.1462`, at the commit
+- `setup --tidewm` builds the pinned tag, `v0.0.1464`, at the commit
   `deps.lock` names.
 - It uses the distro's wlroots 0.20 on Debian testing and Arch. Where
   `pkg-config` finds no `wlroots-0.20` on Debian or Ubuntu (Ubuntu 26.04 has
