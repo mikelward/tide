@@ -577,6 +577,57 @@ test("Screenshot window falls back to the focused window, and says so", () => {
     assert.deepEqual(windowScreenshot(""), ["screenshot", "--window"]);
 });
 
+// Runs windowScreenshot's tidewm command against a fake `tide-msg` printing
+// `tree` for `--type get_tree` and a fake `screenshot`, as
+// runWindowScreenshot does Hyprland's.
+function runTidewmScreenshot(address, tree) {
+    const dir = mkdtempSync(join(tmpdir(), "launcher-test-"));
+    writeFileSync(join(dir, "tree.json"), tree);
+    writeFileSync(join(dir, "tide-msg"), `#!/bin/sh\ntest "$*" = "--type get_tree" || exit 3\ncat "${dir}/tree.json"\n`);
+    writeFileSync(join(dir, "hyprctl"), "#!/bin/sh\necho 'hyprctl asked on tidewm' >&2\nexit 1\n");
+    writeFileSync(join(dir, "screenshot"), `#!/bin/sh\nprintf '%s\\n' "$@" > "${dir}/args"\n`);
+    for (const name of ["tide-msg", "hyprctl", "screenshot"]) {
+        chmodSync(join(dir, name), 0o755);
+    }
+    const [command, ...args] = windowScreenshot(address, true);
+    const run = spawnSync(command, args, { env: { ...process.env, PATH: `${dir}:${process.env.PATH}` }, encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    return { args: readFileSync(join(dir, "args"), "utf8").trim().split("\n"), stderr: run.stderr };
+}
+
+// tidewm's GET_TREE: an output, a workspace part, a tiled and a floating
+// window, and one on a workspace that isn't showing.
+function tidewmTree(focused = 11) {
+    const con = (id, type, rect, visible = true) => ({ id, type, name: `w${id}`, focused: id === focused, visible,
+        rect, foreign_toplevel_identifier: `ft${id}` });
+    return JSON.stringify({ id: 1, type: "root", nodes: [{ id: 2, type: "output", name: "DP-1", nodes: [
+        { id: 3, type: "workspace", name: "1", nodes: [con(10, "con", { x: 0, y: 30, width: 1280, height: 1410 }),
+            con(11, "con", { x: 1280, y: 30, width: 1280, height: 1410 })],
+        floating_nodes: [con(12, "floating_con", { x: 300, y: 200, width: 640, height: 480 })] },
+        { id: 4, type: "workspace", name: "2", nodes: [con(13, "con", { x: 0, y: 30, width: 2560, height: 1410 }, false)],
+            floating_nodes: [] },
+    ] }] });
+}
+
+test("on tidewm, Screenshot window takes the recorded window where GET_TREE has it now", () => {
+    assert.deepEqual(runTidewmScreenshot("12", tidewmTree()), { args: ["--geometry", "300,200 640x480"], stderr: "" });
+    assert.deepEqual(runTidewmScreenshot("10", tidewmTree()).args, ["--geometry", "0,30 1280x1410"]);
+    assert.deepEqual(quickCommand("screenshot-window", { window: "10", tidewm: true }).run.slice(0, 2), ["sh", "-c"]);
+});
+
+test("on tidewm, a window that's gone or not showing gives the focused one, saying so", () => {
+    const gone = runTidewmScreenshot("99", tidewmTree());
+    assert.deepEqual(gone.args, ["--geometry", "1280,30 1280x1410"]);
+    assert.match(gone.stderr, /gone or not showing; taking the focused window/);
+    assert.deepEqual(runTidewmScreenshot("13", tidewmTree()).args, ["--geometry", "1280,30 1280x1410"]);
+});
+
+test("on tidewm, with no focused window to fall back on, the script finds one itself", () => {
+    const none = runTidewmScreenshot("99", tidewmTree(null));
+    assert.deepEqual(none.args, ["--window"]);
+    assert.deepEqual(windowScreenshot("", true), ["screenshot", "--window"]);
+});
+
 test("a quick action wins a tie with an app, so scr and Enter is a screenshot", () => {
     const screenshotApp = { id: "org.gnome.Screenshot", name: "Screenshot", command: ["gnome-screenshot"], actions: [] };
     const all = launcherItems([screenshotApp]).concat(quickActions());

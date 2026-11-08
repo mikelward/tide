@@ -2369,6 +2369,11 @@ See [`switcher.png`](docs/mocks/switcher.png).
 - **Remembering the previous window.** Opening the launcher records the
   focused window's Hyprland `stableId`, so "Screenshot window" means the
   window you were in, not the launcher.
+  - On tidewm it records the window's container ID, and finds it in
+    `GET_TREE` when the shot runs. The scripts' `screenshot` reads only
+    Hyprland's `stableId`, so the launcher passes the window's `rect` as
+    `--geometry`. A window that's gone or not showing gives the focused
+    one.
 - **Launching.** Apps start via `tide launch` (§5.4), and the app's
   first window takes focus when it maps, unless you've typed or moved focus
   since (§14.1).

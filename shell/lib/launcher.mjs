@@ -301,8 +301,36 @@ export const WINDOW_SCREENSHOT = [
     "exec screenshot --window",
 ].join("\n");
 
-export function windowScreenshot(address) {
-    return address ? ["sh", "-c", WINDOW_SCREENSHOT, "sh", address] : ["screenshot", "--window"];
+// tidewm's (SPEC.md §5.3), for the window at `address`, its container ID:
+// tidewm's GET_TREE, through tide-msg, read when the screenshot runs,
+// gives the window's `rect` now, in layout coordinates, as `--geometry`
+// takes. The scripts' `screenshot` reads `--window-id` from Hyprland, so
+// the window's `foreign_toplevel_identifier`, which `grim -T` takes, waits
+// for it to learn tidewm. A window that has closed or isn't showing (its
+// workspace isn't current, or it's minimized) gives the focused window,
+// saying why on stderr, and with none, the script finds it.
+export const TIDEWM_WINDOW_SCREENSHOT = [
+    'a=$1',
+    "w=$(tide-msg --type get_tree | jq -r --arg a \"$a\" 'def at: \"\\(.rect.x),\\(.rect.y) \\(.rect.width)x\\(.rect.height)\"; [.. | objects | select((.type == \"con\" or .type == \"floating_con\") and .visible == true and .rect != null)] as $w | (first($w[] | select((.id | tostring) == $a)) | \"wanted\\t\" + at) // (first($w[] | select(.focused == true)) | \"focused\\t\" + at) // empty')",
+    'case $w in',
+    '    wanted*) exec screenshot --geometry "${w#*\t}" ;;',
+    'esac',
+    'echo "the window the launcher opened over is gone or not showing; taking the focused window" >&2',
+    'case $w in',
+    '    focused*) exec screenshot --geometry "${w#*\t}" ;;',
+    'esac',
+    "exec screenshot --window",
+].join("\n");
+
+// The command for "Screenshot window" of the window at `address`, as the
+// launcher recorded it: on tidewm (`tidewm`) its container ID, otherwise
+// Hyprland's normalized address. With none, the script finds the focused
+// window itself.
+export function windowScreenshot(address, tidewm = false) {
+    if (!address) {
+        return ["screenshot", "--window"];
+    }
+    return ["sh", "-c", tidewm ? TIDEWM_WINDOW_SCREENSHOT : WINDOW_SCREENSHOT, "sh", address];
 }
 
 // Plasma's commands for the quick actions that differ there (quickCommand).
@@ -327,8 +355,9 @@ const PLASMA_COMMANDS = Object.freeze({
 // "dnd", "dark-style", "keep-awake", "presenter",
 // "reload"). "Screenshot window" takes the
 // window recorded as the launcher opened (`context.window`, its normalized
-// Hyprland address; windowScreenshot), and "Screenshot screen" the monitor
-// it opened on (`context.output`, Hyprland's name for it), so a focus change
+// Hyprland address, or on tidewm, `context.tidewm`, its container ID;
+// windowScreenshot), and "Screenshot screen" the monitor it opened on
+// (`context.output`, its output's name), so a focus change
 // while it closes can't swap either; with none, the script finds the focused
 // one itself. On Plasma (`context.plasma`, SPEC.md §8.5), Spectacle takes
 // the screenshots, onto the clipboard with its own notification, logind
@@ -342,7 +371,7 @@ export function quickCommand(id, context = {}) {
     }
     switch (id) {
     case "screenshot-window":
-        return { run: windowScreenshot(context.window), afterClose: true };
+        return { run: windowScreenshot(context.window, context.tidewm === true), afterClose: true };
     case "screenshot-screen":
         return { run: context.output ? ["screenshot", "--output", context.output] : ["screenshot"], afterClose: true };
     case "screenshot-region":
