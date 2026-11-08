@@ -643,7 +643,7 @@ check "an old Quickshell runs no shell" test -z "$(grep '^qs -c tide' "$tmp/log"
 check "an old Quickshell is named, with what the shell needs" \
     contains "$(cat "$tmp/err")" "qs ($qs/qs) is Quickshell 0.2.1, and tide's shell needs 0.3 or newer, so the bar is waybar"
 # It says so on screen too, once swaync is up to show it.
-notice="notify-send [--urgency=critical] [--app-name=tide] [tide's bar couldn't start] [qs is Quickshell 0.2.1, and tide needs 0.3 or newer. Run setup, then log in again; \`tide doctor\` says more.]"
+notice="notify-send [--urgency=critical] [--app-name=tide] [tide's bar couldn't start] [qs is Quickshell 0.2.1, and tide needs 0.3 or newer. Run tide's installer (install/tide-setup), then log in again; \`tide doctor\` says more.]"
 run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
 check "an old Quickshell's fallback is a notification too" test "$(grep '^notify-send' "$tmp/log")" = "$notice"
 check "sent once the notification server is up" \

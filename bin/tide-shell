@@ -51,7 +51,7 @@
 #                             doubling to at most 60
 #   $TIDE_WALLPAPER     the wallpaper swww or swaybg shows with waybar's
 #                             bar, or the Quickshell shell's fallback
-#                             (default: conf's)
+#                             (default: ~/.config/hypr/wallpaper.jpg, as the shell's)
 #   $TIDE_INPUT_SETUP   a one-shot input setup (default: tide's
 #                             apply-input.sh), run once the compositor is up
 #   $TIDE_INPUT_WATCH   what sets up a device plugged in later, run for
@@ -231,7 +231,7 @@ case "${TIDE_BAR:-}" in
         elif ! quickshell_ok; then
             log "$qs_old, so the bar is waybar; \`tide doctor\` says how to fix it"
             bar=waybar
-            bar_notice="qs is Quickshell $qs_old_version, and tide needs $min_quickshell or newer. Run setup, then log in again; \`tide doctor\` says more."
+            bar_notice="qs is Quickshell $qs_old_version, and tide needs $min_quickshell or newer. Run tide's installer (install/tide-setup), then log in again; \`tide doctor\` says more."
         else
             bar=quickshell
         fi
