@@ -1098,6 +1098,20 @@ Next, one PR each:
   Quickshell or Hyprland: Quickshell is tied to the exact Qt it was built
   with, and Hyprland on Ubuntu needs GCC 16.
 
+## Find a docked panel that's off
+
+`lid_open`'s fallback, for a lid closed with no saved state (it predates
+tide's `hypr/hyprland.lua`, or the state file couldn't be written), looks for an
+internal panel that is off with `hl.get_monitors({ all = true })`.
+Hyprland 0.56.2's `hl.get_monitors` ignores its argument and lists only
+the monitors on (`hlGetMonitors` in `LuaBindingsQuery.cpp`), and
+`hl.get_monitor` resolves only those too. With `HYPR_INTERNAL_OUTPUT`
+set, the fallback now turns the named panel on when it isn't listed.
+Without it, it never finds the panel and the lid opens to a dark panel.
+The stub in `hypr/hyprland_test.lua` still lists monitors that are off under
+`{ all = true }` for that case's test; `on_only` makes it list as 0.56.2
+does, and should become the default once this is fixed.
+
 ## Transitional shell (M2)
 
 `tide.service` runs `bin/tide-shell`, not `qs -c tide`,
