@@ -239,6 +239,22 @@ if test "\$1" = ipc; then
             : >"\$XDG_RUNTIME_DIR/tidewm-minimize"
             while test -e "\$XDG_RUNTIME_DIR/tidewm-minimize"; do sleep 0.1; done
             echo minimized ;;
+        # The workspace keys in tidewm's session (WorkspaceKeys.qml): each
+        # answers as the shell does once tidewm has heard the command on
+        # Quickshell's own connection (tidewm_client.py), which reads it
+        # from one pipe and says it's sent on another.
+        *"call workspaces go 1"* | *"call workspaces homeOrBack"*)
+            echo "workspace number in" >"\$XDG_RUNTIME_DIR/tidewm-command"
+            read -r _ <"\$XDG_RUNTIME_DIR/tidewm-sent"
+            echo "went to in" ;;
+        *"call workspaces go 0"*)
+            echo "workspace number 3" >"\$XDG_RUNTIME_DIR/tidewm-command"
+            read -r _ <"\$XDG_RUNTIME_DIR/tidewm-sent"
+            echo "went to 3" ;;
+        *"call workspaces send 1"*)
+            echo "[con_id=23] move to workspace number in" >"\$XDG_RUNTIME_DIR/tidewm-command"
+            read -r _ <"\$XDG_RUNTIME_DIR/tidewm-sent"
+            echo "sent 23 to in" ;;
         *"call prompt shown"*) if test -e "\$XDG_RUNTIME_DIR/prompt-open"; then cat "\$XDG_RUNTIME_DIR/prompt-open"; fi ;;
         *"call picker open characters"*) : >"\$XDG_RUNTIME_DIR/picker-open" ;;
         *"call sharepicker pick \$XDG_RUNTIME_DIR/"*) printf '%s' "\$7" >"\$XDG_RUNTIME_DIR/sharepicker-open" && echo shown ;;
@@ -729,6 +745,23 @@ if not os.path.exists(os.path.join(here, "tidewm-layout-deaf")):
     held.append(socket.socket(socket.AF_UNIX))
     held[-1].connect(os.environ["SWAYSOCK"])
     held[-1].sendall(message(2, '["layout"]'))
+# A workspace key's command, from a pipe the fake qs writes it to: sent on
+# Quickshell's own connection, unless DIR/tidewm-keys-silent is there, and
+# then said to be sent on a second pipe, which the fake qs waits on.
+import threading
+silent = os.path.exists(os.path.join(here, "tidewm-keys-silent"))
+for pipe in ("tidewm-command", "tidewm-sent"):
+    if not os.path.exists(run + "/" + pipe):
+        os.mkfifo(run + "/" + pipe)
+def relay():
+    while True:
+        with open(run + "/tidewm-command") as f:
+            command = f.read().strip()
+        if command and not silent:
+            held[0].sendall(message(0, command))
+        with open(run + "/tidewm-sent", "w") as f:
+            f.write("sent\n")
+threading.Thread(target=relay, daemon=True).start()
 open(run + "/tidewm_client.ready", "w").close()
 # Super+Z's minimize, of draft, which tidewm's events opened and focused
 # last, or of Firefox, focused before them, with DIR/tidewm-stale-focus.
@@ -1877,6 +1910,14 @@ stubs "$tmp/tidewm-stale" "exit 0" "$loaded"
 run "$tmp/tidewm-stale"
 check "a shell that doesn't follow tidewm's focus events fails" test "$code" -ne 0
 check "and says so" contains "$out" "Super+Z should minimize draft ([con_id=23])"
+}
+
+case_127() {
+stubs "$tmp/tidewm-keys" "exit 0" "$loaded"
+: >"$tmp/tidewm-keys/tidewm-keys-silent" || exit 1
+run "$tmp/tidewm-keys"
+check "a shell whose workspace keys answer but ask tidewm nothing fails" test "$code" -ne 0
+check "and says so" contains "$out" "Super+1 and Super+Tab should each go to in"
 }
 
 case_115() {

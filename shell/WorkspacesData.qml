@@ -5,7 +5,6 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import "lib/compositor.mjs" as Comp
-import "lib/dispatch.mjs" as Dispatch
 import "lib/launch.mjs" as Run
 import "lib/mute.mjs" as Mute
 import "lib/report.mjs" as Report
@@ -178,11 +177,7 @@ Singleton {
     // Sends the window at `address` home, without following it.
     function sendHome(address, why) {
         console.log(`tide: sending window ${address}, ${why}, to ${root.home}`);
-        if (Compositor.tidewm) {
-            Compositor.tidewmCommand(Tw.sendCommand(address, root.home), `send window ${address} to ${JSON.stringify(root.home)}`);
-            return;
-        }
-        Hyprland.dispatch(Dispatch.sendWindowTo(address, root.home, Hyprland.usingLua));
+        Compositor.sendWindowTo(address, root.home);
     }
 
     // Hyprland took `text`, or on tidewm the shell did: if it's the rules

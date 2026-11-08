@@ -845,7 +845,8 @@ reinstall() {
 # it's loaded: that its settings pages wrote tidewm's own files, which
 # conf's tidewm config includes (SPEC.md §16), and that it named home `in`
 # again once the stand-in tidewm renamed it (§6.5), by tidewm's rename
-# command, and that it followed tidewm's window events, so Super+Z (§6.7)
+# command, that the workspace keys' calls go by the bar's order (§6.6),
+# and that it followed tidewm's window events, so Super+Z (§6.7)
 # minimizes the window they opened and focused last. load runs it, as
 # $after_load.
 tidewm_loaded() {
@@ -857,6 +858,38 @@ tidewm_loaded() {
     done
     if ! grep -qxF 'run_command rename workspace mail to in' "$tmp/answered"; then
         echo "FAIL: the shell should name home in again once tidewm renames it mail; it asked tidewm:" >&2
+        cat "$tmp/answered" >&2
+        exit 1
+    fi
+    # The workspace keys conf binds on tidewm (SPEC.md §6.6): Super+1 and
+    # Super+Tab, from workspace 1, go to home, first on the bar, by name;
+    # Super+Shift+1 sends draft, focused, there; and Super+0 goes to the
+    # last on the bar, 3, after the standing workspaces and the named ones.
+    _went=$(grep -cxF 'run_command workspace number in' "$tmp/answered")
+    _went3=$(grep -cxF 'run_command workspace number 3' "$tmp/answered")
+    for _key in "go 1" homeOrBack; do
+        # shellcheck disable=SC2086 # the function and its argument
+        _answer=$(ipc call workspaces $_key) || exit 1
+        if test "$_answer" != "went to in"; then
+            echo "FAIL: \`workspaces $_key\` should go to home, in, from workspace 1; it answered: $_answer" >&2
+            exit 1
+        fi
+    done
+    _answer=$(ipc call workspaces send 1) || exit 1
+    if test "$_answer" != "sent 23 to in"; then
+        echo "FAIL: \`workspaces send 1\` should send draft (23), focused, home; it answered: $_answer" >&2
+        exit 1
+    fi
+    _answer=$(ipc call workspaces go 0) || exit 1
+    if test "$_answer" != "went to 3"; then
+        echo "FAIL: \`workspaces go 0\` should go to 3, last on the bar; it answered: $_answer" >&2
+        exit 1
+    fi
+    settle
+    if test "$(grep -cxF 'run_command workspace number in' "$tmp/answered")" -ne $((_went + 2)) \
+        || test "$(grep -cxF 'run_command workspace number 3' "$tmp/answered")" -ne $((_went3 + 1)) \
+        || ! grep -qxF 'run_command [con_id=23] move to workspace number in' "$tmp/answered"; then
+        echo "FAIL: Super+1 and Super+Tab should each go to in, Super+Shift+1 send [con_id=23] there, and Super+0 go to 3; the shell asked tidewm:" >&2
         cat "$tmp/answered" >&2
         exit 1
     fi

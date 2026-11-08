@@ -1287,6 +1287,9 @@ in how long they last and what stays visible:
   - It's a Lua binding in `conf` that keeps the workspaces other than
     home in the order you last used them. `Super+End` reads the same
     history (§6.6).
+  - On tidewm the shell keeps that history, from its start, and does both
+    keys: conf binds them to `qs -c tide ipc call workspaces homeOrBack`
+    and `... lastOther`, and `Super+Home` to `... home`.
   - If that workspace has been removed since, a press from home does
     nothing.
 
@@ -1753,6 +1756,11 @@ the built-in dispatchers instead, with a monitor move for a floating window.
 - **`Super+End`** never goes to home, so it isn't Hyprland's
   `workspace previous`. It uses the same Lua history as `Super+Tab`
   (§6.5), skipping any workspace removed since.
+- **On tidewm**, which knows neither the bar's order nor home, the shell
+  does `Super+1…9`, `Super+0`, `Super+Home`, `Super+Tab` and `Super+End`.
+  `conf`'s tidewm config runs `qs -c tide ipc call workspaces go N`,
+  `... send N`, `... home`, `... homeOrBack` and `... lastOther`. Without
+  the shell, a notification says the key needs it.
 - **`Alt+Tab`** was `Super+Return`. It's dwm's zoom, except on the master:
   plain dwm's `zoom` swaps the master with the top of the stack, and this
   swaps it with the window that was master before. The layout remembers
