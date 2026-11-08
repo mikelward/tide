@@ -656,6 +656,15 @@ export function galleryFolders(home) {
     return ["/usr/share/backgrounds", "/usr/share/wallpapers", `${home}/Pictures/wallpapers`];
 }
 
+// Where the grid's Find more button sends you: Unsplash's desktop
+// wallpapers, landscape, free ones only (Unsplash+ asks you to pay).
+export const MORE_WALLPAPERS = "https://unsplash.com/s/photos/desktop?orientation=landscape&license=free";
+
+// The command that opens MORE_WALLPAPERS in your browser.
+export function moreWallpapersCommand() {
+    return ["xdg-open", MORE_WALLPAPERS];
+}
+
 // The pictures the grid can show: Qt decodes these, JPEG XL where
 // kimageformats is installed. One it can't decode isn't shown.
 const GALLERY_TYPES = ["jpg", "jpeg", "png", "webp", "jxl"];
