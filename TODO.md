@@ -7,6 +7,42 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **tide's Hyprland config installs per user** (2026-11-08, SPEC.md
+  §3.1): `make install` puts `config.lua` and `hyprland.lua` in
+  `~/.config/hypr/tide/`, beside the layout, not in `$(PREFIX)/share/tide`
+  from `make install-session`. They check the layout's helpers and answer
+  the shell's calls, both per user, so they change together; a root
+  install would lag them. Reversible: the Makefile's `install`, and
+  `bin/tide-hyprland`'s path.
+- **With no `hyprland.lua` of yours, the session runs tide's**
+  (2026-11-08): `tide-hyprland` passes `--config`, rather than asking you
+  to write a one-line file. A plain Hyprland login still writes its own
+  example. Reversible: `bin/tide-hyprland`.
+- **Changes go on the module, then `setup()`** (2026-11-08,
+  `hypr/tide/README.md`): defaults on `tide.input` and `tide.mouse`,
+  bindings by `tide.bind` and `tide.fixed`, and what beats tide's settings
+  in `tide.override()`, which is how `hyprland.local.lua` was loaded. The
+  alternative, plain `hl` calls after a `dofile`, can't tell a default
+  tide's settings should still change from an override they shouldn't.
+- **Your named bindings come after tide's** (2026-11-08), and one with a
+  name of tide's takes tide's place. So the Keyboard shortcuts page lists
+  conf's app keys after tide's, where they were between Terminal and
+  Launcher. Reversible: `add_yours()` in `config.lua`.
+- **What stayed conf's** (2026-11-08), asking whether a new tide user
+  would want it: the app keys but the terminal (`runenv` helpers, Chat,
+  Calendar, Meet, `kitty -e yazi` on `Super+E`), US Dvorak with Compose on
+  Caps Lock and Menu as Super, left-handed mice, `GTK_OVERLAY_SCROLLING`,
+  a plain Hyprland login's autostart (swww, waybar and swaync's theme
+  daemon, applets), the fuzzel and swaync fallbacks, and `runenv` for the
+  screenshot and input scripts. tide's defaults: kitty on `Super+T`, a
+  plain US keyboard, right-handed mice, a notification where the shell
+  isn't running, and `screenshot` on `PATH`. Speed 1 on libinput's
+  adaptive curve stays tide's, as the Mouse page shows it.
+- **conf's `hyprland.lua` needs tide's config** (2026-11-08): without it,
+  the config stops with an error that says to run tide's `make install`,
+  where it fell back to Hyprland's master layout and conf's keys.
+  Reversible: conf's `hyprland.lua`.
+
 - **A right-click on the wallpaper opens Appearance, not a menu**
   (2026-11-08, SPEC.md §15), as the bar's right-clicks open their pages.
   A menu (Change wallpaper, Settings) is the alternative. Reversible:
@@ -1060,6 +1096,30 @@ once you have agreed with it or reversed it.
   another monitor on purpose (`span.moved`). A window first seen in a part
   whose monitor is gone isn't noted, and goes to the main monitor.
   Reversible: `span.note`.
+
+## tide's Hyprland config (SPEC.md §3.1)
+
+- [ ] Move the shell's `hyprctl eval` calls (`InputData.qml`,
+  `OutputsData.qml`, `AppearanceData.qml`, `WorkspacesData.qml`,
+  `FloatingData.qml`, `KeysData.qml`, `shell/lib/dispatch.mjs`) and conf's
+  `apply-input.sh` to the `tide_` names, then drop the `conf_` aliases in
+  `config.lua`'s `setup()` once a release of both has shipped.
+- [ ] Bring the scripts the config still runs from outside tide into it:
+  conf's `apply-input.sh`, `watch-input.sh` and `next-layout.sh`, and the
+  scripts repo's `screenshot`, so `Super+Alt+Space`, the input settings and
+  `Print` work without either repo.
+- [ ] The Mouse and Keyboard pages show conf's values while nothing is set
+  (`shell/lib/input.mjs`'s `shown`: variant Dvorak, mice left-handed).
+  tide's defaults are no variant and right-handed mice now.
+- [ ] A named binding's reload takes an override's binding on the same
+  keys in a submap of its own: Hyprland 0.57's `hl.unbind` removes every
+  binding on those keys, whatever its submap
+  (`CRegistry::removeByDisplayKey`), and the stub keeps the submap's. Keep
+  the object `hl.bind` returns and `:remove()` it instead, which would also
+  let a key bound without an unbind keep both. Make the stub do as
+  Hyprland does first.
+- [ ] Sweep SPEC.md for the remaining places that call the Hyprland config
+  `conf`'s.
 
 ## Transitional shell (M2)
 

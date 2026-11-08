@@ -19,10 +19,19 @@ The mocks are in [`docs/mocks/`](docs/mocks/).
 runs both installs below, and enables `tide.service`. It leaves the display
 manager as it is, with tide as one more session. By hand, it's:
 
-    make install                       # builds tide-grant, tide-tz, tide-greetd, tide-agent, tide-tabs and tide-pick (needs Go 1.22+); layout, user units, portal config under ~/.config
+    make install                       # builds tide-grant, tide-tz, tide-greetd, tide-agent, tide-tabs and tide-pick (needs Go 1.22+); Hyprland config and layout, user units, portal config under ~/.config
     sudo make install-session          # session entry, compositor wrapper, `tide`, tide-grant, tide-tz, tide-greetd, tide-agent, tide-tabs, tide-pick, tide-sysmon and tide-lock under /usr/local
     systemctl --user daemon-reload
     systemctl --user enable tide.service tide-clipboard.service
+
+The session's Hyprland config is tide's, in `~/.config/hypr/tide/`,
+while you have no `~/.config/hypr/hyprland.lua`. To change some of it,
+write one that loads tide's and changes what you prefer
+([`hypr/tide/README.md`](hypr/tide/README.md)). Its keys run kitty
+(`Super+T`), `wpctl`, `playerctl`, `brightnessctl` and GNOME Calculator.
+Three of them still run scripts from outside tide: `Print` the scripts
+repo's `screenshot`, and the input settings and `Super+Alt+Space` conf's
+`apply-input.sh` and `next-layout.sh` (`TODO.md`).
 
 By hand, also install what the session runs: Hyprland 0.56 or later,
 Quickshell 0.3 (`qs`, which draws the bar; without it `tide-shell`

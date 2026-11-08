@@ -17,6 +17,30 @@
 if test "${TIDE_IME:-}" != 0 && command -v fcitx5 >/dev/null 2>&1; then
     export QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx
 fi
+#
+# With no Hyprland config of your own, the session runs tide's (SPEC.md
+# §3.1), which `make install` puts in ~/.config/hypr/tide; Hyprland would
+# otherwise write an example config of its own and run that. Yours is
+# Hyprland's: hyprland.lua in $XDG_CONFIG_HOME/hypr or ~/.config/hypr, or
+# the file HYPRLAND_CONFIG or --config names.
+tide_config="$HOME/.config/hypr/tide/hyprland.lua"
+yours=
+for f in ${XDG_CONFIG_HOME:+"$XDG_CONFIG_HOME/hypr/hyprland.lua"} "$HOME/.config/hypr/hyprland.lua"; do
+    if test -e "$f"; then
+        yours=$f
+    fi
+done
+if test -n "${HYPRLAND_CONFIG:-}"; then
+    yours=$HYPRLAND_CONFIG
+fi
+for arg in "$@"; do
+    case "$arg" in
+        -c | --config) yours=$arg ;;
+    esac
+done
+if test -z "$yours" && test -f "$tide_config"; then
+    set -- --config "$tide_config" "$@"
+fi
 if command -v start-hyprland >/dev/null 2>&1; then
     exec start-hyprland -- "$@"
 fi

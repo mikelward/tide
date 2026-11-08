@@ -67,6 +67,31 @@ check "the wrapper starts Hyprland through its watchdog" \
     test "$(PATH="$tmp/wrapper-bin" /bin/sh "$wrapper" --config x)" = "start-hyprland -- --config x"
 check "the wrapper falls back to Hyprland without start-hyprland" \
     test "$(PATH="$tmp/wrapper-bin-old" /bin/sh "$wrapper" --config x)" = "Hyprland --config x"
+# With no Hyprland config of yours, the session runs tide's (SPEC.md §3.1),
+# where `make install` puts it; Hyprland would write an example of its own.
+cfg_home="$tmp/cfg-home"
+mkdir -p "$cfg_home/.config/hypr/tide" "$tmp/xdg/hypr"
+: > "$cfg_home/.config/hypr/tide/hyprland.lua"
+wrapper_run() {
+    env -u HYPRLAND_CONFIG -u XDG_CONFIG_HOME HOME="$cfg_home" PATH="$tmp/wrapper-bin" "$@"
+}
+check "with no config of yours, the session runs tide's" \
+    test "$(wrapper_run /bin/sh "$wrapper")" = "start-hyprland -- --config $cfg_home/.config/hypr/tide/hyprland.lua"
+check "and passes its arguments on after it" \
+    test "$(wrapper_run /bin/sh "$wrapper" --verbose)" = "start-hyprland -- --config $cfg_home/.config/hypr/tide/hyprland.lua --verbose"
+check "a config named on the command line is Hyprland's to run" \
+    test "$(wrapper_run /bin/sh "$wrapper" -c x)" = "start-hyprland -- -c x"
+check "so is one HYPRLAND_CONFIG names" \
+    test "$(wrapper_run HYPRLAND_CONFIG=x /bin/sh "$wrapper")" = "start-hyprland --"
+: > "$tmp/xdg/hypr/hyprland.lua"
+check "so is yours in XDG_CONFIG_HOME" \
+    test "$(wrapper_run XDG_CONFIG_HOME="$tmp/xdg" /bin/sh "$wrapper")" = "start-hyprland --"
+: > "$cfg_home/.config/hypr/hyprland.lua"
+check "and yours in ~/.config" \
+    test "$(wrapper_run /bin/sh "$wrapper")" = "start-hyprland --"
+rm "$cfg_home/.config/hypr/hyprland.lua" "$cfg_home/.config/hypr/tide/hyprland.lua"
+check "without tide's installed, Hyprland finds its own" \
+    test "$(wrapper_run /bin/sh "$wrapper")" = "start-hyprland --"
 # The input method's variables (SPEC.md §8.6) are the compositor's, so every
 # app it starts has them: set where fcitx5 is installed, unless TIDE_IME=0,
 # and left as they were otherwise.
@@ -502,6 +527,8 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
              .config/hypr/tide/span.lua \
              .config/hypr/tide/focus.lua \
              .config/hypr/tide/pinned.lua \
+             .config/hypr/tide/config.lua \
+             .config/hypr/tide/hyprland.lua \
              .config/systemd/user/tide.service \
              .config/systemd/user/tide-lock.service \
              .config/systemd/user/tide-lock-fallback.service \

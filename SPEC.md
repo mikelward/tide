@@ -158,7 +158,8 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 - `xdg-desktop-portal-hyprland` shares single windows and whole screens,
   and it accepts a custom picker.
 - Its IPC reports urgency.
-- The existing config in `conf` is a head start.
+- The existing config in `conf` was a head start. It is tide's own now
+  (below).
 
 **What it costs.** Hyprland breaks config often: window rules changed syntax
 in 0.53, layouts were rewritten in 0.54, Lua arrived in 0.55, `.conf` was
@@ -169,6 +170,28 @@ deprecated in 0.56.1 and is due to be removed in 0.57. The mitigations are:
 - Make CI load the config under the pinned Hyprland (`hypr_test.sh` already
   exists in `conf`).
 - Treat each Hyprland upgrade as its own PR.
+
+**tide's Hyprland config.** tide ships the config its session needs, so it
+installs without anyone's dotfiles (`hypr/tide/README.md`).
+- `hypr/tide/config.lua` is a module: the session's `uwsm finalize`, the
+  layout and the other Lua modules, the files the shell writes, the calls
+  the shell makes through `hyprctl eval`, the keys (§6.6) with their names
+  for the Keyboard shortcuts page (§16), the lid, and the window rules.
+- `hypr/tide/hyprland.lua` is that config with nothing changed. With no
+  `~/.config/hypr/hyprland.lua`, `tide-hyprland` runs Hyprland with it.
+  `make install` puts both in `~/.config/hypr/tide/`, beside the layout,
+  since they change together.
+- Your own `hyprland.lua` loads the module, changes what you prefer, and
+  calls `setup()`. Defaults (`tide.input`, `tide.mouse`) are still under
+  tide's settings. Bindings (`tide.bind`) are named like tide's, and one
+  with a name of tide's replaces it. `tide.override()` runs what wins over
+  tide's settings, as `hyprland.local.lua` does (§16.1).
+- `conf`'s `hyprland.lua` is one such config: the maintainer's app keys,
+  Dvorak, left-handed mice and a plain Hyprland login's autostart.
+- The shell's calls are `tide_input.reload()` and so on. `conf`'s names
+  for them, `conf_input` and the rest, stay as aliases while the shell
+  still calls those (TODO.md). Where this spec says `conf`'s Hyprland
+  config does something tide-wide, tide's config does it now.
 
 The Lua layout API is two releases old, so it is the riskiest dependency.
 If it breaks, the fallback is Hyprland's built-in master and monocle layouts
@@ -284,7 +307,7 @@ gives the greeter the same layout badge as the lock.
 | R11 | Labeled clocks for America/Los_Angeles, America/New_York, Europe/London | fixed place labels `SF` / `NYC` / `LON` by default; tzdata abbreviations (PDT/PST …), **not** CLDR, in the popover or on request (§7.3) | shell |
 | R12 | Local clock shows the date | `MMM d` in place of a label | shell |
 | R13 | Urgency on the workspace widget | Hyprland `urgent` on toplevel/workspace, plus attention derived from notifications, since Chrome can't flag urgency on Wayland (§14) | native + shell |
-| R14 | Tap Super for the launcher | a release bind on `SUPER_L` → a Hyprland global shortcut → Quickshell `GlobalShortcut`. Fixed in Hyprland 0.57.0; `conf` binds it only from 0.57, and `Super+Space` before (§8) | native + shell |
+| R14 | Tap Super for the launcher | a release bind on `SUPER_L` → a Hyprland global shortcut → Quickshell `GlobalShortcut`. Fixed in Hyprland 0.57.0; tide's config binds it only from 0.57, and `Super+Space` before (§8) | native + shell |
 | R15 | Fuzzy search of `.desktop` apps | `DesktopEntries` + our scorer | shell |
 | R16 | Quick actions | a built-in action list | shell |
 | R16a | Named workspaces, with standing ones and home (`in` by default) first | Hyprland's `name:` workspaces, home kept by a `persistent` workspace rule; the shell's name prompt (§6.5) | native + shell |
@@ -541,7 +564,7 @@ flowchart TD
     gets the chance to start a stray daemon. A job added to the shell later
     joins the same ready check.
 - **One `exec-once`.** Hyprland's config starts nothing but
-  `uwsm finalize`, and a test in `conf` asserts it.
+  `uwsm finalize`, and tide's `config_test.lua` asserts it.
 - **Autostart is an allowlist.** XDG autostart entries run in tide only
   if they are on its list: `nm-applet` while the shell's agent isn't
   running, plus any desktop IDs in `~/.config/tide/autostart`. Everything
@@ -648,7 +671,7 @@ flowchart TD
     lock. Its fallback too: the `tide-lock` command, hyprlock and
     `tide-lock-fallback.service` installed, and whether the fallback
     failed;
-  - the home workspace (§6.5): there, and kept by `conf`'s `persistent`
+  - the home workspace (§6.5): there, and kept by tide's config's `persistent`
     rule, with the shell's `tide-workspaces.lua` naming it;
   - the network agent (§5.6): `tide-agent` registered, or what holds
     the job instead; and, with a Bluetooth adapter, its pairing agent.
@@ -1191,17 +1214,18 @@ in how long they last and what stays visible:
 
 **The home workspace.** The first standing workspace, `in` by default.
 
-- It's made at login and is never removed: `conf`'s Hyprland config gives
+- It's made at login and is never removed: tide's Hyprland config gives
   it a `persistent` workspace rule, and makes it the first monitor's
   `default`.
-  - `conf` takes its name from `~/.config/hypr/tide-workspaces.lua`,
+  - tide's config takes its name from `~/.config/hypr/tide-workspaces.lua`,
     which the shell writes from `workspaces.json` and has Hyprland read
-    again (`hyprctl eval 'conf_workspaces.reload()'`). Until the shell
+    again (`hyprctl eval 'conf_workspaces.reload()'`, tide's
+    `tide_workspaces.reload()`). Until the shell
     has written one, at a first login, it's `in`. The file lists the
-    standing workspaces too, so `conf`'s workspace keys step through the
+    standing workspaces too, so the workspace keys step through the
     bar's order (§6.6).
   - `tide doctor` names what's wrong when home doesn't exist or isn't
-    persistent (`conf`'s rule is missing), or the shell hasn't written the
+    persistent (the config's rule is missing), or the shell hasn't written the
     file. A `conf_workspaces.reload()` that fails is a notification.
   - On tidewm (§5.3), which reads no such file, the shell keeps home with
     `persist workspace`, and lets an old home go with `unpersist
@@ -1267,7 +1291,7 @@ in how long they last and what stays visible:
 - A window of a home app can be moved out with `Super+Shift+Return`.
 - `Super+Home` goes to home, and `Super+Tab` flips between home and the
   last other workspace you used (§6.6).
-  - It's a Lua binding in `conf` that keeps the workspaces other than
+  - It's a Lua binding in tide's config that keeps the workspaces other than
     home in the order you last used them. `Super+End` reads the same
     history (§6.6).
   - If that workspace has been removed since, a press from home does
@@ -1419,7 +1443,7 @@ workspace it's on stays open there.
   a shell's delete word. Pin only what's never typed in that way.
 - The shell's own UI closes no other window, so the prompt's Esc is its
   only close.
-- **How, on Hyprland.** It's `hypr/tide/pinned.lua`, which `conf` loads
+- **How, on Hyprland.** It's `hypr/tide/pinned.lua`, which tide's config loads
   as it loads the layout, and hands `tide-workspaces.lua`'s `pinned` list
   at each load and `conf_workspaces.reload()`. The shell writes that list
   from `pinnedApps`: per workspace, the classes and sites its apps match
@@ -1439,7 +1463,7 @@ workspace it's on stays open there.
     `sendshortcut` would make.
   - A window that can't be read, as one going away, is reported, and the
     key does what it would with nothing pinned.
-  - Without tide's `pinned.lua`, `conf` binds `Super+Backspace` to
+  - Without tide's `pinned.lua`, tide's config binds `Super+Backspace` to
     Hyprland's own close and leaves the app's keys unbound, as before.
   - A workspace's name matches ignoring ASCII case there, which is all
     Lua's `lower()` knows.
@@ -1546,7 +1570,7 @@ monitor has its own part of it, with its own windows and layout.
     where `OUT` is that monitor's connector, such as `DP-2`. That's why a
     name can't hold `@` (above).
   - The main monitor is the one showing the parts with plain names. At
-    login it's the first monitor, which `conf` gives home.
+    login it's the first monitor, which tide's config gives home.
   - Each part, the main one's included, has a workspace rule binding it
     to its monitor, added before it's first used, so Hyprland makes it
     there whichever monitor has focus and whatever dispatch makes it
@@ -1555,7 +1579,7 @@ monitor has its own part of it, with its own windows and layout.
     shows the main part.
   - A switch shows each other monitor's part first, then the focused
     monitor's. Showing a workspace on another monitor focuses that monitor,
-    so the last one shown keeps focus where it was. `conf` sets
+    so the last one shown keeps focus where it was. tide's config sets
     `cursor:no_warps`, so the pointer stays put.
   - A part that's empty and not shown is destroyed as any empty workspace
     is, so empty parts cost nothing.
@@ -1567,12 +1591,13 @@ monitor has its own part of it, with its own windows and layout.
     (`shell/lib/span.mjs`, `bin/tide`). Each monitor's tray shows what was
     minimized from its own part, and the bar counts it toward the
     workspace.
-  - The bar, the switcher and the prompt switch through `conf`'s
+  - The bar, the switcher and the prompt switch through tide's config's
     `conf_workspaces.go(name)`, as the keys do. The prompt's move and a
     launch on a named workspace (a grant, §14.3) go through
     `conf_workspaces.move(address, name, follow)`, which puts the window
     in the workspace's part on its own monitor. Without them, under an
-    older `conf`, each is Hyprland's own `name:` dispatch.
+    older `conf` and no config of tide's, each is Hyprland's own `name:`
+    dispatch.
 - **A monitor going away**, as when the lid closes with a display
   attached or a cable is pulled: Hyprland moves its workspaces to another
   monitor, where only one can show. So tide moves the windows of each of
@@ -1585,7 +1610,7 @@ monitor has its own part of it, with its own windows and layout.
     workspace, from the part it's in, by connector, for the session. The
     handoff's own moves don't count, and Hyprland moving whole workspaces
     moves no window.
-  - It's `conf`'s, on Hyprland's `monitor.removed` and `monitor.added`,
+  - It's tide's config's, on Hyprland's `monitor.removed` and `monitor.added`,
     which fire after Hyprland has moved the workspaces, and after the
     lid's own handler has moved the panel's back. `span.handoff` says
     which window goes where.
@@ -1679,7 +1704,7 @@ window order, which isn't the layout's, and never leaves the monitor
 (`CLuaTiledAlgorithm::moveTargetInDirection`). For a floating window it only
 pushes it against the edge of its own monitor's work area
 (`CDefaultFloatingAlgorithm::moveTargetInDirection`). So the keys call the
-layout's `focus_side` and `move_side`; without the tide layout, conf binds
+layout's `focus_side` and `move_side`; without the tide layout, tide's config binds
 the built-in dispatchers instead, with a monitor move for a floating window.
 
 - **Dragging the master/stack edge.** A plain left-press within 4 px
@@ -1773,7 +1798,7 @@ not taken.
   - `Super+Delete` was the other candidate. It's ambiguous with
     `Super+Backspace`, which closes the window: a Mac keyboard labels
     Backspace "delete".
-  - `conf`'s key asks the shell to do it (`qs -c tide ipc call windows
+  - The key asks the shell to do it (`qs -c tide ipc call windows
     minimize`), since only the shell can bring a window back. With no
     shell, a notification says so and the window stays.
 - **Which windows are minimized:** only the ones `Super+Z` minimized.
@@ -2225,7 +2250,7 @@ See [`switcher.png`](docs/mocks/switcher.png).
 - **Each key opens it on its own tab:** a tap of `Super` and `Super+Space` on Apps, `Super+A` on Attention (§6.6). Workspaces has no key of its own: `Tab` reaches it.
   The same key again, or `Esc`, closes it; another tab's key moves to
   that tab.
-  - `conf`'s keys run `qs -c tide ipc call switcher toggle TAB`, and
+  - The keys run `qs -c tide ipc call switcher toggle TAB`, and
     `launcher toggle` for Apps. The tap of `Super` is the `tide:launcher`
     global shortcut (§8.2).
   - The Windows tab lists the window used last first. A workspace that
@@ -2257,7 +2282,7 @@ See [`switcher.png`](docs/mocks/switcher.png).
   - **Caveat:** on Hyprland 0.56.x a release bind on `SUPER_L` fires on
     *every* Super release, including after `Super+T`. The keybind refactor
     that fixes this (hyprwm/Hyprland#15568, then #15904) is in 0.57.0.
-  - So `conf` binds the tap only when `hl.version()` is 0.57 or later. On
+  - So tide's config binds the tap only when `hl.version()` is 0.57 or later. On
     0.56 the tap does nothing, and `Super+Space` opens the launcher. Still
     to check on a real session: `Super+T`, `Super`+drag and `Super`+click
     must not open it.
@@ -2499,7 +2524,7 @@ See [`picker.png`](docs/mocks/picker.png).
     it into the window the picker opened over (below).
   - `Shift+Delete` removes the selected entry from the history, as it
     removes a suggestion in a browser's address bar.
-  - `conf`'s key runs `qs -c tide ipc call picker toggle clipboard`.
+  - The key runs `qs -c tide ipc call picker toggle clipboard`.
     `toggle characters` opens the other tab.
 - **Search.**
   - Clipboard: each entry's one-line preview, whitespace folded: its
@@ -3398,7 +3423,7 @@ talk, a demo, or a meeting room's screen.
     first lock that doesn't come. `tide.service` runs `tide lock-check`
     once the shell is up to show it, and after each restart of the shell.
     It never fails the shell.
-  - `conf`'s binding falls back to `loginctl lock-session` where `tide lock`
+  - The binding falls back to `loginctl lock-session` where `tide lock`
     fails, as it does in a tide from before it.
 - **Before sleep.** hypridle runs `before_sleep_cmd` on `PrepareForSleep`.
   `inhibit_sleep = 3` holds the suspend until an ext-session-lock client has
@@ -3818,7 +3843,7 @@ this spec.
   - a window's `pid` and `class`;
   - the `no_initial_focus` window rule.
 - **Where it lives.** `hypr/tide/focus.lua`, beside the layout, which
-  `conf`'s `hyprland.lua` loads in the tide session only. Nothing outside
+  tide's Hyprland config loads in the tide session only. Nothing outside
   that session grants focus, so there the guard would keep every new
   window unfocused, even an app just launched from a key. It publishes
   itself as the Lua global
@@ -4293,19 +4318,19 @@ stays hand-written.
   - The shell writes what's set to `~/.config/hypr/tide-input.lua`, as a
     table in Hyprland's option names, and runs `hyprctl eval
     'conf_input.reload()'`.
-  - `conf`'s `hyprland.lua` reads that file as data. It applies the
+  - tide's Hyprland config reads that file as data. It applies the
     touchpad's `input.touchpad` options itself, then `apply-input.sh`
     gives each mouse the mouse settings and each touchpad its own, one
     device at a time (`hl.device`). So a left-handed mouse and a
     right-handed touchpad can each have their own speed.
-  - `conf` applies the keyboard's options itself. Then `apply-input.sh`
+  - It applies the keyboard's options itself. Then `apply-input.sh`
     gives each keyboard them, or its own.
   - A Mouse, Touchpad or Keyboard page sets every device of its kind, or
     one by name. ‹ and › step through the ones connected and the ones with
     settings of their own of that kind, and Reset clears them.
   - One device's settings apply over its kind's. They go in the file's
     `devices` table, keyed by the name `hyprctl devices` gives it, and
-    `conf` applies them with `hl.device`, so two mice can differ.
+    tide's config applies them with `hl.device`, so two mice can differ.
   - One name can be a mouse and a keyboard both, as a wireless receiver
     is. It can have a mouse's settings and a keyboard's, since none share a
     name, and Reset on one page leaves the other's.
@@ -4328,7 +4353,7 @@ stays hand-written.
   - Hyprland 0.56.2 leaves a keyboard whose options haven't changed alone
     (`applyConfigToKeyboard`). So applying the settings again doesn't put
     a keyboard back on its first layout.
-  - Only what's set reaches Hyprland. The rest stays as `conf`'s config
+  - Only what's set reaches Hyprland. The rest stays as the Hyprland config
     has it, and the pages show those values until they're changed.
   - A mouse's **acceleration** is an amount from 0 to 4, stepped 0, ¼, ½,
     ¾, 1, 1½, 2, 2½, 3, 4. 1 is libinput's adaptive curve, which `conf`
@@ -4435,23 +4460,24 @@ stays hand-written.
     value one field late from `has_description` on, so its JSON doesn't
     parse, and the page says so.
   - Every Lua binding's dispatcher is `__lua`, so what one does is only
-    its `description`, which `conf` gives in `hl.bind`'s options. One
+    its `description`, which tide's config gives in `hl.bind`'s options. One
     without says so.
   - Each shows its keys as they're printed on the keyboard (`Super+\`,
     `Super+PgUp`), in the config's order, with its submap if it has one.
   - A binding turned off with `set_enabled(false)` still shows. 0.56.2's
-    listing includes it and says nothing of it, and `conf` turns none off.
+    listing includes it and says nothing of it, and tide's config turns none off.
   - A Lua binding by keycode (`SUPER + code:28`) shows only that it is
     one: 0.56.2's listing gives neither its key nor its code.
-  - On Hyprland, `conf` names most bindings, and those come first and can
-    change. `conf` lists each one's name, what it does, its default keys
+  - On Hyprland, tide's config names most bindings, yours (§3.1) after
+    its own, and those come first and can change. It lists each one's
+    name, what it does, its default keys
     and its keys now in `tide-keys.json`, in its instance's runtime
     directory. The rest, which can't change, follow: the mouse, the media
     and brightness keys, `Super+0…9`, the Super tap, a pinned window's app
-    keys, and the resize submap's. On tidewm, and with a `conf` from before
-    named bindings, the whole list stays read-only.
+    keys, and the resize submap's. On tidewm, and with a Hyprland config from
+    before named bindings, the whole list stays read-only.
   - A click on a binding's keys records new ones. The page puts Hyprland
-    in `conf`'s `tide-keys` submap, where no binding but Esc takes a key,
+    in tide's config's `tide-keys` submap, where no binding but Esc takes a key,
     so the keys pressed reach the page, not the bindings. The next key
     pressed with Super, Ctrl or Alt replaces the binding's keys; a
     function key, Print and Pause need none. Esc, a second click, leaving
@@ -4477,7 +4503,7 @@ stays hand-written.
     `~/.config/hypr/tide-keys.lua`, the preset's with yours over them, and
     runs `hyprctl eval 'conf_keys.reload()'`, which binds them, then lists the bindings again.
     With no keys of yours and no file, it writes nothing, so an older
-    `conf` is left alone.
+    config is left alone.
   - Keys are recorded by what the keyboard layout says the key is, as
     Hyprland binds them. With Shift, Qt reports the shifted symbol, which
     is turned back into its key on a US layout's symbols (`!` is `1`).
@@ -4521,11 +4547,11 @@ stays hand-written.
     it is.
   - − and + step the inactive dim's strength (§6.2) a point at a time,
     from none to 50%. It's `dimStrength` in the files, 0 to 1, and shows
-    `conf`'s 0.12 until it's set.
+    tide's 0.12 until it's set.
   - The shell writes a dim that's set to `~/.config/hypr/tide-appearance.lua`,
     as Hyprland's `dim_strength`, and runs `hyprctl eval
     'conf_appearance.reload()'`, as the Layouts page does. With none set,
-    `conf`'s own stands. One `hyprland.local.lua` sets still wins.
+    tide's own stands. One an override sets (§3.1) still wins.
   - The shell applies it as it starts, too, even unchanged, as it does the
     input settings: setting the same strength again changes nothing.
   - The light and dark wallpapers (§15) are a file's path or a color
@@ -4666,8 +4692,8 @@ stays hand-written.
     Reset does.
   - The shell writes what's set to `~/.config/hypr/tide-outputs.lua`, each
     monitor as `desc:` and its description, and runs `hyprctl eval
-    conf_outputs.reload()`. `conf` applies each with `hl.monitor`, leaves a
-    closed lid's panel off, and lets `hyprland.local.lua` win for a monitor
+    conf_outputs.reload()`. tide's config applies each with `hl.monitor`, leaves a
+    closed lid's panel off, and lets an override win for a monitor
     it sets.
   - The shell applies the file as it starts, even unchanged, in case the
     shell before it died with an apply still to retry. Hyprland 0.56 leaves
@@ -4878,7 +4904,7 @@ stays hand-written.
     tries again, rather than taking a lid logind still suspends on for
     held.
   - The shell writes the choice to `~/.config/hypr/tide-power.lua`, and
-    `conf`'s `hyprland.lua` reads it as the lid closes: with no other
+    tide's Hyprland config reads it as the lid closes: with no other
     monitor, Lock runs `loginctl lock-session`, and Do nothing leaves the
     panel as it is. With another monitor, the lid turns the panel off, as it
     always has, whichever is chosen.
@@ -4946,11 +4972,11 @@ stays hand-written.
   - Each rule is Hyprland's whole-text match: the class as `(?i)` and the
     class quoted, the title as `[^\n]*(?:PATTERN)[^\n]*`, or `.*` for
     none.
-  - `conf` makes a window rule for each, `float = true`, named
+  - tide's config makes a window rule for each, `float = true`, named
     `tide-float-N`. Hyprland 0.56.2 can't drop a rule. Adding one by a name
     it has merges into that one (`hlWindowRule`): each match given replaces
     the old, a match not given stays, and each effect is added again. So
-    `conf` gives both matches every time and `float` only the first time,
+    it gives both matches every time and `float` only the first time,
     and turns off the names a shorter list no longer needs.
   - A new rule applies to every matching window, the ones already open
     included. That's the design, chosen over rules for new windows only.
@@ -4958,7 +4984,7 @@ stays hand-written.
     static effect. So once a change applies, the shell floats the tiled
     windows open now that the new rules cover and nothing covered before,
     with `hl.dsp.window.float({ action = "enable" })`.
-    - "Before" counts `conf`'s own dialog rules as well as the old list. A
+    - "Before" counts tide's own dialog rules as well as the old list. A
       window tiled by hand under any rule stays tiled, so a broader rule
       doesn't re-float a tiled Save As.
     - Windows on every workspace and monitor are floated, minimized ones
@@ -4981,10 +5007,10 @@ stays hand-written.
     from Quickshell's toplevel, which follows `windowtitlev2` as the
     client list Quickshell keeps doesn't. Applying a rule and Super+Alt+F
     read a window the same way.
-    `conf`'s own dialog rules count. A window with no class can't be
+    tide's own dialog rules count. A window with no class can't be
     named, so it isn't listed.
   - *Also floating* lists every other floating window, one each: those a
-    rule covers already, `conf`'s dialog rules among them, so a portal's
+    rule covers already, tide's dialog rules among them, so a portal's
     file chooser or an app's own Open dialog is there. Each says whose
     rule floats it, *Built in* or *Your rule*.
     - *Details* fills the fields as *Always float* does, and opens *More
@@ -5014,7 +5040,8 @@ stays hand-written.
       saying so, since a key has nowhere else to show it.
     - Once you add the rule, a tiled window it covers floats, as any new
       rule's does.
-  - The question after floating by the keys (§6.4) comes from `conf`.
+  - The question after floating by the keys (§6.4) comes from tide's
+    config.
     Its float keys run a Lua function that toggles floating. When that
     leaves the window floating, it posts `custom>>tide-floated>>ADDRESS`
     (`hl.dsp.event`).
@@ -5103,8 +5130,9 @@ sway's `config.local`:
     inherit the rest.
   - Lists, such as the clock zones, are replaced whole, so a machine's zone
     list is exactly what it says.
-- **Hyprland** follows the same rule: the Lua config ends by loading an
-  optional `hyprland.local.lua`, the successor to today's
+- **Hyprland** follows the same rule: tide's config takes what wins over
+  its settings through `tide.override()` (§3.1), and `conf`'s ends by
+  passing it an optional `hyprland.local.lua`, the successor to today's
   `hyprland.conf.local`.
 - **The settings panel writes only `.local` files.** It never edits a file
   that `conf` manages, so a `conf` update can't clobber a setting, and a
@@ -5222,7 +5250,7 @@ light/dark switch.
 | Dvorak missing at login | the password "doesn't work" | the greeter uses the session layout and shows a badge |
 | Hyprland config breaks on upgrade | red config-error banner | pinned version, Lua config, CI loads it, upgrades as their own PRs |
 | Tray icon missing | an app started before the tray watcher | the shell (the watcher) is ordered before autostart |
-| `Super` tap misfires | the launcher opens after every `Super+<key>` on Hyprland 0.56.x | `conf` binds the tap only from Hyprland 0.57, which has the keybind fix; `Super+Space` before (§8) |
+| `Super` tap misfires | the launcher opens after every `Super+<key>` on Hyprland 0.56.x | tide's config binds the tap only from Hyprland 0.57, which has the keybind fix; `Super+Space` before (§8) |
 | Dark-on-dark focus hard to see | can't tell which terminal is focused | dim strength is a setting; 0.1 is the next step |
 | Sharing an ultrawide | viewers get a letterboxed strip | the window-first default in the picker |
 | "Show in folder" opens the wrong file manager | Dolphin and Nautilus both claim `FileManager1` | a user-level activation file → a session-bound unit with a desktop-aware launcher: Nautilus in tide, Dolphin in Plasma, one session at a time; `doctor` checks (§16.2) |
@@ -5233,8 +5261,8 @@ light/dark switch.
 
 | Repo | Gets |
 |---|---|
-| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service` and its fallback, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. The tide connector, the browser extension in `connector/` (§8.3). `make install`. |
-| **conf** | The personal config: Hyprland in Lua (keys, rules, the Lua layout's settings, the single `exec-once`, loading `hyprland.local.lua`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces, home's apps and each workspace's own settings), the `persistent` workspace rule for home and the pinned apps' close keys, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
+| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service` and its fallback, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Hyprland config for its session (`hypr/tide/config.lua`, §3.1): the session's `uwsm finalize`, the keys and their names, the files the shell writes and its calls, the lid, the window rules and the `persistent` workspace rule for home, with the pinned apps' close keys. The Lua tiling layout. The tide connector, the browser extension in `connector/` (§8.3). `make install`. |
+| **conf** | The personal config: a Hyprland config that loads tide's and changes it (the app keys, Dvorak, left-handed mice, the fallbacks while waybar and swaync remain, a plain Hyprland login's autostart, loading `hyprland.local.lua`), and the scripts tide's config runs (`apply-input.sh`, `next-layout.sh`); `hypridle.conf`, whose timings tide writes to a file it sources (§10); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces, home's apps and each workspace's own settings), shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **tideco** | tide for Chrome: tiling on chromeOS. On Linux it can list the browser's tabs in the Windows tab, as tide's own connector does (§8.3). |
 | **scripts** | `setup`: packages (pinned Hyprland, Quickshell, greetd, xdph, adw-gtk3, grim/slurp/wl-clipboard/satty, `secret-tool` (libsecret-tools), the file manager without its recommends, `xdg-terminal-exec`, the companion apps in §16.2) and enabling units. `tide-tabs`'s host manifest for Chrome and Brave (§8.3). `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
 | **river window manager** (later, not created) | The Go window manager §21.2 records, under Apache-2.0, if river gains what tide needs. It doesn't exist yet; creating it is §21.2's first step, and this row and the repo guidance's list of repos are updated then. |
@@ -5436,8 +5464,10 @@ are what "done" means.
   on made-up monitors: the parts' names both ways, a switch's order, a
   display unplugged and plugged back, the lid closed and opened, and a
   window moved to another monitor on purpose.
-- **Session.** A `conf` test asserts the Hyprland config's only `exec-once`
-  is `uwsm finalize`. `doctor` has its own tests over recorded `busctl` and
+- **Session.** tide's `hypr/tide/config_test.lua` asserts the Hyprland
+  config's only `exec-once` is `uwsm finalize`, and tests the rest of that
+  config against a stub of `hl`; `conf`'s test loads tide's config with
+  `conf`'s changes. `doctor` has its own tests over recorded `busctl` and
   `systemctl` output, and `tide-sysmon` runs over a fake `/proc` and
   `/sys`.
 - **Scripts.** `screenshot_test` covers the Wayland argument parsing with
