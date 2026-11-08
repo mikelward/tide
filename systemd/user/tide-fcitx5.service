@@ -1,5 +1,5 @@
 # fcitx5, the input method behind accents on a held letter (SPEC.md §8.6):
-# Schnelle Umlaute, its add-on, which `setup-tide` builds. Once fcitx5 owns
+# tide-accents, tide's own add-on (fcitx5/), which `setup-tide` builds. Once fcitx5 owns
 # its bus name, units and autostarted apps get the variables that point Qt
 # and X11 apps at it; the compositor's wrapper sets them for the apps it
 # starts. GTK apps and Wayland Qt apps reach it without them, through the

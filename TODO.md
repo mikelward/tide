@@ -1974,7 +1974,8 @@ or workspace goes there.
 
 ## Accents on a plain long press (SPEC.md §8.6)
 
-Schnelle Umlaute needs Space after the held letter. A plain long press, as
+Schnelle Umlaute, which setup-tide built first, needs Space after the
+held letter. A plain long press, as
 on macOS: hold a letter, and a strip of its accents appears at the text
 cursor; a number, the arrows and Enter, or a click picks one, and Esc
 keeps the letter.
@@ -1995,14 +1996,15 @@ keeps the letter.
       `--enable-wayland-ime`, foot, an X11 app. Only its core is tested;
       the fcitx5 glue is only compiled. Check that Backspace and the
       accent arrive in order where an app lacks surrounding text.
-- [ ] `setup-tide` (scripts repo) builds and installs it, and switches
-      fcitx5's profile from Schnelle Umlaute to `tide-accents`. Then drop
-      Schnelle Umlaute from §8.6, §5's table and the README.
-- [ ] KDE: `setup-kde` installs the shared table at
+- [x] `setup-tide` (scripts repo) builds and installs it, and switches
+      fcitx5's profile from Schnelle Umlaute to `tide-accents`
+      (mikelward/scripts#423); §8.6, §5's table and the README follow.
+- [x] KDE: `setup-kde` installs the shared table at
       `~/.local/share/plasma/keyboard/diacritics/base.json` and sets
-      `plasmakeyboardrc` `[General]` `diacriticsHoldThresholdMs=300`.
-- [ ] macOS: turn `ApplePressAndHoldEnabled` off per terminal app, if the
-      user decides terminals shouldn't have accents (tilemo).
+      `plasmakeyboardrc` `[General]` `diacriticsHoldThresholdMs=300`
+      (mikelward/scripts#423).
+- [x] Terminals keep accents (the user's call), so the Mac's
+      `ApplePressAndHoldEnabled` stays on everywhere.
 - [ ] Verify the accents' order on a Mac, and the capital ß (ẞ), and fix
       `fcitx5/accents.json` to match.
 - [ ] One hold time everywhere. On the Mac, measure when the

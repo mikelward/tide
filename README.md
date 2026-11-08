@@ -39,12 +39,11 @@ on `Super+V` lists, encrypted (SPEC.md §8.4), and wtype, which types what the p
 `Super+Shift+V` chooses. `setup-tide` installs them all. For Bitwarden
 logins on the Fill tab, install rbw, the unofficial Bitwarden client, and
 run `rbw config set email` and `rbw login` once. For accents on a held
-letter (hold it, then press Space), `setup-tide` installs fcitx5 and builds
-Schnelle Umlaute, its add-on, which `tide-fcitx5.service` runs in the tide
-session (SPEC.md §8.6). tide's own add-on for a plain long press,
-`tide-accents`, builds with `make fcitx5` (fcitx5's headers, CMake and
-extra-cmake-modules) and installs with `sudo cmake --install build/fcitx5`;
-`setup-tide` doesn't install it yet.
+letter, `setup-tide` installs fcitx5 and builds tide's own add-on,
+`tide-accents`, which `tide-fcitx5.service` runs in the tide session
+(SPEC.md §8.6). By hand, it builds with `make fcitx5` (fcitx5's headers,
+CMake and extra-cmake-modules) and installs with
+`sudo cmake --install build/fcitx5`.
 jq and python3 are free distro packages that run locally, with no network
 calls; without one, the doctor reports the check it skipped.
 
