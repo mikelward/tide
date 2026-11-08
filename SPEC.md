@@ -445,7 +445,8 @@ flowchart TD
   xdg-desktop-portal reads the first file it finds for any of the
   session's names, trying each name in a directory before the next
   directory, so tide installs `tidewm-portals.conf` (wlr, then gtk)
-  beside `tide-portals.conf`. tide's units, hypridle and the autostart
+  beside `tide-portals.conf`. `tide doctor` checks xdg-desktop-portal-wlr
+  is installed there, by its `wlr.portal` file. tide's units, hypridle and the autostart
   allowlist take any `XDG_CURRENT_DESKTOP` with `tide` in it. `tide`
   and `tide-grant` record grants, read the focused workspace, and ask
   whether a polkit prompt may take the keyboard (`tide prompt-focus`,
