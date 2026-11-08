@@ -892,9 +892,16 @@ test("the wallpaper grid puts your monitors' shape first, in rows", () => {
         ["", ["f"]],
         ["Other shapes", ["c"]],
     ]);
-    // One section alone has no heading.
-    assert.deepEqual(galleryRows([pic("a", 3840, 2160)], screens, 4),
+    // With none that fit, it says so, as the grid would look unsorted.
+    assert.deepEqual(galleryRows([pic("a", 3840, 2160), pic("c", 0, 0)], screens, 1).map(r => r.heading),
+        ["None of these fit your 3440×1440 screen", ""]);
+    assert.deepEqual(galleryRows([pic("a", 3840, 2160)], two, 4).map(r => r.heading), [""]);
+    assert.equal(galleryRows([pic("e", 3000, 3000)], two, 4)[0].heading, "None of these fit your screens");
+    // With no monitor known, or every picture fitting, there's no heading.
+    assert.deepEqual(galleryRows([pic("a", 3840, 2160)], [], 4),
         [{ section: "others", heading: "", images: [pic("a", 3840, 2160)] }]);
+    assert.deepEqual(galleryRows([pic("b", 3440, 1440)], screens, 4),
+        [{ section: "fits", heading: "", images: [pic("b", 3440, 1440)] }]);
     assert.deepEqual(galleryRows([], screens, 4), []);
 });
 

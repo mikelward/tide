@@ -4564,8 +4564,9 @@ stays hand-written.
     - Pictures your monitors' shape come first, under Fits your screen,
       cropped as the monitor would be. The rest follow under Other shapes,
       shown whole so their shape shows. A shape within 2% fits, so a
-      2560×1080 picture fits a 3440×1440 monitor. With every picture in
-      one section, there's no heading.
+      2560×1080 picture fits a 3440×1440 monitor. With none fitting, the
+      grid says so over them, such as None of these fit your 3440×1440
+      screen; with all fitting, there's no heading.
     - JPEG, PNG, WebP, JPEG XL and SVG are shown. An SVG is drawn at the
       monitor's size, so it stays sharp at any size; its shape is its
       `viewBox`'s.
