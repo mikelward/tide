@@ -741,8 +741,9 @@ agent follows in the same helper (below).
     whenever it reappears. Nothing shows meanwhile, since there's nothing
     to connect.
   - *A shell reload or restart* ends the helper with it (its stdin
-    closes). A prompt that was up goes, and NetworkManager, seeing the agent
-    go, fails that connection; you try again.
+    closes). A prompt that was up goes: the helper answers `NoSecrets`, and
+    waits up to 5 s for that answer to be sent before it closes the bus.
+    NetworkManager fails that connection; you try again.
   - *The keyring locked or missing.* A saved VPN password isn't found, so
     you're asked for it. The keyring is unlocked at login (§5.2), so this
     means something else is wrong, and the log says what.

@@ -279,17 +279,50 @@ type world struct {
 	msgs    chan map[string]any
 	stderr  *syncBuffer
 	exit    chan int
+
+	sendMu sync.Mutex
+	// If set, sees each message the agent sends, before it's sent.
+	onSend func(*dbus.Message)
+}
+
+func (w *world) sending(m *dbus.Message) {
+	w.sendMu.Lock()
+	f := w.onSend
+	w.sendMu.Unlock()
+	if f != nil {
+		f(m)
+	}
 }
 
 type syncBuffer struct {
 	mu sync.Mutex
 	b  bytes.Buffer
+	// Closed once a line holding the text is written.
+	watches map[string]chan struct{}
 }
 
 func (s *syncBuffer) Write(p []byte) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for text, ch := range s.watches {
+		if bytes.Contains(p, []byte(text)) {
+			close(ch)
+			delete(s.watches, text)
+		}
+	}
 	return s.b.Write(p)
+}
+
+// logged is closed once the log holds text, from now on.
+func (s *syncBuffer) logged(text string) <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.watches == nil {
+		s.watches = map[string]chan struct{}{}
+	}
+	ch := make(chan struct{})
+	s.watches[text] = ch
+	return ch
 }
 
 func (s *syncBuffer) String() string {
@@ -346,9 +379,9 @@ func newWorld(t *testing.T, timeout time.Duration, btTimeout ...time.Duration) *
 			w.msgs <- m
 		}
 	}()
-	dial := func() (*dbus.Conn, error) { return dbus.Connect(w.addr) }
+	dial := func(opts ...dbus.ConnOption) (*dbus.Conn, error) { return dbus.Connect(w.addr, opts...) }
 	go func() {
-		w.exit <- run(inR, outW, w.stderr, config{system: dial, session: dial, dirs: []string{w.plugins}, timeout: timeout, btTimeout: firstOr(btTimeout, 0)})
+		w.exit <- run(inR, outW, w.stderr, config{system: dial, session: dial, sending: w.sending, dirs: []string{w.plugins}, timeout: timeout, btTimeout: firstOr(btTimeout, 0)})
 		outW.Close()
 	}()
 	t.Cleanup(func() {
@@ -661,6 +694,38 @@ func TestShellGoneAnswersNoSecrets(t *testing.T) {
 		}
 	case <-time.After(patience):
 		t.Fatal("no exit")
+	}
+	w.expectNM("unregister")
+}
+
+// godbus answers a call after the method returns, on another goroutine:
+// exit waits for the answer rather than closing the connection under it.
+func TestExitWaitsForTheAnswer(t *testing.T) {
+	w := newWorld(t, defaultTimeout)
+	release := make(chan struct{})
+	w.sendMu.Lock()
+	w.onSend = func(m *dbus.Message) {
+		if name, _ := m.Headers[dbus.FieldErrorName].Value().(string); m.Type == dbus.TypeError && name == errNoSecrets {
+			<-release
+		}
+	}
+	w.sendMu.Unlock()
+	ch := w.getSecrets(w.nm, psk(0), "802-11-wireless-security", nil, flagAllowInteraction)
+	w.expect("request")
+	waiting := w.stderr.logged("waiting to send")
+	w.toShell.Close()
+	// The answer is held until the agent would otherwise have closed the
+	// connection under it, or has.
+	select {
+	case <-waiting:
+	case code := <-w.exit:
+		w.exit <- code
+	case <-time.After(patience):
+		t.Fatalf("the agent neither waited nor exited; its log:\n%s", w.stderr)
+	}
+	close(release)
+	if r := w.result(ch); errName(r.err) != errNoSecrets {
+		t.Errorf("err = %v", r.err)
 	}
 	w.expectNM("unregister")
 }
