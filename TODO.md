@@ -1061,6 +1061,35 @@ once you have agreed with it or reversed it.
   whose monitor is gone isn't noted, and goes to the main monitor.
   Reversible: `span.note`.
 
+## Free-standing tide
+
+tide should install without mikelward/scripts or mikelward/conf: `setup`
+runs tide's installer, then its owner's extras, and `conf` layers its
+owner's preferences over tide's defaults. Done: `deps.lock` holds the pins
+(`install/pins`), and `tide-shell` starts without conf's theme daemon.
+Next, one PR each:
+
+- **A default Hyprland config.** Ship `hypr/hyprland.lua`, installed to
+  `$(PREFIX)/share/tide/hyprland.lua`: it loads the layout and focus guard,
+  binds tide's keys and holds the window rules. conf's `hyprland.lua` then
+  loads it and changes only what its owner prefers, as
+  `hyprland.local.lua` does now. Much of conf's config is tide's.
+- **The installer.** Move setup-tide's generic half here, as
+  `install/tide-setup`: distro packages, the pinned builds (reading
+  `deps.lock`), units, fcitx5, greetd and the tabs host manifest, with
+  their tests. setup-tide becomes `tide-setup "$@"` plus the launcher
+  scripts' entries, the GDM banner and legacy cleanups.
+- **The README's install** then says to run the installer, and its
+  by-hand steps are complete. SPEC.md §18's table moves with each.
+- **Fedora's and Arch's packages are unpinned.** Accept them with a
+  minimum-version check, as `tide doctor` does for Quickshell, or build the
+  pinned sources there too.
+- **Later: releases and packages.** Tagged `v0.N` releases with the Go
+  binaries (amd64, arm64), the installer and the connector ZIP; then an
+  AUR PKGBUILD, a COPR and OBS for Debian and Ubuntu. No prebuilt
+  Quickshell or Hyprland: Quickshell is tied to the exact Qt it was built
+  with, and Hyprland on Ubuntu needs GCC 16.
+
 ## Transitional shell (M2)
 
 `tide.service` runs `bin/tide-shell`, not `qs -c tide`,
