@@ -1165,7 +1165,22 @@ teardown
 setup; ARGS=(); run FAKE_USER_ENABLE_FAILS=tide-clipboard.service
 check "units: a failed enable of tide-clipboard.service isn't fatal" test "$status" -eq 0
 check "units: it shows what systemctl said" has "$output" "'systemctl --user enable tide-clipboard.service' exited with status 1; the end of what it said"
-check "units: and warns" has "$output" "Warning: couldn't enable tide-clipboard.service, so Super+C's picker keeps no clipboard history"
+check "units: and warns" has "$output" "Warning: couldn't enable tide-clipboard.service, so Super+V's picker keeps no clipboard history"
+check "units: and doesn't start what it couldn't enable" lacks "$calls" "restart tide-clipboard.service"
+teardown
+
+# In a tide session, the clipboard history starts now, or restarts.
+setup; ARGS=(); run
+check "units: outside a tide session, leaves the clipboard history to the next login" lacks "$calls" "restart tide-clipboard.service"
+teardown
+setup; ARGS=(); run FAKE_TIDE_SESSION=1
+check "units: in a tide session, asks whether one runs" has "$calls" "systemctl --user is-active --quiet wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target"
+check "units: in a tide session, (re)starts the clipboard history now" has "$calls" "systemctl --user restart tide-clipboard.service"
+check "units: after enabling it" test "$(printf '%s\n' "$calls" | grep -n 'enable tide-clipboard' | cut -d: -f1)" -lt "$(printf '%s\n' "$calls" | grep -n 'restart tide-clipboard' | cut -d: -f1)"
+teardown
+setup; ARGS=(); run FAKE_TIDE_SESSION=1 FAKE_USER_RESTART_FAILS=tide-clipboard.service
+check "units: a clipboard history that won't start isn't fatal" test "$status" -eq 0
+check "units: and says how to see why" has "$output" "couldn't start tide-clipboard.service, so Super+V's picker keeps no clipboard history until you log in again"
 teardown
 
 # The greeter's copy of your look (tide SPEC.md §11): a folder that's

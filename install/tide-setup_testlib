@@ -575,6 +575,13 @@ case "\$*" in
         fi
         echo "Created symlink '$T/home/.config/systemd/user/tide-session.target.wants/\$unit' → '$T/home/.config/systemd/user/\$unit'." >&2
         ;;
+    "--user is-active "*)
+        # A tide session is running only with \$FAKE_TIDE_SESSION.
+        test -n "\$FAKE_TIDE_SESSION" || exit 3
+        ;;
+    "--user restart "*)
+        test "\$3" != "\$FAKE_USER_RESTART_FAILS" || { echo "Job for \$3 failed." >&2; exit 1; }
+        ;;
     "--user mask "*)
         for unit; do
             case "\$unit" in

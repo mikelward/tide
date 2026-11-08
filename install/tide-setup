@@ -2867,9 +2867,15 @@ EOF2
         || info "For tabs in tide's switcher, install tide for Chrome from the Chrome Web Store, or clone mikelward/tideco to $TIDECO_DIR, load it unpacked, and run $SETUP_COMMAND again"
 }
 
+# tide_session_running: whether this user is in a tide session now, either
+# compositor's.
+tide_session_running() {
+    systemctl --user is-active --quiet wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target
+}
+
 enable_unit() {
     if ! is_command systemctl || ! systemctl --user show-environment >/dev/null 2>&1; then
-        warn "no systemd user manager; run 'systemctl --user enable tide.service tide-clipboard.service tide-fcitx5.service tide-kde.service' in your session"
+        warn "no systemd user manager; run 'systemctl --user enable tide.service tide-clipboard.service tide-fcitx5.service tide-kde.service' and 'systemctl --user start tide-clipboard.service' in your session"
         return 0
     fi
     run_logged systemctl --user daemon-reload
@@ -2886,8 +2892,17 @@ enable_unit() {
     # The clipboard history behind Super+C's picker (tide SPEC.md §8.4).
     # Apart from tide.service, so a tide checkout too old to ship it costs
     # only the history.
-    run_logged systemctl --user enable tide-clipboard.service \
-        || warn "couldn't enable tide-clipboard.service, so Super+C's picker keeps no clipboard history; update tide and run $SETUP_COMMAND again"
+    # In a tide session already, it's started now, or restarted, so an
+    # update's unit applies and a failed one comes back; otherwise the next
+    # tide login starts it.
+    if run_logged systemctl --user enable tide-clipboard.service; then
+        if tide_session_running; then
+            run_logged systemctl --user restart tide-clipboard.service \
+                || warn "couldn't start tide-clipboard.service, so Super+V's picker keeps no clipboard history until you log in again; 'systemctl --user status tide-clipboard.service' says why"
+        fi
+    else
+        warn "couldn't enable tide-clipboard.service, so Super+V's picker keeps no clipboard history; update tide and run $SETUP_COMMAND again"
+    fi
     # fcitx5, for an accent on a held letter (tide SPEC.md §8.6), in the
     # tide sessions only; its unit skips a machine without fcitx5. Apart
     # from tide.service, so a tide checkout too old to ship it costs only
@@ -2901,7 +2916,7 @@ enable_unit() {
         || warn "couldn't enable tide-kde.service, so Meta+Space on Plasma opens KRunner, not tide's launcher; update tide and run $SETUP_COMMAND again"
 }
 
-# --- GDM ---
+# --- Root-owned files ---
 
 # Installs $2 as the root-owned file $1, unless it already says that and
 # only root can change it: a copy someone else can change is replaced, since
