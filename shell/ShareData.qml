@@ -5,9 +5,10 @@ import Quickshell
 import Quickshell.Services.Pipewire
 import "lib/share.mjs" as Share
 
-// Whether a screen share is live (SPEC.md §12): an xdph screencast stream
-// with something consuming it, from PipeWire rather than Hyprland's
-// screencast>> event, which fires for any screencopy. While a screen is
+// Whether a screen share is live (SPEC.md §12): a portal's screencast
+// stream, xdph's or, on tidewm, xdg-desktop-portal-wlr's, with something
+// consuming it, from PipeWire rather than Hyprland's screencast>> event
+// or tidewm's capture event, which fire for a screenshot too. While a screen is
 // shared, popups are held (§9), and the notification center counts
 // them; a window share, known from the share picker's choice, holds none.
 Singleton {

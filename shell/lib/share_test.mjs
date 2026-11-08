@@ -14,6 +14,34 @@ test("xdph's screencast nodes are shares, and nothing else is", () => {
     assert.equal(isShareNode(null), false);
 });
 
+test("xdg-desktop-portal-wlr's screencast nodes, tidewm's, are shares too", () => {
+    assert.equal(isShareNode({ name: "xdpw-stream-a1B2c3" }), true);
+    assert.equal(isShareNode({ name: "xdpw" }), false);
+    assert.equal(isShareNode({ name: "xdpw-streaming" }), false);
+});
+
+test("on tidewm, a window share is live and shows the pill but holds no popups, and a screen share holds them", () => {
+    const window = { id: 70, name: "xdpw-stream-aaaaaa" };
+    const screen = { id: 71, name: "xdpw-stream-bbbbbb" };
+    const chrome = { id: 60, name: "chrome" };
+    const links = shareLinks([
+        { source: window, target: chrome, state: ACTIVE },
+        { source: { id: 50, name: "alsa_input.usb" }, target: chrome, state: ACTIVE },
+    ]);
+    const shares = liveShares([window, chrome], links, ACTIVE);
+    assert.deepEqual(shares, [{ id: 70, readers: [chrome] }]);
+    assert.equal(sharingPill(shares), true);
+    let s = nodesSeen(chose(PAIRING, "window", 1000, "Meet"), [70], 2000);
+    s = settle(s, 2000 + PAIR_MS + 1);
+    assert.equal(holdsPopups(shares, s), false);
+    s = nodesSeen(chose(s, "screen", 40000, "eDP-1"), [70, 71], 41000);
+    s = settle(s, 41000 + PAIR_MS + 1);
+    const both = liveShares([window, screen], shareLinks([
+        { source: window, target: chrome, state: ACTIVE }, { source: screen, target: chrome, state: ACTIVE },
+    ]), ACTIVE);
+    assert.equal(holdsPopups(both, s), true);
+});
+
 test("a share is live while something actively consumes it", () => {
     const share = { id: 40, name: "xdph-streaming-0" };
     const idle = { id: 41, name: "xdph-streaming-1" };

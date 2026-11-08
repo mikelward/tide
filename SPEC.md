@@ -3633,7 +3633,10 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
   enough on its own. It fires for *any* screencopy, including `grim` and the
   shell's own thumbnails, and it doesn't name the client.
   - The **Sharing** pill is driven by PipeWire instead: an
-    `xdph-streaming-*` video source with a running consumer.
+    `xdph-streaming-*` video source with a running consumer, or on tidewm
+    xdg-desktop-portal-wlr's `xdpw-stream-*`. tidewm's `capture` event is
+    no better a sign than `screencast>>`: a `grim -T` screenshot sends one
+    too.
   - The `screencast>>` event serves only as a prompt to re-check.
 - **Knowing what is shared.** Popups are held for a screen share but not a
   window share (§9), so the shell needs the source type.
@@ -5801,10 +5804,9 @@ makes every policy decision. It waits until river exposes what tide needs
   `XDPW_PERSIST_MODE` (letting the chooser decide is a TODO in its source)
   and returns restore data only for a monitor, so the adapter has no way to
   pass the checkbox on, and a window share can't be restored.
-  The Sharing pill (§7.4) also has to learn the new portal's streams: it
-  matches xdph's `xdph-streaming-*`, and xdg-desktop-portal-wlr 0.8.4 names
-  its streams `xdpw-stream-*`, so a share would show no pill and let
-  popups into the shared image until it does, with a test. The session
+  The Sharing pill (§7.4) also had to learn the new portal's streams: it
+  matched only xdph's `xdph-streaming-*`, and xdg-desktop-portal-wlr 0.8.4
+  names its streams `xdpw-stream-*`. It matches both now. The session
   also has to route to it: `tide-portals.conf` goes from `hyprland;gtk` to
   `wlr;gtk`, `setup` installs xdg-desktop-portal-wlr, and the session test
   and doctor expect it. It costs nothing. If it's missing, crashed or too

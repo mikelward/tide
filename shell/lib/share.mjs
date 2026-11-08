@@ -4,9 +4,13 @@
 
 import { streamLabel } from "./audio.mjs";
 
-// xdph names each screencast's PipeWire node xdph-streaming-<id>.
+// The portal names each screencast's PipeWire node: xdph, Hyprland's,
+// xdph-streaming-<id>, and xdg-desktop-portal-wlr, tidewm's,
+// xdpw-stream-<six random characters> (its pipewire_screencast.c, 0.8).
+// A screenshot makes no node, so it's never a share.
 export function isShareNode(node) {
-    return typeof node?.name === "string" && node.name.startsWith("xdph-streaming");
+    const name = node?.name;
+    return typeof name === "string" && (name.startsWith("xdph-streaming") || /^xdpw-stream-[^-]+$/.test(name));
 }
 
 // The link groups out of share nodes: the ones the shell binds (with a
@@ -30,7 +34,7 @@ export function shareReaders(links) {
 }
 
 // The share nodes something is consuming, each as its node's id and the
-// nodes reading it: an xdph stream with an active link out of it. A stream
+// nodes reading it: a portal's stream with an active link out of it. A stream
 // nobody reads yet (the picker is still open, or Chrome hasn't started)
 // isn't a share.
 export function liveShares(nodes, linkGroups, ACTIVE) {
