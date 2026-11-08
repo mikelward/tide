@@ -649,6 +649,56 @@ export function pickedWallpaper(text, home) {
     return home !== "" && path.startsWith(`${home}/`) ? `~/${path.slice(home.length + 1)}` : path;
 }
 
+// The folders the wallpaper grid shows (SPEC.md §16): the distro's
+// collections (GNOME's, Ubuntu's and Fedora's in backgrounds, Plasma's in
+// wallpapers), then your own.
+export function galleryFolders(home) {
+    return ["/usr/share/backgrounds", "/usr/share/wallpapers", `${home}/Pictures/wallpapers`];
+}
+
+// The pictures the grid can show: Qt decodes these, JPEG XL where
+// kimageformats is installed. One it can't decode isn't shown.
+const GALLERY_TYPES = ["jpg", "jpeg", "png", "webp", "jxl"];
+
+// The command that lists every picture under `folders`, a line each,
+// passing over a folder that isn't there. One it can't read all of, a
+// subfolder it may not open say, is find's error and status, with what it
+// could read still listed.
+export function galleryCommand(folders) {
+    const names = GALLERY_TYPES.map(t => `-iname '*.${t}'`).join(" -o ");
+    return ["sh", "-c", `s=0; for d; do if test -d "$d"; then find -L "$d" -maxdepth 6 -type f \\( ${names} \\) -print || s=$?; fi; done; exit $s`, "sh"].concat(folders);
+}
+
+// The grid's pictures from what galleryCommand printed, `text`, as
+// `{ path, name }` sorted by name. A Plasma wallpaper is a folder of the
+// same picture at several sizes (contents/images/WxH.ext): it's one
+// picture, its largest, named for its folder, and its dark set, preview
+// and the rest of contents/ aren't shown.
+export function galleryImages(text) {
+    const plain = new Map();
+    const plasma = new Map();
+    for (const line of String(text ?? "").split("\n")) {
+        const path = line.trim();
+        const type = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+        if (!path.startsWith("/") || !GALLERY_TYPES.includes(type)) {
+            continue;
+        }
+        const sized = /^(.*\/([^/]+))\/contents\/images\/(\d+)x(\d+)\.[^./]+$/.exec(path);
+        if (sized) {
+            const area = Number(sized[3]) * Number(sized[4]);
+            const had = plasma.get(sized[1]);
+            if (!had || area > had.area) {
+                plasma.set(sized[1], { path, name: sized[2], area });
+            }
+        } else if (!path.includes("/contents/")) {
+            const base = path.slice(path.lastIndexOf("/") + 1);
+            plain.set(path, { path, name: base.slice(0, base.lastIndexOf(".")) });
+        }
+    }
+    const all = [...plain.values(), ...[...plasma.values()].map(p => ({ path: p.path, name: p.name }))];
+    return all.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }) || a.path.localeCompare(b.path));
+}
+
 // The command that prints the first of `paths` that's a regular file it
 // can read, or exits 1 with none: so a directory, which `test -r` alone
 // passes, isn't taken for a picture.
