@@ -32,6 +32,8 @@ Singleton {
     // tidewm's workspaces as its GET_WORKSPACES gives them, or [] on
     // Hyprland.
     readonly property var tidewmListed: root.tidewm ? I3.workspaces.values.map(w => w.lastIpcObject) : []
+    // tidewm's outputs as its GET_OUTPUTS gives them, or [] on Hyprland.
+    readonly property var tidewmOutputs: root.tidewm ? I3.monitors.values.map(m => m.lastIpcObject) : []
     // The workspaces, as workspaces.mjs's workspaceOrder takes them:
     // [{id, name}] from Hyprland, a part of a spanning one apiece, or
     // [{id, order, name}] from tidewm, where one spans every monitor.

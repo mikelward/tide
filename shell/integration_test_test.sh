@@ -680,7 +680,8 @@ EOF
     # subscribes to workspaces and monitors, asks for both, and names home
     # in again as the shell does once tidewm has renamed it, unless
     # DIR/tidewm-keeps-rename is there; TidewmData subscribes to windows,
-    # workspaces and ticks, unless DIR/tidewm-deaf is there. Each holds its
+    # workspaces and ticks, unless DIR/tidewm-deaf is there, and LayoutData
+    # to layouts, unless DIR/tidewm-layout-deaf is there. Each holds its
     # connection, as Quickshell does, until qs is gone.
     cat >"$1/tidewm_client.py" <<'EOF'
 import os, socket, struct, sys, time
@@ -724,6 +725,10 @@ if not os.path.exists(os.path.join(here, "tidewm-deaf")):
     held.append(socket.socket(socket.AF_UNIX))
     held[-1].connect(os.environ["SWAYSOCK"])
     held[-1].sendall(message(2, '["window","workspace","tick"]'))
+if not os.path.exists(os.path.join(here, "tidewm-layout-deaf")):
+    held.append(socket.socket(socket.AF_UNIX))
+    held[-1].connect(os.environ["SWAYSOCK"])
+    held[-1].sendall(message(2, '["layout"]'))
 open(run + "/tidewm_client.ready", "w").close()
 # Super+Z's minimize, of draft, which tidewm's events opened and focused
 # last, or of Firefox, focused before them, with DIR/tidewm-stale-focus.
@@ -1848,6 +1853,14 @@ stubs "$tmp/tidewm-deaf" "exit 0" "$loaded"
 run "$tmp/tidewm-deaf"
 check "a shell that never listens for tidewm's window events fails" test "$code" -ne 0
 check "and says so" contains "$out" "the shell never listened for the stand-in tidewm's window events"
+}
+
+case_126() {
+stubs "$tmp/tidewm-layout-deaf" "exit 0" "$loaded"
+: >"$tmp/tidewm-layout-deaf/tidewm-layout-deaf" || exit 1
+run "$tmp/tidewm-layout-deaf"
+check "a shell that never listens for tidewm's layout events fails" test "$code" -ne 0
+check "and says so" contains "$out" "the shell never listened for the stand-in tidewm's layout events"
 }
 
 case_111() {

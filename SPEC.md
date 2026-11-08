@@ -1035,6 +1035,13 @@ See [`layouts.png`](docs/mocks/layouts.png).
   workspace's mode whenever that workspace becomes active, so a restarted
   shell catches up on the next switch. Until then, a monitor's current
   workspace shows its default mode.
+  - On tidewm, the bar hears tidewm's own `layout` event, which names a
+    monitor and its layout as either changes and on each switch. It
+    counts monocle's hidden windows itself, since the event's `[n]` goes
+    stale as windows come and go. After a restart, the focused monitor
+    shows `GET_WORKSPACES`' `layout` for the current workspace, and
+    another monitor the default for its `GET_OUTPUTS` `rect`, which is
+    already rotated, as tidewm picks a new part's layout.
 
 ### 6.2 Focus cue: dim, nothing else
 
