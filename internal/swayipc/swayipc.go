@@ -1,6 +1,6 @@
 // Package swayipc speaks sway's IPC, which tidewm answers on the socket
 // named in SWAYSOCK (SPEC.md §5.3): a command, a query, and the focused
-// workspace.
+// workspace, and the events tidewm sends.
 // It's i3's protocol: a message is "i3-ipc", its payload's length and its
 // type, both 32 bits in this machine's byte order, then the payload.
 package swayipc
@@ -20,6 +20,8 @@ import (
 const (
 	RunCommand    = 0
 	GetWorkspaces = 1
+	// Subscribe asks for events, which come on the same connection.
+	SubscribeType = 2
 	GetOutputs    = 3
 	GetTree       = 4
 	GetVersion    = 7
@@ -74,6 +76,12 @@ func Send(socket string, kind uint32, payload []byte) ([]byte, error) {
 	if err := conn.SetDeadline(time.Now().Add(Timeout)); err != nil {
 		return nil, err
 	}
+	return exchange(conn, kind, payload)
+}
+
+// exchange sends one message of type kind on conn and returns its reply's
+// payload.
+func exchange(conn net.Conn, kind uint32, payload []byte) ([]byte, error) {
 	msg := make([]byte, 0, len(magic)+8+len(payload))
 	msg = append(msg, magic...)
 	msg = binary.NativeEndian.AppendUint32(msg, uint32(len(payload)))
@@ -82,22 +90,89 @@ func Send(socket string, kind uint32, payload []byte) ([]byte, error) {
 	if _, err := conn.Write(msg); err != nil {
 		return nil, err
 	}
-	header := make([]byte, len(magic)+8)
-	if _, err := io.ReadFull(conn, header); err != nil {
-		return nil, fmt.Errorf("no reply: %w", err)
+	got, reply, err := read(conn)
+	if err != nil {
+		return nil, err
 	}
-	if string(header[:len(magic)]) != string(magic) {
-		return nil, errors.New("the reply isn't sway's IPC")
-	}
-	n := binary.NativeEndian.Uint32(header[len(magic):])
-	if got := binary.NativeEndian.Uint32(header[len(magic)+4:]); got != kind {
+	if got != kind {
 		return nil, fmt.Errorf("the reply is type %d, not %d", got, kind)
 	}
-	reply := make([]byte, n)
-	if _, err := io.ReadFull(conn, reply); err != nil {
-		return nil, fmt.Errorf("the reply was cut short: %w", err)
-	}
 	return reply, nil
+}
+
+// read reads one message from conn: its type and payload. Its error says
+// "no reply" when none came, wrapping io.EOF when conn closed first.
+func read(conn net.Conn) (uint32, []byte, error) {
+	header := make([]byte, len(magic)+8)
+	if _, err := io.ReadFull(conn, header); err != nil {
+		return 0, nil, fmt.Errorf("no reply: %w", err)
+	}
+	if string(header[:len(magic)]) != string(magic) {
+		return 0, nil, errors.New("the reply isn't sway's IPC")
+	}
+	n := binary.NativeEndian.Uint32(header[len(magic):])
+	kind := binary.NativeEndian.Uint32(header[len(magic)+4:])
+	payload := make([]byte, n)
+	if _, err := io.ReadFull(conn, payload); err != nil {
+		return 0, nil, fmt.Errorf("the reply was cut short: %w", err)
+	}
+	return kind, payload, nil
+}
+
+// Subscribe asks for the events named, such as "input", and calls each
+// with every one's payload as it comes. It returns nil once tidewm closes
+// the connection, as when it exits, or each's error, or why the events
+// stopped coming.
+func Subscribe(socket string, events []string, each func(payload []byte) error) error {
+	conn, err := net.DialTimeout("unix", socket, Timeout)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	// Only the subscription has a deadline: the events come when they do.
+	if err := conn.SetDeadline(time.Now().Add(Timeout)); err != nil {
+		return err
+	}
+	names, err := json.Marshal(events)
+	if err != nil {
+		return err
+	}
+	reply, err := exchange(conn, SubscribeType, names)
+	if err != nil {
+		return err
+	}
+	var result struct {
+		Success bool   `json:"success"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal(reply, &result); err != nil {
+		return fmt.Errorf("couldn't read the reply %q: %w", reply, err)
+	}
+	if !result.Success {
+		if result.Error == "" {
+			result.Error = "tidewm refused the subscription"
+		}
+		return Refused{result.Error}
+	}
+	if err := conn.SetDeadline(time.Time{}); err != nil {
+		return err
+	}
+	for {
+		kind, payload, err := read(conn)
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// An event's type has the high bit set; anything else isn't one.
+		if kind&0x80000000 == 0 {
+			continue
+		}
+		if err := each(payload); err != nil {
+			return err
+		}
+	}
 }
 
 // Refused is tidewm's answer that commands failed: each one's error.

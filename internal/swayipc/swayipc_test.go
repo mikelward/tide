@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mikelward/tide/internal/swayipc/swayipctest"
 )
 
 // serve answers one message on a socket in a temporary directory with
@@ -157,5 +159,47 @@ func TestWord(t *testing.T) {
 		if _, err := Word(in); err == nil {
 			t.Errorf("Word(%q) took it", in)
 		}
+	}
+}
+
+func TestSubscribeGivesEachEventUntilTidewmCloses(t *testing.T) {
+	tidewm := swayipctest.New(t, `{"success":true}`)
+	tidewm.Events(0x80000015, `{"change":"added"}`, `{"change":"removed"}`)
+	var got []string
+	err := Subscribe(tidewm.Socket, []string{"input"}, func(p []byte) error {
+		got = append(got, string(p))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{`{"change":"added"}`, `{"change":"removed"}`}; strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("got %q", got)
+	}
+	if sent := tidewm.Sent(); len(sent) != 1 || sent[0].Type != SubscribeType || sent[0].Payload != `["input"]` {
+		t.Fatalf("sent %v", sent)
+	}
+}
+
+func TestARefusedSubscriptionSaysWhy(t *testing.T) {
+	tidewm := swayipctest.New(t, `{"success":false,"error":"no such event"}`)
+	err := Subscribe(tidewm.Socket, []string{"nope"}, func([]byte) error { return nil })
+	var refused Refused
+	if !errors.As(err, &refused) || err.Error() != "no such event" {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestSubscribeStopsAtEachsError(t *testing.T) {
+	tidewm := swayipctest.New(t, `{"success":true}`)
+	tidewm.Events(0x80000015, `{"change":"added"}`, `{"change":"removed"}`)
+	stop := errors.New("stop")
+	n := 0
+	err := Subscribe(tidewm.Socket, []string{"input"}, func([]byte) error {
+		n++
+		return stop
+	})
+	if err != stop || n != 1 {
+		t.Fatalf("got %v after %d", err, n)
 	}
 }

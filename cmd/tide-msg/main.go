@@ -24,8 +24,15 @@
 // names them, or tidewm's own get_bindings. tide doctor reads tidewm's
 // outputs and config errors so, and the shell its bindings.
 //
-// It exits 0 when that worked, 1 when tidewm refused a command, and 2 for
-// a usage error, or when there's no tidewm to ask or it didn't answer.
+//	tide-msg --subscribe EVENTS
+//
+// prints each of the events named, comma-separated, such as input, as a
+// line of JSON as it comes, as swaymsg -t subscribe -m does, until tidewm
+// exits. watch-input.sh follows input devices so.
+//
+// It exits 0 when that worked, or when tidewm exited during a
+// subscription, 1 when tidewm refused a command or a subscription, and 2
+// for a usage error, or when there's no tidewm to ask or it didn't answer.
 package main
 
 import (
@@ -34,6 +41,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/mikelward/tide/internal/swayipc"
@@ -49,21 +57,24 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 	focused := flags.Bool("focused-workspace", false, "print the focused workspace's name")
 	prompt := flags.Bool("prompt-may-focus", false, "exit 0 if a polkit prompt may take the keyboard now, 1 if not")
 	query := flags.String("type", "", "print the reply to the query `QUERY` (get_outputs, get_config and the rest), as JSON")
+	subscribe := flags.String("subscribe", "", "print each of the `EVENTS`, comma-separated, as a line of JSON, until tidewm exits")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 	kind, known := swayipc.Queries[*query]
 	modes := 0
-	for _, on := range []bool{*focused, *prompt, *query != "", flags.NArg() > 0} {
+	for _, on := range []bool{*focused, *prompt, *query != "", *subscribe != "", flags.NArg() > 0} {
 		if on {
 			modes++
 		}
 	}
-	if modes != 1 || (*query != "" && !known) {
+	events := strings.Split(*subscribe, ",")
+	if modes != 1 || (*query != "" && !known) || (*subscribe != "" && slices.Contains(events, "")) {
 		fmt.Fprintln(stderr, "usage: tide-msg [--] COMMAND...")
 		fmt.Fprintln(stderr, "       tide-msg --focused-workspace")
 		fmt.Fprintln(stderr, "       tide-msg --prompt-may-focus")
 		fmt.Fprintln(stderr, "       tide-msg --type get_workspaces|get_outputs|get_tree|get_version|get_config|get_inputs|get_seats|get_bindings")
+		fmt.Fprintln(stderr, "       tide-msg --subscribe EVENT[,EVENT...]")
 		return 2
 	}
 	socket, err := swayipc.Socket(env)
@@ -89,6 +100,22 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 		fmt.Fprintln(stdout, name)
+		return 0
+	}
+	if *subscribe != "" {
+		err := swayipc.Subscribe(socket, events, func(payload []byte) error {
+			_, err := fmt.Fprintf(stdout, "%s\n", payload)
+			return err
+		})
+		var refused swayipc.Refused
+		if errors.As(err, &refused) {
+			fmt.Fprintf(stderr, "tide-msg: tidewm at %s refused a subscription to %s: %v\n", socket, *subscribe, err)
+			return 1
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, "tide-msg: couldn't follow tidewm's %s events at %s: %v\n", *subscribe, socket, err)
+			return 2
+		}
 		return 0
 	}
 	if *query != "" {
