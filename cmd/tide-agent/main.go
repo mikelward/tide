@@ -50,17 +50,19 @@ import (
 )
 
 type config struct {
-	system, session func() (*dbus.Conn, error)
-	dirs            []string
-	timeout         time.Duration
+	system, session func(...dbus.ConnOption) (*dbus.Conn, error)
+	// For tests: sees each message the agent sends, before it's sent.
+	sending func(*dbus.Message)
+	dirs    []string
+	timeout time.Duration
 	// BlueZ's, which is shorter; zero is bluezTimeout.
 	btTimeout time.Duration
 }
 
 func main() {
 	os.Exit(run(os.Stdin, os.Stdout, os.Stderr, config{
-		system:  func() (*dbus.Conn, error) { return dbus.ConnectSystemBus() },
-		session: func() (*dbus.Conn, error) { return dbus.ConnectSessionBus() },
+		system:  dbus.ConnectSystemBus,
+		session: dbus.ConnectSessionBus,
 		dirs:    pluginDirs(),
 		timeout: defaultTimeout,
 	}))
@@ -76,16 +78,19 @@ func run(stdin io.Reader, stdout, stderr io.Writer, cfg config) int {
 		}
 		return 1
 	}
-	sys, err := cfg.system()
+	// Each connection closes only once the calls it received are answered.
+	sysReplies := newReplies(stderr, cfg.sending)
+	sys, err := cfg.system(sysReplies.options()...)
 	if err != nil {
 		return fault("couldn't connect to the system bus, where NetworkManager is: %v", err)
 	}
-	defer sys.Close()
-	session, err := cfg.session()
+	defer sysReplies.close(sys)
+	sessionReplies := newReplies(stderr, cfg.sending)
+	session, err := cfg.session(sessionReplies.options()...)
 	if err != nil {
 		return fault("couldn't connect to the session bus: %v", err)
 	}
-	defer session.Close()
+	defer sessionReplies.close(session)
 
 	a := &agent{
 		sys: sys, session: session, shell: shell,
@@ -156,7 +161,7 @@ func run(stdin io.Reader, stdout, stderr io.Writer, cfg config) int {
 	err = <-readErr
 	// Every request waiting on the shell has been answered "gone"; end the
 	// rest (a VPN's own dialog), and let each answer reach NetworkManager
-	// before the connection closes.
+	// before the connection closes (replies.go sees it sent).
 	a.mu.Lock()
 	for _, p := range a.requests {
 		p.cancel()
