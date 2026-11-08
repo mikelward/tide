@@ -1,0 +1,134 @@
+# shellcheck shell=sh
+# wlroots 0.20 for tidewm, where the distro has none: sourced by
+# install/tide-setup, whose helpers (info, detail, warn, build_logged,
+# git_github, $PINS) it uses.
+#
+# tidewm builds against wlroots 0.20, which Debian testing and Arch package
+# and Ubuntu 26.04 and Debian 13 don't. There, build_tidewm builds deps.lock's
+# wlroots group with meson into tidewm's own build directory, then tidewm
+# against it, each with a run path to that directory's lib, so tidewm loads
+# that libwlroots, and nothing else on the system sees it. The group's other
+# pins are what wlroots 0.20's meson.build needs newer than Debian 13 has;
+# each builds only where the distro's is older (see wlroots_dep_minimum).
+#
+# The build is in tidewm's directory, named for a checksum of what's built
+# (wlroots_record is part of it), so a new wlroots pin rebuilds tidewm too,
+# and an old tidewm keeps the wlroots it was linked against.
+
+if ! WLROOTS_PINS=$("$PINS" wlroots); then
+    echo "tide-setup: couldn't read wlroots' pins from tide's deps.lock" >&2
+    exit 1
+fi
+
+# What the wlroots group's builds need from apt, named as on Ubuntu 26.04 and
+# Debian 13, from wlroots 0.20's meson.build and its dependencies': meson and
+# ninja; wayland's expat and libffi; xkbcommon's bison, and xkb-data for its
+# keymaps; the -dev packages wlroots uses as they are where they're new
+# enough; and for Xwayland, the xcb libraries and Xwayland's own
+# xwayland.pc. The X11 backend, wlroots on an X server, isn't built.
+# shellcheck disable=SC2034  # tide-setup's tidewm_build_deps reads it
+WLROOTS_APT_DEPS="meson ninja-build bison libexpat1-dev libffi-dev xkb-data
+    libwayland-dev libwayland-bin wayland-protocols libdrm-dev libxkbcommon-dev libpixman-1-dev
+    libudev-dev libseat-dev libinput-dev libdisplay-info-dev hwdata
+    libegl-dev libgles-dev libgbm-dev libvulkan-dev glslang-tools liblcms2-dev
+    libxcb1-dev libxcb-composite0-dev libxcb-ewmh-dev libxcb-icccm4-dev libxcb-render0-dev
+    libxcb-res0-dev libxcb-xfixes0-dev libxcb-errors-dev xwayland"
+
+# wlroots_wanted: whether tidewm needs wlroots built here, once its build
+# dependencies are installed: only on Debian and Ubuntu, when pkg-config
+# can't find the distro's wlroots-0.20.
+wlroots_wanted() {
+    test "$(detect_os)" = debian || return 1
+    ! pkg-config --modversion wlroots-0.20 >/dev/null 2>&1
+}
+
+# wlroots_record: what the build is, for tidewm's build record.
+wlroots_record() {
+    printf 'wlroots\n%s\n' "$WLROOTS_PINS"
+}
+
+# wlroots_dep_minimum NAME prints the pkg-config modules wlroots 0.20 takes
+# from pin NAME and the least version of them it takes, from its
+# meson.build. Nothing for wlroots itself, which always builds.
+wlroots_dep_minimum() {
+    case "$1" in
+        wayland) echo "1.24.0 wayland-server wayland-scanner" ;;
+        wayland-protocols) echo "1.47 wayland-protocols" ;;
+        libdrm) echo "2.4.129 libdrm" ;;
+        libxkbcommon) echo "1.8.0 xkbcommon" ;;
+        pixman) echo "0.46.0 pixman-1" ;;
+    esac
+}
+
+# wlroots_meson_options NAME: what a pin builds with. Only the libraries:
+# no tests, docs, tools or demos. xkbcommon reads the system's keymaps and
+# Compose files, not ones under tidewm's prefix.
+wlroots_meson_options() {
+    case "$1" in
+        wayland) echo "-Dtests=false -Ddocumentation=false -Ddtd_validation=false" ;;
+        wayland-protocols) echo "-Dtests=false" ;;
+        libdrm) echo "-Dauto_features=disabled -Dtests=false" ;;
+        libxkbcommon) echo "-Denable-tools=false -Denable-x11=false -Denable-docs=false -Denable-wayland=false
+            -Denable-xkbregistry=false -Denable-bash-completion=false
+            -Dxkb-config-root=/usr/share/X11/xkb -Dx-locale-root=/usr/share/X11/locale -Dxkb-config-extra-path=/etc/xkb" ;;
+        pixman) echo "-Dtests=disabled -Ddemos=disabled -Dgtk=disabled -Dlibpng=disabled" ;;
+        wlroots) echo "-Dexamples=false -Dxwayland=enabled -Dbackends=drm,libinput" ;;
+    esac
+}
+
+# wlroots_env DIR COMMAND...: runs COMMAND to build against what's in DIR,
+# ahead of the system's, and to link with a run path to DIR/lib.
+wlroots_env() {
+    _we_dir=$1
+    shift
+    env PKG_CONFIG_PATH="$_we_dir/lib/pkgconfig:$_we_dir/share/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" \
+        LDFLAGS="-Wl,-rpath,$_we_dir/lib${LDFLAGS:+ $LDFLAGS}" "$@"
+}
+
+# build_wlroots DIR SRC: builds the wlroots group into DIR, cloning each pin
+# into SRC/NAME, in deps.lock's order, adding to $build_log. A pin whose
+# distro version is new enough is skipped. meson never downloads what
+# wlroots' wraps name, which aren't pinned: anything missing fails.
+build_wlroots() {
+    _bw_dir=$1
+    _bw_src=$2
+    info "Building wlroots for tidewm, which the distro doesn't package"
+    printf '%s\n' "$WLROOTS_PINS" | while read -r name url tag commit _; do
+        test -n "$name" || continue
+        _bw_min=$(wlroots_dep_minimum "$name")
+        if test -n "$_bw_min"; then
+            # shellcheck disable=SC2086  # the modules, split on purpose
+            if wlroots_env "$_bw_dir" pkg-config --atleast-version=$_bw_min; then
+                detail "Using the distro's $name, which is new enough for wlroots"
+                continue
+            fi
+        fi
+        _bw_clone="$_bw_src/$name"
+        rm -rf "$_bw_clone" || exit 1
+        build_logged "$name" git_github clone -c advice.detachedHead=false --quiet --depth 1 --branch "$tag" "$url" "$_bw_clone" || exit 1
+        _bw_head=$(git -C "$_bw_clone" rev-parse HEAD) || exit 1
+        if test "$_bw_head" != "$commit"; then
+            warn "$name's $tag tag is commit $_bw_head, not the pinned $commit; not building it"
+            rm -rf "$_bw_clone" || warn "couldn't remove the rejected clone in $_bw_clone"
+            exit 1
+        fi
+        case "$name" in
+            wayland-protocols)
+                # As for Hyprland's (see build_component): an older
+                # wayland-scanner fails 1.49's strict check of headers
+                # nothing here uses.
+                find "$_bw_clone" -name meson.build -exec sed -i "s/'--strict', *//g" {} + || exit 1
+                ;;
+        esac
+        # shellcheck disable=SC2046  # the options, split on purpose
+        build_logged "$name" wlroots_env "$_bw_dir" meson setup "$_bw_clone/build" "$_bw_clone" \
+            --prefix="$_bw_dir" --libdir=lib --buildtype=release --wrap-mode=nodownload \
+            $(wlroots_meson_options "$name") \
+            && build_logged "$name" meson compile -C "$_bw_clone/build" \
+            && build_logged "$name" meson install -C "$_bw_clone/build" \
+            || exit 1
+    done || {
+        warn "building wlroots failed, so tidewm isn't built; the sources are in $_bw_src"
+        return 1
+    }
+}

@@ -7,7 +7,7 @@
 # it was pinned: a tag can be moved, so a clone must be at exactly this
 # commit before its build files run. A tag of - pins the commit alone.
 # Update a pin in its own PR, and check its build on every distro that uses
-# it.
+# it. A name can be in more than one group if it's pinned the same in each.
 
 # Quickshell, which draws tide's shell, where the distro has none new
 # enough (Ubuntu 26.04, Debian), from the GitHub mirror SPEC.md cites. CI's
@@ -17,6 +17,18 @@ quickshell quickshell https://github.com/quickshell-mirror/quickshell.git v0.3.1
 # tidewm, tide's fork of dwl, for the tide (tidewm) session. A release tag,
 # numbered as tidewm's README says.
 tidewm tidewm https://github.com/mikelward/tidewm.git v0.0.1460 324b9ecfe27dc05068111ac8b352fae304014ae7 make
+
+# wlroots 0.20, which tidewm builds against, where the distro has none
+# (Ubuntu 26.04, Debian 13), into tidewm's own build. The rest are what
+# wlroots 0.20's meson.build needs that's newer than Debian 13 has (wayland
+# 1.24, wayland-protocols 1.47, libdrm 2.4.129, xkbcommon 1.8, pixman
+# 0.46); each builds only where the distro's is older. wlroots builds last.
+wlroots wayland https://gitlab.freedesktop.org/wayland/wayland.git 1.24.0 736d12ac67c20c60dc406dc49bb06be878501f86 meson
+wlroots wayland-protocols https://gitlab.freedesktop.org/wayland/wayland-protocols.git 1.49 ee78491a237eaff9389a0ccf8680521d074407d3 meson
+wlroots libdrm https://gitlab.freedesktop.org/mesa/drm.git libdrm-2.4.134 e984d448b8b17aab853369e6c203e53719f46de1 meson
+wlroots libxkbcommon https://github.com/xkbcommon/libxkbcommon.git xkbcommon-1.13.2 d1442aaa6b635551182e83c3b55037f4c118c962 meson
+wlroots pixman https://gitlab.freedesktop.org/pixman/pixman.git pixman-0.46.4 9cc163c9da0fb4da430641715313d95a6ec466d9 meson
+wlroots wlroots https://gitlab.freedesktop.org/wlroots/wlroots.git 0.20.2 d783533489e1f75d6886c2ab5c5960090ef268f8 meson
 
 # Hyprland, where the distro's is older than the 0.56 the Lua config needs
 # (Debian, Ubuntu), and what it needs that those distros lack or have too

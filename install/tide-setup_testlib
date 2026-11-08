@@ -41,6 +41,7 @@ setup() {
     cat > "$T/bin/make" <<MOCK
 #!/bin/sh
 printf "%s\\n" "make \$*" >> "$CALLS"
+case "\$LDFLAGS" in *-rpath*) printf "%s\\n" "make env: PKG_CONFIG_PATH=\$PKG_CONFIG_PATH LDFLAGS=\$LDFLAGS" >> "$CALLS" ;; esac
 echo "install -m 644 tide.service $T/home/.config/systemd/user"
 if test -n "\$FAKE_MAKE_FAILS" && test "\$1" = -C && test "\$2" = "\$FAKE_MAKE_FAILS"; then
     exit 2
@@ -186,11 +187,37 @@ for pkg; do
     esac
 done
 MOCK
-    # meson setup also logs the compilers it was given.
+    # meson setup also logs the compilers it was given, and the run path
+    # and pkg-config path when it's given a run path. Setting up the
+    # checkout \$FAKE_MESON_FAILS names fails.
     cat > "$T/bin/meson" <<MOCK
 #!/bin/sh
 printf "%s\\n" "meson \$*" >> "$CALLS"
 test "\$1" != setup || printf "%s\\n" "meson compilers CC=\$CC CXX=\$CXX" >> "$CALLS"
+if test "\$1" = setup; then
+    case "\$LDFLAGS" in *-rpath*) printf "%s\\n" "meson env: PKG_CONFIG_PATH=\$PKG_CONFIG_PATH LDFLAGS=\$LDFLAGS" >> "$CALLS" ;; esac
+    test "\${3##*/}" != "\${FAKE_MESON_FAILS:-no such checkout}" || exit 1
+fi
+MOCK
+    # pkg-config finds wlroots-0.20 unless apt has no libwlroots-0.20-dev
+    # (\$FAKE_MISSING), and every other module, new enough, but those in
+    # \$FAKE_PKG_OLD.
+    cat > "$T/bin/pkg-config" <<MOCK
+#!/bin/sh
+printf "%s\\n" "pkg-config \$*" >> "$CALLS"
+case "\$1" in
+    --modversion)
+        test "\$2" != wlroots-0.20 && exit 0
+        case " \$FAKE_MISSING " in *" libwlroots-0.20-dev "*) exit 1 ;; esac
+        echo 0.20.2
+        ;;
+    --atleast-version=*)
+        shift
+        for mod; do
+            case " \$FAKE_PKG_OLD " in *" \$mod "*) exit 1 ;; esac
+        done
+        ;;
+esac
 MOCK
     # apt-get refuses the whole command when it names a package in
     # \$FAKE_MISSING or \$FAKE_APT_REFUSES (one apt-cache knows), as apt
@@ -453,6 +480,9 @@ MOCK
     # Each Hyprland pin's name and commit, for git rev-parse, and tidewm's,
     # or \$FAKE_TIDEWM_COMMIT, as setup is called.
     "$SCRIPT_DIR/pins" hyprland | awk '{ print $1, $4, $5 }' > "$T/pins"
+    # And wlroots', each name once.
+    "$SCRIPT_DIR/pins" wlroots | awk '{ print $1, $4, $5 }' \
+        | awk 'FNR == NR { seen[$1] = 1; next } !($1 in seen)' "$T/pins" - >> "$T/pins"
     echo "tidewm ${FAKE_TIDEWM_COMMIT:-$("$SCRIPT_DIR/pins" --env tidewm | sed -n 's/^PIN_COMMIT=//p')}" >> "$T/pins"
     # localectl status names the X11 layout \$FAKE_X11_LAYOUT and variant
     # \$FAKE_X11_VARIANT, each line left out when it's empty, or fails with

@@ -5577,6 +5577,9 @@ such as `centeredmaster`, scenefx, and what niri, sway and KWin can do beyond
   them with the default GCC. Where a distro falls short, wlroots carries
   Meson wraps for wayland, wayland-protocols, libdrm, xkbcommon, pixman,
   seatd, libdisplay-info and libliftoff, which build that piece too.
+  Those wraps follow each project's `HEAD`, so the installer doesn't use
+  them: `deps.lock` pins the five Debian 13 lacks, and each builds only
+  where the distro's is older (`install/wlroots`).
 - **Layouts in C.** dwm's layouts are the model for §6.1. Tile and monocle
   are built in, and three-column is dwm's `centeredmaster`. Our layouts live
   in their own file, included from `config.h`, without touching `dwl.c`.
