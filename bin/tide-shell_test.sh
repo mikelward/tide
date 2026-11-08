@@ -52,9 +52,13 @@ if test -n "\$FAKE_SLEEP_FAILS" && test "\$1" = "\$FAKE_SLEEP_FAILS"; then
 fi
 exec $(command -v sleep) "\$@"
 FAKE
+# With $FAKE_READY_SAYS it says ready on stderr too, for $stop_on.
 cat > "$fake/systemd-notify" <<'FAKE'
 #!/bin/sh
 printf 'systemd-notify %s\n' "$*" >> "$FAKE_LOG"
+if test -n "$FAKE_READY_SAYS" && test "$*" = --ready; then
+    echo "fake ready" >&2
+fi
 exit "${FAKE_NOTIFY_STATUS:-0}"
 FAKE
 # Claims the names in $FAKE_NAMES, then exits, which ends the shell's wait;
@@ -160,9 +164,27 @@ if test -n "$FAKE_QS_EXIT"; then
     exit "$FAKE_QS_EXIT"
 fi
 echo "${FAKE_UNIT:-tide.service}" > "$FAKE_OWNED/org.kde.StatusNotifierWatcher"
+if test "$TIDE_NOTIFICATIONS" = 1; then
+    echo "${FAKE_UNIT:-tide.service}" > "$FAKE_OWNED/org.freedesktop.Notifications"
+fi
 echo $$ >> "$FAKE_PIDS"
 exec sleep 600 >/dev/null 2>&1
 FAKE
+# swaync and waybar, which tide-shell starts itself without a theme
+# daemon, claim their names and stay up; each is in its own directory.
+for d in swaync=org.freedesktop.Notifications waybar=org.kde.StatusNotifierWatcher; do
+    mkdir "$tmp/${d%%=*}-bin"
+    cat > "$tmp/${d%%=*}-bin/${d%%=*}" <<FAKE
+#!/bin/sh
+printf '%s\n' "${d%%=*}" >> "\$FAKE_LOG"
+echo "\${FAKE_UNIT:-tide.service}" > "\$FAKE_OWNED/${d#*=}"
+echo \$\$ >> "\$FAKE_PIDS"
+exec sleep 600 >/dev/null 2>&1
+FAKE
+    chmod +x "$tmp/${d%%=*}-bin/${d%%=*}"
+done
+swaync=$tmp/swaync-bin
+waybar=$tmp/waybar-bin
 # notify-send logs its arguments, or fails with $FAKE_NOTIFY_SEND_ERR; it's in
 # its own directory so a run can leave it off the PATH.
 notify=$tmp/notify-bin
@@ -478,10 +500,62 @@ check "a missing theme daemon fails at once, not to be retried" test "$status" -
 check "a missing TIDE_THEME_DAEMON is reported by name" \
     contains "$(cat "$tmp/err")" "TIDE_THEME_DAEMON is '$tmp/nonexistent'"
 
-run FAKE_NAMES="$both" TIDE_THEME_DAEMON= HOME="$tmp/empty-home"
-check "a missing default theme daemon fails, not to be retried" test "$status" -eq 78
-check "a missing default theme daemon is reported" \
-    contains "$(cat "$tmp/err")" "no theme daemon at $tmp/empty-home/.config/hypr/scripts/theme-daemon.sh"
+# Without conf there's no theme daemon, and the shell starts swaync and
+# waybar itself. It then runs until one of them exits: the fakes are
+# stopped once it's ready.
+stop_on="fake ready"
+run FAKE_READY_SAYS=1 PATH="$fake:$swww:$swaync:$waybar:$PATH" TIDE_THEME_DAEMON= HOME="$tmp/empty-home"
+stop_on=
+log=$(cat "$tmp/log")
+check "no theme daemon: the shell starts" test "$status" -ne 78
+check "no theme daemon: swaync starts" contains "$log" "swaync"
+check "no theme daemon: waybar starts" contains "$log" "waybar"
+check "no theme daemon: ready is reported" contains "$log" "systemd-notify --ready"
+check "no theme daemon: it's said, once" \
+    test "$(grep -c "no theme daemon at $tmp/empty-home/.config/hypr/scripts/theme-daemon.sh (conf's), so swaync and waybar start in their default style" "$tmp/err")" -eq 1
+check "no theme daemon: swaync exiting ends the shell" contains "$(cat "$tmp/err")" "swaync exited"
+check "no theme daemon: and it's a failure, to be restarted" test "$status" -eq 1
+
+# With the Quickshell bar, only swaync is started; with TIDE_NOTIFICATIONS=1
+# the shell is the notification server, so not even that.
+stop_on="fake ready"
+run FAKE_READY_SAYS=1 PATH="$fake:$swww:$qs:$swaync:$waybar:$PATH" TIDE_BAR=quickshell TIDE_THEME_DAEMON= HOME="$tmp/empty-home"
+stop_on=
+log=$(cat "$tmp/log")
+check "no theme daemon, Quickshell bar: swaync starts" test -n "$(grep -x swaync "$tmp/log")"
+check "no theme daemon, Quickshell bar: no waybar" test -z "$(grep -x waybar "$tmp/log")"
+check "no theme daemon, Quickshell bar: ready" contains "$log" "systemd-notify --ready"
+stop_on="fake ready"
+run FAKE_READY_SAYS=1 PATH="$fake:$swww:$qs:$swaync:$PATH" TIDE_BAR=quickshell TIDE_NOTIFICATIONS=1 TIDE_THEME_DAEMON= HOME="$tmp/empty-home"
+stop_on=
+check "no theme daemon, TIDE_NOTIFICATIONS=1: no swaync" test -z "$(grep -x swaync "$tmp/log")"
+check "no theme daemon, TIDE_NOTIFICATIONS=1: the shell's server counts toward ready" \
+    contains "$(cat "$tmp/log")" "systemd-notify --ready"
+check "no theme daemon, TIDE_NOTIFICATIONS=1: it's said" \
+    contains "$(cat "$tmp/err")" "so the Quickshell shell is the notification server (TIDE_NOTIFICATIONS=1)"
+
+# Without a theme daemon, swaync and waybar are needed; skipped where the
+# host has its own.
+if ! command -v swaync >/dev/null 2>&1; then
+    run PATH="$fake:$swww:$waybar:$PATH" TIDE_THEME_DAEMON= HOME="$tmp/empty-home"
+    check "no theme daemon or swaync fails, not to be retried" test "$status" -eq 78
+    check "no theme daemon or swaync is reported" contains "$(cat "$tmp/err")" "and swaync, which serves notifications without one, isn't installed"
+    check "no theme daemon or swaync starts nothing" test ! -s "$tmp/log"
+fi
+if ! command -v waybar >/dev/null 2>&1; then
+    run PATH="$fake:$swww:$swaync:$PATH" TIDE_THEME_DAEMON= HOME="$tmp/empty-home"
+    check "no theme daemon or waybar for waybar's bar fails, not to be retried" test "$status" -eq 78
+    check "no theme daemon or waybar is reported" contains "$(cat "$tmp/err")" "the bar is waybar, but waybar isn't installed"
+fi
+
+# conf's daemon, found by default, is run, and failing is still reported.
+mkdir -p "$tmp/conf-home/.config/hypr/scripts"
+cp "$tmp/theme-daemon" "$tmp/conf-home/.config/hypr/scripts/theme-daemon.sh"
+run FAKE_NAMES="org.freedesktop.Notifications" FAKE_DAEMON_EXIT=5 PATH="$fake:$swww:$swaync:$waybar:$PATH" TIDE_THEME_DAEMON= HOME="$tmp/conf-home"
+check "conf's theme daemon runs when it's there" contains "$(cat "$tmp/log")" "theme-daemon"
+check "then swaync isn't started here" test -z "$(grep -x swaync "$tmp/log")"
+check "conf's theme daemon failing is reported" contains "$(cat "$tmp/err")" "the theme daemon exited (5) before its owners were up"
+check "conf's theme daemon present isn't said to be missing" not_contains "$(cat "$tmp/err")" "no theme daemon"
 
 # An empty search list, so no agent installed on this host is found.
 run FAKE_NAMES="$both" TIDE_POLKIT_AGENT= TIDE_POLKIT_AGENTS=

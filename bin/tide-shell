@@ -12,7 +12,11 @@
 #     it, and waybar when that's the bar, with the light/dark style and
 #     restarts them at each theme boundary, so it runs here rather than from
 #     Hyprland's autostart. It's told which bar it is in $TIDE_BAR, so
-#     it doesn't start waybar beside the Quickshell bar;
+#     it doesn't start waybar beside the Quickshell bar. Without conf there's
+#     no theme daemon, and this starts swaync and waybar itself, in their
+#     default style; the Quickshell shell still switches light and dark
+#     (SPEC.md §15). With TIDE_NOTIFICATIONS=1 the Quickshell shell is the
+#     notification server instead, and no swaync is started;
 #   - the first polkit agent found on this system, unless the Quickshell
 #     shell is the agent (TIDE_POLKIT=1, SPEC.md §5.2).
 #
@@ -36,7 +40,8 @@
 #   $TIDE_BAR           quickshell or waybar (default: quickshell when
 #                             `qs` and the shell's config are installed, and
 #                             qs is Quickshell 0.3 or newer)
-#   $TIDE_THEME_DAEMON  the theme daemon (default: conf's)
+#   $TIDE_THEME_DAEMON  the theme daemon (default: conf's, when there is
+#                             one)
 #   $TIDE_POLKIT        1 to have the Quickshell shell be the polkit
 #                             agent, so none is started here; it needs the
 #                             Quickshell bar (default: 0)
@@ -66,7 +71,8 @@ default_agents="
     /usr/lib/*-linux-*/libexec/polkit-kde-authentication-agent-1
     /usr/libexec/kf6/polkit-kde-authentication-agent-1
 "
-theme_daemon=${TIDE_THEME_DAEMON:-$HOME/.config/hypr/scripts/theme-daemon.sh}
+default_theme_daemon=$HOME/.config/hypr/scripts/theme-daemon.sh
+theme_daemon=${TIDE_THEME_DAEMON:-$default_theme_daemon}
 # Where `make install` puts the shell, and where `qs -c tide` finds it.
 shell_config=${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/tide/shell.qml
 # The oldest Quickshell the shell loads in: 0.3.0 added IdleInhibitor,
@@ -141,8 +147,8 @@ owned() {
 }
 
 # No cleanup trap: stopping the unit kills its whole cgroup, which also
-# catches waybar and swaync, started by the theme daemon rather than here,
-# and the Quickshell shell.
+# catches waybar and swaync, when the theme daemon started them rather than
+# this, and the Quickshell shell.
 
 # A bad setting or a missing piece fails the start at once, by name, before
 # anything runs. It exits EX_CONFIG (78), which the unit doesn't restart on
@@ -250,13 +256,42 @@ if test "${TIDE_BAR:-}" = quickshell && ! quickshell_ok; then
 fi
 export TIDE_BAR="$bar"
 
-if ! is_program "$theme_daemon"; then
-    if test -n "${TIDE_THEME_DAEMON:-}"; then
-        log "TIDE_THEME_DAEMON is '$theme_daemon', which isn't an executable file"
-    else
-        log "no theme daemon at $theme_daemon, so no bar or notifications"
-    fi
+# conf's theme daemon is optional: without conf, this starts swaync, and
+# waybar when that's the bar, itself. One that's set but missing is still
+# an error.
+if test -n "${TIDE_THEME_DAEMON:-}" && ! is_program "$theme_daemon"; then
+    log "TIDE_THEME_DAEMON is '$theme_daemon', which isn't an executable file"
     exit $EX_CONFIG
+fi
+notifications_owner=swaync
+if is_program "$theme_daemon"; then
+    start_swaync=no
+    start_waybar=no
+else
+    theme_daemon=
+    if test "${TIDE_NOTIFICATIONS:-}" = 1 && test "$bar" = quickshell; then
+        start_swaync=no
+        notifications_owner="the Quickshell shell"
+    else
+        start_swaync=yes
+    fi
+    if test "$bar" = waybar; then start_waybar=yes; else start_waybar=no; fi
+    if test "$start_swaync" = yes && ! command -v swaync >/dev/null 2>&1; then
+        log "no theme daemon at $default_theme_daemon, and swaync, which serves notifications without one, isn't installed"
+        exit $EX_CONFIG
+    fi
+    if test "$start_waybar" = yes && ! command -v waybar >/dev/null 2>&1; then
+        log "the bar is waybar, but waybar isn't installed"
+        exit $EX_CONFIG
+    fi
+    # Fine without conf: the Quickshell shell sets light and dark itself
+    # (SPEC.md §15); only conf's styles for swaync and waybar are missed.
+    case $start_swaync$start_waybar in
+        yesyes) own="swaync and waybar start in their default style, with no light and dark" ;;
+        yesno) own="swaync starts in its default style" ;;
+        *) own="the Quickshell shell is the notification server (TIDE_NOTIFICATIONS=1)" ;;
+    esac
+    log "no theme daemon at $default_theme_daemon (conf's), so $own"
 fi
 # The theme daemon runs under a subshell that records its exit status, so an
 # exit during startup is reported as itself rather than as missing owners.
@@ -271,11 +306,14 @@ theme_status=$(mktemp) || {
 agent_loop=
 agent_done=
 trap 'if test -n "$agent_loop" && ! test -s "$agent_done"; then kill "$agent_loop"; wait "$agent_loop"; fi; rm -f "$theme_status" "$agent_done"' EXIT
-(
-    "$theme_daemon"
-    echo $? > "$theme_status"
-) &
-theme_pid=$!
+theme_pid=
+if test -n "$theme_daemon"; then
+    (
+        "$theme_daemon"
+        echo $? > "$theme_status"
+    ) &
+    theme_pid=$!
+fi
 
 # Runs a long-lived owner under a watcher subshell, so its exit ends this
 # script too and systemd restarts the unit.
@@ -362,6 +400,9 @@ if test "$bar" = quickshell; then
 else
     tray_owner="waybar's tray"
 fi
+# What the theme daemon would start, when there's none.
+test "$start_swaync" = no || supervise swaync swaync
+test "$start_waybar" = no || supervise waybar waybar
 
 # The wallpaper (§5.2 puts it in the shell). The Quickshell shell draws its
 # own (§15); with waybar's bar, a daemon does. Not an owner apps wait for,
@@ -435,7 +476,7 @@ while :; do
     exited=no
     test -s "$theme_status" && exited=yes
     missing=
-    owned org.freedesktop.Notifications || missing="$missing org.freedesktop.Notifications (swaync)"
+    owned org.freedesktop.Notifications || missing="$missing org.freedesktop.Notifications ($notifications_owner)"
     owned org.kde.StatusNotifierWatcher || missing="$missing org.kde.StatusNotifierWatcher ($tray_owner)"
     # The wallpaper doesn't hold up ready; it keeps trying below.
     test -z "$missing" && break
@@ -483,8 +524,15 @@ if test "$wallpaper_pending" = yes; then
     done
 fi
 
-# Runs for the session. The theme daemon never exits on its own, so its end
-# is this unit's end, and systemd restarts it (Restart=on-failure).
+# Runs for the session. Without a theme daemon, the first owner to exit
+# ends it, through supervise's signal, which interrupts the wait.
+if test -z "$theme_pid"; then
+    wait
+    log "every process the shell started has exited"
+    exit 1
+fi
+# The theme daemon never exits on its own, so its end is this unit's end,
+# and systemd restarts it (Restart=on-failure).
 wait "$theme_pid"
 status=$(cat "$theme_status")
 log "the theme daemon exited ($status)"
