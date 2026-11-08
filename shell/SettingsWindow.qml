@@ -12,6 +12,7 @@ import "lib/dnd.mjs" as Dnd
 import "lib/floating.mjs" as FloatRules
 import "lib/idle.mjs" as Idle
 import "lib/input.mjs" as Input
+import "lib/keymaps.mjs" as KeyPresets
 import "lib/keys.mjs" as Shortcuts
 import "lib/launch.mjs" as Run
 import "lib/layouts.mjs" as Layouts
@@ -423,6 +424,8 @@ PanelWindow {
         id: pill
 
         property string text
+        // Shown as the one chosen.
+        property bool selected: false
 
         signal activated
 
@@ -430,14 +433,14 @@ PanelWindow {
         width: pillText.implicitWidth + 24
         height: 24
         radius: 12
-        color: pillHover.hovered ? Theme.edge : Theme.surface2
+        color: pill.selected ? Theme.accentBg : pillHover.hovered ? Theme.edge : Theme.surface2
 
         Text {
             id: pillText
 
             anchors.centerIn: parent
             text: pill.text
-            color: Theme.fg
+            color: pill.selected ? Theme.accentFg : Theme.fg
             font.family: Theme.font
             font.pixelSize: 12
             font.weight: Font.DemiBold
@@ -1544,9 +1547,19 @@ PanelWindow {
                         // Why the last change made here was refused, until
                         // the next one or another page.
                         property string refused: ""
+                        // The preset asked about, when starting from it
+                        // would drop keys of your own, or "".
+                        property string asking: ""
+
+                        function startFrom(preset) {
+                            asking = "";
+                            refused = KeysData.startFrom(preset);
+                            root.report(refused);
+                        }
 
                         onVisibleChanged: {
                             refused = "";
+                            asking = "";
                             if (visible) {
                                 KeysData.list();
                                 pageFlick.scrolled();
@@ -1575,6 +1588,89 @@ PanelWindow {
                             color: Theme.fgDim
                             font.family: Theme.font
                             font.pixelSize: 13
+                        }
+
+                        // Other tiling window managers' keys, to start from.
+                        Item {
+                            visible: KeysData.editable
+                            width: keyList.width
+                            implicitHeight: 32
+
+                            Text {
+                                id: startLabel
+
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Start from"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                anchors.left: startLabel.right
+                                anchors.leftMargin: 10
+                                height: parent.height
+                                spacing: 4
+
+                                Repeater {
+                                    model: KeyPresets.PRESET_NAMES
+
+                                    PillButton {
+                                        required property string modelData
+
+                                        text: KeyPresets.PRESETS[modelData].label
+                                        selected: KeysData.yours.preset === modelData
+                                        onActivated: {
+                                            if (Object.keys(KeysData.yours.keys).length > 0) {
+                                                keyList.asking = modelData;
+                                            } else {
+                                                keyList.startFrom(modelData);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Starting from a preset drops your own keys: ask.
+                        Item {
+                            visible: keyList.asking !== ""
+                            width: keyList.width
+                            implicitHeight: 32
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.right: askButtons.left
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                elide: Text.ElideRight
+                                text: keyList.asking === "" ? "" : `Your own keys go. Start from ${KeyPresets.PRESETS[keyList.asking].label}?`
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                id: askButtons
+
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                height: parent.height
+                                spacing: 4
+
+                                PillButton {
+                                    text: "Start over"
+                                    onActivated: keyList.startFrom(keyList.asking)
+                                }
+
+                                PillButton {
+                                    text: "Cancel"
+                                    onActivated: keyList.asking = ""
+                                }
+                            }
                         }
 
                         // Takes the keys pressed while one is recording.

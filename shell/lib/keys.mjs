@@ -9,6 +9,8 @@
 // binding's dispatcher is "__lua", so what one does is only its
 // description, which conf gives in hl.bind's `description` option.
 
+import { PRESETS, PRESET_NAMES } from "./keymaps.mjs";
+
 // Hyprland's modifier bits, in xkb's order, as a binding names them.
 const MODIFIERS = [[64, "Super"], [4, "Ctrl"], [8, "Alt"], [1, "Shift"], [2, "Caps"], [16, "Mod2"], [32, "Mod3"], [128, "Mod5"]];
 
@@ -178,9 +180,10 @@ export function listedTidewmBinds(failed, text) {
 // Editing the keys (SPEC.md §16). conf names most of Hyprland's bindings
 // and lists each one's name, what it does, its defaults and its keys now in
 // tide-keys.json, in its instance's runtime directory. Your keys are kept
-// in keys.json and keys.local.json (§16.1) as { "keys": { "terminal":
-// ["SUPER + D"], "lock": [] } }, a binding's keys in place of its defaults,
-// none turning it off, and written to ~/.config/hypr/tide-keys.lua, which
+// in keys.json and keys.local.json (§16.1) as { "preset": "dwm", "keys": {
+// "terminal": ["SUPER + D"], "lock": [] } }: the preset you started from
+// (keymaps.mjs), and a binding's keys in place of the preset's, none
+// turning it off. They're written to ~/.config/hypr/tide-keys.lua, which
 // conf reads. Keys are written as Hyprland's config writes them: the
 // modifiers, then the key's XKB name, joined by " + ".
 
@@ -251,8 +254,12 @@ function checkKeys(raw, where) {
     return { keys: raw.trim() };
 }
 
-// Parses keys.json or keys.local.json: {keys} (undefined when the file
-// doesn't set it) or {error}.
+// Your keys: the preset you started from ("tide" for tide's own, from
+// keymaps.mjs) and your keys over it, by binding name.
+export const NO_KEYS = Object.freeze({ preset: "tide", keys: Object.freeze({}) });
+
+// Parses keys.json or keys.local.json: {keys, preset}, each undefined when
+// the file doesn't set it, or {error}.
 export function parseKeysFile(text) {
     if (text.trim() === "") {
         return {};
@@ -267,12 +274,19 @@ export function parseKeysFile(text) {
         return { error: "expected an object" };
     }
     for (const k of Object.keys(value)) {
-        if (k !== "keys") {
+        if (k !== "keys" && k !== "preset") {
             return { error: `unknown setting ${k}` };
         }
     }
+    const out = {};
+    if (value.preset !== undefined) {
+        if (typeof value.preset !== "string" || !Object.prototype.hasOwnProperty.call(PRESETS, value.preset)) {
+            return { error: `preset should be one of ${PRESET_NAMES.join(", ")}` };
+        }
+        out.preset = value.preset;
+    }
     if (value.keys === undefined) {
-        return {};
+        return out;
     }
     if (value.keys === null || typeof value.keys !== "object" || Array.isArray(value.keys)) {
         return { error: "keys should be an object of names" };
@@ -288,23 +302,25 @@ export function parseKeysFile(text) {
         if (list.length > MAX_KEYS) {
             return { error: `${name} lists ${list.length} keys, more than ${MAX_KEYS}` };
         }
-        const out = [];
+        const checked = [];
         for (const raw of list) {
             const c = checkKeys(raw, name);
             if (c.error) {
                 return { error: c.error };
             }
-            out.push(c.keys);
+            checked.push(c.keys);
         }
-        keys[name] = out;
+        keys[name] = checked;
     }
-    return { keys };
+    out.keys = keys;
+    return out;
 }
 
-// Your keys from both files, keys.local.json's replacing keys.json's
-// whole: {keys, errors}. With an error, `lastGood` stands.
-export function loadKeys(sharedText, localText, lastGood = {}) {
-    let keys = {};
+// Your keys from both files, {state, errors}: keys.local.json's keys
+// replace keys.json's whole, and so does its preset. With an error,
+// `lastGood` stands.
+export function loadKeys(sharedText, localText, lastGood = NO_KEYS) {
+    let state = { preset: "tide", keys: {} };
     const errors = [];
     for (const [name, text] of [[FILES[0], sharedText], [FILES[1], localText]]) {
         if (text === null || text === undefined) {
@@ -315,32 +331,63 @@ export function loadKeys(sharedText, localText, lastGood = {}) {
             errors.push(`${name}: ${parsed.error}`);
             continue;
         }
-        if (parsed.keys !== undefined) {
-            keys = parsed.keys;
-        }
+        state = {
+            preset: parsed.preset !== undefined ? parsed.preset : state.preset,
+            keys: parsed.keys !== undefined ? parsed.keys : state.keys,
+        };
     }
-    return errors.length > 0 ? { keys: lastGood, errors } : { keys, errors };
+    return errors.length > 0 ? { state: lastGood, errors } : { state, errors };
 }
 
 // keys.local.json's text with the keys `change` makes of the ones in
-// effect: {text, keys} or {error}. Either file not loading is an {error},
-// so a hand edit gone wrong isn't overwritten.
+// effect: {text, state} or {error}, or {clash} as `change` gives it.
+// Either file not loading is an {error}, so a hand edit gone wrong isn't
+// overwritten.
 export function editedKeys(sharedText, localText, change) {
     const loaded = loadKeys(sharedText, localText);
     if (loaded.errors.length > 0) {
         return { error: loaded.errors[0] };
     }
-    const result = change(Object.assign({}, loaded.keys));
-    if (result.error) {
-        return { error: result.error };
+    const result = change({ preset: loaded.state.preset, keys: Object.assign({}, loaded.state.keys) });
+    if (result.error || result.clash) {
+        return result;
     }
     const local = localText === null || localText === undefined || localText.trim() === "" ? {} : JSON.parse(localText);
     const sorted = {};
-    for (const name of Object.keys(result.keys).sort()) {
-        sorted[name] = result.keys[name];
+    for (const name of Object.keys(result.state.keys).sort()) {
+        sorted[name] = result.state.keys[name];
     }
-    const text = JSON.stringify(Object.assign({}, local, { keys: sorted }), null, 2) + "\n";
-    return { text, keys: sorted };
+    // The preset always, so tide's own overrides another in keys.json.
+    const out = Object.assign({}, local, { preset: result.state.preset, keys: sorted });
+    const text = JSON.stringify(out, null, 2) + "\n";
+    return { text, state: { preset: result.state.preset, keys: sorted } };
+}
+
+// The keys conf is to bind: the preset's, with yours over them. A
+// preset's binding gives up keys you gave another, so yours take them, as
+// conf would hand them out in its own order otherwise.
+export function mergedKeys(state) {
+    const yours = new Set(Object.values(state.keys).reduce((ids, list) => ids.concat(list.map(keysId)), []));
+    const out = {};
+    for (const [name, keys] of Object.entries(PRESETS[state.preset].keys)) {
+        out[name] = keys.filter(k => !yours.has(keysId(k)));
+    }
+    return Object.assign(out, state.keys);
+}
+
+// Each named binding's keys before yours: the preset's for one it names,
+// else conf's defaults less the keys the preset gives others, as conf
+// binds them.
+export function presetDefaults(preset, catalog) {
+    const given = PRESETS[preset].keys;
+    const taken = new Set(Object.values(given).reduce((ids, list) => ids.concat(list.map(keysId)), []));
+    const out = {};
+    for (const b of catalog) {
+        out[b.name] = Object.prototype.hasOwnProperty.call(given, b.name)
+            ? given[b.name].slice()
+            : b.defaults.filter(k => !taken.has(keysId(k)));
+    }
+    return out;
 }
 
 // A Lua string literal holding `s`, which checkKeys and NAME keep to
@@ -349,8 +396,10 @@ function luaString(s) {
     return `"${s}"`;
 }
 
-// tide-keys.lua, which conf's hyprland.lua reads as data.
-export function keysLua(keys) {
+// tide-keys.lua, which conf's hyprland.lua reads as data: the preset's
+// keys with yours over them.
+export function keysLua(state) {
+    const keys = mergedKeys(state);
     const lines = ["-- Written by tide's Keyboard shortcuts (SPEC.md §16); changes here are lost.", "return { keys = {"];
     for (const name of Object.keys(keys).sort()) {
         lines.push(`    ${name} = { ${keys[name].map(luaString).join(", ")} },`);
@@ -433,28 +482,30 @@ export function recordedKeys(key, modifiers) {
 }
 
 // The page's list (SPEC.md §16): conf's named bindings, which can change,
-// as [{name, does, keys, label, changed}], then the rest of Hyprland's
+// as [{name, does, keys, label, changed}], `changed` from the preset's
+// keys (presetDefaults), then the rest of Hyprland's
 // listing, which can't, as parseBinds gives them. A fixed binding's keys a
 // named one has now are that one's. `label` is "Off" for none.
-export function shortcutRows(catalog, binds) {
+export function shortcutRows(catalog, binds, state = NO_KEYS) {
+    const defaults = presetDefaults(state.preset, catalog);
     const named = catalog.map(b => ({
         name: b.name,
         does: b.does,
         keys: b.keys.slice(),
         label: b.keys.length === 0 ? "Off" : b.keys.map(keysId).join(" or "),
-        changed: b.keys.map(keysId).join("|") !== b.defaults.map(keysId).join("|"),
+        changed: b.keys.map(keysId).join("|") !== defaults[b.name].map(keysId).join("|"),
     }));
     const namedIds = new Set(catalog.reduce((ids, b) => ids.concat(b.keys.map(keysId)), []));
     const fixed = binds.filter(b => b.submap !== "tide-keys" && !(b.submap === "" && namedIds.has(b.keys)));
     return { named, fixed };
 }
 
-// Your keys with `name` given `keys` (as written) alone, or {clash}: the
-// named binding ({name, does}) that has them now, unless `swap`, which
-// gives that one the keys `name` had. Keys a fixed binding has
-// (`fixedIds`, as keysId gives them) are an {error}. A binding back at its
-// defaults is left out of your keys.
-export function withKeys(yours, catalog, name, keys, swap = false, fixedIds = []) {
+// Your keys with `name` given `keys` (as written) alone: {state}, or
+// {clash}: the named binding ({name, does}) that has them now, unless
+// `swap`, which gives that one the keys `name` had. Keys a fixed binding
+// has (`fixedIds`, as keysId gives them) are an {error}. A binding back at
+// its preset's keys is left out of yours.
+export function withKeys(state, catalog, name, keys, swap = false, fixedIds = []) {
     const target = catalog.find(b => b.name === name);
     if (!target) {
         return { error: `no shortcut is called ${name}` };
@@ -463,36 +514,61 @@ export function withKeys(yours, catalog, name, keys, swap = false, fixedIds = []
     if (fixedIds.includes(id)) {
         return { error: `${id} can't change, so it can't be ${target.does}` };
     }
+    const defaults = presetDefaults(state.preset, catalog);
     const other = catalog.find(b => b.name !== name && b.keys.some(k => keysId(k) === id));
-    const out = Object.assign({}, yours);
+    const out = Object.assign({}, state.keys);
     if (other) {
         if (!swap) {
             return { clash: { name: other.name, does: other.does } };
         }
         const given = other.keys.filter(k => keysId(k) !== id)
             .concat(target.keys.filter(k => keysId(k) !== id));
-        setOrDefault(out, other, given.slice(0, MAX_KEYS));
+        setOrDefault(out, other.name, defaults[other.name], given.slice(0, MAX_KEYS));
     }
-    setOrDefault(out, target, [keys]);
-    return { keys: out };
+    setOrDefault(out, name, defaults[name], [keys]);
+    return { state: { preset: state.preset, keys: out } };
 }
 
-function setOrDefault(out, bind, keys) {
-    if (keys.map(keysId).join("|") === bind.defaults.map(keysId).join("|")) {
-        delete out[bind.name];
+function setOrDefault(out, name, defaults, keys) {
+    if (keys.map(keysId).join("|") === defaults.map(keysId).join("|")) {
+        delete out[name];
     } else {
-        out[bind.name] = keys;
+        out[name] = keys;
     }
 }
 
-// Your keys with `name` back at its defaults.
-export function withDefault(yours, name) {
-    const out = Object.assign({}, yours);
-    delete out[name];
-    return { keys: out };
+// Your keys with `name` back at its preset's. Another binding you gave
+// those keys, by a swap say, gives them up, as conf binds yours first; one
+// left with none goes back to its own preset's, so Reset undoes a swap.
+export function withDefault(state, name, catalog = []) {
+    const keys = Object.assign({}, state.keys);
+    delete keys[name];
+    const defaults = presetDefaults(state.preset, catalog);
+    const wanted = new Set((defaults[name] || []).map(keysId));
+    for (const other of Object.keys(keys)) {
+        const list = keys[other];
+        if (list.length === 0 || !list.some(k => wanted.has(keysId(k)))) {
+            continue;
+        }
+        const kept = list.filter(k => !wanted.has(keysId(k)));
+        if (kept.length === 0) {
+            delete keys[other];
+        } else {
+            setOrDefault(keys, other, defaults[other] || [], kept);
+        }
+    }
+    return { state: { preset: state.preset, keys } };
 }
 
 // Your keys with `name` off.
-export function withOff(yours, name) {
-    return { keys: Object.assign({}, yours, { [name]: [] }) };
+export function withOff(state, name) {
+    return { state: { preset: state.preset, keys: Object.assign({}, state.keys, { [name]: [] }) } };
+}
+
+// Starting again from `preset`'s keys, none of yours over them.
+export function withPreset(state, preset) {
+    if (!Object.prototype.hasOwnProperty.call(PRESETS, preset)) {
+        return { error: `no preset is called ${preset}` };
+    }
+    return { state: { preset, keys: {} } };
 }

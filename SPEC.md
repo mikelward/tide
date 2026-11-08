@@ -4455,13 +4455,22 @@ stays hand-written.
     one's old keys, and Cancel changes nothing. Keys that can't change
     can't be given, and the page says whose they are.
   - Off takes a binding's keys away; Reset, shown once a binding's keys
-    aren't its defaults, gives them back.
+    aren't its preset's, gives them back.
+  - Start from sets every key to another tiling window manager's defaults:
+    tide's own, dwm, i3, sway, xmonad or bspwm (`shell/lib/keymaps.mjs`).
+    Each maps that window manager's default keys onto the binding that does
+    the same here, with Super as the modifier, as dwm's and xmonad's Alt
+    would take keys apps use. A binding it doesn't name keeps tide's keys,
+    unless it gives them to another, when it's off and shows Off.
+    What only the other one does (i3's split direction, dwm's tags) is left
+    out, and `Super+0…9` stay the workspaces, as in all of them. With keys
+    of your own, the page asks first, as they go.
   - Your keys are in `keys.json` and `keys.local.json` (§16.1), as
-    `{ "keys": { "terminal": ["SUPER + D"], "lock": [] } }`, a binding's
-    keys in place of its defaults, an empty list for off; a binding back at
-    its defaults leaves the file. The shell writes them to
-    `~/.config/hypr/tide-keys.lua` and runs `hyprctl eval
-    'conf_keys.reload()'`, which binds them, then lists the bindings again.
+    `{ "preset": "dwm", "keys": { "terminal": ["SUPER + D"], "lock": [] } }`:
+    the preset, and a binding's keys in place of the preset's, an empty
+    list for off. A binding back at its preset's keys leaves the file. The shell writes them to
+    `~/.config/hypr/tide-keys.lua`, the preset's with yours over them, and
+    runs `hyprctl eval 'conf_keys.reload()'`, which binds them, then lists the bindings again.
     With no keys of yours and no file, it writes nothing, so an older
     `conf` is left alone.
   - Keys are recorded by what the keyboard layout says the key is, as

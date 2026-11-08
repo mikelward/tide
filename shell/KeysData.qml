@@ -32,11 +32,12 @@ Singleton {
     // Why the last listing has none, or "".
     property string error: ""
     // The page's rows: {named, fixed} (Keys.shortcutRows).
-    readonly property var rows: Keys.shortcutRows(root.catalog, root.binds)
+    readonly property var rows: Keys.shortcutRows(root.catalog, root.binds, root.yours)
     readonly property bool editable: !Compositor.tidewm && root.catalog.length > 0
 
-    // Your keys in effect, and why they aren't saved or applied, or "".
-    property var yours: ({})
+    // Your keys in effect, {preset, keys} (Keys.loadKeys), and why they
+    // aren't saved or applied, or "".
+    property var yours: Keys.NO_KEYS
     property var fileErrors: []
     property string saveFailure: ""
     property var target: Writes.TARGET
@@ -96,7 +97,7 @@ Singleton {
         if (root.fileErrors.length > 0) {
             return;
         }
-        root.yours = result.keys;
+        root.yours = result.state;
         const writtenText = written.readNow();
         if (written.broken !== "") {
             root.stepped(Writes.targetUnreadable(root.target, `${written.broken}; the shortcuts stay as they were`));
@@ -104,7 +105,7 @@ Singleton {
         }
         // With no keys of yours and no file, there's nothing to write, and
         // a conf from before named bindings is left alone.
-        if (Object.keys(root.yours).length === 0 && writtenText === null) {
+        if (root.yours.preset === "tide" && Object.keys(root.yours.keys).length === 0 && writtenText === null) {
             return;
         }
         // Hyprland outlives the shell, so the first read applies what's
@@ -130,8 +131,9 @@ Singleton {
 
     // Changes your keys as `change` says, in keys.local.json: the panel
     // writes only the .local files (§16.1), building on them as they are
-    // now. Returns why it didn't, or "".
-    function edit(change) {
+    // now. Returns why it didn't, or "". Keys another shortcut has wait in
+    // `pending` for the page's swap.
+    function edit(change, pendingIfClash) {
         const sharedText = shared.readNow();
         const localText = local.readNow();
         const broken = [shared.broken, local.broken].filter(b => b !== "");
@@ -139,6 +141,11 @@ Singleton {
             return `${broken[0]}; not changing the shortcuts`;
         }
         const result = Keys.editedKeys(sharedText, localText, change);
+        if (result.clash) {
+            root.pending = Object.assign({ clash: result.clash }, pendingIfClash);
+            return "";
+        }
+        root.pending = null;
         if (result.error) {
             return `${result.error}; not changing the shortcuts`;
         }
@@ -187,21 +194,7 @@ Singleton {
 
     function give(name, keys, swap) {
         const fixedIds = root.rows.fixed.filter(b => b.submap === "").map(b => b.keys);
-        let clash = null;
-        const error = root.edit(yours => {
-            const r = Keys.withKeys(yours, root.catalog, name, keys, swap, fixedIds);
-            if (r.clash) {
-                clash = r.clash;
-                return { error: "clash" };
-            }
-            return r;
-        });
-        if (clash !== null) {
-            root.pending = { name: name, keys: keys, clash: clash };
-            return "";
-        }
-        root.pending = null;
-        return error;
+        return root.edit(state => Keys.withKeys(state, root.catalog, name, keys, swap, fixedIds), { name: name, keys: keys });
     }
 
     function swap() {
@@ -210,13 +203,17 @@ Singleton {
     }
 
     function reset(name) {
-        root.pending = null;
-        return root.edit(yours => Keys.withDefault(yours, name));
+        return root.edit(state => Keys.withDefault(state, name, root.catalog));
     }
 
     function off(name) {
-        root.pending = null;
-        return root.edit(yours => Keys.withOff(yours, name));
+        return root.edit(state => Keys.withOff(state, name));
+    }
+
+    // Starts again from `preset`'s keys (lib/keymaps.mjs), dropping yours.
+    function startFrom(preset) {
+        root.stop();
+        return root.edit(state => Keys.withPreset(state, preset));
     }
 
     // Leaving the submap any other way (Esc, conf's) ends the recording.
