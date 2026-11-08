@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # Tests for tide's input scripts, apply-input.sh, next-layout.sh and
-# watch-input.sh, against fakes of hyprctl and udevadm. From the repo root:
+# watch-input.sh, against fakes of hyprctl, tide-msg and udevadm. From the repo root:
 # `sh hypr/tide/input_test.sh`.
 
 cd "$(dirname "$0")/../.." || exit 1
@@ -133,6 +133,162 @@ FAKE_EVAL_REPLY='error: hl.device: unknown field' _apply_run
 assert_equal 1 "$?"
 assert_contains "couldn't configure mouse 'logitech-usb-receiver'" "$(cat "$_fake/err")"
 assert_contains "couldn't configure keyboard 'at-keyboard': error: hl.device: unknown field" "$(cat "$_fake/err")"
+rm -rf "$_fake"
+
+################################################################################
+# apply-input.sh in tidewm's session, against a fake tide-msg: it writes
+# tide-devices.conf, giving a laptop's pointing stick and its touchpad's
+# -mouse node the first touchpad's settings, and reloads tidewm when that
+# changes. Run with jq, then with python3 alone, since it takes either.
+################################################################################
+_fake=$(mktemp -d)
+cat > "$_fake/tide-msg" <<'FAKE'
+#!/bin/sh
+case "$*" in
+    "--type get_inputs")
+        test -z "$FAKE_INPUTS_FAIL" || { echo "tide-msg: couldn't ask tidewm" >&2; exit 2; }
+        printf '%s\n' "$FAKE_INPUTS"
+        ;;
+    reload)
+        echo reload >> "$FAKE_LOG"
+        test -z "$FAKE_RELOAD_FAIL" || { echo "tide-msg: reload: $FAKE_RELOAD_FAIL" >&2; exit 1; }
+        ;;
+    *) echo "unexpected: $*" >> "$FAKE_LOG" ;;
+esac
+FAKE
+# It mustn't ask Hyprland.
+cat > "$_fake/hyprctl" <<'FAKE'
+#!/bin/sh
+echo "hyprctl $*" >> "$FAKE_LOG"
+FAKE
+chmod +x "$_fake/tide-msg" "$_fake/hyprctl"
+mkdir "$_fake/nojq"
+for _tool in sh cat cp mv rm mkdir; do
+    _path=$(command -v "$_tool") && ln -s "$_path" "$_fake/nojq/$_tool"
+done
+if _python=$(python3 -c 'import sys; print(sys.executable)' 2>"$_fake/err") && test -n "$_python"; then
+    ln -s "$_python" "$_fake/nojq/python3"
+else
+    echo "input_test.sh: couldn't find python3's interpreter: $(cat "$_fake/err")" >&2
+fi
+_devices=$_fake/config/tidewm/tide-devices.conf
+_tw_run() {
+    : > "$_fake/log"
+    PATH="$_fake:${_tw_path:-$PATH}" FAKE_LOG="$_fake/log" XDG_CURRENT_DESKTOP=tidewm:tide \
+        XDG_CONFIG_HOME="$_fake/config" sh "$_apply" 2>"$_fake/err"
+}
+_tw_input() {
+    printf '{"identifier": "%s", "hyprland_name": "%s", "type": "%s"%s}' "$1" "$1" "$2" "$3"
+}
+_tw_pad=$(_tw_input abcd1234:00-0a0b:0c0d-touchpad touchpad ', "scroll_factor": 1.5, "libinput": {"tap": "enabled", "left_handed": "disabled", "natural_scroll": "enabled", "accel_speed": 0.5}')
+_tw_stick=$(_tw_input tpps/2-elan-trackpoint pointer ', "scroll_factor": 3, "libinput": {"left_handed": "enabled"}')
+_tw_node=$(_tw_input abcd1234:00-0a0b:0c0d-mouse pointer ', "scroll_factor": 3')
+_tw_mouse=$(_tw_input logitech-usb-receiver pointer ', "scroll_factor": 3')
+_tw_kb=$(_tw_input at-translated-set-2-keyboard keyboard '')
+_tw_laptop="[$_tw_kb, $_tw_pad, $_tw_stick, $_tw_node, $_tw_mouse]"
+_tw_block() {
+    printf 'input "%s" {\n    left_handed %s\n' "$1" "$2"
+    test -z "$3" || printf '    natural_scroll %s\n' "$3"
+    printf '    pointer_accel %s\n    scroll_factor %s\n}' "$4" "$5"
+}
+for _with in jq python3; do
+    _tw_path=
+    test "$_with" = python3 && _tw_path="$_fake/nojq"
+    if test "$_with" = jq && ! command -v jq >/dev/null 2>&1; then
+        skip_block "apply-input.sh on tidewm with jq (jq isn't installed)"
+        continue
+    fi
+    rm -rf "$_fake/config"
+
+    start_test "apply-input ($_with) on tidewm gives a laptop's pointing stick and -mouse node the touchpad's settings"
+    FAKE_INPUTS=$_tw_laptop _tw_run
+    assert_equal 0 "$?"
+    _conf=$(cat "$_devices")
+    assert_contains "$(_tw_block tpps/2-elan-trackpoint disabled enabled 0.5 1.5)" "$_conf"
+    assert_contains "$(_tw_block abcd1234:00-0a0b:0c0d-mouse disabled enabled 0.5 1.5)" "$_conf"
+    assert_equal reload "$(cat "$_fake/log")"
+    assert_equal "" "$(cat "$_fake/err")"
+
+    start_test "apply-input ($_with) on tidewm leaves mice, touchpads and keyboards to the config"
+    assert_not_contains logitech-usb-receiver "$_conf"
+    assert_not_contains '-touchpad"' "$_conf"
+    assert_not_contains keyboard "$_conf"
+    assert_not_contains "type:pointer" "$_conf"
+
+    start_test "apply-input ($_with) on tidewm leaves tidewm alone when nothing changed"
+    FAKE_INPUTS=$_tw_laptop _tw_run
+    assert_equal 0 "$?"
+    assert_equal "" "$(cat "$_fake/log")"
+    assert_equal "$_conf" "$(cat "$_devices")"
+
+    start_test "apply-input ($_with) on tidewm follows a change to the touchpad's settings"
+    FAKE_INPUTS="[$(_tw_input pad touchpad ', "scroll_factor": 1, "libinput": {"left_handed": "enabled", "natural_scroll": "disabled", "accel_speed": -0.25}'), $_tw_stick]" _tw_run
+    assert_equal 0 "$?"
+    assert_contains "$(_tw_block tpps/2-elan-trackpoint enabled disabled -0.25 1)" "$(cat "$_devices")"
+    assert_equal reload "$(cat "$_fake/log")"
+
+    start_test "apply-input ($_with) on tidewm keeps each of the touchpad's settings in its place when one is missing"
+    # As tide's stand-in for tidewm gives a touchpad, with no left_handed.
+    FAKE_INPUTS="[$(_tw_input pad touchpad ', "scroll_factor": 1.5, "libinput": {"natural_scroll": "enabled", "accel_speed": 0.5}'), $_tw_stick]" _tw_run
+    assert_equal 0 "$?"
+    assert_contains "$(_tw_block tpps/2-elan-trackpoint disabled enabled 0.5 1.5)" "$(cat "$_devices")"
+
+    start_test "apply-input ($_with) on tidewm gives a pointing stick libinput's defaults without a touchpad"
+    FAKE_INPUTS="[$_tw_stick, $_tw_mouse]" _tw_run
+    assert_equal 0 "$?"
+    assert_contains "$(_tw_block tpps/2-elan-trackpoint disabled '' 0 1)" "$(cat "$_devices")"
+
+    start_test "apply-input ($_with) on tidewm makes HYPR_MOUSE_SCROLL_FACTOR every mouse's wheel speed"
+    FAKE_INPUTS="[$_tw_mouse]" HYPR_MOUSE_SCROLL_FACTOR=2.25 _tw_run
+    assert_equal 0 "$?"
+    assert_contains "input type:pointer {
+    scroll_factor 2.25
+}" "$(cat "$_devices")"
+done
+
+start_test "apply-input on tidewm writes a file tidewm reads before tide's own settings"
+# conf's tidewm config ends with `include tide-*.conf`, in glob order, and
+# the later line for a name wins.
+: > "$_fake/config/tidewm/tide-input.conf"
+set -- "$_fake/config/tidewm"/tide-*.conf
+assert_equal "$_devices" "$1"
+assert_equal "$_fake/config/tidewm/tide-input.conf" "$2"
+rm "$_fake/config/tidewm/tide-input.conf"
+
+start_test "apply-input on tidewm never asks Hyprland"
+FAKE_INPUTS=$_tw_laptop _tw_run
+assert_not_contains hyprctl "$(cat "$_fake/log")"
+
+start_test "apply-input on tidewm leaves out a name tidewm's config can't hold, saying so"
+FAKE_INPUTS="[$(_tw_input 'odd\"trackpoint' pointer ''), $_tw_stick]" _tw_run
+assert_equal 1 "$?"
+assert_contains "can't give 'odd\"trackpoint' the touchpad's settings" "$(cat "$_fake/err")"
+assert_not_contains 'odd' "$(cat "$_devices")"
+assert_contains 'input "tpps/2-elan-trackpoint" {' "$(cat "$_devices")"
+
+start_test "apply-input on tidewm reports devices tide-msg couldn't list"
+_before=$(cat "$_devices")
+FAKE_INPUTS_FAIL=1 _tw_run
+assert_equal 1 "$?"
+assert_contains "tide-msg --type get_inputs failed" "$(cat "$_fake/err")"
+assert_equal "" "$(cat "$_fake/log")"
+assert_equal "$_before" "$(cat "$_devices")"
+
+start_test "apply-input on tidewm puts the file back when tidewm can't reload, and tries again next time"
+FAKE_INPUTS=$_tw_laptop FAKE_RELOAD_FAIL="config error" _tw_run
+assert_equal 1 "$?"
+assert_contains "tidewm couldn't reload with $_devices, so it's as it was: tide-msg: reload: config error" "$(cat "$_fake/err")"
+assert_equal "$_before" "$(cat "$_devices")"
+FAKE_INPUTS=$_tw_laptop _tw_run
+assert_equal 0 "$?"
+assert_equal reload "$(cat "$_fake/log")"
+
+start_test "apply-input on tidewm removes a new file tidewm couldn't reload with"
+rm -rf "$_fake/config"
+FAKE_INPUTS=$_tw_laptop FAKE_RELOAD_FAIL="config error" _tw_run
+assert_equal 1 "$?"
+assert_true test ! -e "$_devices"
+assert_true test ! -e "$_devices.old"
 rm -rf "$_fake"
 
 ################################################################################
@@ -289,6 +445,63 @@ start_test "watch-input refuses a delay that isn't a number"
 PATH="$_wfake:$PATH" WATCH_INPUT_DELAY=soon sh "$_watch" 2>"$_wfake/err"
 assert_equal 1 "$?"
 assert_contains "WATCH_INPUT_DELAY must be a number" "$(cat "$_wfake/err")"
+rm -rf "$_wfake"
+
+################################################################################
+# watch-input.sh in tidewm's session, against a fake tide-msg that prints
+# tidewm's input events and ends, as when tidewm exits.
+################################################################################
+_wfake=$(mktemp -d)
+cat > "$_wfake/tide-msg" <<'FAKE'
+#!/bin/sh
+test "$*" = "--subscribe input" || { echo "unexpected: $*" >> "$FAKE_LOG"; exit 2; }
+test -z "$FAKE_EVENTS" || printf '%s\n' "$FAKE_EVENTS"
+exit "${FAKE_SUBSCRIBE_STATUS:-0}"
+FAKE
+# It mustn't listen to udev.
+cat > "$_wfake/udevadm" <<'FAKE'
+#!/bin/sh
+echo "udevadm $*" >> "$FAKE_LOG"
+FAKE
+cat > "$_wfake/apply" <<'FAKE'
+#!/bin/sh
+echo ran >> "$FAKE_LOG"
+FAKE
+chmod +x "$_wfake/tide-msg" "$_wfake/udevadm" "$_wfake/apply"
+_tw_watch_run() {
+    : > "$_wfake/log"
+    PATH="$_wfake:$PATH" FAKE_LOG="$_wfake/log" WATCH_INPUT_DELAY=0 XDG_CURRENT_DESKTOP=tidewm:tide \
+        WATCH_INPUT_APPLY="$_wfake/apply" timeout 10 sh "$_watch" 2>"$_wfake/err"
+}
+
+start_test "watch-input on tidewm applies the settings when a device is added"
+FAKE_EVENTS='{ "change": "added", "input": { "identifier": "1:2:TPPS/2_Elan_TrackPoint", "type": "pointer" } }' _tw_watch_run
+assert_equal 0 "$?"
+assert_equal "ran" "$(cat "$_wfake/log")"
+
+start_test "watch-input on tidewm applies the settings again when a reload sets a device's"
+FAKE_EVENTS='{"change":"libinput_config","input":{"identifier":"1:2:SynPS/2_Synaptics_TouchPad","type":"touchpad"}}' _tw_watch_run
+assert_equal "ran" "$(cat "$_wfake/log")"
+
+start_test "watch-input on tidewm applies the settings again when a device is removed"
+# The first touchpad, whose settings a pointing stick takes, may be gone.
+FAKE_EVENTS='{ "change": "removed", "input": { "type": "touchpad" } }' _tw_watch_run
+assert_equal "ran" "$(cat "$_wfake/log")"
+
+start_test "watch-input on tidewm ignores a keyboard's layout and keymap"
+FAKE_EVENTS='{ "change": "xkb_layout", "input": { "type": "keyboard", "xkb_active_layout_name": "added" } }
+{ "change": "xkb_keymap", "input": { "type": "keyboard" } }' _tw_watch_run
+assert_equal "" "$(cat "$_wfake/log")"
+
+start_test "watch-input on tidewm ends, saying so, once tidewm has gone"
+FAKE_EVENTS='' _tw_watch_run
+assert_equal 0 "$?"
+assert_contains "tidewm has gone" "$(cat "$_wfake/err")"
+
+start_test "watch-input on tidewm says so when it can't follow tidewm's events"
+FAKE_EVENTS='' FAKE_SUBSCRIBE_STATUS=2 _tw_watch_run
+assert_equal 1 "$?"
+assert_contains "tide-msg stopped following tidewm's input events (2)" "$(cat "$_wfake/err")"
 rm -rf "$_wfake"
 
 start_test "watch-input parses as shell and is executable"

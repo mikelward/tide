@@ -54,7 +54,7 @@ maintainer deferred.
 | §5.4: `tide` and doctor find the compositor's IPC | `HYPRLAND_INSTANCE_SIGNATURE` | Built: `SWAYSOCK` (tidewm #7), which the session's units get from `uwsm finalize`. `tide`, `tide-grant`, doctor and the shell's home reach it through `tide-msg` | `tide` and doctor find the IPC |
 | §11, `conf`: US Dvorak with `compose:caps,altwin:menu_win` everywhere, and the lock's layout badge | `input` options; `hyprctl devices -j` (`keyboards[].main`, `active_keymap`); the `activelayout` event | Built: conf's tidewm config sets the keymap in an `input type:keyboard` block (tidewm #17); `GET_INPUTS` and the `input` event's `xkb_layout` (#36) drive the lock's badge (`shell/LockKeymap.qml`). The greeter still runs Hyprland (§11 greeter row) | Typing gives US Dvorak and Caps Lock composes; the lock's badge reads DVORAK and follows a switch |
 | §16: the Mouse, Touchpad and Keyboard pages apply at once, and again at login | `tide-input.lua`, read by conf's hyprland.lua, and `hyprctl eval conf_input.reload()` | Built: `tide-input.conf`, `input type:pointer`, `type:touchpad` and `type:keyboard` lines, which conf's tidewm config includes, and `tide-msg reload` (`lib/input.mjs`'s `inputConf`). No acceleration curve, so a mouse's is adaptive or flat. A device's own settings are an `input` block naming it as Hyprland does, `GET_INPUTS`' `hyprland_name` (tidewm #57) | Turning off tap to click stops taps at once, and stays off after a login |
-| `conf`: per-mouse settings (left-handed, scroll factor) | `apply-input.sh` runs `hyprctl eval 'hl.device(...)'` after `hyprctl devices -j` | tidewm has it: `input NAME { … }` blocks per device, with `left_handed` and `scroll_factor` (tidewm #17, #35, #57). Left: conf's `apply-input.sh` still asks Hyprland, so its per-mouse settings don't apply on tidewm (conf's TODO.md, *Fill tidewm's keys*) | A mouse's buttons swap and it scrolls by its factor; touchpads stay as they are |
+| `conf`: per-mouse settings (left-handed, scroll factor) | `apply-input.sh` runs `hyprctl eval 'hl.device(...)'` after `hyprctl devices -j` | Built: conf's tidewm config makes every mouse left-handed with a faster wheel in its `input type:pointer` block (tidewm #17, #35). tidewm calls a laptop's pointing stick and its touchpad's `-mouse` node pointers too, so tide's `apply-input.sh` writes `tide-devices.conf`, which that config includes before `tide-input.conf`: an `input` block for each, by its `hyprland_name` (#57), with the first touchpad's settings from `GET_INPUTS`, and `HYPR_MOUSE_SCROLL_FACTOR` as `type:pointer`'s. `watch-input.sh` runs it again on tidewm's `input` event, a device added or removed or a reload, through `tide-msg --subscribe input` | A mouse's buttons swap and it scrolls by its factor; touchpads stay as they are |
 | §16: the Keyboard page lists every shortcut, and you can change one | `hyprctl binds -j`; conf's named bindings in `tide-keys.json`, and its `tide-keys` submap for recording | Part: the list is tidewm's `GET_BINDINGS` (tidewm #56), through `tide-msg --type get_bindings`. Left: changing one, as the list is read-only on tidewm (`KeysData.qml`'s `editable`) | Every binding shows with its keys; a changed one works at once and after a login |
 | §11: the greeter, on the lock's face, with the lock's layout badge, and its displays off when idle | `tide-greeter` runs Hyprland with its own config | Not built: `bin/tide-greeter` still runs Hyprland, so a machine without Hyprland has no tide greeter (TODO.md, *A session on it*) | The greeter starts on tidewm, takes a password, and its displays go off when idle |
 
@@ -127,15 +127,14 @@ maintainer deferred.
 Checked 2026-11-08, against tidewm `v0.0.1460` and the repositories named
 above. Nothing was run in a real login.
 
-Of the 48 rows, 35 are built on both sides, 9 in part and 4 not at all.
+Of the 48 rows, 36 are built on both sides, 8 in part and 4 not at all.
 On 2026-11-02, dwl 0.9 met 5 of the 39 rows there were then, 21 in part
 and 13 not at all; that table, with dwl's line numbers, is in this file's
-history. Of the 13 rows left, tidewm itself lacks something in 6; the
+history. Of the 12 rows left, tidewm itself lacks something in 6; the
 rest need only tide, conf or scripts.
 
 | Row | tidewm | tide, conf, scripts | Left |
 |---|---|---|---|
-| `conf` per-mouse settings | done | conf: no | `apply-input.sh`'s settings as `input` blocks in conf's tidewm config |
 | §16 shortcuts | done | tide, conf: part | Changing a binding: named bindings in conf's tidewm config, and a file the page writes |
 | §11 greeter | done | tide: no | The greeter on tidewm, with its displays off by `output * power` |
 | §6.6 bindings | part | tide, conf: part | The master split drag |

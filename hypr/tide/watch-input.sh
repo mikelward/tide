@@ -14,6 +14,15 @@
 # Every WATCH_INPUT_POLL seconds (default 30) it checks Hyprland is still
 # there, so it ends after a logout with nothing plugged in.
 # WATCH_INPUT_APPLY replaces apply-input.sh, for tests.
+#
+# In tide's tidewm session (tide SPEC.md §5.3) it follows tidewm's input
+# events instead, through `tide-msg --subscribe input`: a device added or
+# removed, as the touchpad a pointing stick takes after may be, and a
+# device's settings set, as each reload sets every device's, so a change
+# to the touchpad's settings reaches what apply-input.sh gives a laptop's
+# pointing stick. apply-input.sh reloads tidewm only when its file
+# changes, so its own reload makes one more run, which changes nothing.
+# It ends once tidewm has gone, which ends the subscription.
 
 delay="${WATCH_INPUT_DELAY:-1}"
 poll="${WATCH_INPUT_POLL:-30}"
@@ -27,7 +36,15 @@ for setting in "WATCH_INPUT_DELAY=$delay" "WATCH_INPUT_POLL=$poll"; do
             ;;
     esac
 done
-if ! command -v udevadm >/dev/null 2>&1; then
+case ":${XDG_CURRENT_DESKTOP:-}:" in
+    *:tidewm:*) tidewm=yes ;;
+    *) tidewm=no ;;
+esac
+if test "$tidewm" = yes && ! command -v tide-msg >/dev/null 2>&1; then
+    echo "watch-input.sh: no tide-msg, so a laptop's pointing stick plugged in after login takes the mice's settings until apply-input.sh runs again" >&2
+    exit 1
+fi
+if test "$tidewm" = no && ! command -v udevadm >/dev/null 2>&1; then
     echo "watch-input.sh: no udevadm, so a device plugged in after login keeps Hyprland's defaults until a reload" >&2
     exit 1
 fi
@@ -53,31 +70,49 @@ stop() {
 trap stop EXIT
 trap 'exit 0' INT TERM HUP
 if ! mkfifo "$state/events"; then
-    echo "watch-input.sh: couldn't make a pipe for udev's events" >&2
+    echo "watch-input.sh: couldn't make a pipe for the input events" >&2
     exit 1
 fi
 
-udevadm monitor --udev --subsystem-match=input > "$state/events" &
+if test "$tidewm" = yes; then
+    tide-msg --subscribe input > "$state/events" &
+else
+    udevadm monitor --udev --subsystem-match=input > "$state/events" &
+fi
 monitor=$!
 # Opening the pipe waits for the monitor to open its end, so the guard below
 # can't kill it before the two are joined, which would leave this waiting
 # on a pipe nothing will ever open.
 exec 3< "$state/events"
-# Ends the monitor, and so the loop below, once Hyprland has gone.
-(
-    while hyprctl version >/dev/null 2>&1; do
-        sleep "$poll"
-    done
-    echo "watch-input.sh: Hyprland has gone; stopping" >&2
-    kill "$monitor" 2>/dev/null
-) &
-guard=$!
+# Ends the monitor, and so the loop below, once Hyprland has gone. tidewm's
+# subscription ends with tidewm, so it needs none.
+if test "$tidewm" = no; then
+    (
+        while hyprctl version >/dev/null 2>&1; do
+            sleep "$poll"
+        done
+        echo "watch-input.sh: Hyprland has gone; stopping" >&2
+        kill "$monitor" 2>/dev/null
+    ) &
+    guard=$!
+fi
 
 while IFS= read -r line; do
-    case "$line" in
-        *" add "*/event[0-9]*) ;;
-        *) continue ;;
-    esac
+    # tidewm's event is a line of JSON, with "change" first: a keyboard's
+    # layout and keymap changes need nothing. A device removed may be the
+    # touchpad a pointing stick takes its settings from.
+    if test "$tidewm" = yes; then
+        case "$line" in
+            *'"change":'*'"added"'*'"input":'* | *'"change":'*'"removed"'*'"input":'* \
+                | *'"change":'*'"libinput_config"'*'"input":'*) ;;
+            *) continue ;;
+        esac
+    else
+        case "$line" in
+            *" add "*/event[0-9]*) ;;
+            *) continue ;;
+        esac
+    fi
     test -e "$state/pending" && continue
     : > "$state/pending"
     (
@@ -87,8 +122,22 @@ while IFS= read -r line; do
     ) &
 done <&3
 exec 3<&-
+if test "$tidewm" = yes; then
+    # tide-msg exits 0 once tidewm has gone, else says why it stopped.
+    wait "$monitor"
+    followed=$?
+    monitor=
+    wait
+    if test "$followed" -eq 0; then
+        echo "watch-input.sh: tidewm has gone; stopping" >&2
+    else
+        echo "watch-input.sh: tide-msg stopped following tidewm's input events ($followed), so a pointing stick plugged in now takes the mice's settings" >&2
+        exit 1
+    fi
+    exit 0
+fi
 # The guard is done with; a run still waiting finishes first.
-kill -s USR1 "$guard" 2>/dev/null
+test -z "$guard" || kill -s USR1 "$guard" 2>/dev/null
 guard=
 wait
 if hyprctl version >/dev/null 2>&1; then
