@@ -2562,10 +2562,16 @@ install_tide() {
 # reads it, unless there's one already, which is yours to keep. Without one,
 # idle never dims, locks or suspends, and the Idle settings, which it
 # sources, do nothing (SPEC.md §10).
+# A link to a file that's gone, as a config repo's link is once the repo
+# drops its copy, is replaced: it holds nothing to keep.
 install_hypridle_config() {
     _hc_file=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/hypridle.conf
-    if test -e "$_hc_file" || test -L "$_hc_file"; then
+    if test -e "$_hc_file"; then
         detail "Keeping your hypridle config, $_hc_file"
+        return 0
+    fi
+    if test -L "$_hc_file" && ! rm -f "$_hc_file"; then
+        warn "couldn't remove $_hc_file, a link to a file that's gone, so the session won't dim, lock or suspend when idle"
         return 0
     fi
     if ! mkdir -p "${_hc_file%/*}" || ! cp "$TIDE_DIR/hypr/hypridle.conf" "$_hc_file"; then
