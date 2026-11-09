@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=tide (tidewm)
 Comment=tidewm with the tide shell, managed by uwsm: still being built
-Exec=uwsm start -e -D tidewm:tide -N tidewm -- tide-tidewm
+Exec=tide-session tidewm
 TryExec=tidewm
 Type=Application
 DesktopNames=tidewm;tide

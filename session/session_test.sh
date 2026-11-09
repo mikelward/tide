@@ -51,8 +51,8 @@ trap 'rm -rf "$tmp"' EXIT
 # uwsm names the session after the compositor command, so the wrapper's name
 # is the session's target; the unit must hang off that same target.
 session_id=$(basename "$wrapper")
-check "the entry starts the wrapper through uwsm with tide:Hyprland" \
-    has_line "$entry" "Exec=uwsm start -e -D tide:Hyprland -N tide -- $session_id"
+check "the entry starts the Hyprland session through tide-session" \
+    has_line "$entry" "Exec=tide-session hyprland"
 check "the entry lists tide first in DesktopNames" \
     has_line "$entry" "DesktopNames=tide;Hyprland"
 # The wrapper runs start-hyprland when there is one, and Hyprland otherwise,
@@ -144,8 +144,40 @@ check "the wrapper parses as sh" sh -n "$wrapper"
 # wrapper, so its own target, and tidewm first in XDG_CURRENT_DESKTOP, so
 # portals read tidewm-portals.conf.
 tidewm_id=$(basename "$tidewm_wrapper")
-check "the tidewm entry starts its wrapper through uwsm with tidewm:tide" \
-    has_line "$tidewm_entry" "Exec=uwsm start -e -D tidewm:tide -N tidewm -- $tidewm_id"
+check "the tidewm entry starts the tidewm session through tide-session" \
+    has_line "$tidewm_entry" "Exec=tide-session tidewm"
+# tide-session, which each entry runs, starts uwsm with the session's
+# desktops, name and wrapper, and logs what it ran, uwsm's output and how
+# it ended. Stubs: uwsm prints its arguments one per line and exits
+# $FAKE_UWSM; systemd-cat runs what it's given, marking its output; logger
+# appends to a file.
+mkdir -p "$tmp/session-bin"
+# shellcheck disable=SC2016 # the stubs' own $@, $1 and the rest
+printf '#!/bin/sh\nprintf "[%%s]\\n" "$@"\nexit "${FAKE_UWSM:-0}"\n' > "$tmp/session-bin/uwsm"
+# shellcheck disable=SC2016 # and here
+printf '#!/bin/sh\ntest "$1" = -t && test "$2" = tide-session && test "$3" = -- || exit 99\nshift 3\necho "systemd-cat:"\nexec "$@"\n' > "$tmp/session-bin/systemd-cat"
+printf '#!/bin/sh\nshift 3\necho "$*" >> "%s"\n' "$tmp/session-log" > "$tmp/session-bin/logger"
+chmod +x "$tmp/session-bin/uwsm" "$tmp/session-bin/systemd-cat" "$tmp/session-bin/logger"
+run_session() { PATH="$tmp/session-bin:/usr/bin:/bin" sh bin/tide-session "$@" 2>"$tmp/session-err"; }
+: > "$tmp/session-log"
+out=$(run_session tidewm)
+check "tide-session tidewm runs uwsm, through systemd-cat, with tidewm's desktops, name and wrapper" \
+    test "$out" = "$(printf '%s\n' "systemd-cat:" "[start]" "[-e]" "[-D]" "[tidewm:tide]" "[-N]" "[tide (tidewm)]" "[--]" "[tide-tidewm]")"
+check "and logs what it ran" \
+    grep -qxF "starting the tide (tidewm) session: uwsm start -e -D tidewm:tide -N 'tide (tidewm)' -- tide-tidewm" "$tmp/session-log"
+check "and that it ended" grep -qxF "the tide (tidewm) session ended" "$tmp/session-log"
+out=$(run_session hyprland)
+check "tide-session hyprland runs uwsm with Hyprland's desktops, name and wrapper" \
+    test "$out" = "$(printf '%s\n' "systemd-cat:" "[start]" "[-e]" "[-D]" "[tide:Hyprland]" "[-N]" "[tide]" "[--]" "[tide-hyprland]")"
+: > "$tmp/session-log"
+FAKE_UWSM=3 run_session tidewm >/dev/null
+check "a uwsm that fails is tide-session's status" test "$?" -eq 3
+check "and is logged with its status" \
+    grep -qxF "the tide (tidewm) session ended with uwsm exiting 3: the lines above say why" "$tmp/session-log"
+run_session sway >/dev/null
+check "an unknown session is an error" test "$?" -eq 2
+check "and says which are known" grep -qF "usage: tide-session hyprland|tidewm, not 'sway'" "$tmp/session-err"
+check "make install-session installs tide-session" grep -qF "bin/tide-session" Makefile
 # A login screen hands Exec on in ways that break a quote: GDM wraps it in
 # double quotes of its own, unescaped (gdm-session.c's gdm-wayland-session
 # "%s"), so a quoted word ends them early, and SDDM's wayland-session
@@ -274,7 +306,7 @@ check "the tidewm wrapper is executable" test -x "$tidewm_wrapper"
 check "the tidewm wrapper parses as sh" sh -n "$tidewm_wrapper"
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes on the wrappers and this test" \
-        shellcheck -s sh "$wrapper" "$tidewm_wrapper" session/session_test.sh
+        shellcheck -s sh "$wrapper" "$tidewm_wrapper" bin/tide-session session/session_test.sh
 fi
 
 # --- tide.service ---------------------------------------------------------

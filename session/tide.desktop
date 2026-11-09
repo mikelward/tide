@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=tide
 Comment=Hyprland with the tide shell, managed by uwsm
-Exec=uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland
+Exec=tide-session hyprland
 TryExec=uwsm
 Type=Application
 DesktopNames=tide;Hyprland
