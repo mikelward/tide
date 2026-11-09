@@ -2685,9 +2685,16 @@ build_component() {
         # A commit with no tag: a whole clone, then that commit, through the
         # mirror too. Not a partial clone (--filter): a server or mirror that
         # doesn't serve one refuses it outright, and these repos are small.
-        build_logged "$1" git_github clone --quiet --no-checkout "$2" "$dir" \
-            && build_logged "$1" git_github -C "$dir" -c advice.detachedHead=false checkout --quiet "$4" \
-            || return 1
+        build_logged "$1" git_github clone --quiet --no-checkout "$2" "$dir" || return 1
+        # A mirror behind GitHub, which git may be set to fetch GitHub
+        # through, can lack the pinned commit: git then says only "unable to
+        # read tree". Said plainly, with how far the mirror has got.
+        if ! git -C "$dir" cat-file -e "$4^{commit}" 2>/dev/null; then
+            newest=$(git -C "$dir" log -1 --format='%h, from %cs' 2>/dev/null) || newest=
+            warn "the copy of $2 this machine gets has no commit $(printf '%.7s' "$4"), which this Hyprland is pinned to${newest:+; its newest is $newest}. It's likely a mirror that's behind GitHub, so this Hyprland can't be built until it catches up"
+            return 1
+        fi
+        build_logged "$1" git_github -C "$dir" -c advice.detachedHead=false checkout --quiet "$4" || return 1
     else
         # Hyprland's Tracy submodule is only built with -DUSE_TRACY=ON, for
         # profiling, so it isn't fetched; a mirror without it can't fail the clone.
@@ -2756,6 +2763,22 @@ build_component() {
 
 # tide needs MIN_HYPRLAND. Hyprland before 0.56 reads hyprland.conf, which
 # conf no longer ships.
+# hyprland_build_kept: when a new build fails, keeps the one built before,
+# which the commands still link to, if it's new enough for tide: a mirror
+# behind GitHub, say, can hold the new build back for weeks, and the last
+# one runs tide fine meanwhile. Fails when there's none to keep.
+hyprland_build_kept() {
+    _hk_link=$(readlink "$HYPRLAND_BIN_DIR/Hyprland" 2>/dev/null) || return 1
+    case "$_hk_link" in
+        "$HYPRLAND_PREFIX"/*) ;;
+        *) return 1 ;;
+    esac
+    _hk_version=$("$HYPRLAND_BIN_DIR/Hyprland" --version 2>/dev/null \
+        | sed -n 's/^Hyprland \([0-9][0-9.]*\).*/\1/p' | head -n1)
+    test -n "$_hk_version" && version_at_least "$_hk_version" "$MIN_HYPRLAND" || return 1
+    warn "keeping Hyprland $_hk_version, built before, as the new build failed; $SETUP_COMMAND tries again each run"
+}
+
 check_hyprland_version() {
     if ! is_command Hyprland; then
         warn "Hyprland isn't installed; the tide session won't start"
@@ -6930,7 +6953,7 @@ else
     if test "$BUILD_NOW" = yes; then
         # apt's Hyprland wasn't installed, so without this build there's no
         # compositor: that's fatal unless errors are being ignored.
-        if ! build_hyprland; then
+        if ! build_hyprland && ! hyprland_build_kept; then
             if test "$IGNORE_ERRORS" = no; then
                 error "the tide session needs Hyprland $MIN_HYPRLAND or later; rerun $SETUP_COMMAND to retry the build"
             fi
