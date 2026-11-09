@@ -225,6 +225,8 @@ install: build install-shell
 	@# the tide-idle.conf it sources, which hypridle finds beside it.
 	install -d "$(IDLE_DIR)"
 	install -m 644 hypr/hypridle.conf "$(IDLE_DIR)/tide-hypridle.conf"
+	@# And its hyprlock config, for the lock's fallback with none of yours.
+	install -m 644 hypr/hyprlock.conf "$(IDLE_DIR)/tide-hyprlock.conf"
 	install -m 755 hypr/tide/apply-input.sh hypr/tide/watch-input.sh hypr/tide/next-layout.sh "$(HYPR_DIR)/"
 	install -d "$(TIDEWM_DIR)"
 	install -m 644 tidewm/tide.conf "$(TIDEWM_DIR)/"
