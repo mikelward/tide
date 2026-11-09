@@ -672,12 +672,12 @@ check "--no-sudo runs no sudo" lacks "$calls" "sudo "
 check "--no-sudo still enables the user unit" has "$calls" "systemctl --user enable tide.service"
 teardown
 
-setup; ARGS=(); run FAKE_HYPRLAND_VERSION=0.56.2
-check "an old Hyprland is warned about" has "$output" "Hyprland 0.56.2 is older than 0.57"
+setup; ARGS=(); run FAKE_HYPRLAND_VERSION=0.56.1
+check "an old Hyprland is warned about" has "$output" "Hyprland 0.56.1 is older than 0.56.2"
 teardown
 
-setup; ARGS=(); run FAKE_HYPRLAND_VERSION=0.57.0
-check "a newer Hyprland is fine" lacks "$output" "older than"
+setup; ARGS=(); run FAKE_HYPRLAND_VERSION=0.56.2
+check "the oldest Hyprland tide supports is fine" lacks "$output" "older than"
 teardown
 
 setup; ARGS=(); run FAKE_NO_USER_MANAGER=1
@@ -792,25 +792,25 @@ setup; ARGS=(); mv "$T/usr-bin/Hyprland" "$T/usr-bin/start-hyprland"; run
 check "session: start-hyprland alone can start it" lacks "$output" "the tide session won't start"
 teardown
 
-# A Hyprland too old for tide's config (apt's 0.56.2, where the build
+# A Hyprland too old for tide's config (0.56.1, where the build
 # couldn't run) would log in to Hyprland's banner with no tide keys or bar.
 # The run ends, saying so, and the session comes off the login screen.
-setup; ARGS=(); run FAKE_GREETER_HYPRLAND_VERSION=0.56.2
+setup; ARGS=(); run FAKE_GREETER_HYPRLAND_VERSION=0.56.1
 check "session: a Hyprland too old ends the run" test "$status" -ne 0
 check "session: and says why" has "$output" \
-    "the tide session can't run: its Hyprland is 0.56.2, and tide's config needs 0.57 or later"
+    "the tide session can't run: its Hyprland is 0.56.1, and tide's config needs 0.56.2 or later"
 check "session: and takes the session off the login screen" test ! -e "$T/share/wayland-sessions/tide.desktop"
 check "session: and says so" has "$output" "so it was taken off the login screen ($T/share/wayland-sessions/tide.desktop)"
 check "session: and is repeated at the end" \
-    has "$(printf '%s\n' "$output" | sed -n '/from this run, again:/,$p')" "its Hyprland is 0.56.2"
+    has "$(printf '%s\n' "$output" | sed -n '/from this run, again:/,$p')" "its Hyprland is 0.56.1"
 teardown
-setup; ARGS=(--ignore-errors); run FAKE_GREETER_HYPRLAND_VERSION=0.56.2
+setup; ARGS=(--ignore-errors); run FAKE_GREETER_HYPRLAND_VERSION=0.56.1
 check "session: --ignore-errors still takes a session that can't run off the login screen" \
     test ! -e "$T/share/wayland-sessions/tide.desktop"
 check "session: and still fails the run, at the end" test "$status" -eq 1
 check "session: saying so last" has "$(printf '%s\n' "$output" | tail -n 1)" "tide-setup FAILED: 1 error"
 teardown
-setup; ARGS=(); run FAKE_GREETER_HYPRLAND_VERSION=0.57.1
+setup; ARGS=(); run FAKE_GREETER_HYPRLAND_VERSION=0.56.2
 check "session: a Hyprland new enough keeps the session" test -e "$T/share/wayland-sessions/tide.desktop"
 check "session: and says nothing of it" lacks "$output" "the tide session can't run"
 teardown

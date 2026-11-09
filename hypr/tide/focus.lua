@@ -1,4 +1,4 @@
--- tide focus guard for Hyprland 0.57+ (SPEC.md §14).
+-- tide focus guard for Hyprland 0.56.2+ (SPEC.md §14).
 --
 -- Nothing steals the keyboard. A catch-all `no_initial_focus` rule opens
 -- every window unfocused, and the guard then focuses the ones you asked for:

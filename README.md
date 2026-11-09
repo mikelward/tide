@@ -49,7 +49,7 @@ yours and still have tide's keys, load it from yours with your own
 options, such as your keyboard layout, terminal and app keys; its first
 lines list them (SPEC.md §6.8).
 
-By hand, also install what the session runs: Hyprland 0.57 or later,
+By hand, also install what the session runs: Hyprland 0.56.2 or later,
 Quickshell 0.3 (`qs`, which draws the bar; without it `tide-shell`
 falls back to waybar, and with an older one it says so in a
 notification), hypridle, hyprlock

@@ -1,4 +1,4 @@
--- tide's pinned apps for Hyprland 0.57+ (SPEC.md §6.5).
+-- tide's pinned apps for Hyprland 0.56.2+ (SPEC.md §6.5).
 --
 -- A workspace's pinned apps (`pinnedApps` in workspaces.json's
 -- `workspaceSettings`) stay open there: tide's close keys leave a window of

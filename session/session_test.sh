@@ -112,18 +112,18 @@ hyprland_version() {
     printf '#!/bin/sh\ncase "$1" in --version) echo "Hyprland %s built from branch main" ;; *) echo "Hyprland $*" ;; esac\n' "$1" > "$tmp/wrapper-bin-ver/Hyprland"
     chmod +x "$tmp/wrapper-bin-ver/Hyprland"
 }
-hyprland_version 0.56.2
-check "the wrapper refuses a Hyprland older than 0.57" \
+hyprland_version 0.56.1
+check "the wrapper refuses a Hyprland older than 0.56.2" \
     not env PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x
 check "the wrapper says why it refuses" \
-    test -n "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x 2>&1 >/dev/null | grep -F 'needs Hyprland 0.57 or later, and this is 0.56.2')"
+    test -n "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x 2>&1 >/dev/null | grep -F 'needs Hyprland 0.56.2 or later, and this is 0.56.1')"
 check "the wrapper starts nothing for a Hyprland too old" \
     test -z "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x 2>/dev/null)"
-hyprland_version 0.57.1
-check "the wrapper starts a Hyprland 0.57 or later" \
+hyprland_version 0.56.2
+check "the wrapper starts a Hyprland 0.56.2 or later" \
     test "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x)" = "start-hyprland -- --config x"
 hyprland_version 0.60.0
-check "the wrapper starts a Hyprland past 0.57" \
+check "the wrapper starts a Hyprland past 0.56.2" \
     test "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x)" = "start-hyprland -- --config x"
 # Each step lands in the journal, as tidewm's wrapper's do.
 cat > "$tmp/wrapper-bin-ver/logger" <<STUB
