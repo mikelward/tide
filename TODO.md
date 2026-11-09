@@ -2203,6 +2203,46 @@ or workspace goes there.
   - [ ] On a live session: Chrome and Brave both connected, a shell
     restart, and Enter on a tab in a window on another workspace.
 
+## An overview of every workspace
+
+Plan A, agreed 2026-11-09: build an overview of every workspace's windows,
+opened only two ways:
+
+- **`Super+W`**, which nothing in tide or `conf` uses (W for workspaces):
+  `qs -c tide ipc call overview toggle`, bound in `conf` for Hyprland and
+  tidewm. The same key again, or Esc, closes it.
+- **A left-click on bare desktop**, on the wallpaper window
+  (`shell/Wallpaper.qml`), beside its right-click to Appearance (SPEC.md
+  §15). With no wallpaper set there's no window to click: decide whether
+  the wallpaper window should then exist anyway, filled with the theme's
+  background.
+
+Not the logo, which stays the launcher, and not a bar button.
+
+**Match tide for macOS's overview** (tidemo SPEC.md §6.9, built
+2026-11-05): a full-screen page of cards grouped by workspace, current
+workspace first then bar order, one card per window with its icon, title
+and app; a click or arrows and Enter go to the window, a click on a header
+goes to the workspace, typing filters with the launcher's fuzzy matcher,
+and Esc, the key again or a click on empty space closes it. Differences to
+settle across both, in tidemo's `TODO.md` too:
+
+- **Keys.** tidemo uses Ctrl+Up (every workspace) and Ctrl+Down (this one),
+  Mission Control's keys. Pick one set for both, or say why they differ.
+- **Thumbnails.** Hyprland can capture windows on hidden workspaces
+  (Quickshell's `ScreencopyView` with a toplevel), once as it opens rather
+  than live. tidewm can't until it exposes toplevel capture (see *Compositor:
+  explore a dwl fork*), so it shows icons, as tidemo does without Screen
+  Recording.
+- **A click on bare desktop.** tidemo has none yet.
+
+**Needs more thought:** whether it replaces the switcher's Workspaces tab
+(SPEC.md §8.1), which lists workspaces by name and icons, or stays its own
+overlay. Until that's decided, it's its own overlay.
+
+**Cost and reliability:** no new dependencies; on Hyprland, one still
+capture per window each time it opens.
+
 ## Accents on a plain long press (SPEC.md §8.6)
 
 Schnelle Umlaute, which setup-tide built first, needs Space after the
