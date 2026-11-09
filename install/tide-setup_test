@@ -807,6 +807,8 @@ teardown
 setup; ARGS=(--ignore-errors); run FAKE_GREETER_HYPRLAND_VERSION=0.56.2
 check "session: --ignore-errors still takes a session that can't run off the login screen" \
     test ! -e "$T/share/wayland-sessions/tide.desktop"
+check "session: and still fails the run, at the end" test "$status" -eq 1
+check "session: saying so last" has "$(printf '%s\n' "$output" | tail -n 1)" "tide-setup FAILED: 1 error"
 teardown
 setup; ARGS=(); run FAKE_GREETER_HYPRLAND_VERSION=0.57.1
 check "session: a Hyprland new enough keeps the session" test -e "$T/share/wayland-sessions/tide.desktop"
@@ -1080,7 +1082,8 @@ Nothing new to install
 Installing Quickshell
 Nothing new to install
 Installing fcitx5, for accents in tide
-Nothing new to install"
+Nothing new to install
+tide-setup finished with no warnings or errors"
 check "quiet: a rerun starts the log afresh" test "$(log | grep -c '^+ make -C .* install GO=go$')" -eq 1
 teardown
 
@@ -1242,8 +1245,10 @@ teardown
 # warning in the middle scrolls away among thousands of lines.
 setup; ARGS=(); mkdir "$T/tmp"; run TMPDIR="$T/tmp" SETUP_OS=redhat FAKE_MISSING=fuzzel
 check "recap: the run ends by repeating its warnings" \
-    has "$(printf '%s\n' "$output" | tail -n 2)" "tide-setup: the warnings and errors from this run, again:
+    has "$(printf '%s\n' "$output" | tail -n 3)" "tide-setup: the warnings and errors from this run, again:
   Warning: could not install: fuzzel; install them manually"
+check "recap: then says, last, that it finished with warnings" \
+    test "$(printf '%s\n' "$output" | tail -n 1)" = "tide-setup finished, with 1 warning; see above"
 check "recap: a warning still shows where it happened too" \
     test "$(printf '%s\n' "$output" | grep -c 'Warning: could not install: fuzzel')" -eq 2
 check "recap: a run that went on still exits 0" test "$status" -eq 0
@@ -1252,12 +1257,33 @@ teardown
 
 setup; ARGS=(); run
 check "recap: a clean run repeats nothing" lacks "$output" "from this run, again"
+check "recap: and says, last, that it finished cleanly" \
+    test "$(printf '%s\n' "$output" | tail -n 1)" = "tide-setup finished with no warnings or errors"
+check "recap: in no color when it isn't on a terminal" lacks "$output" "$(printf '\033[')"
+teardown
+
+# On a terminal, or with SETUP_COLOR=always, errors are red, warnings
+# yellow, and the last line green, yellow or red; NO_COLOR turns it off.
+setup; ARGS=(); run SETUP_COLOR=always SETUP_OS=redhat FAKE_MISSING=fuzzel
+check "color: a warning's label is yellow" has "$output" "$(printf '\033[1;33mWarning:\033[0m could not install: fuzzel')"
+check "color: the last line is yellow after warnings" \
+    test "$(printf '%s\n' "$output" | tail -n 1)" = "$(printf '\033[1;33mtide-setup finished, with 1 warning; see above\033[0m')"
+teardown
+setup; ARGS=(); run SETUP_COLOR=always
+check "color: the last line is green after a clean run" \
+    test "$(printf '%s\n' "$output" | tail -n 1)" = "$(printf '\033[1;32mtide-setup finished with no warnings or errors\033[0m')"
+teardown
+setup; ARGS=(); run SETUP_COLOR=always GO="$T/no-such-go"
+check "color: an error's label is red" has "$output" "$(printf '\033[1;31mError:\033[0m tide needs Go 1.22 or newer')"
+check "color: the last line is red after a failure" \
+    has "$(printf '%s\n' "$output" | tail -n 1)" "$(printf '\033[1;31mtide-setup FAILED')"
 teardown
 
 setup; ARGS=(); run GO="$T/no-such-go"
 check "recap: an error is repeated" \
     has "$(printf '%s\n' "$output" | sed -n '/from this run, again:/,$p')" "  Error: tide needs Go 1.22 or newer"
-check "recap: and the run says it stopped early" has "$output" "tide-setup stopped early, with exit status 1"
+check "recap: and says, last, that it failed, stopping early" \
+    test "$(printf '%s\n' "$output" | tail -n 1)" = "tide-setup FAILED: it stopped early, with exit status 1 (1 error, 0 warnings)"
 check "recap: and keeps its exit status" test "$status" -eq 1
 teardown
 
