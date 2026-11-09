@@ -32,7 +32,8 @@ setup() {
     # tide-accents, as installed, unless a test points SETUP_TIDE_ACCENTS_IM_CONFS
     # elsewhere.
     : > "$T/fcitx5-im/tide-accents.conf"
-    # make install-session installs the session entry, with TryExec
+    # make install-session installs the entries SESSIONS= names (both, by
+    # default): tide's, with TryExec
     # \$FAKE_ENTRY_TRYEXEC (or none, when that's empty), or uwsm; with
     # \$FAKE_NO_ENTRY it installs none. make install PREFIX=DIR, as
     # tidewm's, installs DIR/bin/tidewm. \$FAKE_MAKE_FAILS makes a make in
@@ -65,15 +66,29 @@ for arg; do
             ;;
     esac
 done
+sessions="tide tide-tidewm"
+for arg; do
+    case "\$arg" in SESSIONS=*) sessions=\${arg#SESSIONS=} ;; esac
+done
 case " \$* " in
     *" install-session "*)
         test -z "\$FAKE_NO_ENTRY" || exit 0
         mkdir -p "$T/share/wayland-sessions"
-        {
-            printf "[Desktop Entry]\\nName=tide\\nExec=uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland\\n"
-            test -z "\${FAKE_ENTRY_TRYEXEC-uwsm}" || printf "TryExec=%s\\n" "\${FAKE_ENTRY_TRYEXEC-uwsm}"
-            printf "Type=Application\\n"
-        } > "$T/share/wayland-sessions/tide.desktop"
+        case " \$sessions " in
+            *" tide "*)
+                {
+                    printf "[Desktop Entry]\\nName=tide\\nExec=uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland\\n"
+                    test -z "\${FAKE_ENTRY_TRYEXEC-uwsm}" || printf "TryExec=%s\\n" "\${FAKE_ENTRY_TRYEXEC-uwsm}"
+                    printf "Type=Application\\n"
+                } > "$T/share/wayland-sessions/tide.desktop"
+                ;;
+        esac
+        case " \$sessions " in
+            *" tide-tidewm "*)
+                printf "[Desktop Entry]\\nName=tide (tidewm)\\nExec=tide-session tidewm\\nTryExec=tidewm\\nType=Application\\n" \\
+                    > "$T/share/wayland-sessions/tide-tidewm.desktop"
+                ;;
+        esac
         ;;
 esac
 MOCK

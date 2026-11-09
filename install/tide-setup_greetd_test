@@ -174,7 +174,7 @@ teardown
 
 # greetd is installed after everything that can end the run, so a failure
 # there can't leave the package's switch behind, unnoted.
-setup; ARGS=(--greeter); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CMAKE_FAILS=Hyprland FAKE_GREETD_TAKES=1
+setup; rm -f "$T/bin/Hyprland" "$T/usr-bin/Hyprland"; ARGS=(--greeter --no-tidewm); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CMAKE_FAILS=Hyprland FAKE_GREETD_TAKES=1
 check "greetd: a fatal failure earlier ends the run" test "$status" -ne 0
 check "greetd: before greetd is installed" lacks "$calls" "install -y --no-upgrade greetd"
 check "greetd: so it isn't the display manager" test ! -s "$T/dm"

@@ -220,8 +220,9 @@ check "the seal opens its directories to all" test "$(stat -c %a "$(inst)/bin")"
 check "and its commands" test "$(stat -c %a "$(inst)/bin/Hyprland")" = 755
 teardown
 
-# A command that can't be run once sealed isn't linked.
-setup; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CHOWN_FAILS=1
+# A command that can't be run once sealed isn't linked. Without tidewm,
+# whose build would run the sabotaged chmod first.
+setup; ARGS=(--no-tidewm); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CHOWN_FAILS=1
 printf '#!/bin/sh\nprintf "%%s\\n" "chmod $*" >> "%s"\n/bin/chmod "$@" && /bin/chmod a-x "%s/bin/hyprctl"\n' "$CALLS" "$(inst)" > "$T/bin/chmod"
 chmod +x "$T/bin/chmod"
 run FAKE_APT_HYPRLAND=0.53.3+ds-4
@@ -493,7 +494,7 @@ teardown
 # never run, and nothing after it is built either.
 setup; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_MOVED_PIN=hyprgraphics
 check "a moved pin is named" has "$output" "hyprgraphics's v0.6.0 tag is commit 0000000000000000000000000000000000000000, not the pinned "
-check "a moved pin is fatal" test "$status" -ne 0
+check "a moved pin is a warning while tidewm's session runs" test "$status" -eq 0
 check "a moved pin runs no build" lacks "$calls" "cmake -S $T/src/hyprland-build/hyprgraphics "
 check "a moved pin stops the build" lacks "$calls" "cmake -S $T/src/hyprland-build/Hyprland "
 check "a moved pin's clone is removed" test ! -e "$T/src/hyprland-build/hyprgraphics"
@@ -505,7 +506,7 @@ teardown
 # isn't built either.
 setup; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4
 check "a commit pin is a whole clone, which any server serves" has "$calls" "git clone --quiet --no-checkout https://github.com/hyprwm/aquamarine.git $T/src/hyprland-build/aquamarine"
-check "not a partial one, which some refuse" lacks "$calls" "--filter"
+check "not a partial one, which some refuse" lacks "$calls" "--filter=blob:none https://github.com/hyprwm"
 check "of the commit Hyprland's flake.lock names" has "$calls" "git -C $T/src/hyprland-build/aquamarine -c advice.detachedHead=false checkout --quiet ad4484335fc327a6cf010f455ae258c397861ee0"
 check "a commit pin is named by its commit" has "$output" "Building aquamarine ad44843"
 teardown
@@ -521,15 +522,23 @@ git config: url.https://ghe.example.com/.insteadOf=https://github.com/"
 teardown
 
 # A failed step stops the build before anything is linked or recorded.
-setup; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CMAKE_FAILS=hyprlang
+setup; rm -f "$T/bin/Hyprland" "$T/usr-bin/Hyprland"; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CMAKE_FAILS=hyprlang
 check "a failed build step is reported" has "$output" "building Hyprland failed; the sources are in $T/src/hyprland-build"
-check "a failed build is fatal" test "$status" -ne 0
-check "a failed build doesn't claim success" lacks "$output" "tide installed"
+check "a failed build is a warning while tidewm's session runs" test "$status" -eq 0
+check "which says the Hyprland session won't show" has "$output" "the tide (Hyprland) session won't show at the login screen"
+check "and installs only tidewm's" has "$calls" "install-session PREFIX=/usr SESSIONS=tide-tidewm"
 check "a failed build stops before Hyprland" lacks "$calls" "cmake -S $T/src/hyprland-build/Hyprland"
 check "a failed build isn't marked complete" test ! -e "$(inst)/quickspace-pins"
 check "a failed build says a rerun resumes" has "$output" "a rerun resumes from the step that failed"
 check "a failed build links nothing" test ! -e "$T/usr-local-bin/Hyprland"
-ARGS=(--ignore-errors); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CMAKE_FAILS=hyprlang
+teardown
+# With no tidewm either, there's no session, so it's fatal, unless errors
+# are ignored.
+setup; rm -f "$T/bin/Hyprland" "$T/usr-bin/Hyprland"; ARGS=(--no-tidewm); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CMAKE_FAILS=hyprlang
+check "with neither compositor, a failed build is fatal" test "$status" -ne 0
+check "and says why" has "$output" "neither Hyprland 0.56.2 or later nor tidewm is installed, so tide has no session to log in to"
+check "a failed build doesn't claim success" lacks "$output" "tide installed"
+ARGS=(--no-tidewm --ignore-errors); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CMAKE_FAILS=hyprlang
 check "--ignore-errors carries on past a failed build" has "$output" "tide installed"
 teardown
 
@@ -546,9 +555,9 @@ teardown
 
 # A mirror behind GitHub that lacks a pinned commit is named, with how far
 # it has got, rather than git's "unable to read tree".
-setup; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_MIRROR_LACKS=hyprland-protocols
+setup; rm -f "$T/bin/Hyprland" "$T/usr-bin/Hyprland"; ARGS=(--no-tidewm); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_MIRROR_LACKS=hyprland-protocols
 check "a pinned commit the mirror lacks is named" has "$output" "has no commit cd1aba6, which this Hyprland is pinned to; its newest is cc9a8fd, from 2026-09-15"
-check "with no Hyprland to keep, it's fatal" test "$status" -ne 0
+check "with no Hyprland to keep, nor tidewm, it's fatal" test "$status" -ne 0
 teardown
 
 # The Hyprland built before is kept, when it's new enough, and setup goes on.
@@ -564,14 +573,44 @@ check "and its link stays" test -L "$T/usr-local-bin/Hyprland"
 teardown
 
 # One too old for tide isn't kept.
-setup
+setup; rm -f "$T/bin/Hyprland" "$T/usr-bin/Hyprland"
 mkdir -p "$T/opt/hyprland/v0.50.0-1/bin"
 printf '#!/bin/sh\necho "Hyprland 0.50.0 built from branch  at commit 1"\n' > "$T/opt/hyprland/v0.50.0-1/bin/Hyprland"
 chmod +x "$T/opt/hyprland/v0.50.0-1/bin/Hyprland"
 ln -s "$T/opt/hyprland/v0.50.0-1/bin/Hyprland" "$T/usr-local-bin/Hyprland"
-ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_MIRROR_LACKS=hyprland-protocols
+ARGS=(--no-tidewm); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_MIRROR_LACKS=hyprland-protocols
 check "a build too old for tide isn't kept" lacks "$output" "keeping Hyprland"
 check "so the failure is fatal" test "$status" -ne 0
+teardown
+
+# With tidewm's session alone, what both sessions need is still checked:
+# without uwsm, which tide-session starts it through, it can't start.
+setup; rm -f "$T/bin/Hyprland" "$T/usr-bin/Hyprland" "$T/usr-bin/uwsm"; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CMAKE_FAILS=hyprlang
+check "a tidewm-only install without uwsm says it can't start" has "$output" "the tide (tidewm) session won't start: it starts through uwsm, which isn't installed"
+check "and isn't ready to log in to" test "$status" -ne 0
+teardown
+
+# Compositors are looked up on the login session's PATH: an older Hyprland
+# of this user's own, ahead on theirs, doesn't take a working session away.
+setup; ARGS=(); run FAKE_HYPRLAND_VERSION=0.50.0
+check "a user's older Hyprland doesn't drop the Hyprland session" has "$calls" "install-session PREFIX=/usr SESSIONS=tide tide-tidewm"
+teardown
+
+# With no compositor, the entries are taken off before setup stops, so none
+# is left that logs in to nothing.
+setup; rm -f "$T/bin/Hyprland" "$T/usr-bin/Hyprland"
+mkdir -p "$T/share/wayland-sessions"
+printf '[Desktop Entry]\nName=tide\nTryExec=uwsm\n' > "$T/share/wayland-sessions/tide.desktop"
+ARGS=(--no-tidewm --no-build-hyprland); run FAKE_APT_HYPRLAND=0.53.3+ds-4
+check "with no compositor, setup stops" test "$status" -ne 0
+check "having taken the stale entry off the login screen" test ! -e "$T/share/wayland-sessions/tide.desktop"
+teardown
+
+# --no-sudo installs no session, so no compositor is only a warning there,
+# and this user's files are still installed.
+setup; rm -f "$T/bin/Hyprland" "$T/usr-bin/Hyprland"; ARGS=(--no-sudo --no-tidewm); run
+check "--no-sudo without a compositor is a warning" test "$status" -eq 0
+check "and still installs this user's files" has "$calls" "make -C $T/src/tide install GO=go"
 teardown
 
 finish

@@ -54,6 +54,9 @@
 # distributions package today.
 LUA ?= $(shell command -v lua5.5 || command -v lua5.4 || command -v lua)
 HYPR_DIR ?= $(HOME)/.config/hypr/tide
+# The login screen's sessions install-session installs: tide (Hyprland's)
+# and tide-tidewm. install/tide-setup gives only those whose compositor runs.
+SESSIONS ?= tide tide-tidewm
 # tidewm's own directory, where tide-tidewm looks for tide.conf and tide's
 # shell writes the tide-*.conf it includes: $XDG_CONFIG_HOME's, as both have it.
 TIDEWM_DIR ?= $(or $(XDG_CONFIG_HOME),$(HOME)/.config)/tidewm
@@ -283,7 +286,7 @@ install-session:
 	done
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
 	install -m 755 bin/tide bin/tide-session bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-tidewm bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-shell-fallback bin/tide-sysmon build/tide-grant build/tide-msg build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
-	install -m 644 session/tide.desktop session/tide-tidewm.desktop "$(DESTDIR)$(PREFIX)/share/wayland-sessions/"
+	$(if $(strip $(SESSIONS)),install -m 644 $(SESSIONS:%=session/%.desktop) "$(DESTDIR)$(PREFIX)/share/wayland-sessions/")
 	@# KWin lets a program use its fake-input (KDE's Win+V paste) only if
 	@# a desktop entry whose Exec is that program's path lists it in
 	@# X-KDE-Wayland-Interfaces (cmd/tide-kwin-paste).
