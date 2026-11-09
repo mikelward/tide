@@ -28,8 +28,15 @@ old_build() {
 # deps.lock pins no tidewm.
 check "deps.lock has no tidewm pin" test -z "$(awk '!/^[ \t]*(#|$)/ && $2 == "tidewm"' "$SCRIPT_DIR/../deps.lock")"
 
-# Without --tidewm, nothing of tidewm's is touched.
+# By default tidewm is built, and its session installed beside Hyprland's.
 setup; ARGS=(); run
+check "by default, tidewm is built" has "$calls" "tidewm.git"
+check "by default, it's linked" test -L "$T/usr-local-bin/tidewm"
+check "by default, both sessions are installed" has "$calls" "install-session PREFIX=/usr SESSIONS=tide tide-tidewm"
+teardown
+
+# With --no-tidewm, nothing of tidewm's is touched.
+setup; ARGS=(--no-tidewm); run
 check "without --tidewm, setup succeeds" test "$status" -eq 0
 # Its session's target is only asked about, as tide's other one is.
 check "without --tidewm, tidewm isn't cloned" lacks "$calls" "tidewm.git"
@@ -131,7 +138,7 @@ setup; ARGS=(--tidewm); run FAKE_TIDEWM_CLONED=$moved FAKE_CHECKOUT_FAILS=1
 check "an unreachable commit isn't built" lacks "$calls" "make -C $T/src/tidewm-build"
 check "an unreachable commit says so" has "$output" "couldn't check out tidewm's $main, the commit its main was at"
 check "a failed tidewm build is a warning, not a failure" test "$status" -eq 0
-check "and says what it costs" has "$output" "the tide (tidewm) session won't show at the login screen; rerun setup --tidewm to retry"
+check "and says what it costs" has "$output" "tidewm couldn't be built; rerun setup to retry"
 check "nothing is linked" test ! -e "$T/usr-local-bin/tidewm"
 teardown
 
@@ -159,7 +166,7 @@ setup; ARGS=(--tidewm); run FAKE_LS_REMOTE_FAILS=1
 check "offline with no build, setup still succeeds" test "$status" -eq 0
 check "offline with no build, nothing is cloned" lacks "$calls" "$clone"
 check "offline with no build, it says so" has "$output" "there's no build of tidewm to keep"
-check "offline with no build, and what it costs" has "$output" "the tide (tidewm) session won't show at the login screen; rerun setup --tidewm to retry"
+check "offline with no build, and what it costs" has "$output" "tidewm couldn't be built; rerun setup to retry"
 check "offline with no build, nothing is linked" test ! -e "$T/usr-local-bin/tidewm"
 teardown
 setup; ARGS=(); run TIDE_SETUP_ONLY=tidewm FAKE_LS_REMOTE_FAILS=1

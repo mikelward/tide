@@ -37,14 +37,16 @@
 #   left installed, just no longer the input method. It hides fcitx5's
 #   autostart entry, which would start it in Plasma too, and Schnelle
 #   Umlaute's overlay's (see hide_fcitx5_autostart);
-# - with --tidewm, builds tidewm, tide's fork of dwl, from its latest main,
+# - unless --no-tidewm, builds tidewm, tide's fork of dwl, from its latest main,
 #   into /opt/tidewm, rebuilding only once main has moved, and links it onto
 #   PATH, and installs wlroots' portal for screen sharing, so the tide
 #   (tidewm) session, an option beside Hyprland's, shows at the login
 #   screen (see build_tidewm). It builds against wlroots 0.20: the distro's
 #   on Debian testing and Arch, and where Debian and Ubuntu have none
 #   (Ubuntu 26.04, Debian 13), one built from pinned tags into tidewm's own
-#   build (see install/wlroots);
+#   build (see install/wlroots). Each session, Hyprland's and tidewm's,
+#   shows at the login screen only once its compositor is installed, and
+#   setup warns about one that couldn't be;
 # - runs this checkout's `make install` (the
 #   layout, the focus guard, the user units, the portal config) and, with
 #   sudo, `make install-session PREFIX=/usr` (the display manager's session
@@ -86,7 +88,7 @@
 #
 # Usage:
 #     install/tide-setup [--no-install] [--no-sudo] [--ignore-errors]
-#                      [--no-build-hyprland] [--tidewm]
+#                      [--no-build-hyprland] [--no-tidewm]
 #                      [--dm tide|sddm|gdm|keep | --greeter | --no-greeter]
 #                      [--github PREFIX]
 #                      [-v | --verbose] [-h | --help]
@@ -96,7 +98,7 @@
 # failures. It installs this checkout as it is; `git pull` it first for
 # the latest.
 # --no-build-hyprland leaves Hyprland to the distro even when it's too old.
-# --tidewm builds tidewm too; without it, nothing of tidewm's is touched.
+# --no-tidewm leaves tidewm out: nothing of tidewm's is touched.
 # --dm picks the login screen: tide (greetd running tide's greeter), sddm,
 # gdm, or keep (the default). --greeter is --dm=tide; the rest of this says
 # --greeter for both. --dm=sddm or --dm=gdm installs it if it isn't, and makes
@@ -139,7 +141,7 @@ UPGRADE=no
 # The packages pkg_upgrade couldn't upgrade: one of min_versions' there
 # may still be too old, so a source build's links stay in front of it.
 UPGRADE_FAILED_PKGS=
-BUILD_TIDEWM=no
+BUILD_TIDEWM=yes
 # Where GitHub's repos come from: empty for github.com itself (see
 # git_github).
 GITHUB_PREFIX="${GITHUB_PREFIX:-}"
@@ -222,7 +224,7 @@ QUICKSHELL_BUILD_DEPS="build-essential cmake ninja-build pkg-config git
     qt6-svg-plugins qml6-module-qtquick qml6-module-qtquick-layouts qml6-module-qtquick-effects"
 
 # tidewm (github.com/mikelward/tidewm), tide's fork of dwl, which
-# build_tidewm builds with --tidewm, for tide's tidewm session, an option
+# build_tidewm builds unless --no-tidewm, for tide's tidewm session, an option
 # beside Hyprland's. Not pinned: its latest main, which tidewm's CI gates,
 # so a fix there reaches the next setup. $TIDEWM_BRANCH builds another
 # branch. Its own prefix, like Quickshell's, with tidewm linked onto PATH,
@@ -605,10 +607,10 @@ Options:
   --no-build-hyprland
                    On Debian and Ubuntu, don't build Hyprland from source when
                    apt's is older than 0.56.2 (the build takes 10-20 minutes)
-  --tidewm         Also build tidewm, tide's fork of dwl, from its latest
-                   main, for the tide (tidewm) session, an option beside
-                   Hyprland's: on Debian, Ubuntu and Arch, building the
-                   wlroots 0.20 it needs where the distro has none
+  --no-tidewm      Don't build tidewm, tide's fork of dwl, for the tide
+                   (tidewm) session beside Hyprland's. It's built by default,
+                   from its latest main: on Debian, Ubuntu and Arch, with the
+                   wlroots 0.20 it needs built too where the distro has none
   --dm DM          The login screen from the next boot: tide (greetd with
                    tide's greeter), sddm, gdm, or keep the one there is (the
                    default). SDDM and GDM are installed if they aren't
@@ -2104,7 +2106,6 @@ build_tidewm() {
         return
     fi
     tw_short=$(printf '%s\n' "$tw_commit" | cut -c1-12)
-    info "Building tidewm's $TIDEWM_BRANCH, at $tw_short, from source"
     tw_wlroots=no
     if wlroots_wanted; then
         tw_wlroots=yes
@@ -2118,6 +2119,7 @@ build_tidewm() {
     if test -f "$tw_marker"; then
         detail "tidewm's $TIDEWM_BRANCH, at $tw_short, is already built in $tw_dir"
     else
+        info "Building tidewm's $TIDEWM_BRANCH, at $tw_short, from source"
         src="$TIDEWM_SRC/tidewm"
         # A stale clone or partial install left in place would be built into
         # and then marked complete. The partial install is in root's prefix,
@@ -2779,19 +2781,59 @@ hyprland_build_kept() {
     warn "keeping Hyprland $_hk_version, built before, as the new build failed; $SETUP_COMMAND tries again each run"
 }
 
-check_hyprland_version() {
-    if ! is_command Hyprland; then
-        warn "Hyprland isn't installed; the tide session won't start"
-        return 0
+# check_compositors sets SESSIONS to the login screen's tide sessions whose
+# compositors run here: tide (Hyprland, new enough for tide's config) and
+# tide-tidewm (tidewm). install_tide installs only those, and takes away
+# one whose compositor is gone. Each missing one is a warning; with none,
+# tide has no session, which stops setup unless errors are ignored.
+check_compositors() {
+    SESSIONS=
+    # Looked up as the login screen will, on the session's PATH: not this
+    # run's, where an older Hyprland of the user's own, or a failed build's
+    # half-built one, could stand in front of the one the session runs.
+    if ! session_command start-hyprland && ! session_command Hyprland; then
+        warn "Hyprland isn't installed, so the tide (Hyprland) session won't show at the login screen"
+    elif ! hyprland_ready; then
+        warn "the tide (Hyprland) session won't show at the login screen: $_hyprland_why"
+    else
+        SESSIONS=tide
     fi
-    version=$(Hyprland --version 2>/dev/null | sed -n 's/^Hyprland \([0-9][0-9.]*\).*/\1/p' | head -n1)
-    if test -z "$version"; then
-        warn "couldn't read Hyprland's version; tide needs $MIN_HYPRLAND or later"
-        return 0
+    if session_command tidewm; then
+        SESSIONS="${SESSIONS:+$SESSIONS }tide-tidewm"
+    elif test "$BUILD_TIDEWM" = yes; then
+        warn "tidewm isn't installed, so the tide (tidewm) session won't show at the login screen"
     fi
-    if test "$(printf '%s\n%s\n' "$MIN_HYPRLAND" "$version" | sort -V | head -n1)" != "$MIN_HYPRLAND"; then
-        warn "Hyprland $version is older than $MIN_HYPRLAND, which tide needs; upgrade it"
+    remove_unrunnable_entries
+    if test -z "$SESSIONS"; then
+        # Only where setup installs the sessions: --no-install and --no-sudo
+        # install none, so there it's a warning, as check_session's are.
+        if test "$IGNORE_ERRORS" = no && test "$INSTALL" = yes && test "$SUDO" = yes; then
+            error "neither Hyprland $MIN_HYPRLAND or later nor tidewm is installed, so tide has no session to log in to; see the warnings above, and rerun $SETUP_COMMAND to retry"
+        fi
+        # Carried past when errors are ignored, but the run still ends red.
+        if test "$INSTALL" = yes && test "$SUDO" = yes; then
+            error_and_go_on "neither Hyprland $MIN_HYPRLAND or later nor tidewm is installed, so tide has no session to log in to"
+        else
+            warn "neither Hyprland $MIN_HYPRLAND or later nor tidewm is installed, so tide has no session to log in to"
+        fi
     fi
+}
+
+# remove_unrunnable_entries takes off the login screen each tide session
+# whose compositor check_compositors didn't find: one picked would log in
+# to nothing. First, so a run that then stops leaves none behind.
+remove_unrunnable_entries() {
+    test "$INSTALL" = yes && test "$SUDO" = yes || return 0
+    for _session in tide tide-tidewm; do
+        case " $SESSIONS " in *" $_session "*) continue ;; esac
+        _entry="${SESSION_ENTRY%/*}/$_session.desktop"
+        test -e "$_entry" || continue
+        if sudo_or_warn rm -f "$_entry"; then
+            info "Took $_entry off the login screen: its compositor can't run it"
+        else
+            warn "couldn't remove $_entry, whose compositor can't run it; take it off the login screen with 'sudo rm $_entry'"
+        fi
+    done
 }
 
 # --- The tide repo ---
@@ -2811,9 +2853,9 @@ install_tide() {
     detail "Installing tide's user files"
     run_logged make -C "$TIDE_DIR" install GO="$GO"
     if test "$INSTALL" = yes; then
-        detail "Installing the tide session entry and commands under /usr"
-        sudo_logged make -C "$TIDE_DIR" install-session PREFIX=/usr \
-            || warn "could not install the session entry; run 'sudo make -C $TIDE_DIR install-session PREFIX=/usr'"
+        detail "Installing the tide session entries and commands under /usr"
+        sudo_logged make -C "$TIDE_DIR" install-session PREFIX=/usr SESSIONS="$SESSIONS" \
+            || warn "could not install the session entries; run 'sudo make -C $TIDE_DIR install-session PREFIX=/usr'"
     fi
 }
 
@@ -6836,28 +6878,47 @@ remove_session_entry() {
 check_session() {
     _problems=
     _session_cant_run=no
-    if ! test -f "$SESSION_ENTRY"; then
-        _problems="the tide session won't show at the login screen: there's no $SESSION_ENTRY; run 'sudo make -C $TIDE_DIR install-session PREFIX=/usr'"
-    elif ! _try=$(sed -n '/^TryExec[[:space:]]*=/{s/^[^=]*=[[:space:]]*//;s/[[:space:]]*$//;p;q;}' "$SESSION_ENTRY"); then
-        _problems="the tide session may not show at the login screen: couldn't read $SESSION_ENTRY"
-    elif test -n "$_try" && ! session_command "$_try"; then
-        _where=
-        if test "$_try" = uwsm && test "$(detect_os)" = redhat; then
-            _where=" (Fedora has it only in the $HYPRLAND_COPR COPR)"
+    # Without a Hyprland to run it, tide (Hyprland)'s entry isn't installed,
+    # as check_compositors said, so only tidewm's session is checked: its
+    # entry, and uwsm, which tide-session starts either session through.
+    # The bar and lock's Quickshell, below, both sessions need.
+    _hyprland_session=no
+    case " ${SESSIONS-tide} " in
+        *" tide "*) _hyprland_session=yes ;;
+    esac
+    if test "$_hyprland_session" = yes; then
+        if ! test -f "$SESSION_ENTRY"; then
+            _problems="the tide session won't show at the login screen: there's no $SESSION_ENTRY; run 'sudo make -C $TIDE_DIR install-session PREFIX=/usr'"
+        elif ! _try=$(sed -n '/^TryExec[[:space:]]*=/{s/^[^=]*=[[:space:]]*//;s/[[:space:]]*$//;p;q;}' "$SESSION_ENTRY"); then
+            _problems="the tide session may not show at the login screen: couldn't read $SESSION_ENTRY"
+        elif test -n "$_try" && ! session_command "$_try"; then
+            _where=
+            if test "$_try" = uwsm && test "$(detect_os)" = redhat; then
+                _where=" (Fedora has it only in the $HYPRLAND_COPR COPR)"
+            fi
+            _problems="the tide session won't show at the login screen: it's listed only where $_try is installed, and it isn't; install $_try$_where"
         fi
-        _problems="the tide session won't show at the login screen: it's listed only where $_try is installed, and it isn't; install $_try$_where"
-    fi
-    if ! session_command start-hyprland && ! session_command Hyprland; then
-        _problems="${_problems:+$_problems
-}the tide session won't start: Hyprland isn't installed"
-    elif ! hyprland_ready; then
-        # Hyprland too old for tide's config would come up with its own
-        # banner and no tide keys or bar. So the entry goes, and the login
-        # screen can't offer, or preselect, a session that can't work.
-        remove_session_entry
-        _session_cant_run=yes
-        _problems="${_problems:+$_problems
-}the tide session can't run: $_hyprland_why$_removed"
+        if ! session_command start-hyprland && ! session_command Hyprland; then
+            _problems="${_problems:+$_problems
+    }the tide session won't start: Hyprland isn't installed"
+        elif ! hyprland_ready; then
+            # Hyprland too old for tide's config would come up with its own
+            # banner and no tide keys or bar. So the entry goes, and the login
+            # screen can't offer, or preselect, a session that can't work.
+            remove_session_entry
+            _session_cant_run=yes
+            _problems="${_problems:+$_problems
+    }the tide session can't run: $_hyprland_why$_removed"
+        fi
+    else
+        _tidewm_entry="${SESSION_ENTRY%/*}/tide-tidewm.desktop"
+        if ! test -f "$_tidewm_entry"; then
+            _problems="the tide (tidewm) session won't show at the login screen: there's no $_tidewm_entry; run 'sudo make -C $TIDE_DIR install-session PREFIX=/usr SESSIONS=tide-tidewm'"
+        fi
+        if ! session_command uwsm; then
+            _problems="${_problems:+$_problems
+}the tide (tidewm) session won't start: it starts through uwsm, which isn't installed; install uwsm"
+        fi
     fi
     # Without a new enough Quickshell, tide's own bar and lock don't run:
     # tide-shell falls back to waybar and tide-lock to hyprlock. The
@@ -6945,23 +7006,18 @@ else
     if test "$DISTRO_HYPRLAND" = yes && test "$hyprland_too_old" = no; then
         unlink_hyprland || warn "couldn't remove the links to a source-built Hyprland in $HYPRLAND_BIN_DIR"
     fi
-    # tidewm is an option beside Hyprland, so a failed build is only a
-    # warning: the default session doesn't need it.
+    # Each compositor is one of two sessions, so a failed build is only a
+    # warning, and the other session still shows (see install_tide). With
+    # neither, there's no session at all, which check_compositors says.
     if test "$BUILD_TIDEWM" = yes; then
-        build_tidewm || warn "tidewm wasn't built, so the tide (tidewm) session won't show at the login screen; rerun $SETUP_COMMAND --tidewm to retry"
+        build_tidewm || warn "tidewm couldn't be built; rerun $SETUP_COMMAND to retry"
     fi
     if test "$BUILD_NOW" = yes; then
-        # apt's Hyprland wasn't installed, so without this build there's no
-        # compositor: that's fatal unless errors are being ignored.
-        if ! build_hyprland && ! hyprland_build_kept; then
-            if test "$IGNORE_ERRORS" = no; then
-                error "the tide session needs Hyprland $MIN_HYPRLAND or later; rerun $SETUP_COMMAND to retry the build"
-            fi
-            warn "the tide session needs Hyprland $MIN_HYPRLAND or later; rerun $SETUP_COMMAND to retry the build"
-        fi
+        build_hyprland || hyprland_build_kept \
+            || warn "Hyprland $MIN_HYPRLAND or later couldn't be built; rerun $SETUP_COMMAND to retry"
     fi
 fi
-check_hyprland_version
+check_compositors
 install_tide
 install_hypridle_config
 # tide-accents is built from the tide checkout, so only once it's fetched.

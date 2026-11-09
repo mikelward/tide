@@ -83,10 +83,11 @@ login (SPEC.md §5.3). If the display manager doesn't list the session,
 install it with `sudo make install-session PREFIX=/usr`.
 
 **tide (tidewm)** is the same session on tidewm, tide's fork of dwl
-(mikelward/tidewm), listed only where tidewm is installed:
-`install/tide-setup --tidewm` builds it, on Debian, Ubuntu, Fedora and Arch, and
-builds the wlroots 0.20 it needs where the distro has none (Ubuntu 26.04,
-Debian 13). The shell reads
+(mikelward/tidewm). `install/tide-setup` builds it beside Hyprland, unless
+given `--no-tidewm`, on Debian, Ubuntu, Fedora and Arch, and builds the
+wlroots 0.20 it needs where the distro has none (Ubuntu 26.04, Debian 13).
+Each session shows at the login screen only where its compositor is
+installed, and setup warns about one that couldn't be. The shell reads
 tidewm's IPC there: the bar's workspaces, windows, title and layout
 symbol, the switcher, the launcher's screenshots and the Sharing pill
 all work, and screen sharing goes through xdg-desktop-portal-wlr, which

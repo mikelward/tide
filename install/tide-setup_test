@@ -729,8 +729,9 @@ check "--no-sudo runs no sudo" lacks "$calls" "sudo "
 check "--no-sudo still enables the user unit" has "$calls" "systemctl --user enable tide.service"
 teardown
 
-setup; ARGS=(); run FAKE_HYPRLAND_VERSION=0.56.1
-check "an old Hyprland is warned about" has "$output" "Hyprland 0.56.1 is older than 0.56.2"
+# The session's Hyprland, on the login screen's PATH, is the one checked.
+setup; ARGS=(); run FAKE_GREETER_HYPRLAND_VERSION=0.56.1
+check "an old Hyprland is warned about" has "$output" "the tide (Hyprland) session won't show at the login screen: its Hyprland is 0.56.1, and tide's config needs 0.56.2 or later"
 teardown
 
 setup; ARGS=(); run FAKE_HYPRLAND_VERSION=0.56.2
@@ -841,9 +842,15 @@ teardown
 
 # Hyprland on the user's PATH alone (the mock the rest of the run uses)
 # isn't on the session's.
+# With tidewm, that's only a warning: tidewm's session is still there.
 setup; ARGS=(); rm "$T/usr-bin/Hyprland"; run
+check "session: no Hyprland is a warning beside tidewm" test "$status" -eq 0
+check "session: no Hyprland says the session won't show" has "$output" "Hyprland isn't installed, so the tide (Hyprland) session won't show at the login screen"
+teardown
+# Without tidewm, there's no session at all.
+setup; ARGS=(--no-tidewm); rm "$T/usr-bin/Hyprland"; run
 check "session: no Hyprland ends the run" test "$status" -ne 0
-check "session: no Hyprland says the session won't start" has "$output" "the tide session won't start: Hyprland isn't installed"
+check "session: no Hyprland says there's no session" has "$output" "neither Hyprland 0.56.2 or later nor tidewm is installed"
 teardown
 setup; ARGS=(); mv "$T/usr-bin/Hyprland" "$T/usr-bin/start-hyprland"; run
 check "session: start-hyprland alone can start it" lacks "$output" "the tide session won't start"
@@ -852,16 +859,15 @@ teardown
 # A Hyprland too old for tide's config (0.56.1, where the build
 # couldn't run) would log in to Hyprland's banner with no tide keys or bar.
 # The run ends, saying so, and the session comes off the login screen.
-setup; ARGS=(); run FAKE_GREETER_HYPRLAND_VERSION=0.56.1
+setup; ARGS=(--no-tidewm); run FAKE_GREETER_HYPRLAND_VERSION=0.56.1
 check "session: a Hyprland too old ends the run" test "$status" -ne 0
 check "session: and says why" has "$output" \
-    "the tide session can't run: its Hyprland is 0.56.1, and tide's config needs 0.56.2 or later"
+    "its Hyprland is 0.56.1, and tide's config needs 0.56.2 or later"
 check "session: and takes the session off the login screen" test ! -e "$T/share/wayland-sessions/tide.desktop"
-check "session: and says so" has "$output" "so it was taken off the login screen ($T/share/wayland-sessions/tide.desktop)"
 check "session: and is repeated at the end" \
     has "$(printf '%s\n' "$output" | sed -n '/from this run, again:/,$p')" "its Hyprland is 0.56.1"
 teardown
-setup; ARGS=(--ignore-errors); run FAKE_GREETER_HYPRLAND_VERSION=0.56.1
+setup; ARGS=(--no-tidewm --ignore-errors); run FAKE_GREETER_HYPRLAND_VERSION=0.56.1
 check "session: --ignore-errors still takes a session that can't run off the login screen" \
     test ! -e "$T/share/wayland-sessions/tide.desktop"
 check "session: and still fails the run, at the end" test "$status" -eq 1
@@ -874,8 +880,8 @@ teardown
 
 # Each problem is named, not just the first.
 setup; ARGS=(--ignore-errors); rm "$T/usr-bin/uwsm" "$T/usr-bin/Hyprland"; run
-check "session: no uwsm and no Hyprland names uwsm" has "$output" "it's listed only where uwsm is installed"
-check "session: and names Hyprland" has "$output" "the tide session won't start: Hyprland isn't installed"
+check "session: no uwsm and no Hyprland names uwsm" has "$output" "it starts through uwsm, which isn't installed"
+check "session: and names Hyprland" has "$output" "Hyprland isn't installed, so the tide (Hyprland) session won't show"
 teardown
 
 # A Quickshell too old for tide's bar and lock (Debian's 0.2.1, where the
@@ -1139,6 +1145,8 @@ Nothing new to install
 Installing Quickshell
 Nothing new to install
 Installing fcitx5, for accents in tide
+Nothing new to install
+Installing tidewm's build dependencies
 Nothing new to install
 tide-setup finished with no warnings or errors"
 check "quiet: a rerun starts the log afresh" test "$(log | grep -c '^+ make -C .* install GO=go$')" -eq 1
