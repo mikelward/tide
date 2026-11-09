@@ -87,6 +87,13 @@ MOCK
 #!/bin/sh
 if test "\$1" = repoquery; then
     test -z "\$FAKE_DNF_QUERY_FAILS" || exit 1
+    # The package with wlroots 0.20's pkg-config file, \$FAKE_DNF_WLROOTS or
+    # wlroots-devel, unless wlroots is in \$FAKE_MISSING.
+    if test "\$3" = --whatprovides; then
+        case " \$FAKE_MISSING " in *" wlroots "*) exit 0 ;; esac
+        printf "%s\\n" "\${FAKE_DNF_WLROOTS:-wlroots-devel}"
+        exit 0
+    fi
     shift 3
     for pkg; do
         case " \$FAKE_MISSING " in *" \$pkg "*) continue ;; esac

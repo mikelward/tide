@@ -84,7 +84,7 @@ install it with `sudo make install-session PREFIX=/usr`.
 
 **tide (tidewm)** is the same session on tidewm, tide's fork of dwl
 (mikelward/tidewm), listed only where tidewm is installed:
-`install/tide-setup --tidewm` builds it, on Debian, Ubuntu and Arch, and
+`install/tide-setup --tidewm` builds it, on Debian, Ubuntu, Fedora and Arch, and
 builds the wlroots 0.20 it needs where the distro has none (Ubuntu 26.04,
 Debian 13). The shell reads
 tidewm's IPC there: the bar's workspaces, windows, title and layout
