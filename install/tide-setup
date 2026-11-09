@@ -23,7 +23,7 @@
 #   pinned release from source into /opt/quickshell (see
 #   build_quickshell). Without it the bar can't run, and waybar stays the
 #   bar;
-# - on Debian and Ubuntu, where apt's Hyprland is older than the 0.57 tide
+# - on Debian and Ubuntu, where apt's Hyprland is older than the 0.56.2 tide
 #   needs, builds Hyprland and the hyprwm libraries it needs from
 #   source, at pinned tags, into /opt/hyprland (see build_hyprland). Both
 #   builds are outside $HOME because the greeter runs them too, as greetd's
@@ -156,8 +156,9 @@ QUICKSHELL_COPR=errornointernet/quickshell
 # Fedora 43 and 44 package neither Hyprland nor uwsm. This COPR, a
 # continuation of the abandoned solopasha/hyprland, has both.
 HYPRLAND_COPR=lionheartp/Hyprland
-# The oldest Hyprland tide supports: the one build_hyprland builds.
-MIN_HYPRLAND=0.57
+# The oldest Hyprland tide supports. build_hyprland builds a newer one, the
+# pin in deps.lock, where the distro's is older than this.
+MIN_HYPRLAND=0.56.2
 
 # The Quickshell release build_quickshell builds where apt has none, from
 # the GitHub mirror tide's SPEC.md cites. Its own prefix, like
@@ -596,7 +597,7 @@ Options:
   --ignore-errors  Keep going past failures instead of aborting on the first
   --no-build-hyprland
                    On Debian and Ubuntu, don't build Hyprland from source when
-                   apt's is older than 0.57 (the build takes 10-20 minutes)
+                   apt's is older than 0.56.2 (the build takes 10-20 minutes)
   --tidewm         Also build tidewm, tide's fork of dwl, for the tide
                    (tidewm) session, an option beside Hyprland's: on Debian,
                    Ubuntu and Arch, building the wlroots 0.20 it needs where

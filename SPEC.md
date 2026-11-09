@@ -136,7 +136,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 
 ## 3. Decisions
 
-### 3.1 Compositor: Hyprland 0.57+, configured in Lua
+### 3.1 Compositor: Hyprland 0.56.2+, configured in Lua
 
 | | tile | three-col | two cols + stack | lone window 80% / 100% | per-workspace layout | urgency | fit |
 |---|---|---|---|---|---|---|---|
@@ -165,8 +165,11 @@ in 0.53, layouts were rewritten in 0.54, Lua arrived in 0.55, `.conf` was
 deprecated in 0.56.1 and removed in 0.57. The mitigations are:
 
 - Write the config in Lua now.
-- Pin the Hyprland version `setup` installs: 0.57.1, which is also the
-  oldest tide supports.
+- Pin the Hyprland version `setup` builds: 0.57.1.
+- Keep running on the oldest one a distro ships that has the Lua API tide
+  uses: 0.56.2, Debian testing's from August to November 2026. A machine
+  that can't upgrade keeps a working session, with only what needs 0.57
+  (the `Super` tap) gated on `hl.version()`.
 - Make CI load the config under the pinned Hyprland (`hypr_test.sh` already
   exists in `conf`).
 - Treat each Hyprland upgrade as its own PR.
@@ -443,12 +446,12 @@ flowchart TD
   logs that tidewm is up before it tells uwsm. So `journalctl -b -t
   tide-tidewm` shows where a login that never reached a desktop stopped.
 - **A Hyprland too old for tide's config never gets a tide session.**
-  Before 0.57, Hyprland can't run `hypr/tide/hyprland.lua`, and comes up
+  Before 0.56.2, Hyprland can't run `hypr/tide/hyprland.lua`, and comes up
   with its own banner and no tide keys or bar. So:
   - `tide-hyprland` won't start one. It logs why, and the login screen
     comes back.
   - `install/tide-setup` checks the session's Hyprland last. If it's too
-    old, as where the distro's toolchain can't build 0.57, the run fails
+    old, as where the distro's toolchain can't build 0.57.1, the run fails
     saying so, and the tide session's entry comes off the login screen,
     even with `--ignore-errors`. tide (tidewm) keeps its own entry. A
     later run with a Hyprland new enough puts it back.

@@ -14,10 +14,16 @@ check "a new enough apt Hyprland is installed" has "$calls" "apt-get install -y 
 check "a new enough apt Hyprland isn't built" lacks "$calls" "cmake"
 teardown
 
-# Debian testing's 0.56.2 is older than the 0.57 tide needs: build it.
+# Debian testing's 0.56.2 is the oldest tide supports: installed, not built.
 setup; ARGS=(); run FAKE_APT_HYPRLAND=0.56.2+ds-1
-check "apt's 0.56.2 builds from source" has "$calls" "--branch v0.57.1"
-check "apt's 0.56.2 isn't installed" lacks "$calls" "apt-get install -y hyprland"
+check "apt's 0.56.2 is installed" has "$calls" "apt-get install -y hyprland hypridle"
+check "apt's 0.56.2 isn't built" lacks "$calls" "cmake"
+teardown
+
+# 0.56.1 is older: build it.
+setup; ARGS=(); run FAKE_APT_HYPRLAND=0.56.1+ds-1
+check "apt's 0.56.1 builds from source" has "$calls" "--branch v0.57.1"
+check "apt's 0.56.1 isn't installed" lacks "$calls" "apt-get install -y hyprland"
 teardown
 
 # apt's Hyprland is too old (Ubuntu 26.04's 0.53): build it.
@@ -462,10 +468,10 @@ check "only-hyprland: and says where" has "$output" "Built Hyprland in $(inst)"
 check "only-hyprland: and nothing of tide's own" lacks "$calls" "make -C $T/src/tide install"
 check "only-hyprland: succeeds" test "$status" -eq 0
 teardown
-setup; ARGS=(); run TIDE_SETUP_ONLY=hyprland FAKE_APT_HYPRLAND=0.56.2+ds-1 FAKE_MISSING=g++-16 FAKE_APT_XKB=1.7.0-2
+setup; ARGS=(); run TIDE_SETUP_ONLY=hyprland FAKE_APT_HYPRLAND=0.56.1+ds-1 FAKE_MISSING=g++-16 FAKE_APT_XKB=1.7.0-2
 check "only-hyprland: without the toolchain fails" test "$status" -ne 0
 check "only-hyprland: saying what's missing" has "$output" "it has g++-16 none"
-check "only-hyprland: and that it can't build" has "$output" "this release can't build Hyprland 0.57 or later"
+check "only-hyprland: and that it can't build" has "$output" "this release can't build Hyprland 0.56.2 or later"
 check "only-hyprland: and installs no Hyprland" lacks "$calls" "apt-get install -y hyprland"
 teardown
 setup; ARGS=(); run TIDE_SETUP_ONLY=hyprland FAKE_APT_HYPRLAND=0.57.1+ds-1

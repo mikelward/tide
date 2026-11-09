@@ -1,4 +1,4 @@
--- tide's Hyprland config (SPEC.md §6, §14 and §16), for Hyprland 0.57+,
+-- tide's Hyprland config (SPEC.md §6, §14 and §16), for Hyprland 0.56.2+,
 -- which reads only Lua. `make install` puts it in ~/.config/hypr/tide,
 -- beside the layout, and tide-hyprland runs Hyprland with it when you have
 -- no ~/.config/hypr/hyprland.lua of your own. Tiling comes from the tide

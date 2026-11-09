@@ -1191,14 +1191,14 @@ does, and should become the default once this is fixed.
 
 ## Hyprland from source in the installer
 
-The installer builds Hyprland 0.57 from source where apt's is older
-(Ubuntu 26.04 ships 0.53). Two follow-ups:
+The installer builds Hyprland 0.57.1 from source where apt's is older
+than 0.56.2, the oldest tide supports (Ubuntu 26.04 ships 0.53). Two follow-ups:
 
 - **Debian 13.** The build needs GCC 16's libstdc++, libxkbcommon 1.11 and
   Lua 5.5; trixie has GCC 14 and older xkbcommon, so setup keeps apt's Hyprland
   there and says why. A newer toolchain from backports, or a container
   build, would cover it.
-- **Retire it.** Once Debian and Ubuntu ship Hyprland 0.57 or later, the
+- **Retire it.** Once Debian and Ubuntu ship Hyprland 0.56.2 or later, the
   build no longer runs; delete it then, with `~/.local/opt/hyprland` and the links
   in `/usr/local/bin` on machines that built it.
 
