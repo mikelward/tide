@@ -869,7 +869,7 @@ while True:
     env = ["XDG_SESSION_TYPE=wayland", "XDG_SESSION_DESKTOP=" + session]
     if session == "tide":
         env.append("XDG_CURRENT_DESKTOP=tide:Hyprland")
-    cmd = "uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland" if session == "tide" else "alpha-session"
+    cmd = "tide-session hyprland" if session == "tide" else "alpha-session"
     ask({"type": "start_session", "cmd": [cmd], "env": env})
     break
 EOF
