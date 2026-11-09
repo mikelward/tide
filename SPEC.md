@@ -437,6 +437,16 @@ flowchart TD
   its own session target, `wayland-session@tide-hyprland.target`. A
   plain Hyprland login gets `wayland-session@hyprland.desktop.target`
   instead, and starts none of tide's units.
+- **A Hyprland too old for tide's config never gets a tide session.**
+  Before 0.57, Hyprland can't run `hypr/tide/hyprland.lua`, and comes up
+  with its own banner and no tide keys or bar. So:
+  - `tide-hyprland` won't start one. It logs why, and the login screen
+    comes back.
+  - `install/tide-setup` checks the session's Hyprland last. If it's too
+    old, as where the distro's toolchain can't build 0.57, the run fails
+    saying so, and the tide session's entry comes off the login screen,
+    even with `--ignore-errors`. tide (tidewm) keeps its own entry. A
+    later run with a Hyprland new enough puts it back.
 - **tidewm's session** (§21.1) is an option beside Hyprland's, not the
   default: `tide-tidewm.desktop`, listed as "tide (tidewm)" only where
   tidewm is installed. It runs `uwsm start -e -D tidewm:tide -- tide-tidewm`,

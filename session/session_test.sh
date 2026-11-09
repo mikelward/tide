@@ -102,6 +102,29 @@ for w in "$wrapper" "$tidewm_wrapper"; do
     check "$name leaves them alone without fcitx5" \
         test "$(env -u QT_IM_MODULE -u XMODIFIERS PATH="$tmp/ime-bin-none" XDG_CONFIG_HOME="$tmp/none" /bin/sh "$w" | tail -n 1)" = "|"
 done
+# A Hyprland too old for tide's config isn't started: it would come up
+# with no tide keys and no bar. One new enough, or of no version the
+# wrapper can read, is.
+mkdir -p "$tmp/wrapper-bin-ver"
+cp "$tmp/wrapper-bin/start-hyprland" "$tmp/wrapper-bin-ver/"
+hyprland_version() {
+    # shellcheck disable=SC2016  # the stub's own $1 and $*
+    printf '#!/bin/sh\ncase "$1" in --version) echo "Hyprland %s built from branch main" ;; *) echo "Hyprland $*" ;; esac\n' "$1" > "$tmp/wrapper-bin-ver/Hyprland"
+    chmod +x "$tmp/wrapper-bin-ver/Hyprland"
+}
+hyprland_version 0.56.2
+check "the wrapper refuses a Hyprland older than 0.57" \
+    not env PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x
+check "the wrapper says why it refuses" \
+    test -n "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x 2>&1 >/dev/null | grep -F 'needs Hyprland 0.57 or later, and this is 0.56.2')"
+check "the wrapper starts nothing for a Hyprland too old" \
+    test -z "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x 2>/dev/null)"
+hyprland_version 0.57.1
+check "the wrapper starts a Hyprland 0.57 or later" \
+    test "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x)" = "start-hyprland -- --config x"
+hyprland_version 0.60.0
+check "the wrapper starts a Hyprland past 0.57" \
+    test "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x)" = "start-hyprland -- --config x"
 check "the wrapper is executable" test -x "$wrapper"
 check "the wrapper parses as sh" sh -n "$wrapper"
 

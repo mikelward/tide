@@ -6534,6 +6534,39 @@ session_command() {
     esac
 }
 
+# hyprland_ready succeeds when the session's Hyprland, on SESSION_PATH, is
+# MIN_HYPRLAND or later, or of a version it can't read; otherwise it sets
+# _hyprland_why.
+hyprland_ready() {
+    # Hyprland 0.56 aborts without a runtime directory, even for --version,
+    # so it gets one of its own, as the greeter's check gives its Hyprland.
+    if ! _hr_dir=$(mktemp -d); then
+        warn "couldn't make a runtime directory to ask Hyprland its version in"
+        return 0
+    fi
+    _hv=$(PATH=$SESSION_PATH XDG_RUNTIME_DIR=$_hr_dir Hyprland --version 2>/dev/null \
+        | sed -n 's/^Hyprland \([0-9][0-9.]*\).*/\1/p' | head -n1)
+    rm -rf -- "$_hr_dir" || warn "left $_hr_dir behind"
+    test -z "$_hv" && return 0
+    version_at_least "$_hv" "$MIN_HYPRLAND" && return 0
+    _hyprland_why="its Hyprland is $_hv, and tide's config needs $MIN_HYPRLAND or later (see the Hyprland warnings above)"
+    return 1
+}
+
+# remove_session_entry takes the tide (Hyprland) session off the login
+# screen, as a session that can't run, setting _removed to how that went
+# for check_session's message. tide (tidewm) has an entry of its own and
+# stays.
+remove_session_entry() {
+    _removed=
+    test -f "$SESSION_ENTRY" || return 0
+    if test "$SUDO" = yes && sudo_logged rm -f "$SESSION_ENTRY"; then
+        _removed="; so it was taken off the login screen ($SESSION_ENTRY), and comes back once setup installs a Hyprland that can run it"
+    else
+        _removed="; take it off the login screen with 'sudo rm $SESSION_ENTRY'"
+    fi
+}
+
 # check_session says, last, whether the tide session will be at the login
 # screen, start once picked, and run tide's own bar and lock. GDM, SDDM and tide's greeter list it only
 # where its entry is and the entry's TryExec command (uwsm) is installed,
@@ -6557,6 +6590,13 @@ check_session() {
     if ! session_command start-hyprland && ! session_command Hyprland; then
         _problems="${_problems:+$_problems
 }the tide session won't start: Hyprland isn't installed"
+    elif ! hyprland_ready; then
+        # Hyprland too old for tide's config would come up with its own
+        # banner and no tide keys or bar. So the entry goes, and the login
+        # screen can't offer, or preselect, a session that can't work.
+        remove_session_entry
+        _problems="${_problems:+$_problems
+}the tide session can't run: $_hyprland_why$_removed"
     fi
     # Without a new enough Quickshell, tide's own bar and lock don't run:
     # tide-shell falls back to waybar and tide-lock to hyprlock. The

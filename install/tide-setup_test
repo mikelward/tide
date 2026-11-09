@@ -792,6 +792,27 @@ setup; ARGS=(); mv "$T/usr-bin/Hyprland" "$T/usr-bin/start-hyprland"; run
 check "session: start-hyprland alone can start it" lacks "$output" "the tide session won't start"
 teardown
 
+# A Hyprland too old for tide's config (apt's 0.56.2, where the build
+# couldn't run) would log in to Hyprland's banner with no tide keys or bar.
+# The run ends, saying so, and the session comes off the login screen.
+setup; ARGS=(); run FAKE_GREETER_HYPRLAND_VERSION=0.56.2
+check "session: a Hyprland too old ends the run" test "$status" -ne 0
+check "session: and says why" has "$output" \
+    "the tide session can't run: its Hyprland is 0.56.2, and tide's config needs 0.57 or later"
+check "session: and takes the session off the login screen" test ! -e "$T/share/wayland-sessions/tide.desktop"
+check "session: and says so" has "$output" "so it was taken off the login screen ($T/share/wayland-sessions/tide.desktop)"
+check "session: and is repeated at the end" \
+    has "$(printf '%s\n' "$output" | sed -n '/from this run, again:/,$p')" "its Hyprland is 0.56.2"
+teardown
+setup; ARGS=(--ignore-errors); run FAKE_GREETER_HYPRLAND_VERSION=0.56.2
+check "session: --ignore-errors still takes a session that can't run off the login screen" \
+    test ! -e "$T/share/wayland-sessions/tide.desktop"
+teardown
+setup; ARGS=(); run FAKE_GREETER_HYPRLAND_VERSION=0.57.1
+check "session: a Hyprland new enough keeps the session" test -e "$T/share/wayland-sessions/tide.desktop"
+check "session: and says nothing of it" lacks "$output" "the tide session can't run"
+teardown
+
 # Each problem is named, not just the first.
 setup; ARGS=(--ignore-errors); rm "$T/usr-bin/uwsm" "$T/usr-bin/Hyprland"; run
 check "session: no uwsm and no Hyprland names uwsm" has "$output" "it's listed only where uwsm is installed"
