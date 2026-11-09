@@ -145,7 +145,17 @@ check "the wrapper parses as sh" sh -n "$wrapper"
 # portals read tidewm-portals.conf.
 tidewm_id=$(basename "$tidewm_wrapper")
 check "the tidewm entry starts its wrapper through uwsm with tidewm:tide" \
-    has_line "$tidewm_entry" "Exec=uwsm start -e -D tidewm:tide -N \"tide (tidewm)\" -- $tidewm_id"
+    has_line "$tidewm_entry" "Exec=uwsm start -e -D tidewm:tide -N tidewm -- $tidewm_id"
+# A login screen hands Exec on in ways that break a quote: GDM wraps it in
+# double quotes of its own, unescaped (gdm-session.c's gdm-wayland-session
+# "%s"), so a quoted word ends them early, and SDDM's wayland-session
+# splits it on spaces with no quoting at all. A session that logged in
+# then straight out had -N "tide (tidewm)". Each entry's Exec is plain
+# words, nothing a shell or GDM would read as quoting or syntax.
+for e in "$entry" "$tidewm_entry"; do
+    check "$(basename "$e")'s Exec has no quotes, escapes or shell syntax" \
+        lacks_line_matching "$e" "^Exec=.*[\"'\\\\\`\$()<>|;&*?]"
+done
 check "the tidewm entry lists tidewm, then tide, in DesktopNames" \
     has_line "$tidewm_entry" "DesktopNames=tidewm;tide"
 check "the tidewm entry is offered only where tidewm is installed" \
