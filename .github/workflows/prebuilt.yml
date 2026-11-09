@@ -77,19 +77,28 @@ jobs:
           if-no-files-found: error
 
   # tidewm, and wlroots 0.20 where the release has none, built the same way
-  # into /opt/tidewm. setup builds tidewm only on Debian, Ubuntu and Arch.
+  # into /opt/tidewm, on each distribution setup builds it on: the latest
+  # Ubuntu, Debian testing, the latest Fedora, and Arch (rolling, so its base
+  # image).
   tidewm:
     strategy:
       fail-fast: false
       matrix:
-        image: ["ubuntu:26.10", "debian:testing"]
+        image: ["ubuntu:26.10", "debian:testing", "fedora:45", "archlinux:base"]
     runs-on: ubuntu-latest
     container: ${{ matrix.image }}
     timeout-minutes: 30
     steps:
+      # setup clones the pin with git, and runs its root steps with sudo.
       - run: |
-          apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y sudo git ca-certificates
+          if command -v apt-get >/dev/null; then
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y sudo git ca-certificates
+          elif command -v dnf >/dev/null; then
+            dnf install -y sudo git
+          else
+            pacman -Syu --noconfirm sudo git
+          fi
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
@@ -103,9 +112,9 @@ jobs:
         run: |
           set -eu
           . /etc/os-release
-          release="${ID}-${VERSION_ID:-${VERSION_CODENAME}}"
+          release="${ID}-${VERSION_ID:-${VERSION_CODENAME:-rolling}}"
           dir=$(readlink /opt/tidewm/current)
-          name="tidewm-${dir}-${release}-$(dpkg --print-architecture).tar.gz"
+          name="tidewm-${dir}-${release}-$(uname -m).tar.gz"
           mkdir -p dist
           tar -C /opt/tidewm -czf "dist/$name" "$dir"
           (cd dist && sha256sum "$name" > "$name.sha256")

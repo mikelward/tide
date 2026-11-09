@@ -196,11 +196,17 @@ check "on Arch, tidewm is built" has "$calls" "make -C $T/src/tidewm-build/tidew
 check "on Arch, wlroots isn't built" lacks "$calls" "wlroots.git"
 teardown
 
-# Fedora isn't built on yet.
-setup; ARGS=(--tidewm); run SETUP_OS=redhat
-check "on Fedora, tidewm isn't built" lacks "$calls" "$clone"
-check "on Fedora, it says why" has "$output" "tidewm isn't built on redhat"
+# On Fedora, from dnf, with the package that has wlroots 0.20.
+setup; ARGS=(--tidewm); run SETUP_OS=redhat FAKE_DNF_WLROOTS=wlroots0.20-devel
+check "on Fedora, tidewm's dependencies come from dnf" has "$calls" "dnf install -y gcc make pkgconf-pkg-config git wayland-devel"
+check "on Fedora, with the package that has wlroots 0.20" has "$calls" "xdg-desktop-portal-wlr wlroots0.20-devel"
+check "on Fedora, tidewm is built" has "$calls" "make -C $T/src/tidewm-build/tidewm install PREFIX="
 check "on Fedora, wlroots isn't built" lacks "$calls" "wlroots.git"
+check "on Fedora, it succeeds" test "$status" -eq 0
+teardown
+setup; ARGS=(--tidewm); run SETUP_OS=redhat FAKE_MISSING=wlroots
+check "on a Fedora without wlroots 0.20, tidewm isn't built" lacks "$calls" "$clone"
+check "on a Fedora without wlroots 0.20, it says why" has "$output" "dnf has no wlroots 0.20"
 teardown
 
 # A tidewm on PATH that setup didn't link is left alone.
