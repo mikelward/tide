@@ -17,7 +17,7 @@ The "Today" column was read from this repository and `mikelward/conf`'s
 `config/hypr` on 2026-10-05. The "Fork" column says what the fork,
 [tidewm](https://github.com/mikelward/tidewm), and tide's tidewm session
 have built, and what's left. It was checked on 2026-11-08 against tidewm
-`v0.0.1466` (`829d2a6`, the commit `setup --tidewm` pins), this repository,
+`v0.0.1474` (`c22f9ca`, the commit `setup --tidewm` pins), this repository,
 and conf's `config/tidewm`. "tidewm #N" is a tidewm pull request. "Built"
 means built and tested headless, by tidewm's own tests and tide's stand-in
 (`shell/tidewm_stand_in.py`): nothing has run in a real login yet. The
@@ -124,7 +124,7 @@ maintainer deferred.
 
 ## tidewm today
 
-Checked 2026-11-08, against tidewm `v0.0.1466` and the repositories named
+Checked 2026-11-09, against tidewm `v0.0.1474` and the repositories named
 above. Nothing was run in a real login.
 
 Of the 48 rows, 40 are built on both sides, 4 in part and 4 not at all.
@@ -146,7 +146,7 @@ rest need only tide, conf or scripts.
 
 **Getting tidewm onto a machine** (scripts' `setup-tide`):
 
-- `setup --tidewm` builds the pinned tag, `v0.0.1466`, at the commit
+- `setup --tidewm` builds the pinned tag, `v0.0.1474`, at the commit
   `deps.lock` names.
 - It uses the distro's wlroots 0.20 on Debian testing and Arch. Where
   `pkg-config` finds no `wlroots-0.20` on Debian or Ubuntu (Ubuntu 26.04 has

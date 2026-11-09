@@ -16,7 +16,7 @@ quickshell quickshell https://github.com/quickshell-mirror/quickshell.git v0.3.1
 
 # tidewm, tide's fork of dwl, for the tide (tidewm) session. A release tag,
 # numbered as tidewm's README says.
-tidewm tidewm https://github.com/mikelward/tidewm.git v0.0.1466 829d2a660d8cb325ef48b86d71344a16e4c60e6f make
+tidewm tidewm https://github.com/mikelward/tidewm.git v0.0.1474 c22f9cad8b572174cb526d671ac3ef71d9c85158 make
 
 # wlroots 0.20, which tidewm builds against, where the distro has none
 # (Ubuntu 26.04, Debian 13), into tidewm's own build. The rest are what
