@@ -437,6 +437,11 @@ flowchart TD
   its own session target, `wayland-session@tide-hyprland.target`. A
   plain Hyprland login gets `wayland-session@hyprland.desktop.target`
   instead, and starts none of tide's units.
+- **A login says how far it got.** `tide-hyprland` and `tide-tidewm` log
+  each step to stderr and the journal, under their own names: the session
+  starting, then the compositor and its arguments. tidewm's startup command
+  logs that tidewm is up before it tells uwsm. So `journalctl -b -t
+  tide-tidewm` shows where a login that never reached a desktop stopped.
 - **A Hyprland too old for tide's config never gets a tide session.**
   Before 0.57, Hyprland can't run `hypr/tide/hyprland.lua`, and comes up
   with its own banner and no tide keys or bar. So:

@@ -125,6 +125,17 @@ check "the wrapper starts a Hyprland 0.57 or later" \
 hyprland_version 0.60.0
 check "the wrapper starts a Hyprland past 0.57" \
     test "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x)" = "start-hyprland -- --config x"
+# Each step lands in the journal, as tidewm's wrapper's do.
+cat > "$tmp/wrapper-bin-ver/logger" <<STUB
+#!/bin/sh
+echo "\$*" >> "$tmp/hypr-logged"
+STUB
+chmod +x "$tmp/wrapper-bin-ver/logger"
+PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x >/dev/null 2>&1
+check "the wrapper logs that the session is starting" \
+    grep -qxF -- "-t tide-hyprland -- starting the tide session" "$tmp/hypr-logged"
+check "the wrapper logs which Hyprland it starts, and how" \
+    grep -qxF -- "-t tide-hyprland -- starting Hyprland 0.60.0 through start-hyprland: --config x" "$tmp/hypr-logged"
 check "the wrapper is executable" test -x "$wrapper"
 check "the wrapper parses as sh" sh -n "$wrapper"
 
@@ -155,20 +166,38 @@ cat > "$tmp/tidewm-bin/tide-msg" <<'STUB'
 echo "tide-msg $*"
 test -z "$FAKE_TIDEMSG_FAILS"
 STUB
-chmod +x "$tmp/tidewm-bin/tidewm" "$tmp/tidewm-bin/uwsm" "$tmp/tidewm-bin/tide-msg"
+# A stub logger keeps what it's asked in $tmp/logged, not the journal.
+cat > "$tmp/tidewm-bin/logger" <<STUB
+#!/bin/sh
+echo "\$*" >> "$tmp/logged"
+STUB
+chmod +x "$tmp/tidewm-bin/tidewm" "$tmp/tidewm-bin/uwsm" "$tmp/tidewm-bin/tide-msg" "$tmp/tidewm-bin/logger"
+# What the startup command logs before anything else.
+up="logger -t tide-tidewm -- 'tidewm is up; going home and telling uwsm the session is ready' 2>/dev/null; "
 mkdir -p "$tmp/tidewm-config/hypr"
 # tidewm_start [VAR=VALUE...]: what the wrapper's tidewm and its startup
 # command print, with the shell's config under $tmp/tidewm-config.
 tidewm_start() {
-    env PATH="$tmp/tidewm-bin:/usr/bin:/bin" XDG_CONFIG_HOME="$tmp/tidewm-config" "$@" /bin/sh "$tidewm_wrapper" -c x
+    env PATH="$tmp/tidewm-bin:/usr/bin:/bin" XDG_CONFIG_HOME="$tmp/tidewm-config" "$@" /bin/sh "$tidewm_wrapper" -c x 2>/dev/null
 }
+: > "$tmp/logged"
 tidewm_ran=$(tidewm_start)
 check "the tidewm wrapper starts tidewm, passing its arguments through" \
-    test "$(printf '%s\n' "$tidewm_ran" | head -n 1)" = "tidewm -s tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c x"
+    test "$(printf '%s\n' "$tidewm_ran" | head -n 1)" = "tidewm -s ${up}tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c x"
 check "before the shell has named home, tidewm goes to in and keeps it" \
     test "$(printf '%s\n' "$tidewm_ran" | sed -n 2p)" = "tide-msg workspace number in; persist workspace in"
 check "tidewm's startup command finalizes the session with tidewm's IPC socket" \
     test "$(printf '%s\n' "$tidewm_ran" | sed -n 3p)" = "uwsm finalize SWAYSOCK"
+# Each step lands in the journal, so a login that shows no desktop says how
+# far it got.
+check "the tidewm wrapper logs that the session is starting" \
+    grep -qxF -- "-t tide-tidewm -- starting the tide (tidewm) session" "$tmp/logged"
+check "the tidewm wrapper logs tidewm's start, with home and arguments" \
+    grep -qxF -- "-t tide-tidewm -- starting tidewm, home in: -c x" "$tmp/logged"
+check "tidewm's startup command logs that tidewm is up" \
+    grep -qxF -- "-t tide-tidewm -- tidewm is up; going home and telling uwsm the session is ready" "$tmp/logged"
+check "the tidewm wrapper says the same on stderr" \
+    test -n "$(env PATH="$tmp/tidewm-bin:/usr/bin:/bin" XDG_CONFIG_HOME="$tmp/tidewm-config" /bin/sh "$tidewm_wrapper" -c x 2>&1 >/dev/null | grep -F 'tide-tidewm: starting the tide (tidewm) session')"
 # shellcheck disable=SC2016 # the name has a $ that mustn't expand
 printf '%s\n' 'return {' '    home = "my $HOME & mail",' '    in_apps = {},' '}' > "$tmp/tidewm-config/hypr/tide-workspaces.lua"
 tidewm_ran=$(tidewm_start)
@@ -185,7 +214,7 @@ check "a home with a ; goes to tidewm in quotes, as it reads a quoted name" \
 printf '%s\n' 'return {' "    home = \"it's\"," '}' > "$tmp/tidewm-config/hypr/tide-workspaces.lua"
 tidewm_ran=$(tidewm_start)
 check "a home tidewm's start can't name is left to the shell" \
-    test "$tidewm_ran" = "tidewm -s exec uwsm finalize SWAYSOCK -c x
+    test "$tidewm_ran" = "tidewm -s ${up}exec uwsm finalize SWAYSOCK -c x
 uwsm finalize SWAYSOCK"
 # Without a config of your own, tidewm gets tide's; with one, or a -c,
 # it's tidewm's to read.
@@ -193,15 +222,15 @@ rm -f "$tmp/tidewm-config/hypr/tide-workspaces.lua"
 mkdir -p "$tmp/tidewm-config/tidewm"
 : > "$tmp/tidewm-config/tidewm/tide.conf"
 tidewm_bare() {
-    env PATH="$tmp/tidewm-bin:/usr/bin:/bin" HOME="$tmp/tidewm-home" XDG_CONFIG_HOME="$tmp/tidewm-config" /bin/sh "$tidewm_wrapper"
+    env PATH="$tmp/tidewm-bin:/usr/bin:/bin" HOME="$tmp/tidewm-home" XDG_CONFIG_HOME="$tmp/tidewm-config" /bin/sh "$tidewm_wrapper" 2>/dev/null
 }
 check "with no config of yours, tidewm runs tide's" \
-    test "$(tidewm_bare | head -n 1)" = "tidewm -s tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c $tmp/tidewm-config/tidewm/tide.conf"
+    test "$(tidewm_bare | head -n 1)" = "tidewm -s ${up}tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c $tmp/tidewm-config/tidewm/tide.conf"
 check "a -c given wins over tide's" \
-    test "$(tidewm_start | head -n 1)" = "tidewm -s tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c x"
+    test "$(tidewm_start | head -n 1)" = "tidewm -s ${up}tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c x"
 : > "$tmp/tidewm-config/tidewm/config"
 check "your own config is tidewm's to read" \
-    test "$(tidewm_bare | head -n 1)" = "tidewm -s tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK"
+    test "$(tidewm_bare | head -n 1)" = "tidewm -s ${up}tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK"
 # make install puts tide.conf where the wrapper looks: XDG_CONFIG_HOME's
 # tidewm, else ~/.config's.
 # shellcheck disable=SC2016 # sh -c's own $1
