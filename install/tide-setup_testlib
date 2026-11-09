@@ -504,6 +504,15 @@ if test "\$1" = clone; then
         */wayland-protocols) test "\$kind" != meson || printf "%s\\n" "command: [scanner, '--strict', 'enum-header']" > "\$last/meson.build" ;;
     esac
 fi
+# \$FAKE_MIRROR_LACKS names a Hyprland pin whose clone, from a mirror behind
+# GitHub, lacks its pinned commit, and whose newest is cc9a8fd.
+if test "\$3" = cat-file && test "\${2##*/}" = "\${FAKE_MIRROR_LACKS:-none}"; then
+    exit 1
+fi
+if test "\$3" = log && test "\${2##*/}" = "\${FAKE_MIRROR_LACKS:-none}"; then
+    echo "cc9a8fd, from 2026-09-15"
+    exit 0
+fi
 if test "\$3" = pull && test -n "\$FAKE_PULL_FAILS"; then
     echo "fatal: unable to access 'https://example.com/tide.git/': Could not resolve host: example.com" >&2
     exit 1

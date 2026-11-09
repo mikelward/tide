@@ -544,4 +544,34 @@ setup; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_APT_INSTALLED="libxkbcomm
 check "an installed libxkbcommon too old for Hyprland's build is upgraded" has "$calls" "apt-get install -y --only-upgrade libxkbcommon-dev"
 teardown
 
+# A mirror behind GitHub that lacks a pinned commit is named, with how far
+# it has got, rather than git's "unable to read tree".
+setup; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_MIRROR_LACKS=hyprland-protocols
+check "a pinned commit the mirror lacks is named" has "$output" "has no commit cd1aba6, which this Hyprland is pinned to; its newest is cc9a8fd, from 2026-09-15"
+check "with no Hyprland to keep, it's fatal" test "$status" -ne 0
+teardown
+
+# The Hyprland built before is kept, when it's new enough, and setup goes on.
+setup
+mkdir -p "$T/opt/hyprland/v0.56.2-1/bin"
+printf '#!/bin/sh\necho "Hyprland 0.56.2 built from branch  at commit 1"\n' > "$T/opt/hyprland/v0.56.2-1/bin/Hyprland"
+chmod +x "$T/opt/hyprland/v0.56.2-1/bin/Hyprland"
+ln -s "$T/opt/hyprland/v0.56.2-1/bin/Hyprland" "$T/usr-local-bin/Hyprland"
+ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_MIRROR_LACKS=hyprland-protocols
+check "a failed build keeps the Hyprland built before" has "$output" "keeping Hyprland 0.56.2, built before, as the new build failed"
+check "and setup goes on" test "$status" -eq 0
+check "and its link stays" test -L "$T/usr-local-bin/Hyprland"
+teardown
+
+# One too old for tide isn't kept.
+setup
+mkdir -p "$T/opt/hyprland/v0.50.0-1/bin"
+printf '#!/bin/sh\necho "Hyprland 0.50.0 built from branch  at commit 1"\n' > "$T/opt/hyprland/v0.50.0-1/bin/Hyprland"
+chmod +x "$T/opt/hyprland/v0.50.0-1/bin/Hyprland"
+ln -s "$T/opt/hyprland/v0.50.0-1/bin/Hyprland" "$T/usr-local-bin/Hyprland"
+ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_MIRROR_LACKS=hyprland-protocols
+check "a build too old for tide isn't kept" lacks "$output" "keeping Hyprland"
+check "so the failure is fatal" test "$status" -ne 0
+teardown
+
 finish
