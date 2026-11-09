@@ -432,6 +432,13 @@ flowchart TD
 
 - **The session entry** is `tide.desktop` in `wayland-sessions`, so
   the current display manager lists it too (M2).
+- **Each entry's `Exec` is `tide-session hyprland` or `tide-session
+  tidewm`**, plain words. GDM puts `Exec` inside double quotes of its own,
+  unescaped, and SDDM splits it on spaces with no quoting, so a quote in
+  `Exec` breaks the command before anything runs: `-N "tide (tidewm)"`
+  logged in and straight back out, with nothing in the journal.
+  `tide-session` runs the `uwsm start` below, and logs what it ran, uwsm's
+  output and how it ended, to the journal as `tide-session`.
 - **`-e -D tide:Hyprland`** sets `XDG_CURRENT_DESKTOP` to exactly that;
   without `-e`, uwsm appends to names from other sources.
 - **`tide-hyprland`** is a wrapper that execs `start-hyprland`,

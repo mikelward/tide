@@ -1,0 +1,49 @@
+#!/bin/sh
+#
+# What a tide session entry runs (SPEC.md §5.3): `tide-session hyprland` or
+# `tide-session tidewm`. It starts the session through uwsm, and says in
+# the journal (`journalctl -b -t tide-session`) what it ran, what uwsm
+# printed, and how it ended. A login that goes straight back to the login
+# screen leaves nothing of its own, so this is where to look.
+#
+# The entries' Exec is plain words for that reason too: GDM puts Exec
+# inside double quotes of its own, unescaped, and SDDM splits it on spaces
+# with no quoting at all, so a quote in Exec breaks the command before
+# anything runs. Every argument with a space in it is here instead.
+
+# say MESSAGE: to stderr, which the login screen keeps, and to the journal.
+say() {
+    echo "tide-session: $*" >&2
+    # The journal is the log: a logger that fails has nowhere to say so.
+    logger -t tide-session -- "$*" 2>/dev/null || :
+}
+
+case ${1:-} in
+    hyprland) desktops=tide:Hyprland name=tide compositor=tide-hyprland ;;
+    tidewm) desktops=tidewm:tide name="tide (tidewm)" compositor=tide-tidewm ;;
+    *)
+        say "usage: tide-session hyprland|tidewm, not '${1:-}'"
+        exit 2
+        ;;
+esac
+
+if ! command -v uwsm >/dev/null 2>&1; then
+    say "uwsm isn't installed, so the tide ($1) session can't start: run tide's installer"
+    exit 1
+fi
+
+say "starting the tide ($1) session: uwsm start -e -D $desktops -N '$name' -- $compositor"
+# uwsm's own output goes to the journal under this name as well, through
+# systemd-cat where there is one, and the session ends when uwsm returns.
+if command -v systemd-cat >/dev/null 2>&1; then
+    systemd-cat -t tide-session -- uwsm start -e -D "$desktops" -N "$name" -- "$compositor"
+else
+    uwsm start -e -D "$desktops" -N "$name" -- "$compositor"
+fi
+status=$?
+if test "$status" -eq 0; then
+    say "the tide ($1) session ended"
+else
+    say "the tide ($1) session ended with uwsm exiting $status: the lines above say why"
+fi
+exit "$status"
