@@ -45,6 +45,12 @@ check "--tidewm installs tidewm's build dependencies, wlroots 0.20 among them" \
     has "$calls" "apt-get install -y build-essential pkgconf git libwlroots-0.20-dev libwayland-dev"
 check "and PCRE2, for its window rules, and Xwayland, for X11 apps" has "$calls" "libjson-c-dev libpcre2-dev xwayland"
 check "and wlroots' portal, for sharing a screen or window" has "$calls" "xwayland xdg-desktop-portal-wlr"
+# git is one of them, so GitHub is asked about main only once they're in:
+# a machine without git would otherwise look offline.
+deps_line=$(printf '%s\n' "$calls" | grep -n "apt-get install -y build-essential pkgconf git" | head -n1 | cut -d: -f1)
+ask_line=$(printf '%s\n' "$calls" | grep -nF "$ask" | head -n1 | cut -d: -f1)
+check "main's commit is asked for after the build dependencies, git among them, are installed" \
+    test -n "$deps_line" -a -n "$ask_line" -a "${deps_line:-0}" -lt "${ask_line:-0}"
 check "--tidewm asks GitHub which commit main is at" has "$calls" "$ask"
 check "--tidewm clones main" has "$calls" "$clone $T/src/tidewm-build/tidewm"
 check "and checks the clone is at that commit" has "$calls" "git -C $T/src/tidewm-build/tidewm rev-parse HEAD"

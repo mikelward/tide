@@ -1973,6 +1973,18 @@ tidewm_main_commit() {
 # changed only relinks. Without GitHub, a build that's current is kept.
 build_tidewm() {
     deps=$(tidewm_build_deps) || return 1
+    pkg_begin "$(pkg_manager)" "Installing tidewm's build dependencies"
+    deps_status=0
+    # shellcheck disable=SC2086  # word-split the package list
+    install_all $deps || deps_status=$?
+    pkg_end
+    if test "$deps_status" -ne 0; then
+        # shellcheck disable=SC2086  # word-split the package list
+        warn "could not install tidewm's build dependencies:$(printf ' %s' $not_installed)"
+        return 1
+    fi
+    # Asked after the dependencies, git among them, are installed: a machine
+    # without git would otherwise take the offline path.
     if ! tw_commit=$(tidewm_main_commit); then
         tw_dir=
         if test -L "$TIDEWM_PREFIX/current"; then
@@ -1989,16 +2001,6 @@ build_tidewm() {
     fi
     tw_short=$(printf '%s\n' "$tw_commit" | cut -c1-12)
     info "Building tidewm's $TIDEWM_BRANCH, at $tw_short, from source"
-    pkg_begin "$(pkg_manager)" "Installing tidewm's build dependencies"
-    deps_status=0
-    # shellcheck disable=SC2086  # word-split the package list
-    install_all $deps || deps_status=$?
-    pkg_end
-    if test "$deps_status" -ne 0; then
-        # shellcheck disable=SC2086  # word-split the package list
-        warn "could not install tidewm's build dependencies:$(printf ' %s' $not_installed)"
-        return 1
-    fi
     tw_wlroots=no
     if wlroots_wanted; then
         tw_wlroots=yes
