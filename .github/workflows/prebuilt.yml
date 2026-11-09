@@ -1,7 +1,7 @@
 name: prebuilt
 
-# Hyprland and tidewm built from deps.lock's pins by setup itself
-# (TIDE_SETUP_ONLY=hyprland or tidewm install/tide-setup), in a container of each
+# Hyprland built from deps.lock's pins, and tidewm from its latest main, by
+# setup itself (TIDE_SETUP_ONLY=hyprland or tidewm install/tide-setup), in a container of each
 # release it's built for (the latest Ubuntu and Debian testing), packed as a tarball with its SHA-256 (TODO.md,
 # "Prebuilt Hyprland and tidewm from tide's CI"). A release whose apt can't
 # build it fails, saying what's missing; one whose apt Hyprland is new
@@ -89,7 +89,7 @@ jobs:
     container: ${{ matrix.image }}
     timeout-minutes: 30
     steps:
-      # setup clones the pin with git, and runs its root steps with sudo.
+      # setup clones tidewm's main with git, and runs its root steps with sudo.
       - run: |
           if command -v apt-get >/dev/null; then
             apt-get update
