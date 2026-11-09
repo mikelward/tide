@@ -455,6 +455,25 @@ setup; ARGS=(); run FAKE_APT_HYPRLAND="(none)"
 check "no apt Hyprland builds from source" has "$calls" "cmake -S $T/src/hyprland-build/Hyprland"
 teardown
 
+# CI's prebuilt workflow builds only Hyprland, or says why it can't.
+setup; ARGS=(); run TIDE_SETUP_ONLY=hyprland FAKE_APT_HYPRLAND=0.53.3+ds-4
+check "only-hyprland: builds Hyprland" has "$calls" "cmake -S $T/src/hyprland-build/Hyprland"
+check "only-hyprland: and says where" has "$output" "Built Hyprland in $(inst)"
+check "only-hyprland: and nothing of tide's own" lacks "$calls" "make -C $T/src/tide install"
+check "only-hyprland: succeeds" test "$status" -eq 0
+teardown
+setup; ARGS=(); run TIDE_SETUP_ONLY=hyprland FAKE_APT_HYPRLAND=0.56.2+ds-1 FAKE_MISSING=g++-16 FAKE_APT_XKB=1.7.0-2
+check "only-hyprland: without the toolchain fails" test "$status" -ne 0
+check "only-hyprland: saying what's missing" has "$output" "it has g++-16 none"
+check "only-hyprland: and that it can't build" has "$output" "this release can't build Hyprland 0.57 or later"
+check "only-hyprland: and installs no Hyprland" lacks "$calls" "apt-get install -y hyprland"
+teardown
+setup; ARGS=(); run TIDE_SETUP_ONLY=hyprland FAKE_APT_HYPRLAND=0.57.1+ds-1
+check "only-hyprland: a new enough apt Hyprland needs nothing built" lacks "$calls" "cmake"
+check "only-hyprland: and says so" has "$output" "apt's Hyprland is 0.57.1, new enough"
+check "only-hyprland: and succeeds" test "$status" -eq 0
+teardown
+
 setup; ARGS=(--no-build-hyprland); run FAKE_APT_HYPRLAND=0.53.3+ds-4
 check "--no-build-hyprland doesn't build" lacks "$calls" "cmake"
 check "--no-build-hyprland installs apt's Hyprland" has "$calls" "apt-get install -y hyprland hypridle"
