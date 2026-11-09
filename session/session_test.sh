@@ -484,7 +484,28 @@ check "and at the fifth start" has_line "$lock" "StartLimitBurst=5"
 # A crash that's restarted mustn't also start hyprlock, which would race
 # the restarted lock for the session.
 check "a restarted lock skips the fallback" has_line "$lock" "RestartMode=direct"
-check "the fallback is hyprlock" has_line "$lockfallback" "ExecStart=hyprlock"
+# The fallback's command, as systemd would run it, against a hyprlock that
+# says which config it was given: tide's without one of yours, or with a
+# link to one that's gone, and yours when it's there.
+lock_start=$(sed -n 's/^ExecStart=\/bin\/sh -c //p' "$lockfallback" | sed "s/^'//; s/'\$//; s/\\$\\$/\\$/g")
+mkdir -p "$tmp/lock-bin" "$tmp/lock-none/.config/hypr" "$tmp/lock-gone/.config/hypr" \
+    "$tmp/lock-own/.config/hypr"
+printf '#!/bin/sh\necho "hyprlock $*"\n' > "$tmp/lock-bin/hyprlock"
+chmod +x "$tmp/lock-bin/hyprlock"
+ln -s "$tmp/lock-gone/gone.conf" "$tmp/lock-gone/.config/hypr/hyprlock.conf"
+: > "$tmp/lock-own/.config/hypr/hyprlock.conf"
+lock_config() { HOME="$tmp/$1" XDG_CONFIG_HOME='' PATH="$tmp/lock-bin:/usr/bin:/bin" sh -c "$lock_start"; }
+check "the fallback is hyprlock, with your config" \
+    test "$(lock_config lock-own)" = "hyprlock --config $tmp/lock-own/.config/hypr/hyprlock.conf"
+check "without a hyprlock config of your own, the fallback gets tide's" \
+    test "$(lock_config lock-none)" = "hyprlock --config $tmp/lock-none/.config/hypr/tide-hyprlock.conf"
+check "a link to a hyprlock config that's gone gets tide's too" \
+    test "$(lock_config lock-gone)" = "hyprlock --config $tmp/lock-gone/.config/hypr/tide-hyprlock.conf"
+# shellcheck disable=SC2016 # sh -c's own $1
+check "make install puts tide's hyprlock config beside yours" \
+    sh -c 'env -u XDG_CONFIG_HOME HOME="$1" make -n install 2>/dev/null | grep -qF "hypr/hyprlock.conf \"$1/.config/hypr/tide-hyprlock.conf\""' sh "$tmp/home"
+check "tide's hyprlock config has a password field" grep -q "^input-field {" hypr/hyprlock.conf
+check "and names the host" grep -qF "uname -n" hypr/hyprlock.conf
 check "the fallback stops with the session" \
     has_line "$lockfallback" "PartOf=graphical-session.target"
 check "a crashed fallback takes the lock back" has_line "$lockfallback" "Restart=on-failure"
@@ -603,7 +624,7 @@ if command -v systemd-analyze >/dev/null 2>&1; then
         > "$tmp/units/$agent_unit"
     cp "$autostart" "$tmp/units/app-.service.d/"
     sed "s|^ExecStart=tide-lock\$|ExecStart=$tmp/stub|" "$lock" > "$tmp/units/tide-lock.service"
-    sed "s|^ExecStart=hyprlock\$|ExecStart=$tmp/stub|" "$lockfallback" > "$tmp/units/tide-lock-fallback.service"
+    sed "s|^ExecStart=/bin/sh -c .*hyprlock.*\$|ExecStart=$tmp/stub|" "$lockfallback" > "$tmp/units/tide-lock-fallback.service"
     sed "s|^ExecStart=tide-shell-fallback\$|ExecStart=$tmp/stub|" "$shellfallback" > "$tmp/units/tide-shell-fallback.service"
     sed "s|^ExecStart=wl-paste .*\$|ExecStart=$tmp/stub|" "$clipboard" > "$tmp/units/tide-clipboard.service"
     sed "s|^ExecStart=qs .*\$|ExecStart=$tmp/stub|" "$kdelauncher" > "$tmp/units/tide-kde.service"

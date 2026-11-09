@@ -3442,6 +3442,11 @@ talk, a demo, or a meeting room's screen.
   - `tide-lock.service` has `OnFailure=tide-lock-fallback.service`, which
     runs `hyprlock`. `make install` installs both units, and `setup`
     installs hyprlock.
+  - hyprlock gets your `~/.config/hypr/hyprlock.conf`, or tide's
+    `hypr/hyprlock.conf`, which `make install` puts beside it as
+    `tide-hyprlock.conf`, when yours is missing or a link to a file that's
+    gone. hyprlock aborts without a config, so the fallback that keeps the
+    session locked can't depend on another repo's file.
   - A unit that isn't there never fails, so `OnFailure=` can't cover it.
     That happens when `make install` hasn't run since the unit was added,
     or the unit is masked. So `conf`'s `lock_cmd` starts the unit only when
