@@ -6704,6 +6704,30 @@ check_session() {
 
 # --- Main ---
 
+# Only Hyprland's build (TIDE_SETUP_ONLY=hyprland), or only tidewm's
+# (=tidewm), for CI's prebuilt workflow (.github/workflows/prebuilt.yml),
+# which packs what it makes: Hyprland's says why when this release's apt
+# can't build it, and makes nothing where apt's Hyprland is new enough.
+if test "${TIDE_SETUP_ONLY:-}" = hyprland; then
+    decide_hyprland_build
+    if test "$BUILD_NOW" = no; then
+        if test -n "${apt_hyprland:-}" && version_at_least "$apt_hyprland" "$MIN_HYPRLAND"; then
+            info "apt's Hyprland is $apt_hyprland, new enough: nothing to build"
+            exit 0
+        fi
+        error "this release can't build Hyprland $MIN_HYPRLAND or later; see the warning above"
+    fi
+    build_hyprland || error "building Hyprland failed; see $build_log"
+    info "Built Hyprland in $install_dir"
+    exit 0
+fi
+# The same for tidewm, which packs $TIDEWM_PREFIX's build.
+if test "${TIDE_SETUP_ONLY:-}" = tidewm; then
+    build_tidewm || error "building tidewm failed; see the warnings above"
+    info "Built tidewm in $tw_dir"
+    exit 0
+fi
+
 KEEP_GREETD=no
 if test "$SUDO" != no; then
     early_greeter

@@ -84,6 +84,19 @@ check "nothing is linked" test ! -e "$T/usr-local-bin/tidewm"
 teardown
 
 # A failed make is reported, and nothing is linked or marked complete.
+# CI's prebuilt workflow builds only tidewm.
+setup; ARGS=(); run TIDE_SETUP_ONLY=tidewm
+check "only-tidewm: builds tidewm" has "$calls" "$clone"
+check "only-tidewm: and says where" has "$output" "Built tidewm in $(build)"
+check "only-tidewm: and nothing of tide's own" lacks "$calls" "make -C $T/src/tide install"
+check "only-tidewm: and no Hyprland" lacks "$calls" "apt-get install -y hyprland"
+check "only-tidewm: succeeds" test "$status" -eq 0
+teardown
+setup; ARGS=(); run TIDE_SETUP_ONLY=tidewm FAKE_MAKE_FAILS="$T/src/tidewm-build/tidewm"
+check "only-tidewm: a failed build fails" test "$status" -ne 0
+check "only-tidewm: saying so" has "$output" "building tidewm failed"
+teardown
+
 setup; ARGS=(--tidewm); run FAKE_MAKE_FAILS="$T/src/tidewm-build/tidewm"
 check "a failed make doesn't fail setup" test "$status" -eq 0
 check "a failed make is reported" has "$output" "building tidewm failed"

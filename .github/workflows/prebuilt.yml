@@ -1,0 +1,141 @@
+name: prebuilt
+
+# Hyprland and tidewm built from deps.lock's pins by setup itself
+# (TIDE_SETUP_ONLY=hyprland or tidewm install/tide-setup), in a container of each
+# release it's built for (the latest Ubuntu and Debian testing), packed as a tarball with its SHA-256 (TODO.md,
+# "Prebuilt Hyprland and tidewm from tide's CI"). A release whose apt can't
+# build it fails, saying what's missing; one whose apt Hyprland is new
+# enough builds nothing.
+#
+# For now the tarballs are this run's artifacts; publishing them, and setup
+# downloading them, come next.
+#
+# Cost: a 10-20 minute job per release, only when the pins, setup or this
+# file change, free on a public repository.
+on:
+  push:
+    branches: ["main"]
+    paths: ["deps.lock", "install/tide-setup", "install/pins", ".github/workflows/prebuilt.yml"]
+  pull_request:
+    paths: ["deps.lock", "install/tide-setup", "install/pins", ".github/workflows/prebuilt.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prebuilt-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  hyprland:
+    strategy:
+      fail-fast: false
+      matrix:
+        # The maintainer's machines: the latest Ubuntu and Debian testing.
+        # Fedora's Hyprland comes from a COPR, not a build (below).
+        image: ["ubuntu:26.10", "debian:testing"]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    timeout-minutes: 60
+    steps:
+      # setup clones the pins with git, and runs its root steps with sudo.
+      - run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y sudo git ca-certificates
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Build Hyprland
+        env:
+          TIDE_SETUP_ONLY: hyprland
+          SETUP_COLOR: never
+        run: install/tide-setup
+      # Named for the release it runs on: ID and VERSION_ID, or the codename
+      # where there's no version, as on Debian testing.
+      - name: Pack it
+        id: pack
+        run: |
+          set -eu
+          . /etc/os-release
+          release="${ID}-${VERSION_ID:-${VERSION_CODENAME}}"
+          if ! test -L /opt/hyprland/current; then
+            echo "Nothing was built: apt's Hyprland is new enough here"
+            exit 0
+          fi
+          dir=$(readlink /opt/hyprland/current)
+          name="hyprland-${dir}-${release}-$(dpkg --print-architecture).tar.gz"
+          mkdir -p dist
+          tar -C /opt/hyprland -czf "dist/$name" "$dir"
+          (cd dist && sha256sum "$name" > "$name.sha256")
+          cat "dist/$name.sha256"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - if: steps.pack.outputs.name != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.name }}
+          path: dist/
+          if-no-files-found: error
+
+  # tidewm, and wlroots 0.20 where the release has none, built the same way
+  # into /opt/tidewm. setup builds tidewm only on Debian, Ubuntu and Arch.
+  tidewm:
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:26.10", "debian:testing"]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    timeout-minutes: 30
+    steps:
+      - run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y sudo git ca-certificates
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Build tidewm
+        env:
+          TIDE_SETUP_ONLY: tidewm
+          SETUP_COLOR: never
+        run: install/tide-setup
+      - name: Pack it
+        id: pack
+        run: |
+          set -eu
+          . /etc/os-release
+          release="${ID}-${VERSION_ID:-${VERSION_CODENAME}}"
+          dir=$(readlink /opt/tidewm/current)
+          name="tidewm-${dir}-${release}-$(dpkg --print-architecture).tar.gz"
+          mkdir -p dist
+          tar -C /opt/tidewm -czf "dist/$name" "$dir"
+          (cd dist && sha256sum "$name" > "$name.sha256")
+          cat "dist/$name.sha256"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.name }}
+          path: dist/
+          if-no-files-found: error
+
+  # Fedora takes Hyprland from setup's COPR, not a build: this checks the
+  # latest Fedora's is new enough for tide's config.
+  fedora-hyprland:
+    runs-on: ubuntu-latest
+    # The latest stable Fedora, named: zizmor refuses the floating latest.
+    container: fedora:45
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: The COPR's Hyprland is new enough
+        run: |
+          set -eu
+          copr=$(sed -n 's/^HYPRLAND_COPR=//p' install/tide-setup)
+          min=$(sed -n 's/^MIN_HYPRLAND=//p' install/tide-setup)
+          dnf install -y dnf-plugins-core
+          dnf copr enable -y "$copr"
+          version=$(dnf repoquery -q --latest-limit 1 --queryformat '%{version}' hyprland)
+          echo "Fedora $(rpm -E %fedora), $copr: Hyprland ${version:-none}; tide needs $min"
+          test -n "$version"
+          test "$(printf '%s\n%s\n' "$min" "$version" | sort -V | head -n 1)" = "$min"
