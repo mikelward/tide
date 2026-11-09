@@ -294,6 +294,29 @@ check "hypridle runs in the tidewm session" idle_runs_in "tidewm:tide"
 check "hypridle is skipped under Plasma, even when a package enabled it" idle_skips_in "KDE"
 check "hypridle's unit is skipped in a plain Hyprland login, which runs its own" idle_skips_in "Hyprland"
 check "hypridle is skipped where no desktop is set" idle_skips_in ""
+# The drop-in's command, as systemd would run it, against a hypridle that
+# says which config it was given, in a home with none of your own, one
+# with a link to a config that's gone, and one with your own.
+idle_start=$(sed -n 's/^ExecStart=\/bin\/sh -c //p' "$dropin" | sed "s/^'//; s/'\$//; s/\\$\\$/\\$/g")
+mkdir -p "$tmp/idle-bin" "$tmp/idle-none/.config/hypr" "$tmp/idle-gone/.config/hypr" \
+    "$tmp/idle-own/.config/hypr"
+printf '#!/bin/sh\necho "$*"\n' > "$tmp/idle-bin/hypridle"
+chmod +x "$tmp/idle-bin/hypridle"
+ln -s "$tmp/idle-gone/gone.conf" "$tmp/idle-gone/.config/hypr/hypridle.conf"
+: > "$tmp/idle-own/.config/hypr/hypridle.conf"
+idle_config() { HOME="$tmp/$1" XDG_CONFIG_HOME='' PATH="$tmp/idle-bin:/usr/bin:/bin" sh -c "$idle_start"; }
+check "the drop-in replaces the packaged command" has_line "$dropin" "ExecStart="
+check "without a hypridle config of your own, hypridle gets tide's" \
+    test "$(idle_config idle-none)" = "--config $tmp/idle-none/.config/hypr/tide-hypridle.conf"
+check "a link to a config that's gone gets tide's too" \
+    test "$(idle_config idle-gone)" = "--config $tmp/idle-gone/.config/hypr/tide-hypridle.conf"
+check "your own hypridle config wins" \
+    test "$(idle_config idle-own)" = "--config $tmp/idle-own/.config/hypr/hypridle.conf"
+# shellcheck disable=SC2016 # sh -c's own $1
+check "make install puts tide's hypridle config beside the tide-idle.conf it sources" \
+    sh -c 'env -u XDG_CONFIG_HOME HOME="$1" make -n install 2>/dev/null | grep -qF "hypr/hypridle.conf \"$1/.config/hypr/tide-hypridle.conf\""' sh "$tmp/home"
+check "tide's hypridle config sources the Idle page's file beside itself" \
+    grep -qx "source = tide-idle.conf" hypr/hypridle.conf
 
 # --- The autostart allowlist -------------------------------------------------
 # The drop-in's condition, as systemd would run it for a unit ($$ is a
