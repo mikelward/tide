@@ -15,6 +15,14 @@ Wants=hypridle.service
 After=hypridle.service
 # The owners the shell hosts exist before any autostarted app.
 Before=xdg-desktop-autostart.target
+# A shell that can't run leaves a session with nothing on it, so once it has
+# failed for good a terminal says why and how to log out (SPEC.md §5.2).
+OnFailure=tide-shell-fallback.service
+# For good is three failed starts in two minutes. A start that hangs fails
+# at TimeoutStartSec and is restarted; with systemd's default limit, five
+# in ten seconds, 15-second hangs would restart forever and never fall back.
+StartLimitIntervalSec=120
+StartLimitBurst=3
 
 [Service]
 # Ready only once the shell reports that every owner it hosts is up
@@ -35,6 +43,10 @@ ExecStartPost=-tide autostart-sweep
 TimeoutStartSec=15
 Restart=on-failure
 RestartSec=1
+# A restart skips the failed state, so OnFailure= opens the fallback only
+# once the start limit gives up, not for a failure the next start recovers
+# from (systemd 254).
+RestartMode=direct
 # tide-shell exits 78 (EX_CONFIG) for a bad setting or a missing piece,
 # which a restart can't fix.
 RestartPreventExitStatus=78

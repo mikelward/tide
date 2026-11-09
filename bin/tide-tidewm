@@ -40,7 +40,9 @@ if line=$(grep -m 1 '^    home = ".*",$' "$lua" 2>/dev/null); then
     line=${line#    home = \"}
     home=${line%\",}
 fi
-start='exec uwsm finalize SWAYSOCK'
+# A failed finalize is logged: uwsm then never hears the session is ready,
+# and ends it.
+start="uwsm finalize SWAYSOCK || logger -t tide-tidewm -- 'uwsm finalize failed, so uwsm will end the session' 2>/dev/null"
 case $home in
     *\"* | *\'* | '') ;;
     *)
@@ -48,7 +50,9 @@ case $home in
         case $home in
             *\;*) word="\"$home\"" ;;
         esac
-        start="tide-msg 'workspace number $word; persist workspace $word'; $start"
+        # tide-msg has no time limit of its own, and one that hangs would
+        # hold up the finalize after it, so uwsm would end the session.
+        start="timeout 5 tide-msg 'workspace number $word; persist workspace $word'; $start"
         ;;
 esac
 # Without a config of your own, tide's, which `make install` puts beside

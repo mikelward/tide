@@ -1,0 +1,17 @@
+# The shell's fallback (SPEC.md §5.2): a terminal that says tide's shell
+# didn't start, shows why, and says how to log out, so a failed shell
+# doesn't leave a session with nothing on it. tide.service's OnFailure=
+# starts it once the shell has failed for good; nothing else does.
+[Unit]
+Description=tide shell fallback (a terminal saying why the shell failed)
+Documentation=https://github.com/mikelward/tide
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+# Only in a tide session: tide.service runs nowhere else, but a start by
+# hand under Plasma would open a terminal for nothing.
+ExecCondition=/bin/sh -c 'case ":$${XDG_CURRENT_DESKTOP}:" in *:tide:*) ;; *) exit 1 ;; esac'
+Type=exec
+ExecStart=tide-shell-fallback
+Slice=session-graphical.slice

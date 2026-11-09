@@ -229,7 +229,7 @@ install: build install-shell
 	install -d "$(TIDEWM_DIR)"
 	install -m 644 tidewm/tide.conf "$(TIDEWM_DIR)/"
 	install -d "$(SYSTEMD_USER_DIR)/hypridle.service.d" "$(SYSTEMD_USER_DIR)/app-.service.d"
-	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service systemd/user/tide-lock-fallback.service systemd/user/tide-clipboard.service systemd/user/tide-fcitx5.service systemd/user/tide-lid-inhibit.service systemd/user/tide-kde.service "$(SYSTEMD_USER_DIR)/"
+	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service systemd/user/tide-lock-fallback.service systemd/user/tide-shell-fallback.service systemd/user/tide-clipboard.service systemd/user/tide-fcitx5.service systemd/user/tide-lid-inhibit.service systemd/user/tide-kde.service "$(SYSTEMD_USER_DIR)/"
 	install -m 644 systemd/user/hypridle.service.d/tide.conf "$(SYSTEMD_USER_DIR)/hypridle.service.d/"
 	install -m 644 systemd/user/app-.service.d/tide-autostart.conf "$(SYSTEMD_USER_DIR)/app-.service.d/"
 	@# rmdir only removes a directory this emptied.
@@ -280,7 +280,7 @@ install-session:
 		test -x build/$$cmd || { echo "make install-session: no build/$$cmd; run make build first, as yourself" >&2; exit 1; }; \
 	done
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
-	install -m 755 bin/tide bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-tidewm bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-sysmon build/tide-grant build/tide-msg build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
+	install -m 755 bin/tide bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-tidewm bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-shell-fallback bin/tide-sysmon build/tide-grant build/tide-msg build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
 	install -m 644 session/tide.desktop session/tide-tidewm.desktop "$(DESTDIR)$(PREFIX)/share/wayland-sessions/"
 	@# KWin lets a program use its fake-input (KDE's Win+V paste) only if
 	@# a desktop entry whose Exec is that program's path lists it in

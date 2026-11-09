@@ -445,6 +445,18 @@ flowchart TD
   starting, then the compositor and its arguments. tidewm's startup command
   logs that tidewm is up before it tells uwsm. So `journalctl -b -t
   tide-tidewm` shows where a login that never reached a desktop stopped.
+- **Nothing holds up telling uwsm the session is ready.** uwsm ends a
+  session that never says so. Going home, before that, is given 5 seconds
+  (`tide-msg` has no limit of its own), and a failed `uwsm finalize` is
+  logged.
+- **A shell that can't run leaves a terminal, not an empty session.**
+  `tide.service` gives up after three failed starts in two minutes, wide
+  enough that 15-second start timeouts can't restart it forever, and its
+  `OnFailure=` starts `tide-shell-fallback.service`. With
+  `RestartMode=direct`, a failure the next start recovers from doesn't. That opens the first
+  terminal there is, saying the shell didn't start and that Super+Shift+E
+  logs out, with the shell's status and log, then a shell to fix it from.
+  It runs only in a tide session.
 - **A Hyprland too old for tide's config never gets a tide session.**
   Before 0.56.2, Hyprland can't run `hypr/tide/hyprland.lua`, and comes up
   with its own banner and no tide keys or bar. So:
