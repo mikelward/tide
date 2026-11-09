@@ -22,6 +22,15 @@
 # every app it starts has them, not only those started after
 # tide-fcitx5.service. Where fcitx5 isn't installed, or TIDE_IME=0, they're
 # left as they were.
+# Each step says what it does, to stderr and to the journal (`journalctl
+# -b -t tide-tidewm`), so a login that never shows a desktop says how far
+# it got: started, tidewm up, then uwsm told.
+say() {
+    echo "tide-tidewm: $*" >&2
+    # The journal is the log: a logger that fails has nowhere to say so.
+    logger -t tide-tidewm -- "$*" 2>/dev/null || :
+}
+say "starting the tide (tidewm) session"
 if test "${TIDE_IME:-}" != 0 && command -v fcitx5 >/dev/null 2>&1; then
     export QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx
 fi
@@ -53,4 +62,7 @@ if test "$given" = no && ! test -e "$config_dir/config" && ! test -e "$HOME/.con
     && test -f "$config_dir/tide.conf"; then
     set -- -c "$config_dir/tide.conf" "$@"
 fi
+# The startup command logs first, as that's the first sign tidewm is up.
+start="logger -t tide-tidewm -- 'tidewm is up; going home and telling uwsm the session is ready' 2>/dev/null; $start"
+say "starting tidewm, home $home: $*"
 exec tidewm -s "$start" "$@"

@@ -14,6 +14,15 @@
 # every app it starts has them, not only those started after
 # tide-fcitx5.service. Where fcitx5 isn't installed, or TIDE_IME=0, they're
 # left as they were.
+# Each step says what it does, to stderr and to the journal (`journalctl
+# -b -t tide-hyprland`), so a login that never shows a desktop says how far
+# it got.
+say() {
+    echo "tide-hyprland: $*" >&2
+    # The journal is the log: a logger that fails has nowhere to say so.
+    logger -t tide-hyprland -- "$*" 2>/dev/null || :
+}
+say "starting the tide session"
 if test "${TIDE_IME:-}" != 0 && command -v fcitx5 >/dev/null 2>&1; then
     export QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx
 fi
@@ -42,12 +51,12 @@ min_hyprland=0.57
 version=$(Hyprland --version 2>/dev/null | sed -n 's/^Hyprland \([0-9][0-9.]*\).*/\1/p' | head -n 1)
 if test -n "$version" \
     && test "$(printf '%s\n%s\n' "$min_hyprland" "$version" | sort -V | head -n 1)" != "$min_hyprland"; then
-    msg="tide needs Hyprland $min_hyprland or later, and this is $version: run tide-setup again, or log in to tide (tidewm) or another session"
-    echo "tide-hyprland: $msg" >&2
-    logger -t tide-hyprland -- "$msg" 2>/dev/null || :
+    say "tide needs Hyprland $min_hyprland or later, and this is $version: run tide-setup again, or log in to tide (tidewm) or another session"
     exit 1
 fi
 if command -v start-hyprland >/dev/null 2>&1; then
+    say "starting Hyprland ${version:-of unknown version} through start-hyprland: $*"
     exec start-hyprland -- "$@"
 fi
+say "starting Hyprland ${version:-of unknown version}: $*"
 exec Hyprland "$@"
