@@ -57,6 +57,8 @@ HYPR_DIR ?= $(HOME)/.config/hypr/tide
 # tidewm's own directory, where tide-tidewm looks for tide.conf and tide's
 # shell writes the tide-*.conf it includes: $XDG_CONFIG_HOME's, as both have it.
 TIDEWM_DIR ?= $(or $(XDG_CONFIG_HOME),$(HOME)/.config)/tidewm
+# Where hypridle's config and the Idle page's tide-idle.conf are.
+IDLE_DIR ?= $(or $(XDG_CONFIG_HOME),$(HOME)/.config)/hypr
 SYSTEMD_USER_DIR ?= $(HOME)/.config/systemd/user
 PORTAL_DIR ?= $(HOME)/.config/xdg-desktop-portal
 SHELL_DIR ?= $(HOME)/.config/quickshell/tide
@@ -219,6 +221,10 @@ build/tide-kwin-paste: go.mod $(wildcard cmd/tide-kwin-paste/*.go)
 install: build install-shell
 	install -d "$(HYPR_DIR)"
 	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/span.lua hypr/tide/layout.lua hypr/tide/focus.lua hypr/tide/pinned.lua hypr/hyprland.lua hypr/hyprland.local.lua.template "$(HYPR_DIR)/"
+	@# tide's hypridle config, for a hypridle with none of yours, beside
+	@# the tide-idle.conf it sources, which hypridle finds beside it.
+	install -d "$(IDLE_DIR)"
+	install -m 644 hypr/hypridle.conf "$(IDLE_DIR)/tide-hypridle.conf"
 	install -m 755 hypr/tide/apply-input.sh hypr/tide/watch-input.sh hypr/tide/next-layout.sh "$(HYPR_DIR)/"
 	install -d "$(TIDEWM_DIR)"
 	install -m 644 tidewm/tide.conf "$(TIDEWM_DIR)/"

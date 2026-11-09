@@ -631,6 +631,13 @@ flowchart TD
   - The hypridle drop-in also sets `TimeoutStartSec=10`, so a hypridle
     that never claims its name fails quickly and the shell starts without
     it, rather than waiting out systemd's 90 s default.
+  - The drop-in starts hypridle with your `~/.config/hypr/hypridle.conf`,
+    or tide's copy, `~/.config/hypr/tide-hypridle.conf`, when that's
+    missing or a link to a file that's gone. The copy sits beside the
+    `tide-idle.conf` it sources, since hypridle reads a relative source
+    from the config's own directory. hypridle 0.1.8 aborts without a config, so a
+    config repo that dropped its copy before tide's installer ran left
+    hypridle crashing at every login.
   - `tide launch` also records the launch for the focus guard (§14.3),
     before it waits, so a key press or focus change during the wait cancels
     the grant.
