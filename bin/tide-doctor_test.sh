@@ -340,6 +340,9 @@ healthy() {
     # Home's name, as the shell writes it.
     mkdir -p "$tmp/config/hypr"
     printf '%s\n' 'return {' '    home = "in",' '    in_apps = {},' '}' > "$tmp/config/hypr/tide-workspaces.lua"
+    # tide's hypridle and hyprlock configs, as make install puts them.
+    : > "$tmp/config/hypr/tide-hypridle.conf"
+    : > "$tmp/config/hypr/tide-hyprlock.conf"
     # The lock's QML, where its unit runs it from, and its PAM file.
     mkdir -p "$tmp/home/.config/quickshell/tide" "$tmp/sysconf/pam.d"
     cp shell/lock.qml "$tmp/home/.config/quickshell/tide/"
@@ -1376,6 +1379,25 @@ check "systemctl failing to list the units is a problem" \
 run FAKE_AUTOSTART_UNITS="app-x@autostart.service=1" FAKE_SHOW_FAILS="Access denied"
 check "systemctl failing to show the units is a problem" \
     contains "$out" "systemctl couldn't read the autostart units (Access denied)"
+
+# hypridle and the lock's fallback each need a config: yours, or tide's.
+healthy
+ln -s "$tmp/conf-gone/hypridle.conf" "$tmp/config/hypr/hypridle.conf"
+run
+check "a link to a hypridle config that's gone is a problem" test "$status" -eq 1
+check "and says which, and that tide's is used" \
+    test "$out" = "$tmp/config/hypr/hypridle.conf is a link to $tmp/conf-gone/hypridle.conf, which is gone, so hypridle uses tide's config: remove the link, or put the file back"
+healthy
+: > "$tmp/config/hypr/hyprlock.conf"
+mv "$tmp/config/hypr/tide-hyprlock.conf" "$tmp/config/hypr/tide-hyprlock.conf.moved"
+run
+check "your own hyprlock config is enough without tide's" test "$status" -eq 0
+healthy
+mv "$tmp/config/hypr/tide-hyprlock.conf" "$tmp/config/hypr/tide-hyprlock.conf.moved"
+run
+check "with neither config, the lock's fallback is a problem" test "$status" -eq 1
+check "and says to run make install" \
+    test "$out" = "the lock's fallback, hyprlock, has no config, neither $tmp/config/hypr/hyprlock.conf nor tide's $tmp/config/hypr/tide-hyprlock.conf, so it can't start: run \`make install\` in tide, as its installer does"
 
 doctor_out=$(env PATH="$fake:$PATH" XDG_CURRENT_DESKTOP=GNOME sh bin/tide doctor 2>&1)
 check "tide doctor runs it" contains "$doctor_out" "tide-doctor: not in a tide session"
