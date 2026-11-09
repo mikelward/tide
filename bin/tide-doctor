@@ -25,6 +25,8 @@
 #     tidewm-portals.conf) is installed and XDG_CURRENT_DESKTOP selects it;
 #   - in tidewm's session, xdg-desktop-portal-wlr is installed;
 #   - Hyprland reports no config errors;
+#   - hypridle and the lock's fallback each have a config, yours or
+#     tide's, and yours isn't a link to a file that's gone;
 #   - the home workspace (SPEC.md §6.5) exists and is persistent, which
 #     takes the shell's tide-workspaces.lua and conf's rule for it;
 #   - no monitor has more than one bar, by shape or by space reserved
@@ -1177,6 +1179,22 @@ else
     n=$(printf '%s\n' "$errors" | grep -c .)
     problems=$((problems + n))
 fi
+
+# The configs tide starts hypridle and the lock's fallback with (SPEC.md
+# §10): yours, or tide's beside it, which `make install` puts there. Both
+# programs abort without one. A link to a file that's gone, as a config
+# repo leaves when it drops one, is reported, though tide's is used.
+config_check() { # PROGRAM YOURS TIDES
+    if test -L "$2" && ! test -e "$2"; then
+        problem "$2 is a link to $(readlink "$2"), which is gone, so $1 uses tide's config: remove the link, or put the file back"
+    fi
+    if ! test -e "$2" && ! test -e "$3"; then
+        problem "$1 has no config, neither $2 nor tide's $3, so it can't start: run \`make install\` in tide, as its installer does"
+    fi
+}
+config_home=${XDG_CONFIG_HOME:-$HOME/.config}
+config_check hypridle "$config_home/hypr/hypridle.conf" "$config_home/hypr/tide-hypridle.conf"
+config_check "the lock's fallback, hyprlock," "$config_home/hypr/hyprlock.conf" "$config_home/hypr/tide-hyprlock.conf"
 
 # The home workspace (SPEC.md §6.5): the shell writes its name to
 # tide-workspaces.lua, and conf's hyprland.lua makes it persistent; on

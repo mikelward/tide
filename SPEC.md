@@ -699,6 +699,9 @@ flowchart TD
     lock. Its fallback too: the `tide-lock` command, hyprlock and
     `tide-lock-fallback.service` installed, and whether the fallback
     failed;
+  - a config for hypridle and for the lock's fallback, yours or tide's
+    (§10), as each aborts without one, and yours not a link to a file
+    that's gone, as a config repo leaves when it drops one;
   - the home workspace (§6.5): there, and kept by `conf`'s `persistent`
     rule, with the shell's `tide-workspaces.lua` naming it;
   - the network agent (§5.6): `tide-agent` registered, or what holds
