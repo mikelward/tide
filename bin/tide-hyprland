@@ -33,6 +33,20 @@ elif ! test -e "$config_home/hypr/hyprland.lua" && ! test -e "$config_home/hypr/
     && test -f "$HOME/.config/hypr/tide/hyprland.lua"; then
     set -- --config "$HOME/.config/hypr/tide/hyprland.lua" "$@"
 fi
+# tide's config needs Hyprland 0.57 or later. An older one starts without
+# it, with Hyprland's own banner and no tide keys or bar, which is no way to
+# leave someone (SPEC.md §5.3). So the session refuses, saying why, and the
+# login screen comes back. A Hyprland whose version can't be read is
+# started as before.
+min_hyprland=0.57
+version=$(Hyprland --version 2>/dev/null | sed -n 's/^Hyprland \([0-9][0-9.]*\).*/\1/p' | head -n 1)
+if test -n "$version" \
+    && test "$(printf '%s\n%s\n' "$min_hyprland" "$version" | sort -V | head -n 1)" != "$min_hyprland"; then
+    msg="tide needs Hyprland $min_hyprland or later, and this is $version: run tide-setup again, or log in to tide (tidewm) or another session"
+    echo "tide-hyprland: $msg" >&2
+    logger -t tide-hyprland -- "$msg" 2>/dev/null || :
+    exit 1
+fi
 if command -v start-hyprland >/dev/null 2>&1; then
     exec start-hyprland -- "$@"
 fi

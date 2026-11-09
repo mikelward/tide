@@ -292,8 +292,14 @@ setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; : > "$T/passwd"; run
 greeter_not_ready "no greetd user" "greetd has no system account to run the greeter as (setup looked for greeter _greetd greetd)"
 teardown
 # The Hyprland on the greeter's PATH is the one checked, not this user's.
-setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run FAKE_GREETER_HYPRLAND_VERSION=0.56.2
+# It's the session's too, which can't run on it: that ends the run (the
+# session's own check), so this carries on past it to see the greeter's.
+setup; ARGS=(--greeter --ignore-errors); echo gdm3.service > "$T/dm"; run FAKE_GREETER_HYPRLAND_VERSION=0.56.2
 greeter_not_ready "an old Hyprland" "the greeter's Hyprland is 0.56.2, and it needs 0.57 or later"
+teardown
+setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run FAKE_GREETER_HYPRLAND_VERSION=0.56.2
+check "greetd: an old Hyprland for the greeter and the session ends the run" test "$status" -ne 0
+check "greetd: and says the session can't run" has "$output" "the tide session can't run: its Hyprland is 0.56.2"
 teardown
 setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run FAKE_HYPRLAND_VERSION=0.56.2
 check "greetd: an old Hyprland only on this user's PATH doesn't stop the switch" test "$(cat "$T/dm")" = greetd.service
