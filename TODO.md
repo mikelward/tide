@@ -7,6 +7,11 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **The overview's pictures are stills, taken as it opens** (2026-11-09),
+  not live: there may be many windows. On tidewm each is a `grim -T`
+  JPEG in `$XDG_RUNTIME_DIR/tide/overview`, all taken at once by one
+  `sh`, and the cards show icons until the last is done.
+  Reversible, in `Overview.qml`.
 - **Arrange displays on tidewm saves sway's file** (2026-11-08):
   nwg-displays runs as on sway, with `--outputs_path
   ~/.config/sway/outputs`, the file tide's and conf's tidewm configs
@@ -2208,7 +2213,8 @@ or workspace goes there.
 Plan A, agreed 2026-11-09: build an overview of every workspace's windows,
 opened only two ways:
 
-- **`Super+W`**, which nothing in tide or `conf` uses (W for workspaces):
+- **`Super+W`** (W for workspaces), though conf has it for "Terminal on
+  the workstation" (see below):
   `qs -c tide ipc call overview toggle`, bound in `conf` for Hyprland and
   tidewm. The same key again, or Esc, closes it.
 - **A left-click on bare desktop**, on the wallpaper window
@@ -2231,10 +2237,28 @@ settle across both, in tidemo's `TODO.md` too:
   Mission Control's keys. Pick one set for both, or say why they differ.
 - **Thumbnails.** Hyprland can capture windows on hidden workspaces
   (Quickshell's `ScreencopyView` with a toplevel), once as it opens rather
-  than live. tidewm can't until it exposes toplevel capture (see *Compositor:
-  explore a dwl fork*), so it shows icons, as tidemo does without Screen
-  Recording.
+  than live. tidewm exposes toplevel capture, which `grim -T` uses;
+  Quickshell's `ScreencopyView` can't use it.
 - **A click on bare desktop.** tidemo has none yet.
+
+**MVP built 2026-11-09** (SPEC.md §8.7), only stub-tested:
+
+- [x] `shell/Overview.qml` and `shell/lib/overview.mjs`: the cards,
+      grouped and ordered as tidemo's, filtering, arrows, Enter, clicks.
+- [ ] A key. No key yet (the maintainer, 2026-11-09): `Super+W` is
+      "Terminal on the workstation" in conf (`hyprland_test.lua`'s
+      personal fixture) and tide for macOS, so the overview waits for
+      tide's keys to be settled. `qs -c tide ipc call overview toggle`
+      opens it.
+- [x] Pictures: Hyprland's `ScreencopyView`; tidewm's `grim -T`, which
+      tidewm's tests now check for a window on a workspace not shown
+      (mikelward/tidewm#76).
+- [ ] On a live session, Hyprland and tidewm: the pictures, how long
+      opening takes with many windows, a minimized window restored,
+      and keys reaching the overlay.
+- [ ] A left-click on bare desktop.
+- [ ] tidesway: sway's IPC has `foreign_toplevel_identifier` and sway
+      captures toplevels, so the tidewm path should work there; untried.
 
 **Needs more thought:** whether it replaces the switcher's Workspaces tab
 (SPEC.md §8.1), which lists workspaces by name and icons, or stays its own
@@ -2327,7 +2351,8 @@ history; tide's changes go on top of v0.9 there. Before rewriting §3.1 around i
 
 - Screen sharing through `tide-share-picker` on xdg-desktop-portal-wlr,
   with an adapter.
-- `grim -T` on a dwl build that exposes the toplevel-capture protocols.
+- `grim -T` on a dwl build that exposes the toplevel-capture protocols:
+  tidewm does, and its tests check a frame arrives (mikelward/tidewm#76).
 - Re-check Debian 13's toolchain.
 - Inventory everything the spec needs from the compositor, with the fork's
   replacement and a check for each: first draft in `docs/compositor.md`.

@@ -2984,6 +2984,50 @@ plain long press.
   hold up typing in every app; stopping `tide-fcitx5.service` gives the
   keyboard straight back.
 
+### 8.7 The overview
+
+**An MVP, built 2026-11-09.** Only stubs tested it: Quickshell and the
+compositors can't run here. It's tide for macOS's overview (tidemo SPEC.md
+§6.9) on tide for Linux.
+
+- **Every workspace's windows as cards,** full screen on the focused
+  monitor, grouped by workspace: the current one first, then the rest in
+  the bar's order. A workspace with no windows isn't shown.
+- **The cards:** each window's picture, its icon and its title.
+  - The order is each monitor's in turn, its tiled windows, then its
+    floating ones.
+  - A minimized window is in the group of the workspace it came from,
+    marked "minimized" (§6.7). If that workspace has gone, its group
+    comes after the bar's.
+- **The pictures** are taken once each time it opens, not live.
+  - Hyprland: Quickshell's `ScreencopyView` of the window's toplevel, as
+    the share picker's (§12). Hyprland captures windows on workspaces not
+    shown too.
+  - tidewm: `grim -T`, by the window's ext-foreign-toplevel-list
+    identifier, into `$XDG_RUNTIME_DIR/tide/overview`, every window at
+    once, the icons showing until they're done. Quickshell's
+    `ScreencopyView` captures a window only over Hyprland's own protocol.
+    tidewm captures windows on workspaces not shown (its
+    `tests/test_capture.py`). It needs grim 1.5 or later.
+  - Without a picture, the app's icon.
+- **Choosing:**
+  - A click on a card, or the arrows and Enter, goes to that window,
+    showing its workspace. A minimized one is restored there.
+  - The arrows and Tab step through the cards in order. The selection
+    starts on the focused window.
+  - A click on a group's name goes to that workspace.
+  - Typing filters the cards by title and app name, with the launcher's
+    fuzzy matcher.
+- **Closing:** Esc, a click on empty space, or `overview toggle` again.
+- **No key yet.** `qs -c tide ipc call overview toggle` opens it, and a
+  key of your own can run that. `Super+W`, as planned, is "Terminal on
+  the workstation" in conf and tide for macOS, so the key waits until
+  tide's keys are settled.
+- **The code:** `shell/Overview.qml` shows it; `shell/lib/overview.mjs`
+  orders, filters and chooses.
+- **Not yet:** a left-click on bare desktop to open it, and whether it
+  replaces the switcher's Workspaces tab (`TODO.md`).
+
 ## 9. Notifications
 
 See [`notifications.png`](docs/mocks/notifications.png).

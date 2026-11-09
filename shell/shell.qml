@@ -52,6 +52,9 @@ ShellRoot {
     // One launcher, which moves to the focused monitor as it opens.
     LauncherWindow {}
 
+    // The overview of every workspace (§8.7), which does the same.
+    Overview {}
+
     // One settings panel, which does the same.
     SettingsWindow {}
 
