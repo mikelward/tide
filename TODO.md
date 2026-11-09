@@ -2341,6 +2341,47 @@ prototype window manager, the capture flows, and each compositor need with
 river's replacement checked. If river stalls, the fallback is our own
 compositor started from tinywl (check its CC0 license before copying).
 
+## Prebuilt Hyprland and tidewm from tide's CI
+
+Planned 2026-11-09. Building Hyprland 0.57.1 needs g++-16, libxkbcommon
+1.11 and Lua 5.5; where apt lacks them (Debian 13), setup now stops rather
+than leave a session that can't run (#424), and the build takes 10-20
+minutes where it can run. tidewm builds wlroots 0.20 where the distro has
+none. Ship both as release assets instead, with the source build as the
+fallback.
+
+- **What's in one:** the directory setup's build makes,
+  `/opt/hyprland/<tag>-<pins>` (and tidewm's `/opt/tidewm/...`), as a
+  tarball: the binaries, the hyprwm libraries, and the newer libraries the
+  distro lacks, found by rpath. Graphics and input (Mesa, libdrm,
+  libinput, wayland) come from the distro, so a tarball is per distro and
+  architecture: built against that distro's own versions in a container of
+  it, amd64 and arm64.
+- **Built by:** a workflow that runs setup's own build (`build_hyprland`,
+  `build_tidewm`) in each distro's container when a pin in `deps.lock`
+  moves, and attaches the tarballs and their SHA-256 to a release.
+- **Pinned:** each tarball's URL and SHA-256 in `deps.lock`, beside the
+  source pins. setup picks the one for `/etc/os-release`'s ID and
+  VERSION_ID and the machine's architecture, checks the sum, unpacks it
+  where its build would go, and links it as `link_hyprland` does. Any
+  miss (no tarball for this distro, a download or sum that fails) falls
+  back to the source build, which still fails loudly.
+- **The catch, Debian 13:** a tarball has to be built against the oldest
+  glibc it runs on, so Debian 13's has to be built on Debian 13, which has
+  no GCC 16. Its build needs a GCC 16 toolchain from elsewhere, then
+  libstdc++ either linked statically or shipped in the tarball. Ubuntu
+  26.04 packages g++-16, so it can come first.
+- **Cost:** a matrix of 10-20 minute builds per pin move, free on a public
+  repository; release assets of tens of MB. **Trust:** the sums pinned in
+  this repository, and GitHub's build attestations, so a tarball can be
+  traced to the workflow run that built it.
+
+- [ ] Workflow: Ubuntu 26.04, amd64, Hyprland; tarball and sum on a release.
+- [ ] setup: download, check and unpack it, with the source build as the
+      fallback; tests with a stub download.
+- [ ] arm64, and tidewm's tarball the same way.
+- [ ] Debian 13: a GCC 16 toolchain for the build container.
+
 ## Compositor: explore a dwl fork (SPEC.md §21.1)
 
 Hyprland stays the baseline, but building it on Debian and Ubuntu is heavy,
