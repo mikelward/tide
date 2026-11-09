@@ -38,6 +38,7 @@ tidewm_portals=xdg-desktop-portal/tidewm-portals.conf
 autostart=systemd/user/app-.service.d/tide-autostart.conf
 lock=systemd/user/tide-lock.service
 lockfallback=systemd/user/tide-lock-fallback.service
+shellfallback=systemd/user/tide-shell-fallback.service
 clipboard=systemd/user/tide-clipboard.service
 fcitx5=systemd/user/tide-fcitx5.service
 lidinhibit=systemd/user/tide-lid-inhibit.service
@@ -159,11 +160,16 @@ cat > "$tmp/tidewm-bin/tidewm" <<'STUB'
 echo "tidewm $*"
 test "$1" = -s && /bin/sh -c "$2"
 STUB
-printf '#!/bin/sh\necho "uwsm $*"\n' > "$tmp/tidewm-bin/uwsm"
-# A stub tide-msg prints what it was asked, and fails with $FAKE_TIDEMSG_FAILS.
+# The stub uwsm fails with $FAKE_UWSM_FAILS.
+# shellcheck disable=SC2016 # the stub expands them when it runs
+printf '#!/bin/sh\necho "uwsm $*"\ntest -z "$FAKE_UWSM_FAILS"\n' > "$tmp/tidewm-bin/uwsm"
+# A stub tide-msg prints what it was asked, fails with $FAKE_TIDEMSG_FAILS,
+# and with $FAKE_TIDEMSG_HANGS never answers: it waits to read a FIFO that
+# nothing ever writes.
 cat > "$tmp/tidewm-bin/tide-msg" <<'STUB'
 #!/bin/sh
 echo "tide-msg $*"
+test -n "$FAKE_TIDEMSG_HANGS" && exec cat "$FAKE_TIDEMSG_HANGS"
 test -z "$FAKE_TIDEMSG_FAILS"
 STUB
 # A stub logger keeps what it's asked in $tmp/logged, not the journal.
@@ -172,6 +178,8 @@ cat > "$tmp/tidewm-bin/logger" <<STUB
 echo "\$*" >> "$tmp/logged"
 STUB
 chmod +x "$tmp/tidewm-bin/tidewm" "$tmp/tidewm-bin/uwsm" "$tmp/tidewm-bin/tide-msg" "$tmp/tidewm-bin/logger"
+# How the startup command ends: telling uwsm, or logging that it couldn't.
+fin="uwsm finalize SWAYSOCK || logger -t tide-tidewm -- 'uwsm finalize failed, so uwsm will end the session' 2>/dev/null"
 # What the startup command logs before anything else.
 up="logger -t tide-tidewm -- 'tidewm is up; going home and telling uwsm the session is ready' 2>/dev/null; "
 mkdir -p "$tmp/tidewm-config/hypr"
@@ -183,7 +191,7 @@ tidewm_start() {
 : > "$tmp/logged"
 tidewm_ran=$(tidewm_start)
 check "the tidewm wrapper starts tidewm, passing its arguments through" \
-    test "$(printf '%s\n' "$tidewm_ran" | head -n 1)" = "tidewm -s ${up}tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c x"
+    test "$(printf '%s\n' "$tidewm_ran" | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c x"
 check "before the shell has named home, tidewm goes to in and keeps it" \
     test "$(printf '%s\n' "$tidewm_ran" | sed -n 2p)" = "tide-msg workspace number in; persist workspace in"
 check "tidewm's startup command finalizes the session with tidewm's IPC socket" \
@@ -214,7 +222,7 @@ check "a home with a ; goes to tidewm in quotes, as it reads a quoted name" \
 printf '%s\n' 'return {' "    home = \"it's\"," '}' > "$tmp/tidewm-config/hypr/tide-workspaces.lua"
 tidewm_ran=$(tidewm_start)
 check "a home tidewm's start can't name is left to the shell" \
-    test "$tidewm_ran" = "tidewm -s ${up}exec uwsm finalize SWAYSOCK -c x
+    test "$tidewm_ran" = "tidewm -s ${up}$fin -c x
 uwsm finalize SWAYSOCK"
 # Without a config of your own, tidewm gets tide's; with one, or a -c,
 # it's tidewm's to read.
@@ -225,12 +233,12 @@ tidewm_bare() {
     env PATH="$tmp/tidewm-bin:/usr/bin:/bin" HOME="$tmp/tidewm-home" XDG_CONFIG_HOME="$tmp/tidewm-config" /bin/sh "$tidewm_wrapper" 2>/dev/null
 }
 check "with no config of yours, tidewm runs tide's" \
-    test "$(tidewm_bare | head -n 1)" = "tidewm -s ${up}tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c $tmp/tidewm-config/tidewm/tide.conf"
+    test "$(tidewm_bare | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c $tmp/tidewm-config/tidewm/tide.conf"
 check "a -c given wins over tide's" \
-    test "$(tidewm_start | head -n 1)" = "tidewm -s ${up}tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK -c x"
+    test "$(tidewm_start | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c x"
 : > "$tmp/tidewm-config/tidewm/config"
 check "your own config is tidewm's to read" \
-    test "$(tidewm_bare | head -n 1)" = "tidewm -s ${up}tide-msg 'workspace number in; persist workspace in'; exec uwsm finalize SWAYSOCK"
+    test "$(tidewm_bare | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin"
 # make install puts tide.conf where the wrapper looks: XDG_CONFIG_HOME's
 # tidewm, else ~/.config's.
 # shellcheck disable=SC2016 # sh -c's own $1
@@ -239,6 +247,19 @@ check "make install puts tide.conf in XDG_CONFIG_HOME's tidewm" \
 # shellcheck disable=SC2016 # and here
 check "and without it, in ~/.config's" \
     sh -c 'env -u XDG_CONFIG_HOME HOME="$1" make -n install 2>/dev/null | grep -qF "tidewm/tide.conf \"$1/.config/tidewm/\""' sh "$tmp/home"
+# A tide-msg that never answers would hold up the finalize after it, and
+# uwsm ends a session that never says it's ready.
+# The wrapper's 5 seconds, not the stub, end the wait: without them the whole
+# start is cut off at 20 and never reaches the finalize.
+mkfifo "$tmp/never"
+tidewm_ran=$(timeout 20 env PATH="$tmp/tidewm-bin:/usr/bin:/bin" XDG_CONFIG_HOME="$tmp/tidewm-config" \
+    FAKE_TIDEMSG_HANGS="$tmp/never" /bin/sh "$tidewm_wrapper" -c x 2>/dev/null)
+check "the session finalizes within seconds even if going home hangs" \
+    test "$(printf '%s\n' "$tidewm_ran" | tail -n 1)" = "uwsm finalize SWAYSOCK"
+: > "$tmp/logged"
+tidewm_start FAKE_UWSM_FAILS=1 >/dev/null
+check "a failed finalize is logged" \
+    grep -qxF -- "-t tide-tidewm -- uwsm finalize failed, so uwsm will end the session" "$tmp/logged"
 check "the tidewm wrapper is executable" test -x "$tidewm_wrapper"
 check "the tidewm wrapper parses as sh" sh -n "$tidewm_wrapper"
 if command -v shellcheck >/dev/null 2>&1; then
@@ -403,6 +424,56 @@ check "only a crash restarts the lock" \
 # lock that can't start, and once a crash loop's restarts run out.
 check "a failed lock starts the fallback" \
     has_line "$lock" "OnFailure=tide-lock-fallback.service"
+# contains TEXT PART: TEXT holds PART.
+contains() {
+    case $1 in *"$2"*) return 0 ;; esac
+    return 1
+}
+# A shell that fails for good leaves a terminal saying why, not a session
+# with nothing on it; three failed starts in two minutes is for good, so
+# 15-second hangs can't restart forever under systemd's default limit.
+check "a failed shell falls back to a terminal" \
+    has_line "$unit" "OnFailure=tide-shell-fallback.service"
+check "the shell gives up after three failed starts" \
+    has_line "$unit" "StartLimitBurst=3"
+check "in two minutes" has_line "$unit" "StartLimitIntervalSec=120"
+check "and falls back only then, not for a failure a restart recovers from" \
+    has_line "$unit" "RestartMode=direct"
+check "the shell's fallback runs only in a tide session" \
+    grep -q "^ExecCondition=.*:tide:" "$shellfallback"
+check "the shell's fallback stops with the session" \
+    has_line "$shellfallback" "PartOf=graphical-session.target"
+check "make install installs the shell's fallback" \
+    grep -qF "bin/tide-shell-fallback " Makefile
+# The fallback opens the first terminal there is, running itself to show
+# why; with none, it says what to do.
+mkdir -p "$tmp/sf-foot" "$tmp/sf-none" "$tmp/sf-show"
+printf '#!/bin/sh\necho "foot $*"\n' > "$tmp/sf-foot/foot"
+printf '#!/bin/sh\necho "xterm $*"\n' > "$tmp/sf-foot/xterm"
+chmod +x "$tmp/sf-foot/foot" "$tmp/sf-foot/xterm"
+check "the shell's fallback opens the first terminal there is, showing why" \
+    test "$(PATH="$tmp/sf-foot" /bin/sh bin/tide-shell-fallback 2>/dev/null)" = "foot bin/tide-shell-fallback --show"
+sf_err=$(PATH="$tmp/sf-none" /bin/sh bin/tide-shell-fallback 2>&1)
+sf_status=$?
+check "with no terminal, the shell's fallback fails" test "$sf_status" -eq 1
+check "and says what to do" \
+    test -n "$(printf '%s\n' "$sf_err" | grep -F 'no terminal to open: install foot, or log out with Super+Shift+E')"
+for cmd in systemctl journalctl; do
+    printf '#!/bin/sh\necho "%s $*"\n' "$cmd" > "$tmp/sf-show/$cmd"
+done
+printf '#!/bin/sh\necho "shell $*"\n' > "$tmp/sf-show/stubshell"
+chmod +x "$tmp/sf-show"/*
+sf_shown=$(PATH="$tmp/sf-show" SHELL="$tmp/sf-show/stubshell" /bin/sh bin/tide-shell-fallback --show 2>&1)
+check "the fallback's terminal says the shell didn't start" \
+    contains "$sf_shown" "tide's shell didn't start"
+check "and how to log out" contains "$sf_shown" "Super+Shift+E logs out"
+check "it shows the shell's status" \
+    contains "$sf_shown" "systemctl --user status tide.service"
+check "and its log" contains "$sf_shown" "journalctl --user -u tide.service -b"
+check "then leaves a shell to fix it from" \
+    test "$(printf '%s\n' "$sf_shown" | tail -n 1)" = "shell -i"
+check "the shell's fallback parses as sh" sh -n bin/tide-shell-fallback
+check "the shell's fallback is executable" test -x bin/tide-shell-fallback
 check "a lock that can't start isn't restarted" \
     has_line "$lock" "RestartPreventExitStatus=78"
 check "tide-lock exits with the status the unit doesn't restart" \
@@ -533,10 +604,11 @@ if command -v systemd-analyze >/dev/null 2>&1; then
     cp "$autostart" "$tmp/units/app-.service.d/"
     sed "s|^ExecStart=tide-lock\$|ExecStart=$tmp/stub|" "$lock" > "$tmp/units/tide-lock.service"
     sed "s|^ExecStart=hyprlock\$|ExecStart=$tmp/stub|" "$lockfallback" > "$tmp/units/tide-lock-fallback.service"
+    sed "s|^ExecStart=tide-shell-fallback\$|ExecStart=$tmp/stub|" "$shellfallback" > "$tmp/units/tide-shell-fallback.service"
     sed "s|^ExecStart=wl-paste .*\$|ExecStart=$tmp/stub|" "$clipboard" > "$tmp/units/tide-clipboard.service"
     sed "s|^ExecStart=qs .*\$|ExecStart=$tmp/stub|" "$kdelauncher" > "$tmp/units/tide-kde.service"
     sed "s|^ExecStart=fcitx5 .*\$|ExecStart=$tmp/stub|" "$fcitx5" > "$tmp/units/tide-fcitx5.service"
-    for u in tide.service tide-lock.service tide-lock-fallback.service tide-clipboard.service tide-kde.service tide-fcitx5.service hypridle.service "$agent_unit"; do
+    for u in tide.service tide-lock.service tide-lock-fallback.service tide-shell-fallback.service tide-clipboard.service tide-kde.service tide-fcitx5.service hypridle.service "$agent_unit"; do
         out=$(cd "$tmp/units" && XDG_RUNTIME_DIR="$tmp/run" \
             systemd-analyze verify --user --man=no "$u" 2>&1)
         status=$?
@@ -616,6 +688,7 @@ if make -s install HOME="$home" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go 
              .config/systemd/user/tide.service \
              .config/systemd/user/tide-lock.service \
              .config/systemd/user/tide-lock-fallback.service \
+             .config/systemd/user/tide-shell-fallback.service \
              .config/quickshell/tide/lock.qml \
              .config/quickshell/tide/LockSurface.qml \
              .config/quickshell/tide/LockFace.qml \

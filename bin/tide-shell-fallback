@@ -1,0 +1,43 @@
+#!/bin/sh
+# What a tide session shows when its shell can't run (SPEC.md §5.2):
+# tide.service's OnFailure= starts tide-shell-fallback.service, which runs
+# this once the shell has failed for good. Without it the session is a bare
+# wallpaper or a gray screen with nothing to click and no word of why. It
+# opens a terminal that says so, shows the shell's status and log, and says
+# how to log out, then leaves a shell there to fix it from.
+say() {
+    echo "tide-shell-fallback: $*" >&2
+    # The journal is the log: a logger that fails has nowhere to say so.
+    logger -t tide-shell-fallback -- "$*" 2>/dev/null || :
+}
+# What the terminal runs: this script again, with --show.
+if test "${1:-}" = --show; then
+    echo "tide's shell didn't start, so there's no bar or launcher."
+    echo "Super+Shift+E logs out. Here's why it stopped:"
+    echo
+    systemctl --user status tide.service --no-pager --lines=0 2>&1
+    echo
+    journalctl --user -u tide.service -b --no-pager -n 30 2>&1
+    echo
+    echo "systemctl --user restart tide starts it again."
+    exec "${SHELL:-/bin/sh}" -i
+fi
+say "tide's shell failed; opening a terminal that says why"
+self=$0
+case $self in
+    */*) ;;
+    *) self=tide-shell-fallback ;;
+esac
+# The first terminal there is, each given the command its own way.
+for term in xdg-terminal-exec foot kitty ghostty alacritty wezterm konsole gnome-terminal xterm; do
+    command -v "$term" >/dev/null 2>&1 || continue
+    say "running $term"
+    case $term in
+        xdg-terminal-exec | foot | kitty) exec "$term" "$self" --show ;;
+        gnome-terminal) exec "$term" --wait -- "$self" --show ;;
+        wezterm) exec "$term" start -- "$self" --show ;;
+        *) exec "$term" -e "$self" --show ;;
+    esac
+done
+say "no terminal to open: install foot, or log out with Super+Shift+E"
+exit 1
