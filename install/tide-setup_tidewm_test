@@ -42,12 +42,12 @@ teardown
 setup; ARGS=(--tidewm); run
 check "--tidewm succeeds" test "$status" -eq 0
 check "--tidewm installs tidewm's build dependencies, wlroots 0.20 among them" \
-    has "$calls" "apt-get install -y build-essential pkgconf git libwlroots-0.20-dev libwayland-dev"
+    has "$calls" "apt-get install -y --no-upgrade build-essential pkgconf git libwlroots-0.20-dev libwayland-dev"
 check "and PCRE2, for its window rules, and Xwayland, for X11 apps" has "$calls" "libjson-c-dev libpcre2-dev xwayland"
 check "and wlroots' portal, for sharing a screen or window" has "$calls" "xwayland xdg-desktop-portal-wlr"
 # git is one of them, so GitHub is asked about main only once they're in:
 # a machine without git would otherwise look offline.
-deps_line=$(printf '%s\n' "$calls" | grep -n "apt-get install -y build-essential pkgconf git" | head -n1 | cut -d: -f1)
+deps_line=$(printf '%s\n' "$calls" | grep -n "apt-get install -y --no-upgrade build-essential pkgconf git" | head -n1 | cut -d: -f1)
 ask_line=$(printf '%s\n' "$calls" | grep -nF "$ask" | head -n1 | cut -d: -f1)
 check "main's commit is asked for after the build dependencies, git among them, are installed" \
     test -n "$deps_line" -a -n "$ask_line" -a "${deps_line:-0}" -lt "${ask_line:-0}"
@@ -172,7 +172,7 @@ setup; ARGS=(); run TIDE_SETUP_ONLY=tidewm
 check "only-tidewm: builds tidewm's main" has "$calls" "$clone"
 check "only-tidewm: and says where" has "$output" "Built tidewm in $(build)"
 check "only-tidewm: and nothing of tide's own" lacks "$calls" "make -C $T/src/tide install"
-check "only-tidewm: and no Hyprland" lacks "$calls" "apt-get install -y hyprland"
+check "only-tidewm: and no Hyprland" lacks "$calls" "apt-get install -y --no-upgrade hyprland"
 check "only-tidewm: succeeds" test "$status" -eq 0
 teardown
 setup; ARGS=(); run TIDE_SETUP_ONLY=tidewm FAKE_MAKE_FAILS="$T/src/tidewm-build/tidewm"
@@ -210,7 +210,7 @@ check "without wlroots 0.20, setup succeeds" test "$status" -eq 0
 check "the pin is a 0.20 release" has "$wl_tag" "0.20."
 check "the build doesn't ask apt for wlroots" lacks "$calls" "libwlroots-0.20-dev"
 check "it installs wlroots' build dependencies with tidewm's" \
-    has "$calls" "apt-get install -y build-essential pkgconf git libwayland-dev wayland-protocols"
+    has "$calls" "apt-get install -y --no-upgrade build-essential pkgconf git libwayland-dev wayland-protocols"
 check "among them meson, and Xwayland's xcb libraries" has "$calls" "meson ninja-build bison"
 check "and the xcb libraries Xwayland needs" has "$calls" "libxcb-res0-dev libxcb-xfixes0-dev libxcb-errors-dev xwayland"
 check "it asks pkg-config whether the distro has wlroots 0.20" has "$calls" "pkg-config --modversion wlroots-0.20"
@@ -281,7 +281,7 @@ teardown
 
 # On Fedora, from dnf, with the package that has wlroots 0.20.
 setup; ARGS=(--tidewm); run SETUP_OS=redhat FAKE_DNF_WLROOTS=wlroots0.20-devel
-check "on Fedora, tidewm's dependencies come from dnf" has "$calls" "dnf install -y gcc make pkgconf-pkg-config git wayland-devel"
+check "on Fedora, tidewm's dependencies come from dnf" has "$calls" "dnf install -y --setopt=best=False gcc make pkgconf-pkg-config git wayland-devel"
 check "on Fedora, with the package that has wlroots 0.20" has "$calls" "xdg-desktop-portal-wlr wlroots0.20-devel"
 check "on Fedora, tidewm is built" has "$calls" "make -C $T/src/tidewm-build/tidewm install PREFIX="
 check "on Fedora, wlroots isn't built" lacks "$calls" "wlroots.git"

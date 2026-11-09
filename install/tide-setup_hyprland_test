@@ -10,27 +10,27 @@ set -e
 
 # apt's Hyprland is new enough: no build.
 setup; ARGS=(); run
-check "a new enough apt Hyprland is installed" has "$calls" "apt-get install -y hyprland hypridle"
+check "a new enough apt Hyprland is installed" has "$calls" "apt-get install -y --no-upgrade hyprland hypridle"
 check "a new enough apt Hyprland isn't built" lacks "$calls" "cmake"
 teardown
 
 # Debian testing's 0.56.2 is the oldest tide supports: installed, not built.
 setup; ARGS=(); run FAKE_APT_HYPRLAND=0.56.2+ds-1
-check "apt's 0.56.2 is installed" has "$calls" "apt-get install -y hyprland hypridle"
+check "apt's 0.56.2 is installed" has "$calls" "apt-get install -y --no-upgrade hyprland hypridle"
 check "apt's 0.56.2 isn't built" lacks "$calls" "cmake"
 teardown
 
 # 0.56.1 is older: build it.
 setup; ARGS=(); run FAKE_APT_HYPRLAND=0.56.1+ds-1
 check "apt's 0.56.1 builds from source" has "$calls" "--branch v0.57.1"
-check "apt's 0.56.1 isn't installed" lacks "$calls" "apt-get install -y hyprland"
+check "apt's 0.56.1 isn't installed" lacks "$calls" "apt-get install -y --no-upgrade hyprland"
 teardown
 
 # apt's Hyprland is too old (Ubuntu 26.04's 0.53): build it.
 setup; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4
 check "an old apt Hyprland builds from source" test "$status" -eq 0
-check "the build doesn't install apt's Hyprland" lacks "$calls" "apt-get install -y hyprland"
-check "the build installs its dependencies, with GCC 16" has "$calls" "apt-get install -y build-essential gcc-16 g++-16 cmake meson"
+check "the build doesn't install apt's Hyprland" lacks "$calls" "apt-get install -y --no-upgrade hyprland"
+check "the build installs its dependencies, with GCC 16" has "$calls" "apt-get install -y --no-upgrade build-essential gcc-16 g++-16 cmake meson"
 check "the build needs Lua 5.5" has "$calls" "liblua5.5-dev"
 check "the build needs libcanberra, which Hyprland 0.57 requires" has "$calls" "libcanberra-dev"
 check "the build needs sdbus-c++, which Hyprland 0.57 requires on Linux" has "$calls" "libsdbus-c++-dev"
@@ -433,7 +433,7 @@ teardown
 # Debian 13 has neither g++-16 nor xkbcommon 1.11: keep apt's Hyprland.
 setup; ARGS=(); run FAKE_APT_HYPRLAND=0.49.0+ds-1 FAKE_MISSING=g++-16 FAKE_APT_XKB=1.7.0-2
 check "without g++-16 there's no build" lacks "$calls" "cmake"
-check "without g++-16 apt's Hyprland installs" has "$calls" "apt-get install -y hyprland hypridle"
+check "without g++-16 apt's Hyprland installs" has "$calls" "apt-get install -y --no-upgrade hyprland hypridle"
 check "without g++-16 says what's missing" has "$output" "it has g++-16 none, libxkbcommon 1.7.0"
 teardown
 
@@ -447,14 +447,14 @@ setup; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4
 run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_APT_GXX=4:14.2.0-1
 check "a finished build without the toolchain isn't rebuilt" lacks "$calls" "cmake"
 check "a finished build without the toolchain keeps its links" test "$(readlink -f "$T/usr-local-bin/Hyprland")" = "$(inst)/bin/Hyprland"
-check "a finished build without the toolchain skips apt's Hyprland" lacks "$calls" "apt-get install -y hyprland"
+check "a finished build without the toolchain skips apt's Hyprland" lacks "$calls" "apt-get install -y --no-upgrade hyprland"
 teardown
 
 # An apt-cache that can't answer isn't taken for "no Hyprland".
 setup; ARGS=(); run FAKE_APT_CACHE_FAILS=1
 check "an apt-cache failure doesn't build" lacks "$calls" "cmake"
 check "an apt-cache failure says so" has "$output" "couldn't ask apt for its Hyprland version"
-check "an apt-cache failure installs everything" has "$calls" "apt-get install -y hyprland hypridle"
+check "an apt-cache failure installs everything" has "$calls" "apt-get install -y --no-upgrade hyprland hypridle"
 teardown
 
 setup; ARGS=(); run FAKE_APT_HYPRLAND="(none)"
@@ -472,7 +472,7 @@ setup; ARGS=(); run TIDE_SETUP_ONLY=hyprland FAKE_APT_HYPRLAND=0.56.1+ds-1 FAKE_
 check "only-hyprland: without the toolchain fails" test "$status" -ne 0
 check "only-hyprland: saying what's missing" has "$output" "it has g++-16 none"
 check "only-hyprland: and that it can't build" has "$output" "this release can't build Hyprland 0.56.2 or later"
-check "only-hyprland: and installs no Hyprland" lacks "$calls" "apt-get install -y hyprland"
+check "only-hyprland: and installs no Hyprland" lacks "$calls" "apt-get install -y --no-upgrade hyprland"
 teardown
 setup; ARGS=(); run TIDE_SETUP_ONLY=hyprland FAKE_APT_HYPRLAND=0.57.1+ds-1
 check "only-hyprland: a new enough apt Hyprland needs nothing built" lacks "$calls" "cmake"
@@ -482,7 +482,7 @@ teardown
 
 setup; ARGS=(--no-build-hyprland); run FAKE_APT_HYPRLAND=0.53.3+ds-4
 check "--no-build-hyprland doesn't build" lacks "$calls" "cmake"
-check "--no-build-hyprland installs apt's Hyprland" has "$calls" "apt-get install -y hyprland hypridle"
+check "--no-build-hyprland installs apt's Hyprland" has "$calls" "apt-get install -y --no-upgrade hyprland hypridle"
 teardown
 
 setup; ARGS=(--no-install); run FAKE_APT_HYPRLAND=0.53.3+ds-4
@@ -531,6 +531,17 @@ check "a failed build says a rerun resumes" has "$output" "a rerun resumes from 
 check "a failed build links nothing" test ! -e "$T/usr-local-bin/Hyprland"
 ARGS=(--ignore-errors); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CMAKE_FAILS=hyprlang
 check "--ignore-errors carries on past a failed build" has "$output" "tide installed"
+teardown
+
+# A Hyprland installed too old for tide's config is upgraded to apt's, which
+# isn't, without --upgrade: installs alone leave it be.
+setup; ARGS=(); run FAKE_APT_INSTALLED="hyprland=0.50.0-1"
+check "an installed Hyprland too old for tide is upgraded" has "$calls" "apt-get install -y --only-upgrade hyprland"
+teardown
+
+# Hyprland's build upgrades an installed libxkbcommon too old for it.
+setup; ARGS=(); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_APT_INSTALLED="libxkbcommon-dev=1.7.0-2"
+check "an installed libxkbcommon too old for Hyprland's build is upgraded" has "$calls" "apt-get install -y --only-upgrade libxkbcommon-dev"
 teardown
 
 finish

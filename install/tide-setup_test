@@ -82,7 +82,7 @@ check "a newer Go is fine" test "$status" -eq 0
 teardown
 
 setup; ARGS=(); run SETUP_OS=redhat
-check "Fedora installs Hyprland and Go with dnf" has "$calls" "dnf install -y hyprland hypridle"
+check "Fedora installs Hyprland and Go with dnf" has "$calls" "dnf install -y --setopt=best=False hyprland hypridle"
 check "Fedora installs its swaync, notify-send, Go and python3" has "$calls" "SwayNotificationCenter libnotify golang python3"
 teardown
 
@@ -93,18 +93,18 @@ setup; ARGS=(); run SETUP_OS=redhat FAKE_MISSING=swww
 check "Fedora: a missing package isn't fatal" test "$status" -eq 0
 check "Fedora: a missing swww, beside swaybg, isn't named" lacks "$output" "swww"
 check "Fedora: nor warned about" lacks "$output" "Warning:"
-check "Fedora: the rest install in one go" has "$calls" "dnf install -y hyprland hypridle hyprlock uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk waybar swaybg fuzzel"
+check "Fedora: the rest install in one go" has "$calls" "dnf install -y --setopt=best=False hyprland hypridle hyprlock uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk waybar swaybg fuzzel"
 teardown
 
 setup; ARGS=(); run SETUP_OS=redhat FAKE_DNF_QUERY_FAILS=1
 check "Fedora: a dnf query failure says so" has "$output" "couldn't ask dnf which packages exist"
-check "Fedora: a dnf query failure installs everything" has "$calls" "dnf install -y hyprland hypridle"
+check "Fedora: a dnf query failure installs everything" has "$calls" "dnf install -y --setopt=best=False hyprland hypridle"
 teardown
 
 setup; ARGS=(); run SETUP_OS=redhat
-check "Fedora installs dnf's copr plugin, whichever dnf it has" has "$calls" "sudo dnf install -y dnf-command(copr)"
+check "Fedora installs dnf's copr plugin, whichever dnf it has" has "$calls" "sudo dnf install -y --setopt=best=False dnf-command(copr)"
 check "Fedora enables Quickshell's COPR" has "$calls" "sudo dnf copr enable -y errornointernet/quickshell"
-check "then installs Quickshell on its own" has "$calls" "dnf install -y quickshell"
+check "then installs Quickshell on its own" has "$calls" "dnf install -y --setopt=best=False quickshell"
 check "Fedora's Qt has the effects module already" lacks "$calls" "qml6-module-qtquick-effects"
 check "so Fedora warns of nothing missing" lacks "$output" "won't load"
 teardown
@@ -113,14 +113,14 @@ teardown
 # before the main install asks dnf for them.
 setup; ARGS=(); run SETUP_OS=redhat
 check "Fedora enables Hyprland's COPR" has "$calls" "sudo dnf copr enable -y lionheartp/Hyprland"
-first=$(printf '%s\n' "$calls" | grep -n -e 'copr enable -y lionheartp/Hyprland' -e 'install -y hyprland' | cut -d: -f2- | head -n 1)
+first=$(printf '%s\n' "$calls" | grep -n -e 'copr enable -y lionheartp/Hyprland' -e 'install -y --setopt=best=False hyprland' | cut -d: -f2- | head -n 1)
 check "before it installs Hyprland" has "$first" "copr enable"
 teardown
 
 setup; ARGS=(); run SETUP_OS=redhat FAKE_DNF_COPR_FAILS=lionheartp/Hyprland
 check "a failed Hyprland COPR isn't fatal" test "$status" -eq 0
 check "a failed Hyprland COPR says the session won't start" has "$output" "couldn't enable the lionheartp/Hyprland COPR"
-check "a failed Hyprland COPR still installs the rest" has "$calls" "dnf install -y hyprland hypridle"
+check "a failed Hyprland COPR still installs the rest" has "$calls" "dnf install -y --setopt=best=False hyprland hypridle"
 check "a failed Hyprland COPR still enables Quickshell's" has "$calls" "dnf copr enable -y errornointernet/quickshell"
 teardown
 
@@ -157,18 +157,18 @@ teardown
 setup; ARGS=(); run SETUP_OS=redhat FAKE_DNF_COPR_FAILS=1
 check "a failed COPR isn't fatal" test "$status" -eq 0
 check "a failed COPR says the bar won't run" has "$output" "couldn't enable the errornointernet/quickshell COPR"
-check "a failed COPR doesn't try to install Quickshell" lacks "$calls" "dnf install -y quickshell"
+check "a failed COPR doesn't try to install Quickshell" lacks "$calls" "dnf install -y --setopt=best=False quickshell"
 teardown
 
 setup; ARGS=(); run
-check "Debian and Ubuntu install Quickshell and its effects module from apt" has "$calls" "apt-get install -y quickshell qml6-module-qtquick-effects"
+check "Debian and Ubuntu install Quickshell and its effects module from apt" has "$calls" "apt-get install -y --no-upgrade quickshell qml6-module-qtquick-effects"
 check "Quickshell isn't in the main install, so its absence can't block it" lacks "$calls" "golang quickshell"
 teardown
 
 setup; ARGS=(); run FAKE_MISSING=qml6-module-qtquick-effects
 check "a missing effects module isn't fatal" test "$status" -eq 0
 check "a missing effects module says the bar won't load" has "$output" "couldn't install qml6-module-qtquick-effects, so tide's bar won't load"
-check "Quickshell still installs without it" has "$calls" "apt-get install -y quickshell"
+check "Quickshell still installs without it" has "$calls" "apt-get install -y --no-upgrade quickshell"
 teardown
 
 setup; ARGS=(); run SETUP_OS=arch FAKE_MISSING=quickshell
@@ -177,13 +177,70 @@ check "a distro without Quickshell says the bar won't run" has "$output" "couldn
 check "and that waybar stays" has "$output" "waybar stays the bar"
 teardown
 
+# Only what's missing is installed: apt-get --no-upgrade leaves an installed
+# package be, even one newer than apt's, as a company's own git, which a
+# plain install -y fails trying to downgrade.
+setup; ARGS=(); run FAKE_MISSING=quickshell FAKE_APT_INSTALLED="git=1:9.9.9-1"
+check "packages install without upgrading the installed ones" has "$calls" "apt-get install -y --no-upgrade build-essential"
+check "nothing is upgraded without --upgrade" lacks "$calls" "--only-upgrade"
+teardown
+
+# --upgrade upgrades what apt has newer, and never downgrades.
+setup; ARGS=(--upgrade); run FAKE_MISSING=quickshell FAKE_APT_INSTALLED="git=0.5-1 cmake=1:9.9-1"
+check "--upgrade upgrades a package apt has newer" has "$calls" "apt-get install -y --only-upgrade git"
+check "--upgrade leaves one newer than apt's" lacks "$calls" "--only-upgrade cmake"
+check "--upgrade upgrades only what's installed" lacks "$calls" "--only-upgrade build-essential"
+teardown
+
+# A Quickshell installed too old for tide's shell is upgraded to apt's,
+# which isn't, without --upgrade: installs alone leave it be.
+setup; ARGS=(); run FAKE_APT_INSTALLED="quickshell=0.2.1-1"
+check "an installed Quickshell too old for tide is upgraded" has "$calls" "apt-get install -y --only-upgrade quickshell"
+check "and says why" has "$output" "Upgrading quickshell from 0.2.1"
+teardown
+
+# One that can't be upgraded keeps a source build's links in front of it.
+setup
+mkdir -p "$T/opt/quickshell/v0.3.1-test/bin"
+ln -s "$T/opt/quickshell/v0.3.1-test/bin/qs" "$T/usr-local-bin/qs"
+ARGS=(); run FAKE_APT_INSTALLED="quickshell=0.2.1-1" FAKE_APT_UPGRADE_FAILS=1
+check "a failed upgrade of a too-old Quickshell says so" has "$output" "could not upgrade quickshell"
+check "and keeps the source build's links" test -L "$T/usr-local-bin/qs"
+teardown
+
+# Quickshell's build upgrades an installed Qt too old for it.
+setup; ARGS=(); run FAKE_MISSING=quickshell FAKE_APT_INSTALLED="qt6-base-dev=6.4.2+dfsg-1"
+check "an installed Qt too old for Quickshell's build is upgraded" has "$calls" "apt-get install -y --only-upgrade qt6-base-dev"
+teardown
+
+# So is a Go too old to build tide-grant, where apt has one new enough.
+setup; ARGS=(); run FAKE_APT_CANDIDATES="golang=2:1.24~2" FAKE_APT_INSTALLED="golang=2:1.19~1"
+check "an installed Go too old for tide is upgraded" has "$calls" "apt-get install -y --only-upgrade golang"
+teardown
+
+# But not where apt's is too old as well: that's no better.
+setup; ARGS=(); run FAKE_APT_CANDIDATES="golang=2:1.20~1" FAKE_APT_INSTALLED="golang=2:1.19~1"
+check "a Go upgrade that wouldn't be enough isn't tried" lacks "$calls" "--only-upgrade golang"
+teardown
+
+# Fedora upgrades one too old the same way; dnf upgrade never downgrades.
+setup; ARGS=(); run SETUP_OS=redhat FAKE_RPM_INSTALLED="golang=1.19.5 hyprland=0.57.1"
+check "Fedora upgrades an installed Go too old for tide" has "$calls" "dnf upgrade -y golang"
+check "and leaves a new enough Hyprland be" lacks "$calls" "dnf upgrade -y hyprland"
+teardown
+
+# One new enough is left as it is.
+setup; ARGS=(); run FAKE_APT_INSTALLED="quickshell=0.3.0-1"
+check "an installed Quickshell new enough isn't upgraded" lacks "$calls" "--only-upgrade"
+teardown
+
 # The directory this run's Quickshell build installs into.
 qs_inst() { printf '%s\n' "$T"/opt/quickshell/v0.3.1-*; }
 
 # apt without Quickshell (Ubuntu 26.04): build the pinned release.
 setup; ARGS=(); run FAKE_MISSING=quickshell
 check "apt without Quickshell builds it" test "$status" -eq 0
-check "the Quickshell build never asks apt for quickshell" lacks "$calls" "apt-get install -y quickshell"
+check "the Quickshell build never asks apt for quickshell" lacks "$calls" "apt-get install -y --no-upgrade quickshell"
 check "the Quickshell build installs Qt's private headers" has "$calls" "qt6-declarative-private-dev"
 check "the Quickshell build installs the effects module the bar needs" has "$calls" "qml6-module-qtquick-effects"
 check "the Quickshell build installs the GLES headers Qt's GUI module needs" has "$calls" " libgles-dev "
@@ -288,7 +345,7 @@ teardown
 # passed over for the build, as if apt had none.
 setup; ARGS=(); run FAKE_APT_QS=0.2.1-3
 check "apt's old Quickshell isn't fatal" test "$status" -eq 0
-check "apt's old Quickshell isn't installed" lacks "$calls" "apt-get install -y quickshell"
+check "apt's old Quickshell isn't installed" lacks "$calls" "apt-get install -y --no-upgrade quickshell"
 check "apt's old Quickshell is named" has "$output" "apt's Quickshell is 0.2.1, and tide's shell needs 0.3.0; building v0.3.1 from source"
 check "apt's old Quickshell is replaced by the build" has "$calls" "cmake -S $T/src/quickshell-build/quickshell "
 check "the build replacing it is linked onto PATH" \
@@ -297,19 +354,19 @@ teardown
 
 # 0.3.0 is new enough, with an epoch too...
 setup; ARGS=(); run FAKE_APT_QS=1:0.3.0-1build1
-check "apt's Quickshell 0.3.0 is installed" has "$calls" "apt-get install -y quickshell"
+check "apt's Quickshell 0.3.0 is installed" has "$calls" "apt-get install -y --no-upgrade quickshell"
 check "apt's Quickshell 0.3.0 isn't built" lacks "$calls" "quickshell-mirror"
 teardown
 
 # ...but a pre-release of it isn't: Debian orders 0.3.0~rc1 before 0.3.0.
 setup; ARGS=(); run FAKE_APT_QS=0.3.0~rc1-1
-check "apt's Quickshell 0.3.0~rc1 isn't installed" lacks "$calls" "apt-get install -y quickshell"
+check "apt's Quickshell 0.3.0~rc1 isn't installed" lacks "$calls" "apt-get install -y --no-upgrade quickshell"
 check "apt's Quickshell 0.3.0~rc1 is named" has "$output" "apt's Quickshell is 0.3.0~rc1, and tide's shell needs 0.3.0"
 teardown
 
 # A pre-release of a later one is new enough.
 setup; ARGS=(); run FAKE_APT_QS=0.3.1~rc1-1
-check "apt's Quickshell 0.3.1~rc1 is installed" has "$calls" "apt-get install -y quickshell"
+check "apt's Quickshell 0.3.1~rc1 is installed" has "$calls" "apt-get install -y --no-upgrade quickshell"
 teardown
 
 # With apt's Quickshell too old and its Qt too old to build one, there's
@@ -317,7 +374,7 @@ teardown
 setup; ARGS=(); run FAKE_APT_QS=0.2.1-3 FAKE_APT_QT=6.4.2+dfsg-21.1build5
 check "an old Quickshell and Qt isn't fatal" test "$status" -eq 0
 check "an old Quickshell and Qt says why" has "$output" "apt's Quickshell is 0.2.1, and tide's shell needs 0.3.0, and building it needs Qt 6.6"
-check "an old Quickshell and Qt installs no Quickshell" lacks "$calls" "apt-get install -y quickshell"
+check "an old Quickshell and Qt installs no Quickshell" lacks "$calls" "apt-get install -y --no-upgrade quickshell"
 check "an old Quickshell and Qt clones nothing" lacks "$calls" "quickshell-mirror"
 teardown
 
@@ -510,7 +567,7 @@ teardown
 # waybar's icons come from Symbols Nerd Font, which not every release
 # packages, so it's asked for on its own, and its absence costs only them.
 setup; ARGS=(); run
-check "nerd font: Debian installs the icons-only font" has "$calls" "apt-get install -y fonts-nerd-symbols"
+check "nerd font: Debian installs the icons-only font" has "$calls" "apt-get install -y --no-upgrade fonts-nerd-symbols"
 check "nerd font: not in the main transaction" lacks "$(printf '%s\n' "$calls" | grep 'hypridle')" "fonts-nerd-symbols"
 teardown
 # A release without the package gets the font from Nerd Fonts' own release,
@@ -617,10 +674,10 @@ check "a missing swww, beside swaybg, isn't named" lacks "$output" "swww"
 check "nor warned about" lacks "$output" "Warning:"
 check "nor a failure" lacks "$output" "Failed:"
 check "swaybg is installed in its place" has "$output" " swaybg "
-check "the rest install in one go" has "$calls" "apt-get install -y hyprland hypridle hyprlock uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk waybar swaybg fuzzel"
+check "the rest install in one go" has "$calls" "apt-get install -y --no-upgrade hyprland hypridle hyprlock uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk waybar swaybg fuzzel"
 check "the rest install in one go, notify-send, Go and python3 too" has "$calls" "playerctl jq make xdg-terminal-exec hyprpolkitagent sway-notification-center libnotify-bin golang python3"
-check "satty is asked for, for the screenshot's Annotate" has "$calls" "apt-get install -y satty"
-check "Debian gets nm-connection-editor from network-manager-gnome" has "$calls" "apt-get install -y network-manager-gnome"
+check "satty is asked for, for the screenshot's Annotate" has "$calls" "apt-get install -y --no-upgrade satty"
+check "Debian gets nm-connection-editor from network-manager-gnome" has "$calls" "apt-get install -y --no-upgrade network-manager-gnome"
 check "a missing package is never asked for" lacks "$calls" "swww"
 teardown
 
@@ -642,7 +699,7 @@ teardown
 # When apt itself fails (offline, say), that's one failure, not one per
 # package.
 setup; ARGS=(); run FAKE_MISSING=nothing FAKE_APT_GET_FAILS=1
-check "a failed apt is reported once" test "$(printf '%s\n' "$calls" | grep -c '^apt-get install -y hyprland')" -eq 1
+check "a failed apt is reported once" test "$(printf '%s\n' "$calls" | grep -c '^apt-get install -y --no-upgrade hyprland')" -eq 1
 check "a failed apt names what didn't install" has "$output" "could not install: hyprland hypridle"
 teardown
 
@@ -1066,7 +1123,7 @@ Installed: hyprland hypridle hyprlock uwsm "
 check "quiet: and Quickshell's" has "$output" "Installing Quickshell
 Installed: quickshell qml6-module-qtquick-effects"
 check "quiet: apt's own lines aren't shown" lacks "$output" "Setting up"
-check "quiet: they're in the log" has "$(log)" "+ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y hyprland hypridle"
+check "quiet: they're in the log" has "$(log)" "+ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade hyprland hypridle"
 check "quiet: what apt said, too" has "$(log)" "Setting up hyprland (1.0-1) ..."
 check "quiet: make's lines aren't shown" lacks "$output" "install -m 644"
 check "quiet: they're in the log" has "$(log)" "+ make -C $T/src/tide install GO=go
@@ -1105,7 +1162,7 @@ teardown
 # where the rest is; the step names what didn't install.
 setup; ARGS=(); run FAKE_APT_REFUSES=satty
 check "quiet: a failed install isn't fatal" test "$status" -eq 0
-check "quiet: a failed install shows what apt said, and where the log is" has "$output" "'sudo DEBIAN_FRONTEND=noninteractive apt-get install -y satty -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold' exited with status 100; the end of what it said (all of it is in $T/home/.local/state/setup/setup.log):
+check "quiet: a failed install shows what apt said, and where the log is" has "$output" "'sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade satty -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold' exited with status 100; the end of what it said (all of it is in $T/home/.local/state/setup/setup.log):
     Reading package lists...
     E: Package 'satty' has no installation candidate"
 check "quiet: the step names it" has "$output" "
@@ -1147,7 +1204,7 @@ setup; ARGS=(); : > "$T/tty"
 printf '#!/bin/sh\nexit 0\n' > "$T/bin/apt-extracttemplates"; chmod +x "$T/bin/apt-extracttemplates"
 run APT_TTY="$T/tty"
 check "with a terminal, apt asks debconf's questions on it" \
-    has "$calls" "apt-get install -y hyprland"
+    has "$calls" "apt-get install -y --no-upgrade hyprland"
 check "through a hook it runs before it installs" \
     has "$calls" "-o DPkg::Pre-Install-Pkgs::=set --; while read -r deb; do set -- \"\$@\" \"\$deb\"; done; test \"\$#\" -eq 0 || DEBIAN_FRONTEND=readline /usr/sbin/dpkg-preconfigure \"\$@\" <$T/tty >$T/tty 2>&1 || true"
 check "and apt itself still asks nothing" lacks "$(cat "$T/apt-asks")" "DEBIAN_FRONTEND=unset"

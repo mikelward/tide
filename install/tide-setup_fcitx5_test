@@ -37,10 +37,10 @@ Layout=
 setup; fake_fcitx5; ARGS=(); run FAKE_X11_LAYOUT=us FAKE_X11_VARIANT=dvorak
 check "fcitx5: exits 0" test "$status" -eq 0
 check "fcitx5: Debian installs fcitx5 and its GTK and Qt modules" \
-    has "$calls" "apt-get install -y fcitx5 fcitx5-frontend-gtk3 fcitx5-frontend-gtk4 fcitx5-frontend-qt6 fcitx5-config-qt"
+    has "$calls" "apt-get install -y --no-upgrade fcitx5 fcitx5-frontend-gtk3 fcitx5-frontend-gtk4 fcitx5-frontend-qt6 fcitx5-config-qt"
 check "fcitx5: they're a package step of their own" has "$output" "Installing fcitx5, for accents in tide"
 check "fcitx5: Debian installs what tide's accents need to build" \
-    has "$calls" "apt-get install -y libfcitx5core-dev fcitx5-modules-dev cmake extra-cmake-modules g++ pkg-config"
+    has "$calls" "apt-get install -y --no-upgrade libfcitx5core-dev fcitx5-modules-dev cmake extra-cmake-modules g++ pkg-config"
 check "fcitx5: and no Qt" lacks "$calls" "qt6-base-dev"
 check "fcitx5: clones nothing of its own" lacks "$calls" "schnelle-umlaute"
 check "fcitx5: builds tide's accents from the tide checkout" has "$calls" "make -C $T/src/tide fcitx5"
@@ -162,9 +162,9 @@ teardown
 
 # Fedora and Arch name the packages their own way.
 setup; fake_fcitx5; ARGS=(); run SETUP_OS=redhat
-check "fcitx5: Fedora installs fcitx5 and its modules" has "$calls" "dnf install -y fcitx5 fcitx5-gtk fcitx5-qt6 fcitx5-configtool"
+check "fcitx5: Fedora installs fcitx5 and its modules" has "$calls" "dnf install -y --setopt=best=False fcitx5 fcitx5-gtk fcitx5-qt6 fcitx5-configtool"
 check "fcitx5: and what tide's accents need to build" \
-    has "$calls" "dnf install -y fcitx5-devel cmake extra-cmake-modules gcc-c++"
+    has "$calls" "dnf install -y --setopt=best=False fcitx5-devel cmake extra-cmake-modules gcc-c++"
 check "fcitx5: and builds them" has "$calls" "sudo cmake --install $(ta_build)"
 teardown
 setup; fake_fcitx5; ARGS=(); run SETUP_OS=arch
@@ -178,7 +178,7 @@ teardown
 setup; fake_fcitx5; ARGS=(); run FAKE_MISSING=fcitx5-frontend-gtk4
 check "fcitx5: a missing module isn't fatal" test "$status" -eq 0
 check "fcitx5: it's named" has "$output" "couldn't install fcitx5-frontend-gtk4, so a held letter may type no accents in tide"
-check "fcitx5: the rest install" has "$calls" "apt-get install -y fcitx5 fcitx5-frontend-gtk3 fcitx5-frontend-qt6 fcitx5-config-qt"
+check "fcitx5: the rest install" has "$calls" "apt-get install -y --no-upgrade fcitx5 fcitx5-frontend-gtk3 fcitx5-frontend-qt6 fcitx5-config-qt"
 teardown
 
 # Missing build dependencies leave it unbuilt.
@@ -191,7 +191,7 @@ teardown
 
 # Without fcitx5 there's nothing to build or set up.
 setup; ARGS=(); run
-check "fcitx5: without fcitx5, it's still asked for" has "$calls" "apt-get install -y fcitx5 "
+check "fcitx5: without fcitx5, it's still asked for" has "$calls" "apt-get install -y --no-upgrade fcitx5 "
 check "fcitx5: without fcitx5, nothing's built" lacks "$calls" "make -C $T/src/tide fcitx5"
 check "fcitx5: without fcitx5, no build dependencies" lacks "$calls" "libfcitx5core-dev"
 check "fcitx5: without fcitx5, no profile" test ! -e "$(fx_dir)/profile"
@@ -202,7 +202,7 @@ teardown
 
 # --no-install leaves the packages and the build, but sets fcitx5 up.
 setup; fake_fcitx5; ARGS=(--no-install); run
-check "fcitx5: --no-install installs no fcitx5" lacks "$calls" "install -y fcitx5"
+check "fcitx5: --no-install installs no fcitx5" lacks "$calls" "install -y --no-upgrade fcitx5"
 check "fcitx5: --no-install builds nothing" lacks "$calls" "make -C $T/src/tide fcitx5"
 check "fcitx5: --no-install installs nothing into fcitx5" lacks "$calls" "cmake --install"
 check "fcitx5: --no-install still writes the profile" test -f "$(fx_dir)/profile"

@@ -105,7 +105,7 @@ printf "%s\\n" "dnf \$*" >> "$CALLS"
 if test "\$1" = copr; then
     case "\$FAKE_DNF_COPR_FAILS" in 1|"\$4") exit 1 ;; esac
 fi
-test "\$*" != "install -y dnf-command(copr)" || test -z "\$FAKE_DNF_PLUGIN_FAILS" || exit 1
+test "\$*" != "install -y --setopt=best=False dnf-command(copr)" || test -z "\$FAKE_DNF_PLUGIN_FAILS" || exit 1
 test "\$1" != install || for arg; do
     case " \$FAKE_MISSING " in *" \$arg "*) echo "No match for argument: \$arg" >&2; exit 1 ;; esac
 done
@@ -122,8 +122,17 @@ if test "\$1" = install; then
 fi
 MOCK
     # rpm -qa lists what dnf installed.
+    # rpm -q --qf '%{VERSION}' NAME answers from \$FAKE_RPM_INSTALLED's
+    # name=version pairs, failing for one that isn't there, as rpm does.
     cat > "$T/bin/rpm" <<MOCK
 #!/bin/sh
+if test "\$1" = -q; then
+    for pair in \$FAKE_RPM_INSTALLED; do
+        case "\$pair" in "\$4="*) printf '%s' "\${pair#*=}"; exit 0 ;; esac
+    done
+    echo "package \$4 is not installed"
+    exit 1
+fi
 test "\$1" = -qa || exit 1
 test ! -f "$T/installed" || sort -u "$T/installed"
 MOCK
@@ -233,6 +242,7 @@ MOCK
     # none, as Debian's package does. What it installs goes in
     # $T/installed, for dpkg-query, and it says so, as apt does, a line or
     # two a package. Whether it could ask anything goes in $T/apt-asks.
+    # With \$FAKE_APT_UPGRADE_FAILS, an --only-upgrade fails.
     # With \$FAKE_KEPT_CONFIG, an install keeps that config file, under
     # $T/etc, and writes the package's version beside it, as dpkg does.
     cat > "$T/bin/apt-get" <<MOCK
@@ -253,6 +263,14 @@ if test -n "\$FAKE_APT_GET_FAILS"; then
     echo "E: Could not get lock /var/lib/dpkg/lock-frontend" >&2
     exit 100
 fi
+case " \$* " in
+    *" --only-upgrade "*)
+        if test -n "\$FAKE_APT_UPGRADE_FAILS"; then
+            echo "E: Unable to fetch some archives" >&2
+            exit 100
+        fi
+        ;;
+esac
 for arg; do
     case " \$FAKE_MISSING \$FAKE_APT_REFUSES " in
         *" \$arg "*)
@@ -320,6 +338,8 @@ MOCK
     # offering Hyprland \$FAKE_APT_HYPRLAND (or a new enough one), g++-16
     # \$FAKE_APT_GXX and libxkbcommon-dev \$FAKE_APT_XKB (or Ubuntu 26.04's),
     # Quickshell \$FAKE_APT_QS (or 0.3.0, new enough), and 1.0 of the rest.
+    # \$FAKE_APT_INSTALLED lists the package=version pairs installed already,
+    # and \$FAKE_APT_CANDIDATES package=version pairs apt offers instead.
     # \$FAKE_APT_CACHE_FAILS makes it fail.
     cat > "$T/bin/apt-cache" <<MOCK
 #!/bin/sh
@@ -335,7 +355,14 @@ for pkg; do
         quickshell) version="\${FAKE_APT_QS:-0.3.0-1build1}" ;;
         *) version=1.0-1 ;;
     esac
-    printf "%s:\\n  Installed: (none)\\n  Candidate: %s\\n  Version table:\\n" "\$pkg" "\$version"
+    for pair in \$FAKE_APT_CANDIDATES; do
+        case "\$pair" in "\$pkg="*) version=\${pair#*=} ;; esac
+    done
+    installed="(none)"
+    for pair in \$FAKE_APT_INSTALLED; do
+        case "\$pair" in "\$pkg="*) installed=\${pair#*=} ;; esac
+    done
+    printf "%s:\\n  Installed: %s\\n  Candidate: %s\\n  Version table:\\n" "\$pkg" "\$installed" "\$version"
 done
 MOCK
     # cmake configuring into a prefix creates the commands the build would

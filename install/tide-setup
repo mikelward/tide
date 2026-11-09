@@ -131,6 +131,14 @@ SUDO=yes
 IGNORE_ERRORS=no
 VERBOSE=no
 BUILD_HYPRLAND=yes
+# Whether to upgrade the packages tide uses that are installed already
+# (--upgrade). Without it, only what's missing is installed: a package
+# there stays as it is, even one newer than the distro's, as a company's
+# own git, which apt would otherwise downgrade.
+UPGRADE=no
+# The packages pkg_upgrade couldn't upgrade: one of min_versions' there
+# may still be too old, so a source build's links stay in front of it.
+UPGRADE_FAILED_PKGS=
 BUILD_TIDEWM=no
 # Where GitHub's repos come from: empty for github.com itself (see
 # git_github).
@@ -579,7 +587,7 @@ sudo_or_warn() {
 usage() {
     cat <<'USAGE'
 Usage: tide-setup [--no-install] [--no-sudo] [--ignore-errors]
-                  [--no-build-hyprland]
+                  [--no-build-hyprland] [--upgrade]
                   [--dm tide|sddm|gdm|keep | --greeter | --no-greeter]
                   [--github PREFIX] [-v | --verbose] [-h | --help]
 
@@ -592,6 +600,8 @@ Options:
   --no-sudo        Skip every privileged step (packages, the session entry,
                    the display manager)
   --ignore-errors  Keep going past failures instead of aborting on the first
+  --upgrade        Also upgrade the packages tide uses that are installed
+                   already; without it, only what's missing is installed
   --no-build-hyprland
                    On Debian and Ubuntu, don't build Hyprland from source when
                    apt's is older than 0.56.2 (the build takes 10-20 minutes)
@@ -642,6 +652,8 @@ while test $# -gt 0; do
         --build-hyprland) BUILD_HYPRLAND=yes ;;
         --no-build-hyprland) BUILD_HYPRLAND=no ;;
         --tidewm) BUILD_TIDEWM=yes ;;
+        --upgrade) UPGRADE=yes ;;
+        --no-upgrade) UPGRADE=no ;;
         --no-tidewm) BUILD_TIDEWM=no ;;
         --greeter) GREETER=yes ;;
         --no-greeter) GREETER=no ;;
@@ -1020,9 +1032,14 @@ pkg_note() {
 
 # apt_install, dnf_install, pacman_install NAME...: install NAME, quietly
 # (see sudo_logged), for pkg_end to report.
+# apt_install, dnf_install, pacman_install NAME...: install those of NAME
+# that aren't, quietly, for pkg_end to report. apt and dnf leave the rest
+# as they are, upgraded only by --upgrade (pkg_upgrade); pacman -S --needed
+# upgrades an out-of-date one, as Arch has no partial upgrades.
 apt_install() {
     pkg_note asked "$@"
-    sudo_logged apt-get install -y "$@" && return 0
+    pkg_upgrade apt "$@"
+    sudo_logged apt-get install -y --no-upgrade "$@" && return 0
     _pi_status=$?
     pkg_note failed "$@"
     return "$_pi_status"
@@ -1030,7 +1047,9 @@ apt_install() {
 
 dnf_install() {
     pkg_note asked "$@"
-    sudo_logged dnf install -y "$@" && return 0
+    pkg_upgrade dnf "$@"
+    # best off, Fedora's default and dnf5's way, leaves an installed one be.
+    sudo_logged dnf install -y --setopt=best=False "$@" && return 0
     _pi_status=$?
     pkg_note failed "$@"
     return "$_pi_status"
@@ -1145,14 +1164,81 @@ pkg_install() {
     esac
 }
 
-# apt_candidates prints "package version" for each of its arguments apt
-# knows, with "(none)" for a version apt has no candidate for, and fails when
-# apt-cache does. Asked in the C locale, whose labels it parses.
+# apt_candidates prints "package candidate installed" for each of its
+# arguments apt knows, with "(none)" for a version apt has no candidate
+# for, or one that isn't installed, and fails when apt-cache does. Asked in
+# the C locale, whose labels it parses.
 apt_candidates() {
     _policy=$(LC_ALL=C apt-cache policy "$@") || return 1
     printf '%s\n' "$_policy" | awk '
-        /^[^ ].*:$/ { pkg = substr($0, 1, length($0) - 1) }
-        /^  Candidate:/ { print pkg, $2 }'
+        /^[^ ].*:$/ { pkg = substr($0, 1, length($0) - 1); installed = "(none)" }
+        /^  Installed:/ { installed = $2 }
+        /^  Candidate:/ { print pkg, $2, installed }'
+}
+
+# pkg_upgrade MANAGER NAME...: upgrades those of NAME that MANAGER (apt or
+# dnf) has installed below min_versions' minimum, saying why, and with
+# --upgrade, every one it has newer. Never one newer than apt's, which apt
+# would downgrade; dnf upgrade never downgrades. A failure is a warning:
+# what's installed still works, and UPGRADE_FAILED_PKGS names it.
+pkg_upgrade() {
+    _pu_manager=$1
+    shift
+    if test "$UPGRADE" != yes; then
+        _pu_want=
+        for _p; do
+            test -z "$(min_version "$_p")" || _pu_want="$_pu_want $_p"
+        done
+        test -n "$_pu_want" || return 0
+        # shellcheck disable=SC2086  # a space-separated list of names
+        set -- $_pu_want
+    fi
+    _pu_names=
+    case "$_pu_manager" in
+        apt)
+            _pu_policy=$(apt_candidates "$@") || {
+                warn "couldn't ask apt which packages have upgrades; not upgrading them"
+                return 0
+            }
+            while read -r _p _c _i; do
+                test -n "$_p" && test "$_c" != "(none)" && test "$_i" != "(none)" || continue
+                dpkg --compare-versions "$_c" gt "$_i" 2>/dev/null || continue
+                if test "$UPGRADE" = yes; then
+                    _pu_names="$_pu_names $_p"
+                    continue
+                fi
+                _pu_min=$(min_version "$_p")
+                _pu_have=$(upstream_version "$_i")
+                if ! version_at_least "$_pu_have" "$_pu_min" \
+                    && version_at_least "$(upstream_version "$_c")" "$_pu_min"; then
+                    info "Upgrading $_p from $_pu_have, older than the $_pu_min tide needs"
+                    _pu_names="$_pu_names $_p"
+                fi
+            done <<EOF
+$_pu_policy
+EOF
+            set -- apt-get install -y --only-upgrade
+            ;;
+        dnf)
+            for _p; do
+                _pu_have=$(rpm -q --qf '%{VERSION}' "$_p" 2>/dev/null) || continue
+                if test "$UPGRADE" = yes; then
+                    _pu_names="$_pu_names $_p"
+                elif ! version_at_least "$_pu_have" "$(min_version "$_p")"; then
+                    info "Upgrading $_p from $_pu_have, older than the $(min_version "$_p") tide needs"
+                    _pu_names="$_pu_names $_p"
+                fi
+            done
+            set -- dnf upgrade -y
+            ;;
+        *) return 0 ;;
+    esac
+    _pu_names=${_pu_names# }
+    test -n "$_pu_names" || return 0
+    # shellcheck disable=SC2086  # a space-separated list of names
+    sudo_logged "$@" $_pu_names && return 0
+    warn "could not upgrade $_pu_names"
+    UPGRADE_FAILED_PKGS="$UPGRADE_FAILED_PKGS $_pu_names"
 }
 
 # The upstream part of a Debian version (4:15.2.0-5ubuntu1 -> 15.2.0), or
@@ -1164,6 +1250,24 @@ upstream_version() {
 
 version_at_least() {
     test "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" = "$2"
+}
+
+# min_versions: "package=version" for each package tide, or a source build
+# of its, needs at least a version of, under Debian's and Fedora's names.
+# Installs leave an installed package be, so pkg_upgrade upgrades one of
+# these installed below it, with or without --upgrade, where the distro has
+# one that isn't. One table, so a new minimum can't be missed somewhere.
+min_versions() {
+    echo "hyprland=$MIN_HYPRLAND quickshell=$MIN_QUICKSHELL golang=$MIN_GO" \
+        "libxkbcommon-dev=1.11 libxkbcommon-devel=1.11" \
+        "qt6-base-dev=$MIN_QUICKSHELL_QT qt6-qtbase-devel=$MIN_QUICKSHELL_QT"
+}
+
+# min_version NAME: the version min_versions gives NAME, or nothing.
+min_version() {
+    for _mv in $(min_versions); do
+        case "$_mv" in "$1="*) echo "${_mv#*=}"; return ;; esac
+    done
 }
 
 # dnf_known prints the name of each of its arguments dnf has a package for,
@@ -1530,7 +1634,7 @@ install_or_build_quickshell() {
     missing=$not_installed
     # The packaged qs, in /usr/bin, would lose to links from a build, even
     # when an optional module didn't install beside it.
-    case " $missing " in
+    case " $missing $UPGRADE_FAILED_PKGS " in
         *" quickshell "*) ;;
         # It warns about each link it couldn't remove, and the step goes on.
         *) unlink_quickshell || : ;;
@@ -6810,7 +6914,12 @@ else
     install_quickshell
     install_fcitx5
     # Only once the distro's is there to replace them.
-    if test "$DISTRO_HYPRLAND" = yes; then
+    # Nor while it's one too old for tide that couldn't be upgraded.
+    case " $UPGRADE_FAILED_PKGS " in
+        *" hyprland "*) hyprland_too_old=yes ;;
+        *) hyprland_too_old=no ;;
+    esac
+    if test "$DISTRO_HYPRLAND" = yes && test "$hyprland_too_old" = no; then
         unlink_hyprland || warn "couldn't remove the links to a source-built Hyprland in $HYPRLAND_BIN_DIR"
     fi
     # tidewm is an option beside Hyprland, so a failed build is only a
