@@ -176,13 +176,13 @@ teardown
 # there can't leave the package's switch behind, unnoted.
 setup; ARGS=(--greeter); run FAKE_APT_HYPRLAND=0.53.3+ds-4 FAKE_CMAKE_FAILS=Hyprland FAKE_GREETD_TAKES=1
 check "greetd: a fatal failure earlier ends the run" test "$status" -ne 0
-check "greetd: before greetd is installed" lacks "$calls" "install -y greetd"
+check "greetd: before greetd is installed" lacks "$calls" "install -y --no-upgrade greetd"
 check "greetd: so it isn't the display manager" test ! -s "$T/dm"
 teardown
 setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run
 check "greetd: is installed after tide's session" \
     test "$(printf '%s\n' "$calls" | grep -n 'install-session' | head -n1 | cut -d: -f1)" -lt \
-        "$(printf '%s\n' "$calls" | grep -n 'install -y greetd' | head -n1 | cut -d: -f1)"
+        "$(printf '%s\n' "$calls" | grep -n 'install -y --no-upgrade greetd' | head -n1 | cut -d: -f1)"
 teardown
 
 # Every other way of not switching undoes the package's switch too: here,
@@ -341,7 +341,7 @@ teardown
 
 # --no-install sets up the greetd that's there, without installing one.
 setup; ARGS=(--greeter --no-install); echo gdm3.service > "$T/dm"; : > "$T/greetd-installed"; run
-check "--no-install: installs no greetd" lacks "$calls" "install -y greetd"
+check "--no-install: installs no greetd" lacks "$calls" "install -y --no-upgrade greetd"
 check "--no-install: still makes greetd the display manager" test "$(cat "$T/dm")" = greetd.service
 teardown
 
@@ -352,19 +352,19 @@ teardown
 
 # Logging in at the greeter unlocks gnome-keyring, as GDM's login does.
 setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; cp "$T/pam.d/greetd" "$T/debian-pam"; run
-check "keyring: installs PAM's gnome-keyring module" has "$calls" "apt-get install -y gnome-keyring libpam-gnome-keyring"
+check "keyring: installs PAM's gnome-keyring module" has "$calls" "apt-get install -y --no-upgrade gnome-keyring libpam-gnome-keyring"
 check "keyring: leaves Debian's file, which lists it" cmp -s "$T/pam.d/greetd" "$T/debian-pam"
 teardown
 
 setup; ARGS=(--greeter); run SETUP_OS=redhat
-check "keyring: Fedora's module is gnome-keyring-pam" has "$calls" "dnf install -y gnome-keyring gnome-keyring-pam"
+check "keyring: Fedora's module is gnome-keyring-pam" has "$calls" "dnf install -y --setopt=best=False gnome-keyring gnome-keyring-pam"
 teardown
 setup; ARGS=(--greeter); run SETUP_OS=arch
 check "keyring: Arch's is in gnome-keyring" has "$calls" "pacman -S --needed --noconfirm gnome-keyring"
 teardown
 setup; ARGS=(--greeter); run FAKE_MISSING=libpam-gnome-keyring
 check "keyring: a missing module is named" has "$output" "couldn't install libpam-gnome-keyring, so logging in won't unlock the keyring"
-check "keyring: and greetd still installs" has "$calls" "apt-get install -y greetd"
+check "keyring: and greetd still installs" has "$calls" "apt-get install -y --no-upgrade greetd"
 teardown
 
 # A file without it gets both lines, after everything it includes; a

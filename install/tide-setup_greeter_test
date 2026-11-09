@@ -25,12 +25,12 @@ check "--dm=sddm: answers debconf's question for it" \
     test "$(cat "$T/debconf-answer")" = "sddm shared/default-x-display-manager select sddm"
 check "--dm=sddm: with sudo" has "$calls" "sudo debconf-set-selections"
 check "--dm=sddm: before installing it" \
-    test "$(printf '%s\n' "$calls" | grep -n 'debconf-set-selections\|apt-get install -y sddm' | head -1 | grep -c debconf)" -eq 1
-check "--dm=sddm: installs it" has "$calls" "apt-get install -y sddm"
+    test "$(printf '%s\n' "$calls" | grep -n 'debconf-set-selections\|apt-get install -y --no-upgrade sddm' | head -1 | grep -c debconf)" -eq 1
+check "--dm=sddm: installs it" has "$calls" "apt-get install -y --no-upgrade sddm"
 check "--dm=sddm: it's the display manager" test "$(cat "$T/dm")" = sddm.service
 check "--dm=sddm: says so" has "$output" "From the next boot, SDDM is the login screen, in place of gdm.service"
 check "--dm=sddm: an install that switched needs no reconfigure" lacks "$calls" "dpkg-reconfigure"
-check "--dm=sddm: installs no greetd" lacks "$calls" "install -y greetd"
+check "--dm=sddm: installs no greetd" lacks "$calls" "install -y --no-upgrade greetd"
 check "--dm=sddm: disables no greetd" lacks "$calls" "disable greetd.service"
 check "--dm=sddm: the run succeeds" test "$status" -eq 0
 # A rerun with SDDM the display manager already changes nothing.
@@ -55,7 +55,7 @@ check "--dm=gdm: names gdm3 in default-display-manager" \
     test "$(cat "$T/etc/X11/default-display-manager")" = /usr/sbin/gdm3
 check "--dm=gdm: answers for gdm3" \
     test "$(cat "$T/debconf-answer")" = "gdm3 shared/default-x-display-manager select gdm3"
-check "--dm=gdm: installs gdm3" has "$calls" "apt-get install -y gdm3"
+check "--dm=gdm: installs gdm3" has "$calls" "apt-get install -y --no-upgrade gdm3"
 check "--dm=gdm: runs its postinst again" has "$calls" "sudo dpkg-reconfigure -f noninteractive gdm3"
 check "--dm=gdm: then has systemd read the alias" has "$calls" "sudo systemctl daemon-reload"
 check "--dm=gdm: it's the display manager" test "$(cat "$T/dm")" = gdm.service
@@ -72,7 +72,7 @@ teardown
 
 # Elsewhere, enabling its unit moves the alias, with no debconf to answer.
 setup; ARGS=(--dm=sddm); echo gdm.service > "$T/dm"; run SETUP_OS=redhat
-check "--dm=sddm on Fedora: installs it" has "$calls" "dnf install -y sddm"
+check "--dm=sddm on Fedora: installs it" has "$calls" "dnf install -y --setopt=best=False sddm"
 check "--dm=sddm on Fedora: enables its unit" has "$calls" "sudo systemctl enable --force sddm.service"
 check "--dm=sddm on Fedora: asks no debconf" lacks "$calls" "debconf"
 check "--dm=sddm on Fedora: it's the display manager" test "$(cat "$T/dm")" = sddm.service
@@ -90,7 +90,7 @@ teardown
 setup; ARGS=(--dm=sddm); echo gdm.service > "$T/dm"; dm_file /usr/sbin/gdm3; run FAKE_DEBCONF_FAILS=1
 check "--dm: a debconf that can't be told says so" \
     has "$output" "couldn't tell debconf to make SDDM the display manager, so it isn't; rerun setup with --dm=sddm"
-check "--dm: and installs nothing for it" lacks "$calls" "install -y sddm"
+check "--dm: and installs nothing for it" lacks "$calls" "install -y --no-upgrade sddm"
 check "--dm: and leaves GDM" test "$(cat "$T/dm")" = gdm.service
 check "--dm: and its default-display-manager" \
     test "$(cat "$T/etc/X11/default-display-manager")" = /usr/sbin/gdm3
@@ -118,7 +118,7 @@ teardown
 
 # --dm=tide is --greeter, and --dm=keep leaves the display manager.
 setup; ARGS=(--dm=tide); echo gdm3.service > "$T/dm"; run
-check "--dm=tide: installs greetd" has "$calls" "apt-get install -y greetd"
+check "--dm=tide: installs greetd" has "$calls" "apt-get install -y --no-upgrade greetd"
 check "--dm=tide: greetd is the display manager" test "$(cat "$T/dm")" = greetd.service
 teardown
 setup; ARGS=(--dm=keep); echo gdm3.service > "$T/dm"; run
@@ -138,7 +138,7 @@ teardown
 # On a GDM machine, greetd becomes the display manager from the next boot,
 # running tide's greeter as the user and on the VT this greetd needs.
 setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run
-check "greetd: installs greetd, with sudo" has "$calls" "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y greetd"
+check "greetd: installs greetd, with sudo" has "$calls" "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade greetd"
 check "greetd: the config is tide's, with Debian's user and VT" \
     test "$(cat "$T/etc/greetd/config.toml")" = "$(sed -e 's/^user = .*/user = "_greetd"/' -e 's/^vt = .*/vt = 7/' "$T/greetd.toml")"
 check "greetd: the config is root's" has "$calls" "sudo install -D -m 644"
@@ -177,7 +177,7 @@ check "--no-greeter: puts back what greetd replaced" has "$calls" "sudo systemct
 check "--no-greeter: and disables greetd" has "$calls" "sudo systemctl disable greetd.service"
 check "--no-greeter: GDM is the display manager" test "$(cat "$T/dm")" = gdm3.service
 check "--no-greeter: says so" has "$output" "gdm3.service is the display manager again from the next boot"
-check "--no-greeter: installs no greetd" lacks "$calls" "install -y greetd"
+check "--no-greeter: installs no greetd" lacks "$calls" "install -y --no-upgrade greetd"
 check "--no-greeter: leaves the session's own greeting" has "$output" "Log out and pick the \"tide\" session"
 # And when greetd isn't the display manager, --no-greeter does nothing.
 : > "$CALLS"
@@ -188,7 +188,7 @@ teardown
 # Without --greeter or --no-greeter, the display manager is left alone: on
 # a GDM machine, tide is one more session at GDM's login screen.
 setup; ARGS=(); echo gdm3.service > "$T/dm"; run
-check "default: installs no greetd" lacks "$calls" "install -y greetd"
+check "default: installs no greetd" lacks "$calls" "install -y --no-upgrade greetd"
 check "default: enables no display manager" lacks "$calls" "systemctl enable"
 check "default: GDM stays the display manager" test "$(cat "$T/dm")" = gdm3.service
 check "default: writes no greetd config" test ! -e "$T/etc/greetd/config.toml"
