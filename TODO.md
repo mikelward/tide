@@ -2379,7 +2379,12 @@ fallback.
 - [ ] Workflow: Ubuntu 26.04, amd64, Hyprland; tarball and sum on a release.
 - [ ] setup: download, check and unpack it, with the source build as the
       fallback; tests with a stub download.
-- [ ] arm64, and tidewm's tarball the same way.
+- [ ] arm64.
+- [ ] Maybe: tidewm release builds. Per-distro tarballs attached to
+      tidewm's own GitHub releases, which `setup --tidewm` could download
+      instead of building `main`. `prebuilt.yml` already builds tidewm
+      tarballs, but only as a CI run's artifacts, and tidewm's releases
+      have no assets yet.
 - [ ] Debian 13: a GCC 16 toolchain for the build container.
 
 ## Compositor: explore a dwl fork (SPEC.md §21.1)
@@ -2401,8 +2406,8 @@ history; tide's changes go on top of v0.9 there. Before rewriting §3.1 around i
 
 **A session on it**, as an option beside Hyprland's, never the default
 until it's done (SPEC.md §5.3). The entry, the wrapper, the units' target
-and the portals are in, `setup --tidewm` (scripts) builds tidewm at a
-pinned release tag, building wlroots 0.20 where the distro has none, and conf has a
+and the portals are in, `setup --tidewm` (scripts) builds tidewm's
+latest `main`, building wlroots 0.20 where the distro has none, and conf has a
 tidewm config with tide's keys and inputs. `tide`'s grants, focused
 workspace and `prompt-focus`, and `tide doctor`'s bar, config-error
 and home checks, read tidewm's IPC, and so does the shell:
@@ -2428,16 +2433,20 @@ windows need no thumbnails. What's left:
 - The greeter's displays off, should the greeter move to tidewm (it runs
   Hyprland), which is part of the switch.
 
-Machines build a pinned release tag, never a branch:
+Machines build tidewm's latest `main` (maintainer, 2026-11-09). A pinned
+tag lagged tidewm's fixes: `v0.0.1466` refused conf's config, leaving a
+gray screen, after the fix had merged. `main` is CI-gated, and every push
+to it is tagged:
 
 - **Tags.** `v0.MINOR.PATCH` on the fork's `main`, PATCH being the
   commits on `main` at the tag, as tidewm's README says. The first is
   `v0.0.1448`. MINOR goes up for a change that breaks a config or an IPC
   client, and 1.x waits on the maintainer. Upstream dwl's own tags stop
   at `v0.9`, so they can't collide.
-- **`setup-tide` pins one** with the commit it named, as it pins
-  Quickshell, and refuses a tag that has moved. Moving every machine is a
-  one-line scripts pull request that CI checks first.
+- **`setup --tidewm` builds `main`**: it asks GitHub which commit `main`
+  is at, builds that commit into a directory named for it, and rebuilds
+  only once `main` moves. Its clone has the tags, so `tidewm -v` names
+  the release it's at or follows.
 - **Protection.** `main` gets the fleet ruleset from `repo setup`, like
   every other repository, and so does a tag ruleset, `release tags`, that
   stops anyone moving or deleting a `v*` tag. The repository is public, so

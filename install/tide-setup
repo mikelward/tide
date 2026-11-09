@@ -37,8 +37,8 @@
 #   left installed, just no longer the input method. It hides fcitx5's
 #   autostart entry, which would start it in Plasma too, and Schnelle
 #   Umlaute's overlay's (see hide_fcitx5_autostart);
-# - with --tidewm, builds tidewm, tide's fork of dwl, from a pinned release
-#   tag, checked against its commit, into /opt/tidewm and links it onto
+# - with --tidewm, builds tidewm, tide's fork of dwl, from its latest main,
+#   into /opt/tidewm, rebuilding only once main has moved, and links it onto
 #   PATH, and installs wlroots' portal for screen sharing, so the tide
 #   (tidewm) session, an option beside Hyprland's, shows at the login
 #   screen (see build_tidewm). It builds against wlroots 0.20: the distro's
@@ -105,8 +105,9 @@
 # one setup replaced with greetd. Without either, the display manager stays
 # as it is. --github PREFIX, or $GITHUB_PREFIX, clones what it clones from
 # GitHub (Quickshell, Hyprland and its libraries and submodules, tidewm)
-# from a mirror instead. Only the host changes: each source build still
-# checks out its pinned commit, so a mirror can't swap what's built.
+# from a mirror instead. Only the host changes: each pinned source build
+# still checks out its pinned commit, so a mirror can't swap what's built.
+# tidewm has no pin: the mirror names the commit of main that's built.
 #
 # What the package managers, tide's make and systemctl say goes to
 # ~/.local/state/setup/setup.log, which each run starts afresh (or, under
@@ -214,16 +215,12 @@ QUICKSHELL_BUILD_DEPS="build-essential cmake ninja-build pkg-config git
 
 # tidewm (github.com/mikelward/tidewm), tide's fork of dwl, which
 # build_tidewm builds with --tidewm, for tide's tidewm session, an option
-# beside Hyprland's. A release tag, numbered as tidewm's README says
-# (v0.MINOR.<commits on main>). Its own prefix, like Quickshell's, with
-# tidewm linked onto PATH, where the session entry's TryExec finds it.
-if ! _pin=$("$PINS" --env tidewm); then
-    echo "tide-setup: couldn't read tidewm's pin from tide's deps.lock" >&2
-    exit 1
-fi
-TIDEWM_REPO=$(printf '%s\n' "$_pin" | sed -n 's/^PIN_REPO=//p')
-TIDEWM_TAG=$(printf '%s\n' "$_pin" | sed -n 's/^PIN_TAG=//p')
-TIDEWM_COMMIT=$(printf '%s\n' "$_pin" | sed -n 's/^PIN_COMMIT=//p')
+# beside Hyprland's. Not pinned: its latest main, which tidewm's CI gates,
+# so a fix there reaches the next setup. $TIDEWM_BRANCH builds another
+# branch. Its own prefix, like Quickshell's, with tidewm linked onto PATH,
+# where the session entry's TryExec finds it.
+TIDEWM_REPO=https://github.com/mikelward/tidewm.git
+TIDEWM_BRANCH="${TIDEWM_BRANCH:-main}"
 TIDEWM_PREFIX="${TIDEWM_PREFIX:-/opt/tidewm}"
 TIDEWM_SRC="${TIDEWM_SRC:-$HOME/src/tidewm-build}"
 TIDEWM_BIN_DIR="${TIDEWM_BIN_DIR:-/usr/local/bin}"
@@ -598,10 +595,10 @@ Options:
   --no-build-hyprland
                    On Debian and Ubuntu, don't build Hyprland from source when
                    apt's is older than 0.56.2 (the build takes 10-20 minutes)
-  --tidewm         Also build tidewm, tide's fork of dwl, for the tide
-                   (tidewm) session, an option beside Hyprland's: on Debian,
-                   Ubuntu and Arch, building the wlroots 0.20 it needs where
-                   the distro has none
+  --tidewm         Also build tidewm, tide's fork of dwl, from its latest
+                   main, for the tide (tidewm) session, an option beside
+                   Hyprland's: on Debian, Ubuntu and Arch, building the
+                   wlroots 0.20 it needs where the distro has none
   --dm DM          The login screen from the next boot: tide (greetd with
                    tide's greeter), sddm, gdm, or keep the one there is (the
                    default). SDDM and GDM are installed if they aren't
@@ -1947,14 +1944,51 @@ tidewm_build_deps() {
     esac
 }
 
-# build_tidewm builds TIDEWM_TAG into its own directory under
-# $TIDEWM_PREFIX, as this user, then hands it to root and links tidewm onto
-# PATH, as build_quickshell does Quickshell. The directory is named for the
-# tag and a checksum of the build's inputs, so a new pin builds afresh and
-# a rerun with none changed only relinks.
+# tidewm_main_commit prints the commit $TIDEWM_BRANCH is at on GitHub, or
+# fails, saying why.
+tidewm_main_commit() {
+    if ! _tm_ls=$(git_github ls-remote "$TIDEWM_REPO" "refs/heads/$TIDEWM_BRANCH"); then
+        warn "couldn't ask GitHub which commit tidewm's $TIDEWM_BRANCH is at"
+        return 1
+    fi
+    _tm_commit=$(printf '%s\n' "$_tm_ls" | sed -n '1s/[[:space:]].*//p')
+    case "$_tm_commit" in
+        '' | *[!0-9a-f]*)
+            warn "tidewm has no branch $TIDEWM_BRANCH on GitHub"
+            return 1
+            ;;
+    esac
+    if test "${#_tm_commit}" -ne 40; then
+        warn "GitHub named $_tm_commit as tidewm's $TIDEWM_BRANCH, which isn't a commit"
+        return 1
+    fi
+    printf '%s\n' "$_tm_commit"
+}
+
+# build_tidewm builds the commit tidewm's $TIDEWM_BRANCH is at into its own
+# directory under $TIDEWM_PREFIX, as this user, then hands it to root and
+# links tidewm onto PATH, as build_quickshell does Quickshell. The
+# directory is named for the branch, the commit and a checksum of the
+# build's inputs, so a moved main builds afresh and a rerun with nothing
+# changed only relinks. Without GitHub, a build that's current is kept.
 build_tidewm() {
     deps=$(tidewm_build_deps) || return 1
-    info "Building tidewm $TIDEWM_TAG from source"
+    if ! tw_commit=$(tidewm_main_commit); then
+        tw_dir=
+        if test -L "$TIDEWM_PREFIX/current"; then
+            tw_dir="$TIDEWM_PREFIX/$(readlink "$TIDEWM_PREFIX/current")"
+        fi
+        tw_marker="$tw_dir/setup-tide-build"
+        if test -z "$tw_dir" || ! test -f "$tw_marker"; then
+            warn "there's no build of tidewm to keep, so it isn't built"
+            return 1
+        fi
+        warn "keeping the tidewm build in $tw_dir, which may be behind its $TIDEWM_BRANCH"
+        link_tidewm
+        return
+    fi
+    tw_short=$(printf '%s\n' "$tw_commit" | cut -c1-12)
+    info "Building tidewm's $TIDEWM_BRANCH, at $tw_short, from source"
     pkg_begin "$(pkg_manager)" "Installing tidewm's build dependencies"
     deps_status=0
     # shellcheck disable=SC2086  # word-split the package list
@@ -1969,13 +2003,14 @@ build_tidewm() {
     if wlroots_wanted; then
         tw_wlroots=yes
     fi
-    tw_record=$(printf '%s\n' "$TIDEWM_REPO $TIDEWM_TAG $TIDEWM_COMMIT" "make XWAYLAND=$TIDEWM_XWAYLAND XLIBS=$TIDEWM_XLIBS"
+    tw_record=$(printf '%s\n' "$TIDEWM_REPO $TIDEWM_BRANCH $tw_commit" "make XWAYLAND=$TIDEWM_XWAYLAND XLIBS=$TIDEWM_XLIBS"
         test "$tw_wlroots" = no || wlroots_record)
     tw_sum=$(printf '%s\n' "$tw_record" | cksum | cut -d' ' -f1)
-    tw_dir="$TIDEWM_PREFIX/$TIDEWM_TAG-$tw_sum"
+    # A branch's slashes would nest the directory.
+    tw_dir="$TIDEWM_PREFIX/$(printf '%s\n' "$TIDEWM_BRANCH" | tr / -)-$tw_short-$tw_sum"
     tw_marker="$tw_dir/setup-tide-build"
     if test -f "$tw_marker"; then
-        detail "tidewm $TIDEWM_TAG is already built in $tw_dir"
+        detail "tidewm's $TIDEWM_BRANCH, at $tw_short, is already built in $tw_dir"
     else
         src="$TIDEWM_SRC/tidewm"
         # A stale clone or partial install left in place would be built into
@@ -1988,13 +2023,22 @@ build_tidewm() {
         mkdir -p "$TIDEWM_SRC" || return 1
         make_build_dir "$tw_dir" || return 1
         start_build_log tidewm || return 1
-        # The tag's own clone, so `tidewm -v`, which is `git describe --tags`,
-        # names it.
-        build_logged tidewm git_github clone -c advice.detachedHead=false --quiet --depth 1 --branch "$TIDEWM_TAG" "$TIDEWM_REPO" "$src" || return 1
+        # The branch's history and tags, without their files, so `tidewm -v`,
+        # which is `git describe --tags`, names the release tag it's at or
+        # follows.
+        build_logged tidewm git_github clone -c advice.detachedHead=false --quiet --filter=blob:none --branch "$TIDEWM_BRANCH" "$TIDEWM_REPO" "$src" || return 1
         commit=$(git -C "$src" rev-parse HEAD) || return 1
-        if test "$commit" != "$TIDEWM_COMMIT"; then
-            warn "tidewm's $TIDEWM_TAG tag is commit $commit, not the pinned $TIDEWM_COMMIT; not building it"
-            rm -rf "$src" || warn "couldn't remove the rejected clone in $src"
+        # The branch moved since it was asked: build the commit the
+        # directory is named for.
+        if test "$commit" != "$tw_commit"; then
+            detail "tidewm's $TIDEWM_BRANCH moved to $commit; checking out $tw_commit"
+            build_logged tidewm git_github -C "$src" fetch --quiet origin "$tw_commit" \
+                && build_logged tidewm git_github -C "$src" checkout --quiet "$tw_commit" \
+                && commit=$(git -C "$src" rev-parse HEAD)
+        fi
+        if test "$commit" != "$tw_commit"; then
+            warn "couldn't check out tidewm's $tw_commit, the commit its $TIDEWM_BRANCH was at; not building it"
+            rm -rf "$src" || warn "couldn't remove the clone in $src"
             return 1
         fi
         # Built into tidewm's own directory, so it's sealed and replaced
@@ -2007,7 +2051,7 @@ build_tidewm() {
         # shellcheck disable=SC2086  # $tw_make is a command, split on purpose
         build_logged tidewm $tw_make -C "$src" XWAYLAND="$TIDEWM_XWAYLAND" XLIBS="$TIDEWM_XLIBS" \
             && build_logged tidewm $tw_make -C "$src" install PREFIX="$tw_dir" || return 1
-        info "Built tidewm $TIDEWM_TAG; the build's output is in $build_log"
+        info "Built tidewm's $TIDEWM_BRANCH, at $tw_short; the build's output is in $build_log"
         printf '%s\n' "$tw_record" > "$tw_marker" || {
             warn "couldn't write $tw_marker"
             return 1
@@ -2054,8 +2098,8 @@ link_tidewm() {
     done
 }
 
-# Builds of an older pin, now that current points elsewhere. A running
-# tidewm keeps the files it has open. Only finished builds of setup's, by
+# Older builds, of an older main or a pinned tag, now that current points
+# elsewhere. A running tidewm keeps the files it has open. Only finished builds of setup's, by
 # their marker.
 remove_old_tidewm_builds() {
     for old in "$TIDEWM_PREFIX"/*-[0-9]*/; do

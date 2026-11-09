@@ -422,7 +422,10 @@ MOCK
     # git clone creates the checkout, its last argument, or fails for a
     # repository named in \$FAKE_CLONE_FAILS; pull just logs, or
     # fails with \$FAKE_PULL_FAILS. Both say what they did, as git does,
-    # unless --quiet.
+    # unless --quiet. ls-remote names tidewm's main as \$FAKE_TIDEWM_MAIN,
+    # or a fixed commit, or fails with \$FAKE_LS_REMOTE_FAILS. A tidewm
+    # clone is at main, or \$FAKE_TIDEWM_CLONED, and checkout moves it, unless
+    # \$FAKE_CHECKOUT_FAILS.
     cat > "$T/bin/git" <<MOCK
 #!/bin/sh
 printf "%s\\n" "git \$*" >> "$CALLS"
@@ -433,6 +436,22 @@ while test "\$i" -lt "\${GIT_CONFIG_COUNT:-0}"; do
     printf "%s\\n" "git config: \$k=\$v" >> "$CALLS"
     i=\$((i + 1))
 done
+tidewm_main=\${FAKE_TIDEWM_MAIN:-71de000000000000000000000000000000000001}
+if test "\$1" = ls-remote; then
+    if test -n "\$FAKE_LS_REMOTE_FAILS"; then
+        echo "fatal: unable to access '\$2/': Could not resolve host: github.com" >&2
+        exit 128
+    fi
+    case "\$2" in
+        */tidewm.git) printf "%s\\t%s\\n" "\$tidewm_main" "\$3" ;;
+    esac
+    exit 0
+fi
+if test "\$3" = checkout; then
+    test -z "\$FAKE_CHECKOUT_FAILS" || exit 1
+    for last; do :; done
+    echo "\$last" > "\$2/.git/fake-head"
+fi
 if test "\$1" = clone; then
     for last; do :; done
     # \$FAKE_CLONE_FAILS names a repository the server doesn't have.
@@ -444,6 +463,7 @@ if test "\$1" = clone; then
             ;;
     esac
     mkdir -p "\$last/.git"
+    test "\${last##*/}" != tidewm || echo "\${FAKE_TIDEWM_CLONED:-\$tidewm_main}" > "\$last/.git/fake-head"
     # A Hyprland pin's checkout has the build file its pin names, or a
     # CMakeLists.txt for the one in \$FAKE_CHECKOUT_CMAKE.
     kind=\$(awk -v name="\${last##*/}" '\$1 == name { print \$3 }' "$T/pins")
@@ -470,7 +490,9 @@ esac
 # another for the one named in \$FAKE_MOVED_PIN; tide's is
 # \$FAKE_TIDE_COMMIT, or a fixed one; Quickshell's is its pinned commit, or
 # \$FAKE_QS_COMMIT.
-if test "\$3" = rev-parse; then
+if test "\$3" = rev-parse && test -f "\$2/.git/fake-head"; then
+    cat "\$2/.git/fake-head"
+elif test "\$3" = rev-parse; then
     name=\${2##*/}
     pinned=\$(awk -v name="\$name" '\$1 == name { print \$2 }' "$T/pins")
     if test "\$name" = "\$FAKE_MOVED_PIN"; then
@@ -484,13 +506,11 @@ if test "\$3" = rev-parse; then
     fi
 fi
 MOCK
-    # Each Hyprland pin's name and commit, for git rev-parse, and tidewm's,
-    # or \$FAKE_TIDEWM_COMMIT, as setup is called.
+    # Each Hyprland pin's name and commit, for git rev-parse.
     "$SCRIPT_DIR/pins" hyprland | awk '{ print $1, $4, $5 }' > "$T/pins"
     # And wlroots', each name once.
     "$SCRIPT_DIR/pins" wlroots | awk '{ print $1, $4, $5 }' \
         | awk 'FNR == NR { seen[$1] = 1; next } !($1 in seen)' "$T/pins" - >> "$T/pins"
-    echo "tidewm ${FAKE_TIDEWM_COMMIT:-$("$SCRIPT_DIR/pins" --env tidewm | sed -n 's/^PIN_COMMIT=//p')}" >> "$T/pins"
     # localectl status names the X11 layout \$FAKE_X11_LAYOUT and variant
     # \$FAKE_X11_VARIANT, each line left out when it's empty, or fails with
     # \$FAKE_LOCALECTL_FAILS.

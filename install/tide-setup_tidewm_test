@@ -8,11 +8,25 @@
 
 set -e
 
-commit=$("$SCRIPT_DIR/pins" --env tidewm | sed -n 's/^PIN_COMMIT=//p')
-tag=$("$SCRIPT_DIR/pins" --env tidewm | sed -n 's/^PIN_TAG=//p')
-build() { printf '%s\n' "$T"/opt/tidewm/"$tag"-*; }
+# The commit the fake git says tidewm's main is at, and another it moves to.
+main=71de000000000000000000000000000000000001
+moved=71de000000000000000000000000000000000002
+build() { printf '%s\n' "$T"/opt/tidewm/main-"${1:-${main:0:12}}"-*; }
+ask="git ls-remote https://github.com/mikelward/tidewm.git refs/heads/main"
 # The clone, which a test of a run that builds nothing checks is absent.
-clone="git clone -c advice.detachedHead=false --quiet --depth 1 --branch $tag https://github.com/mikelward/tidewm.git"
+clone="git clone -c advice.detachedHead=false --quiet --filter=blob:none --branch main https://github.com/mikelward/tidewm.git"
+# old_build NAME: an earlier finished build, current and linked.
+old_build() {
+    mkdir -p "$T/opt/tidewm/$1/bin"
+    printf '#!/bin/sh\n' > "$T/opt/tidewm/$1/bin/tidewm"
+    chmod +x "$T/opt/tidewm/$1/bin/tidewm"
+    echo "old build" > "$T/opt/tidewm/$1/setup-tide-build"
+    ln -sfn "$1" "$T/opt/tidewm/current"
+    ln -sfn "$T/opt/tidewm/current/bin/tidewm" "$T/usr-local-bin/tidewm"
+}
+
+# deps.lock pins no tidewm.
+check "deps.lock has no tidewm pin" test -z "$(awk '!/^[ \t]*(#|$)/ && $2 == "tidewm"' "$SCRIPT_DIR/../deps.lock")"
 
 # Without --tidewm, nothing of tidewm's is touched.
 setup; ARGS=(); run
@@ -24,69 +38,132 @@ check "without --tidewm, nothing of it is installed" lacks "$calls" "libwlroots"
 check "without --tidewm, nothing is linked" test ! -e "$T/usr-local-bin/tidewm"
 teardown
 
-# With --tidewm on Debian testing, which packages wlroots 0.20: build it.
+# With --tidewm on Debian testing, which packages wlroots 0.20: build main.
 setup; ARGS=(--tidewm); run
 check "--tidewm succeeds" test "$status" -eq 0
 check "--tidewm installs tidewm's build dependencies, wlroots 0.20 among them" \
     has "$calls" "apt-get install -y build-essential pkgconf git libwlroots-0.20-dev libwayland-dev"
 check "and PCRE2, for its window rules, and Xwayland, for X11 apps" has "$calls" "libjson-c-dev libpcre2-dev xwayland"
 check "and wlroots' portal, for sharing a screen or window" has "$calls" "xwayland xdg-desktop-portal-wlr"
-check "the pin is a release tag, as tidewm numbers them" test "${tag#v0.}" != "$tag"
-check "--tidewm clones the pinned tag" has "$calls" "$clone $T/src/tidewm-build/tidewm"
-check "and checks the tag names the pinned commit" has "$calls" "git -C $T/src/tidewm-build/tidewm rev-parse HEAD"
+check "--tidewm asks GitHub which commit main is at" has "$calls" "$ask"
+check "--tidewm clones main" has "$calls" "$clone $T/src/tidewm-build/tidewm"
+check "and checks the clone is at that commit" has "$calls" "git -C $T/src/tidewm-build/tidewm rev-parse HEAD"
+check "and, being there, checks out nothing else" lacks "$calls" "git -C $T/src/tidewm-build/tidewm checkout"
+check "and says which commit it builds" has "$output" "Building tidewm's main, at ${main:0:12}, from source"
 check "--tidewm builds it with XWayland" has "$calls" "make -C $T/src/tidewm-build/tidewm XWAYLAND=-DXWAYLAND XLIBS=xcb xcb-icccm"
-check "--tidewm installs it under its prefix, by tag" has "$calls" "make -C $T/src/tidewm-build/tidewm install PREFIX=$T/opt/tidewm/$tag-"
+check "--tidewm installs it under its prefix, by main's commit" has "$calls" "make -C $T/src/tidewm-build/tidewm install PREFIX=$T/opt/tidewm/main-${main:0:12}-"
 check "the build never uses sudo to install" lacks "$calls" "sudo make -C $T/src/tidewm-build"
 check "the build is marked complete" test -f "$(build)/setup-tide-build"
+check "the build records the commit" has "$(cat "$(build)/setup-tide-build")" "https://github.com/mikelward/tidewm.git main $main"
 check "the build is current" test "$(readlink -f "$T/opt/tidewm/current")" = "$(build)"
 check "tidewm is linked onto PATH, through current" \
     test "$(readlink "$T/usr-local-bin/tidewm")" = "$T/opt/tidewm/current/bin/tidewm"
 check "the build is root's once it's linked" has "$calls" "sudo chown -R 0:0 $(build)"
 check "its build dependencies are a package step" has "$output" "Installing tidewm's build dependencies
 Installed: "
-# Real git, given the tidewm clone's own options, checks out the tag without
-# a word about detached HEADs, and `git describe --tags`, which is what
-# `tidewm -v` says, names it.
-g init -q "$T/git/tidewm" && g -C "$T/git/tidewm" commit -q --allow-empty -m tidewm
-replay_clone tidewm "$tag"
-check "the tidewm clone's own options check out the tag" test "$clone_status" -eq 0
-check "without a word about a detached HEAD" lacks "$clone_output" "detached HEAD"
-check "and tidewm -v names the tag" test "$(g -C "$T/git/tidewm-clone" describe --tags)" = "$tag"
 check "its build's output isn't shown" lacks "$output" "install -m 644"
-# A second run with the same pin doesn't rebuild.
+# Real git, given the tidewm clone's own options, clones main without a
+# word about detached HEADs, and with the tags behind it, so `git describe
+# --tags`, which is what `tidewm -v` says, names the last release tag even
+# before main's newest commit is tagged.
+g init -q -b main "$T/git/tidewm"
+g -C "$T/git/tidewm" commit -q --allow-empty -m one
+g -C "$T/git/tidewm" tag v0.0.1
+g -C "$T/git/tidewm" commit -q --allow-empty -m two
+opts=$(printf '%s\n' "$calls" | sed -n 's/^git clone \(.*\) https:[^ ]*\/tidewm\.git .*/\1/p')
+clone_status=0
+# shellcheck disable=SC2086  # word-split the logged options
+clone_output=$(g clone $opts "file://$T/git/tidewm" "$T/git/tidewm-clone" 2>&1) || clone_status=$?
+check "the tidewm clone's own options clone main" test "$clone_status" -eq 0
+check "without a word about a detached HEAD" lacks "$clone_output" "detached HEAD"
+check "at main's newest commit" test "$(g -C "$T/git/tidewm-clone" rev-parse HEAD)" = "$(g -C "$T/git/tidewm" rev-parse HEAD)"
+described=$(g -C "$T/git/tidewm-clone" describe --tags 2>&1) || true
+check "and tidewm -v names the release tag it follows" has "$described" "v0.0.1-1-g"
+# A second run with main where it was doesn't rebuild.
 : > "$CALLS"
 run
-check "the same pin doesn't rebuild" lacks "$calls" "make -C $T/src/tidewm-build"
-check "the same pin says so only with --verbose" lacks "$output" "is already built"
-check "the same pin still links" test "$(readlink "$T/usr-local-bin/tidewm")" = "$T/opt/tidewm/current/bin/tidewm"
+check "an unmoved main is still asked about" has "$calls" "$ask"
+check "an unmoved main isn't cloned again" lacks "$calls" "$clone"
+check "an unmoved main doesn't rebuild" lacks "$calls" "make -C $T/src/tidewm-build"
+check "an unmoved main says so only with --verbose" lacks "$output" "is already built"
+check "an unmoved main still links" test "$(readlink "$T/usr-local-bin/tidewm")" = "$T/opt/tidewm/current/bin/tidewm"
+# A moved main builds afresh, and the old build goes once current moves.
+first=$(build)
+: > "$CALLS"
+run FAKE_TIDEWM_MAIN=$moved
+check "a moved main builds" has "$calls" "make -C $T/src/tidewm-build/tidewm install PREFIX=$T/opt/tidewm/main-${moved:0:12}-"
+check "a moved main's build is current" test "$(readlink -f "$T/opt/tidewm/current")" = "$(build "${moved:0:12}")"
+check "the old main's build is removed" test ! -e "$first"
 teardown
 
-# A new pin builds afresh, and the old build goes once current moves.
+# Builds of the tags setup used to pin go once main's is current.
 setup; ARGS=(--tidewm)
-mkdir -p "$T/opt/tidewm/000000000000-1/bin"
-printf '#!/bin/sh\n' > "$T/opt/tidewm/000000000000-1/bin/tidewm"
-echo "old pin" > "$T/opt/tidewm/000000000000-1/setup-tide-build"
-ln -s 000000000000-1 "$T/opt/tidewm/current"
-ln -s "$T/opt/tidewm/current/bin/tidewm" "$T/usr-local-bin/tidewm"
+old_build v0.0.1474-1234
 run
-check "a new pin builds" has "$calls" "make -C $T/src/tidewm-build/tidewm install"
-check "a new pin's build is current" test "$(readlink -f "$T/opt/tidewm/current")" = "$(build)"
-check "the old pin's build is removed" test ! -e "$T/opt/tidewm/000000000000-1"
+check "with a tag's build, main builds" has "$calls" "make -C $T/src/tidewm-build/tidewm install"
+check "main's build is current" test "$(readlink -f "$T/opt/tidewm/current")" = "$(build)"
+check "the tag's build is removed" test ! -e "$T/opt/tidewm/v0.0.1474-1234"
 teardown
 
-# A checkout of another commit isn't built.
-FAKE_TIDEWM_COMMIT=0000000000000000000000000000000000000000 setup; ARGS=(--tidewm); run
-check "a moved checkout isn't built" lacks "$calls" "make -C $T/src/tidewm-build"
-check "a moved checkout says so" has "$output" "tidewm's $tag tag is commit 0000000000000000000000000000000000000000, not the pinned $commit"
+# Another branch, by $TIDEWM_BRANCH, a slash in its name kept out of the path.
+setup; ARGS=(--tidewm); run TIDEWM_BRANCH=fix/thing
+check "another branch is asked about" has "$calls" "git ls-remote https://github.com/mikelward/tidewm.git refs/heads/fix/thing"
+check "another branch is cloned" has "$calls" "--filter=blob:none --branch fix/thing https://github.com/mikelward/tidewm.git"
+check "another branch builds in a directory of its own" test -f "$(printf '%s\n' "$T"/opt/tidewm/fix-thing-"${main:0:12}"-*/setup-tide-build)"
+teardown
+
+# Main moved between asking and cloning: the commit asked about is built.
+setup; ARGS=(--tidewm); run FAKE_TIDEWM_CLONED=$moved
+check "a clone past the commit fetches it" has "$calls" "git -C $T/src/tidewm-build/tidewm fetch --quiet origin $main"
+check "and checks it out" has "$calls" "git -C $T/src/tidewm-build/tidewm checkout --quiet $main"
+check "and builds it" has "$calls" "make -C $T/src/tidewm-build/tidewm install PREFIX=$T/opt/tidewm/main-${main:0:12}-"
+check "and it's current" test "$(readlink -f "$T/opt/tidewm/current")" = "$(build)"
+teardown
+
+# A commit that can't be checked out isn't built.
+setup; ARGS=(--tidewm); run FAKE_TIDEWM_CLONED=$moved FAKE_CHECKOUT_FAILS=1
+check "an unreachable commit isn't built" lacks "$calls" "make -C $T/src/tidewm-build"
+check "an unreachable commit says so" has "$output" "couldn't check out tidewm's $main, the commit its main was at"
 check "a failed tidewm build is a warning, not a failure" test "$status" -eq 0
 check "and says what it costs" has "$output" "the tide (tidewm) session won't show at the login screen; rerun setup --tidewm to retry"
 check "nothing is linked" test ! -e "$T/usr-local-bin/tidewm"
 teardown
 
-# A failed make is reported, and nothing is linked or marked complete.
+# Without GitHub, a build that's there is kept.
+setup; ARGS=(--tidewm)
+old_build main-${main:0:12}-1234
+run FAKE_LS_REMOTE_FAILS=1
+check "offline, a build is kept" test "$status" -eq 0
+check "offline, nothing is cloned" lacks "$calls" "$clone"
+check "offline, nothing is built" lacks "$calls" "make -C $T/src/tidewm-build"
+check "offline, it says why" has "$output" "couldn't ask GitHub which commit tidewm's main is at"
+check "offline, it says which build it keeps" has "$output" "keeping the tidewm build in $T/opt/tidewm/main-${main:0:12}-1234"
+check "offline, the build stays current" test "$(readlink "$T/opt/tidewm/current")" = "main-${main:0:12}-1234"
+check "offline, the build stays" test -f "$T/opt/tidewm/main-${main:0:12}-1234/setup-tide-build"
+check "offline, it's still linked" test "$(readlink "$T/usr-local-bin/tidewm")" = "$T/opt/tidewm/current/bin/tidewm"
+teardown
+setup; ARGS=(); old_build main-${main:0:12}-1234
+run TIDE_SETUP_ONLY=tidewm FAKE_LS_REMOTE_FAILS=1
+check "only-tidewm offline, a build is kept" test "$status" -eq 0
+check "only-tidewm offline, and named" has "$output" "Built tidewm in $T/opt/tidewm/main-${main:0:12}-1234"
+teardown
+
+# Without GitHub or a build, it fails as a failed build does.
+setup; ARGS=(--tidewm); run FAKE_LS_REMOTE_FAILS=1
+check "offline with no build, setup still succeeds" test "$status" -eq 0
+check "offline with no build, nothing is cloned" lacks "$calls" "$clone"
+check "offline with no build, it says so" has "$output" "there's no build of tidewm to keep"
+check "offline with no build, and what it costs" has "$output" "the tide (tidewm) session won't show at the login screen; rerun setup --tidewm to retry"
+check "offline with no build, nothing is linked" test ! -e "$T/usr-local-bin/tidewm"
+teardown
+setup; ARGS=(); run TIDE_SETUP_ONLY=tidewm FAKE_LS_REMOTE_FAILS=1
+check "only-tidewm offline with no build fails" test "$status" -ne 0
+check "only-tidewm offline with no build, saying so" has "$output" "building tidewm failed"
+teardown
+
 # CI's prebuilt workflow builds only tidewm.
 setup; ARGS=(); run TIDE_SETUP_ONLY=tidewm
-check "only-tidewm: builds tidewm" has "$calls" "$clone"
+check "only-tidewm: builds tidewm's main" has "$calls" "$clone"
 check "only-tidewm: and says where" has "$output" "Built tidewm in $(build)"
 check "only-tidewm: and nothing of tide's own" lacks "$calls" "make -C $T/src/tide install"
 check "only-tidewm: and no Hyprland" lacks "$calls" "apt-get install -y hyprland"
