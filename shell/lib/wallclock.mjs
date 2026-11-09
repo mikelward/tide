@@ -16,3 +16,17 @@ export const SLACK_MS = 2000;
 export function jumped(last, now, interval = CHECK_MS) {
     return Math.abs(now - last - interval) > SLACK_MS;
 }
+
+// logind says when the machine wakes (PrepareForSleep false, after the
+// sleep, with the wall clock already moved on), so the clocks and the
+// light/dark schedule catch up then rather than at the next check. Read
+// from gdbus, which comes with gsettings, so it needs nothing new.
+export const SLEEP_MONITOR = ["gdbus", "monitor", "--system",
+    "--dest", "org.freedesktop.login1", "--object-path", "/org/freedesktop/login1"];
+
+// Whether a line of SLEEP_MONITOR's output says the machine just woke:
+// `/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (false,)`.
+// The signal before sleep (true) and every other line aren't.
+export function woke(line) {
+    return /\.Manager\.PrepareForSleep \(false,?\)/.test(line);
+}
