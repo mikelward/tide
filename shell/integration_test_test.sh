@@ -322,6 +322,11 @@ fi
 # Talked to before it says it loaded, as Quickshell does.
 if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
     python3 "\$(dirname "\$0")/hyprland_client.py" ${6:-full} &
+    # Every face listens for a wake from sleep, for its clocks, unless
+    # DIR/no-wake-watch is there.
+    if ! test -e "\$(dirname "\$0")/no-wake-watch"; then
+        gdbus monitor --system --dest org.freedesktop.login1 --object-path /org/freedesktop/login1 >/dev/null 2>&1 &
+    fi
     until test -e "\$XDG_RUNTIME_DIR/hyprland_client.ready"; do sleep 0.1; done
     rm "\$XDG_RUNTIME_DIR/hyprland_client.ready" || exit 1
     if test "\$1" = -c; then
@@ -573,6 +578,11 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
 # tidewm-asks-hyprland makes it skip the tree, write no files, or run
 # hyprctl too.
 elif test -n "\$SWAYSOCK" && test "\$1" = -p; then
+    # Every face listens for a wake from sleep, for its clocks, unless
+    # DIR/no-wake-watch is there.
+    if ! test -e "\$(dirname "\$0")/no-wake-watch"; then
+        gdbus monitor --system --dest org.freedesktop.login1 --object-path /org/freedesktop/login1 >/dev/null 2>&1 &
+    fi
     # The lock there listens only for tidewm's input events, and asks
     # tide-msg for the keyboard as it starts and again on each input event
     # (tidewm_client.py), unless DIR/tidewm-lock-deaf is there, when it
@@ -1795,6 +1805,14 @@ stubs "$tmp/no-keyboard-watch" "exit 0" "$loaded"
 run "$tmp/no-keyboard-watch"
 check "a lock and greeter that never count the keyboards for the field's focus fail" test "$code" -ne 0
 check "and say so" contains "$out" 'never ran "tide keyboards..." in 2 s'
+}
+
+case_128() {
+stubs "$tmp/no-wake-watch" "exit 0" "$loaded"
+: >"$tmp/no-wake-watch/no-wake-watch" || exit 1
+run "$tmp/no-wake-watch"
+check "a shell, lock and greeter that never listen for a wake from sleep fail" test "$code" -ne 0
+check "and say so" contains "$out" 'never ran "gdbus monitor --system --dest org.freedesktop.login1..." in 2 s'
 }
 
 case_98() {

@@ -72,7 +72,11 @@ Singleton {
         }
     }
 
-    onDarkChanged: root.tell()
+    // Logged, so the journal shows how soon after a wake it came.
+    onDarkChanged: {
+        console.log(`tide: switching to ${root.dark ? "dark" : "light"}`);
+        root.tell();
+    }
     onLoadedChanged: root.tell()
 
     // Tells apps (Appearance.schemeCommands), once the settings are read so
@@ -431,6 +435,8 @@ Singleton {
     // waking.
     WallClock {
         id: clock
+
+        onJumped: console.log(`tide: the clock caught up; it is ${root.dark ? "dark" : "light"}`)
 
         readonly property real minute: date.getTime()
     }

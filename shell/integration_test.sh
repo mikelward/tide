@@ -275,11 +275,11 @@ cat >"$tmp/helpers/real/hyprctl" <<EOF || exit 1
 "$python_path" "$PWD/shell/hyprland_stand_in.py" ctl "\$@"
 EOF
 chmod +x "$tmp/helpers/real/hyprctl" || exit 1
-# gsettings and nmcli, for light and dark and the VPNs (their stand-ins
-# say what they answer), copied so their monitors can exec a tail that
+# gsettings and nmcli, for light and dark and the VPNs, and gdbus, for
+# waking from sleep (their stand-ins say what they answer), copied so their monitors can exec a tail that
 # ends with the shell; systemctl and timedatectl, for hypridle and the
 # system's time zone.
-for _helper in gsettings nmcli systemctl timedatectl udevadm busctl; do
+for _helper in gsettings gdbus nmcli systemctl timedatectl udevadm busctl; do
     cp "shell/${_helper}_stand_in.sh" "$tmp/helpers/real/$_helper" || exit 1
     chmod +x "$tmp/helpers/real/$_helper" || exit 1
 done
@@ -312,7 +312,7 @@ if ! GOTOOLCHAIN=local "$go_path" build -buildvcs=false -o "$tmp/helpers/real/ti
     echo "FAIL: couldn't build tide-msg: $(cat "$tmp/go.log")" >&2
     exit 1
 fi
-helpers="tide-sysmon tide-tz hyprctl tide-msg gsettings nmcli systemctl timedatectl udevadm busctl tide"
+helpers="tide-sysmon tide-tz hyprctl tide-msg gsettings gdbus nmcli systemctl timedatectl udevadm busctl tide"
 : >"$tmp/helpers.log" || exit 1
 for _helper in $helpers; do
     cat >"$tmp/helpers/$_helper" <<EOF || exit 1
@@ -633,7 +633,7 @@ load() {
     # tzdata; the stand-ins' answers), so anything the shell's commands
     # warn of is a failure.
     # On tidewm, Quickshell's I3 module logs a command tidewm refused.
-    if grep -E "tide: (busctl|tide-tz|tide-sysmon|tide-msg|tidewm can't|clocks|bar title|focus|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl|tide-msg)|replay|tell|apply|keep|read tidewm)|tide-(lock|greeter): (hyprctl|tide-msg|couldn't start (hyprctl|tide-msg)|keyboards)|Error occurred while running command" "$log" >"$tmp/reports"; then
+    if grep -E "tide: (busctl|gdbus|tide-tz|tide-sysmon|tide-msg|tidewm can't|clocks|bar title|focus|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl|tide-msg)|replay|tell|apply|keep|read tidewm)|tide-(lock|greeter): (hyprctl|tide-msg|couldn't start (hyprctl|tide-msg)|keyboards)|Error occurred while running command" "$log" >"$tmp/reports"; then
         echo "FAIL: $_what loaded, but its commands warned:" >&2
         cat "$tmp/reports" >&2
         exit 1
@@ -2208,7 +2208,7 @@ start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"
 # settings, whether a popover is open, the monitors and their settings, the
 # dim strength, home and its apps' rules, or the floating rules.
 # The lock and the greeter only ask for the keyboards, for their layout
-# badges.
+# badges, and listen for a wake, for their clocks.
 shell_runs='tide-tz
 tide-sysmon probe
 hyprctl activewindow -j
@@ -2217,6 +2217,7 @@ hyprctl eval tide_focus.set_order(
 gsettings monitor org.gnome.desktop.interface color-scheme
 gsettings set org.gnome.desktop.interface color-scheme
 gsettings set org.gnome.desktop.interface gtk-theme
+gdbus monitor --system --dest org.freedesktop.login1
 nmcli monitor
 nmcli -t -f NAME,UUID,TYPE,ACTIVE,STATE,DEVICE connection show
 systemctl --user try-restart hypridle.service
@@ -2276,7 +2277,8 @@ echo "ok: the shell writes the display settings, and new ones, and applies them"
 echo "ok: make install-shell over the running shell reloads it once, after every file"
 load_runs='hyprctl devices -j
 tide keyboards
-udevadm monitor --udev --subsystem-match=input'
+udevadm monitor --udev --subsystem-match=input
+gdbus monitor --system --dest org.freedesktop.login1'
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"
 load_runs=
 if test -n "$notify_path"; then
@@ -2334,12 +2336,14 @@ fi
 # badge, from tidewm's inputs. It too is left holding the screen, which
 # the lock below takes over.
 load_compositor=tidewm
-load_runs='tide-msg --type get_inputs'
+load_runs='tide-msg --type get_inputs
+gdbus monitor --system --dest org.freedesktop.login1'
 load tidewm-lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 load_compositor=
 load_runs='hyprctl devices -j
 tide keyboards
-udevadm monitor --udev --subsystem-match=input'
+udevadm monitor --udev --subsystem-match=input
+gdbus monitor --system --dest org.freedesktop.login1'
 # A clocks.local.json and a wallpaper record the lock refuses, which it
 # should name.
 printf '{\n  "hour24": "no"\n}\n' >"$clocks_local" || exit 1

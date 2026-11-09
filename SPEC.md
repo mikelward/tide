@@ -2062,8 +2062,10 @@ See [`bar.png`](docs/mocks/bar.png).
   bar, the popover and the lock, and after the time is set. Quickshell's
   `SystemClock` waits for the next minute on a timer that stops while the
   machine sleeps, so on its own it shows the time from before a suspend
-  for up to a minute. `WallClock.qml` checks the wall clock each second
-  and redraws at once when it has jumped.
+  for up to a minute. `WallClock.qml` redraws when logind says the machine
+  woke (`PrepareForSleep`, heard through `gdbus monitor`, from `Sleep.qml`).
+  It also checks the wall clock each second and redraws when it has jumped,
+  which catches a time change and a wake logind didn't report.
 - **Hovering the clocks** shows each zone that isn't in the bar on one
   line, in order, such as `SF 09:41 · NYC 12:41 · LON 17:41`, in the bar's
   hover text (§7.4). With every zone in the bar, there's no hover text.
@@ -4233,6 +4235,10 @@ to be focused.
     from a latitude and longitude in `appearance.local.json`, with no network
     lookup.
   - **`light`** or **`dark`**: fixed.
+
+  The schedule follows the same clock as the bar (§7.3), so a change due while the
+  machine slept comes as it wakes. The journal logs each wake and each
+  switch.
 
   The settings are `mode`, `light` and `dark` (24-hour times like
   `"07:00"`), and `latitude` and `longitude` (decimal degrees, east and
