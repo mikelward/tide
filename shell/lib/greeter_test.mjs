@@ -66,11 +66,11 @@ test("a session file becomes a session with the environment pam_systemd reads", 
         ["XDG_SESSION_TYPE=wayland", "XDG_SESSION_DESKTOP=hyprland"]);
 });
 
-test("tidewm's session entry starts uwsm with tidewm first, and follows tide", () => {
+test("tidewm's session entry starts tide-session tidewm with tidewm first, and follows tide", () => {
     const text = readFileSync(new URL("../../session/tide-tidewm.desktop", import.meta.url), "utf8");
     const s = sessionFromEntry("tide-tidewm", parseDesktopEntry(text));
     assert.equal(s.name, "tide (tidewm)");
-    assert.equal(s.command, 'uwsm start -e -D tidewm:tide -N "tide (tidewm)" -- tide-tidewm');
+    assert.equal(s.command, "tide-session tidewm");
     assert.deepEqual(s.env, ["XDG_SESSION_TYPE=wayland", "XDG_SESSION_DESKTOP=tide-tidewm", "XDG_CURRENT_DESKTOP=tidewm:tide"]);
     const sessions = sessionList(parseListing(listing(
         [true, "/usr/share/wayland-sessions/tide-tidewm.desktop", text],

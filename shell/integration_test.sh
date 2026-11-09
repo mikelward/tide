@@ -2185,7 +2185,7 @@ cancel_session
 create_session probe
 answer right
 answer code right
-start_session {"cmd": ["uwsm start -e -D tide:Hyprland -N tide -- tide-hyprland"], "env": ["XDG_SESSION_TYPE=wayland", "XDG_SESSION_DESKTOP=tide", "XDG_CURRENT_DESKTOP=tide:Hyprland"]}'
+start_session {"cmd": ["tide-session hyprland"], "env": ["XDG_SESSION_TYPE=wayland", "XDG_SESSION_DESKTOP=tide", "XDG_CURRENT_DESKTOP=tide:Hyprland"]}'
     if test "$(cat "$tmp/greetd.log")" != "$_want"; then
         echo "FAIL: greetd should see a wrong password, then the right one and the code, then tide started; it saw:" >&2
         cat "$tmp/greetd.log" >&2
