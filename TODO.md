@@ -1815,6 +1815,12 @@ Hyprland yet. Still to do:
   plain Hyprland login, and as tide-lock's fallback (SPEC.md §10). On a
   real session, check all three paths reach tide-lock, and before sleep
   too.
+- [ ] **The idle fallback's sleep doesn't wait for the lock.** swayidle's
+      `before-sleep` starts `tide-lock.service` and returns once systemd
+      has forked it (`Type=simple`), so a suspend can freeze the lock
+      before it covers the screen; hypridle waits for the lock
+      (`inhibit_sleep = 3`). Have the hook wait for the session lock,
+      tide-lock's or its fallback's, before it returns (Codex on #439).
 - On a real session, check the lock's fallback (SPEC.md §10): with `qs`
   hidden from the user manager's `PATH`, Super+L locks with hyprlock at
   once, and the notification waits under it; `kill -SEGV` on a live

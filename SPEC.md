@@ -659,6 +659,19 @@ flowchart TD
     from the config's own directory. hypridle 0.1.8 aborts without a config, so a
     config repo that dropped its copy before tide's installer ran left
     hypridle crashing at every login.
+  - A hypridle that keeps failing gives way to swayidle. The drop-in
+    sets `OnFailure=tide-idle-fallback.service` and a start limit of eight
+    in 90 s, which a start that times out every 10 s reaches; the packaged
+    unit's `Restart=on-failure` with systemd's default limit never did.
+    `RestartMode=direct` keeps a crash the next start recovers from away
+    from the fallback.
+    The fallback runs `swayidle`, which runs `tide lock --now` after
+    five minutes, before sleep and on logind's `Lock`: that starts
+    `tide-lock.service`, or hyprlock or swaylock where the unit can't
+    start. It only locks: no
+    dimming, no displays off, no suspend, no `org.freedesktop.ScreenSaver`.
+    A critical notification, "hypridle failed", says so. It stops when
+    hypridle starts again. `setup` installs swayidle.
   - `tide launch` also records the launch for the focus guard (§14.3),
     before it waits, so a key press or focus change during the wait cancels
     the grant.
@@ -3472,7 +3485,9 @@ talk, a demo, or a meeting room's screen.
     its `LoadState` is `loaded`. Otherwise it runs hyprlock itself, unless
     one is running, and sends the same notification.
   - `tide-lock` fails at once when the lock can't start: no `qs`, a `qs`
-    older than 0.3 (§3.2), or no `lock.qml`. It says why in the journal
+    older than 0.3 (§3.2), no `lock.qml`, or no readable
+    `/etc/pam.d/tide-lock`, without which PAM refuses every password and
+    the lock could never be opened. It says why in the journal
     and exits 78. The unit doesn't restart on 78
     (`RestartPreventExitStatus`), so it fails, and hyprlock locks at once.
     A `qs` version it can't read is let through.
@@ -3487,6 +3502,11 @@ talk, a demo, or a meeting room's screen.
     ends the same way.
   - An unlock is a clean exit, and so is a stop at logout. Neither
     fails the unit, so neither starts hyprlock.
+  - A lock the compositor drops before a password was accepted, as when
+    it refuses the lock, exits 1, so the unit restarts it and then falls
+    back, rather than leaving the session unlocked with a clean exit.
+  - Without hyprlock, the fallback unit and `tide lock` run swaylock,
+    which `setup` installs too. It needs no config.
   - The fallback says so: a critical notification, "The tide lock
     failed", waiting under the lock. `tide doctor` names the failed unit
     and why.

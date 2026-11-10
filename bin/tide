@@ -151,7 +151,9 @@
 #     hypridle, nothing answers logind, so it starts tide-lock.service
 #     itself, or hyprlock where that isn't installed or won't start, as
 #     lock_cmd does. A critical notification then says idle and suspend
-#     won't lock either. Exits 1 if nothing could lock.
+#     won't lock either. Exits 1 if nothing could lock. With --now it
+#     skips logind and starts the lock itself, as what answers logind's
+#     Lock does (tide-idle-fallback.service's swayidle).
 #
 #   tide lid-closed
 #
@@ -261,7 +263,7 @@ usage() {
     echo "       $prog autostart-sweep" >&2
     echo "       $prog network-agent" >&2
     echo "       $prog brightness STEP" >&2
-    echo "       $prog lock" >&2
+    echo "       $prog lock [--now]" >&2
     echo "       $prog lid-closed" >&2
     echo "       $prog lock-check" >&2
     echo "       $prog idle-lock" >&2
@@ -1192,9 +1194,19 @@ tell_critical() {
 }
 
 lock() {
+    now=no
+    if test "${1:-}" = --now; then
+        now=yes
+        shift
+    fi
     test $# -eq 0 || usage
     hypridle=$(systemctl --user is-active hypridle.service 2>&1)
-    if test "$hypridle" = active; then
+    # --now: whatever answers logind's Lock is what's asking.
+    if test "$now" = yes; then
+        :
+    # swayidle, hypridle's fallback, answers logind's Lock too.
+    elif test "$hypridle" = active ||
+        test "$(systemctl --user is-active tide-idle-fallback.service 2>&1)" = active; then
         if loginctl lock-session; then
             return 0
         else
@@ -1224,9 +1236,19 @@ lock() {
         return 0
     fi
     if ! command -v "$hyprlock" >/dev/null 2>&1; then
-        echo "$prog lock: there's no hyprlock either, so the session isn't locked" >&2
-        tell_critical "The session didn't lock" "Neither tide-lock nor hyprlock could run. Run tide doctor to see why."
-        return 1
+        # $TIDE_SWAYLOCK stands in for swaylock in the tests.
+        swaylock=${TIDE_SWAYLOCK:-swaylock}
+        if pgrep -u "$(id -u)" -x "$swaylock" >/dev/null 2>&1; then
+            return 0
+        fi
+        if ! command -v "$swaylock" >/dev/null 2>&1; then
+            echo "$prog lock: there's no hyprlock or swaylock either, so the session isn't locked" >&2
+            tell_critical "The session didn't lock" "None of tide-lock, hyprlock and swaylock could run. Run tide doctor to see why."
+            return 1
+        fi
+        echo "$prog lock: there's no hyprlock, so swaylock locks instead" >&2
+        tell_critical "The tide lock failed" "swaylock locked the session instead. Run tide doctor to see why."
+        exec "$swaylock"
     fi
     tell_critical "The tide lock failed" "hyprlock locked the session instead. Run tide doctor to see why."
     exec "$hyprlock"
@@ -1258,6 +1280,13 @@ lock_check() {
     test $# -eq 0 || usage
     hypridle=$(systemctl --user is-active hypridle.service 2>&1)
     test "$hypridle" = active && return 0
+    # swayidle, which a failed hypridle starts, locks instead, and said so
+    # as it started.
+    fallback=$(systemctl --user is-active tide-idle-fallback.service 2>&1)
+    if test "$fallback" = active; then
+        echo "$prog lock-check: hypridle.service is ${hypridle:-not active}, and tide-idle-fallback.service (swayidle) locks instead" >&2
+        return 0
+    fi
     echo "$prog lock-check: hypridle.service is ${hypridle:-not active}, so idle and suspend won't lock" >&2
     tell_critical "Idle and suspend won't lock" "hypridle isn't running. Run tide doctor to see why."
 }

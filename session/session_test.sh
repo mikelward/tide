@@ -38,6 +38,7 @@ tidewm_portals=xdg-desktop-portal/tidewm-portals.conf
 autostart=systemd/user/app-.service.d/tide-autostart.conf
 lock=systemd/user/tide-lock.service
 lockfallback=systemd/user/tide-lock-fallback.service
+idlefallback=systemd/user/tide-idle-fallback.service
 shellfallback=systemd/user/tide-shell-fallback.service
 clipboard=systemd/user/tide-clipboard.service
 fcitx5=systemd/user/tide-fcitx5.service
@@ -382,6 +383,26 @@ ln -s "$tmp/idle-gone/gone.conf" "$tmp/idle-gone/.config/hypr/hypridle.conf"
 : > "$tmp/idle-own/.config/hypr/hypridle.conf"
 idle_config() { HOME="$tmp/$1" XDG_CONFIG_HOME='' PATH="$tmp/idle-bin:/usr/bin:/bin" sh -c "$idle_start"; }
 check "the drop-in replaces the packaged command" has_line "$dropin" "ExecStart="
+# A hypridle that keeps failing gives way to swayidle, which only locks.
+check "a failed hypridle starts the idle fallback" has_line "$dropin" "OnFailure=tide-idle-fallback.service"
+check "a hypridle crash the next start recovers from doesn't" has_line "$dropin" "RestartMode=direct"
+# shellcheck disable=SC2016 # sh -c's own $1
+check "a hypridle that times out at every start fails within the limit" \
+    sh -c 'test "$(sed -n "s/^StartLimitBurst=//p" "$1")" -le "$(( $(sed -n "s/^StartLimitIntervalSec=//p" "$1") / 11 ))"' sh "$dropin"
+check "the idle fallback is swayidle" grep -q '^ExecStart=swayidle -w ' "$idlefallback"
+for event in "timeout 300" before-sleep lock; do
+    check "swayidle locks on $event" \
+        grep -qF "$event 'tide lock --now'" "$idlefallback"
+done
+check "the idle fallback stops with the session" has_line "$idlefallback" "PartOf=graphical-session.target"
+check "and when hypridle runs again" has_line "$idlefallback" "Conflicts=hypridle.service"
+check "nothing but hypridle's failure starts the idle fallback" \
+    lacks_line_matching "$idlefallback" "^(\[Install\]|WantedBy=)"
+check "the idle fallback says it took over" \
+    grep -q '^ExecStartPost=.*notify-send --urgency=critical --app-name=tide "hypridle failed"' "$idlefallback"
+# shellcheck disable=SC2016 # make's own $(...)
+check "make install installs the idle fallback" \
+    grep -q '^	install -m 644 .*systemd/user/tide-idle-fallback.service .*"$(SYSTEMD_USER_DIR)/"$' Makefile
 check "without a hypridle config of your own, hypridle gets tide's" \
     test "$(idle_config idle-none)" = "--config $tmp/idle-none/.config/hypr/tide-hypridle.conf"
 check "a link to a config that's gone gets tide's too" \
@@ -576,6 +597,18 @@ check "without a hyprlock config of your own, the fallback gets tide's" \
     test "$(lock_config lock-none)" = "hyprlock --config $tmp/lock-none/.config/hypr/tide-hyprlock.conf"
 check "a link to a hyprlock config that's gone gets tide's too" \
     test "$(lock_config lock-gone)" = "hyprlock --config $tmp/lock-gone/.config/hypr/tide-hyprlock.conf"
+# Without hyprlock, the fallback is swaylock, which needs no config.
+mkdir -p "$tmp/sway-bin"
+printf '#!/bin/sh\necho "swaylock $*"\n' > "$tmp/sway-bin/swaylock"
+chmod +x "$tmp/sway-bin/swaylock"
+if PATH=/usr/bin:/bin command -v hyprlock >/dev/null 2>&1; then
+    echo "session_test.sh: skipping the swaylock fallback: this machine has a hyprlock in /usr/bin" >&2
+else
+    check "without hyprlock, the fallback is swaylock" \
+        test "$(HOME="$tmp/lock-none" XDG_CONFIG_HOME='' PATH="$tmp/sway-bin:/usr/bin:/bin" sh -c "$lock_start" 2>/dev/null)" = "swaylock "
+    check "and the journal says so" \
+        contains "$(HOME="$tmp/lock-none" XDG_CONFIG_HOME='' PATH="$tmp/sway-bin:/usr/bin:/bin" sh -c "$lock_start" 2>&1 >/dev/null)" "tide-lock-fallback: no hyprlock, so swaylock locks"
+fi
 # shellcheck disable=SC2016 # sh -c's own $1
 check "make install puts tide's hyprlock config beside yours" \
     sh -c 'env -u XDG_CONFIG_HOME HOME="$1" make -n install 2>/dev/null | grep -qF "hypr/hyprlock.conf \"$1/.config/hypr/tide-hyprlock.conf\""' sh "$tmp/home"

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, facePalette, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
+import { exitCode, CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, facePalette, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -685,4 +685,12 @@ test("the face is light or dark, its ink white on dark and black on light", () =
     // The field's border follows: the light palette's accent and a dark hairline.
     assert.deepEqual(fieldLook({ focused: true, keyboard: true, error: false, dark: false }), { border: "#1c71d8", borderWidth: 1.5, caret: true });
     assert.equal(fieldLook({ focused: false, keyboard: true, error: false, dark: false }).border, "#29000000");
+});
+
+test("the lock exits cleanly only once a password was accepted", () => {
+    assert.equal(exitCode(Object.assign({}, INITIAL, { unlocked: true })), 0);
+    // The compositor refused the lock, or dropped it: the unit runs it again.
+    assert.equal(exitCode(INITIAL), 1);
+    assert.equal(exitCode(Object.assign({}, INITIAL, { checking: true })), 1);
+    assert.equal(exitCode(undefined), 1);
 });
