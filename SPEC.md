@@ -466,6 +466,15 @@ flowchart TD
   It runs only in a tide session. It first starts waybar, where installed,
   as the transient unit `tide-bar-fallback`, so there's a bar meanwhile; it
   stops when `tide.service` starts again (`Conflicts=`).
+- **The fallback bar has tide's config.** `tide-waybar` runs waybar for
+  both fallbacks, the one above and `tide-shell`'s where Quickshell can't
+  run. A `~/.config/waybar/config` or `config.jsonc` of your own is
+  waybar's to read. Without one it gets tide's, which `make install` puts
+  beside it: `tide-hyprland.jsonc` or `tide-tidewm.jsonc`, with
+  `tide.css`. The distro's default is written for sway and shows little
+  on Hyprland. tide's has the workspaces (Hyprland's module, or sway's
+  over tidewm's IPC), a clock, the tray, the network, the volume and the
+  battery, and says tide's bar isn't running.
 - **A Hyprland too old for tide's config never gets a tide session.**
   Before 0.56.2, Hyprland can't run `hypr/tide/hyprland.lua`, and comes up
   with its own banner and no tide keys or bar. So:

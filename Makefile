@@ -62,6 +62,8 @@ SESSIONS ?= tide tide-tidewm
 TIDEWM_DIR ?= $(or $(XDG_CONFIG_HOME),$(HOME)/.config)/tidewm
 # Where hypridle's config and the Idle page's tide-idle.conf are.
 IDLE_DIR ?= $(or $(XDG_CONFIG_HOME),$(HOME)/.config)/hypr
+# Where waybar's config is: tide's fallback bar's goes beside yours.
+WAYBAR_DIR ?= $(or $(XDG_CONFIG_HOME),$(HOME)/.config)/waybar
 SYSTEMD_USER_DIR ?= $(HOME)/.config/systemd/user
 PORTAL_DIR ?= $(HOME)/.config/xdg-desktop-portal
 SHELL_DIR ?= $(HOME)/.config/quickshell/tide
@@ -142,6 +144,7 @@ test-fast: test-lua
 	sh bin/tide-clipboard_test.sh
 	sh bin/tide-fill_test.sh
 	sh bin/tide-lock_test.sh
+	sh bin/tide-waybar_test.sh
 	sh bin/tide-shell_test.sh
 	sh bin/tide-doctor_test.sh
 	sh bin/tide-sysmon_test.sh
@@ -230,6 +233,10 @@ install: build install-shell
 	install -m 644 hypr/hypridle.conf "$(IDLE_DIR)/tide-hypridle.conf"
 	@# And its hyprlock config, for the lock's fallback with none of yours.
 	install -m 644 hypr/hyprlock.conf "$(IDLE_DIR)/tide-hyprlock.conf"
+	@# The fallback bar's config (SPEC.md §5.2), beside any of yours, which
+	@# tide-waybar leaves waybar to read.
+	install -d "$(WAYBAR_DIR)"
+	install -m 644 waybar/tide-hyprland.jsonc waybar/tide-tidewm.jsonc waybar/tide.css "$(WAYBAR_DIR)/"
 	install -m 755 hypr/tide/apply-input.sh hypr/tide/watch-input.sh hypr/tide/next-layout.sh "$(HYPR_DIR)/"
 	install -d "$(TIDEWM_DIR)"
 	install -m 644 tidewm/tide.conf "$(TIDEWM_DIR)/"
@@ -285,7 +292,7 @@ install-session:
 		test -x build/$$cmd || { echo "make install-session: no build/$$cmd; run make build first, as yourself" >&2; exit 1; }; \
 	done
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
-	install -m 755 bin/tide bin/tide-session bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-tidewm bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-shell-fallback bin/tide-sysmon build/tide-grant build/tide-msg build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
+	install -m 755 bin/tide bin/tide-session bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-tidewm bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-shell-fallback bin/tide-waybar bin/tide-sysmon build/tide-grant build/tide-msg build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
 	$(if $(strip $(SESSIONS)),install -m 644 $(SESSIONS:%=session/%.desktop) "$(DESTDIR)$(PREFIX)/share/wayland-sessions/")
 	@# KWin lets a program use its fake-input (KDE's Win+V paste) only if
 	@# a desktop entry whose Exec is that program's path lists it in

@@ -1,0 +1,31 @@
+/* The fallback bar's look (SPEC.md §5.2): plain, dark, and readable. */
+* {
+    font-family: sans-serif;
+    font-size: 13px;
+    min-height: 0;
+}
+window#waybar {
+    background: #1d1d20;
+    color: #f2f2f6;
+}
+#workspaces button {
+    padding: 0 8px;
+    color: #a0a0a8;
+    border-radius: 0;
+}
+#workspaces button.active,
+#workspaces button.focused {
+    color: #f2f2f6;
+    background: #3a3a40;
+}
+#clock,
+#tray,
+#network,
+#wireplumber,
+#battery {
+    padding: 0 10px;
+}
+#custom-tide {
+    padding: 0 10px;
+    color: #f6d32d;
+}

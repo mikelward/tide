@@ -1,0 +1,31 @@
+#!/bin/sh
+#
+# tide-waybar: waybar as tide's fallback bar (SPEC.md §5.2), which
+# tide-shell runs where Quickshell can't, and tide-shell-fallback where
+# tide's shell failed. With a waybar config of your own it runs plain
+# waybar, which reads it. Without one, tide's: the distro's default is
+# written for sway, and shows little on Hyprland. tide's has the session's
+# workspaces (Hyprland's, or tidewm's over sway's IPC), a clock, the tray,
+# the network, the volume and the battery, and says tide's bar isn't running.
+#
+# Usage: tide-waybar
+
+prog=tide-waybar
+config_home=${XDG_CONFIG_HOME:-$HOME/.config}
+
+for own in "$config_home/waybar/config" "$config_home/waybar/config.jsonc"; do
+    if test -e "$own"; then
+        exec waybar
+    fi
+done
+case ":${XDG_CURRENT_DESKTOP:-}:" in
+    *:Hyprland:*) name=hyprland ;;
+    *) name=tidewm ;;
+esac
+config=$config_home/waybar/tide-$name.jsonc
+style=$config_home/waybar/tide.css
+if ! test -r "$config" || ! test -r "$style"; then
+    echo "$prog: can't read $config and $style, so waybar starts with its own default; run \`make install\` in tide" >&2
+    exec waybar
+fi
+exec waybar --config "$config" --style "$style"
