@@ -1950,6 +1950,10 @@ reads the settings files the shell writes (`tide-*.lua`).
   the launcher's fallback and the screenshot command. An unknown option,
   or one of the wrong type, fails the load by name. `conf` does this with
   its owner's preferences.
+- **Rescue keys.** The file's first act binds `Super+T`, your terminal, and
+  `Super+Shift+E`, quit. A load that stops part-way, on a wrong option or
+  a settings file this Hyprland can't take, keeps them, so there are keys
+  to fix it with. A load that reaches the real bindings unbinds them first.
 - **Its defaults.** A US layout, right-handed mice at Hyprland's speed,
   `xdg-terminal-exec` on `Super+T`, `xdg-open` on your home folder on
   `Super+E`, grim and slurp for screenshots, and a notification where the

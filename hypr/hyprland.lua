@@ -32,6 +32,29 @@
 --   screenshot      the screenshot command, which takes --window and
 --                   --region (grim and slurp, to the clipboard)
 -- A wrong one fails here, by name.
+-- The rescue keys: a terminal on Super+T and the way out on Super+Shift+E,
+-- bound before anything below can fail, so a config that stops part-way (a
+-- wrong option, a settings file this Hyprland can't take, a bug) still
+-- leaves keys to fix it with. apply_keys() takes them back as it binds
+-- every key, these two among them.
+local rescue_keys = {}
+do
+    local given = ...
+    local rescue_terminal = type(given) == "table" and type(given.terminal) == "string" and given.terminal
+        or "xdg-terminal-exec"
+    for _, r in ipairs({
+        { "SUPER + T", function() return hl.dsp.exec_cmd(rescue_terminal) end, "Terminal" },
+        { "SUPER + SHIFT + E", function() return hl.dsp.exit() end, "Quit Hyprland" },
+    }) do
+        local ok, err = pcall(function() hl.bind(r[1], r[2](), { description = r[3] }) end)
+        if ok then
+            table.insert(rescue_keys, r[1])
+        else
+            print("tide: couldn't bind the rescue key " .. r[1] .. ": " .. tostring(err))
+        end
+    end
+end
+
 local opts = ...
 if opts == nil then
     opts = {}
@@ -1048,6 +1071,14 @@ end
 
 local function fixed(keys, target, opts)
     fixed_keys[key_id(keys)] = true
+    -- A fixed binding on a rescue key takes it over now, so apply_keys()
+    -- doesn't unbind it with the rescue one.
+    for i = #rescue_keys, 1, -1 do
+        if key_id(rescue_keys[i]) == key_id(keys) then
+            hl.unbind(rescue_keys[i])
+            table.remove(rescue_keys, i)
+        end
+    end
     hl.bind(keys, target, opts)
 end
 
@@ -1937,6 +1968,11 @@ end
 local function apply_keys()
     local given, unknown = read_tide_keys()
     local problems = {}
+    -- The config got this far, so the rescue keys give way to the real ones.
+    for _, k in ipairs(rescue_keys) do
+        hl.unbind(k)
+    end
+    rescue_keys = {}
     for _, b in ipairs(named_binds) do
         for _, k in ipairs(b.bound) do
             hl.unbind(k)
