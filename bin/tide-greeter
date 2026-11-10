@@ -15,6 +15,10 @@
 # session. Without localed, Hyprland's default (US) stands, and the journal
 # says so.
 #
+# A greeter that can't run still lets you log in: without its files,
+# Hyprland or qs, or when Hyprland fails, it says why and runs agreety,
+# greetd's own text login, where that's installed.
+#
 # Usage: tide-greeter
 
 prog=tide-greeter
@@ -22,7 +26,7 @@ prog=tide-greeter
 if test $# -gt 0; then
     case $1 in
         -h | --help)
-            sed -n '3,18p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
     esac
@@ -30,20 +34,44 @@ if test $# -gt 0; then
     exit 2
 fi
 
+# text_login WHY: says why the greeter can't run, then runs agreety, greetd's
+# own text login, so the machine can still be logged in to and fixed. It's
+# looked for on the PATH and where the distros put it. Without it, fails,
+# and greetd starts the greeter again.
+text_login() {
+    echo "$prog: $1" >&2
+    # $TIDE_GREETER_AGREETY_DIRS stands in for those directories in the tests.
+    _dir=$(command -v agreety 2>/dev/null)
+    for _dir in "${_dir%/agreety}" ${TIDE_GREETER_AGREETY_DIRS-/usr/sbin /usr/bin /usr/local/bin /usr/libexec}; do
+        _agreety=$_dir/agreety
+        if test -n "$_dir" && test -f "$_agreety" && test -x "$_agreety"; then
+            echo "$prog: logging in on the console instead (agreety)" >&2
+            # On the console too, which is all there is to read here.
+            printf "\ntide's greeter could not start: %s\n\n" "$1"
+            exec "$_agreety" --cmd /bin/sh
+        fi
+    done
+    echo "$prog: and there's no agreety to log in with instead" >&2
+    exit 1
+}
+
 share=$(dirname -- "$0")/../share/tide
 config=$share/greeter/hyprland.lua
 qml=$share/shell/greeter.qml
 for file in "$config" "$qml"; do
     if ! test -r "$file"; then
-        echo "$prog: can't read $file; install the greeter with \`make install-session\`" >&2
-        exit 1
+        text_login "can't read $file; install the greeter with \`make install-session\`"
     fi
 done
 greetd_client=$(dirname -- "$0")/tide-greetd
 if ! test -x "$greetd_client"; then
-    echo "$prog: can't run $greetd_client; install the greeter with \`make install-session\`" >&2
-    exit 1
+    text_login "can't run $greetd_client; install the greeter with \`make install-session\`"
 fi
+for command in Hyprland qs; do
+    if ! command -v "$command" >/dev/null 2>&1; then
+        text_login "there's no $command on the greeter's PATH ($PATH); rerun setup"
+    fi
+done
 
 # unquote LINE: a string property's value from busctl's `s "VALUE"`, or
 # fails for any other line.
@@ -77,4 +105,10 @@ else
 fi
 
 export TIDE_GREETER_QML="$qml" TIDE_GREETER_GREETD="$greetd_client"
-exec Hyprland --config "$config"
+# Not exec'd: a Hyprland that fails, as one too old for the greeter's
+# config, leaves the text login. It exits 0 once the greeter has.
+Hyprland --config "$config"
+status=$?
+if test "$status" -ne 0; then
+    text_login "Hyprland exited $status"
+fi

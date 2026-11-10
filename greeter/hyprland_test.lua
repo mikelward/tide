@@ -28,15 +28,23 @@ local S -- what the stub recorded
 
 -- Loads the config with `environ` as its environment, and returns what it
 -- set up. The start handler isn't run until the test runs it.
-local function load(environ)
+local function load(environ, refuse)
     S = { config = {}, monitors = {}, handlers = {}, exec = {}, other = {} }
     local hl = setmetatable({
         config = function(t)
+            if refuse and t[refuse] then
+                error("no config section " .. refuse)
+            end
             for k, v in pairs(t) do
                 S.config[k] = v
             end
         end,
-        monitor = function(m) table.insert(S.monitors, m) end,
+        monitor = function(m)
+            if refuse == "monitor" then
+                error("no hl.monitor")
+            end
+            table.insert(S.monitors, m)
+        end,
         on = function(ev, fn) S.handlers[ev] = fn end,
         exec_cmd = function(cmd) table.insert(S.exec, cmd) end,
     }, {
@@ -157,6 +165,20 @@ test("with no greeter given, it says so and exits Hyprland", function()
     local out = run(start())
     eq(out, "tide-greeter: no TIDE_GREETER_QML, so no greeter to run\n"
         .. "hyprctl [dispatch] [hl.dsp.exit()] watcher=\n", "what ran")
+end)
+
+test("a setting this Hyprland refuses costs neither the greeter nor the other settings", function()
+    for _, refuse in ipairs({ "misc", "input", "animations", "monitor" }) do
+        load({ TIDE_GREETER_QML = "/usr/share/tide/shell/greeter.qml", TIDE_GREETER_KB_LAYOUT = "de" }, refuse)
+        local out = run(start())
+        eq(out:find("qs [-p] [/usr/share/tide/shell/greeter.qml]", 1, true) ~= nil, true, refuse .. ": the greeter runs")
+        if refuse ~= "input" then
+            eq(S.config.input.kb_layout, "de", refuse .. ": the keyboard")
+        end
+        if refuse ~= "misc" then
+            eq(S.config.misc.key_press_enables_dpms, true, refuse .. ": the displays wake")
+        end
+    end
 end)
 
 io.write(string.format("hyprland_test.lua: %d passed, %d failed\n", passed, failures))

@@ -49,8 +49,21 @@ cat >"$tmp/stubs/Hyprland" <<'EOF'
     printf '\n'
     env | grep '^TIDE_GREETER_' | sort
 } >"$STUB_LOG"
+exit "${HYPRLAND_EXIT:-0}"
 EOF
-chmod +x "$tmp/stubs/busctl" "$tmp/stubs/Hyprland" || exit 1
+printf '#!/bin/sh\n' >"$tmp/stubs/qs" || exit 1
+chmod +x "$tmp/stubs/busctl" "$tmp/stubs/Hyprland" "$tmp/stubs/qs" || exit 1
+# agreety, in a directory of its own so only some runs have it: it says how
+# it was run.
+mkdir "$tmp/agreety" || exit 1
+printf '#!/bin/sh\necho "agreety $*"\n' >"$tmp/agreety/agreety" || exit 1
+chmod +x "$tmp/agreety/agreety" || exit 1
+# The system's commands the greeter needs, without the system's Hyprland,
+# qs or agreety.
+mkdir "$tmp/sys" || exit 1
+for c in sh dirname sed test printf tr cat env grep sort; do
+    ln -s "$(command -v "$c")" "$tmp/sys/$c" || exit 1
+done
 
 # greeter STATUS [ARG...]: runs the installed tide-greeter, leaving its
 # output in $out and what Hyprland got in $ran, and checks that it exits
@@ -59,8 +72,9 @@ greeter() {
     _want=$1
     shift
     rm -f "$tmp/log" "$tmp/log.busctl"
-    out=$(env -i PATH="$tmp/stubs:$PATH" STUB_LOG="$tmp/log" \
-        BUSCTL_OUT="${BUSCTL_OUT-}" BUSCTL_EXIT="${BUSCTL_EXIT:-0}" \
+    out=$(env -i PATH="${GREETER_PATH:-$tmp/stubs:$tmp/sys}" STUB_LOG="$tmp/log" \
+        BUSCTL_OUT="${BUSCTL_OUT-}" BUSCTL_EXIT="${BUSCTL_EXIT:-0}" HYPRLAND_EXIT="${HYPRLAND_EXIT:-0}" \
+        TIDE_GREETER_AGREETY_DIRS="${AGREETY_DIRS-}" \
         "$prefix/bin/tide-greeter" "$@" 2>&1)
     _code=$?
     ran=$(cat "$tmp/log" 2>/dev/null)
@@ -134,6 +148,45 @@ greeter 1
 check "a greetd client that can't run is named" contains "$out" "can't run $prefix/bin/tide-greetd"
 check "a greetd client that can't run starts no Hyprland" test -z "$ran"
 chmod +x "$prefix/bin/tide-greetd" || exit 1
+
+# A greeter that can't run leaves greetd's text login, where there is one.
+with_agreety="$tmp/agreety:$tmp/stubs:$tmp/sys"
+HYPRLAND_EXIT=1
+greeter 1
+check "a Hyprland that fails is reported" contains "$out" "tide-greeter: Hyprland exited 1"
+check "and without agreety, that's said too" contains "$out" "there's no agreety to log in with instead"
+GREETER_PATH=$with_agreety
+greeter 0
+check "a Hyprland that fails leaves the text login" contains "$out" "agreety --cmd /bin/sh"
+check "which says why on the console" contains "$out" "tide's greeter could not start: Hyprland exited 1"
+HYPRLAND_EXIT=0
+greeter 0
+check "a Hyprland that exits cleanly starts no text login" lacks "$out" "agreety"
+# Off the PATH, it's found where the distros put it.
+GREETER_PATH="$tmp/stubs:$tmp/sys" AGREETY_DIRS="$tmp/nowhere $tmp/agreety" HYPRLAND_EXIT=1
+greeter 0
+check "agreety is found off the PATH too" contains "$out" "agreety --cmd /bin/sh"
+unset AGREETY_DIRS
+HYPRLAND_EXIT=0
+GREETER_PATH=$with_agreety
+
+rm "$prefix/share/tide/shell/greeter.qml" || exit 1
+greeter 0
+check "a missing greeter leaves the text login" contains "$out" "agreety --cmd /bin/sh"
+check "and starts no Hyprland" test -z "$ran"
+: >"$prefix/share/tide/shell/greeter.qml" || exit 1
+
+GREETER_PATH="$tmp/agreety:$tmp/sys"
+greeter 0
+check "no Hyprland is reported" contains "$out" "there's no Hyprland on the greeter's PATH"
+check "and leaves the text login" contains "$out" "agreety --cmd /bin/sh"
+mkdir "$tmp/no-qs" || exit 1
+ln -s "$tmp/stubs/Hyprland" "$tmp/no-qs/Hyprland" || exit 1
+GREETER_PATH="$tmp/agreety:$tmp/no-qs:$tmp/sys"
+greeter 0
+check "no qs is reported" contains "$out" "there's no qs on the greeter's PATH"
+check "and starts no Hyprland" test -z "$ran"
+unset GREETER_PATH
 
 greeter 0 --help
 check "--help gives the usage" contains "$out" "Usage: tide-greeter"

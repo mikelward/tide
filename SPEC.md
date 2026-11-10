@@ -3621,6 +3621,12 @@ talk, a demo, or a meeting room's screen.
   after it, and greetd starts the session. `make install-session` installs
   the command, `tide-greetd`, the config, a copy of the shell (the greeter
   user can't read anyone's `~/.config`) and a greetd config template.
+- **A greeter that can't run still logs you in.** Without its files,
+  Hyprland or `qs`, or when Hyprland exits non-zero, `tide-greeter` says
+  why and runs `agreety`, greetd's own text login, where it's installed.
+  Without it, it fails and greetd starts it again. The greeter's config
+  registers the greeter first, then tries each setting alone, so one this
+  Hyprland refuses is logged and skipped.
 - **Same face as the lock.** Login and lock are one QML component with two
   modes ([`lock.png`](docs/mocks/lock.png)): `shell/LockFace.qml`.
 - **Light or dark, with a wallpaper.** The face has a light palette as
