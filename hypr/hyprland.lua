@@ -2005,6 +2005,15 @@ local function apply_keys()
             end
         end
     end
+    -- Quit, the terminal and the launcher always keep a key, so a session
+    -- can always be fixed from and left: turned off, each keeps its
+    -- defaults, and that's said.
+    for _, name in ipairs({ "quit", "terminal", "launcher" }) do
+        if given[name] and #given[name] == 0 then
+            given[name] = nil
+            table.insert(problems, name .. " can't be turned off, so it keeps its keys")
+        end
+    end
     for _, b in ipairs(named_binds) do
         if given[b.name] then
             claim(b, given[b.name], true)

@@ -4702,6 +4702,11 @@ stays hand-written.
     can't be given, and the page says whose they are.
   - Off takes a binding's keys away; Reset, shown once a binding's keys
     aren't its preset's, gives them back.
+  - Quit, the terminal and the launcher always keep a key (maintainer,
+    2026-11-10), so a session can always be fixed from and left. Off
+    refuses them, as does a swap that would leave one with none: "Terminal
+    needs a shortcut". A file edited by hand to turn one off is read as
+    leaving it alone, and `conf` keeps its defaults, saying so.
   - Start from sets every key to another tiling window manager's defaults:
     tide's own, dwm, i3, sway, xmonad or bspwm (`shell/lib/keymaps.mjs`).
     Each maps that window manager's default keys onto the binding that does
