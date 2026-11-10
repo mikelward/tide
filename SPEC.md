@@ -463,7 +463,9 @@ flowchart TD
   `RestartMode=direct`, a failure the next start recovers from doesn't. That opens the first
   terminal there is, saying the shell didn't start and that Super+Shift+E
   logs out, with the shell's status and log, then a shell to fix it from.
-  It runs only in a tide session.
+  It runs only in a tide session. It first starts waybar, where installed,
+  as the transient unit `tide-bar-fallback`, so there's a bar meanwhile; it
+  stops when `tide.service` starts again (`Conflicts=`).
 - **A Hyprland too old for tide's config never gets a tide session.**
   Before 0.56.2, Hyprland can't run `hypr/tide/hyprland.lua`, and comes up
   with its own banner and no tide keys or bar. So:

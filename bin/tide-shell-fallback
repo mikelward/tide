@@ -4,7 +4,8 @@
 # this once the shell has failed for good. Without it the session is a bare
 # wallpaper or a gray screen with nothing to click and no word of why. It
 # opens a terminal that says so, shows the shell's status and log, and says
-# how to log out, then leaves a shell there to fix it from.
+# how to log out, then leaves a shell there to fix it from. First it starts
+# waybar, where that's installed, so there's a bar meanwhile.
 say() {
     echo "tide-shell-fallback: $*" >&2
     # The journal is the log: a logger that fails has nowhere to say so.
@@ -12,7 +13,7 @@ say() {
 }
 # What the terminal runs: this script again, with --show.
 if test "${1:-}" = --show; then
-    echo "tide's shell didn't start, so there's no bar or launcher."
+    echo "tide's shell didn't start, so there's no launcher, and the bar is waybar's, if there is one."
     echo "Super+Shift+E logs out. Here's why it stopped:"
     echo
     systemctl --user status tide.service --no-pager --lines=0 2>&1
@@ -23,6 +24,17 @@ if test "${1:-}" = --show; then
     exec "${SHELL:-/bin/sh}" -i
 fi
 say "tide's shell failed; opening a terminal that says why"
+# A bar meanwhile: waybar, in a unit of its own, so it outlives the terminal
+# and stops when the shell starts again or the session ends.
+if ! command -v waybar >/dev/null 2>&1; then
+    say "no waybar, so there's no bar"
+elif out=$(systemd-run --user --quiet --collect --unit=tide-bar-fallback \
+    --property=PartOf=graphical-session.target --property=Conflicts=tide.service \
+    --slice=session-graphical.slice waybar 2>&1); then
+    say "waybar is the bar until the shell runs again"
+else
+    say "couldn't start waybar as the bar: $out"
+fi
 self=$0
 case $self in
     */*) ;;

@@ -514,6 +514,26 @@ check "it shows the shell's status" \
 check "and its log" contains "$sf_shown" "journalctl --user -u tide.service -b"
 check "then leaves a shell to fix it from" \
     test "$(printf '%s\n' "$sf_shown" | tail -n 1)" = "shell -i"
+# A bar meanwhile: waybar in a unit of its own, where it's installed. The
+# stub systemd-run records its arguments and exits $FAKE_RUN_STATUS.
+mkdir -p "$tmp/sf-bar"
+ln -s "$tmp/sf-foot/foot" "$tmp/sf-bar/foot"
+printf '#!/bin/sh\n' > "$tmp/sf-bar/waybar"
+# shellcheck disable=SC2016 # the stub's own $* and ${...}
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" > "%s"\necho "run failed" >&2\nexit "${FAKE_RUN_STATUS:-0}"\n' "$tmp/sf-run" > "$tmp/sf-bar/systemd-run"
+chmod +x "$tmp/sf-bar/waybar" "$tmp/sf-bar/systemd-run"
+sf_err=$(PATH="$tmp/sf-bar" /bin/sh bin/tide-shell-fallback 2>&1 >/dev/null)
+check "the fallback starts waybar in a unit of its own, which the shell's return stops" \
+    test "$(cat "$tmp/sf-run")" = "--user --quiet --collect --unit=tide-bar-fallback --property=PartOf=graphical-session.target --property=Conflicts=tide.service --slice=session-graphical.slice waybar"
+check "and says waybar is the bar" contains "$sf_err" "waybar is the bar until the shell runs again"
+check "and still opens the terminal" \
+    test "$(PATH="$tmp/sf-bar" /bin/sh bin/tide-shell-fallback 2>/dev/null)" = "foot bin/tide-shell-fallback --show"
+sf_err=$(FAKE_RUN_STATUS=1 PATH="$tmp/sf-bar" /bin/sh bin/tide-shell-fallback 2>&1 >/dev/null)
+check "a waybar that can't start is reported" contains "$sf_err" "couldn't start waybar as the bar: run failed"
+check "and the terminal still opens" \
+    test "$(FAKE_RUN_STATUS=1 PATH="$tmp/sf-bar" /bin/sh bin/tide-shell-fallback 2>/dev/null)" = "foot bin/tide-shell-fallback --show"
+sf_err=$(PATH="$tmp/sf-foot" /bin/sh bin/tide-shell-fallback 2>&1 >/dev/null)
+check "without waybar, the fallback says there's no bar" contains "$sf_err" "no waybar, so there's no bar"
 check "the shell's fallback parses as sh" sh -n bin/tide-shell-fallback
 check "the shell's fallback is executable" test -x bin/tide-shell-fallback
 check "a lock that can't start isn't restarted" \
