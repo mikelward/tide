@@ -380,7 +380,23 @@ export function mergedKeys(state) {
     for (const [name, keys] of Object.entries(PRESETS[state.preset].keys)) {
         out[name] = keys.filter(k => !yours.has(keysId(k)));
     }
-    return Object.assign(out, state.keys);
+    Object.assign(out, state.keys);
+    // A file edited by hand can't turn a kept binding off either: left
+    // out, it keeps the keys conf gives it.
+    for (const name of Object.keys(KEPT)) {
+        if (Array.isArray(out[name]) && out[name].length === 0) {
+            delete out[name];
+        }
+    }
+    return out;
+}
+
+// The bindings that always keep a key, so a session can always be fixed
+// from and left: what each is called where one is refused.
+export const KEPT = Object.freeze({ quit: "Quit", terminal: "Terminal", launcher: "The launcher" });
+
+function keptError(name) {
+    return `${KEPT[name]} needs a shortcut`;
 }
 
 // Each named binding's keys before yours: the preset's for one it names,
@@ -689,6 +705,9 @@ export function withKeys(state, catalog, name, keys, swap = false, fixedIds = []
         }
         const given = other.keys.filter(k => keysId(k) !== id)
             .concat(target.keys.filter(k => keysId(k) !== id));
+        if (given.length === 0 && Object.prototype.hasOwnProperty.call(KEPT, other.name)) {
+            return { error: keptError(other.name) };
+        }
         setOrDefault(out, other.name, defaults[other.name], given.slice(0, MAX_KEYS));
     }
     setOrDefault(out, name, defaults[name], [keys]);
@@ -726,8 +745,11 @@ export function withDefault(state, name, catalog = []) {
     return { state: { preset: state.preset, keys } };
 }
 
-// Your keys with `name` off.
+// Your keys with `name` off: an {error} for one that keeps a key (KEPT).
 export function withOff(state, name) {
+    if (Object.prototype.hasOwnProperty.call(KEPT, name)) {
+        return { error: keptError(name) };
+    }
     return { state: { preset: state.preset, keys: Object.assign({}, state.keys, { [name]: [] }) } };
 }
 

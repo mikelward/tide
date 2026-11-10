@@ -241,7 +241,7 @@ test("tide-keys.lua lists your keys over the preset's for conf to read", () => {
     assert.deepEqual(merged.launcher, ["SUPER + P"], "the preset's");
     const taken = mergedKeys({ preset: "i3", keys: { lock: ["SUPER + Return"] } });
     assert.deepEqual(taken.lock, ["SUPER + Return"]);
-    assert.deepEqual(taken.terminal, [], "i3's terminal gives up the key you gave lock");
+    assert.equal(taken.terminal, undefined, "i3's terminal gives up the key you gave lock, and keeps conf's own rather than none");
 });
 
 test("a preset's keys are a binding's defaults, and a binding it takes keys from goes without them", () => {
@@ -326,6 +326,18 @@ test("reset, off and starting from a preset", () => {
     assert.deepEqual(withDefault(yours({ monocle: ["SUPER + grave", "SUPER + L"], lock: ["SUPER + D"] }), "lock", CATALOG),
         { state: yours({ monocle: ["SUPER + grave"] }) });
     assert.deepEqual(withOff(NO_KEYS, "lock"), { state: yours({ lock: [] }) });
+    // Quit, the terminal and the launcher always keep a key.
+    assert.deepEqual(withOff(NO_KEYS, "terminal"), { error: "Terminal needs a shortcut" });
+    assert.deepEqual(withOff(NO_KEYS, "quit"), { error: "Quit needs a shortcut" });
+    assert.deepEqual(withOff(NO_KEYS, "launcher"), { error: "The launcher needs a shortcut" });
+    assert.deepEqual(mergedKeys(yours({ terminal: [], lock: [] })).terminal, undefined, "a hand-edited file can't either");
+    // Nor by a swap: Lock, off, taking the terminal's only key would leave it none.
+    const lockOff = CATALOG.map(b => (b.name === "lock" ? Object.assign({}, b, { keys: [] }) : b));
+    assert.deepEqual(withKeys(yours({ lock: [] }), lockOff, "lock", "SUPER + T", true), { error: "Terminal needs a shortcut" });
+    // A binding that isn't kept gives its last key up to a swap.
+    const terminalOff = CATALOG.map(b => (b.name === "terminal" ? Object.assign({}, b, { keys: [] }) : b));
+    assert.deepEqual(withKeys(NO_KEYS, terminalOff, "terminal", "SUPER + L", true).state.keys, { terminal: ["SUPER + L"], lock: [] });
+    assert.deepEqual(mergedKeys(yours({ terminal: [], lock: [] })).lock, []);
     assert.deepEqual(withPreset(yours({ lock: [] }), "i3"), { state: { preset: "i3", keys: {} } }, "your own go");
     assert.ok(withPreset(NO_KEYS, "awesome").error);
 });
