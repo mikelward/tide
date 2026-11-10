@@ -25,12 +25,13 @@ if test "${1:-}" = --show; then
 fi
 say "tide's shell failed; opening a terminal that says why"
 # A bar meanwhile: waybar, in a unit of its own, so it outlives the terminal
-# and stops when the shell starts again or the session ends.
+# and stops when the shell starts again or the session ends. tide-waybar
+# gives it tide's config where you have none.
 if ! command -v waybar >/dev/null 2>&1; then
     say "no waybar, so there's no bar"
 elif out=$(systemd-run --user --quiet --collect --unit=tide-bar-fallback \
     --property=PartOf=graphical-session.target --property=Conflicts=tide.service \
-    --slice=session-graphical.slice waybar 2>&1); then
+    --slice=session-graphical.slice tide-waybar 2>&1); then
     say "waybar is the bar until the shell runs again"
 else
     say "couldn't start waybar as the bar: $out"

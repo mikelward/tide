@@ -402,7 +402,8 @@ else
 fi
 # What the theme daemon would start, when there's none.
 test "$start_swaync" = no || supervise swaync swaync
-test "$start_waybar" = no || supervise waybar waybar
+# tide-waybar, beside this script, gives it tide's config where you have none.
+test "$start_waybar" = no || supervise waybar "$(dirname -- "$0")/tide-waybar"
 
 # The wallpaper (§5.2 puts it in the shell). The Quickshell shell draws its
 # own (§15); with waybar's bar, a daemon does. Not an owner apps wait for,

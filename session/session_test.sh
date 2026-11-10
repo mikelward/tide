@@ -558,7 +558,7 @@ printf '#!/bin/sh\nprintf "%%s\\n" "$*" > "%s"\necho "run failed" >&2\nexit "${F
 chmod +x "$tmp/sf-bar/waybar" "$tmp/sf-bar/systemd-run"
 sf_err=$(PATH="$tmp/sf-bar" /bin/sh bin/tide-shell-fallback 2>&1 >/dev/null)
 check "the fallback starts waybar in a unit of its own, which the shell's return stops" \
-    test "$(cat "$tmp/sf-run")" = "--user --quiet --collect --unit=tide-bar-fallback --property=PartOf=graphical-session.target --property=Conflicts=tide.service --slice=session-graphical.slice waybar"
+    test "$(cat "$tmp/sf-run")" = "--user --quiet --collect --unit=tide-bar-fallback --property=PartOf=graphical-session.target --property=Conflicts=tide.service --slice=session-graphical.slice tide-waybar"
 check "and says waybar is the bar" contains "$sf_err" "waybar is the bar until the shell runs again"
 check "and still opens the terminal" \
     test "$(PATH="$tmp/sf-bar" /bin/sh bin/tide-shell-fallback 2>/dev/null)" = "foot bin/tide-shell-fallback --show"

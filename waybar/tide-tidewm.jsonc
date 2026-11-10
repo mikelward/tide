@@ -1,0 +1,15 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": 28,
+    "modules-left": ["sway/workspaces"],
+    "modules-center": ["clock"],
+    "modules-right": ["custom/tide", "tray", "network", "wireplumber", "battery"],
+    "sway/workspaces": { "format": "{name}" },
+    "clock": { "format": "{:%a %e %b  %H:%M}", "tooltip": false },
+    "custom/tide": { "format": "tide's bar isn't running", "tooltip": false },
+    "tray": { "spacing": 8 },
+    "network": { "format-wifi": "{essid}", "format-ethernet": "Wired", "format-disconnected": "Offline", "tooltip": false },
+    "wireplumber": { "format": "Vol {volume}%", "format-muted": "Muted", "tooltip": false },
+    "battery": { "format": "{capacity}%", "format-charging": "{capacity}% charging", "tooltip": false }
+}
