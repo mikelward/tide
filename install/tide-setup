@@ -1432,9 +1432,11 @@ install_packages() {
     # tide's Hyprland config and launcher open, and hyprpolkitagent, the
     # first polkit agent tide-shell looks for, asks for passwords; none
     # comes with every desktop.
+    # swayidle and swaylock stand in for a hypridle or hyprlock that can't
+    # run (tide-idle-fallback.service, tide-lock-fallback.service).
     common="hypridle hyprlock uwsm xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
             waybar swww swaybg fuzzel grim slurp wl-clipboard wtype brightnessctl playerctl jq \
-            make xdg-terminal-exec hyprpolkitagent"
+            make xdg-terminal-exec hyprpolkitagent swayidle swaylock"
     # A source build replaces the distro's Hyprland rather than sitting
     # beside it.
     if test "$BUILD_NOW" = no; then

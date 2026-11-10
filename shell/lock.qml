@@ -266,11 +266,17 @@ ShellRoot {
 
         locked: true
 
-        // Unlocked: the compositor has dropped the lock, so the process's
-        // job is done. A clean exit, so systemd doesn't restart it.
+        // The compositor has dropped the lock, so the process's job is
+        // done. After the password, a clean exit, so systemd doesn't
+        // restart it. Without one, as when the compositor refused the lock,
+        // a failure: the unit starts it again, or its fallback.
         onLockedChanged: {
             if (!locked) {
-                Qt.quit();
+                const code = Lock.exitCode(root.face);
+                if (code !== 0) {
+                    console.warn("tide-lock: the compositor dropped the lock before a password was accepted");
+                }
+                Qt.exit(code);
             }
         }
 

@@ -11,7 +11,10 @@
 #   - lock.qml isn't installed;
 #   - qs is older than 0.3. 0.3.0 added what the lock's QML uses, and an
 #     older qs (Debian's 0.2.1) fails to load it, so the session never
-#     locked.
+#     locked;
+#   - the lock's PAM service, /etc/pam.d/tide-lock, isn't there or can't
+#     be read (`sudo make install-session` installs it). Without it PAM
+#     refuses every password, so that lock could never be opened.
 # A version it can't read is logged and let through, as tide-shell does,
 # so a new format can't cost the lock. If that qs can't load lock.qml, it
 # exits non-zero, and the unit's restarts run out to the same fallback.
@@ -22,6 +25,9 @@ lock_qml=$HOME/.config/quickshell/tide/lock.qml
 # tide-shell and tide-doctor check the same.
 min_quickshell=0.3
 EX_CONFIG=78
+# The lock's PAM service: lock.qml's PamContext names it. $TIDE_SYSCONFDIR
+# stands in for /etc in the tests, as in tide-doctor.
+pam_service=${TIDE_SYSCONFDIR:-/etc}/pam.d/tide-lock
 
 log() {
     echo "$prog: $*" >&2
@@ -42,6 +48,10 @@ if ! qs_path=$(command -v qs); then
 fi
 if ! test -f "$lock_qml"; then
     log "there's no lock at $lock_qml, so the lock is hyprlock's; run \`make install\` in tide"
+    exit $EX_CONFIG
+fi
+if ! test -r "$pam_service"; then
+    log "can't read $pam_service, which the lock checks passwords with, so the lock is hyprlock's; run \`sudo make install-session\` in tide"
     exit $EX_CONFIG
 fi
 # 0.2 prints its version as "quickshell 0.2.1, revision ...", 0.3 as

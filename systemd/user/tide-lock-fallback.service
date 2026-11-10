@@ -3,7 +3,7 @@
 # session still locks. Nothing else starts it. hyprlock takes over a lock
 # a crashed tide-lock left (Hyprland's misc:allow_session_lock_restore),
 # or locks a session tide-lock never locked. It exits 0 once the password
-# is accepted.
+# is accepted. Without hyprlock, swaylock locks instead.
 [Unit]
 Description=tide lock screen fallback (hyprlock)
 Documentation=https://github.com/mikelward/tide
@@ -15,7 +15,7 @@ Type=simple
 # Your hyprlock config, or tide's, which `make install` puts beside it as
 # tide-hyprlock.conf: hyprlock aborts without one, and a fallback that
 # can't start leaves the session unlocked.
-ExecStart=/bin/sh -c 'c=$${XDG_CONFIG_HOME:-$$HOME/.config}/hypr/hyprlock.conf; test -e "$$c" || c=$${XDG_CONFIG_HOME:-$$HOME/.config}/hypr/tide-hyprlock.conf; exec hyprlock --config "$$c"'
+ExecStart=/bin/sh -c 'c=$${XDG_CONFIG_HOME:-$$HOME/.config}/hypr/hyprlock.conf; test -e "$$c" || c=$${XDG_CONFIG_HOME:-$$HOME/.config}/hypr/tide-hyprlock.conf; command -v hyprlock >/dev/null || { echo "tide-lock-fallback: no hyprlock, so swaylock locks" >&2; exec swaylock; }; exec hyprlock --config "$$c"'
 # A lock that fell back says so (SPEC.md §1, principle 6): a critical
 # notification, which waits under the lock until it's dismissed. Failing to
 # send it is logged, and never stops the lock.

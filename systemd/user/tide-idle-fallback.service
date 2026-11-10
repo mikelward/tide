@@ -1,0 +1,27 @@
+# The idle daemon's fallback (SPEC.md §10): swayidle, which
+# hypridle.service's OnFailure= starts once hypridle has failed for good
+# (tide's drop-in sets the limit), so idle, suspend and Super+L still lock.
+# Nothing else starts it. It only locks: the screen doesn't dim, the
+# displays stay on, nothing suspends, and nothing owns
+# org.freedesktop.ScreenSaver, so a video doesn't hold the lock off.
+[Unit]
+Description=tide idle fallback (swayidle)
+Documentation=https://github.com/mikelward/tide
+PartOf=graphical-session.target
+After=graphical-session.target
+# Once hypridle runs again, this stops.
+Conflicts=hypridle.service
+
+[Service]
+Type=simple
+# The lock after five minutes without input, hypridle.conf's default, before
+# sleep, and on logind's Lock, which `tide lock` and Super+L raise. Each
+# runs `tide lock --now`, which starts tide-lock.service, or hyprlock or
+# swaylock where that can't start.
+ExecStart=swayidle -w timeout 300 'tide lock --now' before-sleep 'tide lock --now' lock 'tide lock --now'
+# A fallback says so (SPEC.md §1, principle 6). Failing to send it is
+# logged, and never stops swayidle.
+ExecStartPost=/bin/sh -c 'notify-send --urgency=critical --app-name=tide "hypridle failed" "swayidle locks the session instead: after 5 minutes, and before sleep. Run tide doctor to see why." || echo "tide-idle-fallback: notify-send failed, so only the journal says idle fell back" >&2'
+Restart=on-failure
+RestartSec=1
+Slice=session-graphical.slice

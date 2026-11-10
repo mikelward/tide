@@ -574,3 +574,11 @@ export function caretBlinks(ticks) {
 export function caretShown(ticks) {
     return ticks >= CARET_BLINK_TICKS || ticks % 2 === 0;
 }
+
+// tide-lock's exit status once the compositor has dropped the lock: 0 when
+// PAM accepted a password, which tide-lock.service takes as done, and 1
+// when it didn't (the compositor refused the lock, or dropped it on its
+// own), which the unit restarts, then leaves to its fallback.
+export function exitCode(state) {
+    return state && state.unlocked === true ? 0 : 1;
+}

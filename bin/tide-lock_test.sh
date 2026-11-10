@@ -43,13 +43,14 @@ exit "${FAKE_QS_EXIT:-0}"
 FAKE
 chmod +x "$qs/qs"
 home=$tmp/home
-mkdir -p "$home/.config/quickshell/tide"
+mkdir -p "$home/.config/quickshell/tide" "$tmp/etc/pam.d" "$tmp/no-etc"
+: > "$tmp/etc/pam.d/tide-lock"
 : > "$home/.config/quickshell/tide/lock.qml"
 
 # run ENV...: runs tide-lock as the unit would, with the fake qs.
 run() {
     : > "$tmp/log"
-    env PATH="$qs:$PATH" HOME="$home" FAKE_LOG="$tmp/log" QS_DISABLE_FILE_WATCHER=1 \
+    env PATH="$qs:$PATH" HOME="$home" TIDE_SYSCONFDIR="$tmp/etc" FAKE_LOG="$tmp/log" QS_DISABLE_FILE_WATCHER=1 \
         "$@" sh "$lock" > "$tmp/out" 2> "$tmp/err"
     status=$?
     err=$(cat "$tmp/err")
@@ -86,6 +87,14 @@ check "no lock.qml fails, not to be retried" test "$status" -eq 78
 check "no lock.qml is reported, with the fix" \
     contains "$err" "there's no lock at $tmp/no-home/.config/quickshell/tide/lock.qml, so the lock is hyprlock's; run \`make install\` in tide"
 check "no lock.qml runs no lock" test -z "$log"
+
+# Without its PAM service the lock would take no password at all, so it
+# never starts, and hyprlock, with a PAM service of its own, locks.
+run TIDE_SYSCONFDIR="$tmp/no-etc"
+check "no PAM service fails, not to be retried" test "$status" -eq 78
+check "no PAM service is reported, with the fix" \
+    contains "$err" "can't read $tmp/no-etc/pam.d/tide-lock, which the lock checks passwords with, so the lock is hyprlock's; run \`sudo make install-session\` in tide"
+check "no PAM service runs no lock" test -z "$log"
 
 # A version it can't read lets the lock run, as tide-shell does with the
 # bar: if that qs can't load it, the unit's restarts run out to the

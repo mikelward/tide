@@ -30,11 +30,17 @@ log=$tmp/log
 # Each fake logs its arguments. systemctl sleeps $FAKE_SYSTEMCTL_SLEEP and
 # exits $FAKE_SYSTEMCTL_STATUS; hyprctl answers $FAKE_HYPRCTL_REPLY (ok by
 # default); uwsm runs the command after --, as `uwsm app` does.
-# With $FAKE_IS_ACTIVE set, is-active answers it; with $FAKE_LOADSTATE
-# set, show answers it.
+# With $FAKE_IS_ACTIVE set, is-active answers it, and for
+# tide-idle-fallback.service $FAKE_IDLE_FALLBACK (inactive by default); with
+# $FAKE_LOADSTATE set, show answers it.
 cat > "$fake/systemctl" <<'FAKE'
 #!/bin/sh
 printf "systemctl %s\n" "$*" >> "$FAKE_LOG"
+if test -n "${FAKE_IS_ACTIVE:-}" && test "$2" = is-active && test "$3" = tide-idle-fallback.service; then
+    echo "${FAKE_IDLE_FALLBACK:-inactive}"
+    test "${FAKE_IDLE_FALLBACK:-inactive}" = active
+    exit
+fi
 if test -n "${FAKE_IS_ACTIVE:-}" && test "$2" = is-active; then
     echo "$FAKE_IS_ACTIVE"
     test "$FAKE_IS_ACTIVE" = active
@@ -976,7 +982,11 @@ cat > "$fake/fake-hyprlock" <<'FAKE'
 #!/bin/sh
 printf "hyprlock %s\n" "$*" >> "$FAKE_LOG"
 FAKE
-chmod +x "$fake/pgrep" "$fake/fake-hyprlock"
+cat > "$fake/fake-swaylock" <<'FAKE'
+#!/bin/sh
+printf "swaylock %s\n" "$*" >> "$FAKE_LOG"
+FAKE
+chmod +x "$fake/pgrep" "$fake/fake-hyprlock" "$fake/fake-swaylock"
 run FAKE_IS_ACTIVE=active TIDE_HYPRLOCK=fake-hyprlock "$qs" lock
 check "lock exits 0" test $? -eq 0
 check "with hypridle, lock goes through logind" contains "$(cat "$log")" "loginctl lock-session"
@@ -1008,7 +1018,14 @@ run FAKE_IS_ACTIVE=inactive FAKE_LOADSTATE=masked FAKE_HYPRLOCK_RUNNING=1 TIDE_H
 check "a hyprlock already running counts as the lock" test $? -eq 0
 check "and isn't started twice" lacks "$(cat "$log")" "hyprlock "
 check "only this user's hyprlock is looked for" contains "$(cat "$log")" "pgrep -u $(id -u) -x fake-hyprlock"
-run FAKE_IS_ACTIVE=inactive FAKE_LOADSTATE=not-found TIDE_HYPRLOCK=no-such-hyprlock "$qs" lock
+run FAKE_IS_ACTIVE=inactive FAKE_LOADSTATE=not-found TIDE_HYPRLOCK=no-such-hyprlock TIDE_SWAYLOCK=fake-swaylock "$qs" lock
+check "without hyprlock, swaylock locks" contains "$(cat "$log")" "swaylock "
+check "and a notification says swaylock did" \
+    contains "$(cat "$log")" "notify-send --urgency=critical -a tide The tide lock failed swaylock locked the session instead."
+check "and the journal says why" contains "$(cat "$tmp/err")" "there's no hyprlock, so swaylock locks instead"
+run FAKE_IS_ACTIVE=inactive FAKE_LOADSTATE=not-found FAKE_HYPRLOCK_RUNNING=1 TIDE_HYPRLOCK=no-such-hyprlock TIDE_SWAYLOCK=fake-swaylock "$qs" lock
+check "a swaylock already running isn't started twice" lacks "$(cat "$log")" "swaylock "
+run FAKE_IS_ACTIVE=inactive FAKE_LOADSTATE=not-found TIDE_HYPRLOCK=no-such-hyprlock TIDE_SWAYLOCK=no-such-swaylock "$qs" lock
 check "with nothing to lock, lock fails" test $? -eq 1
 check "with nothing to lock, a notification says the session didn't lock" \
     contains "$(cat "$log")" "notify-send --urgency=critical -a tide The session didn't lock"
@@ -1056,6 +1073,22 @@ check "without hypridle, a notification says idle and suspend won't lock" \
     contains "$(cat "$log")" "notify-send --urgency=critical -a tide Idle and suspend won't lock hypridle isn't running. Run tide doctor to see why."
 check "without hypridle, lock-check says why in the journal" \
     contains "$(cat "$tmp/err")" "hypridle.service is inactive, so idle and suspend won't lock"
+run FAKE_IS_ACTIVE=failed FAKE_IDLE_FALLBACK=active "$qs" lock-check
+check "with swayidle standing in for hypridle, lock-check sends nothing" lacks "$(cat "$log")" "notify-send"
+check "and the journal says swayidle locks" \
+    contains "$(cat "$tmp/err")" "hypridle.service is failed, and tide-idle-fallback.service (swayidle) locks instead"
+run FAKE_IS_ACTIVE=failed FAKE_IDLE_FALLBACK=active "$qs" lock
+check "with swayidle standing in for hypridle, lock goes through logind" \
+    contains "$(cat "$log")" "loginctl lock-session"
+check "and starts no lock of its own" lacks "$(cat "$log")" "systemctl --user start"
+run FAKE_IS_ACTIVE=failed FAKE_IDLE_FALLBACK=active FAKE_LOADSTATE=loaded "$qs" lock --now
+check "lock --now, as swayidle runs it, starts the lock without asking logind again" \
+    test "$(grep -c 'loginctl' "$log")" -eq 0
+check "it starts tide-lock.service" contains "$(cat "$log")" "systemctl --user start tide-lock.service"
+check "and sends no notification" lacks "$(cat "$log")" "notify-send"
+run FAKE_IS_ACTIVE=failed FAKE_IDLE_FALLBACK=active FAKE_LOADSTATE=masked TIDE_HYPRLOCK=fake-hyprlock "$qs" lock --now
+check "lock --now with a masked tide-lock.service locks with hyprlock" contains "$(cat "$log")" "hyprlock "
+run FAKE_IS_ACTIVE=inactive "$qs" lock-check
 check "lock-check starts nothing" lacks "$(cat "$log")" "systemctl --user start"
 run "$qs" lock-check now
 check "lock-check takes no arguments" test $? -eq 2
