@@ -41,9 +41,26 @@ local function greeter_command(qml)
     return "QS_DISABLE_FILE_WATCHER=1 qs -p " .. quote(qml) .. "; " .. EXIT
 end
 
-hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" })
+hl.on("hyprland.start", function()
+    hl.exec_cmd(greeter_command(env("TIDE_GREETER_QML", nil)))
+end)
 
-hl.config({
+-- Everything below is after the greeter is registered, and each is tried
+-- alone: a setting this Hyprland doesn't take is said in the journal and
+-- skipped, so it can't cost the greeter.
+local function try(what, fn)
+    local ok, err = pcall(fn)
+    if not ok then
+        print("tide-greeter: " .. what .. ": " .. tostring(err))
+    end
+end
+
+try("monitors", function()
+    hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" })
+end)
+
+-- One section at a time, so one that fails leaves the others.
+for name, section in pairs({
     input = {
         kb_layout = env("TIDE_GREETER_KB_LAYOUT", "us"),
         kb_model = env("TIDE_GREETER_KB_MODEL", ""),
@@ -72,8 +89,8 @@ hl.config({
     animations = {
         enabled = false,
     },
-})
-
-hl.on("hyprland.start", function()
-    hl.exec_cmd(greeter_command(env("TIDE_GREETER_QML", nil)))
-end)
+}) do
+    try("settings " .. name, function()
+        hl.config({ [name] = section })
+    end)
+end

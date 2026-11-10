@@ -868,7 +868,9 @@ if make -s install-session DESTDIR="$tmp/root" PREFIX=/usr >"$tmp/session.log" 2
 #!/bin/sh
 printf '%s\n' "\$2" "\$TIDE_GREETER_QML" > "$tmp/greeter-ran"
 EOF
-    chmod +x "$tmp/greeter-stubs/busctl" "$tmp/greeter-stubs/Hyprland"
+    # The greeter won't start Hyprland without a qs to run in it.
+    printf '#!/bin/sh\n' > "$tmp/greeter-stubs/qs"
+    chmod +x "$tmp/greeter-stubs/busctl" "$tmp/greeter-stubs/Hyprland" "$tmp/greeter-stubs/qs"
     # busctl failing makes it warn, so what it says is kept for a failure.
     if PATH="$tmp/greeter-stubs:$PATH" "$tmp/root/usr/bin/tide-greeter" 2>"$tmp/greeter.err"; then
         pass
