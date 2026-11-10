@@ -126,6 +126,19 @@ check "the wrapper starts a Hyprland 0.56.2 or later" \
 hyprland_version 0.60.0
 check "the wrapper starts a Hyprland past 0.56.2" \
     test "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" /bin/sh "$wrapper" --config x)" = "start-hyprland -- --config x"
+# A config of your own that never names tide, as an old hyprland.conf left
+# behind, is Hyprland's, and the journal says the session lacks tide's keys.
+mkdir -p "$tmp/own-stale/hypr" "$tmp/own-tide/hypr"
+echo 'bind = SUPER, Q, exec, kitty' > "$tmp/own-stale/hypr/hyprland.conf"
+echo 'loadfile(os.getenv("HOME") .. "/.config/hypr/tide/hyprland.lua")()' > "$tmp/own-tide/hypr/hyprland.lua"
+# shellcheck disable=SC2069 # stderr alone, as the journal gets it
+own_err() { PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" XDG_CONFIG_HOME="$tmp/$1" /bin/sh "$wrapper" 2>&1 >/dev/null; }
+check "a config of your own that doesn't load tide's is named" \
+    test -n "$(own_err own-stale | grep -F "$tmp/own-stale/hypr/hyprland.conf is your own Hyprland config and doesn't load tide's")"
+check "and Hyprland still starts with it" \
+    test "$(PATH="$tmp/wrapper-bin-ver:/usr/bin:/bin" XDG_CONFIG_HOME="$tmp/own-stale" /bin/sh "$wrapper" 2>/dev/null)" = "start-hyprland --"
+check "one that loads tide's isn't" \
+    test -z "$(own_err own-tide | grep -F 'your own Hyprland config')"
 # Each step lands in the journal, as tidewm's wrapper's do.
 cat > "$tmp/wrapper-bin-ver/logger" <<STUB
 #!/bin/sh

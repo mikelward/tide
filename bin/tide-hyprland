@@ -41,6 +41,18 @@ elif test -n "${TIDE_HYPRLAND_CONFIG:-}"; then
 elif ! test -e "$config_home/hypr/hyprland.lua" && ! test -e "$config_home/hypr/hyprland.conf" \
     && test -f "$HOME/.config/hypr/tide/hyprland.lua"; then
     set -- --config "$HOME/.config/hypr/tide/hyprland.lua" "$@"
+else
+    # A config of your own is Hyprland's, and tide's keys and layout come
+    # only if it loads tide's. One that never names tide, as an old
+    # hyprland.conf left behind does, gives a session without them, so the
+    # journal says which file it was.
+    for own in "$config_home/hypr/hyprland.lua" "$config_home/hypr/hyprland.conf"; do
+        test -e "$own" || continue
+        if ! grep -q tide "$own" 2>/dev/null; then
+            say "$own is your own Hyprland config and doesn't load tide's, so this session has no tide keys or layout: load ~/.config/hypr/tide/hyprland.lua from it, or move it away"
+        fi
+        break
+    done
 fi
 # tide's config needs Hyprland 0.56.2 or later. An older one starts without
 # it, with Hyprland's own banner and no tide keys or bar, which is no way to

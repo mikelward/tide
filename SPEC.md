@@ -1942,6 +1942,9 @@ reads the settings files the shell writes (`tide-*.lua`).
 - **Who reads it.** With no `~/.config/hypr/hyprland.lua` or
   `hyprland.conf`, `tide-hyprland` starts Hyprland with `--config` on it.
   `TIDE_HYPRLAND_CONFIG` names another.
+  A config of your own that never names tide, as an old `hyprland.conf`
+  left behind, gives a session without tide's keys: `tide-hyprland` says
+  which file in the journal.
 - **Your own on top.** Your `hyprland.lua` can load it with `loadfile` and
   pass it a table of options: the terminal, the file manager, a command
   helper scripts run under, input options (a keyboard variant), each
