@@ -581,7 +581,8 @@ flowchart TD
   `persist workspace`. tidewm has no window rules, so the shell is home's
   apps' rule there: a window of one of them that opens elsewhere is sent
   home as it opens, unfollowed, as Hyprland's rule sends it, and one that
-  opened before the shell knew its app is sent once it does. `tide doctor` counts bars, reports config errors
+  opened before the shell knew its app is sent once it does. The bar
+  warns of tidewm's config errors (§7.4). `tide doctor` counts bars, reports config errors
   and checks home from tidewm's `GET_OUTPUTS`, `GET_CONFIG` and
   `GET_WORKSPACES` there.
 
@@ -2308,6 +2309,7 @@ See [`bar.png`](docs/mocks/bar.png).
 | Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen or window), and the app reading it; stop it from the app | — |
 | Privacy: mic (orange) | any app is capturing the microphone; the mic slashed while every mic being recorded from is muted (`Super+Shift+M` mutes them all), so a headset an app picked still shows live | per-app list with mute | hover: "Mic on" or "Mic off", as the OSD says, and how many apps are recording |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
+| Config errors (tidewm's session): a warning triangle, amber | only while tidewm's config has errors | each error, as tidewm reported it: the file and line, then what's wrong | hover: "tidewm's config has 2 errors" |
 | Keyboard layout | up to three letters of the main keyboard's layout (US, DVO, GER), as tide for macOS's; only once there are two layouts | the next layout, as `Super+Alt+Space` (§16) | hover: the layout's full name |
 | Keep awake: a cup of coffee | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off; the OSD says which | hover: what it's doing, in the OSD's words |
 | Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | hover: "Bluetooth off", or "Bluetooth on" with what's connected: one or two by name, else how many, or "nothing connected" |
@@ -2318,6 +2320,29 @@ See [`bar.png`](docs/mocks/bar.png).
 | System monitor | CPU %; amber when the CPU is hot or memory is 90% full, red while it throttles or is critically hot | a readout of CPU, memory and temperature, then tabs: **CPU** (the default: temperature, clock, thermal throttling, the five processes using the most CPU) and **Memory** (memory, swap, the five using the most) | hover: CPU %, then throttling, hot or memory nearly full |
 | Notifications | dot when unread; a slashed bell for DND, Adwaita's `notifications-disabled-symbolic` | notification center | middle-click toggles DND; hover: how many arrived since the center was last open, after "Do not disturb" while it's on |
 | Session | — | lock, log out, suspend, restart, shut down | hover: what it's for |
+
+**Config errors.** tidewm leaves a bad config line out and starts
+anyway, so a key or a setting is missing with nothing to say why (its
+`docs/config.md`).
+
+- The shell asks tidewm for its `GET_CONFIG`, whose `errors` lists them,
+  with `tide-msg --type get_config`. It asks as it connects, when a key
+  bound to `reload` runs (tidewm's `binding` event), and after each
+  `tide-msg reload` of its own (§16).
+- tidewm has no event for a reload. So one from a terminal isn't seen
+  until the next of those.
+- While there are errors, a warning triangle is the first status icon. A
+  click lists them, the first eight, then how many more. It goes when a
+  load has none.
+- One critical notification says how many there are and where to see
+  them. It's sent once per distinct set of errors, not at each reconnect
+  or reload that reports the same ones. A set fixed and made again is
+  reported again.
+- A reply that can't be read, as an older tidewm's without `errors`,
+  shows nothing, and the log says why.
+- `tide doctor` lists every error (§5.4).
+- Hyprland's session shows none of this: `hyprctl configerrors` is its
+  own.
 
 **Wired.** A cable wins over Wi-Fi on the icon. With nothing else up, the
 icon shows a wired connection on its way up, and a cable that's in with

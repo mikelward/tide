@@ -367,6 +367,8 @@ Singleton {
                 } else if (state.report?.level === "log") {
                     console.log(state.report.message);
                 }
+                // tidewm read its config again: its errors may have changed.
+                ConfigErrorsData.reloaded();
                 const done = Writes.targetApplied(root.target, error);
                 if (Compositor.tidewm && error === "") {
                     applied.record(Writes.recordOf(done.state.applied));

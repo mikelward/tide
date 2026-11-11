@@ -125,6 +125,8 @@ ShellRoot {
         PopupsData.resync();
         // Pinned windows kept open by tidewm, in its session.
         PinnedData.load();
+        // tidewm's config errors, for the bar's warning, in its session.
+        ConfigErrorsData.load();
     }
 
     // A toplevel's class and fullscreen state come from Hyprland's client

@@ -6,13 +6,15 @@ import Quickshell.Services.Pipewire
 import Quickshell.Services.UPower
 import "lib/barclick.mjs" as Click
 import "lib/bluetooth.mjs" as Bt
+import "lib/configerrors.mjs" as Errors
 import "lib/keepawake.mjs" as KeepAwake
 import "lib/network.mjs" as Net
 import "lib/status.mjs" as Status
 import "lib/barsettings.mjs" as BarSettings
 
 // The status icons before the clocks (SPEC.md §7.4), each with hover text
-// (BarTip) in tide for macOS's words where tide for macOS has the same icon. So far: the
+// (BarTip) in tide for macOS's words where tide for macOS has the same icon. So far:
+// tidewm's config errors, while it has any; the
 // keyboard layout, once there are two; keep awake;
 // Bluetooth, then one for each connected audio device; network; volume and its %, which scrolls by 5%; battery, red
 // at 20% and below; and the system monitor's CPU %, each with its popover; the
@@ -54,6 +56,40 @@ Row {
     // Volume and mute are only live on a bound node.
     PwObjectTracker {
         objects: [root.sink]
+    }
+
+    // tidewm's config errors: a warning triangle, only while its config
+    // has errors, which hovering counts and a click lists (lib/configerrors.mjs).
+    SymbolicIcon {
+        id: config
+
+        anchors.verticalCenter: parent.verticalCenter
+        visible: ConfigErrorsData.errors.length > 0
+        name: Errors.ICON
+        color: Theme.warn
+
+        ConfigErrorsPopover {
+            id: configPopover
+
+            icon: config
+        }
+
+        BarHit {
+            settings: BarSettings.page("config")
+            id: configHit
+
+            reach: root.reachOf(config)
+
+            TapHandler {
+                onTapped: configPopover.toggle(parent)
+            }
+        }
+
+        BarTip {
+            item: config
+            shown: configHit.hovered
+            text: Errors.summary(ConfigErrorsData.errors)
+        }
     }
 
     // The keyboard layout, as tide for macOS's input source: up to three letters,

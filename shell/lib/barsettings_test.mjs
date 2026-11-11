@@ -67,6 +67,7 @@ const DROPDOWNS = Object.freeze({
     "BatteryPopover.qml": "battery",
     "BluetoothPopover.qml": "bluetooth",
     "ClocksPopover.qml": "clocks",
+    "ConfigErrorsPopover.qml": "config",
     "MicPopover.qml": "mic",
     "NetworkPopover.qml": "network",
     "SessionMenu.qml": "session",
