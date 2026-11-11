@@ -6101,13 +6101,35 @@ greeter_program_ready() {
     esac
 }
 
+# greeter_optional_program_ready NAME PATH: as greeter_program_ready, for a
+# program the greeter runs only when it starts: a NAME at PATH that greetd's
+# user can't start passes, said, since tide-greeter falls back past it. One
+# that isn't root's alone still fails, setting why.
+greeter_optional_program_ready() {
+    if ! trusted "$2" || ! command_prefix_trusted "$trusted_to"; then
+        why="the greeter's $1 isn't root's alone: $why"
+        return 1
+    fi
+    program_starts "$trusted_to" "$GREETER_PATH" "$greeter"
+    case $? in
+        1)
+            detail "greetd's user $greeter can't start $1 ($why), so the greeter runs on Hyprland"
+            ;;
+        2)
+            why="the greeter's $1 isn't root's alone: $why"
+            return 1
+            ;;
+    esac
+}
+
 # greeter_ready sets greeter to greetd's user, after checking that the
 # greeter can run, and that only root can change what greetd and it run:
 # greetd, tide's template, greetd's config directory, its PAM stack and
 # what that names by its full path, the greeter's PATH, each command the
 # greeter starts, found on that PATH by greetd's user itself, with the build
 # it comes from, the tide-greetd beside tide-greeter, tide's greeter files,
-# and a new enough Hyprland. Otherwise
+# any tidewm it would run in Hyprland's place with the tide-msg that ends
+# it, and a new enough Hyprland. Otherwise
 # it sets why to what's wrong.
 greeter_ready() {
     if test "$(unit_property greetd.service LoadState)" != loaded; then
@@ -6185,6 +6207,7 @@ greeter_ready() {
             hyprctl) _hyprctl_dir=${greeter_program%/*} ;;
         esac
         test "$_cmd" = tide-greeter || continue
+        _greeter_bin=${_found%/*}
         # tide-greeter talks to greetd through tide-greetd, which it runs
         # from beside itself rather than from the PATH, as tide's make
         # install-session puts it.
@@ -6213,6 +6236,17 @@ greeter_ready() {
             fi
         done
     done
+    # tidewm, which tide-greeter runs in Hyprland's place wherever greetd's
+    # user finds it, with the tide-msg beside tide-greeter that ends it:
+    # neither has to be there, or start, but each that is has to be root's
+    # alone.
+    # shellcheck disable=SC2016  # $1 and $_p are the inner shell's
+    if _found=$(sudo -u "$greeter" env PATH="$GREETER_PATH" /bin/sh -c '_p=$(command -v "$1") && test -x "$_p" && printf "%s\n" "$_p"' sh tidewm); then
+        greeter_optional_program_ready tidewm "$_found" || return 1
+        if sudo -u "$greeter" test -x "$_greeter_bin/tide-msg"; then
+            greeter_optional_program_ready tide-msg "$_greeter_bin/tide-msg" || return 1
+        fi
+    fi
     # hyprctl is how the greeter's Hyprland is told to end, so it has to be
     # that Hyprland's own: one from another install can look for another
     # socket, or speak another version's protocol, and leave the greeter
