@@ -8,7 +8,17 @@
 # tidewm runs its -s command once its Wayland socket and its IPC are up,
 # so that's where `uwsm finalize` goes, as Hyprland's one exec-once: it
 # hands WAYLAND_DISPLAY, DISPLAY and tidewm's IPC socket, SWAYSOCK, to
-# the session's units, and tells uwsm the compositor is ready.
+# the session's units, and tells uwsm the compositor is ready. The socket
+# goes as I3SOCK too, which Quickshell's I3 client reads before SWAYSOCK:
+# tidewm's own once it sets one, and SWAYSOCK's value until then, so an
+# I3SOCK the user manager kept from an earlier session can't point the
+# shell at a socket that's gone.
+# tidewm starts with none of an earlier session's compositor variables,
+# which a login from a terminal or a user manager that outlived a logout
+# can hand it: with WAYLAND_DISPLAY or DISPLAY set, wlroots runs tidewm as
+# a window in that display, which isn't there. uwsm sets none of them for
+# the compositor (it drops the first two itself), so nothing of this
+# session's is lost.
 # Before that, it goes to home (§6.5) and keeps it, as Hyprland's session
 # starts there: tidewm itself starts on workspace 1, which goes once it's
 # left empty. Home's name is the one tide's shell last wrote for conf's
@@ -31,6 +41,16 @@ say() {
     logger -t tide-tidewm -- "$*" 2>/dev/null || :
 }
 say "starting the tide (tidewm) session"
+stale=
+for var in WAYLAND_DISPLAY DISPLAY SWAYSOCK I3SOCK HYPRLAND_INSTANCE_SIGNATURE; do
+    eval "test -z \"\${$var+set}\"" || stale="$stale $var"
+done
+if test -n "$stale"; then
+    say "dropping what an earlier session left in the environment:$stale"
+    # Unquoted: one name a word.
+    # shellcheck disable=SC2086
+    unset $stale
+fi
 if test "${TIDE_IME:-}" != 0 && command -v fcitx5 >/dev/null 2>&1; then
     export QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx
 fi
@@ -42,7 +62,9 @@ if line=$(grep -m 1 '^    home = ".*",$' "$lua" 2>/dev/null); then
 fi
 # A failed finalize is logged: uwsm then never hears the session is ready,
 # and ends it.
-start="uwsm finalize SWAYSOCK || logger -t tide-tidewm -- 'uwsm finalize failed, so uwsm will end the session' 2>/dev/null"
+# I3SOCK is SWAYSOCK's value where tidewm set none; with no SWAYSOCK either,
+# it's left out, and uwsm passes on only the variables that are set.
+start="test -n \"\$I3SOCK\" || test -z \"\$SWAYSOCK\" || export I3SOCK=\"\$SWAYSOCK\"; uwsm finalize SWAYSOCK I3SOCK || logger -t tide-tidewm -- 'uwsm finalize failed, so uwsm will end the session' 2>/dev/null"
 case $home in
     *\"* | *\'* | '') ;;
     *)

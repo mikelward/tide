@@ -508,9 +508,16 @@ flowchart TD
 - **tidewm's session** (§21.1) is an option beside Hyprland's, not the
   default: `tide-tidewm.desktop`, listed as "tide (tidewm)" only where
   tidewm is installed. It runs `uwsm start -e -D tidewm:tide -- tide-tidewm`,
-  and the wrapper execs tidewm with `uwsm finalize SWAYSOCK` as its
+  and the wrapper execs tidewm with `uwsm finalize SWAYSOCK I3SOCK` as its
   startup command, so the session gets its own target,
-  `wayland-session@tide-tidewm.target`, and tidewm's IPC socket. tidewm
+  `wayland-session@tide-tidewm.target`, and tidewm's IPC socket. Quickshell's
+  I3 client reads `I3SOCK` first, so it's handed on too: tidewm's own, or
+  `SWAYSOCK`'s value from a tidewm that sets none, which replaces one the
+  user manager kept from an earlier session. The wrapper also starts
+  tidewm without `WAYLAND_DISPLAY`, `DISPLAY`, `SWAYSOCK`, `I3SOCK` and
+  `HYPRLAND_INSTANCE_SIGNATURE`, and logs any it dropped. An earlier
+  session can leave them, and wlroots runs a compositor that sees
+  `WAYLAND_DISPLAY` or `DISPLAY` as a window in that display. tidewm
   comes first in `XDG_CURRENT_DESKTOP` for the portals:
   xdg-desktop-portal reads the first file it finds for any of the
   session's names, trying each name in a directory before the next
