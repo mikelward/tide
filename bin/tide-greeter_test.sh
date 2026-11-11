@@ -49,7 +49,7 @@ cat >"$tmp/stubs/Hyprland" <<'EOF'
     printf 'args'
     printf ' [%s]' "$@"
     printf '\n'
-    env | grep '^TIDE_GREETER_' | sort
+    env | grep -E '^(TIDE_GREETER_|XCURSOR_|HYPRCURSOR_)' | sort
 } >"$STUB_LOG"
 if test -n "${TIDE_GREETER_QS_STATUS-}" && test "${QS_EXIT:-0}" != none; then
     printf '%s\n' "${QS_EXIT:-0}" >"$TIDE_GREETER_QS_STATUS"
@@ -89,7 +89,7 @@ greeter() {
     out=$(env -i PATH="${GREETER_PATH:-$tmp/stubs:$tmp/sys}" STUB_LOG="$tmp/log" \
         BUSCTL_OUT="${BUSCTL_OUT-}" BUSCTL_EXIT="${BUSCTL_EXIT:-0}" HYPRLAND_EXIT="${HYPRLAND_EXIT:-0}" \
         QS_EXIT="${QS_EXIT:-0}" XDG_RUNTIME_DIR="${RUNTIME_DIR-$run}" \
-        TIDE_GREETER_AGREETY_DIRS="${AGREETY_DIRS-}" \
+        TIDE_GREETER_AGREETY_DIRS="${AGREETY_DIRS-}" TIDE_GREETER_ICON_DIRS="${ICON_DIRS-$tmp/icons}" \
         "$prefix/bin/tide-greeter" "$@" 2>&1)
     _code=$?
     ran=$(cat "$tmp/log" 2>/dev/null)
@@ -123,6 +123,20 @@ check "a keymap that's read says nothing of it" lacks "$out" "keymap"
 check "Hyprland's start is logged" contains "$out" "tide-greeter: starting Hyprland with the greeter"
 check "and its end" contains "$out" "tide-greeter: Hyprland exited 0"
 check "and the greeter's" contains "$out" "tide-greeter: the greeter is done; greetd starts the session"
+
+# Cursor themes: none installed, then Adwaita.
+mkdir -p "$tmp/icons" || exit 1
+greeter 0
+check "with no cursor theme, Hyprland's own pointer is said" contains "$out" "found no cursor theme"
+check "and no theme is passed" lacks "$ran" "XCURSOR_THEME="
+check "the pointer's size is the session's" contains "$ran" "XCURSOR_SIZE=24"
+mkdir -p "$tmp/icons/breeze_cursors/cursors" "$tmp/icons/Adwaita/cursors" || exit 1
+greeter 0
+check "an installed theme is passed" contains "$ran" "XCURSOR_THEME=Adwaita"
+check "and said" contains "$out" "the pointer's theme is Adwaita"
+rm -r "$tmp/icons/Adwaita" || exit 1
+greeter 0
+check "another one when Adwaita isn't there" contains "$ran" "XCURSOR_THEME=breeze_cursors"
 
 BUSCTL_OUT='s "de"
 s ""

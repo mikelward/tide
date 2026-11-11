@@ -3863,7 +3863,9 @@ talk, a demo, or a meeting room's screen.
     Enter or Space picks. Escape closes the list, then goes back to the
     field. Typing on a chip goes back to the field and types there.
   - The pointer starts in the middle of the focused monitor, not
-    Hyprland's top left.
+    Hyprland's top left. The greeter user has no cursor theme of its own,
+    so `tide-greeter` names an installed one (Adwaita, breeze_cursors or
+    DMZ-White) at 24 pixels, and logs which, or that there was none.
 - **The session's environment.** The greeter passes greetd
   `XDG_SESSION_TYPE`, `XDG_SESSION_DESKTOP` (the entry's file name) and
   `XDG_CURRENT_DESKTOP` (its `DesktopNames`). pam_systemd records the first
