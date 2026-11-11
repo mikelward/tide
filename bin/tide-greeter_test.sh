@@ -56,8 +56,48 @@ if test -n "${TIDE_GREETER_QS_STATUS-}" && test "${QS_EXIT:-0}" != none; then
 fi
 exit "${HYPRLAND_EXIT:-0}"
 EOF
-printf '#!/bin/sh\n' >"$tmp/stubs/qs" || exit 1
+# qs exits $QS_EXIT, for the greeter's command on tidewm.
+cat >"$tmp/stubs/qs" <<'EOF'
+#!/bin/sh
+exit "${QS_EXIT:-0}"
+EOF
 chmod +x "$tmp/stubs/busctl" "$tmp/stubs/Hyprland" "$tmp/stubs/qs" || exit 1
+# tidewm, in a directory of its own so only some runs have it: -v says its
+# version and exits 1, as dwl does, or fails with $TIDEWM_V_FAILS; a run records its arguments, the
+# desktop qs gets and its config, then runs its -s command, as tidewm does,
+# and exits $TIDEWM_EXIT. tide-msg, beside tide-greeter, records what it's
+# asked.
+mkdir "$tmp/tw" || exit 1
+cat >"$tmp/tw/tidewm" <<'EOF'
+#!/bin/sh
+if test "$1" = -v; then
+    if test -n "${TIDEWM_V_FAILS-}"; then
+        echo "tidewm: error while loading shared libraries"
+        exit 127
+    fi
+    # As dwl's -v does: the version on stderr, and exit 1.
+    echo "dwl v0.3.120" >&2
+    exit 1
+fi
+{
+    printf 'tidewm'
+    printf ' [%s]' "$1" "$2" "$3"
+    printf '\n'
+    echo "XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP-}"
+    echo "TIDE_GREETER_MSG=${TIDE_GREETER_MSG-}"
+    cat "$2"
+} >"$STUB_LOG"
+# As tidewm does, a SIGTERM is a request to quit, cleanly.
+trap 'echo "tidewm: quit on SIGTERM" >>"$STUB_LOG.msg"; exit 0' TERM
+sh -c "$4"
+exit "${TIDEWM_EXIT:-0}"
+EOF
+cat >"$prefix/bin/tide-msg" <<'EOF'
+#!/bin/sh
+printf 'tide-msg %s\n' "$*" >>"$STUB_LOG.msg"
+test -z "${TIDE_MSG_FAILS-}" || exit 1
+EOF
+chmod +x "$tmp/tw/tidewm" "$prefix/bin/tide-msg" || exit 1
 # agreety, in a directory of its own so only some runs have it: it says how
 # it was run.
 mkdir "$tmp/agreety" || exit 1
@@ -85,15 +125,17 @@ mkdir "$run" || exit 1
 greeter() {
     _want=$1
     shift
-    rm -f "$tmp/log" "$tmp/log.busctl" "$tmp/log.sleep"
+    rm -f "$tmp/log" "$tmp/log.busctl" "$tmp/log.sleep" "$tmp/log.msg"
     out=$(env -i PATH="${GREETER_PATH:-$tmp/stubs:$tmp/sys}" STUB_LOG="$tmp/log" \
         BUSCTL_OUT="${BUSCTL_OUT-}" BUSCTL_EXIT="${BUSCTL_EXIT:-0}" HYPRLAND_EXIT="${HYPRLAND_EXIT:-0}" \
         QS_EXIT="${QS_EXIT:-0}" XDG_RUNTIME_DIR="${RUNTIME_DIR-$run}" \
+        TIDEWM_V_FAILS="${TIDEWM_V_FAILS-}" TIDEWM_EXIT="${TIDEWM_EXIT:-0}" TIDE_MSG_FAILS="${TIDE_MSG_FAILS-}" \
         TIDE_GREETER_AGREETY_DIRS="${AGREETY_DIRS-}" TIDE_GREETER_ICON_DIRS="${ICON_DIRS-$tmp/icons}" \
         "$prefix/bin/tide-greeter" "$@" 2>&1)
     _code=$?
     ran=$(cat "$tmp/log" 2>/dev/null)
     slept=$(cat "$tmp/log.sleep" 2>/dev/null)
+    msg=$(cat "$tmp/log.msg" 2>/dev/null)
     if test "$_code" -eq "$_want"; then
         pass
     else
@@ -275,6 +317,72 @@ check "--help starts no Hyprland" test -z "$ran"
 
 greeter 2 extra
 check "an argument starts no Hyprland" test -z "$ran"
+
+# On tidewm, where it runs.
+BUSCTL_OUT='s "us"
+s "pc105"
+s "dvorak"
+s "compose:caps"
+'
+BUSCTL_EXIT=0
+GREETER_PATH="$tmp/tw:$tmp/stubs:$tmp/sys"
+greeter 0
+check "with tidewm, the greeter runs on it" contains "$out" "tide-greeter: the greeter runs on tidewm"
+check "with its own config" contains "$ran" "tidewm [-c] [$run/tide-greeter-tidewm.conf] [-s]"
+check "which binds one key to nothing, so tidewm's own keys are gone" contains "$ran" "bindsym XF86Tools nop"
+check "and drags no windows" contains "$ran" "floating_modifier none"
+check "with localed's keymap" contains "$ran" "    xkb_layout us
+    xkb_model pc105
+    xkb_variant dvorak
+    xkb_options compose:caps"
+check "qs is told it's on tidewm" contains "$ran" "XDG_CURRENT_DESKTOP=tidewm"
+check "and which tide-msg to use, the one beside tide-greeter" contains "$ran" "TIDE_GREETER_MSG=$prefix/bin/tide-msg"
+check "the greeter ends tidewm through tide-msg" test "$msg" = "tide-msg exit"
+check "and logs both ends" contains "$out" "tide-greeter: the greeter (qs) exited 0"
+check "a login on tidewm starts no text login" lacks "$out" "agreety"
+check "and runs no Hyprland" lacks "$ran" "args [--config]"
+
+QS_EXIT=1 AGREETY_DIRS="$tmp/agreety"
+greeter 0
+check "a qs that fails on tidewm leaves the text login" contains "$out" "agreety --cmd /bin/sh"
+check "which says why" contains "$out" "could not start: the greeter (qs) exited 1"
+QS_EXIT=0 AGREETY_DIRS=
+
+TIDEWM_EXIT=1 AGREETY_DIRS="$tmp/agreety"
+greeter 0
+check "a tidewm that fails leaves the text login" contains "$out" "could not start: tidewm exited 1"
+TIDEWM_EXIT=0 AGREETY_DIRS=
+
+BUSCTL_OUT='s "us"
+s ""
+s ""
+s "grp:alt shift"
+'
+greeter 0
+check "a keymap value that isn't one word is left out" lacks "$ran" "xkb_options"
+check "and said" contains "$out" "leaving xkb_options grp:alt shift out of tidewm's config"
+check "an empty one is left out" lacks "$ran" "xkb_model"
+
+TIDE_MSG_FAILS=1
+greeter 0
+check "a tide-msg that can't end tidewm, tidewm is ended with SIGTERM" test "$msg" = "tide-msg exit
+tidewm: quit on SIGTERM"
+check "and that's said" contains "$out" "tide-msg could not end tidewm; ending it with SIGTERM"
+check "and the login goes on" lacks "$out" "agreety"
+TIDE_MSG_FAILS=
+
+TIDEWM_V_FAILS=1
+greeter 0
+check "a tidewm that can't run leaves Hyprland" contains "$ran" "args [--config]"
+check "and says why" contains "$out" "tidewm -v failed (tidewm: error while loading shared libraries); the greeter runs on Hyprland"
+TIDEWM_V_FAILS=
+
+mv "$prefix/bin/tide-msg" "$tmp/tide-msg.away" || exit 1
+greeter 0
+check "without tide-msg to end tidewm, the greeter runs on Hyprland" contains "$ran" "args [--config]"
+check "and says why" contains "$out" "can't run $prefix/bin/tide-msg, which ends tidewm"
+mv "$tmp/tide-msg.away" "$prefix/bin/tide-msg" || exit 1
+GREETER_PATH=
 
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh bin/tide-greeter bin/tide-greeter_test.sh

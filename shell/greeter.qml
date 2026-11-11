@@ -6,6 +6,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import "lib/compositor.mjs" as Comp
 import "lib/greeter.mjs" as Greeter
 import "lib/lock.mjs" as Lock
 
@@ -22,6 +23,12 @@ ShellRoot {
     id: root
 
     property var face: Lock.INITIAL
+    // Which compositor runs the greeter: tidewm where tide-greeter found it,
+    // else Hyprland.
+    readonly property bool tidewm: Comp.isTidewm(Quickshell.env("XDG_CURRENT_DESKTOP"))
+    // On tidewm, the tide-msg setup checked, beside tide-greeter, which
+    // names it here, not whichever is first on PATH.
+    readonly property string msg: Quickshell.env("TIDE_GREETER_MSG") || "tide-msg"
 
     // The choices: the people who can log in (getent passwd, within
     // login.defs' range), the sessions (LISTING_SCRIPT) and what was
@@ -184,6 +191,7 @@ ShellRoot {
     LockKeymap {
         id: keymap
         name: "tide-greeter"
+        msg: root.msg
     }
 
     // Whether there's a keyboard to type with, for the field's focus
@@ -356,7 +364,7 @@ ShellRoot {
             if (displays.running || displays.pending === null) {
                 return;
             }
-            displays.command = Greeter.displaysCommand(displays.pending);
+            displays.command = Greeter.displaysCommand(displays.pending, root.tidewm, root.msg);
             displays.pending = null;
             displays.started = false;
             displays.ok = false;
@@ -366,7 +374,7 @@ ShellRoot {
         onStarted: started = true
         onExited: (code, status) => {
             if (code !== 0) {
-                console.warn(`tide-greeter: hyprctl dpms exited ${code}`);
+                console.warn(`tide-greeter: ${displays.command[0]}, turning the displays on or off, exited ${code}`);
             }
             ok = code === 0;
         }
@@ -376,7 +384,7 @@ ShellRoot {
                 return;
             }
             if (!started) {
-                console.warn("tide-greeter: couldn't start hyprctl to turn the displays on or off");
+                console.warn(`tide-greeter: couldn't start ${displays.command[0]} to turn the displays on or off`);
             }
             displays.next({ type: "done", ok: started && ok });
         }

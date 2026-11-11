@@ -263,10 +263,15 @@ export function takes(state, event) {
 export const SAVER_AFTER = DEFAULT_IDLE.lock;
 export const DISPLAYS_OFF_AFTER = DEFAULT_IDLE.displaysOff;
 
-// What turns every display off or back on: hyprctl's dispatch, which the
-// greeter's Hyprland, configured in Lua, takes as a Lua call (Hyprland
-// 0.56). The same hyprctl ends that Hyprland (greeter/hyprland.lua).
-export function displaysCommand(on) {
+// What turns every display off or back on. On tidewm, the greeter's
+// compositor where it's installed, sway's `output * power` over `msg`, the
+// tide-msg tide-greeter names;
+// on Hyprland, hyprctl's dispatch, which the greeter's Hyprland, configured
+// in Lua, takes as a Lua call (Hyprland 0.56).
+export function displaysCommand(on, tidewm = false, msg = "tide-msg") {
+    if (tidewm) {
+        return [msg, `output * power ${on ? "on" : "off"}`];
+    }
     return ["hyprctl", "dispatch", `hl.dsp.dpms({ action = "${on ? "on" : "off"}" })`];
 }
 
