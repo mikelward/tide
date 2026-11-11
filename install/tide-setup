@@ -2785,7 +2785,7 @@ hyprland_build_kept() {
 
 # check_compositors sets SESSIONS to the login screen's tide sessions whose
 # compositors run here: tide (Hyprland, new enough for tide's config) and
-# tide-tidewm (tidewm). install_tide installs only those, and takes away
+# tide-tidewm (a tidewm that runs). install_tide installs only those, and takes away
 # one whose compositor is gone. Each missing one is a warning; with none,
 # tide has no session, which stops setup unless errors are ignored.
 check_compositors() {
@@ -2801,7 +2801,14 @@ check_compositors() {
         SESSIONS=tide
     fi
     if session_command tidewm; then
-        SESSIONS="${SESSIONS:+$SESSIONS }tide-tidewm"
+        # A file that's there may not run: a wlroots upgrade, say, takes
+        # away the library a tidewm built before links to. Its session
+        # would log in to nothing, and the greeter would offer it again.
+        if tidewm_ready; then
+            SESSIONS="${SESSIONS:+$SESSIONS }tide-tidewm"
+        else
+            warn "the tide (tidewm) session won't show at the login screen: $_tidewm_why"
+        fi
     elif test "$BUILD_TIDEWM" = yes; then
         warn "tidewm isn't installed, so the tide (tidewm) session won't show at the login screen"
     fi
@@ -6856,6 +6863,26 @@ hyprland_ready() {
     return 1
 }
 
+# tidewm_ready succeeds when the session's tidewm, on SESSION_PATH, runs:
+# asked its version, it names one, or exits 0. Otherwise it sets
+# _tidewm_why, with the last line of what it said, which is the dynamic
+# loader's when a library it links to is gone.
+# `tidewm -v` reads nothing but its options, so it needs no display or
+# runtime directory. It prints `dwl VERSION` to stderr and exits 1, being
+# dwl's (mikelward/tidewm's dwl.c and util.h, 2026-11); `tidewm VERSION`
+# is taken too, should it come to say its own name.
+tidewm_ready() {
+    _tr_out=$(PATH=$SESSION_PATH tidewm -v 2>&1)
+    _tr_status=$?
+    test "$_tr_status" -eq 0 && return 0
+    case "$(printf '%s\n' "$_tr_out" | head -n 1)" in
+        "dwl "?* | "tidewm "?*) return 0 ;;
+    esac
+    _tr_last=$(printf '%s\n' "$_tr_out" | tail -n 1)
+    _tidewm_why="its tidewm ($(PATH=$SESSION_PATH command -v tidewm)) can't run: 'tidewm -v' exited $_tr_status, saying '${_tr_last:-nothing}'; rerun $SETUP_COMMAND to build it again"
+    return 1
+}
+
 # remove_session_entry takes the tide (Hyprland) session off the login
 # screen, as a session that can't run, setting _removed to how that went
 # for check_session's message. tide (tidewm) has an entry of its own and
@@ -6874,20 +6901,31 @@ remove_session_entry() {
 # screen, start once picked, and run tide's own bar and lock. GDM, SDDM and tide's greeter list it only
 # where its entry is and the entry's TryExec command (uwsm) is installed,
 # and its compositor wrapper runs start-hyprland, or Hyprland without it.
+# tide (tidewm)'s entry is checked too, wherever its tidewm runs, beside
+# Hyprland's session or without it.
 # The steps that install these warn on their own, early in a long run, where
 # a missing uwsm went unseen; a run that tried to install them stops here,
 # unless errors are being ignored. Returns 1 when the session isn't ready.
 check_session() {
     _problems=
     _session_cant_run=no
-    # Without a Hyprland to run it, tide (Hyprland)'s entry isn't installed,
-    # as check_compositors said, so only tidewm's session is checked: its
-    # entry, and uwsm, which tide-session starts either session through.
-    # The bar and lock's Quickshell, below, both sessions need.
+    # Each session check_compositors found a compositor for is checked:
+    # without a Hyprland to run it, tide (Hyprland)'s entry isn't installed,
+    # as check_compositors said, nor tide (tidewm)'s without a tidewm that
+    # runs. With neither, tidewm's is the one checked, as it's the one
+    # setup builds. The bar and lock's Quickshell, below, both sessions
+    # need.
     _hyprland_session=no
+    _tidewm_session=no
     case " ${SESSIONS-tide} " in
         *" tide "*) _hyprland_session=yes ;;
     esac
+    case " ${SESSIONS-tide} " in
+        *" tide-tidewm "*) _tidewm_session=yes ;;
+    esac
+    test "$_hyprland_session" = yes || _tidewm_session=yes
+    # Whether a missing uwsm is already among the problems.
+    _uwsm_said=no
     if test "$_hyprland_session" = yes; then
         if ! test -f "$SESSION_ENTRY"; then
             _problems="the tide session won't show at the login screen: there's no $SESSION_ENTRY; run 'sudo make -C $TIDE_DIR install-session PREFIX=/usr'"
@@ -6899,6 +6937,7 @@ check_session() {
                 _where=" (Fedora has it only in the $HYPRLAND_COPR COPR)"
             fi
             _problems="the tide session won't show at the login screen: it's listed only where $_try is installed, and it isn't; install $_try$_where"
+            test "$_try" != uwsm || _uwsm_said=yes
         fi
         if ! session_command start-hyprland && ! session_command Hyprland; then
             _problems="${_problems:+$_problems
@@ -6912,12 +6951,16 @@ check_session() {
             _problems="${_problems:+$_problems
     }the tide session can't run: $_hyprland_why$_removed"
         fi
-    else
+    fi
+    # tide (tidewm): its entry, and uwsm, which tide-session starts either
+    # session through.
+    if test "$_tidewm_session" = yes; then
         _tidewm_entry="${SESSION_ENTRY%/*}/tide-tidewm.desktop"
         if ! test -f "$_tidewm_entry"; then
-            _problems="the tide (tidewm) session won't show at the login screen: there's no $_tidewm_entry; run 'sudo make -C $TIDE_DIR install-session PREFIX=/usr SESSIONS=tide-tidewm'"
+            _problems="${_problems:+$_problems
+}the tide (tidewm) session won't show at the login screen: there's no $_tidewm_entry; run 'sudo make -C $TIDE_DIR install-session PREFIX=/usr SESSIONS=${SESSIONS:-tide-tidewm}'"
         fi
-        if ! session_command uwsm; then
+        if test "$_uwsm_said" = no && ! session_command uwsm; then
             _problems="${_problems:+$_problems
 }the tide (tidewm) session won't start: it starts through uwsm, which isn't installed; install uwsm"
         fi

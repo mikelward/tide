@@ -837,8 +837,17 @@ teardown
 setup; ARGS=(); run FAKE_ENTRY_TRYEXEC="$T/usr-bin/uwsm"
 check "session: a TryExec path that's there is fine" test "$status" -eq 0
 teardown
-setup; ARGS=(); rm "$T/usr-bin/uwsm"; run FAKE_ENTRY_TRYEXEC=
+setup; ARGS=(--no-tidewm); rm "$T/usr-bin/uwsm"; run FAKE_ENTRY_TRYEXEC=
 check "session: an entry without TryExec is always listed" test "$status" -eq 0
+teardown
+# Beside it, tide (tidewm)'s session is checked too, and starts through uwsm.
+setup; ARGS=(); rm "$T/usr-bin/uwsm"; run FAKE_ENTRY_TRYEXEC=
+check "session: with both sessions, tidewm's missing uwsm ends the run" test "$status" -ne 0
+check "session: and is named" has "$output" "the tide (tidewm) session won't start: it starts through uwsm, which isn't installed"
+teardown
+# A missing uwsm is said once, not for each session.
+setup; ARGS=(); rm "$T/usr-bin/uwsm"; run
+check "session: with both sessions, a missing uwsm is said once" lacks "$output" "the tide (tidewm) session won't start"
 teardown
 
 # Hyprland on the user's PATH alone (the mock the rest of the run uses)

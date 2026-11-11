@@ -3736,6 +3736,10 @@ talk, a demo, or a meeting room's screen.
     `$XDG_DATA_DIRS`:
     - a hidden entry, or one whose `TryExec` isn't installed, is left out,
       along with any entry of the same name further down;
+    - a tide entry whose compositor can't run isn't there to offer or
+      preselect. `install/tide-setup` takes it off: for a Hyprland too
+      old (§5), or a tidewm that can't run. It asks `tidewm -v`, and warns
+      with the last line of what that said;
     - tide comes first, then the rest by name;
     - **Shell** comes last: the user's login shell on greetd's VT, the way
       out if the desktop is broken.

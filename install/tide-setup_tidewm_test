@@ -308,4 +308,60 @@ check "someone else's tidewm isn't replaced" test ! -L "$T/usr-local-bin/tidewm"
 check "and setup says so" has "$output" "NOT LINKING tidewm: $T/usr-local-bin/tidewm is already there"
 teardown
 
+# A tidewm that's there but can't run, as one whose wlroots an upgrade took
+# away, would log in to nothing, and the greeter would offer it again. Its
+# session comes off the login screen, and Hyprland's stays.
+setup; ARGS=(--tidewm)
+mkdir -p "$T/share/wayland-sessions"
+echo "an earlier run's" > "$T/share/wayland-sessions/tide-tidewm.desktop"
+run FAKE_TIDEWM_BROKEN=yes
+check "a tidewm that can't run is only a warning beside Hyprland" test "$status" -eq 0
+check "a tidewm that can't run is asked its version" test -x "$T/usr-local-bin/tidewm"
+check "a tidewm that can't run is named, with the last line of why" has "$output" \
+    "the tide (tidewm) session won't show at the login screen: its tidewm ($T/usr-local-bin/tidewm) can't run: 'tidewm -v' exited 127, saying 'tidewm: error while loading shared libraries: libwlroots-0.20.so: cannot open shared object file: No such file or directory'"
+check "and not the lines before it" lacks "$output" "symbol lookup warning"
+check "its session isn't installed" has "$calls" "install-session PREFIX=/usr SESSIONS=tide"
+check "only Hyprland's is" lacks "$calls" "SESSIONS=tide tide-tidewm"
+check "its entry comes off the login screen" test ! -e "$T/share/wayland-sessions/tide-tidewm.desktop"
+check "which is said" has "$output" "Took $T/share/wayland-sessions/tide-tidewm.desktop off the login screen"
+check "Hyprland's entry stays" test -e "$T/share/wayland-sessions/tide.desktop"
+teardown
+# With no Hyprland either, there's no session at all.
+setup; ARGS=(--tidewm); rm "$T/usr-bin/Hyprland"; run FAKE_TIDEWM_BROKEN=yes
+check "a tidewm that can't run, with no Hyprland, ends the run" test "$status" -ne 0
+check "and says there's no session" has "$output" "so tide has no session to log in to"
+teardown
+# One that runs keeps its entry: `tidewm -v` names its version and exits 1.
+setup; ARGS=(--tidewm); run
+check "a tidewm that runs keeps its session" test -e "$T/share/wayland-sessions/tide-tidewm.desktop"
+check "and nothing is said of it" lacks "$output" "can't run"
+teardown
+# Under its own name too, and one that exits 0 without a word.
+for says in 'echo "tidewm v0.2.0" >&2; exit 1' 'exit 0'; do
+    setup; ARGS=(--tidewm)
+    printf '#!/bin/sh\n%s\n' "$says" > "$T/usr-local-bin/tidewm"
+    chmod +x "$T/usr-local-bin/tidewm"
+    run
+    check "a tidewm that ends '$says' keeps its session" has "$calls" "SESSIONS=tide tide-tidewm"
+    teardown
+done
+# One that fails with anything else can't run, whatever its status.
+setup; ARGS=(--tidewm)
+printf '#!/bin/sh\necho "tidewm: /lib/libc.so.6: version GLIBC_2.99 not found" >&2\nexit 1\n' > "$T/usr-local-bin/tidewm"
+chmod +x "$T/usr-local-bin/tidewm"
+run
+check "a tidewm that fails with status 1 and no version can't run" has "$output" \
+    "'tidewm -v' exited 1, saying 'tidewm: /lib/libc.so.6: version GLIBC_2.99 not found'"
+check "and its session isn't installed" lacks "$calls" "SESSIONS=tide tide-tidewm"
+teardown
+
+# With both sessions, both entries are checked: tidewm's too, not only
+# when Hyprland's session is absent.
+setup; ARGS=(--tidewm); run FAKE_NO_TIDEWM_ENTRY=yes
+check "with both sessions, a missing tidewm entry ends the run" test "$status" -ne 0
+check "and is named" has "$output" \
+    "the tide (tidewm) session won't show at the login screen: there's no $T/share/wayland-sessions/tide-tidewm.desktop"
+check "and Hyprland's, which is there, isn't" lacks "$output" "there's no $T/share/wayland-sessions/tide.desktop"
+teardown
+
 finish
