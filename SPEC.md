@@ -473,6 +473,16 @@ flowchart TD
   starting, then the compositor and its arguments. tidewm's startup command
   logs that tidewm is up before it tells uwsm. So `journalctl -b -t
   tide-tidewm` shows where a login that never reached a desktop stopped.
+- **Every part leaves a trace that outlasts it** (maintainer,
+  2026-11-11). Each process tide starts, the greeter's included, logs that
+  it started, that it ended and how, and any error, where it survives a
+  logout and a reboot: the journal, or a file under `~/.local/state`.
+  Never only `$XDG_RUNTIME_DIR` or `/tmp`, which go at logout.
+  - Hyprland's own log is a file in the runtime directory, so tide's and
+    the greeter's configs turn on `debug:enable_stdout_logs`. Its stdout is
+    the journal's: uwsm's `wayland-wm@` unit, and greetd's.
+  - Hyprland sends what `exec` starts to `/dev/null`, so the greeter's
+    command pipes Quickshell's output through `systemd-cat`.
 - **Nothing holds up telling uwsm the session is ready.** uwsm ends a
   session that never says so. Going home, before that, is given 5 seconds
   (`tide-msg` has no limit of its own), and a failed `uwsm finalize` is
@@ -3781,6 +3791,8 @@ talk, a demo, or a meeting room's screen.
 
   The greeter's config registers the greeter first, then tries each
   setting alone, so one this Hyprland refuses is logged and skipped.
+  Hyprland logs to stdout too, so its log stays in greetd's journal after
+  the greeter user's runtime directory goes.
 - **Same face as the lock.** Login and lock are one QML component with two
   modes ([`lock.png`](docs/mocks/lock.png)): `shell/LockFace.qml`.
 - **Light or dark, with a wallpaper.** The face has a light palette as

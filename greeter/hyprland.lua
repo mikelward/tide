@@ -41,15 +41,25 @@ local EXIT = "hyprctl dispatch 'hl.dsp.exit()'"
 -- login. A status that can't be written is said by sh, and Hyprland still
 -- exits. The QML is root's, and nothing edits it under a running greeter,
 -- so the file watcher is off.
+--
+-- Hyprland sends what it starts to /dev/null, so the greeter's output,
+-- with a line as it starts and as it ends, goes to the journal through
+-- systemd-cat, under tide-greeter like the rest of the greeter's log.
+-- Without systemd-cat it's lost, as before.
 local function greeter_command(qml, status_file)
+    local body
     if qml == nil then
-        return "echo 'tide-greeter: no TIDE_GREETER_QML, so no greeter to run' >&2; " .. EXIT
+        body = "echo 'tide-greeter: no TIDE_GREETER_QML, so no greeter to run'"
+    else
+        body = "echo 'tide-greeter: starting the greeter (qs)'; "
+            .. "QS_DISABLE_FILE_WATCHER=1 qs -p " .. quote(qml) .. "; status=$?; "
+            .. 'echo "tide-greeter: the greeter (qs) exited $status"'
+        if status_file ~= nil then
+            body = body .. '; echo "$status" >' .. quote(status_file)
+        end
     end
-    local report = ""
-    if status_file ~= nil then
-        report = 'echo "$?" >' .. quote(status_file) .. "; "
-    end
-    return "QS_DISABLE_FILE_WATCHER=1 qs -p " .. quote(qml) .. "; " .. report .. EXIT
+    return "if command -v systemd-cat >/dev/null 2>&1; then { " .. body
+        .. "; } 2>&1 | systemd-cat --identifier=tide-greeter; else " .. body .. "; fi; " .. EXIT
 end
 
 -- The pointer starts in the middle of the focused monitor, by the field,
@@ -118,6 +128,13 @@ for name, section in pairs({
     },
     animations = {
         enabled = false,
+    },
+    -- Hyprland's own log is a file in the greeter user's runtime
+    -- directory, which goes once someone logs in; on stdout, it's kept in
+    -- greetd's journal, where the greeter's trouble can be read later.
+    debug = {
+        enable_stdout_logs = true,
+        colored_stdout_logs = false,
     },
 }) do
     try("settings " .. name, function()

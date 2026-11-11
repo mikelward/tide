@@ -119,7 +119,10 @@ check "the variant is localed's" contains "$ran" "TIDE_GREETER_KB_VARIANT=dvorak
 check "the options are localed's" contains "$ran" "TIDE_GREETER_KB_OPTIONS=compose:caps,altwin:menu_win"
 check "localed is asked for the four X11 properties, in order" test "$(cat "$tmp/log.busctl")" = \
     "get-property org.freedesktop.locale1 /org/freedesktop/locale1 org.freedesktop.locale1 X11Layout X11Model X11Variant X11Options"
-check "a keymap that's read says nothing" test -z "$out"
+check "a keymap that's read says nothing of it" lacks "$out" "keymap"
+check "Hyprland's start is logged" contains "$out" "tide-greeter: starting Hyprland with the greeter"
+check "and its end" contains "$out" "tide-greeter: Hyprland exited 0"
+check "and the greeter's" contains "$out" "tide-greeter: the greeter is done; greetd starts the session"
 
 BUSCTL_OUT='s "de"
 s ""
@@ -179,7 +182,8 @@ check "which says why on the console" contains "$out" "tide's greeter could not 
 HYPRLAND_EXIT=0
 greeter 0
 check "a Hyprland that exits cleanly starts no text login" lacks "$out" "agreety"
-check "a login (qs exits 0) says nothing" test -z "$out"
+check "a login (qs exits 0) says only that it's done" contains "$out" "the greeter is done; greetd starts the session"
+check "with no trouble said" lacks "$out" "can't"
 check "and waits for nothing" test -z "$slept"
 check "Hyprland is told where to leave qs's exit status" \
     contains "$ran" "TIDE_GREETER_QS_STATUS=$run/tide-greeter-qs"

@@ -19,6 +19,7 @@
 # Hyprland or qs, or when Hyprland or qs fails, it says why and runs
 # agreety, greetd's own text login, where that's installed. Without
 # agreety it waits a few seconds and fails, and greetd starts it again.
+# Each start and end, of Hyprland and of the greeter, is in the journal.
 #
 # Usage: tide-greeter
 
@@ -27,7 +28,7 @@ prog=tide-greeter
 if test $# -gt 0; then
     case $1 in
         -h | --help)
-            sed -n '3,23p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '3,24p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
     esac
@@ -135,6 +136,7 @@ fi
 export TIDE_GREETER_QML="$qml" TIDE_GREETER_GREETD="$greetd_client"
 # Not exec'd: a Hyprland that fails, as one too old for the greeter's
 # config, leaves the text login. It exits 0 once the greeter has.
+echo "$prog: starting Hyprland with the greeter" >&2
 Hyprland --config "$config"
 status=$?
 if test "$status" -ne 0; then
@@ -145,6 +147,7 @@ fi
 # has the session to start (shell/GreetdClient.qml); any other end is a
 # greeter that failed, and starting it again would only fail again. A
 # status that can't be told is taken as a normal end, and said.
+echo "$prog: Hyprland exited 0" >&2
 if test -z "$qs_status_file"; then
     exit 0
 fi
@@ -157,7 +160,10 @@ if ! read -r qs_status <"$qs_status_file"; then
     exit 0
 fi
 case $qs_status in
-    0) exit 0 ;;
+    0)
+        echo "$prog: the greeter is done; greetd starts the session" >&2
+        exit 0
+        ;;
     [0-9] | [0-9][0-9] | [0-9][0-9][0-9]) ;;
     *)
         echo "$prog: the greeter's (qs) exit status in $qs_status_file isn't a number; taking it as a normal end" >&2
