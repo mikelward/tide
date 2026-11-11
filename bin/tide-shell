@@ -136,14 +136,21 @@ unit=tide.service
 
 # True when a process in this unit owns the name. busctl failing is the
 # normal answer while nobody owns it yet, so its message isn't shown then,
-# but the last one is kept in $busctl_err for the report if the wait runs
-# out: a missing user bus or busctl shows up there, not as a missing owner.
+# but it's kept in $busctl_err for the report if the wait runs out: a
+# missing user bus or busctl shows up there, not as a missing owner. A name
+# owned from outside the unit sets $elsewhere to who has it, for the report.
 owned() {
+    elsewhere=
     if ! out=$(busctl --user status "$1" 2>&1); then
         busctl_err=$(printf '%s\n' "$out" | tail -n 1)
         return 1
     fi
-    printf '%s\n' "$out" | grep -qx "UserUnit=$unit"
+    printf '%s\n' "$out" | grep -qx "UserUnit=$unit" && return 0
+    _comm=$(printf '%s\n' "$out" | sed -n 's/^Comm=//p' | head -n 1)
+    _pid=$(printf '%s\n' "$out" | sed -n 's/^PID=//p' | head -n 1)
+    _where=$(printf '%s\n' "$out" | sed -n 's/^UserUnit=//p' | head -n 1)
+    elsewhere="held by ${_comm:-a process} (pid ${_pid:-unknown}) in ${_where:-no user unit}"
+    return 1
 }
 
 # No cleanup trap: stopping the unit kills its whole cgroup, which also
@@ -478,8 +485,12 @@ while :; do
     exited=no
     test -s "$theme_status" && exited=yes
     missing=
-    owned org.freedesktop.Notifications || missing="$missing org.freedesktop.Notifications ($notifications_owner)"
-    owned org.kde.StatusNotifierWatcher || missing="$missing org.kde.StatusNotifierWatcher ($tray_owner)"
+    # Only this round's busctl errors, so the report can't give a stale one.
+    busctl_err=
+    owned org.freedesktop.Notifications ||
+        missing="$missing org.freedesktop.Notifications ($notifications_owner${elsewhere:+; $elsewhere})"
+    owned org.kde.StatusNotifierWatcher ||
+        missing="$missing org.kde.StatusNotifierWatcher ($tray_owner${elsewhere:+; $elsewhere})"
     # The wallpaper doesn't hold up ready; it keeps trying below.
     test -z "$missing" && break
     if test "$exited" = yes; then
