@@ -73,10 +73,18 @@ end
 -- Runs `cmd` under sh with qs and hyprctl stubbed to print what they're
 -- given, and returns what they printed. A command that exits nonzero fails
 -- the test, whatever it printed. With `qs_exit`, qs exits with that.
-local function run(cmd, qs_exit)
+local function run(cmd, qs_exit, no_journal)
     local bin = os.tmpname()
     os.remove(bin)
     assert(os.execute("mkdir -p '" .. bin .. "'"))
+    -- systemd-cat marks each line it would send to the journal, unless
+    -- the test says there's none: PATH is only these stand-ins.
+    if not no_journal then
+        local f = assert(io.open(bin .. "/systemd-cat", "w"))
+        f:write("#!/bin/sh\nwhile IFS= read -r line; do printf 'journal(%s) %s\\n' \"$1\" \"$line\"; done\n")
+        f:close()
+        assert(os.execute("chmod +x '" .. bin .. "/systemd-cat'"))
+    end
     for _, name in ipairs({ "qs", "hyprctl" }) do
         local f = assert(io.open(bin .. "/" .. name, "w"))
         f:write("#!/bin/sh\nprintf '" .. name .. "'\nprintf ' [%s]' \"$@\"\nprintf ' watcher=%s\\n' \"${QS_DISABLE_FILE_WATCHER:-}\"\n")
@@ -90,7 +98,7 @@ local function run(cmd, qs_exit)
     local f = assert(io.open(bin .. "/cmd.sh", "w"))
     f:write(cmd .. "\n")
     f:close()
-    local p = assert(io.popen("PATH='" .. bin .. "':\"$PATH\" sh '" .. bin .. "/cmd.sh' 2>&1"))
+    local p = assert(io.popen("PATH='" .. bin .. "' /bin/sh '" .. bin .. "/cmd.sh' 2>&1"))
     local out = p:read("a")
     local ok, how, code = p:close()
     assert(os.execute("rm -rf '" .. bin .. "'"))
@@ -141,6 +149,12 @@ test("a key or a move turns the displays back on", function()
     eq(S.config.animations.enabled, false, "animations")
 end)
 
+test("Hyprland's log goes to greetd's journal, without color codes", function()
+    load({})
+    eq(S.config.debug.enable_stdout_logs, true, "stdout logs")
+    eq(S.config.debug.colored_stdout_logs, false, "colored")
+end)
+
 test("there are no key bindings, rules or anything else", function()
     load({ TIDE_GREETER_QML = "/usr/share/tide/shell/greeter.qml" })
     start()
@@ -155,7 +169,9 @@ end)
 test("at start it runs the greeter, then exits Hyprland", function()
     load({ TIDE_GREETER_QML = "/usr/share/tide/shell/greeter.qml" })
     local out = run(start())
-    eq(out, "qs [-p] [/usr/share/tide/shell/greeter.qml] watcher=1\n"
+    eq(out, "journal(--identifier=tide-greeter) tide-greeter: starting the greeter (qs)\n"
+        .. "journal(--identifier=tide-greeter) qs [-p] [/usr/share/tide/shell/greeter.qml] watcher=1\n"
+        .. "journal(--identifier=tide-greeter) tide-greeter: the greeter (qs) exited 0\n"
         .. "hyprctl [dispatch] [hl.dsp.exit()] watcher=\n", "what ran")
 end)
 
@@ -177,14 +193,16 @@ end)
 test("a path with quotes and spaces reaches qs whole", function()
     load({ TIDE_GREETER_QML = "/opt/it's a $HOME `x`/greeter.qml" })
     local out = run(start())
-    eq(out, "qs [-p] [/opt/it's a $HOME `x`/greeter.qml] watcher=1\n"
+    eq(out, "journal(--identifier=tide-greeter) tide-greeter: starting the greeter (qs)\n"
+        .. "journal(--identifier=tide-greeter) qs [-p] [/opt/it's a $HOME `x`/greeter.qml] watcher=1\n"
+        .. "journal(--identifier=tide-greeter) tide-greeter: the greeter (qs) exited 0\n"
         .. "hyprctl [dispatch] [hl.dsp.exit()] watcher=\n", "what ran")
 end)
 
 test("with no greeter given, it says so and exits Hyprland", function()
     load({})
     local out = run(start())
-    eq(out, "tide-greeter: no TIDE_GREETER_QML, so no greeter to run\n"
+    eq(out, "journal(--identifier=tide-greeter) tide-greeter: no TIDE_GREETER_QML, so no greeter to run\n"
         .. "hyprctl [dispatch] [hl.dsp.exit()] watcher=\n", "what ran")
 end)
 
@@ -209,7 +227,9 @@ test("the greeter's exit status is left where tide-greeter asked, then Hyprland 
         load({ TIDE_GREETER_QML = "/usr/share/tide/shell/greeter.qml", TIDE_GREETER_QS_STATUS = status })
         local out = run(start(), code)
         eq(slurp(status), code .. "\n", "the status left for qs exiting " .. code)
-        eq(out, "qs [-p] [/usr/share/tide/shell/greeter.qml] watcher=1\n"
+        eq(out, "journal(--identifier=tide-greeter) tide-greeter: starting the greeter (qs)\n"
+            .. "journal(--identifier=tide-greeter) qs [-p] [/usr/share/tide/shell/greeter.qml] watcher=1\n"
+            .. "journal(--identifier=tide-greeter) tide-greeter: the greeter (qs) exited " .. code .. "\n"
             .. "hyprctl [dispatch] [hl.dsp.exit()] watcher=\n", "what ran when qs exited " .. code)
     end
     assert(os.execute("rm -rf '" .. dir .. "'"))
@@ -220,6 +240,15 @@ test("a status that can't be written still exits Hyprland", function()
     local out = run(start(), 3)
     eq(out:find("hyprctl [dispatch] [hl.dsp.exit()]", 1, true) ~= nil, true, "Hyprland exits")
     eq(out:find("/nonexistent/dir/status", 1, true) ~= nil, true, "sh names the file it couldn't write")
+end)
+
+test("without systemd-cat, the greeter still runs and Hyprland exits", function()
+    load({ TIDE_GREETER_QML = "/q.qml" })
+    local out = run(start(), nil, true)
+    eq(out, "tide-greeter: starting the greeter (qs)\n"
+        .. "qs [-p] [/q.qml] watcher=1\n"
+        .. "tide-greeter: the greeter (qs) exited 0\n"
+        .. "hyprctl [dispatch] [hl.dsp.exit()] watcher=\n", "what ran")
 end)
 
 test("a setting this Hyprland refuses costs neither the greeter nor the other settings", function()

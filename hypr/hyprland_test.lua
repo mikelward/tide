@@ -2305,6 +2305,12 @@ test("outside the tide session, app keys run the command itself", function()
     eq("~/scripts/runenv browser1", bind("SUPER + G").target.args)
 end)
 
+test("Hyprland's log also goes to stdout, for the journal, without color codes", function()
+    load()
+    eq(true, S.config.debug.enable_stdout_logs, "stdout logs")
+    eq(false, S.config.debug.colored_stdout_logs, "colored")
+end)
+
 test("the pointer starts in the middle of the focused monitor", function()
     load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
     -- A 4K panel at 1.5 to the right of another: its middle in layout units.

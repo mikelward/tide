@@ -746,6 +746,10 @@ hl.config({
     },
     -- Focus never drags the pointer along with it.
     cursor = { no_warps = true },
+    -- Hyprland's own log is a file under $XDG_RUNTIME_DIR, gone at logout;
+    -- on stdout it's also in the journal (uwsm's wayland-wm@ unit), which
+    -- keeps it.
+    debug = { enable_stdout_logs = true, colored_stdout_logs = false },
 })
 
 --------------------------------------------------------------------------------
