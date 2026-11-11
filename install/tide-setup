@@ -7087,8 +7087,17 @@ fi
 
 if ! check_session; then
     info "tide installed, but its session isn't ready: see the warnings above."
-elif test "$GREETER_ACTIVE" = yes; then
-    say_news "tide installed. Pick the \"tide\" session at greetd's greeter; KDE Plasma stays available there."
 else
-    say_news "tide installed. Log out and pick the \"tide\" session; KDE Plasma stays available."
+    # A display manager this run switched to starts at the next boot: the
+    # one running now stays until then, and logging out returns to it.
+    if test "$DM_CHANGED" = yes; then
+        _pick='Reboot, then pick'
+    else
+        _pick='Log out and pick'
+    fi
+    if test "$GREETER_ACTIVE" = yes; then
+        say_news "tide installed. $_pick the \"tide\" session at greetd's greeter; KDE Plasma stays available there."
+    else
+        say_news "tide installed. $_pick the \"tide\" session; KDE Plasma stays available."
+    fi
 fi
