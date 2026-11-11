@@ -333,23 +333,33 @@ if test -n "${TIDE_THEME_DAEMON:-}" && ! is_program "$theme_daemon"; then
     log "TIDE_THEME_DAEMON is '$theme_daemon', which isn't an executable file"
     exit $EX_CONFIG
 fi
-notifications_owner=swaync
+# Who serves notifications doesn't depend on the theme daemon: with
+# TIDE_NOTIFICATIONS=1 the Quickshell shell does, and swaync isn't needed.
+if test "${TIDE_NOTIFICATIONS:-}" = 1 && test "$bar" = quickshell; then
+    notifications_owner="the Quickshell shell"
+else
+    notifications_owner=swaync
+fi
 if is_program "$theme_daemon"; then
     start_swaync=no
     start_waybar=no
 else
     theme_daemon=
-    if test "${TIDE_NOTIFICATIONS:-}" = 1 && test "$bar" = quickshell; then
-        start_swaync=no
-        notifications_owner="the Quickshell shell"
-    else
-        start_swaync=yes
-    fi
+    if test "$notifications_owner" = swaync; then start_swaync=yes; else start_swaync=no; fi
     if test "$bar" = waybar; then start_waybar=yes; else start_waybar=no; fi
-    if test "$start_swaync" = yes && ! command -v swaync >/dev/null 2>&1; then
+fi
+# Wherever swaync is to serve notifications, it has to be installed: the
+# theme daemon starts it as this would, and without it the name would be
+# waited for, in vain, at every start.
+if test "$notifications_owner" = swaync && ! command -v swaync >/dev/null 2>&1; then
+    if test -n "$theme_daemon"; then
+        log "swaync, which the theme daemon ($theme_daemon) starts to serve notifications, isn't installed"
+    else
         log "no theme daemon at $default_theme_daemon, and swaync, which serves notifications without one, isn't installed"
-        exit $EX_CONFIG
     fi
+    exit $EX_CONFIG
+fi
+if test -z "$theme_daemon"; then
     if test "$start_waybar" = yes && ! command -v waybar >/dev/null 2>&1; then
         log "the bar is waybar, but waybar isn't installed"
         exit $EX_CONFIG
