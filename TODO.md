@@ -35,12 +35,6 @@ once you have agreed with it or reversed it.
   `~/.config/sway` first, and `$XDG_CONFIG_HOME/sway` where that's set,
   since nwg-displays quits unless sway's directory under its config home
   is there. Reversible, in `lib/settings.mjs`'s `advancedFor`.
-- **The installer builds tidewm only with `--tidewm`** (2026-11-05), since
-  tide's tidewm session is an option beside Hyprland's, not the default,
-  and the build costs a run's time on every machine. It pins a release
-  tag and checks the commit it named, as the other pins do. Debian testing
-  and Arch use their wlroots 0.20; Fedora says so and carries on.
-  The alternative is building it by default. Reversible.
 - **Where apt has no wlroots 0.20, the installer builds it into tidewm's
   own build** (2026-11-08), not a prefix of its own, so a new pin of either
   rebuilds both and an old tidewm keeps its wlroots. Sub-choices, each

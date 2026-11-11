@@ -4,7 +4,7 @@
 # git_github, $PINS) it uses.
 #
 # tidewm builds against wlroots 0.20, which Debian testing and Arch package
-# and Ubuntu 26.04 and Debian 13 don't. There, build_tidewm builds deps.lock's
+# and Ubuntu 26.04, Debian 13 and some Fedoras don't. There, build_tidewm builds deps.lock's
 # wlroots group with meson into tidewm's own build directory, then tidewm
 # against it, each with a run path to that directory's lib, so tidewm loads
 # that libwlroots, and nothing else on the system sees it. The group's other
@@ -34,11 +34,27 @@ WLROOTS_APT_DEPS="meson ninja-build bison libexpat1-dev libffi-dev xkb-data
     libxcb1-dev libxcb-composite0-dev libxcb-ewmh-dev libxcb-icccm4-dev libxcb-render0-dev
     libxcb-res0-dev libxcb-xfixes0-dev libxcb-errors-dev xwayland"
 
+# The same from dnf, for a Fedora with no wlroots 0.20, asked for by
+# pkg-config name where there is one, since Fedora's package names for them
+# vary between releases.
+# shellcheck disable=SC2034  # tide-setup's tidewm_build_deps reads it
+WLROOTS_DNF_DEPS="meson ninja-build bison xkeyboard-config glslang hwdata
+    pkgconfig(expat) pkgconfig(libffi) pkgconfig(wayland-server) pkgconfig(wayland-scanner)
+    pkgconfig(wayland-protocols) pkgconfig(libdrm) pkgconfig(xkbcommon) pkgconfig(pixman-1)
+    pkgconfig(libudev) pkgconfig(libseat) pkgconfig(libinput) pkgconfig(libdisplay-info)
+    pkgconfig(hwdata) pkgconfig(egl) pkgconfig(glesv2) pkgconfig(gbm) pkgconfig(vulkan)
+    pkgconfig(lcms2) pkgconfig(xcb) pkgconfig(xcb-composite) pkgconfig(xcb-ewmh)
+    pkgconfig(xcb-icccm) pkgconfig(xcb-render) pkgconfig(xcb-res) pkgconfig(xcb-xfixes)
+    pkgconfig(xcb-errors) pkgconfig(xwayland)"
+
 # wlroots_wanted: whether tidewm needs wlroots built here, once its build
-# dependencies are installed: only on Debian and Ubuntu, when pkg-config
-# can't find the distro's wlroots-0.20.
+# dependencies are installed: on Debian, Ubuntu and Fedora, when pkg-config
+# can't find the distro's wlroots-0.20. Arch packages it.
 wlroots_wanted() {
-    test "$(detect_os)" = debian || return 1
+    case "$(detect_os)" in
+        debian | redhat) ;;
+        *) return 1 ;;
+    esac
     ! pkg-config --modversion wlroots-0.20 >/dev/null 2>&1
 }
 
