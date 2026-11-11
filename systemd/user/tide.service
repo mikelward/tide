@@ -41,6 +41,12 @@ ExecStartPost=-tide lock-check
 # (SPEC.md §5.4). It never fails the shell either.
 ExecStartPost=-tide autostart-sweep
 TimeoutStartSec=15
+# A stop is a kill of the unit's cgroup: tide-shell has nothing to tidy up.
+# graphical-session.target stays active until this has stopped, and uwsm
+# won't start a session while it is, so a process slow to die, at systemd's
+# 90 s default, bounced a login straight after a logout back to the login
+# screen. After 5 s what's left is killed.
+TimeoutStopSec=5
 Restart=on-failure
 RestartSec=1
 # A restart skips the failed state, so OnFailure= opens the fallback only

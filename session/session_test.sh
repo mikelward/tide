@@ -808,6 +808,24 @@ check "it never starts in tide's session" \
     lacks_line_matching "$kdelauncher" '(graphical-session|wayland-session@tide)'
 check "make install installs it" grep -q 'systemd/user/tide-kde.service' Makefile
 
+# --- A logout that doesn't hold up the next login ------------------------------
+# graphical-session.target stays active until every unit ordered after it
+# has stopped, and uwsm refuses to start a session while it's active. None
+# of tide's units has anything to tidy up, so each is killed after a few
+# seconds rather than systemd's 90, and a login straight after a logout
+# finds the target gone.
+for u in "$unit" "$lock" "$lockfallback" "$idlefallback" "$shellfallback" "$clipboard" "$fcitx5" "$lidinhibit" "$dropin"; do
+    stop=$(section_value "$u" Service TimeoutStopSec)
+    check "$u is given a stop timeout" test -n "$stop"
+    check "$u is killed within 10 s of a stop, so a logout isn't held up" test "${stop:-99}" -le 10
+done
+# Any unit added later that stops with the session is covered too.
+for u in systemd/user/*.service; do
+    grep -q '^PartOf=graphical-session.target$' "$u" || continue
+    check "$u, which stops with the session, has a stop timeout" \
+        test -n "$(section_value "$u" Service TimeoutStopSec)"
+done
+
 # --- systemd-analyze verify ---------------------------------------------------
 # Resolves the units as systemd would. tide-shell and hypridle aren't
 # installed here, so the copies point ExecStart at a stub; everything else is

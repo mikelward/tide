@@ -24,4 +24,7 @@ ExecStartPost=/bin/sh -c 'notify-send --urgency=critical --app-name=tide "The ti
 # lock back. systemd's default start limit ends a crash loop.
 Restart=on-failure
 RestartSec=0
+# As tide.service: graphical-session.target stays active until this has
+# stopped, and the next login waits on that, so it gets 5 s, not 90.
+TimeoutStopSec=5
 Slice=session-graphical.slice

@@ -17,4 +17,7 @@ After=graphical-session.target
 Type=notify
 NotifyAccess=all
 ExecStart=systemd-inhibit --what=handle-lid-switch --who=tide --why="Settings: the lid locks or does nothing" --mode=block systemd-notify --ready --exec \; sleep infinity
+# As tide.service: graphical-session.target stays active until this has
+# stopped, and the next login waits on that, so it gets 5 s, not 90.
+TimeoutStopSec=5
 Slice=background-graphical.slice
