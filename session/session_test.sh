@@ -164,14 +164,32 @@ check "the tidewm entry starts the tidewm session through tide-session" \
 # desktops, name and wrapper, and logs what it ran, uwsm's output and how
 # it ended. Stubs: uwsm prints its arguments one per line and exits
 # $FAKE_UWSM; systemd-cat runs what it's given, marking its output; logger
-# appends to a file.
+# appends to a file, a debug message with its level; systemctl records its
+# arguments, and prints $FAKE_SYSTEMCTL_ERR and exits 1 when that's set.
 mkdir -p "$tmp/session-bin"
 # shellcheck disable=SC2016 # the stubs' own $@, $1 and the rest
 printf '#!/bin/sh\nprintf "[%%s]\\n" "$@"\nexit "${FAKE_UWSM:-0}"\n' > "$tmp/session-bin/uwsm"
 # shellcheck disable=SC2016 # and here
 printf '#!/bin/sh\ntest "$1" = -t && test "$2" = tide-session && test "$3" = -- || exit 99\nshift 3\necho "systemd-cat:"\nexec "$@"\n' > "$tmp/session-bin/systemd-cat"
-printf '#!/bin/sh\nshift 3\necho "$*" >> "%s"\n' "$tmp/session-log" > "$tmp/session-bin/logger"
-chmod +x "$tmp/session-bin/uwsm" "$tmp/session-bin/systemd-cat" "$tmp/session-bin/logger"
+cat > "$tmp/session-bin/logger" <<FAKE
+#!/bin/sh
+level=
+while test "\$1" != --; do
+    case \$1 in user.debug) level="debug: " ;; esac
+    shift
+done
+shift
+echo "\$level\$*" >> "$tmp/session-log"
+FAKE
+cat > "$tmp/session-bin/systemctl" <<FAKE
+#!/bin/sh
+echo "\$*" >> "$tmp/session-systemctl"
+if test -n "\$FAKE_SYSTEMCTL_ERR"; then
+    printf '%s\n' "\$FAKE_SYSTEMCTL_ERR" >&2
+    exit 1
+fi
+FAKE
+chmod +x "$tmp/session-bin/uwsm" "$tmp/session-bin/systemd-cat" "$tmp/session-bin/logger" "$tmp/session-bin/systemctl"
 run_session() { PATH="$tmp/session-bin:/usr/bin:/bin" sh bin/tide-session "$@" 2>"$tmp/session-err"; }
 : > "$tmp/session-log"
 out=$(run_session tidewm)
@@ -188,6 +206,53 @@ FAKE_UWSM=3 run_session tidewm >/dev/null
 check "a uwsm that fails is tide-session's status" test "$?" -eq 3
 check "and is logged with its status" \
     grep -qxF "the tide (tidewm) session ended with uwsm exiting 3: the lines above say why" "$tmp/session-log"
+# A user manager that outlived the last login still holds its failures, and
+# a shell that hit its start limit there would be refused here. So each
+# login clears them first, for every unit of tide's and hypridle.
+: > "$tmp/session-systemctl"
+: > "$tmp/session-log"
+out=$(run_session tidewm)
+reset=$(cat "$tmp/session-systemctl")
+# clears UNIT: true when the login asked for that unit's failure to go.
+clears() { printf '%s\n' "$reset" | tr ' ' '\n' | grep -qxF -- "$1"; }
+check "a login clears the last session's failures, once" \
+    test "$(printf '%s\n' "$reset" | grep -c '^--user reset-failed ')" -eq 1
+for u in systemd/user/tide*.service; do
+    u=${u##*/}
+    # Plasma's launcher isn't the tide session's.
+    test "$u" != tide-kde.service || continue
+    check "a login clears a failed $u" clears "$u"
+done
+check "a login clears a failed hypridle, whose start limit is tide's" clears hypridle.service
+check "a login clears a failed fallback bar" clears tide-bar-fallback.service
+check "and names units, not every failure the manager holds" test "$reset" != "--user reset-failed"
+check "the session starts after its failures are cleared" \
+    test "$(printf '%s\n' "$out" | tail -n 1)" = "[tide-tidewm]"
+check "clearing them says nothing" not grep -q "clear failures" "$tmp/session-log"
+# Most units aren't loaded when none has failed, which systemctl reports
+# for each, exiting 1: nothing to say.
+: > "$tmp/session-log"
+out=$(FAKE_SYSTEMCTL_ERR="Failed to reset failed state of unit tide-lock.service: Unit tide-lock.service not loaded.
+Failed to reset failed state of unit hypridle.service: Unit hypridle.service not loaded." run_session tidewm)
+check "units that aren't loaded have nothing to clear, and it isn't said" not grep -q "clear failures" "$tmp/session-log"
+check "and the session starts" test "$(printf '%s\n' "$out" | tail -n 1)" = "[tide-tidewm]"
+# A first login has no user manager yet where the session starts it: said
+# at debug level only, not on the login screen.
+: > "$tmp/session-log"
+out=$(FAKE_SYSTEMCTL_ERR="Failed to connect to bus: No such file or directory" run_session tidewm)
+check "no user manager is only a debug line" \
+    grep -qxF "debug: no user manager to clear failures from an earlier session in (Failed to connect to bus: No such file or directory)" "$tmp/session-log"
+check "and isn't said on the login screen" not grep -q "clear failures" "$tmp/session-err"
+check "and the session starts without one" test "$(printf '%s\n' "$out" | tail -n 1)" = "[tide-tidewm]"
+# Anything else is said, with systemctl's own words, and the login goes on.
+: > "$tmp/session-log"
+out=$(FAKE_SYSTEMCTL_ERR="Failed to reset failed state of unit tide-lock.service: Unit tide-lock.service not loaded.
+Failed to reset failed state of unit tide.service: Access denied" run_session tidewm)
+check "a failure to clear them is logged with systemctl's reason" \
+    grep -qxF "couldn't clear failures from an earlier session (systemctl --user reset-failed exited 1: Failed to reset failed state of unit tide.service: Access denied), so a shell that failed for good then may not start now" "$tmp/session-log"
+check "and doesn't stop the login" test "$(printf '%s\n' "$out" | tail -n 1)" = "[tide-tidewm]"
+FAKE_SYSTEMCTL_ERR="Access denied" run_session tidewm >/dev/null
+check "nor change its status" test "$?" -eq 0
 run_session sway >/dev/null
 check "an unknown session is an error" test "$?" -eq 2
 check "and says which are known" grep -qF "usage: tide-session hyprland|tidewm, not 'sway'" "$tmp/session-err"
