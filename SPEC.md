@@ -346,7 +346,7 @@ work". The old setup shows how it fought itself:
 | Bar (exactly one per monitor), launcher, OSD, wallpaper | tide (`qs -c tide`) | `tide.service` | waybar, swaybar, swww/swaybg, fuzzel/rofi aren't started; `doctor` counts top-layer bars |
 | Notifications (`org.freedesktop.Notifications`) | tide | `tide.service`, before any app | dunst/mako/swaync: not installed; `doctor` flags any activatable one |
 | Tray host (`org.kde.StatusNotifierWatcher`) | tide | `tide.service`, before any app | `nm-applet`, `blueman-applet`, `xembedsniproxy` not run |
-| Polkit agent | tide (`Quickshell.Services.Polkit`) | `tide.service` | polkit-gnome/-kde agents not run |
+| Polkit agent | tide (`Quickshell.Services.Polkit`) | `tide.service` | polkit-gnome/-kde agents not run; the packaged `hyprpolkitagent.service` is skipped in tide's sessions by a drop-in |
 | Lock screen | `tide-lock`, a separate Quickshell process with the same QML (`WlSessionLock` + PAM service `tide-lock`) | hypridle's `lock_cmd`, on logind's `Lock` signal → `tide-lock.service` | hyprlock runs only as the lock's fallback (§10) |
 | Idle timeline, `org.freedesktop.ScreenSaver`, logind lock and sleep bridge | hypridle (§10) | `hypridle.service` | swayidle not run; the shell does not time idle |
 | Screen-share picker | tide, via xdph `custom_picker_binary` | xdph, on demand | `hyprland-share-picker` |
