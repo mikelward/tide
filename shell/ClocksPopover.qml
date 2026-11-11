@@ -54,9 +54,10 @@ PopupWindow {
     }
 
     anchor.item: clocks
-    anchor.edges: Edges.Bottom | Edges.Right
-    anchor.gravity: Edges.Bottom | Edges.Left
-    anchor.margins.bottom: -6
+    anchor.edges: Theme.hangEdge | Edges.Right
+    anchor.gravity: Theme.hangEdge | Edges.Left
+    anchor.margins.top: Theme.hang(6).top
+    anchor.margins.bottom: Theme.hang(6).bottom
     grabFocus: true
     color: "transparent"
     implicitWidth: 640

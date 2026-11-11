@@ -75,9 +75,12 @@ Item {
         }
 
         // A right-click opens the item's settings page (SPEC.md §7.1), or
-        // the first page by name, so an open panel turns to it too.
+        // the first page by name, so an open panel turns to it too. It
+        // grabs the press, so the bar's own right-click, for the Bar page,
+        // doesn't open that too (Bar.qml).
         TapHandler {
             acceptedButtons: Qt.RightButton
+            gesturePolicy: TapHandler.WithinBounds
             enabled: root.settings !== undefined
             onTapped: SettingsData.open(BarSettings.opened(root.settings, Settings.PAGES))
         }

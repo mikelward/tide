@@ -12,7 +12,7 @@ import {
     expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
-    POSITIONS, POSITION_CHOICES, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf,
+    POSITIONS, POSITION_CHOICES, BAR_POSITIONS, BAR_CHOICES, barAtBottom, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf,
     LOOK_ROOT, lookDir, lookCommand, lookWriteCommand, lookCopied, lookJson, parseLook, lookAt
 } from "./appearance.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -1271,4 +1271,14 @@ test("look.json is written readable by all, whatever the umask, and replaced who
     } finally {
         rmSync(tmp, { recursive: true });
     }
+});
+
+test("the bar is at the top unless barPosition puts it at the bottom", () => {
+    assert.equal(barAtBottom(DEFAULTS), false, "top when unset, as before");
+    assert.equal(barAtBottom(loadAppearance('{"barPosition": "bottom"}', null).settings), true);
+    assert.equal(barAtBottom(loadAppearance('{"barPosition": "bottom"}', '{"barPosition": "top"}').settings), false, "the local file's wins");
+    const bad = loadAppearance('{"barPosition": "left"}', null);
+    assert.deepEqual(bad.errors, ['appearance.json: barPosition must be one of "top", "bottom"']);
+    assert.equal(barAtBottom(bad.settings), false, "a bad one keeps the last good");
+    assert.deepEqual(BAR_CHOICES.map(c => c.position), BAR_POSITIONS);
 });

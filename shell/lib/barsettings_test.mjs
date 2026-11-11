@@ -20,11 +20,17 @@ test("each bar item opens its own page", () => {
     assert.equal(page("clocks"), "clocks");
     assert.equal(page("workspaces"), "workspaces");
     assert.equal(page("volume"), "sound");
-    assert.equal(page("sysmon"), "");
+});
+
+test("the bar itself, and the items no other page fits, open the Bar page", () => {
+    for (const item of ["bar", "logo", "sharing", "sysmon"]) {
+        assert.equal(page(item), "bar", item);
+    }
+    assert.ok(PAGES.some(p => p.id === "bar" && p.label === "Bar"));
 });
 
 test("the first page opens by name, so an open panel turns to it", () => {
-    assert.equal(opened(page("sysmon"), PAGES), PAGES[0].id);
+    assert.equal(opened("", PAGES), PAGES[0].id);
     assert.equal(opened(page("clocks"), PAGES), "clocks");
 });
 
@@ -70,8 +76,8 @@ const DROPDOWNS = Object.freeze({
 });
 
 // A dropdown ends in Settings… (SettingsRow.qml), for its item's page, but
-// one whose item has none, whose right-click opens the first page: there,
-// Settings… would open a page about something else. Every dropdown is
+// one whose item has none, whose right-click opens the Bar page (or the
+// first page): there, Settings… would open a page about something else. Every dropdown is
 // listed, so a new one is too. integration_test.sh clicks the clocks'.
 test("every dropdown with a page of its own ends in Settings… for that page", () => {
     const dropdowns = readdirSync(SHELL).filter((f) => f.endsWith(".qml")
@@ -85,7 +91,7 @@ test("every dropdown with a page of its own ends in Settings… for that page", 
         for (let m = row.exec(text); m; m = row.exec(text)) {
             rows.push(m[1]);
         }
-        const want = page(item) === "" ? [] : [item];
+        const want = page(item) === "" || page(item) === "bar" ? [] : [item];
         if (JSON.stringify(rows) !== JSON.stringify(want)) {
             wrong.push(`${file} has Settings… for ${JSON.stringify(rows)}, not ${JSON.stringify(want)}`);
         }

@@ -120,6 +120,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 |---|---|
 | **Desktop**: 3440×1440, three-column layout, focused master in the middle, the rest dimmed. The bar shows the workspaces by name, and `me` is urgent. [`desktop.png`](docs/mocks/desktop.png) | ![desktop](docs/mocks/desktop.png) |
 | **Bar**: dark and light, every workspace and status state, the clock rules. [`bar.png`](docs/mocks/bar.png) | ![bar](docs/mocks/bar.png) |
+| **Bar at the bottom**: a popover rising from it, popups top right, the minimized tray over it, and the notification center over the bell (§7.1). [`bottom-bar.png`](docs/mocks/bottom-bar.png) | ![bar at the bottom](docs/mocks/bottom-bar.png) |
 | **Layouts**: tile, three-column, two columns + stack, monocle, the single-window rule, and how three-column fills up. [`layouts.png`](docs/mocks/layouts.png) | ![layouts](docs/mocks/layouts.png) |
 | **Switcher**: its five tabs, Apps (the launcher), Workspaces, Windows, Attention and Actions. [`switcher.png`](docs/mocks/switcher.png) | ![switcher](docs/mocks/switcher.png) |
 | **Name prompt**: a new window on home, moving a window, going to a workspace, and a window kept on home (§6.5). [`prompt.png`](docs/mocks/prompt.png) | ![name prompt](docs/mocks/prompt.png) |
@@ -765,7 +766,8 @@ flowchart TD
   - duplicate processes (two idle daemons, two polkit agents);
   - more than one bar per monitor: a second bar-shaped layer, or space
     reserved at any edge beyond the height of tide's own bar (its layer
-    is named `tide-bar`), which a narrow bar or a dock holds;
+    is named `tide-bar`) at its own edge, top or bottom, which a narrow
+    bar or a dock holds;
   - portal backend selection;
   - `hyprctl configerrors`;
   - unscoped autostart entries;
@@ -1935,8 +1937,8 @@ not taken.
 - **The tray.** While the workspace a monitor shows has minimized windows,
   a small tray floats in that monitor's bottom-right corner, with one app
   icon per minimized window.
-  - It's drawn like a popover, 12 px in from both edges. It reserves no
-    space, so nothing re-tiles when it comes or goes; it covers the
+  - It's drawn like a popover, 12 px in from both edges, and 12 px over
+    a bottom bar. It reserves no space, so nothing re-tiles when it comes or goes; it covers the
     corner of the tile under it.
   - The icons are in the order the windows were last used, the latest
     nearest the corner. Since `Super+Z` minimizes the focused window,
@@ -2049,9 +2051,21 @@ See [`bar.png`](docs/mocks/bar.png).
 
 ### 7.1 Layout
 
-- The bar is a top layer-shell panel on every monitor, 36 px tall, with an
-  exclusive zone so tiling starts below it.
-- **It is a plain rectangle flush with the top edge and both sides:** no
+- The bar is a layer-shell panel, on the top layer, on every monitor,
+  36 px tall, with an exclusive zone so tiling stays off it.
+- **It runs along the top edge, or the bottom.** It's at the top unless
+  `barPosition` (§15) says `bottom`. Changing it moves every bar at once,
+  with no restart, and tiling ends above it. tidewm keeps windows off a
+  bottom exclusive zone as off a top one: its `arrangelayers` hands every
+  layer surface to wlroots' `wlr_scene_layer_surface_v1_configure`,
+  whatever its anchors. Hyprland does too *(unverified)*. waybar's bar,
+  the fallback, stays at the top. See
+  [`bottom-bar.png`](docs/mocks/bottom-bar.png).
+- **Everything that opens from it opens away from its edge:** popovers,
+  menus and hover tips drop down from a top bar and rise from a bottom
+  one, the same distance from the item. `Theme.hangEdge` and
+  `Theme.hang` give the edge and gap (`shell/lib/barside.mjs`).
+- **It is a plain rectangle flush with its edge and both sides:** no
   margin, no corner radius, no shadow, no floating pill. Rounded corners
   belong only to things that pop up (popovers, notifications, the launcher).
 - **Left:** tide's logo, two waves in the accent blue
@@ -2081,7 +2095,7 @@ See [`bar.png`](docs/mocks/bar.png).
   Titles do show up in screenshots and screen shares of the bar; having
   the title where waybar had it is worth that.
 - **Hovering the title** shows it in full, uncut, in a small popup
-  below it, drawn as the minimized tray's titles are (§6.7). A long one
+  below it (above it on a bottom bar), drawn as the minimized tray's titles are (§6.7). A long one
   wraps at about 100 characters. With no title there's no popup.
 - **Double-clicking the title** toggles maximize on the window it names, as
   a title bar's double-click would (§6.3). That's always the focused
@@ -2110,17 +2124,20 @@ See [`bar.png`](docs/mocks/bar.png).
   | keyboard layout | Keyboard |
   | keep-awake, session | Idle |
   | notifications, Presenting pill | Notifications |
-  | logo, sharing pill, system monitor | the first page, since none fits |
+  | logo, sharing pill, system monitor | Bar, since no other page fits |
+  | anywhere else on the bar | Bar |
   | the wallpaper, on bare desktop (§15) | Appearance |
 
-  The first page opens even with the panel open on another. A tray
-  icon's right-click stays the app's own menu, its only way in. The
-  layout symbol takes no other click.
+  The bar's own right-click is under every item. An item's grabs the
+  press first (`TapHandler.WithinBounds`), so only its page opens
+  *(unverified: Quickshell can't run here)*. The page opens even with the
+  panel open on another. A tray icon's right-click stays the app's own
+  menu, its only way in. The layout symbol takes no other click.
 - **Each dropdown ends in Settings…**, under a line, which closes it and
   opens the page its item's right-click opens (`shell/SettingsRow.qml`):
   the clocks, volume, mic, network, Bluetooth, battery and session
-  dropdowns. The system monitor's and the sharing pill's have none, as no
-  page fits, nor does the session menu while it asks about a blocked
+  dropdowns. The system monitor's and the sharing pill's have none: their
+  right-click opens Bar, which isn't about them, nor does the session menu while it asks about a blocked
   action.
 - **Hovered, a target shows its whole span** as a rounded rect, the text
   color at 8% over whatever fill it has, and 15% while pressed
@@ -3181,7 +3198,8 @@ See [`notifications.png`](docs/mocks/notifications.png).
 ### Popups
 
 - **Where.** Popups appear top-right of the focused monitor, under the bar,
-  newest on top. At most three show at once; the rest queue.
+  newest on top. With the bar at the bottom they stay top-right, at the
+  screen's edge. Only the center moves. At most three show at once; the rest queue.
 - **Timeouts.** Low urgency lasts 4 s and normal 6 s; hovering pauses the
   timer. Critical stays until dismissed.
 - **Content.** Popups support body markup, images, action buttons, and inline
@@ -3236,6 +3254,8 @@ See [`notifications.png`](docs/mocks/notifications.png).
 ### History
 
 - The **notification center** opens from the bell or `Super+Shift+N`.
+- It hangs from the bar's right end, by the bell: under a top bar, over
+  a bottom one.
 - It groups entries by app and survives a shell restart (stored in
   `$XDG_STATE_HOME/tide/notifications.json`, capped at 200 entries).
 - **Clear all** empties it, and each group has its own ✕.
@@ -3355,7 +3375,7 @@ those can't quiet it.
   shell, not as notifications, so they never reach the history. So do
   `Super+S` and `Super+P`, keep awake's and presenter mode's keys (§10).
 - The OSD is a pill at the bottom center of the focused monitor, visible for
-  1.2 s.
+  1.2 s. A bottom bar lifts it by the bar's height.
 - Volume and mute show whatever changed them. Brightness shows only when
   the brightness keys change it, through `tide brightness STEP`,
   which runs `brightnessctl` and tells the shell the new level. hypridle
@@ -4539,6 +4559,10 @@ to be focused.
     schedule, from the copy their shell keeps for it (§11). The record also
     says light or dark, on a third line, which the lock's face follows; an
     older record without it is dark.
+- **The bar's edge.** `barPosition` in `appearance.json` is `top`, the
+  default, or `bottom` (§7.1). Anything else fails at load, naming the
+  setting. A machine can set its own in `appearance.local.json`, which the
+  Bar page writes (§16).
 - **Fonts and icons:**
   - **Inter** for UI and **Ubuntu Mono** (roughly 11 pt) for code. That is
     one setting in `appearance.json`, handed to GTK (`font-name`,
@@ -4585,6 +4609,7 @@ tide's own, and links out for the rest:
 | Floating | the rules that float a window by its class and title, and the floating windows no rule covers yet (§6.4) |
 | **General** | |
 | Appearance | dark / light / automatic, schedule, dim strength, wallpaper image or color, and its position, with a preview |
+| Bar | where the bar runs: the top edge or the bottom (§7.1) |
 | Notifications | Do not disturb on a schedule, whether critical alerts break through, and the muted apps and sites (§9) |
 | Clipboard | the history on or off, how many copies it keeps, and Clear history (§8.4) |
 | Clocks | the system's time zone; zones, order, labels, 24 h, dedupe-local |
@@ -5149,6 +5174,13 @@ stays hand-written.
   - A change takes effect at the next login. Nothing runs from the page.
   - Over IPC, `addStartup COMMAND`, `moveStartup COMMAND STEP` and
     `removeStartup COMMAND` do what the page does.
+- **Bar** sets where the bar runs (§7.1). A right-click on the bar opens
+  it, off any item or on one no other page fits (§7.1's table).
+  - **Position**, which ‹ and › step between Top and Bottom, is
+    `barPosition` in `appearance.local.json` (§15). Every bar moves at
+    once, and what opens from it with it.
+  - Which status icons the bar shows, and their order, are to come
+    (TODO.md).
 - **Notifications** sets §9's, in `notifications.json` and
   `notifications.local.json`, and lists `muted` from `workspaces.json`.
   - A switch turns Do not disturb on or off now, as the bell does.

@@ -146,7 +146,9 @@ The Quickshell bar has the workspaces by name (the standing ones from
 `~/.config/tide/workspaces.json`, home first; SPEC.md §6.5), the layout symbol, the tray, the
 clocks and their popover, a keep-awake toggle, network, Bluetooth, volume
 and battery with their percentages, the system monitor (CPU %, with top
-processes, memory and temperature) and the session menu, plus the volume and mic-mute OSD. To use it, install
+processes, memory and temperature) and the session menu, plus the volume and mic-mute OSD. It runs
+along the top of each monitor, or the bottom with Settings' Bar page
+(`barPosition`, SPEC.md §15). To use it, install
 Quickshell (above), run `make install` and `sudo make install-session`,
 then log in to tide again (or `systemctl --user restart tide`).
 The clocks need `tide-tz` on `PATH`, and the system monitor's temperature

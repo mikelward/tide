@@ -7,6 +7,7 @@ import Quickshell.Services.UPower
 import Quickshell.Wayland
 import "lib/appearance.mjs" as Appearance
 import "lib/audio.mjs" as Audio
+import "lib/barside.mjs" as BarSide
 import "lib/clipboard.mjs" as Clip
 import "lib/dnd.mjs" as Dnd
 import "lib/floating.mjs" as FloatRules
@@ -289,7 +290,8 @@ PanelWindow {
         // lightWallpaper or darkWallpaper, a file or a color such as
         // "#1a1d2e" ("" for the default), or a lightWallpaperPosition or
         // darkWallpaperPosition (fill, fill-top, fill-bottom, fit or
-        // stretch). Answers why not, or "".
+        // stretch), or barPosition (top or bottom). Answers why not, or
+        // "".
         function setAppearance(key: string, value: string): string {
             if (key === "latitude" || key === "longitude") {
                 const c = Appearance.parseCoordinate(key, value);
@@ -2654,6 +2656,92 @@ PanelWindow {
                             wrapMode: Text.Wrap
                             textFormat: Text.PlainText
                             text: appearance.refused
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Bar: where it runs, top or bottom (SPEC.md §16).
+                    Column {
+                        id: barPage
+
+                        // Why the last change made here was refused, until
+                        // the next one or another page.
+                        property string refused: ""
+
+                        function set(key, value) {
+                            refused = AppearanceData.set(key, value);
+                            root.report(refused);
+                        }
+
+                        onVisibleChanged: refused = ""
+                        visible: root.current.id === "bar"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        // Which edge the bar runs along (§7.1), which ‹
+                        // and › step between. It moves at once. It's
+                        // appearance.json's barPosition (§15).
+                        Item {
+                            id: barRow
+
+                            readonly property int at: BarSide.barChoiceAt(AppearanceData.settings)
+
+                            width: barPage.width
+                            implicitHeight: 32
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Position"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+
+                                StepButton {
+                                    name: "go-previous-symbolic"
+                                    value: barRow.at
+                                    next: BarSide.steppedBarChoice(barRow.at, -1)
+                                    onActivated: barPage.set("barPosition", Appearance.BAR_CHOICES[next].position)
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 92
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: Appearance.BAR_CHOICES[barRow.at].label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                StepButton {
+                                    name: "go-next-symbolic"
+                                    value: barRow.at
+                                    next: BarSide.steppedBarChoice(barRow.at, 1)
+                                    onActivated: barPage.set("barPosition", Appearance.BAR_CHOICES[next].position)
+                                }
+                            }
+                        }
+
+                        Text {
+                            visible: barPage.refused !== ""
+                            x: 10
+                            width: barPage.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: barPage.refused
                             color: Theme.danger
                             font.family: Theme.font
                             font.pixelSize: 12

@@ -7,8 +7,9 @@ import "lib/minimized.mjs" as Min
 import "lib/workspaces.mjs" as Ws
 
 // One monitor's tray of minimized windows (SPEC.md §6.7): in the
-// bottom-right corner, an app icon per window minimized from the workspace
-// this monitor shows, the latest used nearest the corner. Hovering one
+// bottom-right corner, over the bar when it's at the bottom, an app icon
+// per window minimized from the workspace this monitor shows, the latest
+// used nearest the corner. Hovering one
 // shows its title, and a click restores it. It floats, reserving no space,
 // and is there only while it has something in it.
 PanelWindow {
@@ -32,7 +33,8 @@ PanelWindow {
     visible: root.list.length > 0
     anchors.bottom: true
     anchors.right: true
-    margins.bottom: 12
+    // Over a bottom bar, as it ignores the bar's exclusive zone.
+    margins.bottom: Theme.aboveBar(12)
     margins.right: 12
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "tide-minimized"

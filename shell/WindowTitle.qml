@@ -54,10 +54,10 @@ Text {
             }
         }
     }
-    // Hovering it shows the title in full below it (SPEC.md §7.1), as the
-    // minimized tray shows an icon's title (MinimizedTray.qml). A
-    // HoverHandler takes no clicks, so the double-click still reaches the
-    // TapHandler.
+    // Hovering it shows the title in full below it, or above it on a
+    // bottom bar (SPEC.md §7.1), as the minimized tray shows an icon's
+    // title (MinimizedTray.qml). A HoverHandler takes no clicks, so the
+    // double-click still reaches the TapHandler.
     HoverHandler {
         id: hover
     }
@@ -74,9 +74,10 @@ Text {
     PopupWindow {
         visible: root.hoverText !== ""
         anchor.item: root
-        anchor.edges: Edges.Bottom
-        anchor.gravity: Edges.Bottom
-        anchor.margins.bottom: -8
+        anchor.edges: Theme.hangEdge
+        anchor.gravity: Theme.hangEdge
+        anchor.margins.top: Theme.hang(8).top
+        anchor.margins.bottom: Theme.hang(8).bottom
         color: "transparent"
         implicitWidth: full.width + 18
         implicitHeight: full.implicitHeight + 10

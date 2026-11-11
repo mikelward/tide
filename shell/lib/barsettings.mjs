@@ -1,14 +1,17 @@
 // The settings page a right-click on each bar item opens (SPEC.md §7.1):
-// a page's id in settings.mjs's PAGES, or "" for the panel's first page
-// where no page fits. The tray isn't here: its right-click is the app's
-// own menu. tide for macOS copies this file as its dashboard/tide-barsettings.js.
+// a page's id in settings.mjs's PAGES, "bar" (the Bar page) where no
+// other page fits, or "" for the panel's first page. `bar` is the bar
+// itself, a right-click anywhere that isn't an item. The tray isn't here:
+// its right-click is the app's own menu. tide for macOS copies this file
+// as its dashboard/tide-barsettings.js.
 export const BAR_SETTINGS = Object.freeze({
-    logo: "",
+    bar: "bar",
+    logo: "bar",
     workspaces: "workspaces",
     layout: "layouts",
     title: "floating",
     presenter: "notifications",
-    sharing: "",
+    sharing: "bar",
     mic: "sound",
     keyboard: "keyboard",
     keepawake: "idle",
@@ -16,7 +19,7 @@ export const BAR_SETTINGS = Object.freeze({
     network: "network",
     volume: "sound",
     battery: "power",
-    sysmon: "",
+    sysmon: "bar",
     notifications: "notifications",
     session: "idle",
     clocks: "clocks",

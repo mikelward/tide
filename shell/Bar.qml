@@ -5,10 +5,11 @@ import Quickshell.Wayland
 import "lib/barclick.mjs" as Click
 import "lib/title.mjs" as Title
 import "lib/barsettings.mjs" as BarSettings
+import "lib/settings.mjs" as Settings
 
 // One bar per monitor (SPEC.md §7.1): a plain rectangle flush with the top
-// edge and both sides, its exclusive zone keeping tiling below it. Its
-// layer is named tide-bar, which `tide doctor` looks for to tell the space
+// edge, or the bottom one (Theme.barAtBottom), and both sides, its
+// exclusive zone keeping tiling off it. Its layer is named tide-bar, which `tide doctor` looks for to tell the space
 // it reserves from another bar's.
 PanelWindow {
     id: bar
@@ -30,13 +31,30 @@ PanelWindow {
     // Only while a popover is open, so a click into one (the network
     // password) can take the keyboard; otherwise hovering the bar would.
     WlrLayershell.keyboardFocus: PopoverData.open !== null ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    // The edge changes live, from the Appearance page: the layer moves
+    // and its exclusive zone with it.
     anchors {
-        top: true
+        top: !Theme.barAtBottom
+        bottom: Theme.barAtBottom
         left: true
         right: true
     }
     implicitHeight: Theme.barHeight
     color: Theme.barBg
+
+    // A right-click on the bar but off its items opens the Bar page
+    // (SPEC.md §7.1). Under everything: an item's own right-click grabs
+    // the press first (BarHit.qml), and the tray's MouseArea takes its own.
+    Item {
+        anchors.fill: parent
+        z: -2
+
+        TapHandler {
+            acceptedButtons: Qt.RightButton
+            gesturePolicy: TapHandler.WithinBounds
+            onTapped: SettingsData.open(BarSettings.opened(BarSettings.page("bar"), Settings.PAGES))
+        }
+    }
 
     // How far the wave logo and the workspaces reach past their ends: the
     // logo out to the bar's left edge, and the gap between them split.

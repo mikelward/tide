@@ -1055,10 +1055,11 @@ fi
 #   each monitor's `reserved` is the space layers' exclusive zones (and
 #   monitor rules) take from its edges, in the same logical pixels. Where
 #   tide's own bar (namespace tide-bar) is on a monitor, anything reserved
-#   beyond its height is something else holding an edge: a bar too narrow
-#   for the shape test, a dock, or a monitor rule's reservation. The bar
-#   is matched wherever it sits, since space reserved above it pushes it
-#   down. Under waybar there's no tide-bar, and only the shape test runs.
+#   beyond its height, at the edge it's on (the top or bottom half, as
+#   appearance.json's barPosition puts it), is something else holding an
+#   edge: a bar too narrow for the shape test, a dock, or a monitor rule's
+#   reservation. The bar is matched wherever it sits in that half, since
+#   space reserved beyond it pushes it in. Under waybar there's no tide-bar, and only the shape test runs.
 #
 # Prints "MONITOR<tab>bars<tab>N<tab>NAMESPACES" or
 # "MONITOR<tab>reserved<tab>WHERE", one line per monitor with a problem.
@@ -1080,11 +1081,13 @@ bars_on_monitors() {
         | [($layers.levels["1"] // [])[], ($layers.levels["2"] // [])[], ($layers.levels["3"] // [])[]] as $all
         | [$all[] | select(.x >= $m.x and .x < $m.x + $w and .y >= $m.y and .y - $m.y < $h / 8
                            and .w >= $w / 2 and .h <= $h / 8)] as $bars
-        | ([$all[] | select(.namespace == "tide-bar") | .h] | max) as $ours
+        | [$all[] | select(.namespace == "tide-bar")] as $ours
+        | ([$ours[] | select(.y - $m.y < $h / 2) | .h] | max // 0) as $top
+        | ([$ours[] | select(.y - $m.y >= $h / 2) | .h] | max // 0) as $bottom
         | ($m.reserved // [0, 0, 0, 0]) as $r
-        | (if $ours == null then [] else
-              [if $r[1] > $ours then "\($r[1] - $ours) px at the top" else empty end,
-               if $r[3] > 0 then "\($r[3]) px at the bottom" else empty end,
+        | (if ($ours | length) == 0 then [] else
+              [if $r[1] > $top then "\($r[1] - $top) px at the top" else empty end,
+               if $r[3] > $bottom then "\($r[3] - $bottom) px at the bottom" else empty end,
                if $r[0] > 0 then "\($r[0]) px on the left" else empty end,
                if $r[2] > 0 then "\($r[2]) px on the right" else empty end]
            end) as $extra
@@ -1111,13 +1114,15 @@ bars_on_tidewm() {
           | [$all[] | .rect as $b | select($b.x >= $m.x and $b.x < $m.x + $m.width
                      and $b.y >= $m.y and $b.y - $m.y < $m.height / 8
                      and $b.width >= $m.width / 2 and $b.height <= $m.height / 8)] as $bars
-          | ([$all[] | select(.namespace == "tide-bar") | .rect.height] | max) as $ours
+          | [$all[] | select(.namespace == "tide-bar") | .rect] as $ours
+          | ([$ours[] | select(.y - $m.y < $m.height / 2) | .height] | max // 0) as $top
+          | ([$ours[] | select(.y - $m.y >= $m.height / 2) | .height] | max // 0) as $bottom
           | .window_area as $w
           | {top: ($w.y - $m.y), bottom: (($m.y + $m.height) - ($w.y + $w.height)),
              left: ($w.x - $m.x), right: (($m.x + $m.width) - ($w.x + $w.width))} as $r
-          | (if $ours == null then [] else
-                [if $r.top > $ours then "\($r.top - $ours) px at the top" else empty end,
-                 if $r.bottom > 0 then "\($r.bottom) px at the bottom" else empty end,
+          | (if ($ours | length) == 0 then [] else
+                [if $r.top > $top then "\($r.top - $top) px at the top" else empty end,
+                 if $r.bottom > $bottom then "\($r.bottom - $bottom) px at the bottom" else empty end,
                  if $r.left > 0 then "\($r.left) px on the left" else empty end,
                  if $r.right > 0 then "\($r.right) px on the right" else empty end]
              end) as $extra
