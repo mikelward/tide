@@ -1840,8 +1840,12 @@ launch() {
 # Plasma's session does (XDG_CURRENT_DESKTOP=KDE), and fails the test
 # unless Meta+Space's `launcher toggle` opens it, "cafepro" and Enter run
 # Café Probe through kstart by its desktop ID, and "zebra" and Enter open a
-# System Settings page that's hidden from menus. A stand-in kstart on its
-# PATH keeps each command. It must not ask Hyprland, which Plasma doesn't
+# System Settings page that's hidden from menus. Then, on its Windows tab,
+# "probe" and Enter must activate KWin's window of that title, and on its
+# Workspaces tab, "re" and Enter go to that desktop. A stand-in kstart on
+# its PATH keeps each command, and a stand-in busctl answers as KWin's
+# D-Bus does (shell/lib/kwin_test.mjs has KWin's own answers) and keeps
+# each call. It must not ask Hyprland, which Plasma doesn't
 # run, or report from its files. Its icons are Plasma's theme, which isn't
 # here, so a placeholder icon passes. Its log is $tmp/kde.qs.log.
 kde() {
@@ -1852,6 +1856,22 @@ kde() {
         >"$tmp/home/.local/share/applications/kcm_tidezebra.desktop" || exit 1
     printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s/kstarted"\n' "$tmp" >"$tmp/bin/kstart" || exit 1
     chmod +x "$tmp/bin/kstart" || exit 1
+    cat >"$tmp/bin/busctl" <<EOF || exit 1
+#!/bin/sh
+printf '%s\n' "\$*" >>"$tmp/busctl"
+case "\$*" in
+*get-property*desktops*)
+    echo '{"type":"a(uss)","data":[[0,"d1","in"],[1,"d2","re"]]}'
+    echo '{"type":"s","data":"d1"}' ;;
+*Match*)
+    echo '{"type":"a(sssida{sv})","data":[[["0_{w1}","Probe page","wayland",100,0.8,{}],["0_{w2}","shell","wayland",100,0.8,{}],["8_d2","re","user-desktop",30,0.5,{}]]]}' ;;
+*getWindowInfo*w1*)
+    echo '{"type":"a{sv}","data":[{"uuid":{"type":"s","data":"{w1}"},"desktopFile":{"type":"s","data":"tide-test-probe"},"desktops":{"type":"as","data":["d2"]}}]}' ;;
+*getWindowInfo*w2*)
+    echo '{"type":"a{sv}","data":[{"uuid":{"type":"s","data":"{w2}"},"desktopFile":{"type":"s","data":"foot"},"desktops":{"type":"as","data":["d1"]}}]}' ;;
+esac
+EOF
+    chmod +x "$tmp/bin/busctl" || exit 1
     keyboard
     env -i PATH="$tmp/bin:$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
         ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
@@ -1908,6 +1928,42 @@ kde() {
         sed 's/^/  kstart /' "$tmp/kstarted" >&2
         exit 1
     fi
+    # KWin's windows and desktops: each tab reads them as it opens, so the
+    # query waits for that read to be in
+    for _tab in "windows:probe:Run ss 0_{w1} " "workspaces:re:set-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager current s d2"; do
+        _name=${_tab%%:*}
+        _rest=${_tab#*:}
+        _query=${_rest%%:*}
+        _call=${_rest#*:}
+        _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
+        _reads=$(grep -c "read 2 of KWin's windows and 2 desktops" "$log")
+        ipc call switcher toggle "$_name" >/dev/null || exit 1
+        focused "$_focus"
+        i=0
+        until test "$(grep -c "read 2 of KWin's windows and 2 desktops" "$log")" -gt "$_reads"; do
+            if waited "the launcher on Plasma didn't read KWin's windows on its $_name tab" "$i"; then
+                cat "$tmp/busctl" >&2
+                grep -v '^\[' "$log" >&2
+                exit 1
+            fi
+            sleep 0.1
+            i=$((i + 1))
+        done
+        timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+            LANG=C.UTF-8 "$wtype_path" "$_query
+" >"$tmp/wtype.log" 2>&1
+        typed $? "the launcher on Plasma"
+        i=0
+        until grep -qF -- "$_call" "$tmp/busctl" 2>/dev/null; do
+            if waited "the launcher on Plasma's $_name tab didn't ask KWin for $_call" "$i"; then
+                cat "$tmp/busctl" >&2
+                grep -v '^\[' "$log" >&2
+                exit 1
+            fi
+            sleep 0.1
+            i=$((i + 1))
+        done
+    done
     kill "$qs_pid"
     wait "$qs_pid"
     qs_pid=
@@ -1921,7 +1977,7 @@ kde() {
         cat "$tmp/reports" >&2
         exit 1
     fi
-    echo "ok: the launcher on Plasma runs an app, and a System Settings page hidden from menus, through kstart"
+    echo "ok: the launcher on Plasma runs an app, and a System Settings page hidden from menus, through kstart, and goes to KWin's windows and desktops"
 }
 
 # share: on the shell launch() started, asks the share picker for a share

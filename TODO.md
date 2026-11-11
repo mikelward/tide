@@ -190,12 +190,12 @@ once you have agreed with it or reversed it.
   only until the next scheduled change, and the greeter runs before it
   could matter. Reversible: write the flip into `look.json`.
 
-- **The KDE launcher is a second Quickshell config, with Apps and Actions
-  only** (2026-11-07, SPEC.md §8.5), rather than `shell.qml` with a KDE
-  mode, or a KWin backend in `Compositor.qml` for the Windows tab. Plasma
-  has its own window switching, and a separate config can't start the
-  bar or anything else tide's session owns. Reversible: a Windows tab can
-  come later through a KWin script.
+- **The KDE launcher is a second Quickshell config** (2026-11-07,
+  SPEC.md §8.5), rather than `shell.qml` with a KDE mode: a separate config
+  can't start the bar or anything else tide's session owns. Its Workspaces
+  and Windows tabs (2026-11-11) read KWin's D-Bus as it opens
+  (`KWinData.qml`), not `Compositor.qml`, which stays Hyprland's and
+  tidewm's.
 - **Its apps start through their own `Exec`, and log out asks through
   Plasma's prompt** (2026-11-07), not `tide launch` and not straight
   out, as Kickoff does both.
@@ -2477,6 +2477,12 @@ and System Settings pages. Each step is its own PR.
 - [x] **scripts** (mikelward/scripts#411): `setup-tide` enables the
   unit, and `setup-kde` binds `Meta+Space` to `tide-launcher`, which opens
   KRunner when no launcher answers.
+- [x] **Workspaces and Windows tabs**, from KWin's D-Bus through
+  `busctl` (`kwin.mjs`, `KWinData.qml`). Tested by `kwin_test.mjs` on
+  what a headless KWin 6.7.5 answered, and the commands run against one:
+  the lists, going to a desktop and activating a window. Quickshell
+  didn't run there, so `KWinData.qml` and the launcher's wiring are only
+  linted.
 - [ ] **On a real Plasma 6 session**: the surface opens on the focused
   monitor with the keyboard, how long `Meta+Space` takes, that a started
   app gets focus, and the process's memory.

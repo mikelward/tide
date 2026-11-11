@@ -11,9 +11,9 @@ import { windowEntry, windowMuted } from "./mute.mjs";
 // The tabs, in order.
 export const TABS = Object.freeze(["apps", "workspaces", "windows", "attention", "actions"]);
 
-// The tabs on KDE Plasma (SPEC.md §8.5), which has its own ways to
-// workspaces and windows.
-export const PLASMA_TABS = Object.freeze(["apps", "actions"]);
+// The tabs on KDE Plasma (SPEC.md §8.5): KWin's desktops and windows, but
+// no Attention, which is tide's focus guard's.
+export const PLASMA_TABS = Object.freeze(["apps", "workspaces", "windows", "actions"]);
 
 // The tabs on Plasma when `plasma`, or else tide's.
 export function tabsFor(plasma) {
@@ -47,7 +47,7 @@ export function footerKeys(tab, plasma = false) {
     return [["↑↓", "select"], ["↵", apps || tab === "actions" ? "run" : "go"]]
         .concat(apps && !plasma ? [["Ctrl+↵", "new workspace"]] : [])
         .concat(apps ? [["PgDn", "next section"]] : [])
-        .concat(tab === "windows" || tab === "attention" ? [["Ctrl+M", "mute"]] : [])
+        .concat((tab === "windows" || tab === "attention") && !plasma ? [["Ctrl+M", "mute"]] : [])
         .concat([["Tab", "next tab"], ["Esc", "close"]]);
 }
 
@@ -142,6 +142,8 @@ export function workspaceRows(list, query) {
                 icon: w.app,
                 current: w.state === "current",
                 urgent: w.urgent,
+                // KWin's desktop ID on Plasma, where two may share a name
+                desktop: w.desktop ?? null,
             },
             positions: [],
             section: "",

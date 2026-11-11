@@ -221,6 +221,9 @@ if test "\$1" = ipc; then
         *"call launcher open"*) if test -e "\$XDG_RUNTIME_DIR/launcher-open"; then : >"\$XDG_RUNTIME_DIR/launcher-reopen"; else : >"\$XDG_RUNTIME_DIR/launcher-open"; fi ;;
         # Meta+Space on Plasma, the first time and then the second.
         *"call launcher toggle"*) if test -e "\$XDG_RUNTIME_DIR/kde-toggle"; then : >"\$XDG_RUNTIME_DIR/kde-retoggle"; else : >"\$XDG_RUNTIME_DIR/kde-toggle"; fi ;;
+        # Its Windows and Workspaces tabs, each marked.
+        *"call switcher toggle windows"*) : >"\$XDG_RUNTIME_DIR/switcher-windows" ;;
+        *"call switcher toggle workspaces"*) : >"\$XDG_RUNTIME_DIR/switcher-workspaces" ;;
         # Keys' old page id, which opens Keyboard at its shortcuts, or
         # another page with DIR/keys-elsewhere.
         *"call settings openPage keys"*) if test -e "\$(dirname "\$0")/keys-elsewhere"; then echo idle; else echo keyboard; fi >"\$XDG_RUNTIME_DIR/settings-page" ;;
@@ -983,7 +986,15 @@ kde_ran() {
     printf '%s; %s; %s; kstart %s; %s; %s; %s; kstart %s' \
         "$kde_toggled" "$focused" "$typed" "$1" "$kde_retoggled" "$focused" "$typed" "$2"
 }
-kde_launcher=$(kde_ran "--application tide-test-probe" "--application kcm_tidezebra")
+# Then its Windows tab opens, takes the keyboard, reads KWin's windows and,
+# once the query is typed, brings one up through busctl (the integration
+# test's stand-in); then its Workspaces tab goes to a desktop.
+kde_tab() {
+    printf 'until test -e "$XDG_RUNTIME_DIR/switcher-%s"; do sleep 0.1; done; %s; echo "  INFO: tide: launcher: read 2 of KWin'"'"'s windows and 2 desktops"; %s; busctl --user %s' \
+        "$1" "$focused" "$typed" "$2"
+}
+kde_tabs="$(kde_tab windows 'call org.kde.KWin /WindowsRunner org.kde.krunner1 Run ss "0_{w1}" ""'); $(kde_tab workspaces 'set-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager current s d2')"
+kde_launcher="$(kde_ran "--application tide-test-probe" "--application kcm_tidezebra"); $kde_tabs"
 # What a greeter does once the login step starts it: it takes the keyboard,
 # then logs in on the passwords typed, as greeter_client.py's MODE says.
 login_as() {
@@ -1072,6 +1083,8 @@ check "having typed its name and Enter" test "$(sed -n 6p "$tmp/clean/typed")" =
 check "and a launcher on Plasma that runs what's typed passes" contains "$out" "ok: the launcher on Plasma runs an app, and a System Settings page hidden from menus, through kstart"
 check "having typed an app's query, then a settings page's" test "$(sed -n 7,8p "$tmp/clean/typed")" = "cafepro
 zebra"
+check "then a window's on the Windows tab, and a desktop's on Workspaces" test "$(sed -n 9,10p "$tmp/clean/typed")" = "probe
+re"
 }
 
 case_8() {
@@ -1630,7 +1643,7 @@ echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
 check "a lock that unlocks on the right password passes" test "$code" -eq 0
 check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
-check "having typed a wrong password, then the right one" test "$(sed -n 9,10p "$tmp/unlocks/typed")" = "not-pw
+check "having typed a wrong password, then the right one" test "$(sed -n 11,12p "$tmp/unlocks/typed")" = "not-pw
 pw"
 check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
 }
@@ -1707,7 +1720,7 @@ run "$tmp/clean"
 check "a greeter that logs in to tide on the right password passes" \
     contains "$out" "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
 check "having typed a wrong password, then the right one, then the code" \
-    test "$(sed -n 9,11p "$tmp/clean/typed")" = "not-tide-greeter-test
+    test "$(sed -n 11,13p "$tmp/clean/typed")" = "not-tide-greeter-test
 tide-greeter-test
 246810"
 }
