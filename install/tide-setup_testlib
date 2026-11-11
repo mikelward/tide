@@ -35,8 +35,12 @@ setup() {
     # make install-session installs the entries SESSIONS= names (both, by
     # default): tide's, with TryExec
     # \$FAKE_ENTRY_TRYEXEC (or none, when that's empty), or uwsm; with
-    # \$FAKE_NO_ENTRY it installs none. make install PREFIX=DIR, as
-    # tidewm's, installs DIR/bin/tidewm. \$FAKE_MAKE_FAILS makes a make in
+    # \$FAKE_NO_ENTRY it installs none, and with \$FAKE_NO_TIDEWM_ENTRY not
+    # tidewm's. make install PREFIX=DIR, as
+    # tidewm's, installs DIR/bin/tidewm, which answers -v as tidewm does:
+    # its version on stderr, and 1. With \$FAKE_TIDEWM_BROKEN it's one whose
+    # wlroots is gone, which the dynamic loader says, and 127.
+    # \$FAKE_MAKE_FAILS makes a make in
     # the directory it names fail, and \$FAKE_MAKE_TARGET_FAILS a make of
     # the target it names. It says what it installs, as the real one does.
     cat > "$T/bin/make" <<MOCK
@@ -59,7 +63,16 @@ for arg; do
             case " \$* " in
                 *" install "*)
                     mkdir -p "\${arg#PREFIX=}/bin"
-                    printf "#!/bin/sh\\n" > "\${arg#PREFIX=}/bin/tidewm"
+                    {
+                        printf "#!/bin/sh\\n"
+                        printf "if test -n \\"\\\$FAKE_TIDEWM_BROKEN\\"; then\\n"
+                        printf "    echo \\"tidewm: symbol lookup warning\\" >&2\\n"
+                        printf "    echo \\"tidewm: error while loading shared libraries: libwlroots-0.20.so: cannot open shared object file: No such file or directory\\" >&2\\n"
+                        printf "    exit 127\\n"
+                        printf "fi\\n"
+                        printf "echo \\"dwl v0.1.234\\" >&2\\n"
+                        printf "exit 1\\n"
+                    } > "\${arg#PREFIX=}/bin/tidewm"
                     chmod 755 "\${arg#PREFIX=}/bin/tidewm"
                     ;;
             esac
@@ -85,6 +98,7 @@ case " \$* " in
         esac
         case " \$sessions " in
             *" tide-tidewm "*)
+                test -z "\$FAKE_NO_TIDEWM_ENTRY" || exit 0
                 printf "[Desktop Entry]\\nName=tide (tidewm)\\nExec=tide-session tidewm\\nTryExec=tidewm\\nType=Application\\n" \\
                     > "$T/share/wayland-sessions/tide-tidewm.desktop"
                 ;;
