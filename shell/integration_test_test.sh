@@ -270,7 +270,7 @@ if test "\$1" = ipc; then
         *"call settings moveClock UTC 1"*) : >"\$XDG_RUNTIME_DIR/clocks-set" ;;
         *"call settings setClockSwitch hour24 false"*) : >"\$XDG_RUNTIME_DIR/clocks-switch" ;;
         *"call settings setAppearance dimStrength 0.12"*) : >"\$XDG_RUNTIME_DIR/appearance-set" && : >"\$XDG_RUNTIME_DIR/dim-set" ;;
-        *"call settings setAppearance mode sun"*) echo 'mode "sun" needs latitude and longitude; not changing mode' ;;
+        *"call settings setAppearance light 20:00"*) echo 'light and dark must be different times; not changing light' ;;
         *"call settings addClock US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the clocks" ;;
         *"call settings setSystemZone US/Pacific"*) echo "unknown time zone US/Pacific; use a zone ID from timedatectl list-timezones, such as America/Los_Angeles; not changing the time zone" ;;
         *"call settings setSystemZone Asia/Tokyo"*) : >"\$XDG_RUNTIME_DIR/zone-set" ;;

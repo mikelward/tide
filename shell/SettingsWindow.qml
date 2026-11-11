@@ -2078,6 +2078,9 @@ PanelWindow {
                         id: appearance
 
                         readonly property var settings: AppearanceData.settings
+                        // The time zone's place, which sunrise and sunset
+                        // use with no location set (§15).
+                        readonly property var place: AppearanceData.place
                         readonly property int modeAt: Math.max(0, Appearance.MODE_CHOICES.findIndex(c => c.mode === settings.mode))
                         // Why the last change made here was refused, until
                         // the next one or another page.
@@ -2156,7 +2159,7 @@ PanelWindow {
                                 StepButton {
                                     name: "go-previous-symbolic"
                                     value: appearance.modeAt
-                                    next: Appearance.steppedModeAt(appearance.settings, appearance.modeAt, -1)
+                                    next: Appearance.steppedModeAt(appearance.settings, appearance.modeAt, -1, appearance.place)
                                     onActivated: appearance.set("mode", Appearance.MODE_CHOICES[next].mode)
                                 }
 
@@ -2173,7 +2176,7 @@ PanelWindow {
                                 StepButton {
                                     name: "go-next-symbolic"
                                     value: appearance.modeAt
-                                    next: Appearance.steppedModeAt(appearance.settings, appearance.modeAt, 1)
+                                    next: Appearance.steppedModeAt(appearance.settings, appearance.modeAt, 1, appearance.place)
                                     onActivated: appearance.set("mode", Appearance.MODE_CHOICES[next].mode)
                                 }
                             }
@@ -2241,88 +2244,19 @@ PanelWindow {
                             }
                         }
 
-                        // The location, for sunrise and sunset: shown in any
-                        // mode, since sunrise and sunset can't be chosen
-                        // until it's set.
-                        Repeater {
-                            model: [{ key: "latitude", label: "Latitude, negative for south", example: "such as 37.8" }, { key: "longitude", label: "Longitude, negative for west", example: "such as -122.4" }]
-
-                            Item {
-                                id: coordinate
-
-                                required property var modelData
-
-                                function shown() {
-                                    const v = appearance.settings[modelData.key];
-                                    return v === undefined ? "" : String(v);
-                                }
-
-                                width: appearance.width
-                                implicitHeight: 32
-
-                                Text {
-                                    anchors.left: parent.left
-                                    anchors.leftMargin: 10
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: coordinate.modelData.label
-                                    color: Theme.fg
-                                    font.family: Theme.font
-                                    font.pixelSize: 13
-                                }
-
-                                // As the Keyboard page's names: Enter sets
-                                // it, and Escape or a click elsewhere puts
-                                // back what's set.
-                                Rectangle {
-                                    anchors.right: parent.right
-                                    anchors.rightMargin: 6
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 148
-                                    height: 26
-                                    radius: 6
-                                    color: Theme.surface2
-                                    border.width: degrees.activeFocus ? 1 : 0
-                                    border.color: Theme.accent
-
-                                    TextInput {
-                                        id: degrees
-
-                                        anchors.fill: parent
-                                        anchors.leftMargin: 8
-                                        anchors.rightMargin: 8
-                                        verticalAlignment: TextInput.AlignVCenter
-                                        clip: true
-                                        text: coordinate.shown()
-                                        color: Theme.fg
-                                        font.family: Theme.font
-                                        font.pixelSize: 13
-                                        onAccepted: {
-                                            const c = Appearance.parseCoordinate(coordinate.modelData.key, text);
-                                            if (c.error) {
-                                                appearance.refused = `${c.error}; not changing ${coordinate.modelData.key}`;
-                                                root.report(appearance.refused);
-                                            } else {
-                                                appearance.set(coordinate.modelData.key, c.value);
-                                            }
-                                            keys.forceActiveFocus();
-                                        }
-                                        Keys.onEscapePressed: keys.forceActiveFocus()
-                                        onActiveFocusChanged: {
-                                            if (!activeFocus) {
-                                                text = Qt.binding(() => coordinate.shown());
-                                            }
-                                        }
-
-                                        Text {
-                                            visible: degrees.text === "" && !degrees.activeFocus
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: coordinate.modelData.example
-                                            color: Theme.fgFaint
-                                            font: degrees.font
-                                        }
-                                    }
-                                }
-                            }
+                        // Where sunrise and sunset are for: the time zone's
+                        // city, or why they can't be chosen.
+                        Text {
+                            visible: text !== ""
+                            x: 10
+                            width: appearance.width - 20
+                            topPadding: 4
+                            bottomPadding: 4
+                            wrapMode: Text.Wrap
+                            text: Appearance.locationHint(appearance.settings, appearance.place)
+                            color: Theme.fgFaint
+                            font.family: Theme.font
+                            font.pixelSize: 12
                         }
 
                         // The inactive dim's strength (§6.2), which − and +

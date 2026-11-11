@@ -7,7 +7,9 @@
 // each with its UTC offset in minutes (fractional for the rare offset with
 // seconds) and tzdata's abbreviation:
 //
-//	{"local": {"zone": "Europe/London", "periods": [...]},
+//	{"local": {"zone": "Europe/London",
+//	           "place": {"latitude": 51.5083, "longitude": -0.1253, "city": "London"},
+//	           "periods": [...]},
 //	 "zones": [{"zone": "America/Los_Angeles",
 //	            "periods": [{"start": 1790000000000, "offset": -420, "abbr": "PDT"}, ...]},
 //	           {"zone": "US/Pacific", "error": "unknown time zone US/Pacific; ..."}]}
@@ -23,6 +25,11 @@
 // comes only from the cheap places: a $TZ that names a zone, else
 // /etc/localtime's link into the zoneinfo tree. Otherwise it's empty, and
 // hides no clock.
+//
+// Local's place is where tzdata puts its zone's main city: zone1970.tab's
+// coordinates, else zone.tab's, beside the zone files. Sunrise and sunset
+// (SPEC.md §15) fall back to it when no location is set. A zone in neither,
+// such as UTC, has no place.
 package main
 
 import (
@@ -31,9 +38,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -50,12 +60,30 @@ type names struct {
 	tzSet bool
 	// localtime is /etc/localtime, normally a link into the zoneinfo tree.
 	localtime string
+	// tabs are the zone tables to look local's place up in, best first.
+	tabs []string
 }
 
 func systemNames() names {
 	n := names{localtime: "/etc/localtime"}
 	n.tz, n.tzSet = os.LookupEnv("TZ")
+	// Where Go looks for zone files, $ZONEINFO first when it's a folder.
+	dirs := []string{"/usr/share/zoneinfo", "/usr/share/lib/zoneinfo", "/etc/zoneinfo"}
+	if z := os.Getenv("ZONEINFO"); z != "" {
+		dirs = append([]string{z}, dirs...)
+	}
+	for _, dir := range dirs {
+		n.tabs = append(n.tabs, filepath.Join(dir, "zone1970.tab"), filepath.Join(dir, "zone.tab"))
+	}
 	return n
+}
+
+// place is where tzdata puts a zone's main city, in decimal degrees, north
+// and east positive.
+type place struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	City      string  `json:"city"`
 }
 
 type period struct {
@@ -68,6 +96,7 @@ type period struct {
 
 type zone struct {
 	Zone    string   `json:"zone"`
+	Place   *place   `json:"place,omitempty"`
 	Periods []period `json:"periods,omitempty"`
 	Error   string   `json:"error,omitempty"`
 }
@@ -111,6 +140,7 @@ func run(args []string, stdout, stderr io.Writer, now time.Time, local *time.Loc
 		// or link Go couldn't load leaves time.Local as UTC.
 		if loc, err := time.LoadLocation(name); err == nil && slices.Equal(periods(loc, start, end), out.Local.Periods) {
 			out.Local.Zone = name
+			out.Local.Place = placeOf(name, n.tabs, stderr)
 		}
 	}
 	for _, name := range flags.Args() {
@@ -223,4 +253,89 @@ func periods(loc *time.Location, start, end time.Time) []period {
 		t = next
 	}
 	return list
+}
+
+// placeOf is the zone's place in the first of tabs that lists it, or nil.
+// A table that's missing is skipped; one that can't be read is reported
+// and skipped, since a place is only a fallback.
+func placeOf(name string, tabs []string, stderr io.Writer) *place {
+	for _, tab := range tabs {
+		data, err := os.ReadFile(tab)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, "tide-tz: %v\n", err)
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			// Country codes, coordinates, zone, and maybe comments.
+			f := strings.Split(line, "\t")
+			if strings.HasPrefix(line, "#") || len(f) < 3 || f[2] != name {
+				continue
+			}
+			lat, long, ok := coordinates(f[1])
+			if !ok {
+				fmt.Fprintf(stderr, "tide-tz: %s: bad coordinates %q for %s\n", tab, f[1], name)
+				break
+			}
+			city := strings.ReplaceAll(path.Base(name), "_", " ")
+			return &place{Latitude: lat, Longitude: long, City: city}
+		}
+	}
+	return nil
+}
+
+// coordinates reads ISO 6709 as the zone tables write it: ±DDMM±DDDMM or
+// ±DDMMSS±DDDMMSS, as decimal degrees to four places.
+func coordinates(s string) (float64, float64, bool) {
+	var split int
+	switch len(s) {
+	case 11:
+		split = 5
+	case 15:
+		split = 7
+	default:
+		return 0, 0, false
+	}
+	lat, ok := degrees(s[:split], 2)
+	if !ok {
+		return 0, 0, false
+	}
+	long, ok := degrees(s[split:], 3)
+	if !ok {
+		return 0, 0, false
+	}
+	return lat, long, true
+}
+
+func degrees(s string, width int) (float64, bool) {
+	sign := 1.0
+	switch s[0] {
+	case '+':
+	case '-':
+		sign = -1
+	default:
+		return 0, false
+	}
+	digits := s[1:]
+	if len(digits) != width+2 && len(digits) != width+4 {
+		return 0, false
+	}
+	value := 0.0
+	scale := 1.0
+	for i := 0; i < len(digits); {
+		n := 2
+		if i == 0 {
+			n = width
+		}
+		part, err := strconv.Atoi(digits[i : i+n])
+		if err != nil || (i > 0 && part >= 60) {
+			return 0, false
+		}
+		value += float64(part) / scale
+		scale *= 60
+		i += n
+	}
+	return sign * math.Round(value*10000) / 10000, true
 }

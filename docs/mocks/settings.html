@@ -154,8 +154,9 @@ const wallpaperRow = (label, chip, path) => `<div class="wrow"><span class="l">$
   <span class="path"${path ? '' : ' style="color:var(--fg-faint)"'}>${path || 'default'}</span></div>`;
 const positionRow = (which, label) => `<div class="srow"><span class="l">${which} wallpaper position</span><span class="step"><span class="btn"><i class="ms">chevron_left</i></span><span class="v" style="width:140px">${label}</span><span class="btn"><i class="ms">chevron_right</i></span></span></div>`;
 const appearanceRows = () =>
-  '<div class="srow"><span class="l" style="font-variant-numeric:tabular-nums">Dark until 07:00</span><span class="sw" style="width:92px">Light now</span></div>' +
-  '<div class="srow"><span class="l">Mode</span><span class="step"><span class="btn"><i class="ms">chevron_left</i></span><span class="v" style="width:140px">By the clock</span><span class="btn"><i class="ms">chevron_right</i></span></span></div>' +
+  '<div class="srow"><span class="l" style="font-variant-numeric:tabular-nums">Dark until 06:42</span><span class="sw" style="width:92px">Light now</span></div>' +
+  '<div class="srow"><span class="l">Mode</span><span class="step"><span class="btn"><i class="ms">chevron_left</i></span><span class="v" style="width:140px">Sunrise and sunset</span><span class="btn"><i class="ms">chevron_right</i></span></span></div>' +
+  '<div style="padding:4px 10px;font-size:12px;color:var(--fg-faint)">Los Angeles, from your time zone</div>' +
   '<div class="srow"><span class="l">Dim inactive windows</span><span class="step"><span class="btn"><i class="ms">remove</i></span><span class="v">12%</span><span class="btn"><i class="ms">add</i></span></span></div>' +
   wallpaperRow('Light wallpaper', '', '~/Pictures/dusk.jpg') + positionRow('Light', 'Fill, keep top') +
   `<div class="previews">${preview('DP-1', { width: 3440, height: 1440 }, 'fill-top')}${preview('DP-2', { width: 1440, height: 2560 }, 'fill-top')}</div>` +

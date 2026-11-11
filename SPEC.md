@@ -2258,6 +2258,8 @@ See [`bar.png`](docs/mocks/bar.png).
   tzdata. It lists each zone's periods of constant offset and abbreviation
   for the next 400 days, local's included, and the shell re-reads it at
   each transition. Tests pin both sides of every DST change (§20).
+  For local, it also gives the zone's main city and its coordinates from
+  tzdata's zone tables, for sunrise and sunset (§15).
 - **Local is the bar's last item, on the far right.** Any listed zone that
   is the same zone as local is left out of the hover line, whichever zone
   that is, while `dedupeLocal` is on, as it is by default (below): in
@@ -3832,7 +3834,8 @@ talk, a demo, or a meeting room's screen.
     own dark gradient, as it does for a look it can't read.
   - What's shown before login is no more than the lock already shows, and
     the latitude and longitude for `sun` say where the machine is, which
-    anyone at it knows (maintainer, 2026-11-08).
+    anyone at it knows (maintainer, 2026-11-08). With none set, the copy
+    has the time zone's city's, since the greeter runs no `tide-tz`.
   - A flip from the launcher (§15) isn't copied: the greeter follows the
     schedule.
 - **Hostname.** It leads with the short hostname: the first label, with a
@@ -4495,7 +4498,10 @@ to be focused.
     otherwise. These are the existing times, and both are settings.
   - **`sun`**: light from sunrise to sunset. The times are computed locally
     from a latitude and longitude in `appearance.local.json`, with no network
-    lookup.
+    lookup. With none set, they're the time zone's main city's, from tzdata's
+    `zone1970.tab` (else `zone.tab`), which `tide-tz` reports (§7.3). That's
+    usually within minutes of a typed location; a zone with no city, such as
+    UTC, needs one typed.
   - **`light`** or **`dark`**: fixed.
 
   The schedule follows the same clock as the bar (§7.3), so a change due while the
@@ -4504,8 +4510,10 @@ to be focused.
 
   The settings are `mode`, `light` and `dark` (24-hour times like
   `"07:00"`), and `latitude` and `longitude` (decimal degrees, east and
-  north positive). An unknown setting, a bad value, or `sun` without a
-  latitude and longitude is an error at load (§16.1). Both times are wall
+  north positive). Either one unset is the time zone's. An unknown setting,
+  a bad value, or `sun` with no location and no time zone city is an error
+  at load (§16.1). The shell waits up to five seconds for `tide-tz` before
+  calling it one. Both times are wall
   clock times, so a daylight saving change doesn't move them. Where the sun
   doesn't rise or set that day, `sun` stays dark or light all day.
 
@@ -4944,15 +4952,19 @@ stays hand-written.
   - It shows light or dark now, and until when, with a button to switch
     until the next change, as the launcher's flip does.
   - ‹ and › step through the modes: by the clock, sunrise and sunset,
-    always light and always dark. They step past sunrise and sunset until
-    a location is set, so the modes beyond it are still reachable.
+    always light and always dark. They step past sunrise and sunset while
+    there's no location, typed or from the time zone, so the modes beyond
+    it are still reachable.
   - By the clock, − and + move the light and dark times a quarter hour.
     A step that would land on the other time goes past it, so the two can
     cross, as an overnight schedule needs.
-  - The latitude and longitude are typed and set with Enter. They show in
-    every mode, since sunrise and sunset can't be chosen until they're set.
-  - A setting that wouldn't work with the rest, such as sunrise and sunset
-    with no location, or the same time for light and dark, is refused, and
+  - Under sunrise and sunset, a line names the time zone's city they're
+    for, such as "Los Angeles, from your time zone". A zone with no city,
+    such as UTC, says "Sunrise and sunset need your time zone set to a
+    city" in every mode, since that mode can't be chosen. A location set
+    by hand in the files, or over IPC, shows no line. There's no field for
+    one: choosing a city is in `TODO.md`.
+  - A setting that wouldn't work with the rest, such as the same time for light and dark, is refused, and
     the page says why. So is a file that doesn't parse, which is left as
     it is.
   - − and + step the inactive dim's strength (§6.2) a point at a time,

@@ -1063,8 +1063,8 @@ shell_loaded() {
 # by the bar, then 24-hour time turned off there. Then the Layouts page: none written at startup, then two
 # settings over a hand edit, written to layouts.local.json and the file
 # layout.lua reads, and applied again. Then the Appearance page: two
-# settings set over a hand edit, and sunrise and sunset refused without a
-# longitude. Then the Displays page: no monitor settings written at
+# settings set over a hand edit, and the same time for light and dark
+# refused. Then the Displays page: no monitor settings written at
 # startup, then a scale and a place for the stand-in's monitor over a hand
 # edit, written to outputs.local.json and the file conf reads, and applied
 # again; then the hand-edited monitor reset. Then Start at login: its empty
@@ -1319,11 +1319,11 @@ written_settings() {
     ipc call settings setAppearance light 06:30 >/dev/null || exit 1
     ipc call settings setAppearance latitude 51.5 >/dev/null || exit 1
     ipc call settings setAppearance dimStrength 0.12 >/dev/null || exit 1
-    _refused=$(ipc call settings setAppearance mode sun) || exit 1
+    _refused=$(ipc call settings setAppearance light 20:00) || exit 1
     case $_refused in
-        *'mode "sun" needs latitude and longitude'*) ;;
+        *'light and dark must be different times'*) ;;
         *)
-            echo "FAIL: the shell should refuse sunrise and sunset without a longitude, saying so; it answered: $_refused" >&2
+            echo "FAIL: the shell should refuse light from 20:00 with dark from 20:00, saying so; it answered: $_refused" >&2
             exit 1
             ;;
     esac

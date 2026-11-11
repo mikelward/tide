@@ -28,7 +28,18 @@ Singleton {
     // The settings in effect: the last good ones.
     property var settings: Appearance.DEFAULTS
     property bool loaded: false
-    readonly property var now: Appearance.themeAt(root.settings, clock.minute, root.flipOverride)
+    // Where tzdata puts the local zone's main city, from tide-tz (ClockData),
+    // or null: sunrise and sunset fall back to it with no location set
+    // (§15). Kept as text, so a refresh that finds the same place changes
+    // nothing.
+    readonly property string placeJson: ClockData.table ? JSON.stringify(ClockData.table.localPlace) : "null"
+    readonly property var place: JSON.parse(root.placeJson)
+    // The settings with the place filled in, which decide light or dark.
+    readonly property var located: Appearance.placed(root.settings, root.place)
+    // Whether a load that needs the place still waits for tide-tz, rather
+    // than calling sunrise and sunset with no location an error.
+    property bool placeAwaited: true
+    readonly property var now: Appearance.themeAt(root.located, clock.minute, root.flipOverride)
     readonly property bool dark: root.now.dark
     // When the next change is due as "HH:MM", or "" when the mode is fixed.
     readonly property string until: root.now.next === null ? "" : Appearance.clockTime(root.now.next)
@@ -64,7 +75,7 @@ Singleton {
     readonly property var flipOverride: JSON.parse(flipped.overrideJson)
 
     function flip() {
-        flipped.overrideJson = JSON.stringify(Appearance.flip(root.settings, Date.now(), root.flipOverride));
+        flipped.overrideJson = JSON.stringify(Appearance.flip(root.located, Date.now(), root.flipOverride));
     }
 
     // A flip that has run out is dropped, so it can't come back if the
@@ -153,7 +164,10 @@ Singleton {
             return;
         }
         const broken = [shared.broken, local.broken].filter(b => b !== "");
-        const result = Appearance.loadAppearance(shared.broken ? null : textOf(shared), local.broken ? null : textOf(local), root.settings);
+        const result = Appearance.loadAppearance(shared.broken ? null : textOf(shared), local.broken ? null : textOf(local), root.settings, root.place);
+        if (result.needsPlace && root.place === null && root.placeAwaited) {
+            return; // onPlaceChanged, or placeWait, loads again
+        }
         const errors = broken.concat(result.errors);
         for (const error of errors) {
             console.warn(`tide: ${error}`);
@@ -231,7 +245,7 @@ Singleton {
         if (broken.length > 0) {
             return `${broken[0]}; not changing ${key}`;
         }
-        const result = Appearance.withSetting(localText, key, value, sharedText);
+        const result = Appearance.withSetting(localText, key, value, sharedText, root.place);
         if (result.error) {
             return `${result.error}; not changing ${key}`;
         }
@@ -412,6 +426,26 @@ Singleton {
                 }
             }
             onExited: (code, status) => handle({ type: "exited", code: code })
+        }
+    }
+
+    onPlaceJsonChanged: {
+        root.placeAwaited = false;
+        root.load();
+    }
+
+    // tide-tz answers in moments; one that never does (not installed, say)
+    // leaves sunrise and sunset needing a location typed.
+    Timer {
+        id: placeWait
+
+        interval: 5 * 1000
+        running: true
+        onTriggered: {
+            if (root.placeAwaited) {
+                root.placeAwaited = false;
+                root.load();
+            }
         }
     }
 

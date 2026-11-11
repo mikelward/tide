@@ -31,6 +31,13 @@ test("zoneTable files each zone's periods and names the errors", () => {
     assert.deepEqual([...t.periods.keys()], ["America/Los_Angeles", "Europe/London"]);
     assert.deepEqual(t.errors, [{ zone: "US/Pacific", error: "unknown time zone US/Pacific; use a zone ID" }]);
     assert.equal(t.localError, null);
+    assert.equal(t.localPlace, null, "no place in the output is none");
+});
+
+test("zoneTable passes on local's place", () => {
+    const place = { latitude: 51.5083, longitude: -0.1253, city: "London" };
+    const t = zoneTable({ local: Object.assign({ place }, output.local), zones: [] });
+    assert.deepEqual(t.localPlace, place);
 });
 
 test("zoneTable passes on why local's ID wasn't found", () => {
