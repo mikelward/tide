@@ -133,6 +133,27 @@ else
     echo "$prog: no runtime directory to write to (XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR-}), so a greeter (qs) that fails won't leave the text login" >&2
 fi
 
+# The pointer: the greeter user has no cursor theme of its own, so name an
+# installed one, at the session's size, for Hyprland and Quickshell alike.
+# $TIDE_GREETER_ICON_DIRS stands in for the icon directories in the tests.
+if test -z "${XCURSOR_THEME-}"; then
+    for theme in Adwaita breeze_cursors DMZ-White; do
+        for dir in ${TIDE_GREETER_ICON_DIRS-/usr/share/icons /usr/local/share/icons}; do
+            if test -d "$dir/$theme/cursors"; then
+                XCURSOR_THEME=$theme
+                break 2
+            fi
+        done
+    done
+fi
+if test -n "${XCURSOR_THEME-}"; then
+    echo "$prog: the pointer's theme is $XCURSOR_THEME" >&2
+    export XCURSOR_THEME
+else
+    echo "$prog: found no cursor theme (Adwaita, breeze_cursors or DMZ-White); the pointer is Hyprland's own" >&2
+fi
+export XCURSOR_SIZE="${XCURSOR_SIZE:-24}" HYPRCURSOR_SIZE="${HYPRCURSOR_SIZE:-24}"
+
 export TIDE_GREETER_QML="$qml" TIDE_GREETER_GREETD="$greetd_client"
 # Not exec'd: a Hyprland that fails, as one too old for the greeter's
 # config, leaves the text login. It exits 0 once the greeter has.
