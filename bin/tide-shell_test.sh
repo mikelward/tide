@@ -43,21 +43,30 @@ test -e "$FAKE_OWNED/$3" || { echo "Failed to get credentials: No such device or
 printf 'PID=1\nComm=fake\nUserUnit=%s\n' "$(cat "$FAKE_OWNED/$3")"
 FAKE
 # sleep fails for the delay in $FAKE_SLEEP_FAILS and is the real one
-# otherwise.
+# otherwise. It records who ran it in $FAKE_SLEEPERS, when that's the shell
+# or a loop of its own, none of which may outlive it: not a fake that
+# stays up (sleep 600), nor whatever adopts a sleep whose shell has gone
+# (no cmdline to read, or another's).
 cat > "$fake/sleep" <<FAKE
 #!/bin/sh
+if test "\$1" != 600 && grep -q bin/tide-shell "/proc/\$PPID/cmdline" 2>/dev/null; then echo "\$PPID" >> "\$FAKE_SLEEPERS"; fi
 if test -n "\$FAKE_SLEEP_FAILS" && test "\$1" = "\$FAKE_SLEEP_FAILS"; then
     echo "sleep: broken" >&2
     exit 1
 fi
 exec $(command -v sleep) "\$@"
 FAKE
-# With $FAKE_READY_SAYS it says ready on stderr too, for $stop_on.
+# With $FAKE_READY_SAYS it says ready on stderr too, for $stop_on. With
+# $FAKE_READY_CLAIMS, that name gets its owner only then: a server that's
+# late.
 cat > "$fake/systemd-notify" <<'FAKE'
 #!/bin/sh
 printf 'systemd-notify %s\n' "$*" >> "$FAKE_LOG"
 if test -n "$FAKE_READY_SAYS" && test "$*" = --ready; then
     echo "fake ready" >&2
+fi
+if test -n "$FAKE_READY_CLAIMS" && test "$*" = --ready; then
+    echo "${FAKE_UNIT:-tide.service}" > "$FAKE_OWNED/$FAKE_READY_CLAIMS"
 fi
 exit "${FAKE_NOTIFY_STATUS:-0}"
 FAKE
@@ -67,6 +76,10 @@ cat > "$tmp/theme-daemon" <<'FAKE'
 #!/bin/sh
 printf 'theme-daemon bar=%s\n' "$TIDE_BAR" >> "$FAKE_LOG"
 for n in $FAKE_NAMES; do echo "${FAKE_UNIT:-tide.service}" > "$FAKE_OWNED/$n"; done
+# With $FAKE_UNIT_OF_NOTIFICATIONS, a process in that unit holds that name.
+if test -n "$FAKE_UNIT_OF_NOTIFICATIONS"; then
+    echo "$FAKE_UNIT_OF_NOTIFICATIONS" > "$FAKE_OWNED/org.freedesktop.Notifications"
+fi
 if test -n "$FAKE_DAEMON_STAYS"; then
     echo $$ >> "$FAKE_PIDS"
     exec sleep 600 >/dev/null 2>&1
@@ -230,16 +243,24 @@ run() {
     rm -rf "$tmp/owned"
     mkdir "$tmp/owned"
     : > "$tmp/log"
+    : > "$tmp/sleepers"
+    : > "$tmp/outlived"
     # stderr goes through a pipe, so `cat` finishes only once every writer
     # has: the shell, and the agent's watcher once cleanup stops the agent.
     # The long-lived fakes drop the pipe, so they can't hold it open.
     {
         # shellcheck disable=SC2016  # the session's own sh expands them
-        env PATH="$fake:$swww:$PATH" TIDE_BAR=waybar XDG_CONFIG_HOME="$tmp/config" FAKE_OWNED="$tmp/owned" FAKE_LOG="$tmp/log" FAKE_PIDS="$tmp/pids" \
+        env PATH="$fake:$swww:$PATH" TIDE_BAR=waybar XDG_CONFIG_HOME="$tmp/config" FAKE_OWNED="$tmp/owned" FAKE_LOG="$tmp/log" FAKE_PIDS="$tmp/pids" FAKE_SLEEPERS="$tmp/sleepers" \
             TIDE_THEME_DAEMON="$tmp/theme-daemon" TIDE_POLKIT_AGENT="$tmp/agent" \
             TIDE_WALLPAPER="$tmp/wallpaper.jpg" TIDE_INPUT_SETUP="$tmp/input-setup" TIDE_INPUT_WATCH="$tmp/input-watch" \
             TIDE_SHELL_WAIT=1 "$@" setsid -w sh -c 'echo $$ > "$1"; exec sh "$2"' sh "$tmp/session" "$shell" 2>&1 >/dev/null
         echo $? > "$tmp/status"
+        # The shell has exited, so every loop of its own that slept must
+        # have too: its exit stops them and waits.
+        sort -u "$tmp/sleepers" | while read -r pid; do
+            # kill fails for one that's gone, which is the answer wanted.
+            if kill -0 "$pid" 2>/dev/null; then echo "$pid" >> "$tmp/outlived"; fi
+        done
         cleanup
         # Mostly nothing is left, and kill fails for that; it's a failure
         # only if pgrep still finds something in the group (exit 0), or
@@ -260,6 +281,9 @@ run() {
         fi
     done > "$tmp/err"
     status=$(cat "$tmp/status")
+    if test -s "$tmp/outlived"; then
+        fail "a loop of the shell's outlived it (pid $(tr '\n' ' ' < "$tmp/outlived"))"
+    fi
     if test -s "$tmp/sweep-err"; then
         fail "couldn't kill what the shell left: $(cat "$tmp/sweep-err")"
         rm -f "$tmp/sweep-err"
@@ -403,6 +427,48 @@ check "the failure doesn't name an owner that is there" \
 run FAKE_NAMES="org.freedesktop.Notifications" FAKE_DAEMON_STAYS=1
 check "the failure passes on busctl's last error" \
     contains "$(cat "$tmp/err")" "(last busctl error: Failed to get credentials: No such device or address)"
+
+# A notification server that's late doesn't take a working bar down: once
+# the tray is there, the shell reports ready without it, says so, and says
+# when it turns up. Here it gets its name as ready is reported. The later
+# lines come from a shell still running: its exit ends the look for it.
+tray=org.kde.StatusNotifierWatcher
+stop_on="notifications work"
+run FAKE_NAMES="$tray" FAKE_DAEMON_STAYS=1 FAKE_READY_CLAIMS=org.freedesktop.Notifications
+stop_on=
+check "a late notification server doesn't stop ready" contains "$(cat "$tmp/log")" "systemd-notify --ready"
+check "a late notification server isn't a failed start" test -z "$(grep 'not ready after' "$tmp/err")"
+check "a late notification server is named, with who should own it and what busctl said" \
+    contains "$(cat "$tmp/err")" "no owner in tide.service for: org.freedesktop.Notifications (swaync) after 1 s (last busctl error: Failed to get credentials: No such device or address); the bar is up, so the shell goes on without notifications for now"
+check "a late notification server's arrival is logged" \
+    test -n "$(grep 'org.freedesktop.Notifications has its owner now (swaync), [0-9]* s after the shell went on without it; notifications work' "$tmp/err")"
+# One that never turns up is said once more, and the shell stays up: it ends
+# here only because the test stops the theme daemon.
+stop_on="stops looking"
+run FAKE_NAMES="$tray" FAKE_DAEMON_STAYS=1 TIDE_SHELL_LATE_WAIT=1
+stop_on=
+check "a notification server that never appears doesn't stop ready" contains "$(cat "$tmp/log")" "systemd-notify --ready"
+check "a notification server that never appears is said again, pointing at tide doctor" \
+    contains "$(cat "$tmp/err")" "still no owner in tide.service for org.freedesktop.Notifications (swaync) 1 s later (last busctl error: Failed to get credentials: No such device or address); the shell stays up without notifications and stops looking: run \`tide doctor\`"
+# The shell's exit ends the look for it: run's own check, that no loop of
+# the shell's outlives it, fails otherwise. An hour, so it's still looking.
+stop_on="goes on without notifications"
+run FAKE_NAMES="$tray" FAKE_DAEMON_STAYS=1 TIDE_SHELL_LATE_WAIT=3600
+stop_on=
+check "the look for a late notification server sleeps, so run can tell it ended" test -s "$tmp/sleepers"
+check "a shell that exits while looking says nothing more of it" test -z "$(grep 'still no owner\|has its owner now' "$tmp/err")"
+# A name held outside the unit is late too, and the report says who has it.
+stop_on="goes on without notifications"
+run FAKE_NAMES="$tray" FAKE_DAEMON_STAYS=1 TIDE_SHELL_LATE_WAIT=3600 FAKE_UNIT_OF_NOTIFICATIONS=other.service
+stop_on=
+check "a notification server outside the unit is late, not an owner" \
+    contains "$(cat "$tmp/err")" "no owner in tide.service for: org.freedesktop.Notifications (swaync; held by fake (pid 1) in other.service) after 1 s; the bar is up"
+for bad in 0 soon 3601; do
+    run FAKE_NAMES="$both" TIDE_SHELL_LATE_WAIT="$bad"
+    check "TIDE_SHELL_LATE_WAIT=$bad fails the start, not to be retried" test "$status" -eq 78
+    check "TIDE_SHELL_LATE_WAIT=$bad is reported by name" \
+        contains "$(cat "$tmp/err")" "TIDE_SHELL_LATE_WAIT must be a whole number of seconds from 1 to 3600, not '$bad'"
+done
 
 run FAKE_NAMES="org.freedesktop.Notifications" FAKE_DAEMON_EXIT=5
 check "a theme daemon that exits early fails the start" test "$status" -eq 1
@@ -656,6 +722,13 @@ check "a notification sent says nothing in the log" \
     test -z "$(grep "couldn't show\|notify-send isn't" "$tmp/err")"
 run FAKE_NAMES="org.kde.StatusNotifierWatcher" PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
 check "no notification server, no notification" test -z "$(grep '^notify-send' "$tmp/log")"
+# A late server shows it once it's there.
+stop_on="notifications work"
+run FAKE_NAMES="org.kde.StatusNotifierWatcher" FAKE_DAEMON_STAYS=1 FAKE_READY_CLAIMS=org.freedesktop.Notifications \
+    PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
+stop_on=
+check "an old Quickshell's fallback is a notification once a late server is up" \
+    test "$(grep '^notify-send' "$tmp/log")" = "$notice"
 run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021" \
     FAKE_NOTIFY_SEND_ERR="GDBus.Error: no reply"
 check "a notification that fails doesn't stop the session" contains "$(cat "$tmp/log")" "systemd-notify --ready"
