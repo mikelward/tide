@@ -42,9 +42,9 @@
 #   PATH, and installs wlroots' portal for screen sharing, so the tide
 #   (tidewm) session, an option beside Hyprland's, shows at the login
 #   screen (see build_tidewm). It builds against wlroots 0.20: the distro's
-#   on Debian testing and Arch, and where Debian and Ubuntu have none
-#   (Ubuntu 26.04, Debian 13), one built from pinned tags into tidewm's own
-#   build (see install/wlroots). Each session, Hyprland's and tidewm's,
+#   on Debian testing and Arch, and where the distro has none (Ubuntu
+#   26.04, Debian 13, a Fedora without it), one built from pinned tags into
+#   tidewm's own build (see install/wlroots). Each session, Hyprland's and tidewm's,
 #   shows at the login screen only once its compositor is installed, and
 #   setup warns about one that couldn't be;
 # - runs this checkout's `make install` (the
@@ -250,7 +250,8 @@ TIDEWM_PACMAN_DEPS="base-devel git wlroots0.20 wayland wayland-protocols libinpu
     libxcb xcb-util-wm json-c pcre2 pkgconf xorg-xwayland xdg-desktop-portal-wlr"
 # Fedora's, beside the package that provides wlroots 0.20, which
 # tidewm_build_deps asks dnf for by its pkg-config name, as Fedora names
-# wlroots' packages for their version only some of the time.
+# wlroots' packages for their version only some of the time; with none,
+# install/wlroots' WLROOTS_DNF_DEPS, to build it.
 TIDEWM_DNF_DEPS="gcc make pkgconf-pkg-config git wayland-devel wayland-protocols-devel
     libinput-devel libxkbcommon-devel libxcb-devel xcb-util-wm-devel json-c-devel pcre2-devel
     xorg-x11-server-Xwayland xdg-desktop-portal-wlr"
@@ -2040,10 +2041,12 @@ tidewm_build_deps() {
             fi
             _wlr=$(printf '%s\n' "$_wlr" | sed -n '/./{p;q;}')
             if test -z "$_wlr"; then
-                warn "dnf has no wlroots 0.20, which tidewm builds against; tidewm isn't built"
-                return 1
+                detail "dnf has no wlroots 0.20, so wlroots is built for tidewm"
+                echo "$TIDEWM_DNF_DEPS"
+                echo "$WLROOTS_DNF_DEPS"
+            else
+                echo "$TIDEWM_DNF_DEPS $_wlr"
             fi
-            echo "$TIDEWM_DNF_DEPS $_wlr"
             ;;
         *)
             warn "tidewm isn't built on $(detect_os): setup builds it only on Debian, Ubuntu, Fedora and Arch"
