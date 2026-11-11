@@ -153,8 +153,23 @@ jobs:
       - name: Install Quickshell's build dependencies
         run: |
           # A stalled mirror is given up on and tried again, as in `test`.
-          printf '%s\n' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' 'Acquire::Retries "3";' >/etc/apt/apt.conf.d/80-ci-timeouts
-          apt-get update
+          # An archive that can't be reached fails the update instead of
+          # leaving no package to find, and it's tried again for a minute:
+          # a new container's DNS has failed its first lookups.
+          printf '%s\n' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' 'Acquire::Retries "3";' 'APT::Update::Error-Mode "any";' >/etc/apt/apt.conf.d/80-ci-timeouts
+          tries=0
+          until apt-get update; do
+            tries=$((tries + 1))
+            if test "$tries" -ge 4; then
+              echo "apt-get update failed $tries times; giving up" >&2
+              # What the container resolves names with, and which names resolve.
+              cat /etc/resolv.conf >&2 || echo "can't read /etc/resolv.conf" >&2
+              getent hosts archive.ubuntu.com github.com >&2 || echo "not every name resolves" >&2
+              exit 1
+            fi
+            echo "apt-get update failed; trying again in 15 s" >&2
+            sleep 15
+          done
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build pkg-config git ca-certificates dbus-daemon sway wtype grim python3 \
             libnotify-bin adwaita-icon-theme tzdata \
