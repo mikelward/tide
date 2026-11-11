@@ -328,6 +328,13 @@ test("the greeter idles as the lock does by default: the screensaver, then the d
     assert.deepEqual(displaysCommand(true), ["hyprctl", "dispatch", 'hl.dsp.dpms({ action = "on" })']);
 });
 
+test("on tidewm, the displays go off and on through tide-msg", () => {
+    assert.deepEqual(displaysCommand(false, true), ["tide-msg", "output * power off"]);
+    assert.deepEqual(displaysCommand(true, true), ["tide-msg", "output * power on"]);
+    // The one tide-greeter names, not whichever is first on PATH.
+    assert.deepEqual(displaysCommand(false, true, "/usr/bin/tide-msg"), ["/usr/bin/tide-msg", "output * power off"]);
+});
+
 // Runs events through displaysNext, collecting each call it asks for.
 function displays(events, state = DISPLAYS_INITIAL) {
     const sends = [];

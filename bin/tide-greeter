@@ -1,25 +1,27 @@
 #!/bin/sh
 #
 # The tide greeter (SPEC.md §11), as greetd's default session runs it, as
-# greetd's greeter user: Hyprland with tide's greeter config
-# (share/tide/greeter/hyprland.lua), which shows the greeter
+# greetd's greeter user: a compositor that shows the greeter
 # (share/tide/shell/greeter.qml) on every monitor and exits when the greeter
-# does, so greetd can start the session it chose. The greeter talks to
-# greetd through tide-greetd, beside this command. `make install-session`
-# puts all four under the same PREFIX, which is how this finds the other
-# three.
+# does, so greetd can start the session it chose. The compositor is
+# tidewm, with a config this writes, where tidewm runs and tide-msg is
+# here to end it; else Hyprland, with share/tide/greeter/hyprland.lua. The
+# greeter talks to greetd through tide-greetd, beside this command. `make
+# install-session` puts them all under the same PREFIX, which is how this
+# finds the rest.
 #
 # The keyboard is the system's X11 keymap as localed has it (`localectl
 # set-x11-keymap`; /etc/default/keyboard on Debian), which `setup` sets to
 # the session's layout, so a password is typed at the greeter as in the
-# session. Without localed, Hyprland's default (US) stands, and the journal
-# says so.
+# session. Without localed, the compositor's default (US) stands, and the
+# journal says so.
 #
-# A greeter that can't run still lets you log in: without its files,
-# Hyprland or qs, or when Hyprland or qs fails, it says why and runs
-# agreety, greetd's own text login, where that's installed. Without
+# A greeter that can't run still lets you log in: without its files, a
+# compositor or qs, or when the compositor or qs fails, it says why and
+# runs agreety, greetd's own text login, where that's installed. Without
 # agreety it waits a few seconds and fails, and greetd starts it again.
-# Each start and end, of Hyprland and of the greeter, is in the journal.
+# Each start and end, of the compositor and of the greeter, is in the
+# journal, with which compositor and why.
 #
 # Usage: tide-greeter
 
@@ -28,7 +30,7 @@ prog=tide-greeter
 if test $# -gt 0; then
     case $1 in
         -h | --help)
-            sed -n '3,24p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '3,27p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
     esac
@@ -77,7 +79,35 @@ greetd_client=$(dirname -- "$0")/tide-greetd
 if ! test -x "$greetd_client"; then
     text_login "can't run $greetd_client; install the greeter with \`make install-session\`"
 fi
-for command in Hyprland qs; do
+# The compositor: tidewm, tide's own, where it runs (`tidewm -v`) and
+# tide-msg is beside this to end it, else Hyprland. Which, and why, is
+# logged.
+tide_msg=$(dirname -- "$0")/tide-msg
+compositor=Hyprland
+# `tidewm -v` prints "dwl VERSION" and exits 1, as dwl does, so a version
+# named counts as running, as setup's tidewm_ready takes it; anything else
+# is a tidewm that can't run, such as one missing a library.
+tidewm_runs() {
+    if tw_version=$(tidewm -v 2>&1); then
+        return 0
+    fi
+    case "$(printf '%s\n' "$tw_version" | sed -n '1p')" in
+        "dwl "?* | "tidewm "?*) return 0 ;;
+    esac
+    return 1
+}
+if command -v tidewm >/dev/null 2>&1; then
+    if ! tidewm_runs; then
+        echo "$prog: tidewm -v failed ($(printf '%s\n' "$tw_version" | sed -n '$p')); the greeter runs on Hyprland" >&2
+    elif ! test -x "$tide_msg"; then
+        echo "$prog: can't run $tide_msg, which ends tidewm; the greeter runs on Hyprland" >&2
+    else
+        compositor=tidewm
+    fi
+fi
+echo "$prog: the greeter runs on $compositor" >&2
+
+for command in "$compositor" qs; do
     if ! command -v "$command" >/dev/null 2>&1; then
         text_login "there's no $command on the greeter's PATH ($PATH); rerun setup"
     fi
@@ -157,23 +187,88 @@ export XCURSOR_SIZE="${XCURSOR_SIZE:-24}" HYPRCURSOR_SIZE="${HYPRCURSOR_SIZE:-24
 export TIDE_GREETER_QML="$qml" TIDE_GREETER_GREETD="$greetd_client"
 # Not exec'd: a Hyprland that fails, as one too old for the greeter's
 # config, leaves the text login. It exits 0 once the greeter has.
-echo "$prog: starting Hyprland with the greeter" >&2
-Hyprland --config "$config"
+# quote WORD: WORD as one word for sh.
+quote() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+# tidewm_config: tidewm's config for the greeter, on stdout. One binding
+# that does nothing, so the file's bindings are all there are and
+# config.h's aren't (Ctrl+Alt+F1-F12 switch VT whatever it binds); no
+# window drags; and localed's keymap. A keymap value tidewm's syntax can't
+# carry as one word is left out, and said.
+tidewm_config() {
+    echo "# tide's greeter on tidewm, written by tide-greeter at each start."
+    echo "bindsym XF86Tools nop"
+    echo "floating_modifier none"
+    echo "input type:keyboard {"
+    for _kv in "xkb_layout ${TIDE_GREETER_KB_LAYOUT-}" "xkb_model ${TIDE_GREETER_KB_MODEL-}" \
+        "xkb_variant ${TIDE_GREETER_KB_VARIANT-}" "xkb_options ${TIDE_GREETER_KB_OPTIONS-}"; do
+        _v=${_kv#* }
+        case $_v in
+            "") ;;
+            *[!A-Za-z0-9_,:.+\(\)-]*) echo "$prog: leaving ${_kv%% *} $_v out of tidewm's config: it isn't one word" >&2 ;;
+            *) echo "    $_kv" ;;
+        esac
+    done
+    echo "}"
+}
+
+# The greeter's command on tidewm, which tidewm runs with -s: as
+# greeter/hyprland.lua's on Hyprland, Quickshell on the greeter's QML, its
+# output and a line as it starts and ends in the journal, its exit status
+# in $qs_status_file; then tide-msg ends tidewm. Should tide-msg not
+# start, or fail, the command ends tidewm with SIGTERM, which it takes as
+# a request to quit: tidewm runs it as its own child, so $PPID is tidewm.
+tidewm_command() {
+    _body="echo 'tide-greeter: starting the greeter (qs)'; QS_DISABLE_FILE_WATCHER=1 qs -p $(quote "$qml"); status=\$?; echo \"tide-greeter: the greeter (qs) exited \$status\""
+    if test -n "$qs_status_file"; then
+        _body="$_body; echo \"\$status\" >$(quote "$qs_status_file")"
+    fi
+    printf '%s' "if command -v systemd-cat >/dev/null 2>&1; then { $_body; } 2>&1 | systemd-cat --identifier=tide-greeter; else $_body; fi; $(quote "$tide_msg") exit || { echo 'tide-greeter: tide-msg could not end tidewm; ending it with SIGTERM' >&2; kill -TERM \"\$PPID\"; }"
+}
+
+if test "$compositor" = tidewm; then
+    tw_config=
+    if test -n "$qs_status_file"; then
+        tw_config=$XDG_RUNTIME_DIR/tide-greeter-tidewm.conf
+        if ! tidewm_config >"$tw_config"; then
+            echo "$prog: can't write tidewm's config in $tw_config; the greeter runs on Hyprland" >&2
+            compositor=Hyprland
+        fi
+    else
+        echo "$prog: no runtime directory for tidewm's config; the greeter runs on Hyprland" >&2
+        compositor=Hyprland
+    fi
+    if test "$compositor" = Hyprland && ! command -v Hyprland >/dev/null 2>&1; then
+        text_login "there's no Hyprland on the greeter's PATH ($PATH) either; rerun setup"
+    fi
+fi
+
+echo "$prog: starting $compositor with the greeter" >&2
+if test "$compositor" = tidewm; then
+    # qs reads which compositor it's on from here (shell/lib/compositor.mjs).
+    # And which tide-msg to ask tidewm with: the one beside this, which setup
+    # checked, not whichever is first on the PATH.
+    XDG_CURRENT_DESKTOP=tidewm TIDE_GREETER_MSG=$tide_msg tidewm -c "$tw_config" -s "$(tidewm_command)"
+else
+    Hyprland --config "$config"
+fi
 status=$?
 if test "$status" -ne 0; then
-    text_login "Hyprland exited $status"
+    text_login "$compositor exited $status"
 fi
 
 # Hyprland exited 0, as it does whenever qs ends. qs exits 0 once greetd
 # has the session to start (shell/GreetdClient.qml); any other end is a
 # greeter that failed, and starting it again would only fail again. A
 # status that can't be told is taken as a normal end, and said.
-echo "$prog: Hyprland exited 0" >&2
+echo "$prog: $compositor exited 0" >&2
 if test -z "$qs_status_file"; then
     exit 0
 fi
 if ! test -e "$qs_status_file"; then
-    echo "$prog: Hyprland exited 0 and left no exit status for the greeter (qs) in $qs_status_file; taking it as a normal end" >&2
+    echo "$prog: $compositor exited 0 and left no exit status for the greeter (qs) in $qs_status_file; taking it as a normal end" >&2
     exit 0
 fi
 if ! read -r qs_status <"$qs_status_file"; then

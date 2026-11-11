@@ -22,7 +22,10 @@ Scope {
     property string name: "tide-lock"
     readonly property string badge: Lock.layoutBadge(current.keymap)
     readonly property bool tidewm: Comp.isTidewm(Quickshell.env("XDG_CURRENT_DESKTOP"))
-    readonly property string reader: root.tidewm ? "tide-msg" : "hyprctl"
+    // The tide-msg to ask tidewm with: the greeter names the one setup
+    // checked, beside tide-greeter, rather than whichever is first on PATH.
+    property string msg: "tide-msg"
+    readonly property string reader: root.tidewm ? root.msg : "hyprctl"
 
     property var current: Lock.LAYOUT_INITIAL
 
@@ -52,7 +55,7 @@ Scope {
             running = true;
         }
 
-        command: root.tidewm ? ["tide-msg", "--type", "get_inputs"] : ["hyprctl", "devices", "-j"]
+        command: root.tidewm ? [root.msg, "--type", "get_inputs"] : ["hyprctl", "devices", "-j"]
         Component.onCompleted: root.refresh()
 
         stdout: StdioCollector {

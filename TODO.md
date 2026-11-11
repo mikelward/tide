@@ -1180,6 +1180,16 @@ the session's keys (SPEC.md §5.4). Left:
   (`sessionlib`); tidewm's own spawns, whose output reaches the journal
   through uwsm's unit already.
 
+## The greeter runs only what setup checked
+
+- [ ] **`tide keyboards` by its full path at the greeter.**
+  `LockKeyboards.qml` runs `tide keyboards` through the PATH, so at the
+  greeter a `tide` earlier on the PATH, a link into someone's own build
+  say, runs as the greeter, though setup checks only the PATH's
+  directories. tide-msg had the same gap and now goes by the path
+  tide-greeter names (`TIDE_GREETER_MSG`); `tide`, beside tide-greeter,
+  should too, with `greeter_ready` checking it as it does tide-greetd.
+
 ## The session's splash (SPEC.md §5.3)
 
 - [ ] **A splash in tidewm's session too**, from its startup command.

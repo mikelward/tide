@@ -252,16 +252,20 @@ on failure, scoped to this session only, and visible in one
 
 ### 3.4 Login: greetd plus the tide greeter
 
-greetd runs a stripped Hyprland with the tide greeter, the same QML screen
-as the lock (§11). cage was the other candidate, and multiple monitors rule
-it out (checked on cage 0.3.1):
+greetd runs the tide greeter, the same QML screen as the lock (§11), on
+tidewm where it runs, else on a stripped Hyprland (maintainer,
+2026-11-11). tidewm is tide's own: its defaults are ours to set, it logs
+to stderr, and setup builds it on every distro tide supports. cage was
+the other candidate, and multiple monitors rule it out (checked on cage
+0.3.1):
 
 - it has no layer shell, so a greeter can't put a surface on each output;
 - its `-m extend` stretches one window across every output, and `-m last`
   uses only the last one connected.
 
-Hyprland is installed for the session anyway, and its `hyprctl devices`
-gives the greeter the same layout badge as the lock.
+Both are installed for the sessions anyway, and `tide-msg --type
+get_inputs` or `hyprctl devices` gives the greeter the same layout badge as
+the lock.
 
 ### 3.5 Look
 
@@ -3781,20 +3785,29 @@ talk, a demo, or a meeting room's screen.
 ## 11. Login
 
 - **greetd** runs **`tide-greeter`** as greetd's own greeter user. It
-  starts Hyprland with tide's greeter config (`greeter/hyprland.lua`, §3.4):
-  - every monitor at its preferred mode;
-  - no key bindings, so only Hyprland's built-in VT switch acts on a key;
-  - none of Hyprland's own popups;
-  - a key or a pointer move turns the displays back on;
-  - one program, the greeter: Quickshell (`shell/greeter.qml`), talking to
-    greetd through `tide-greetd` (below).
+  starts a compositor for the greeter (§3.4), and logs which and why:
+  - **tidewm**, where `tidewm -v` runs and `tide-msg` is beside
+    `tide-greeter` to end it. Its config, which `tide-greeter` writes to
+    the runtime directory at each start, binds one key to `nop`, so
+    tidewm's built-in keys are gone and only Ctrl+Alt+F1-F12 switch VT; has
+    no window drags; and has localed's keymap. Its `-s` command runs the
+    greeter, then `tide-msg exit`, or, should that fail, sends tidewm
+    SIGTERM, which it takes as a request to quit. The greeter turns the displays off and on
+    with `tide-msg output * power`.
+  - **Hyprland** otherwise, with tide's greeter config
+    (`greeter/hyprland.lua`): every monitor at its preferred mode; no key
+    bindings, so only Hyprland's built-in VT switch acts on a key; none of
+    Hyprland's own popups; a key or a pointer move turns the displays back
+    on.
+  - Either runs one program, the greeter: Quickshell (`shell/greeter.qml`),
+    talking to greetd through `tide-greetd` (below).
 
-  Once greetd has the session to start, Quickshell exits, Hyprland exits
-  after it, and greetd starts the session. `make install-session` installs
+  Once greetd has the session to start, Quickshell exits, the compositor
+  exits after it, and greetd starts the session. `make install-session` installs
   the command, `tide-greetd`, the config, a copy of the shell (the greeter
   user can't read anyone's `~/.config`) and a greetd config template.
 - **A greeter that can't run still logs you in.** Without its files,
-  Hyprland or `qs`, or when Hyprland exits non-zero, `tide-greeter` says
+  a compositor or `qs`, or when the compositor exits non-zero, `tide-greeter` says
   why and runs `agreety`, greetd's own text login, where it's installed.
   - **So does one whose Quickshell fails.** Hyprland exits 0 however
     Quickshell ended. So the greeter's command leaves Quickshell's exit
