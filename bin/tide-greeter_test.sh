@@ -34,7 +34,9 @@ printf '#!/bin/sh\n' >"$prefix/bin/tide-greetd" || exit 1
 chmod +x "$prefix/bin/tide-greetd" || exit 1
 
 # busctl prints $BUSCTL_OUT and exits $BUSCTL_EXIT, and records its
-# arguments; Hyprland records its arguments and the greeter's environment.
+# arguments; Hyprland records its arguments and the greeter's environment,
+# and leaves $QS_EXIT as qs's exit status where it's told to, as the
+# greeter's command does (greeter/hyprland.lua), or nothing for `none`.
 cat >"$tmp/stubs/busctl" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >"$STUB_LOG.busctl"
@@ -49,6 +51,9 @@ cat >"$tmp/stubs/Hyprland" <<'EOF'
     printf '\n'
     env | grep '^TIDE_GREETER_' | sort
 } >"$STUB_LOG"
+if test -n "${TIDE_GREETER_QS_STATUS-}" && test "${QS_EXIT:-0}" != none; then
+    printf '%s\n' "${QS_EXIT:-0}" >"$TIDE_GREETER_QS_STATUS"
+fi
 exit "${HYPRLAND_EXIT:-0}"
 EOF
 printf '#!/bin/sh\n' >"$tmp/stubs/qs" || exit 1
@@ -61,9 +66,18 @@ chmod +x "$tmp/agreety/agreety" || exit 1
 # The system's commands the greeter needs, without the system's Hyprland,
 # qs or agreety.
 mkdir "$tmp/sys" || exit 1
-for c in sh dirname sed test printf tr cat env grep sort; do
+for c in sh dirname sed test printf tr cat env grep sort rm; do
     ln -s "$(command -v "$c")" "$tmp/sys/$c" || exit 1
 done
+# sleep says how long it was asked to wait, and doesn't.
+cat >"$tmp/sys/sleep" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >>"$STUB_LOG.sleep"
+EOF
+chmod +x "$tmp/sys/sleep" || exit 1
+# The greeter user's runtime directory.
+run="$tmp/run"
+mkdir "$run" || exit 1
 
 # greeter STATUS [ARG...]: runs the installed tide-greeter, leaving its
 # output in $out and what Hyprland got in $ran, and checks that it exits
@@ -71,13 +85,15 @@ done
 greeter() {
     _want=$1
     shift
-    rm -f "$tmp/log" "$tmp/log.busctl"
+    rm -f "$tmp/log" "$tmp/log.busctl" "$tmp/log.sleep"
     out=$(env -i PATH="${GREETER_PATH:-$tmp/stubs:$tmp/sys}" STUB_LOG="$tmp/log" \
         BUSCTL_OUT="${BUSCTL_OUT-}" BUSCTL_EXIT="${BUSCTL_EXIT:-0}" HYPRLAND_EXIT="${HYPRLAND_EXIT:-0}" \
+        QS_EXIT="${QS_EXIT:-0}" XDG_RUNTIME_DIR="${RUNTIME_DIR-$run}" \
         TIDE_GREETER_AGREETY_DIRS="${AGREETY_DIRS-}" \
         "$prefix/bin/tide-greeter" "$@" 2>&1)
     _code=$?
     ran=$(cat "$tmp/log" 2>/dev/null)
+    slept=$(cat "$tmp/log.sleep" 2>/dev/null)
     if test "$_code" -eq "$_want"; then
         pass
     else
@@ -155,6 +171,7 @@ HYPRLAND_EXIT=1
 greeter 1
 check "a Hyprland that fails is reported" contains "$out" "tide-greeter: Hyprland exited 1"
 check "and without agreety, that's said too" contains "$out" "there's no agreety to log in with instead"
+check "and it waits before failing, so greetd doesn't restart it in a tight loop" test "$slept" = 5
 GREETER_PATH=$with_agreety
 greeter 0
 check "a Hyprland that fails leaves the text login" contains "$out" "agreety --cmd /bin/sh"
@@ -162,6 +179,52 @@ check "which says why on the console" contains "$out" "tide's greeter could not 
 HYPRLAND_EXIT=0
 greeter 0
 check "a Hyprland that exits cleanly starts no text login" lacks "$out" "agreety"
+check "a login (qs exits 0) says nothing" test -z "$out"
+check "and waits for nothing" test -z "$slept"
+check "Hyprland is told where to leave qs's exit status" \
+    contains "$ran" "TIDE_GREETER_QS_STATUS=$run/tide-greeter-qs"
+
+# Hyprland exits 0 however the greeter (qs) ended, so a qs that failed
+# leaves the text login too, instead of greetd starting it again and again.
+QS_EXIT=1
+greeter 0
+check "a qs that fails leaves the text login" contains "$out" "agreety --cmd /bin/sh"
+check "which says why in the journal" contains "$out" "tide-greeter: the greeter (qs) exited 1"
+check "and on the console" contains "$out" "tide's greeter could not start: the greeter (qs) exited 1"
+QS_EXIT=139
+greeter 0
+check "a qs that's killed leaves the text login" contains "$out" "agreety --cmd /bin/sh"
+check "which names the signal" contains "$out" "the greeter (qs) was killed by signal 11"
+GREETER_PATH="$tmp/stubs:$tmp/sys" QS_EXIT=1
+greeter 1
+check "a qs that fails with no agreety is reported" contains "$out" "the greeter (qs) exited 1"
+check "and fails after a wait, not at once" test "$slept" = 5
+GREETER_PATH=$with_agreety
+# A status from an earlier run isn't this one's.
+QS_EXIT=none
+printf '1\n' >"$run/tide-greeter-qs" || exit 1
+greeter 0
+check "with no status from qs, there's no text login" lacks "$out" "agreety"
+check "and that's said" contains "$out" "left no exit status for the greeter (qs)"
+QS_EXIT=garbage
+greeter 0
+check "a status that isn't a number starts no text login" lacks "$out" "agreety"
+check "and that's said" contains "$out" "isn't a number"
+# Nowhere to leave the status: as before, with the reason.
+QS_EXIT=1 RUNTIME_DIR="$tmp/no-such-dir"
+greeter 0
+check "with no runtime directory, there's no text login" lacks "$out" "agreety"
+check "and that's said" contains "$out" "no runtime directory to write to"
+check "and Hyprland is given no file to write" lacks "$ran" "TIDE_GREETER_QS_STATUS"
+RUNTIME_DIR=
+greeter 0
+check "with XDG_RUNTIME_DIR empty, there's no text login either" lacks "$out" "agreety"
+unset RUNTIME_DIR
+# A Hyprland that failed is reported as that, whatever qs left.
+HYPRLAND_EXIT=1
+greeter 0
+check "a Hyprland that fails is the reason given" contains "$out" "could not start: Hyprland exited 1"
+HYPRLAND_EXIT=0 QS_EXIT=0
 # Off the PATH, it's found where the distros put it.
 GREETER_PATH="$tmp/stubs:$tmp/sys" AGREETY_DIRS="$tmp/nowhere $tmp/agreety" HYPRLAND_EXIT=1
 greeter 0

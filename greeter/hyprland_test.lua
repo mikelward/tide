@@ -69,14 +69,17 @@ end
 
 -- Runs `cmd` under sh with qs and hyprctl stubbed to print what they're
 -- given, and returns what they printed. A command that exits nonzero fails
--- the test, whatever it printed.
-local function run(cmd)
+-- the test, whatever it printed. With `qs_exit`, qs exits with that.
+local function run(cmd, qs_exit)
     local bin = os.tmpname()
     os.remove(bin)
     assert(os.execute("mkdir -p '" .. bin .. "'"))
     for _, name in ipairs({ "qs", "hyprctl" }) do
         local f = assert(io.open(bin .. "/" .. name, "w"))
         f:write("#!/bin/sh\nprintf '" .. name .. "'\nprintf ' [%s]' \"$@\"\nprintf ' watcher=%s\\n' \"${QS_DISABLE_FILE_WATCHER:-}\"\n")
+        if name == "qs" and qs_exit then
+            f:write("exit " .. qs_exit .. "\n")
+        end
         f:close()
         assert(os.execute("chmod +x '" .. bin .. "/" .. name .. "'"))
     end
@@ -165,6 +168,40 @@ test("with no greeter given, it says so and exits Hyprland", function()
     local out = run(start())
     eq(out, "tide-greeter: no TIDE_GREETER_QML, so no greeter to run\n"
         .. "hyprctl [dispatch] [hl.dsp.exit()] watcher=\n", "what ran")
+end)
+
+-- What `path` holds, or nil without it.
+local function slurp(path)
+    local f = io.open(path)
+    if not f then
+        return nil
+    end
+    local text = f:read("a")
+    f:close()
+    return text
+end
+
+test("the greeter's exit status is left where tide-greeter asked, then Hyprland exits", function()
+    -- A directory, for a file name with a quote and a space in it.
+    local dir = os.tmpname()
+    os.remove(dir)
+    assert(os.execute("mkdir -p '" .. dir .. "'"))
+    local status = dir .. "/it's a status"
+    for _, code in ipairs({ 0, 3, 139 }) do
+        load({ TIDE_GREETER_QML = "/usr/share/tide/shell/greeter.qml", TIDE_GREETER_QS_STATUS = status })
+        local out = run(start(), code)
+        eq(slurp(status), code .. "\n", "the status left for qs exiting " .. code)
+        eq(out, "qs [-p] [/usr/share/tide/shell/greeter.qml] watcher=1\n"
+            .. "hyprctl [dispatch] [hl.dsp.exit()] watcher=\n", "what ran when qs exited " .. code)
+    end
+    assert(os.execute("rm -rf '" .. dir .. "'"))
+end)
+
+test("a status that can't be written still exits Hyprland", function()
+    load({ TIDE_GREETER_QML = "/usr/share/tide/shell/greeter.qml", TIDE_GREETER_QS_STATUS = "/nonexistent/dir/status" })
+    local out = run(start(), 3)
+    eq(out:find("hyprctl [dispatch] [hl.dsp.exit()]", 1, true) ~= nil, true, "Hyprland exits")
+    eq(out:find("/nonexistent/dir/status", 1, true) ~= nil, true, "sh names the file it couldn't write")
 end)
 
 test("a setting this Hyprland refuses costs neither the greeter nor the other settings", function()

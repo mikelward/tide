@@ -3671,9 +3671,20 @@ talk, a demo, or a meeting room's screen.
 - **A greeter that can't run still logs you in.** Without its files,
   Hyprland or `qs`, or when Hyprland exits non-zero, `tide-greeter` says
   why and runs `agreety`, greetd's own text login, where it's installed.
-  Without it, it fails and greetd starts it again. The greeter's config
-  registers the greeter first, then tries each setting alone, so one this
-  Hyprland refuses is logged and skipped.
+  - **So does one whose Quickshell fails.** Hyprland exits 0 however
+    Quickshell ended. So the greeter's command leaves Quickshell's exit
+    status in `$XDG_RUNTIME_DIR/tide-greeter-qs`, which `tide-greeter`
+    clears before each start. Quickshell exits 0 once greetd has the
+    session. Any other status, a signal's included, gets the text login,
+    and the journal says which.
+  - A status that's missing or unreadable counts as a normal end, and is
+    logged.
+  - Without `agreety`, `tide-greeter` waits 5 seconds and fails, and
+    greetd starts it again. The wait keeps a greeter that fails at once
+    from flickering, and leaves time to switch VT.
+
+  The greeter's config registers the greeter first, then tries each
+  setting alone, so one this Hyprland refuses is logged and skipped.
 - **Same face as the lock.** Login and lock are one QML component with two
   modes ([`lock.png`](docs/mocks/lock.png)): `shell/LockFace.qml`.
 - **Light or dark, with a wallpaper.** The face has a light palette as

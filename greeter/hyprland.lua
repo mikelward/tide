@@ -5,13 +5,17 @@
 -- input turns the displays back on, and there are no key bindings:
 -- Hyprland's built-in VT switch is the only key it acts on. It runs one
 -- program, the greeter, and exits when the greeter does, which is once
--- greetd has the session to start; greetd then starts it.
+-- greetd has the session to start; greetd then starts it. It exits 0
+-- however the greeter ended, so the greeter's exit status is left in a
+-- file for tide-greeter, which runs a text login after one that failed.
 --
 -- tide-greeter passes what this needs in the environment:
 --   TIDE_GREETER_QML      the greeter's QML (share/tide/shell/greeter.qml)
 --   TIDE_GREETER_KB_LAYOUT, TIDE_GREETER_KB_MODEL,
 --   TIDE_GREETER_KB_VARIANT, TIDE_GREETER_KB_OPTIONS
 --                         localed's X11 keymap; unset, Hyprland's defaults
+--   TIDE_GREETER_QS_STATUS  the file to leave Quickshell's exit status in;
+--                         unset, it's left nowhere
 
 local function env(name, default)
     local value = os.getenv(name)
@@ -31,18 +35,25 @@ end
 local EXIT = "hyprctl dispatch 'hl.dsp.exit()'"
 
 -- The greeter's command: Quickshell on the greeter's QML, then Hyprland's
--- exit, however Quickshell ends. greetd starts the greeter again if it
--- ended without choosing a session. The QML is root's, and nothing edits it
--- under a running greeter, so the file watcher is off.
-local function greeter_command(qml)
+-- exit, however Quickshell ends. In between, Quickshell's exit status goes
+-- in `status_file`, where tide-greeter reads it: 0 is greetd having the
+-- session to start, and after anything else tide-greeter runs a text
+-- login. A status that can't be written is said by sh, and Hyprland still
+-- exits. The QML is root's, and nothing edits it under a running greeter,
+-- so the file watcher is off.
+local function greeter_command(qml, status_file)
     if qml == nil then
         return "echo 'tide-greeter: no TIDE_GREETER_QML, so no greeter to run' >&2; " .. EXIT
     end
-    return "QS_DISABLE_FILE_WATCHER=1 qs -p " .. quote(qml) .. "; " .. EXIT
+    local report = ""
+    if status_file ~= nil then
+        report = 'echo "$?" >' .. quote(status_file) .. "; "
+    end
+    return "QS_DISABLE_FILE_WATCHER=1 qs -p " .. quote(qml) .. "; " .. report .. EXIT
 end
 
 hl.on("hyprland.start", function()
-    hl.exec_cmd(greeter_command(env("TIDE_GREETER_QML", nil)))
+    hl.exec_cmd(greeter_command(env("TIDE_GREETER_QML", nil), env("TIDE_GREETER_QS_STATUS", nil)))
 end)
 
 -- Everything below is after the greeter is registered, and each is tried
