@@ -684,8 +684,15 @@ flowchart TD
     fix a stuck start. It doesn't rely on the units' timeouts, which chain
     (the shell waits for hypridle before its own timer starts).
   - The hypridle drop-in also sets `TimeoutStartSec=10`, so a hypridle
-    that never claims its name fails quickly and the shell starts without
-    it, rather than waiting out systemd's 90 s default.
+    that never claims its name fails quickly, rather than at systemd's
+    90 s default. That alone doesn't free the shell. With
+    `RestartMode=direct` (below) a failed start goes straight back to
+    starting, so hypridle's start job, which the shell is ordered after,
+    runs on until the start limit: eight timeouts, 80 s. So the drop-in
+    sets `JobRunningTimeoutSec=11`. The job is cancelled just after the
+    first timeout and the shell starts without hypridle. The unit itself
+    is left as it is (systemd.unit(5)), so it goes on restarting, and
+    still falls back to swayidle at the limit.
   - The drop-in starts hypridle with your `~/.config/hypr/hypridle.conf`,
     or tide's copy, `~/.config/hypr/tide-hypridle.conf`, when that's
     missing or a link to a file that's gone. The copy sits beside the
