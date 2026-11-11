@@ -240,9 +240,10 @@ install: build install-shell
 	install -m 755 hypr/tide/apply-input.sh hypr/tide/watch-input.sh hypr/tide/next-layout.sh "$(HYPR_DIR)/"
 	install -d "$(TIDEWM_DIR)"
 	install -m 644 tidewm/tide.conf "$(TIDEWM_DIR)/"
-	install -d "$(SYSTEMD_USER_DIR)/hypridle.service.d" "$(SYSTEMD_USER_DIR)/app-.service.d"
+	install -d "$(SYSTEMD_USER_DIR)/hypridle.service.d" "$(SYSTEMD_USER_DIR)/hyprpolkitagent.service.d" "$(SYSTEMD_USER_DIR)/app-.service.d"
 	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service systemd/user/tide-lock-fallback.service systemd/user/tide-idle-fallback.service systemd/user/tide-shell-fallback.service systemd/user/tide-clipboard.service systemd/user/tide-fcitx5.service systemd/user/tide-lid-inhibit.service systemd/user/tide-kde.service "$(SYSTEMD_USER_DIR)/"
 	install -m 644 systemd/user/hypridle.service.d/tide.conf "$(SYSTEMD_USER_DIR)/hypridle.service.d/"
+	install -m 644 systemd/user/hyprpolkitagent.service.d/tide.conf "$(SYSTEMD_USER_DIR)/hyprpolkitagent.service.d/"
 	install -m 644 systemd/user/app-.service.d/tide-autostart.conf "$(SYSTEMD_USER_DIR)/app-.service.d/"
 	@# rmdir only removes a directory this emptied.
 	for f in "$(SYSTEMD_USER_DIR)"/app-*@autostart.service.d/quickspace.conf; do \

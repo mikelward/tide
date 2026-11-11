@@ -371,6 +371,19 @@ check "hypridle runs in the tidewm session" idle_runs_in "tidewm:tide"
 check "hypridle is skipped under Plasma, even when a package enabled it" idle_skips_in "KDE"
 check "hypridle's unit is skipped in a plain Hyprland login, which runs its own" idle_skips_in "Hyprland"
 check "hypridle is skipped where no desktop is set" idle_skips_in ""
+# --- The hyprpolkitagent drop-in -------------------------------------------------
+agentdropin=systemd/user/hyprpolkitagent.service.d/tide.conf
+agent_condition=$(sed -n 's/^ExecCondition=\/bin\/sh -c //p' "$agentdropin" | sed "s/^'//; s/'\$//; s/\\$\\$/\\$/g")
+agent_runs_in() { XDG_CURRENT_DESKTOP=$1 sh -c "$agent_condition"; }
+agent_skips_in() { ! agent_runs_in "$1"; }
+check "hyprpolkitagent's condition is a sh -c script" test -n "$agent_condition"
+check "hyprpolkitagent's unit is skipped in the tide session, whose shell runs the agent" agent_skips_in "tide:Hyprland"
+check "hyprpolkitagent's unit is skipped in the tidewm session" agent_skips_in "tidewm:tide"
+check "hyprpolkitagent's unit still runs in a plain Hyprland login" agent_runs_in "Hyprland"
+check "the agent drop-in adds no [Install]" lacks_line_matching "$agentdropin" '^\[Install\]'
+check "make install installs the agent drop-in" \
+    grep -q 'hyprpolkitagent.service.d/tide.conf' Makefile
+
 # The drop-in's command, as systemd would run it, against a hypridle that
 # says which config it was given, in a home with none of your own, one
 # with a link to a config that's gone, and one with your own.
