@@ -29,7 +29,7 @@ local S -- what the stub recorded
 -- Loads the config with `environ` as its environment, and returns what it
 -- set up. The start handler isn't run until the test runs it.
 local function load(environ, refuse)
-    S = { config = {}, monitors = {}, handlers = {}, exec = {}, other = {} }
+    S = { config = {}, monitors = {}, handlers = {}, exec = {}, other = {}, dispatched = {} }
     local hl = setmetatable({
         config = function(t)
             if refuse and t[refuse] then
@@ -47,6 +47,9 @@ local function load(environ, refuse)
         end,
         on = function(ev, fn) S.handlers[ev] = fn end,
         exec_cmd = function(cmd) table.insert(S.exec, cmd) end,
+        get_active_monitor = function() return S.active_monitor end,
+        dispatch = function(d) table.insert(S.dispatched, d) end,
+        dsp = { cursor = { move = function(at) return { cursor_move = at } end } },
     }, {
         -- Anything else (a bind, a rule) is recorded, so a test can say
         -- there was none.
@@ -154,6 +157,21 @@ test("at start it runs the greeter, then exits Hyprland", function()
     local out = run(start())
     eq(out, "qs [-p] [/usr/share/tide/shell/greeter.qml] watcher=1\n"
         .. "hyprctl [dispatch] [hl.dsp.exit()] watcher=\n", "what ran")
+end)
+
+test("at start the pointer goes to the middle of the focused monitor", function()
+    load({ TIDE_GREETER_QML = "/q.qml" })
+    S.active_monitor = { x = 1920, y = 0, mode = { width = 2560, height = 1440 } }
+    start()
+    eq(#S.dispatched, 1, "pointer moves")
+    eq(S.dispatched[1].cursor_move.x, 3200, "x")
+    eq(S.dispatched[1].cursor_move.y, 720, "y")
+end)
+
+test("with no monitor to read, the pointer stays put and the greeter still runs", function()
+    load({ TIDE_GREETER_QML = "/q.qml" })
+    start()
+    eq(#S.dispatched, 0, "pointer moves")
 end)
 
 test("a path with quotes and spaces reaches qs whole", function()

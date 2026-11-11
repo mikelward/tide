@@ -52,8 +52,27 @@ local function greeter_command(qml, status_file)
     return "QS_DISABLE_FILE_WATCHER=1 qs -p " .. quote(qml) .. "; " .. report .. EXIT
 end
 
+-- The pointer starts in the middle of the focused monitor, by the field,
+-- not at Hyprland's top left corner, where it's easy to miss. `mode` is the
+-- monitor's size in the layout's units, scaled and turned. A monitor that
+-- can't be read leaves the pointer where it is, and says so.
+local function center_pointer()
+    local mon = hl.get_active_monitor()
+    if mon == nil then
+        error("no monitor yet")
+    end
+    hl.dispatch(hl.dsp.cursor.move({
+        x = mon.x + math.floor(mon.mode.width / 2),
+        y = mon.y + math.floor(mon.mode.height / 2),
+    }))
+end
+
 hl.on("hyprland.start", function()
     hl.exec_cmd(greeter_command(env("TIDE_GREETER_QML", nil), env("TIDE_GREETER_QS_STATUS", nil)))
+    local ok, err = pcall(center_pointer)
+    if not ok then
+        print("tide-greeter: couldn't center the pointer: " .. tostring(err))
+    end
 end)
 
 -- Everything below is after the greeter is registered, and each is tried

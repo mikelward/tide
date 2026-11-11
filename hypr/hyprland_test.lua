@@ -2305,6 +2305,31 @@ test("outside the tide session, app keys run the command itself", function()
     eq("~/scripts/runenv browser1", bind("SUPER + G").target.args)
 end)
 
+test("the pointer starts in the middle of the focused monitor", function()
+    load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
+    -- A 4K panel at 1.5 to the right of another: its middle in layout units.
+    S.active_monitor = { name = "DP-2", x = 1920, y = 0, mode = { width = 2560, height = 1440 } }
+    fire("hyprland.start")
+    local moves = {}
+    for _, d in ipairs(S.dispatched) do
+        if d.dsp == "cursor.move" then
+            table.insert(moves, d.args)
+        end
+    end
+    eq(1, #moves, "one pointer move")
+    eq(3200, moves[1].x, "x")
+    eq(720, moves[1].y, "y")
+    eq("uwsm finalize", S.execs[1], "and the session still starts")
+end)
+
+test("with no monitor to read, the pointer stays put and the session starts", function()
+    load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
+    S.active_monitor = nil
+    fire("hyprland.start")
+    eq(0, #S.dispatched, "no move")
+    eq("uwsm finalize", S.execs[1])
+end)
+
 test("autostart runs on hyprland.start, not at load", function()
     load()
     eq(0, #S.execs, "nothing runs while the config loads")
