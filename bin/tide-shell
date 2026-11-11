@@ -383,19 +383,22 @@ theme_status=$(mktemp) || {
 # would catch it anyway, but the shell can exit without that. A loop that
 # has given up says so in $agent_done first, and isn't signaled: the shell
 # may have reaped it already, and its pid may belong to another process.
-# The same goes for the loop that looks for a late notification server.
+# It's still waited for, since it says so just before it exits: wait only
+# ever waits on this shell's own child, and returns at once for one already
+# reaped. The same goes for the loop that looks for a late notification
+# server.
 agent_loop=
 agent_done=
 late_loop=
 late_done=
 # shellcheck disable=SC2317,SC2329  # run from the exit trap
 on_exit() {
-    if test -n "$agent_loop" && ! test -s "$agent_done"; then
-        kill "$agent_loop"
+    if test -n "$agent_loop"; then
+        test -s "$agent_done" || kill "$agent_loop"
         wait "$agent_loop"
     fi
-    if test -n "$late_loop" && ! test -s "$late_done"; then
-        kill "$late_loop"
+    if test -n "$late_loop"; then
+        test -s "$late_done" || kill "$late_loop"
         wait "$late_loop"
     fi
     rm -f "$theme_status" "$agent_done" "$late_done"
