@@ -13,6 +13,10 @@ once you have agreed with it or reversed it.
   `systemd-cat` stay until it exits. The alternative is logging only
   `tide launch`'s own start and handoff. Reversible, in
   `hypr/hyprland.lua`'s `logged`.
+- **The splash is an `exec-once`, not a unit** (2026-11-11): it must show
+  before the session's units start, so Hyprland's config starts it beside
+  `uwsm finalize` (SPEC.md §5.4's rule is now two). It gives up after 2
+  minutes and takes no keys. Reversible, in `hypr/hyprland.lua`.
 - **Hyprland always logs to stdout too** (2026-11-11), in the session and
   the greeter, so the journal keeps it; it doubles what Hyprland writes,
   at its default level. The greeter's Quickshell goes to the journal as
@@ -1181,6 +1185,13 @@ the session's keys (SPEC.md §5.4). Left:
   fails and a nonzero exit (most do); scripts' session entry points
   (`sessionlib`); tidewm's own spawns, whose output reaches the journal
   through uwsm's unit already.
+
+## The session's splash (SPEC.md §5.3)
+
+- [ ] **A splash in tidewm's session too**, from its startup command.
+- [ ] **Find why the shell took about a minute to start** on the first
+  login after the greeter: the splash logs the time (`journalctl -t
+  tide-splash`), and tide.service's journal says where it went.
 
 ## Free-standing tide
 

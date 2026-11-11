@@ -6,7 +6,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
-import "lib/appearance.mjs" as Appearance
 import "lib/greeter.mjs" as Greeter
 import "lib/lock.mjs" as Lock
 
@@ -283,41 +282,14 @@ ShellRoot {
         }
     }
 
-    // The look of the user picked (SPEC.md §11): their light and dark
-    // schedule and wallpapers, as their shell keeps them in the folder
-    // `setup` makes for them (Appearance.lookDir), since their home is
-    // theirs alone. None there, or one that can't be read, is the face's
-    // own dark gradient. Light or dark is worked out again each minute.
-    readonly property string lookDir: Appearance.lookDir(Quickshell.env("TIDE_LOOK_DIR") || "", root.user)
-    property var look: null
-    property real lookNow: Date.now()
-    readonly property var shown: root.look === null ? null : Appearance.lookAt(root.look, root.lookNow, root.lookDir)
-
-    FileView {
-        path: root.lookDir === "" ? "" : `${root.lookDir}/look.json`
-        printErrors: false
-        onLoaded: {
-            const r = Appearance.parseLook(text());
-            if (r.error) {
-                console.warn(`tide-greeter: ${path}: ${r.error}; the greeter shows its own look`);
-            }
-            root.look = r.look ?? null;
-            root.lookNow = Date.now();
-        }
-        onLoadFailed: error => {
-            if (error !== FileViewError.FileNotFound) {
-                console.warn(`tide-greeter: ${path}: ${FileViewError.toString(error)}; the greeter shows its own look`);
-            }
-            root.look = null;
-        }
+    // The look of the user picked (SPEC.md §11), from the folder their
+    // shell keeps it in (LookData.qml).
+    LookData {
+        id: lookData
+        user: root.user
+        name: "tide-greeter"
     }
-
-    Timer {
-        interval: 60 * 1000
-        repeat: true
-        running: root.look !== null
-        onTriggered: root.lookNow = Date.now()
-    }
+    readonly property var shown: lookData.shown
 
     FileView {
         id: remember
