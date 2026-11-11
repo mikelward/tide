@@ -381,7 +381,15 @@ Quickshell bar, the shell is the notification server, and no swaync starts.
 A `TIDE_THEME_DAEMON` that isn't there, or no swaync or waybar where one is
 needed, fails the start. It reports ready once swaync (or the shell) owns
 `org.freedesktop.Notifications` and the bar's tray owns
-`org.kde.StatusNotifierWatcher`. The polkit agent's registration isn't
+`org.kde.StatusNotifierWatcher`, each from inside the unit. It waits 12 s
+(`TIDE_SHELL_WAIT`). A tray that hasn't appeared by then fails the start:
+the bar didn't come up. A notification server that hasn't doesn't, once
+the tray is there. Failing would have systemd kill a working bar, three
+times, and end in the fallback terminal. The shell reports ready, logs
+the missing name, who should own it and what the bus last said, and goes
+on without notifications. It looks for the owner for 60 s more
+(`TIDE_SHELL_LATE_WAIT`), and logs when it appears, or that it hasn't;
+`doctor` reports a missing owner at any time. The polkit agent's registration isn't
 observable from a script, so it isn't waited for. Its exit doesn't fail the
 unit, either: an agent exits at once when another already holds the
 session, and failing the unit for that restarted the bar in a loop at
@@ -602,6 +610,11 @@ flowchart TD
   - So no app starts before the owners exist, and D-Bus activation never
     gets the chance to start a stray daemon. A job added to the shell later
     joins the same ready check.
+  - One exception, in the M2 shell (§5.2): a notification server that's
+    still missing after the wait, with the tray up, doesn't fail the
+    shell. Apps then start with no notification server, until it appears.
+    A notification sent meanwhile fails, or starts whatever D-Bus can
+    activate for the name, which `setup` masks and `doctor` reports.
 - **One `exec-once`.** Hyprland's config starts nothing but
   `uwsm finalize`, and a test in `conf` asserts it.
 - **Autostart is an allowlist.** XDG autostart entries run in tide only
