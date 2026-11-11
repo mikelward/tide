@@ -1,7 +1,7 @@
 ---
 trigger: always_on
 alwaysApply: true
-last_modified: 2026-11-05
+last_modified: 2026-11-11
 ---
 
 # tide
@@ -97,6 +97,9 @@ Shared by every mikelward repo and the user-level agent config; canonical in mik
 - **Docs**. Keep `SPEC.md` and `README.md` current.
 - **CI**. Wait for it before claiming success.
 - **Errors**. Never swallow one; log it with context and clean up.
+- **Logs**. Every process logs that it started, that it ended and how, and each error,
+  where that outlasts it, a logout and a reboot: the journal, or a file under
+  `~/.local/state`. Never only `/tmp`, a runtime directory or `/dev/null`.
 - **Cost**. State the cost and reliability of new dependencies or services up front.
 - **Privacy**. No user data (personal paths, hostnames, tokens, keys, private remotes)
   leaves this machine; use placeholders.
