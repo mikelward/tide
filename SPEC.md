@@ -627,6 +627,13 @@ flowchart TD
     shell. Apps then start with no notification server, until it appears.
     A notification sent meanwhile fails, or starts whatever D-Bus can
     activate for the name, which `setup` masks and `doctor` reports.
+- **A logout doesn't hold up the next login.** `uwsm start` refuses while
+  `graphical-session.target` is active (its `is_active` check), and the
+  target stays active until the units ordered after it have stopped.
+  tide's units have nothing to tidy up: a stop kills the cgroup. So each
+  sets `TimeoutStopSec=5`, and the hypridle drop-in does too. At
+  systemd's default, a process slow to die held the target for 90 s, and
+  a login straight after a logout came back to the login screen.
 - **One `exec-once`.** Hyprland's config starts nothing but
   `uwsm finalize`, and a test in `conf` asserts it.
 - **Autostart is an allowlist.** XDG autostart entries run in tide only

@@ -14,4 +14,7 @@ After=graphical-session.target
 ExecCondition=/bin/sh -c 'case ":$${XDG_CURRENT_DESKTOP}:" in *:tide:*) ;; *) exit 1 ;; esac'
 Type=exec
 ExecStart=tide-shell-fallback
+# As tide.service: graphical-session.target stays active until this has
+# stopped, and the next login waits on that, so it gets 5 s, not 90.
+TimeoutStopSec=5
 Slice=session-graphical.slice
