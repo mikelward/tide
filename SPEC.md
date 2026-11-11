@@ -677,8 +677,13 @@ flowchart TD
   the first second after login can't start an app before the notification,
   tray and polkit owners exist.
   - `systemctl --user start tide.service` blocks until the shell
-    reports ready, and returns at once when it already has, so a launch
-    later in the session costs nothing extra.
+    reports ready. A shell that's already up isn't started
+    (`is-active`), so a launch later in the session costs one question.
+  - A shell that has failed for good isn't started either. Each app key
+    would wait out a whole start, 15 s, and the start would stop the
+    fallback's bar (`Conflicts=`), which nothing brings back. The app
+    launches at once, and the log says how to start the shell:
+    `systemctl --user restart tide`, or log in again.
   - The wait has its own bound: `tide launch` gives up after 15 s
     in total and launches the app anyway, because a terminal is how you'd
     fix a stuck start. It doesn't rely on the units' timeouts, which chain

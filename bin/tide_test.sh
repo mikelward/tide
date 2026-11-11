@@ -160,12 +160,13 @@ run "$qs" launch app one two
 check "launch exits 0" test $? -eq 0
 out=$(cat "$log")
 check "launch waits for the shell" contains "$out" "systemctl --user start tide.service"
+check "having asked whether it's up" contains "$out" "systemctl --user is-active tide.service"
 check "launch grants focus to the command's basename" \
     contains "$out" 'hyprctl eval tide_focus.grant("app", nil, '
 check "launch runs the app through uwsm app" contains "$out" "uwsm app -- app one two"
 check "the app gets its arguments" contains "$out" "app one two"
 check "the focused workspace, the grant, then its desktop-entry lookup, then the wait, then the app" \
-    test "$(sed -n 's/ .*//p' "$log" | tr '\n' ' ')" = "hyprctl hyprctl tide-grant systemctl uwsm app "
+    test "$(sed -n 's/ .*//p' "$log" | tr '\n' ' ')" = "hyprctl hyprctl tide-grant systemctl systemctl uwsm app "
 check "the focused workspace is read first, to tell whether to ask for a name" \
     test "$(sed -n 1p "$log")" = "hyprctl -j activeworkspace"
 check "the app gets the focused workspace's name, sanitized, as TIDE_WORKSPACE" \
@@ -345,7 +346,7 @@ check "a background launch exits 0" test $? -eq 0
 check "a background launch from home doesn't ask the name prompt" not_contains "$(cat "$log")" "qs -c tide"
 check "records no grant" not_contains "$(cat "$log")" "tide_focus"
 check "and reads the workspace, waits for the shell, then starts the app" \
-    test "$(sed -n 's/ .*//p' "$log" | tr '\n' ' ')" = "hyprctl systemctl uwsm app "
+    test "$(sed -n 's/ .*//p' "$log" | tr '\n' ' ')" = "hyprctl systemctl systemctl uwsm app "
 check "with the focused workspace as TIDE_WORKSPACE" test "$(cat "$log.env")" = PR12login
 check "a clean background launch says nothing" test ! -s "$tmp/err"
 check "and says it's starting on stdout, as Start at login waits for" test "$(cat "$tmp/out")" = "tide launch: starting"
@@ -527,8 +528,9 @@ run XDG_CURRENT_DESKTOP=KDE "$qs" launch app x
 out=$(cat "$log")
 check "outside tide it just runs the command" test "$out" = "app x"
 
-# A stuck shell: the wait gives up at the bound and the app starts anyway.
-run TIDE_LAUNCH_WAIT=1 FAKE_SYSTEMCTL_SLEEP=5 "$qs" launch app
+# A stuck shell, still starting: the wait gives up at the bound and the app
+# starts anyway.
+run TIDE_LAUNCH_WAIT=1 FAKE_IS_ACTIVE=activating FAKE_SYSTEMCTL_SLEEP=5 "$qs" launch app
 check "a stuck shell still launches the app" contains "$(cat "$log")" "app "
 check "a stuck shell is reported" contains "$(cat "$tmp/err")" "the shell isn't ready"
 for bad in 0 abc -1 3601 999999999999999999999; do
@@ -541,6 +543,33 @@ run FAKE_SYSTEMCTL_STATUS=1 "$qs" launch app
 check "a failed shell still launches the app" contains "$(cat "$log")" "uwsm app -- app"
 check "a failed shell is reported with systemctl's error" \
     contains "$(cat "$tmp/err")" "Job failed"
+
+# A shell that has failed for good isn't started again by an app key: each
+# press would wait out a whole start, and stop the fallback's bar.
+run FAKE_IS_ACTIVE=failed FAKE_SYSTEMCTL_SLEEP=5 TIDE_LAUNCH_WAIT=5 "$qs" launch app
+check "with the shell failed, launch doesn't start it again" not_contains "$(cat "$log")" "systemctl --user start"
+check "with the shell failed, the app still launches" contains "$(cat "$log")" "uwsm app -- app"
+check "with the shell failed, it says so, and how to start it" \
+    contains "$(cat "$tmp/err")" "tide launch: the shell has failed, so app starts without it; \`systemctl --user restart tide\` starts the shell again"
+run FAKE_IS_ACTIVE=failed "$qs" launch --background -- app
+check "with the shell failed, a background launch doesn't start it either" not_contains "$(cat "$log")" "systemctl --user start"
+check "and still launches" contains "$(cat "$log")" "uwsm app -- app"
+# The bound is for the whole wait: a user manager that doesn't answer the
+# question isn't then asked to start the shell, for the bound over again.
+run FAKE_SYSTEMCTL_SLEEP=5 TIDE_LAUNCH_WAIT=1 "$qs" launch app
+check "with no answer about the shell, launch doesn't go on to start it" not_contains "$(cat "$log")" "systemctl --user start"
+check "with no answer about the shell, the app still launches" contains "$(cat "$log")" "uwsm app -- app"
+check "with no answer about the shell, it says so" \
+    contains "$(cat "$tmp/err")" "tide launch: the user manager didn't say in 1 s whether the shell is up; starting app anyway"
+# One that's up needs no start, and one on its way up is waited for.
+run FAKE_IS_ACTIVE=active "$qs" launch app
+check "with the shell up, launch starts nothing" not_contains "$(cat "$log")" "systemctl --user start"
+check "with the shell up, launch says nothing of it" not_contains "$(cat "$tmp/err")" "the shell"
+check "with the shell up, the app launches" contains "$(cat "$log")" "uwsm app -- app"
+run FAKE_IS_ACTIVE=activating "$qs" launch app
+check "with the shell starting, launch waits for it" contains "$(cat "$log")" "systemctl --user start tide.service"
+run FAKE_IS_ACTIVE=inactive "$qs" launch app
+check "with the shell stopped, launch starts it" contains "$(cat "$log")" "systemctl --user start tide.service"
 
 run FAKE_HYPRCTL_REPLY='error: attempt to index a nil value' "$qs" launch app
 check "a rejected grant still launches the app" contains "$(cat "$log")" "uwsm app -- app"
