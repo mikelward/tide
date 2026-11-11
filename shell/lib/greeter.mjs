@@ -320,3 +320,65 @@ export function statusText(state, sessionName, lockStatus) {
     if (state.unlocked) return `Starting ${sessionName || "the session"}`;
     return lockStatus;
 }
+
+// The keyboard's way to the pickers (SPEC.md §11). Tab and Shift+Tab move
+// between the field and the chips the face shows; on a chip, Enter, Space
+// or Down opens its list, Up and Down move through it, and Enter or Space
+// picks. Escape closes a list, then goes back to the field. Any other key goes back to the field and
+// types there, so a password is never lost to a chip.
+//
+// `state` is {focus, menu, row}: focus "field", "session" or "user"; menu
+// "" or the chip whose list is open; row the highlighted row's index.
+// `chips` is what the face shows: {session: n rows or 0, user: n rows or 0
+// (0 when another user can't be picked), sessionRow, userRow}, the rows
+// of the chosen ones. `key` is "tab", "backtab", "up", "down", "enter",
+// "space", "escape" or "other".
+//
+// Returns {state, pick, pass}: pick is {menu, row} for a row picked, else
+// null; pass is true when the key belongs to the field.
+export const PICKER_INITIAL = Object.freeze({ focus: "field", menu: "", row: 0 });
+
+export function pickerKey(state, chips, key) {
+    const order = ["field"];
+    if (chips.session > 0) order.push("session");
+    if (chips.user > 0) order.push("user");
+    let s = state;
+    // A chip that's gone (the user picker, once the session is starting)
+    // gives the focus back to the field.
+    if (!order.includes(s.focus)) {
+        s = PICKER_INITIAL;
+    }
+    const done = (next, pick = null, pass = false) => ({ state: Object.freeze(next), pick, pass });
+    const count = s.menu === "" ? 0 : chips[s.menu];
+    if (key === "tab" || key === "backtab") {
+        const i = order.indexOf(s.focus);
+        const step = key === "tab" ? 1 : order.length - 1;
+        return done({ focus: order[(i + step) % order.length], menu: "", row: 0 });
+    }
+    if (s.focus === "field") {
+        return done(s, null, true);
+    }
+    if (key === "escape") {
+        // A list closes; a chip gives the focus back without clearing the
+        // field.
+        return done(s.menu !== "" ? Object.assign({}, s, { menu: "" }) : PICKER_INITIAL);
+    }
+    if (s.menu === "") {
+        if (key === "enter" || key === "space" || key === "down") {
+            const row = Math.max(0, Math.min(chips[s.focus] - 1, chips[`${s.focus}Row`] ?? 0));
+            return done(Object.assign({}, s, { menu: s.focus, row }));
+        }
+        if (key === "up") {
+            return done(s);
+        }
+        return done(PICKER_INITIAL, null, true);
+    }
+    if (key === "up" || key === "down") {
+        const row = Math.max(0, Math.min(count - 1, s.row + (key === "down" ? 1 : -1)));
+        return done(Object.assign({}, s, { row }));
+    }
+    if (key === "enter" || key === "space") {
+        return done(Object.assign({}, s, { menu: "" }), { menu: s.menu, row: s.row });
+    }
+    return done(PICKER_INITIAL, null, true);
+}

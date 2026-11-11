@@ -11,10 +11,13 @@ Rectangle {
     // [{key, label}]
     property var rows: []
     property string selected: ""
+    // The row the keyboard is on, highlighted as the pointer's is.
+    property int current: -1
     // The most height it may take, frame included.
     property real maxHeight: 400
 
-    signal picked(string key)
+    // The row picked, by its index.
+    signal picked(int row)
 
     visible: open
     x: Math.round((parent.width - width) / 2)
@@ -27,10 +30,15 @@ Rectangle {
     border.width: 1
     border.color: Qt.rgba(1, 1, 1, 0.16)
 
-    // Opened scrolled to the chosen row.
+    // Opened scrolled to the chosen row, and kept on the keyboard's.
     onOpenChanged: {
         if (open) {
             list.positionViewAtIndex(Math.max(0, menu.rows.findIndex(r => r.key === menu.selected)), ListView.Contain);
+        }
+    }
+    onCurrentChanged: {
+        if (open && current >= 0) {
+            list.positionViewAtIndex(current, ListView.Contain);
         }
     }
 
@@ -47,11 +55,12 @@ Rectangle {
 
         delegate: Rectangle {
             required property var modelData
+            required property int index
 
             width: list.width
             height: 30
             radius: 7
-            color: row.containsMouse ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
+            color: row.containsMouse || index === menu.current ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
 
             Text {
                 anchors.left: parent.left
@@ -85,7 +94,7 @@ Rectangle {
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
-                onClicked: menu.picked(parent.modelData.key)
+                onClicked: menu.picked(parent.index)
             }
         }
     }
