@@ -21,7 +21,9 @@ export function zoneTable(output) {
     }
     const localZone = output.local.zone ?? "";
     periods.set(localZone, output.local.periods);
-    return { periods, localZone, errors, localError: output.local.error ?? null };
+    // Where tzdata puts the local zone's main city, or null (SPEC.md §15).
+    const localPlace = output.local.place ?? null;
+    return { periods, localZone, localPlace, errors, localError: output.local.error ?? null };
 }
 
 // The period in force at `ms`: the last one starting at or before it. Before

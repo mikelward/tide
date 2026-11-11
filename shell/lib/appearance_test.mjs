@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
     DEFAULTS, LOCAL, parseTime, parseAppearance, loadAppearance, sunDown,
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
-    hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, steppedTime, steppedTimePast, parseCoordinate, withSetting,
+    hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, placed, locationHint, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
     expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
@@ -371,6 +371,56 @@ test("an appearance hook that ignores TERM is killed", () => {
     } finally {
         rmSync(dir, { recursive: true });
     }
+});
+
+const LA = { latitude: 34.0522, longitude: -118.2428, city: "Los Angeles" };
+
+test("the time zone's place stands in for a location that isn't set", () => {
+    assert.deepEqual(placed({ mode: "sun" }, LA), { mode: "sun", latitude: 34.0522, longitude: -118.2428 });
+    assert.deepEqual(placed({ mode: "sun", latitude: 51.5 }, LA), { mode: "sun", latitude: 51.5, longitude: -118.2428 },
+        "half a location takes the rest from the zone");
+    const set = { mode: "sun", latitude: 51.5, longitude: -0.1 };
+    assert.equal(placed(set, LA), set, "a location set wins");
+    assert.deepEqual(placed({ mode: "sun" }, null), { mode: "sun" });
+});
+
+test("sunrise and sunset work from the time zone alone", () => {
+    const shared = JSON.stringify({ mode: "sun" });
+    const r = loadAppearance(shared, null, DEFAULTS, LA);
+    assert.deepEqual(r.errors, []);
+    assert.equal(r.settings.mode, "sun");
+    assert.equal(r.settings.latitude, undefined, "the zone's place isn't taken for a setting");
+    const without = loadAppearance(shared, null);
+    assert.equal(without.needsPlace, true, "with no place yet, it may come");
+    assert.equal(loadAppearance("{", null).needsPlace, undefined);
+    assert.equal(withSetting(null, "mode", "sun", null, LA).error, undefined);
+    assert.equal(withSetting(null, "mode", "sun").error, 'mode "sun" needs latitude and longitude');
+    // At noon in Los Angeles in summer it's light; at midnight, dark.
+    assert.equal(scheduled(placed({ mode: "sun" }, LA), Date.parse("2026-07-01T19:00:00Z")).dark, false);
+    assert.equal(scheduled(placed({ mode: "sun" }, LA), Date.parse("2026-07-01T07:00:00Z")).dark, true);
+});
+
+test("sunrise and sunset from a time zone that loses its city fall back to the defaults", () => {
+    const shared = JSON.stringify({ mode: "sun" });
+    const good = loadAppearance(shared, null, DEFAULTS, LA).settings;
+    const r = loadAppearance(shared, null, good, null);
+    assert.equal(r.needsPlace, true);
+    assert.deepEqual(r.settings, DEFAULTS, "not sun with no location, which would stay light");
+    const typed = { mode: "sun", latitude: 51.5, longitude: -0.1 };
+    assert.deepEqual(loadAppearance("{", null, typed, null).settings, typed, "a location typed still works");
+});
+
+test("the page says where sunrise and sunset are for, or why they can't be chosen", () => {
+    assert.equal(locationHint({ mode: "sun" }, LA), "Los Angeles, from your time zone");
+    assert.equal(locationHint({ mode: "schedule" }, LA), "", "only under sunrise and sunset");
+    assert.equal(locationHint({ mode: "schedule" }, null), "Sunrise and sunset need your time zone set to a city");
+    assert.equal(locationHint({ mode: "sun", latitude: 1, longitude: 2 }, LA), "", "a location set by hand");
+});
+
+test("the mode reaches sunrise and sunset with the time zone's place", () => {
+    const at = mode => MODE_CHOICES.findIndex(c => c.mode === mode);
+    assert.equal(steppedModeAt({}, at("schedule"), 1, LA), at("sun"));
+    assert.equal(steppedModeAt({}, at("light"), -1, LA), at("sun"));
 });
 
 test("the Appearance page offers every mode, in order", () => {

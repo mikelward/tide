@@ -110,10 +110,24 @@ export function parseAppearance(text) {
     return { settings };
 }
 
-// Whether merged settings work together: null, or what's wrong.
-export function checkSettings(s) {
+const NEEDS_PLACE = 'mode "sun" needs latitude and longitude';
+
+// The settings with the time zone's place (tide-tz's {latitude, longitude,
+// city}, or null) standing in for a latitude or longitude that isn't set,
+// so sunrise and sunset work before a location is typed (SPEC.md §15).
+export function placed(s, place) {
+    if (!place || (s.latitude !== undefined && s.longitude !== undefined)) {
+        return s;
+    }
+    return Object.assign({}, s, { latitude: s.latitude ?? place.latitude, longitude: s.longitude ?? place.longitude });
+}
+
+// Whether merged settings work together, the time zone's `place` filling
+// in a location: null, or what's wrong.
+export function checkSettings(s, place = null) {
+    s = placed(s, place);
     if (s.mode === "sun" && (s.latitude === undefined || s.longitude === undefined)) {
-        return 'mode "sun" needs latitude and longitude';
+        return NEEDS_PLACE;
     }
     if (s.mode === "schedule" && s.light === s.dark) {
         return "light and dark must be different times";
@@ -121,13 +135,21 @@ export function checkSettings(s) {
     return null;
 }
 
+function keptSettings(lastGood, place) {
+    return checkSettings(lastGood, place) ? DEFAULTS : lastGood;
+}
+
 // The settings in effect, from appearance.json and appearance.local.json
 // (SPEC.md §16.1). Each text is the file's contents, or null when it
 // doesn't exist. The local file's settings replace the shared file's one
 // by one. A file that fails to parse, or settings that don't work
 // together, keep `lastGood` (the defaults the first time), and `errors`
-// names every problem: {settings, errors}.
-export function loadAppearance(sharedText, localText, lastGood = DEFAULTS) {
+// names every problem: {settings, errors}. It adds `needsPlace: true` when
+// the only problem is sunrise and sunset with no location, which the time
+// zone's `place` may yet fill in once it's known. Last good settings that
+// no longer work, such as sunrise and sunset after the time zone loses its
+// city, give way to the defaults.
+export function loadAppearance(sharedText, localText, lastGood = DEFAULTS, place = null) {
     const errors = [];
     let settings = Object.assign({}, DEFAULTS);
     for (const [name, text] of [["appearance.json", sharedText], ["appearance.local.json", localText]]) {
@@ -142,12 +164,14 @@ export function loadAppearance(sharedText, localText, lastGood = DEFAULTS) {
         settings = Object.assign(settings, parsed.settings);
     }
     if (errors.length === 0) {
-        const wrong = checkSettings(settings);
+        const wrong = checkSettings(settings, place);
         if (wrong) {
             errors.push(`${localText !== null && localText !== undefined ? "appearance.local.json" : "appearance.json"}: ${wrong}`);
+            const kept = keptSettings(lastGood, place);
+            return wrong === NEEDS_PLACE ? { settings: kept, errors, needsPlace: true } : { settings: kept, errors };
         }
     }
-    return errors.length > 0 ? { settings: lastGood, errors } : { settings, errors };
+    return errors.length > 0 ? { settings: keptSettings(lastGood, place), errors } : { settings, errors };
 }
 
 // The sun's altitude in degrees at an instant (ms), at a latitude and
@@ -383,10 +407,12 @@ export const MODE_CHOICES = Object.freeze([
 
 // The mode `steps` steps through MODE_CHOICES from the one at index `at`,
 // as an index, stopping at either end. "sun" is stepped past while
-// `settings` has no latitude and longitude, which it needs, so the modes
-// on its far side can still be reached.
-export function steppedModeAt(settings, at, steps) {
-    const located = settings.latitude !== undefined && settings.longitude !== undefined;
+// neither `settings` nor the time zone's `place` gives a latitude and
+// longitude, which it needs, so the modes on its far side can still be
+// reached.
+export function steppedModeAt(settings, at, steps, place = null) {
+    const where = placed(settings, place);
+    const located = where.latitude !== undefined && where.longitude !== undefined;
     const dir = Math.sign(steps);
     let i = at;
     for (let n = Math.abs(steps); n > 0; n--) {
@@ -444,6 +470,20 @@ export function steppedTimePast(text, steps, other) {
     return past === next ? text : past;
 }
 
+// The line the page shows about the location, or "": under sunrise and
+// sunset, the time zone's city they're worked out for, and in any mode,
+// when the time zone has no city, why they can't be chosen. Nothing when
+// appearance.json sets a location by hand.
+export function locationHint(settings, place) {
+    if (settings.latitude !== undefined && settings.longitude !== undefined) {
+        return "";
+    }
+    if (place) {
+        return settings.mode === "sun" ? `${place.city}, from your time zone` : "";
+    }
+    return "Sunrise and sunset need your time zone set to a city";
+}
+
 // A latitude or longitude as typed on the page: a decimal number, east and
 // north positive. Returns {value} or {error} naming the setting.
 export function parseCoordinate(key, text) {
@@ -461,8 +501,9 @@ export function parseCoordinate(key, text) {
 // settings panel writes only the .local file (§16.1). A bad value, a file
 // that doesn't parse (never overwritten, so a hand edit gone wrong isn't
 // lost), or settings that wouldn't work together with the shared file's
-// (`mode` "sun" with no latitude and longitude, say) is an {error}.
-export function withSetting(localText, key, value, sharedText = null) {
+// (`mode` "sun" with no latitude and longitude, and no time zone `place`
+// to fall back on, say) is an {error}.
+export function withSetting(localText, key, value, sharedText = null, place = null) {
     const bad = parseAppearance(JSON.stringify({ [key]: value }));
     if (bad.error) {
         return { error: bad.error };
@@ -480,7 +521,7 @@ export function withSetting(localText, key, value, sharedText = null) {
         files[name] = parsed.settings;
     }
     const local = Object.assign({}, files["appearance.local.json"], { [key]: value });
-    const wrong = checkSettings(Object.assign({}, DEFAULTS, files["appearance.json"], local));
+    const wrong = checkSettings(Object.assign({}, DEFAULTS, files["appearance.json"], local), place);
     if (wrong) {
         return { error: wrong };
     }

@@ -222,3 +222,53 @@ func TestZonesAfterDashDashAreZones(t *testing.T) {
 		t.Errorf("zone 2 = %+v", out.Zones[2])
 	}
 }
+
+func writeTab(t *testing.T, name, text string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestLocalPlaceFromZoneTable(t *testing.T) {
+	tab := writeTab(t, "zone1970.tab", "# comment\nUS\t+340308-1181434\tAmerica/Los_Angeles\tPacific\nAR\t-3436-05827\tAmerica/Argentina/Buenos_Aires\tBuenos Aires\n")
+	for _, c := range []struct {
+		zone string
+		want *place
+	}{
+		{"America/Los_Angeles", &place{Latitude: 34.0522, Longitude: -118.2428, City: "Los Angeles"}},
+		{"America/Argentina/Buenos_Aires", &place{Latitude: -34.6, Longitude: -58.45, City: "Buenos Aires"}},
+		{"UTC", nil},
+	} {
+		n := names{tz: c.zone, tzSet: true, tabs: []string{filepath.Join(t.TempDir(), "missing.tab"), tab}}
+		out, _, code := runTZ(t, loc(t, c.zone), n, "--days", "1")
+		if code != 0 {
+			t.Fatalf("%s: exit %d", c.zone, code)
+		}
+		got := out.Local.Place
+		if (got == nil) != (c.want == nil) || (got != nil && *got != *c.want) {
+			t.Errorf("%s: place = %+v, want %+v", c.zone, got, c.want)
+		}
+	}
+}
+
+func TestLocalPlaceFallsBackToOlderTable(t *testing.T) {
+	newer := writeTab(t, "zone1970.tab", "GB\t+513030-0000731\tEurope/London\n")
+	older := writeTab(t, "zone.tab", "JP\t+353916+1394441\tAsia/Tokyo\tJapan\n")
+	n := names{tz: "Asia/Tokyo", tzSet: true, tabs: []string{newer, older}}
+	out, _, _ := runTZ(t, loc(t, "Asia/Tokyo"), n, "--days", "1")
+	if out.Local.Place == nil || out.Local.Place.City != "Tokyo" || out.Local.Place.Latitude != 35.6544 {
+		t.Errorf("place = %+v", out.Local.Place)
+	}
+}
+
+func TestBadCoordinatesAreReported(t *testing.T) {
+	tab := writeTab(t, "zone1970.tab", "JP\t+3539+13944x\tAsia/Tokyo\n")
+	n := names{tz: "Asia/Tokyo", tzSet: true, tabs: []string{tab}}
+	out, stderr, code := runTZ(t, loc(t, "Asia/Tokyo"), n, "--days", "1")
+	if code != 0 || out.Local.Place != nil || !strings.Contains(stderr, "bad coordinates") {
+		t.Errorf("exit %d, place %+v, stderr %q", code, out.Local.Place, stderr)
+	}
+}

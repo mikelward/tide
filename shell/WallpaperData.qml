@@ -134,7 +134,7 @@ Singleton {
     readonly property string lookDir: Appearance.lookDir(Quickshell.env("TIDE_LOOK_DIR") || "", Quickshell.env("USER") || "")
     readonly property var lightCandidates: AppearanceData.loaded ? Appearance.wallpaperCandidates(AppearanceData.settings, false, root.home, Quickshell.env("TIDE_WALLPAPER") || "") : []
     readonly property var darkCandidates: AppearanceData.loaded ? Appearance.wallpaperCandidates(AppearanceData.settings, true, root.home, Quickshell.env("TIDE_WALLPAPER") || "") : []
-    readonly property string lookKey: AppearanceData.loaded ? JSON.stringify([AppearanceData.settings, root.lightCandidates, root.darkCandidates]) : ""
+    readonly property string lookKey: AppearanceData.loaded ? JSON.stringify([AppearanceData.located, root.lightCandidates, root.darkCandidates]) : ""
     property bool lookMissingSaid: false
     // One copy at a time (Appearance.tellNext, as the theme's commands
     // are): a change while one runs is copied again once it's done, so an
@@ -157,7 +157,7 @@ Singleton {
             return;
         }
         looker.createObject(root, {
-            settings: AppearanceData.settings,
+            settings: AppearanceData.located,
             light: root.lightCandidates,
             dark: root.darkCandidates,
             command: Appearance.lookCommand(root.lookDir, root.lightCandidates, root.darkCandidates)
