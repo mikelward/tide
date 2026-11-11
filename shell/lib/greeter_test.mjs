@@ -11,6 +11,7 @@ import {
     displaysNext, execCommand, fileId, greetdError, parseDesktopEntry, parseListing,
     parseRemembered, parseUsers, pickSession, pickUser, serializeRemembered,
     inConversation, sessionFromEntry, takes, sessionList, statusText, uidRange,
+    PICKER_INITIAL, pickerKey,
 } from "./greeter.mjs";
 
 // What greeter.qml's listing script prints for these files, in order.
@@ -379,4 +380,72 @@ test("a failed call isn't made again until the idle changes", () => {
 
 test("nothing is sent for an idle that changes nothing", () => {
     assert.deepEqual(displays([{ type: "idle", idle: false }]).sends, [null]);
+});
+
+// The keyboard's way to the pickers.
+const CHIPS = Object.freeze({ session: 3, user: 2, sessionRow: 1, userRow: 0 });
+
+function keys(chips, ...names) {
+    let state = PICKER_INITIAL;
+    const out = [];
+    for (const k of names) {
+        const r = pickerKey(state, chips, k);
+        state = r.state;
+        out.push(r);
+    }
+    return out;
+}
+
+test("Tab goes from the field to each chip and back; Shift+Tab goes the other way", () => {
+    assert.deepEqual(keys(CHIPS, "tab", "tab", "tab").map((r) => r.state.focus), ["session", "user", "field"]);
+    assert.deepEqual(keys(CHIPS, "backtab", "backtab").map((r) => r.state.focus), ["user", "session"]);
+});
+
+test("Tab skips a chip the face doesn't show", () => {
+    assert.deepEqual(keys({ ...CHIPS, user: 0 }, "tab", "tab").map((r) => r.state.focus), ["session", "field"]);
+    assert.equal(keys({ session: 0, user: 0 }, "tab")[0].state.focus, "field");
+});
+
+test("on the field, every other key is the field's", () => {
+    for (const k of ["enter", "space", "escape", "up", "other"]) {
+        assert.equal(pickerKey(PICKER_INITIAL, CHIPS, k).pass, true, k);
+    }
+});
+
+test("Enter on a chip opens its list at the chosen row; Down moves, Enter picks", () => {
+    const r = keys(CHIPS, "tab", "enter", "down", "enter");
+    assert.deepEqual(r[1].state, { focus: "session", menu: "session", row: 1 });
+    assert.equal(r[2].state.row, 2);
+    assert.deepEqual(r[3].pick, { menu: "session", row: 2 });
+    assert.deepEqual(r[3].state, { focus: "session", menu: "", row: 2 });
+});
+
+test("Space and Down open a list too, and a list's ends hold", () => {
+    assert.equal(keys(CHIPS, "tab", "space")[1].state.menu, "session");
+    const r = keys(CHIPS, "tab", "tab", "down", "down", "down", "up", "up", "space");
+    assert.equal(r[2].state.menu, "user");
+    assert.deepEqual(r.slice(3).map((x) => x.state.row), [1, 1, 0, 0, 0]);
+    assert.deepEqual(r[7].pick, { menu: "user", row: 0 });
+});
+
+test("Escape closes a list, then goes back to the field without clearing it", () => {
+    const r = keys(CHIPS, "tab", "enter", "escape", "escape");
+    assert.deepEqual(r[2].state, { focus: "session", menu: "", row: 1 });
+    assert.deepEqual(r[3], { state: PICKER_INITIAL, pick: null, pass: false });
+});
+
+test("typing on a chip goes back to the field and types there", () => {
+    for (const names of [["tab", "other"], ["tab", "enter", "other"]]) {
+        const all = keys(CHIPS, ...names);
+        const r = all[all.length - 1];
+        assert.deepEqual(r.state, PICKER_INITIAL);
+        assert.equal(r.pass, true);
+    }
+});
+
+test("a chip that's gone gives the focus back to the field", () => {
+    const [, open] = keys(CHIPS, "tab", "tab");
+    const r = pickerKey(open.state, { ...CHIPS, user: 0 }, "enter");
+    assert.equal(r.state.focus, "field");
+    assert.equal(r.pass, true);
 });

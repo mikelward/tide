@@ -3841,6 +3841,13 @@ talk, a demo, or a meeting room's screen.
       out if the desktop is broken.
   - Restart and Shut down, as on the lock: through logind, never past an
     inhibitor.
+  - **The pickers take keys too.** Tab and Shift+Tab move between the
+    field and the chips, which show it with an accent border. On a chip,
+    Enter, Space or Down opens its list, Up and Down move through it, and
+    Enter or Space picks. Escape closes the list, then goes back to the
+    field. Typing on a chip goes back to the field and types there.
+  - The pointer starts in the middle of the focused monitor, not
+    Hyprland's top left.
 - **The session's environment.** The greeter passes greetd
   `XDG_SESSION_TYPE`, `XDG_SESSION_DESKTOP` (the entry's file name) and
   `XDG_CURRENT_DESKTOP` (its `DesktopNames`). pam_systemd records the first
@@ -4136,6 +4143,8 @@ this spec.
     dismissed every popover. Menus and Chrome extension popovers are
     Wayland popups, which keep their grab here.
   - M2 checks all three.
+- **The pointer starts in the middle** of the focused monitor, not at
+  Hyprland's top left corner.
 - **The pointer never jumps** (`cursor:no_warps true`). `Super+J`,
   the switcher and a new window move focus, not the pointer. The Amethyst and
   qtile configs both turned warping off.

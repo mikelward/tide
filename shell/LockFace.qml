@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Services.UPower
 import "lib/appearance.mjs" as Appearance
 import "lib/clocks.mjs" as Clocks
+import "lib/greeter.mjs" as Greeter
 import "lib/lock.mjs" as Lock
 import "lib/status.mjs" as Status
 
@@ -75,7 +76,7 @@ Item {
     }
 
     readonly property var look: Lock.fieldLook({
-        focused: keys.activeFocus,
+        focused: keys.activeFocus && face.picker.focus === "field",
         keyboard: face.keyboard,
         error: face.lockState.error,
         dark: face.dark,
@@ -121,15 +122,46 @@ Item {
     // Whether another user can be picked now; the greeter says no once the
     // session is starting (Greeter.canPickUser).
     property bool userPickable: true
-    // Which picker's list is open: "", "session" or "user".
-    property string menu: ""
+    // Where the keys go on the greeter, and which picker's list is open
+    // ("", "session" or "user"), with its highlighted row
+    // (Greeter.pickerKey).
+    property var picker: Greeter.PICKER_INITIAL
+    readonly property string menu: picker.menu
+    readonly property int sessionRow: sessions.findIndex(s => s.id === sessionId)
+    readonly property int userRow: users.findIndex(u => u.name === userName)
+    readonly property var chips: ({
+        session: login ? sessions.length : 0,
+        user: login && users.length > 1 && userPickable ? users.length : 0,
+        sessionRow: sessionRow,
+        userRow: userRow,
+    })
+
+    // A chip clicked: its list opens, or closes if it was open, and the
+    // keys follow it there.
+    function toggleMenu(chip) {
+        face.picker = {
+            focus: chip,
+            menu: face.menu === chip ? "" : chip,
+            row: Math.max(0, chip === "session" ? face.sessionRow : face.userRow),
+        };
+    }
+
+    // A row picked, by the keyboard or the pointer.
+    function pickRow(chip, row) {
+        face.picker = { focus: chip, menu: "", row: row };
+        if (chip === "session") {
+            face.pickSession(face.sessions[row].id);
+        } else {
+            face.pickUser(face.users[row].name);
+        }
+    }
     // The room a picker's list has under its chip: the rest of the face
     // below the middle column, less a margin.
     readonly property real menuRoom: face.height - (middle.y + middle.height) - 6 - 16
 
     onUserPickableChanged: {
-        if (!userPickable && menu === "user") {
-            menu = "";
+        if (!userPickable && picker.focus === "user") {
+            picker = Greeter.PICKER_INITIAL;
         }
     }
 
@@ -157,11 +189,6 @@ Item {
 
         Keys.onPressed: keyEvent => {
             keyEvent.accepted = true;
-            // Escape closes an open picker before it clears the field.
-            if (keyEvent.key === Qt.Key_Escape && face.menu !== "") {
-                face.menu = "";
-                return;
-            }
             const event = Lock.keyEvent({
                 key: keyEvent.key === Qt.Key_Return || keyEvent.key === Qt.Key_Enter ? "enter"
                     : keyEvent.key === Qt.Key_Backspace ? "backspace"
@@ -171,6 +198,26 @@ Item {
                 text: keyEvent.text,
                 ctrl: (keyEvent.modifiers & Qt.ControlModifier) !== 0,
             });
+            // On the greeter, Tab reaches the pickers (Greeter.pickerKey).
+            // A key that types nothing, like Shift, leaves the focus be.
+            const pickerName = keyEvent.key === Qt.Key_Tab ? "tab"
+                : keyEvent.key === Qt.Key_Backtab ? "backtab"
+                : keyEvent.key === Qt.Key_Up ? "up"
+                : keyEvent.key === Qt.Key_Down ? "down"
+                : keyEvent.key === Qt.Key_Space ? "space"
+                : keyEvent.key === Qt.Key_Escape ? "escape"
+                : event?.type === "submit" ? "enter"
+                : event !== null ? "other" : "";
+            if (face.login && !face.lockState.saver && pickerName !== "") {
+                const r = Greeter.pickerKey(face.picker, face.chips, pickerName);
+                face.picker = r.state;
+                if (r.pick !== null) {
+                    face.pickRow(r.pick.menu, r.pick.row);
+                }
+                if (!r.pass) {
+                    return;
+                }
+            }
             if (event !== null) {
                 face.event(event);
             } else if (face.lockState.saver) {
@@ -204,7 +251,7 @@ Item {
                 }
             }
             onPressed: {
-                face.menu = "";
+                face.picker = Greeter.PICKER_INITIAL;
                 face.event({ type: "wake" });
             }
             // A wheel or a two-finger scroll is input too, with no move.
@@ -544,17 +591,16 @@ Item {
                         label: face.sessionName
                         trailing: "pan-down-symbolic"
                         visible: face.sessions.length > 0
-                        onClicked: face.menu = face.menu === "session" ? "" : "session"
+                        focused: face.picker.focus === "session"
+                        onClicked: face.toggleMenu("session")
 
                         LockMenu {
                             open: face.menu === "session"
                             maxHeight: face.menuRoom
                             rows: face.sessions.map(s => ({ key: s.id, label: s.name }))
                             selected: face.sessionId
-                            onPicked: key => {
-                                face.menu = "";
-                                face.pickSession(key);
-                            }
+                            current: face.picker.row
+                            onPicked: row => face.pickRow("session", row)
                         }
                     }
 
@@ -565,17 +611,16 @@ Item {
                         trailing: "pan-down-symbolic"
                         visible: face.users.length > 1
                         enabled: face.userPickable
-                        onClicked: face.menu = face.menu === "user" ? "" : "user"
+                        focused: face.picker.focus === "user"
+                        onClicked: face.toggleMenu("user")
 
                         LockMenu {
                             open: face.menu === "user"
                             maxHeight: face.menuRoom
                             rows: face.users.map(u => ({ key: u.name, label: u.label }))
                             selected: face.userName
-                            onPicked: key => {
-                                face.menu = "";
-                                face.pickUser(key);
-                            }
+                            current: face.picker.row
+                            onPicked: row => face.pickRow("user", row)
                         }
                     }
                 }

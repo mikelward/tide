@@ -14,6 +14,9 @@ Rectangle {
     property string tip: ""
     // After the label: a picker's arrow.
     property string trailing: ""
+    // Whether the keys are on it (the greeter's Tab), shown as the field
+    // shows it: an accent border.
+    property bool focused: false
     // On the light face or the dark one (Lock.facePalette).
     property bool dark: true
     readonly property var palette: Lock.facePalette(root.dark)
@@ -29,6 +32,8 @@ Rectangle {
     radius: height / 2
     color: mouse.pressed ? root.ink(0.2) : root.ink(0.1)
     opacity: enabled ? 1 : 0.5
+    border.width: focused ? 1.5 : 0
+    border.color: root.palette.accent
 
     Accessible.role: Accessible.Button
     Accessible.name: label !== "" ? label : tip
