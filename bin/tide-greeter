@@ -16,8 +16,9 @@
 # says so.
 #
 # A greeter that can't run still lets you log in: without its files,
-# Hyprland or qs, or when Hyprland fails, it says why and runs agreety,
-# greetd's own text login, where that's installed.
+# Hyprland or qs, or when Hyprland or qs fails, it says why and runs
+# agreety, greetd's own text login, where that's installed. Without
+# agreety it waits a few seconds and fails, and greetd starts it again.
 #
 # Usage: tide-greeter
 
@@ -26,7 +27,7 @@ prog=tide-greeter
 if test $# -gt 0; then
     case $1 in
         -h | --help)
-            sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '3,23p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
     esac
@@ -37,7 +38,9 @@ fi
 # text_login WHY: says why the greeter can't run, then runs agreety, greetd's
 # own text login, so the machine can still be logged in to and fixed. It's
 # looked for on the PATH and where the distros put it. Without it, fails,
-# and greetd starts the greeter again.
+# and greetd starts the greeter again: after a wait, so a greeter that
+# fails at once every time doesn't flicker the screen, and leaves time to
+# switch to another VT.
 text_login() {
     echo "$prog: $1" >&2
     # $TIDE_GREETER_AGREETY_DIRS stands in for those directories in the tests.
@@ -51,9 +54,15 @@ text_login() {
             exec "$_agreety" --cmd /bin/sh
         fi
     done
-    echo "$prog: and there's no agreety to log in with instead" >&2
+    echo "$prog: and there's no agreety to log in with instead; failing in $retry_delay seconds, for greetd to start the greeter again" >&2
+    if ! sleep "$retry_delay"; then
+        echo "$prog: couldn't wait $retry_delay seconds (sleep failed); failing now" >&2
+    fi
     exit 1
 }
+
+# How long a greeter with no text login to fall back to waits before failing.
+retry_delay=5
 
 share=$(dirname -- "$0")/../share/tide
 config=$share/greeter/hyprland.lua
@@ -104,6 +113,25 @@ else
     echo "$prog: couldn't read the system keymap from localed: $keymap; the greeter types in Hyprland's default layout" >&2
 fi
 
+# Where the greeter's command (greeter/hyprland.lua) leaves qs's exit
+# status: Hyprland exits 0 however qs ended, so this is the only word of a
+# greeter that failed. It's cleared first, so a status here is this run's.
+# Hyprland needs the runtime directory too, so one that's missing costs
+# nothing more.
+unset TIDE_GREETER_QS_STATUS
+qs_status_file=
+if test -n "${XDG_RUNTIME_DIR-}" && test -d "$XDG_RUNTIME_DIR" && test -w "$XDG_RUNTIME_DIR"; then
+    qs_status_file=$XDG_RUNTIME_DIR/tide-greeter-qs
+    if rm -f "$qs_status_file"; then
+        export TIDE_GREETER_QS_STATUS="$qs_status_file"
+    else
+        echo "$prog: can't clear $qs_status_file, so a greeter (qs) that fails won't leave the text login" >&2
+        qs_status_file=
+    fi
+else
+    echo "$prog: no runtime directory to write to (XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR-}), so a greeter (qs) that fails won't leave the text login" >&2
+fi
+
 export TIDE_GREETER_QML="$qml" TIDE_GREETER_GREETD="$greetd_client"
 # Not exec'd: a Hyprland that fails, as one too old for the greeter's
 # config, leaves the text login. It exits 0 once the greeter has.
@@ -112,3 +140,31 @@ status=$?
 if test "$status" -ne 0; then
     text_login "Hyprland exited $status"
 fi
+
+# Hyprland exited 0, as it does whenever qs ends. qs exits 0 once greetd
+# has the session to start (shell/GreetdClient.qml); any other end is a
+# greeter that failed, and starting it again would only fail again. A
+# status that can't be told is taken as a normal end, and said.
+if test -z "$qs_status_file"; then
+    exit 0
+fi
+if ! test -e "$qs_status_file"; then
+    echo "$prog: Hyprland exited 0 and left no exit status for the greeter (qs) in $qs_status_file; taking it as a normal end" >&2
+    exit 0
+fi
+if ! read -r qs_status <"$qs_status_file"; then
+    echo "$prog: can't read the greeter's (qs) exit status from $qs_status_file; taking it as a normal end" >&2
+    exit 0
+fi
+case $qs_status in
+    0) exit 0 ;;
+    [0-9] | [0-9][0-9] | [0-9][0-9][0-9]) ;;
+    *)
+        echo "$prog: the greeter's (qs) exit status in $qs_status_file isn't a number; taking it as a normal end" >&2
+        exit 0
+        ;;
+esac
+if test "$qs_status" -gt 128; then
+    text_login "the greeter (qs) was killed by signal $((qs_status - 128))"
+fi
+text_login "the greeter (qs) exited $qs_status"
