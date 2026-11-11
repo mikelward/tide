@@ -70,6 +70,18 @@ if test -n "$FAKE_READY_CLAIMS" && test "$*" = --ready; then
 fi
 exit "${FAKE_NOTIFY_STATUS:-0}"
 FAKE
+# ps lists the processes it's asked for: its arguments go to the log, and
+# it prints two, or fails with $FAKE_PS_ERR.
+cat > "$fake/ps" <<'FAKE'
+#!/bin/sh
+printf 'ps %s\n' "$*" >> "$FAKE_LOG"
+if test -n "$FAKE_PS_ERR"; then
+    echo "$FAKE_PS_ERR" >&2
+    exit 1
+fi
+printf '   41       00:12 gsettings get org.gnome.desktop.interface color-scheme\n'
+printf '   42    01:02:03 swaync --style style.css\n'
+FAKE
 # Claims the names in $FAKE_NAMES, then exits, which ends the shell's wait;
 # with $FAKE_DAEMON_STAYS it stays up until the test kills it.
 cat > "$tmp/theme-daemon" <<'FAKE'
@@ -227,6 +239,7 @@ FAKE
 chmod +x "$fake"/* "$swww"/* "$swaybg"/* "$qs"/* "$notify"/* "$tmp/theme-daemon" "$tmp/agent" "$tmp/input-setup" "$tmp/input-watch"
 
 both="org.freedesktop.Notifications org.kde.StatusNotifierWatcher"
+tray=org.kde.StatusNotifierWatcher
 
 # run ENV...: runs the shell with the fakes. With $stop_on set, the fakes are
 # stopped as soon as the shell prints a line containing it, which ends a
@@ -428,11 +441,52 @@ run FAKE_NAMES="org.freedesktop.Notifications" FAKE_DAEMON_STAYS=1
 check "the failure passes on busctl's last error" \
     contains "$(cat "$tmp/err")" "(last busctl error: Failed to get credentials: No such device or address)"
 
+# A start that gives up lists what the unit was running, from its cgroup,
+# so whatever was stuck is named. The cgroup here is a directory of the
+# test's.
+mkdir "$tmp/cgroup"
+printf '41\n42\n' > "$tmp/cgroup/cgroup.procs"
+listed="tide-shell: what tide.service was running (pid, age, command):
+tide-shell:    41       00:12 gsettings get org.gnome.desktop.interface color-scheme
+tide-shell:    42    01:02:03 swaync --style style.css"
+run FAKE_NAMES="org.freedesktop.Notifications" FAKE_DAEMON_STAYS=1 TIDE_SHELL_CGROUP="$tmp/cgroup"
+check "a start that timed out lists the unit's processes, with age and command" contains "$(cat "$tmp/err")" "$listed"
+check "they're the ones in the unit's cgroup" \
+    test "$(grep '^ps ' "$tmp/log")" = "ps -o pid=,etime=,args= -p 41,42"
+check "listing them doesn't change how the start fails" test "$status" -eq 1
+run FAKE_NAMES="org.freedesktop.Notifications" FAKE_DAEMON_EXIT=5 TIDE_SHELL_CGROUP="$tmp/cgroup"
+check "a theme daemon that exits early lists the unit's processes too" contains "$(cat "$tmp/err")" "$listed"
+stop_on="tide-shell:    42 "
+run FAKE_NAMES="$tray" FAKE_DAEMON_STAYS=1 TIDE_SHELL_LATE_WAIT=3600 TIDE_SHELL_CGROUP="$tmp/cgroup"
+stop_on=
+check "a shell that goes on without notifications lists them" contains "$(cat "$tmp/err")" "$listed"
+check "once" test "$(grep -c 'what tide.service was running' "$tmp/err")" -eq 1
+# What it can't list it says, and the start fails as it would have.
+run FAKE_NAMES="org.freedesktop.Notifications" FAKE_DAEMON_STAYS=1 TIDE_SHELL_CGROUP="$tmp/cgroup" FAKE_PS_ERR="ps: bad pid list"
+check "a ps that fails is reported" \
+    contains "$(cat "$tmp/err")" "couldn't list what tide.service was running (ps: ps: bad pid list)"
+check "a ps that fails leaves the failure as it was" test "$status" -eq 1
+check "with its report" contains "$(cat "$tmp/err")" "not ready after 1 s; no owner in tide.service for: org.kde.StatusNotifierWatcher"
+run FAKE_NAMES="org.freedesktop.Notifications" FAKE_DAEMON_STAYS=1 TIDE_SHELL_CGROUP="$tmp/no-cgroup"
+check "a cgroup that can't be read is reported" \
+    test -n "$(grep "couldn't list what tide.service was running (cat: .*no-cgroup/cgroup.procs" "$tmp/err")"
+check "a cgroup that can't be read leaves the failure as it was" test "$status" -eq 1
+: > "$tmp/cgroup/cgroup.procs"
+run FAKE_NAMES="org.freedesktop.Notifications" FAKE_DAEMON_STAYS=1 TIDE_SHELL_CGROUP="$tmp/cgroup"
+check "an empty cgroup is reported" \
+    contains "$(cat "$tmp/err")" "couldn't list what tide.service was running: $tmp/cgroup/cgroup.procs is empty"
+check "an empty cgroup runs no ps" test -z "$(grep '^ps ' "$tmp/log")"
+# Run by hand, as here, the shell isn't in tide.service's cgroup.
+run FAKE_NAMES="org.freedesktop.Notifications" FAKE_DAEMON_STAYS=1
+check "outside the unit, it says it can't list them" \
+    contains "$(cat "$tmp/err")" "couldn't list what tide.service was running"
+check "outside the unit, it runs no ps" test -z "$(grep '^ps ' "$tmp/log")"
+check "outside the unit, the failure is as it was" test "$status" -eq 1
+
 # A notification server that's late doesn't take a working bar down: once
 # the tray is there, the shell reports ready without it, says so, and says
 # when it turns up. Here it gets its name as ready is reported. The later
 # lines come from a shell still running: its exit ends the look for it.
-tray=org.kde.StatusNotifierWatcher
 stop_on="notifications work"
 run FAKE_NAMES="$tray" FAKE_DAEMON_STAYS=1 FAKE_READY_CLAIMS=org.freedesktop.Notifications
 stop_on=

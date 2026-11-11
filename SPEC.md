@@ -389,7 +389,10 @@ times, and end in the fallback terminal. The shell reports ready, logs
 the missing name, who should own it and what the bus last said, and goes
 on without notifications. It looks for the owner for 60 s more
 (`TIDE_SHELL_LATE_WAIT`), and logs when it appears, or that it hasn't;
-`doctor` reports a missing owner at any time. The polkit agent's registration isn't
+`doctor` reports a missing owner at any time. A start that gives up, and
+one that goes on without notifications, also log what the unit was
+running: each process in its cgroup, with its age and command line, so one
+that was stuck is named. The polkit agent's registration isn't
 observable from a script, so it isn't waited for. Its exit doesn't fail the
 unit, either: an agent exits at once when another already holds the
 session, and failing the unit for that restarted the bar in a loop at

@@ -33,7 +33,8 @@
 # tray is there: failing would take a working bar down with it. The shell
 # reports ready, says what's missing, and looks for it for
 # $TIDE_SHELL_LATE_WAIT seconds more, to say when it appears, or that it
-# hasn't. The polkit
+# hasn't. Either report lists what the unit was running, each process with
+# its age and command line, so one that was stuck is named. The polkit
 # agent's registration can't be observed from here, so it isn't waited for,
 # and its exit doesn't end the unit: an agent exits at once when another
 # already holds the session, and restarting the shell for that only looped
@@ -45,6 +46,8 @@
 #   $TIDE_SHELL_WAIT    seconds (1-3600) the owners get to appear (12)
 #   $TIDE_SHELL_LATE_WAIT  seconds (1-3600) a late notification server is
 #                             looked for after that (60)
+#   $TIDE_SHELL_CGROUP  the cgroup directory whose processes those reports
+#                             list (default: this unit's)
 #   $TIDE_BAR           quickshell or waybar (default: quickshell when
 #                             `qs` and the shell's config are installed, and
 #                             qs is Quickshell 0.3 or newer)
@@ -159,6 +162,48 @@ owned() {
     _where=$(printf '%s\n' "$out" | sed -n 's/^UserUnit=//p' | head -n 1)
     elsewhere="held by ${_comm:-a process} (pid ${_pid:-unknown}) in ${_where:-no user unit}"
     return 1
+}
+
+# unit_processes: logs what this unit is running, from its cgroup, each
+# process with its age and command line, so a start that gave up names what
+# was stuck: a gsettings, a flock, a swaync that never took its name. It
+# only adds to a report, so whatever it can't do it says, and returns.
+# Outside the unit (a run by hand) there's no cgroup of its own to list.
+unit_processes() {
+    _dir=${TIDE_SHELL_CGROUP:-}
+    if test -z "$_dir"; then
+        if ! _line=$(grep -m 1 '^0::' /proc/self/cgroup 2>&1); then
+            log "couldn't list what $unit was running: /proc/self/cgroup has no cgroup v2 entry${_line:+ ($(printf '%s\n' "$_line" | tail -n 1))}"
+            return 0
+        fi
+        _path=${_line#0::}
+        case $_path in
+            */"$unit") ;;
+            *)
+                log "couldn't list what $unit was running: this isn't running in it, but in the cgroup $_path"
+                return 0
+                ;;
+        esac
+        _dir=/sys/fs/cgroup$_path
+    fi
+    if ! _pids=$(cat "$_dir/cgroup.procs" 2>&1); then
+        log "couldn't list what $unit was running ($(printf '%s\n' "$_pids" | tail -n 1))"
+        return 0
+    fi
+    # One comma-separated list, as ps takes.
+    _pids=$(printf '%s\n' "$_pids" | tr -s '\n' ',' | sed 's/,$//')
+    if test -z "$_pids"; then
+        log "couldn't list what $unit was running: $_dir/cgroup.procs is empty"
+        return 0
+    fi
+    if ! _ps=$(ps -o pid=,etime=,args= -p "$_pids" 2>&1); then
+        log "couldn't list what $unit was running (ps: $(printf '%s\n' "$_ps" | tail -n 1))"
+        return 0
+    fi
+    log "what $unit was running (pid, age, command):"
+    printf '%s\n' "$_ps" | while IFS= read -r _process; do
+        log "$_process"
+    done
 }
 
 # No cleanup trap: stopping the unit kills its whole cgroup, which also
@@ -532,6 +577,7 @@ while :; do
     test -z "$late$missing" && break
     if test "$exited" = yes; then
         log "the theme daemon exited ($(cat "$theme_status")) before its owners were up; no owner in $unit for:$late$missing"
+        unit_processes
         exit 1
     fi
     if test "$i" -ge "$((wait * 10))"; then
@@ -539,9 +585,11 @@ while :; do
             # The bar is up. Failing now would have systemd kill it, three
             # times over, for a server that may only be slow.
             log "no owner in $unit for:$late after ${wait} s${busctl_err:+ (last busctl error: $busctl_err)}; the bar is up, so the shell goes on without notifications for now, and says here when $notifications_owner has the name"
+            unit_processes
             break
         fi
         log "not ready after ${wait} s; no owner in $unit for:$late$missing${busctl_err:+ (last busctl error: $busctl_err)}"
+        unit_processes
         exit 1
     fi
     sleep 0.1
