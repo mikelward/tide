@@ -580,6 +580,22 @@ local function is_dsp(target, name)
     return type(target) == "table" and target.dsp == name
 end
 
+-- A tide session key's command, from inside the systemd-cat that logs it
+-- (hyprland.lua's `logged`), under `name` (tide-keys by default); an
+-- error for one that isn't logged so.
+local function unlogged(args, name)
+    name = name or "tide-keys"
+    local prefix = "systemd-cat --identifier=" .. name .. " -- sh -c "
+    if args:sub(1, #prefix) ~= prefix then
+        error("not logged as " .. name .. ": " .. args, 2)
+    end
+    local quoted = args:match(" " .. name:gsub("%-", "%%-") .. " '(.*)'$")
+    if quoted == nil then
+        error("no command after tide-keys: " .. args, 2)
+    end
+    return (quoted:gsub("'\\''", "'"))
+end
+
 local function fire(event, ...)
     for _, fn in ipairs(S.handlers[event] or {}) do
         fn(...)
@@ -1765,7 +1781,7 @@ test("undocked, tide's Lock locks as the lid closes", function()
     lid("on")
     eq(1, #S.dispatched)
     eq("exec_cmd", S.dispatched[1].dsp)
-    eq("tide lock || loginctl lock-session", S.dispatched[1].args)
+    eq("tide lock || loginctl lock-session", unlogged(S.dispatched[1].args))
     eq(0, #S.monitors, "the panel is left alone")
 end)
 
@@ -2214,7 +2230,7 @@ end)
 --------------------------------------------------------------------------------
 test("Super+L locks with tide lock in the tide session, with hyprlock outside it", function()
     load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
-    eq("tide lock || loginctl lock-session", bind("SUPER + L").target.args)
+    eq("tide lock || loginctl lock-session", unlogged(bind("SUPER + L").target.args))
     load()
     eq("hyprlock", bind("SUPER + L").target.args)
 end)
@@ -2223,16 +2239,16 @@ test("the tide session's autostart is uwsm finalize alone", function()
     load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
     fire("hyprland.start")
     eq(1, #S.execs, "one command")
-    eq("uwsm finalize", S.execs[1])
+    eq("uwsm finalize", unlogged(S.execs[1], "tide-hyprland"))
 end)
 
 test("in the tide session, app keys go through tide launch", function()
     load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
-    eq("tide launch --app 'kitty' -- kitty", bind("SUPER + T").target.args)
-    eq("tide launch --app '*' -- ~/scripts/runenv browser1", bind("SUPER + G").target.args)
-    eq("tide launch --app 'org.gnome.Calculator' -- gnome-calculator", bind("XF86Calculator").target.args)
+    eq("tide launch --app 'kitty' -- kitty", unlogged(bind("SUPER + T").target.args))
+    eq("tide launch --app '*' -- ~/scripts/runenv browser1", unlogged(bind("SUPER + G").target.args))
+    eq("tide launch --app 'org.gnome.Calculator' -- gnome-calculator", unlogged(bind("XF86Calculator").target.args))
     -- Not apps: these stay plain commands.
-    eq("qs -c tide ipc call notifications toggle || swaync-client -t -sw", bind("SUPER + SHIFT + N").target.args)
+    eq("qs -c tide ipc call notifications toggle || swaync-client -t -sw", unlogged(bind("SUPER + SHIFT + N").target.args))
 end)
 
 test("Super+Alt+Space switches to the next keyboard layout, on the lock screen too", function()
@@ -2311,6 +2327,36 @@ test("Hyprland's log also goes to stdout, for the journal, without color codes",
     eq(false, S.config.debug.colored_stdout_logs, "colored")
 end)
 
+test("a tide session key logs its start, output and end to the journal", function()
+    load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
+    local args = bind("SUPER + L").target.args
+    -- Run as Hyprland would, with systemd-cat and tide stubbed: the stub
+    -- marks what it would send to the journal.
+    local bin = os.tmpname()
+    os.remove(bin)
+    assert(os.execute("mkdir -p '" .. bin .. "'"))
+    local function stub(name, body)
+        local f = assert(io.open(bin .. "/" .. name, "w"))
+        f:write("#!/bin/sh\n" .. body .. "\n")
+        f:close()
+        assert(os.execute("chmod +x '" .. bin .. "/" .. name .. "'"))
+    end
+    stub("systemd-cat", 'test "$1" = --identifier=tide-keys || exit 9; shift 2; "$@" 2>&1 | while IFS= read -r l; do echo "journal: $l"; done')
+    stub("tide", 'echo "tide $*"; exit 3')
+    stub("loginctl", 'echo "loginctl $*"')
+    local p = assert(io.popen("PATH='" .. bin .. ":/usr/bin:/bin' /bin/sh -c " .. "'" .. args:gsub("'", "'\\''") .. "'"))
+    local out = p:read("a")
+    p:close()
+    assert(os.execute("rm -rf '" .. bin .. "'"))
+    eq("journal: running: tide lock || loginctl lock-session\n"
+        .. "journal: tide lock\n"
+        .. "journal: loginctl lock-session\n"
+        .. "journal: done: tide lock || loginctl lock-session\n", out)
+    -- Outside the tide session, the command runs as it is.
+    load()
+    eq("hyprlock", bind("SUPER + L").target.args)
+end)
+
 test("the pointer starts in the middle of the focused monitor", function()
     load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
     -- A 4K panel at 1.5 to the right of another: its middle in layout units.
@@ -2325,7 +2371,7 @@ test("the pointer starts in the middle of the focused monitor", function()
     eq(1, #moves, "one pointer move")
     eq(3200, moves[1].x, "x")
     eq(720, moves[1].y, "y")
-    eq("uwsm finalize", S.execs[1], "and the session still starts")
+    eq("uwsm finalize", unlogged(S.execs[1], "tide-hyprland"), "and the session still starts")
 end)
 
 test("with no monitor to read, the pointer stays put and the session starts", function()
@@ -2333,7 +2379,7 @@ test("with no monitor to read, the pointer stays put and the session starts", fu
     S.active_monitor = nil
     fire("hyprland.start")
     eq(0, #S.dispatched, "no move")
-    eq("uwsm finalize", S.execs[1])
+    eq("uwsm finalize", unlogged(S.execs[1], "tide-hyprland"))
 end)
 
 test("autostart runs on hyprland.start, not at load", function()
@@ -2362,16 +2408,16 @@ end)
 --------------------------------------------------------------------------------
 test("with no options, tide's own defaults", function()
     load({ opts = {}, env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
-    eq("tide launch --app '*' -- xdg-terminal-exec", bind("SUPER + T").target.args)
-    eq("tide launch --app '*' -- xdg-open " .. tmp, bind("SUPER + E").target.args)
+    eq("tide launch --app '*' -- xdg-terminal-exec", unlogged(bind("SUPER + T").target.args))
+    eq("tide launch --app '*' -- xdg-open " .. tmp, unlogged(bind("SUPER + E").target.args))
     eq(nil, S.binds["|SUPER + G"], "no app of anyone's own")
     eq("us", S.config.input.kb_layout)
     eq("", S.config.input.kb_variant)
     eq(false, S.config.input.left_handed)
-    eq(tmp .. "/.config/hypr/tide/next-layout.sh", bind("SUPER + ALT + Space").target.args)
-    truthy(bind("SUPER + Space").target.args:find("|| notify-send -a tide 'No launcher'", 1, true), "the launcher says why it's missing")
-    truthy(bind("Print").target.args:find("grim - | wl-copy -t image/png", 1, true), "the screenshot is grim's")
-    truthy(bind("SHIFT + Print").target.args:find("slurp", 1, true), "the region is slurp's")
+    eq(tmp .. "/.config/hypr/tide/next-layout.sh", unlogged(bind("SUPER + ALT + Space").target.args))
+    truthy(unlogged(bind("SUPER + Space").target.args):find("|| notify-send -a tide 'No launcher'", 1, true), "the launcher says why it's missing")
+    truthy(unlogged(bind("Print").target.args):find("grim - | wl-copy -t image/png", 1, true), "the screenshot is grim's")
+    truthy(unlogged(bind("SHIFT + Print").target.args):find("slurp", 1, true), "the region is slurp's")
 end)
 
 test("with no options, a plain login starts hypridle and the input scripts alone", function()
