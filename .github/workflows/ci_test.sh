@@ -40,9 +40,46 @@ conf_line=$(printf '%s\n' "$integration_job" | grep -n '80-ci-timeouts' | head -
 apt_line=$(printf '%s\n' "$integration_job" | grep -n 'apt-get' | head -n 1 | cut -d: -f1)
 check "the integration job writes apt's timeouts" 'test -n "$conf_line"'
 check "before its first apt-get" 'test -n "$conf_line" && test -n "$apt_line" && test "${conf_line%%:*}" -lt "$apt_line"'
-for setting in 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' 'Acquire::Retries "3";'; do
+for setting in 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' 'Acquire::Retries "3";' 'APT::Update::Error-Mode "any";'; do
     check "the integration job's apt config says $setting" 'printf "%s\n" "$conf_line" | grep -q -F -- "$setting"'
 done
+# An archive it can't reach fails `apt-get update`, which is tried again:
+# without both, the install after it finds no package and says only that.
+# The job's own loop runs here, on an apt-get that fails $FAILS times and a
+# sleep that returns at once; "installed" stands for the install after it.
+stubs=$(mktemp -d)
+trap 'rm -rf "$stubs"' EXIT
+cat >"$stubs/apt-get" <<'STUB'
+#!/bin/sh
+n=$(cat "$STUBS/tries" 2>/dev/null || echo 0)
+n=$((n + 1))
+echo "$n" >"$STUBS/tries"
+test "$n" -gt "$FAILS"
+STUB
+printf '#!/bin/sh\necho "$1" >>"$STUBS/slept"\n' >"$stubs/sleep"
+printf '#!/bin/sh\nexit 2\n' >"$stubs/getent"
+chmod +x "$stubs/apt-get" "$stubs/sleep" "$stubs/getent"
+update_loop=$(printf '%s\n' "$integration_job" | awk '/^ *tries=0$/ { on = 1 } on; on && /^ *done$/ { exit }')
+check "the integration job has a loop around apt-get update" 'test -n "$update_loop"'
+# Runs the loop with apt-get failing $1 times; sets $status, $attempts, $out.
+update() {
+    rm -f "$stubs/tries" "$stubs/slept"
+    out=$(STUBS=$stubs FAILS=$1 PATH="$stubs:$PATH" sh -e -c "$update_loop
+echo installed" 2>/dev/null)
+    status=$?
+    attempts=$(cat "$stubs/tries")
+}
+update 0
+check "an update that works runs once and installs" \
+    'test "$status" -eq 0 && test "$attempts" -eq 1 && test "$out" = installed && ! test -e "$stubs/slept"'
+update 2
+check "an update that fails twice is tried a third time, then installs" \
+    'test "$status" -eq 0 && test "$attempts" -eq 3 && test "$out" = installed'
+check "waiting 15 s before each new try" 'test "$(tr "\n" " " <"$stubs/slept")" = "15 15 "'
+update 99
+check "an update that keeps failing stops after four tries and fails the step" \
+    'test "$status" -ne 0 && test "$attempts" -eq 4'
+check "without installing" 'test -z "$out"'
 
 # One workflow-level concurrency group: a pull request's runs share one, keyed
 # by number, and a newer push cancels the stale run; a push to main is keyed by
