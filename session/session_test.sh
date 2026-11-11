@@ -274,16 +274,28 @@ check "the tidewm entry is offered only where tidewm is installed" \
 check "the tidewm entry says which compositor it runs" \
     has_line "$tidewm_entry" "Name=tide (tidewm)"
 # A stub tidewm runs its -s command as tidewm does, under /bin/sh -c, with
-# a stub uwsm that prints what it was asked.
+# a stub uwsm that prints what it was asked. It records the compositor
+# variables it was started with, and gives its command $FAKE_TIDEWM_SWAYSOCK
+# as SWAYSOCK, as tidewm sets its socket, and $FAKE_TIDEWM_I3SOCK as I3SOCK.
 mkdir -p "$tmp/tidewm-bin"
-cat > "$tmp/tidewm-bin/tidewm" <<'STUB'
+cat > "$tmp/tidewm-bin/tidewm" <<STUB
 #!/bin/sh
-echo "tidewm $*"
-test "$1" = -s && /bin/sh -c "$2"
+echo "tidewm \$*"
+for var in WAYLAND_DISPLAY DISPLAY SWAYSOCK I3SOCK HYPRLAND_INSTANCE_SIGNATURE; do
+    eval "echo \$var=\\\${\$var-unset}"
+done > "$tmp/tidewm-env"
+test -z "\$FAKE_TIDEWM_SWAYSOCK" || export SWAYSOCK="\$FAKE_TIDEWM_SWAYSOCK"
+test -z "\$FAKE_TIDEWM_I3SOCK" || export I3SOCK="\$FAKE_TIDEWM_I3SOCK"
+test "\$1" = -s && /bin/sh -c "\$2"
 STUB
-# The stub uwsm fails with $FAKE_UWSM_FAILS.
-# shellcheck disable=SC2016 # the stub expands them when it runs
-printf '#!/bin/sh\necho "uwsm $*"\ntest -z "$FAKE_UWSM_FAILS"\n' > "$tmp/tidewm-bin/uwsm"
+# The stub uwsm fails with $FAKE_UWSM_FAILS, and records the sockets it
+# would hand the session's units.
+cat > "$tmp/tidewm-bin/uwsm" <<STUB
+#!/bin/sh
+echo "uwsm \$*"
+echo "SWAYSOCK=\${SWAYSOCK-unset} I3SOCK=\${I3SOCK-unset}" > "$tmp/tidewm-finalized"
+test -z "\$FAKE_UWSM_FAILS"
+STUB
 # A stub tide-msg prints what it was asked, fails with $FAKE_TIDEMSG_FAILS,
 # and with $FAKE_TIDEMSG_HANGS never answers: it waits to read a FIFO that
 # nothing ever writes.
@@ -300,7 +312,7 @@ echo "\$*" >> "$tmp/logged"
 STUB
 chmod +x "$tmp/tidewm-bin/tidewm" "$tmp/tidewm-bin/uwsm" "$tmp/tidewm-bin/tide-msg" "$tmp/tidewm-bin/logger"
 # How the startup command ends: telling uwsm, or logging that it couldn't.
-fin="uwsm finalize SWAYSOCK || logger -t tide-tidewm -- 'uwsm finalize failed, so uwsm will end the session' 2>/dev/null"
+fin="test -n \"\$I3SOCK\" || test -z \"\$SWAYSOCK\" || export I3SOCK=\"\$SWAYSOCK\"; uwsm finalize SWAYSOCK I3SOCK || logger -t tide-tidewm -- 'uwsm finalize failed, so uwsm will end the session' 2>/dev/null"
 # What the startup command logs before anything else.
 up="logger -t tide-tidewm -- 'tidewm is up; going home and telling uwsm the session is ready' 2>/dev/null; "
 mkdir -p "$tmp/tidewm-config/hypr"
@@ -315,8 +327,36 @@ check "the tidewm wrapper starts tidewm, passing its arguments through" \
     test "$(printf '%s\n' "$tidewm_ran" | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c x"
 check "before the shell has named home, tidewm goes to in and keeps it" \
     test "$(printf '%s\n' "$tidewm_ran" | sed -n 2p)" = "tide-msg workspace number in; persist workspace in"
-check "tidewm's startup command finalizes the session with tidewm's IPC socket" \
-    test "$(printf '%s\n' "$tidewm_ran" | sed -n 3p)" = "uwsm finalize SWAYSOCK"
+check "tidewm's startup command finalizes the session with tidewm's IPC socket, under both names" \
+    test "$(printf '%s\n' "$tidewm_ran" | sed -n 3p)" = "uwsm finalize SWAYSOCK I3SOCK"
+# Quickshell's I3 client reads I3SOCK before SWAYSOCK. A tidewm that sets
+# only SWAYSOCK has it handed on as I3SOCK too, so one the user manager
+# kept from an earlier session is replaced; a tidewm that sets its own
+# keeps it.
+tidewm_start FAKE_TIDEWM_SWAYSOCK=/run/tidewm.sock >/dev/null
+check "a tidewm that sets no I3SOCK has its SWAYSOCK handed on as I3SOCK" \
+    test "$(cat "$tmp/tidewm-finalized")" = "SWAYSOCK=/run/tidewm.sock I3SOCK=/run/tidewm.sock"
+tidewm_start FAKE_TIDEWM_SWAYSOCK=/run/tidewm.sock FAKE_TIDEWM_I3SOCK=/run/tidewm-i3.sock >/dev/null
+check "a tidewm that sets I3SOCK has its own handed on" \
+    test "$(cat "$tmp/tidewm-finalized")" = "SWAYSOCK=/run/tidewm.sock I3SOCK=/run/tidewm-i3.sock"
+tidewm_start >/dev/null
+check "with no socket at all, no empty I3SOCK is handed on" \
+    test "$(cat "$tmp/tidewm-finalized")" = "SWAYSOCK=unset I3SOCK=unset"
+# What an earlier session left in the environment would mislead tidewm (a
+# WAYLAND_DISPLAY or DISPLAY makes wlroots run it as a window there) and
+# its clients, so tidewm starts with none of it, and the log says so.
+: > "$tmp/logged"
+tidewm_start WAYLAND_DISPLAY=wayland-1 DISPLAY=:0 SWAYSOCK=/run/old.sock I3SOCK=/run/old-i3.sock \
+    HYPRLAND_INSTANCE_SIGNATURE=old FAKE_TIDEWM_SWAYSOCK=/run/tidewm.sock >/dev/null
+check "tidewm starts without an earlier session's compositor variables" \
+    test "$(tr '\n' ' ' < "$tmp/tidewm-env")" = "WAYLAND_DISPLAY=unset DISPLAY=unset SWAYSOCK=unset I3SOCK=unset HYPRLAND_INSTANCE_SIGNATURE=unset "
+check "so a stale I3SOCK doesn't reach the session's units" \
+    test "$(cat "$tmp/tidewm-finalized")" = "SWAYSOCK=/run/tidewm.sock I3SOCK=/run/tidewm.sock"
+check "and the log names what was dropped" \
+    grep -qxF -- "-t tide-tidewm -- dropping what an earlier session left in the environment: WAYLAND_DISPLAY DISPLAY SWAYSOCK I3SOCK HYPRLAND_INSTANCE_SIGNATURE" "$tmp/logged"
+: > "$tmp/logged"
+tidewm_start >/dev/null
+check "a clean environment has nothing dropped, and nothing said of it" not grep -q "dropping" "$tmp/logged"
 # Each step lands in the journal, so a login that shows no desktop says how
 # far it got.
 check "the tidewm wrapper logs that the session is starting" \
@@ -335,7 +375,7 @@ check "tidewm goes to the home the shell names, as written" \
     test "$(printf '%s\n' "$tidewm_ran" | sed -n 2p)" = 'tide-msg workspace number my $HOME & mail; persist workspace my $HOME & mail'
 tidewm_ran=$(tidewm_start FAKE_TIDEMSG_FAILS=1)
 check "the session finalizes even if tidewm refuses home" \
-    test "$(printf '%s\n' "$tidewm_ran" | sed -n 3p)" = "uwsm finalize SWAYSOCK"
+    test "$(printf '%s\n' "$tidewm_ran" | sed -n 3p)" = "uwsm finalize SWAYSOCK I3SOCK"
 printf '%s\n' 'return {' '    home = "a;b",' '}' > "$tmp/tidewm-config/hypr/tide-workspaces.lua"
 tidewm_ran=$(tidewm_start)
 check "a home with a ; goes to tidewm in quotes, as it reads a quoted name" \
@@ -344,7 +384,7 @@ printf '%s\n' 'return {' "    home = \"it's\"," '}' > "$tmp/tidewm-config/hypr/t
 tidewm_ran=$(tidewm_start)
 check "a home tidewm's start can't name is left to the shell" \
     test "$tidewm_ran" = "tidewm -s ${up}$fin -c x
-uwsm finalize SWAYSOCK"
+uwsm finalize SWAYSOCK I3SOCK"
 # Without a config of your own, tidewm gets tide's; with one, or a -c,
 # it's tidewm's to read.
 rm -f "$tmp/tidewm-config/hypr/tide-workspaces.lua"
@@ -376,7 +416,7 @@ mkfifo "$tmp/never"
 tidewm_ran=$(timeout 20 env PATH="$tmp/tidewm-bin:/usr/bin:/bin" XDG_CONFIG_HOME="$tmp/tidewm-config" \
     FAKE_TIDEMSG_HANGS="$tmp/never" /bin/sh "$tidewm_wrapper" -c x 2>/dev/null)
 check "the session finalizes within seconds even if going home hangs" \
-    test "$(printf '%s\n' "$tidewm_ran" | tail -n 1)" = "uwsm finalize SWAYSOCK"
+    test "$(printf '%s\n' "$tidewm_ran" | tail -n 1)" = "uwsm finalize SWAYSOCK I3SOCK"
 : > "$tmp/logged"
 tidewm_start FAKE_UWSM_FAILS=1 >/dev/null
 check "a failed finalize is logged" \
