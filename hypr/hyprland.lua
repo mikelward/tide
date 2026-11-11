@@ -376,7 +376,29 @@ end
 -- SPEC.md §5.4): tide.service runs the bar, notifications, wallpaper,
 -- polkit agent and input setup, and hypridle.service the idle daemon, each
 -- once and only in that session. The list below is for a plain Hyprland login.
+-- The pointer starts in the middle of the focused monitor, where the eye
+-- is, not at Hyprland's top left corner. `mode` is the monitor's size in
+-- the layout's units, scaled and turned; a monitor that can't be read
+-- leaves the pointer where it is, and says so.
+local function center_pointer()
+    local ok, err = pcall(function()
+        local mon = hl.get_active_monitor()
+        if mon == nil then
+            error("no monitor yet")
+        end
+        local size = mon.mode
+        hl.dispatch(hl.dsp.cursor.move({
+            x = mon.x + math.floor(size.width / 2),
+            y = mon.y + math.floor(size.height / 2),
+        }))
+    end)
+    if not ok then
+        print("tide: couldn't center the pointer: " .. tostring(err))
+    end
+end
+
 hl.on("hyprland.start", function()
+    center_pointer()
     if tide_session then
         hl.exec_cmd("uwsm finalize")
         return
