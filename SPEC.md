@@ -482,7 +482,11 @@ flowchart TD
     the greeter's configs turn on `debug:enable_stdout_logs`. Its stdout is
     the journal's: uwsm's `wayland-wm@` unit, and greetd's.
   - Hyprland sends what `exec` starts to `/dev/null`, so the greeter's
-    command pipes Quickshell's output through `systemd-cat`.
+    command pipes Quickshell's output through `systemd-cat`. In the tide
+    session, a key's command, `uwsm finalize` and the input script run
+    under `systemd-cat` too: the journal gets a line as each starts, its
+    output, and how it ended, as `tide-keys`, `tide-hyprland` and
+    `tide-input`.
 - **Nothing holds up telling uwsm the session is ready.** uwsm ends a
   session that never says so. Going home, before that, is given 5 seconds
   (`tide-msg` has no limit of its own), and a failed `uwsm finalize` is

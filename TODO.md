@@ -7,6 +7,12 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **A key's app logs as `tide-keys`** (2026-11-11): the systemd-cat a
+  key's command runs under waits while `tide launch` runs the app, so an
+  app started from a key logs its output there, and a small `sh` and
+  `systemd-cat` stay until it exits. The alternative is logging only
+  `tide launch`'s own start and handoff. Reversible, in
+  `hypr/hyprland.lua`'s `logged`.
 - **Hyprland always logs to stdout too** (2026-11-11), in the session and
   the greeter, so the journal keeps it; it doubles what Hyprland writes,
   at its default level. The greeter's Quickshell goes to the journal as
@@ -1166,15 +1172,9 @@ once you have agreed with it or reversed it.
 ## Logs that outlast what made them (AGENTS.md **Logs**)
 
 Each process logs its start, its end and how, and its errors, where a
-logout and a reboot leave them. Done: the greeter and both Hyprlands
-(SPEC.md §5.4). Left:
+logout and a reboot leave them. Done: the greeter, both Hyprlands and
+the session's keys (SPEC.md §5.4). Left:
 
-- [ ] **Session keys run with their output thrown away.** Hyprland sends
-  what `exec` starts to `/dev/null`, so a bound command that fails (a
-  screenshot, `tide lock`'s fallback) leaves no trace. Run `exec`'s
-  commands (`hypr/hyprland.lua`) through one logging wrapper: its start,
-  its exit status, and its output, to the journal under the command's
-  name. Apps already log through `uwsm app`'s units.
 - [ ] **`tide doctor` says when the journal doesn't outlast a reboot**:
   journald's `Storage=volatile`, or `auto` with no `/var/log/journal`.
 - [ ] **Audit the rest**: each `Process` in the shell logs a start that

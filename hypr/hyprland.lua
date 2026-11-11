@@ -106,6 +106,25 @@ local mod = "SUPER"
 -- `tide launch`; a plain Hyprland login keeps doing both itself.
 local tide_session = (":" .. (os.getenv("XDG_CURRENT_DESKTOP") or "") .. ":"):find(":tide:", 1, true) ~= nil
 
+-- Hyprland sends what it runs to /dev/null, so in the tide session what
+-- it runs goes through systemd-cat (uwsm's session always has it): the
+-- journal gets, under `name`, a line as it starts, its output, and how it
+-- ended (tide SPEC.md §5.4). Outside it, the command runs as it is.
+local LOGGED_RUNNER = 'echo "running: $1"; sh -c "$1"; s=$?; '
+    .. 'if test "$s" -eq 0; then echo "done: $1"; else echo "exited $s: $1"; fi; exit "$s"'
+
+local function sh_quote(s)
+    return "'" .. (s:gsub("'", "'\\''")) .. "'"
+end
+
+local function logged(cmd, name)
+    if not tide_session then
+        return cmd
+    end
+    return "systemd-cat --identifier=" .. name .. " -- sh -c " .. sh_quote(LOGGED_RUNNER) .. " " .. name .. " " .. sh_quote(cmd)
+end
+
+
 -- The tide session locks with tide-lock (tide SPEC.md §10). `tide lock`
 -- goes through logind: `loginctl lock-session` raises its Lock signal, and
 -- hypridle's lock_cmd starts tide-lock.service. Without hypridle to answer,
@@ -400,7 +419,7 @@ end
 hl.on("hyprland.start", function()
     center_pointer()
     if tide_session then
-        hl.exec_cmd("uwsm finalize")
+        hl.exec_cmd(logged("uwsm finalize", "tide-hyprland"))
         return
     end
     hl.exec_cmd("hypridle")
@@ -417,7 +436,7 @@ end)
 -- defaults, which would leave mice right-handed with the slow wheel, so the
 -- per-device settings go back on after each one, in either session.
 hl.on("config.reloaded", function()
-    hl.exec_cmd(run .. scripts .. "/apply-input.sh")
+    hl.exec_cmd(logged(run .. scripts .. "/apply-input.sh", "tide-input"))
 end)
 
 --------------------------------------------------------------------------------
@@ -1032,7 +1051,7 @@ local function key(k)
 end
 
 local function exec(cmd)
-    return hl.dsp.exec_cmd(cmd)
+    return hl.dsp.exec_cmd(logged(cmd, "tide-keys"))
 end
 
 -- Starts an app. In the tide session it goes through `tide
@@ -2607,7 +2626,7 @@ _G.conf_input = {
     end,
     reload = function()
         apply_tide_input()
-        hl.exec_cmd(run .. scripts .. "/apply-input.sh")
+        hl.exec_cmd(logged(run .. scripts .. "/apply-input.sh", "tide-input"))
     end,
 }
 -- conf_outputs.reload() is how tide applies a change to its display
