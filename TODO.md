@@ -7,6 +7,12 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **Hyprland always logs to stdout too** (2026-11-11), in the session and
+  the greeter, so the journal keeps it; it doubles what Hyprland writes,
+  at its default level. The greeter's Quickshell goes to the journal as
+  `tide-greeter`, through `systemd-cat`. Reversible, in the two
+  `hyprland.lua` files.
+
 - **The overview's pictures are stills, taken as it opens** (2026-11-09),
   not live: there may be many windows. On tidewm each is a `grim -T`
   JPEG in `$XDG_RUNTIME_DIR/tide/overview`, all taken at once by one
@@ -1156,6 +1162,25 @@ once you have agreed with it or reversed it.
   another monitor on purpose (`span.moved`). A window first seen in a part
   whose monitor is gone isn't noted, and goes to the main monitor.
   Reversible: `span.note`.
+
+## Logs that outlast what made them (AGENTS.md **Logs**)
+
+Each process logs its start, its end and how, and its errors, where a
+logout and a reboot leave them. Done: the greeter and both Hyprlands
+(SPEC.md §5.4). Left:
+
+- [ ] **Session keys run with their output thrown away.** Hyprland sends
+  what `exec` starts to `/dev/null`, so a bound command that fails (a
+  screenshot, `tide lock`'s fallback) leaves no trace. Run `exec`'s
+  commands (`hypr/hyprland.lua`) through one logging wrapper: its start,
+  its exit status, and its output, to the journal under the command's
+  name. Apps already log through `uwsm app`'s units.
+- [ ] **`tide doctor` says when the journal doesn't outlast a reboot**:
+  journald's `Storage=volatile`, or `auto` with no `/var/log/journal`.
+- [ ] **Audit the rest**: each `Process` in the shell logs a start that
+  fails and a nonzero exit (most do); scripts' session entry points
+  (`sessionlib`); tidewm's own spawns, whose output reaches the journal
+  through uwsm's unit already.
 
 ## Free-standing tide
 
