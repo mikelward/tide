@@ -13,6 +13,7 @@ export const BAR_SETTINGS = Object.freeze({
     presenter: "notifications",
     sharing: "bar",
     mic: "sound",
+    config: "",
     keyboard: "keyboard",
     keepawake: "idle",
     bluetooth: "bluetooth",

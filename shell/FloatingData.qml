@@ -453,6 +453,8 @@ Singleton {
                     console.log(state.report.message);
                 }
                 const text = root.target.onDisk;
+                // tidewm read its config again: its errors may have changed.
+                ConfigErrorsData.reloaded();
                 root.stepped(Writes.targetApplied(root.target, error));
                 if (error === "") {
                     root.rulesApplied(text);
