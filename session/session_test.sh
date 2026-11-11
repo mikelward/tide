@@ -424,6 +424,26 @@ check "the drop-in names the ScreenSaver bus name" \
     has_line "$dropin" "BusName=org.freedesktop.ScreenSaver"
 check "a hypridle that never claims the name fails in 10 s" \
     has_line "$dropin" "TimeoutStartSec=10"
+# The shell waits for hypridle's start job, which RestartMode=direct keeps
+# running across every failed start, to the start limit: 80 s of timeouts.
+# The job's own timeout ends the wait just after the first, and leaves
+# hypridle restarting. It's a [Unit] setting, ignored anywhere else.
+# section_value FILE SECTION KEY: the key's value in that section.
+section_value() {
+    awk -v section="[$2]" -v key="$3" '
+        /^\[/ { in_section = ($0 == section) }
+        in_section && index($0, key "=") == 1 { print substr($0, length(key) + 2) }
+    ' "$1"
+}
+idle_job=$(section_value "$dropin" Unit JobRunningTimeoutSec)
+idle_start_timeout=$(section_value "$dropin" Service TimeoutStartSec)
+check "the shell's wait for a hypridle that keeps failing is bounded" test -n "$idle_job"
+check "at more than one start's timeout, so a start that succeeds isn't cut short" \
+    test "${idle_job:-0}" -gt "${idle_start_timeout:-0}"
+check "and not much more, so the shell isn't held for a second start" \
+    test "${idle_job:-99}" -le "$((${idle_start_timeout:-0} + 5))"
+check "the shell's wait ends well before hypridle's start limit would end it" \
+    test "$((${idle_job:-99} * 2))" -le "$(($(section_value "$dropin" Unit StartLimitBurst) * ${idle_start_timeout:-0}))"
 check "the drop-in adds no [Install], so hypridle isn't enabled globally" \
     lacks_line_matching "$dropin" '^\[Install\]'
 # The drop-in's condition, as systemd would run it ($$ is a literal $).
