@@ -313,6 +313,14 @@ tidewm_word() {
 # `systemctl start` blocks until the shell reports ready, and returns at once
 # when it already has. The bound is our own: the units' timeouts chain (the
 # shell's starts only after hypridle's), so they don't bound this.
+#
+# A shell that's up isn't started again, and neither is one that has failed
+# for good: starting it would run its whole start again at every app key,
+# each press waiting out the bound, and would stop the fallback's bar
+# (Conflicts=tide.service), which nothing brings back. You start it again
+# (`systemctl --user restart tide`), or the next login does. is-active says
+# which it is; anything else it says is left to the start. The bound covers
+# both: an is-active that isn't answered in time launches at once.
 wait_for_shell() {
     bound=${TIDE_LAUNCH_WAIT:-15}
     # A whole number of seconds from 1 to 3600: `timeout 0` never times out.
@@ -324,6 +332,22 @@ wait_for_shell() {
         echo "$prog launch: TIDE_LAUNCH_WAIT must be a whole number of seconds from 1 to 3600, not '$bound'; waiting 15 s" >&2
         bound=15
     fi
+    state=$(timeout "$bound" systemctl --user is-active tide.service 2>/dev/null)
+    # A user manager that didn't answer has used up the bound: asking it to
+    # start the shell would wait it out a second time.
+    case $? in
+        124 | 137)
+            echo "$prog launch: the user manager didn't say in $bound s whether the shell is up; starting $1 anyway" >&2
+            return 0
+            ;;
+    esac
+    case $state in
+        active) return 0 ;;
+        failed)
+            echo "$prog launch: the shell has failed, so $1 starts without it; \`systemctl --user restart tide\` starts the shell again" >&2
+            return 0
+            ;;
+    esac
     if ! err=$(timeout "$bound" systemctl --user start tide.service 2>&1); then
         echo "$prog launch: the shell isn't ready (${err:-no answer in $bound s}); starting $1 anyway" >&2
     fi
