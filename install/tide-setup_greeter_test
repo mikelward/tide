@@ -143,8 +143,9 @@ check "greetd: installs greetd, with sudo" has "$calls" "sudo DEBIAN_FRONTEND=no
 check "greetd: the config is tide's, with Debian's user and VT" \
     test "$(cat "$T/etc/greetd/config.toml")" = "$(sed -e 's/^user = .*/user = "_greetd"/' -e 's/^vt = .*/vt = 7/' "$T/greetd.toml")"
 check "greetd: the config is root's" has "$calls" "sudo install -D -m 644"
+# The four it needs, and tidewm, which it runs where it's there.
 check "greetd: checks greetd's user can run each command the greeter starts" \
-    test "$(printf '%s\n' "$calls" | grep -c "^sudo -u _greetd env PATH=$T/usr-local-bin:$T/usr-bin /bin/sh -c _p=")" -eq 4
+    test "$(printf '%s\n' "$calls" | grep -c "^sudo -u _greetd env PATH=$T/usr-local-bin:$T/usr-bin /bin/sh -c _p=")" -eq 5
 check "greetd: and asks its own Hyprland for its version, as greetd's user" \
     has "$calls" "sudo -u _greetd /bin/sh -c _d=\$(mktemp -d)"
 check "greetd: on the greeter's PATH" has "$calls" "sh $T/usr-local-bin:$T/usr-bin Hyprland --version"
@@ -517,6 +518,25 @@ greeter_not_ready "a qs that isn't root's" "the greeter's tide-greeter isn't roo
 teardown
 setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; chmod g+w "$T/usr-bin"; run
 greeter_not_ready "a directory on the way that others can write" "the greeter's PATH isn't root's alone: users other than root can write $T/usr-bin"
+teardown
+# tide-greeter runs tidewm where greetd's user finds it, so a tidewm there
+# has to be root's too, and so does the tide-msg that ends it.
+setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"
+printf '#!/bin/sh\n' > "$T/usr-local-bin/tidewm"; chmod +x "$T/usr-local-bin/tidewm"
+run FAKE_OWNER="1000:$T/usr-local-bin/tidewm"
+greeter_not_ready "a tidewm that isn't root's" "the greeter's tidewm isn't root's alone: $T/usr-local-bin/tidewm is uid 1000's, not root's"
+teardown
+setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"
+printf '#!/bin/sh\n' > "$T/usr-local-bin/tidewm"; chmod +x "$T/usr-local-bin/tidewm"
+run
+check "greetd: a root's tidewm doesn't stop the switch" test "$(cat "$T/dm")" = greetd.service
+teardown
+# One that can't start, a library gone say, doesn't stop the switch:
+# tide-greeter runs on Hyprland then.
+setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; mkdir -p "$T/loader"; elf_program "$T/loader/ld.so" --type=3
+elf_program "$T/usr-local-bin/tidewm" --interp="$T/loader/ld.so"
+run FAKE_LDD_MISSING="$T/usr-local-bin/tidewm:libwlroots-0.20.so"
+check "greetd: a tidewm that can't start doesn't stop the switch" test "$(cat "$T/dm")" = greetd.service
 teardown
 # A directory earlier on the PATH could hold a Hyprland of someone else's.
 setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; chmod o+w "$T/usr-local-bin"; run
