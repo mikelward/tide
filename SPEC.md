@@ -450,6 +450,15 @@ flowchart TD
   logged in and straight back out, with nothing in the journal.
   `tide-session` runs the `uwsm start` below, and logs what it ran, uwsm's
   output and how it ended, to the journal as `tide-session`.
+- **A login starts clean.** The user manager can outlive a logout
+  (lingering, or a login straight after), and with it the last session's
+  failed units. A shell that hit its start limit there is refused its
+  start for the rest of the two minutes (§5.3, below), so the new session
+  went straight to the fallback terminal. `tide-session` first runs
+  `systemctl --user reset-failed` for tide's units and hypridle, which
+  clears the failed state and the start limit's count (systemctl(1)). It
+  never stops the login: a failure is logged. Units that aren't loaded, and
+  no user manager yet, are normal and only logged at debug level.
 - **`-e -D tide:Hyprland`** sets `XDG_CURRENT_DESKTOP` to exactly that;
   without `-e`, uwsm appends to names from other sources.
 - **`tide-hyprland`** is a wrapper that execs `start-hyprland`,

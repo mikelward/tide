@@ -10,6 +10,12 @@
 # inside double quotes of its own, unescaped, and SDDM splits it on spaces
 # with no quoting at all, so a quote in Exec breaks the command before
 # anything runs. Every argument with a space in it is here instead.
+#
+# Before uwsm, it has the user manager forget the failures of tide's units.
+# A manager that outlived the last login (lingering, a logout and straight
+# back in, a compositor that crashed) still holds them, and a shell that
+# hit its start limit there is refused its start here, so the new session
+# would go straight to the fallback terminal.
 
 # say MESSAGE: to stderr, which the login screen keeps, and to the journal.
 say() {
@@ -27,11 +33,55 @@ case ${1:-} in
         ;;
 esac
 
+# note MESSAGE: to the journal only, at debug level, for what's expected.
+note() {
+    logger -t tide-session -p user.debug -- "$*" 2>/dev/null || :
+}
+
+# tide's units, and hypridle, which tide's drop-in gives a start limit:
+# the ones in systemd/user, and the fallback bar tide-shell-fallback runs.
+units="tide.service tide-shell-fallback.service tide-bar-fallback.service
+    tide-lock.service tide-lock-fallback.service tide-idle-fallback.service
+    tide-clipboard.service tide-fcitx5.service tide-lid-inhibit.service
+    hypridle.service"
+
+# forget_failures: clears the failed state and the start limit's count of
+# each unit, so this login starts them afresh. It never stops the login:
+# what it couldn't do is said, and uwsm starts regardless. A unit the
+# manager hasn't loaded has nothing to forget, which is most of them most
+# times, and no user manager to ask is as it should be where the session
+# starts one, so neither is said beyond the journal's debug level.
+forget_failures() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        note "no systemctl, so failures from an earlier session aren't cleared"
+        return 0
+    fi
+    # Unquoted: one argument a unit. It's cut off after 5 s, where there's
+    # a timeout to do it, as a manager that doesn't answer mustn't hold up
+    # the login.
+    if command -v timeout >/dev/null 2>&1; then
+        # shellcheck disable=SC2086
+        out=$(timeout 5 systemctl --user reset-failed $units 2>&1)
+    else
+        # shellcheck disable=SC2086
+        out=$(systemctl --user reset-failed $units 2>&1)
+    fi
+    status=$?
+    test "$status" -ne 0 || return 0
+    rest=$(printf '%s\n' "$out" | grep -v ' not loaded\.$')
+    case $rest in
+        '') test -n "$out" || say "couldn't clear failures from an earlier session (systemctl --user reset-failed exited $status), so a shell that failed for good then may not start now" ;;
+        *'Failed to connect to bus'*) note "no user manager to clear failures from an earlier session in ($(printf '%s\n' "$rest" | tail -n 1))" ;;
+        *) say "couldn't clear failures from an earlier session (systemctl --user reset-failed exited $status: $(printf '%s\n' "$rest" | tail -n 1)), so a shell that failed for good then may not start now" ;;
+    esac
+}
+
 if ! command -v uwsm >/dev/null 2>&1; then
     say "uwsm isn't installed, so the tide ($1) session can't start: run tide's installer"
     exit 1
 fi
 
+forget_failures
 say "starting the tide ($1) session: uwsm start -e -D $desktops -N '$name' -- $compositor"
 # uwsm's own output goes to the journal under this name as well, through
 # systemd-cat where there is one, and the session ends when uwsm returns.
