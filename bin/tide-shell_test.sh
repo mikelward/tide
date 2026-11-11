@@ -241,7 +241,8 @@ chmod +x "$fake"/* "$swww"/* "$swaybg"/* "$qs"/* "$notify"/* "$tmp/theme-daemon"
 both="org.freedesktop.Notifications org.kde.StatusNotifierWatcher"
 tray=org.kde.StatusNotifierWatcher
 
-# run ENV...: runs the shell with the fakes. With $stop_on set, the fakes are
+# run ENV...: runs the shell with the fakes. swaync is on the PATH, as the
+# theme daemon needs it to be, though only the shell without one runs it. With $stop_on set, the fakes are
 # stopped as soon as the shell prints a line containing it, which ends a
 # shell that would otherwise run for the session.
 #
@@ -263,7 +264,7 @@ run() {
     # The long-lived fakes drop the pipe, so they can't hold it open.
     {
         # shellcheck disable=SC2016  # the session's own sh expands them
-        env PATH="$fake:$swww:$PATH" TIDE_BAR=waybar XDG_CONFIG_HOME="$tmp/config" FAKE_OWNED="$tmp/owned" FAKE_LOG="$tmp/log" FAKE_PIDS="$tmp/pids" FAKE_SLEEPERS="$tmp/sleepers" \
+        env PATH="$fake:$swaync:$swww:$PATH" TIDE_BAR=waybar XDG_CONFIG_HOME="$tmp/config" FAKE_OWNED="$tmp/owned" FAKE_LOG="$tmp/log" FAKE_PIDS="$tmp/pids" FAKE_SLEEPERS="$tmp/sleepers" \
             TIDE_THEME_DAEMON="$tmp/theme-daemon" TIDE_POLKIT_AGENT="$tmp/agent" \
             TIDE_WALLPAPER="$tmp/wallpaper.jpg" TIDE_INPUT_SETUP="$tmp/input-setup" TIDE_INPUT_WATCH="$tmp/input-watch" \
             TIDE_SHELL_WAIT=1 "$@" setsid -w sh -c 'echo $$ > "$1"; exec sh "$2"' sh "$tmp/session" "$shell" 2>&1 >/dev/null
@@ -400,7 +401,7 @@ check "it doesn't wait out the wallpaper first" \
 mkdir "$tmp/daemon-only"
 cp "$swww/swww-daemon" "$tmp/daemon-only/"
 if ! command -v swww >/dev/null 2>&1 && ! command -v swaybg >/dev/null 2>&1; then
-    run FAKE_NAMES="$both" PATH="$fake:$tmp/daemon-only:$PATH"
+    run FAKE_NAMES="$both" PATH="$fake:$swaync:$tmp/daemon-only:$PATH"
     check "swww-daemon without swww is reported" \
         contains "$(cat "$tmp/err")" "swww-daemon is installed but its client, swww, isn't, and swaybg isn't installed either"
     check "swww-daemon without swww isn't started" test ! -e "$tmp/owned/swww-up"
@@ -409,7 +410,7 @@ fi
 # Without swww or swaybg on the PATH; skipped where the host has a real one,
 # which this run would otherwise start.
 if ! command -v swww-daemon >/dev/null 2>&1 && ! command -v swaybg >/dev/null 2>&1; then
-    run FAKE_NAMES="$both" PATH="$fake:$PATH"
+    run FAKE_NAMES="$both" PATH="$fake:$swaync:$PATH"
     check "no wallpaper program is reported" contains "$(cat "$tmp/err")" "neither swww nor swaybg is installed; no wallpaper"
     check "no wallpaper program doesn't hold up ready" contains "$(cat "$tmp/log")" "systemd-notify --ready"
 fi
@@ -417,15 +418,15 @@ fi
 # swaybg stands in for swww; skipped where the host has a real swww, which
 # this run would prefer.
 if ! command -v swww-daemon >/dev/null 2>&1; then
-    run FAKE_NAMES="$both" PATH="$fake:$swaybg:$PATH"
+    run FAKE_NAMES="$both" PATH="$fake:$swaync:$swaybg:$PATH"
     check "without swww, swaybg shows the wallpaper" contains "$(cat "$tmp/log")" "swaybg -m fill -i $tmp/wallpaper.jpg"
     check "swaybg doesn't hold up ready" contains "$(cat "$tmp/log")" "systemd-notify --ready"
     # The default wallpaper, under a HOME that has none.
-    run FAKE_NAMES="$both" PATH="$fake:$swaybg:$PATH" TIDE_WALLPAPER= HOME="$tmp/no-home"
+    run FAKE_NAMES="$both" PATH="$fake:$swaync:$swaybg:$PATH" TIDE_WALLPAPER= HOME="$tmp/no-home"
     check "swaybg isn't started without a wallpaper" test -z "$(grep '^swaybg' "$tmp/log")"
     check "a missing wallpaper is reported" contains "$(cat "$tmp/err")" "no wallpaper at $tmp/no-home/.config/hypr/wallpaper.jpg"
 fi
-run FAKE_NAMES="$both" PATH="$fake:$swww:$swaybg:$PATH"
+run FAKE_NAMES="$both" PATH="$fake:$swaync:$swww:$swaybg:$PATH"
 check "swww is preferred to swaybg" test -z "$(grep '^swaybg' "$tmp/log")"
 
 run FAKE_NAMES="org.freedesktop.Notifications" FAKE_DAEMON_STAYS=1
@@ -672,6 +673,28 @@ if ! command -v waybar >/dev/null 2>&1; then
     check "no theme daemon or waybar is reported" contains "$(cat "$tmp/err")" "the bar is waybar, but waybar isn't installed"
 fi
 
+# With a theme daemon, swaync is the daemon's to start, and as needed: one
+# that isn't installed is named at once, not waited for at every start.
+# Skipped where the host has its own.
+if ! command -v swaync >/dev/null 2>&1; then
+    run FAKE_NAMES="$both" PATH="$fake:$swww:$PATH"
+    check "a theme daemon without swaync fails, not to be retried" test "$status" -eq 78
+    check "a theme daemon without swaync is reported" \
+        contains "$(cat "$tmp/err")" "swaync, which the theme daemon ($tmp/theme-daemon) starts to serve notifications, isn't installed"
+    check "a theme daemon without swaync starts nothing" test ! -s "$tmp/log"
+    # With TIDE_NOTIFICATIONS=1 the Quickshell shell serves notifications,
+    # theme daemon or not, so swaync isn't needed.
+    stop_on="fake ready"
+    run FAKE_READY_SAYS=1 PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell TIDE_NOTIFICATIONS=1
+    stop_on=
+    check "a theme daemon, TIDE_NOTIFICATIONS=1 and no swaync: the shell still starts" \
+        contains "$(cat "$tmp/log")" "systemd-notify --ready"
+    check "and swaync isn't called missing" test -z "$(grep "isn't installed" "$tmp/err")"
+fi
+run FAKE_NAMES="$both"
+check "a theme daemon with swaync installed starts" contains "$(cat "$tmp/log")" "systemd-notify --ready"
+check "and leaves swaync to the daemon" test -z "$(grep -x swaync "$tmp/log")"
+
 # conf's daemon, found by default, is run, and failing is still reported.
 mkdir -p "$tmp/conf-home/.config/hypr/scripts"
 cp "$tmp/theme-daemon" "$tmp/conf-home/.config/hypr/scripts/theme-daemon.sh"
@@ -709,7 +732,7 @@ done
 # The Quickshell bar: qs runs the shell and owns the tray watcher, and the
 # theme daemon is told so it starts no waybar.
 notifications=org.freedesktop.Notifications
-run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell
+run FAKE_NAMES="$notifications" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR=quickshell
 log=$(cat "$tmp/log")
 check "the Quickshell bar runs the shell" contains "$log" "qs -c tide"
 check "the theme daemon is told the bar is Quickshell's" contains "$log" "theme-daemon bar=quickshell"
@@ -720,13 +743,13 @@ check "the shell is given TIDE_WALLPAPER" contains "$log" "qs TIDE_WALLPAPER=$tm
 # A relative TIDE_WALLPAPER reaches the shell absolute: it draws the file
 # from a file: URL, which can't be relative.
 cd "$tmp" || exit 1
-run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell TIDE_WALLPAPER=wallpaper.jpg
+run FAKE_NAMES="$notifications" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR=quickshell TIDE_WALLPAPER=wallpaper.jpg
 cd "${shell%/bin/tide-shell}" || exit 1
 check "a relative TIDE_WALLPAPER is found from where tide-shell runs" test "$status" -ne 78
 check "and reaches the shell absolute" contains "$(cat "$tmp/log")" "qs TIDE_WALLPAPER=$tmp/wallpaper.jpg"
 
 # With TIDE_POLKIT=1 the Quickshell shell is the agent, so none is started.
-run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell TIDE_POLKIT=1
+run FAKE_NAMES="$notifications" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR=quickshell TIDE_POLKIT=1
 log=$(cat "$tmp/log")
 check "the shell as polkit agent starts no other" test -z "$(grep -x agent "$tmp/log")"
 check "the shell as polkit agent still runs the shell" contains "$log" "qs -c tide"
@@ -749,10 +772,10 @@ check "a bad TIDE_POLKIT is named" \
 check "a bad TIDE_POLKIT starts nothing" test ! -s "$tmp/log"
 
 # Unset, the bar is Quickshell's where qs and the shell are installed...
-run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=
+run FAKE_NAMES="$notifications" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR=
 check "the bar defaults to Quickshell's when it's installed" contains "$(cat "$tmp/log")" "qs -c tide"
 # ...and waybar where the shell isn't.
-run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= XDG_CONFIG_HOME="$tmp/no-config"
+run FAKE_NAMES="$both" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR= XDG_CONFIG_HOME="$tmp/no-config"
 log=$(cat "$tmp/log")
 check "the bar falls back to waybar without the shell" contains "$log" "theme-daemon bar=waybar"
 check "waybar's bar runs no qs" test -z "$(grep '^qs ' "$tmp/log")"
@@ -760,7 +783,7 @@ check "waybar's bar runs no qs" test -z "$(grep '^qs ' "$tmp/log")"
 # A Quickshell older than 0.3 can't load the bar (Debian's 0.2.1), so the
 # bar is waybar, and the log says why.
 qs_021="quickshell 0.2.1, revision 0000000, distributed by: Debian"
-run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
+run FAKE_NAMES="$both" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
 log=$(cat "$tmp/log")
 check "an old Quickshell's bar is waybar" contains "$log" "theme-daemon bar=waybar"
 check "an old Quickshell runs no shell" test -z "$(grep '^qs -c tide' "$tmp/log")"
@@ -768,51 +791,51 @@ check "an old Quickshell is named, with what the shell needs" \
     contains "$(cat "$tmp/err")" "qs ($qs/qs) is Quickshell 0.2.1, and tide's shell needs 0.3 or newer, so the bar is waybar"
 # It says so on screen too, once swaync is up to show it.
 notice="notify-send [--urgency=critical] [--app-name=tide] [tide's bar couldn't start] [qs is Quickshell 0.2.1, and tide needs 0.3 or newer. Run tide's installer (install/tide-setup), then log in again; \`tide doctor\` says more.]"
-run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
+run FAKE_NAMES="$both" PATH="$fake:$swaync:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
 check "an old Quickshell's fallback is a notification too" test "$(grep '^notify-send' "$tmp/log")" = "$notice"
 check "sent once the notification server is up" \
     test "$(sed -n -e 's/^\(systemd-notify --ready\)$/\1/p' -e 's/^\(notify-send\) .*/\1/p' "$tmp/log" | tr '\n' ' ')" = "systemd-notify --ready notify-send "
 check "a notification sent says nothing in the log" \
     test -z "$(grep "couldn't show\|notify-send isn't" "$tmp/err")"
-run FAKE_NAMES="org.kde.StatusNotifierWatcher" PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
+run FAKE_NAMES="org.kde.StatusNotifierWatcher" PATH="$fake:$swaync:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
 check "no notification server, no notification" test -z "$(grep '^notify-send' "$tmp/log")"
 # A late server shows it once it's there.
 stop_on="notifications work"
 run FAKE_NAMES="org.kde.StatusNotifierWatcher" FAKE_DAEMON_STAYS=1 FAKE_READY_CLAIMS=org.freedesktop.Notifications \
-    PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
+    PATH="$fake:$swaync:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
 stop_on=
 check "an old Quickshell's fallback is a notification once a late server is up" \
     test "$(grep '^notify-send' "$tmp/log")" = "$notice"
-run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021" \
+run FAKE_NAMES="$both" PATH="$fake:$swaync:$swww:$qs:$notify:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021" \
     FAKE_NOTIFY_SEND_ERR="GDBus.Error: no reply"
 check "a notification that fails doesn't stop the session" contains "$(cat "$tmp/log")" "systemd-notify --ready"
 check "a notification that fails is logged" \
     contains "$(cat "$tmp/err")" "couldn't show that the bar is waybar (notify-send: GDBus.Error: no reply)"
 if ! command -v notify-send >/dev/null 2>&1; then
-    run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
+    run FAKE_NAMES="$both" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="$qs_021"
     check "no notify-send is logged" \
         contains "$(cat "$tmp/err")" "notify-send isn't installed, so only this log says the bar is waybar"
 fi
 # A bar chosen as waybar, or one with no qs at all, is no fallback to report.
-run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$notify:$PATH" TIDE_BAR=waybar FAKE_QS_VERSION="$qs_021"
+run FAKE_NAMES="$both" PATH="$fake:$swaync:$swww:$qs:$notify:$PATH" TIDE_BAR=waybar FAKE_QS_VERSION="$qs_021"
 check "TIDE_BAR=waybar sends no notification" test -z "$(grep '^notify-send' "$tmp/log")"
-run FAKE_NAMES="$both" PATH="$fake:$swww:$notify:$PATH" TIDE_BAR=
+run FAKE_NAMES="$both" PATH="$fake:$swaync:$swww:$notify:$PATH" TIDE_BAR=
 check "no qs sends no notification" test -z "$(grep '^notify-send' "$tmp/log")"
-run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell FAKE_QS_VERSION="$qs_021"
+run FAKE_NAMES="$both" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR=quickshell FAKE_QS_VERSION="$qs_021"
 check "TIDE_BAR=quickshell with an old Quickshell fails, not to be retried" test "$status" -eq 78
 check "TIDE_BAR=quickshell with an old Quickshell is reported" \
     contains "$(cat "$tmp/err")" "TIDE_BAR is quickshell, but qs ($qs/qs) is Quickshell 0.2.1"
 check "TIDE_BAR=quickshell with an old Quickshell starts nothing" test ! -s "$tmp/log"
 # 0.3.0 is new enough.
-run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= \
+run FAKE_NAMES="$notifications" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR= \
     FAKE_QS_VERSION="Quickshell 0.3.0 (revision 0000000, distributed by Ubuntu)"
 check "Quickshell 0.3.0 runs the shell" contains "$(cat "$tmp/log")" "qs -c tide"
 # A version that can't be read doesn't cost the bar, but is logged.
-run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="Quickshell nightly"
+run FAKE_NAMES="$notifications" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="Quickshell nightly"
 check "an unreadable Quickshell version still runs the shell" contains "$(cat "$tmp/log")" "qs -c tide"
 check "an unreadable Quickshell version is logged" \
     contains "$(cat "$tmp/err")" "couldn't tell which Quickshell $qs/qs is (qs --version printed 'Quickshell nightly'); running its bar anyway"
-run FAKE_NAMES="$notifications" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="qs: cannot open display" FAKE_QS_VERSION_STATUS=1
+run FAKE_NAMES="$notifications" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR= FAKE_QS_VERSION="qs: cannot open display" FAKE_QS_VERSION_STATUS=1
 check "a failing qs --version still runs the shell" contains "$(cat "$tmp/log")" "qs -c tide"
 check "a failing qs --version is logged" \
     contains "$(cat "$tmp/err")" "couldn't tell which Quickshell $qs/qs is (qs --version: qs: cannot open display)"
@@ -821,7 +844,7 @@ check "a failing qs --version is logged" \
 # The theme daemon waits on the FIFO until qs exits, then exits too: the
 # shell ends either way, and no fake is left holding the test's pipe.
 mkfifo "$tmp/daemon-until"
-run FAKE_NAMES="$notifications" FAKE_DAEMON_UNTIL="$tmp/daemon-until" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell FAKE_QS_EXIT=3
+run FAKE_NAMES="$notifications" FAKE_DAEMON_UNTIL="$tmp/daemon-until" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR=quickshell FAKE_QS_EXIT=3
 check "the Quickshell shell exiting ends the shell with a failure" test "$status" -ne 0
 check "the Quickshell shell exiting is reported" contains "$(cat "$tmp/err")" "the Quickshell shell (qs -c tide) exited (3)"
 
@@ -830,7 +853,7 @@ check "TIDE_BAR=quickshell without qs fails, not to be retried" test "$status" -
 check "TIDE_BAR=quickshell without qs is reported" contains "$(cat "$tmp/err")" "qs (Quickshell) isn't installed"
 check "TIDE_BAR=quickshell without qs starts nothing" test ! -s "$tmp/log"
 
-run FAKE_NAMES="$both" PATH="$fake:$swww:$qs:$PATH" TIDE_BAR=quickshell XDG_CONFIG_HOME="$tmp/no-config"
+run FAKE_NAMES="$both" PATH="$fake:$swaync:$swww:$qs:$PATH" TIDE_BAR=quickshell XDG_CONFIG_HOME="$tmp/no-config"
 check "TIDE_BAR=quickshell without the shell fails, not to be retried" test "$status" -eq 78
 check "TIDE_BAR=quickshell without the shell is reported" contains "$(cat "$tmp/err")" "no shell at $tmp/no-config/quickshell/tide/shell.qml"
 
