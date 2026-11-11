@@ -413,6 +413,10 @@ run FAKE_NAMES="$both" FAKE_UNIT=other.service FAKE_DAEMON_STAYS=1
 check "a name owned outside the unit doesn't count" test "$status" -eq 1
 check "a name owned outside the unit never reports ready" \
     test -z "$(grep systemd-notify "$tmp/log")"
+check "the failure says who holds a name owned outside the unit" \
+    contains "$(cat "$tmp/err")" "org.freedesktop.Notifications (swaync; held by fake (pid 1) in other.service)"
+check "a name owned outside the unit isn't blamed on busctl" \
+    test -z "$(grep 'last busctl error' "$tmp/err")"
 
 # An agent exits at once when another holds the session: the shell carries
 # on to ready, and ends only when the theme daemon does.
