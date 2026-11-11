@@ -160,15 +160,25 @@ test("the logo opens Apps, closes it on its own monitor, and moves it from anoth
     assert.deepEqual(logoTapped(true, "apps", true), { visible: true, tab: "apps", move: true });
 });
 
-test("on Plasma, the switcher has Apps and Actions, and no workspace to open on", () => {
-    assert.deepEqual(tabsFor(true), ["apps", "actions"]);
+test("on Plasma, the switcher has KWin's workspaces and windows, but no Attention, nor workspace to open on", () => {
+    assert.deepEqual(tabsFor(true), ["apps", "workspaces", "windows", "actions"]);
     assert.equal(tabsFor(false), TABS);
-    assert.equal(movedTab("apps", 1, PLASMA_TABS), "actions");
-    assert.equal(movedTab("actions", 1, PLASMA_TABS), "apps");
+    assert.equal(movedTab("apps", 1, PLASMA_TABS), "workspaces");
+    assert.equal(movedTab("windows", 1, PLASMA_TABS), "actions");
     assert.equal(movedTab("apps", -1, PLASMA_TABS), "actions");
-    assert.throws(() => toggled(false, "apps", "windows", PLASMA_TABS));
-    assert.deepEqual(toggled(false, "apps", "actions", PLASMA_TABS), { visible: true, tab: "actions" });
+    assert.throws(() => toggled(false, "apps", "attention", PLASMA_TABS));
+    assert.deepEqual(toggled(false, "apps", "windows", PLASMA_TABS), { visible: true, tab: "windows" });
+    assert.equal(footerKeys("windows", true).some(([k]) => k === "Ctrl+M"), false, "muting is tide's notifications'");
     const keys = footerKeys("apps", true).map(([k]) => k);
     assert.equal(keys.includes("Ctrl+↵"), false);
     assert.equal(keys.includes("PgDn"), true);
+});
+
+test("workspace rows keep KWin's desktop IDs, as two desktops may share a name", () => {
+    const list = [
+        { id: "a", desktop: "a", name: "web", state: "current", count: 0, urgent: false },
+        { id: "b", desktop: "b", name: "web", state: "empty", count: 0, urgent: false },
+    ];
+    assert.deepEqual(workspaceRows(list, "").map((r) => r.item.desktop), ["a", "b"]);
+    assert.equal(workspaceRows([{ id: 1, name: "in", state: "current", count: 0 }], "")[0].item.desktop, null);
 });

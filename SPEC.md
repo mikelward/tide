@@ -2898,9 +2898,24 @@ apps and its System Settings pages. Kickoff stays on the tap of `Super`.
   runs `qs -p ~/.config/quickshell/tide/kde.qml ipc call launcher
   toggle`. KWin has no global shortcut Quickshell can take, unlike
   Hyprland's.
-- **Tabs.** Apps and Actions only. Workspaces, Windows and Attention need
-  the compositor (§5.3), and Plasma has its own for those: `Meta+Tab`,
-  the task manager and KRunner.
+- **Tabs.** Apps, Workspaces, Windows and Actions. Attention is the focus
+  guard's (§14), which Plasma doesn't run, and so is muting an app's
+  windows (Ctrl+M).
+  - **Workspaces** are KWin's virtual desktops, in its order, and **Windows**
+    every window KWin's own window search lists. Both come from KWin's
+    D-Bus as the launcher opens, through `busctl --user --json=short`
+    (`shell/lib/kwin.mjs`, `KWinData.qml`):
+    `org.kde.KWin.VirtualDesktopManager`'s `desktops` and `current`, the
+    `org.kde.krunner1` runner at `/WindowsRunner` with an empty query, and
+    `getWindowInfo` for each window's app and desktop, all in three
+    processes. Enter sets `current`, or runs the window's match, which
+    activates it.
+  - KWin says nothing a launcher could listen to, so it reads them afresh
+    each time it opens, and the tabs fill in a moment after.
+  - The runner matches desktops too, by their bare IDs; only matches whose
+    ID is a window's UUID, in braces, are windows (checked on KWin 6.7.5).
+  - tide on KDE (mikelward/tide-kde), a KWin script, tiles those windows
+    and names those desktops; the tabs need none of it.
 - **Apps.** Every entry `XDG_CURRENT_DESKTOP=KDE` shows, so Plasma's own
   apps and System Settings, which the `SETTINGS_APPS` list (§8.2) drops
   only under tide.

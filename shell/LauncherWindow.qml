@@ -28,8 +28,9 @@ import "lib/workspaces.mjs" as Workspaces
 PanelWindow {
     id: root
 
-    // On KDE Plasma (SPEC.md §8.5), where kde.qml runs it alone: Apps and
-    // Actions, Plasma's actions, kstart, and nothing that asks Hyprland or
+    // On KDE Plasma (SPEC.md §8.5), where kde.qml runs it alone: Apps,
+    // Workspaces, Windows and Actions, Plasma's actions, kstart, KWin's
+    // desktops and windows (KWinData), and nothing that asks Hyprland or
     // starts tide's own state (Compositor, NotificationData and the rest).
     readonly property bool plasma: LauncherData.plasma
     // The tabs it has (Switcher.tabsFor).
@@ -70,7 +71,9 @@ PanelWindow {
         : root.tab === "actions" ? Search.actionRows(root.items, root.query)
         : Search.search(root.items, root.query, LauncherData.frecency, root.openedAt)
     // Every window, as the Windows and Attention tabs list them.
-    readonly property var allWindows: root.plasma ? [] : Compositor.windows.map(w => ({
+    readonly property var allWindows: root.plasma ? KWinData.windows.map(w => Object.assign({
+        appName: DesktopEntries.heuristicLookup(w.app)?.name ?? w.app
+    }, w)) : Compositor.windows.map(w => ({
         address: w.address,
         title: w.title,
         app: w.app,
@@ -79,7 +82,7 @@ PanelWindow {
         urgent: w.urgent,
         focus: Workspaces.focusRank(MarkData.focusOrder, w.address, w.focusHistoryID)
     }))
-    readonly property var workspaceList: root.tab === "workspaces" ? Workspaces.barWorkspaces({
+    readonly property var workspaceList: root.tab !== "workspaces" ? [] : root.plasma ? KWinData.workspaces : Workspaces.barWorkspaces({
         monitor: Compositor.focusedMonitorName,
         monitors: Compositor.monitors,
         workspaces: Compositor.workspaces,
@@ -87,8 +90,9 @@ PanelWindow {
         marks: MarkData.marks,
         standing: WorkspacesData.standing,
         muted: WorkspacesData.muted
-    }) : []
+    })
     readonly property var rows: root.tab === "workspaces" ? Switcher.workspaceRows(root.workspaceList, root.query)
+        : root.tab === "windows" && root.plasma ? Switcher.windowRows(root.allWindows, root.query)
         : root.tab === "windows" ? Switcher.windowRows(root.allWindows, root.query, WorkspacesData.muted, Tabs.tabRows(TabsData.browsers, root.allWindows))
         : root.tab === "attention" ? Switcher.attentionRows(root.allWindows, MarkData.marks, root.query, WorkspacesData.muted)
         : root.appRows
@@ -122,6 +126,9 @@ PanelWindow {
         screenshotDelay.stop();
         pending = "";
         windowAtOpen = root.plasma ? null : FocusData.focused?.address ?? null;
+        if (root.plasma) {
+            KWinData.refresh();
+        }
         outputAtOpen = root.plasma ? "" : Compositor.focusedMonitorName;
         session += 1;
         openedAt = Date.now();
@@ -187,7 +194,8 @@ PanelWindow {
     // (MarkData), so on the Attention tab the row goes.
     function toggleMute(index) {
         const row = rows[index];
-        if (!row || row.item.kind !== "window") {
+        // Muting is tide's notifications', which Plasma doesn't run
+        if (!row || row.item.kind !== "window" || root.plasma) {
             return;
         }
         const app = row.item.icon;
@@ -208,12 +216,18 @@ PanelWindow {
         // window goes back to the workspace it came from (§6.7).
         if (row.item.kind === "workspace") {
             close();
-            Compositor.goToWorkspace(row.item.name);
+            if (root.plasma) {
+                KWinData.goTo(row.item.desktop);
+            } else {
+                Compositor.goToWorkspace(row.item.name);
+            }
             return;
         }
         if (row.item.kind === "window") {
             close();
-            if (row.item.restoreTo) {
+            if (root.plasma) {
+                KWinData.activate(row.item.address);
+            } else if (row.item.restoreTo) {
                 Compositor.moveWindowTo(row.item.address, row.item.restoreTo);
             } else {
                 Compositor.focusWindow(row.item.address);
@@ -754,7 +768,7 @@ PanelWindow {
                             anchors.right: hint.visible ? hint.left : parent.right
                             anchors.rightMargin: 10
                             anchors.verticalCenter: parent.verticalCenter
-                            visible: row.modelData.item.kind === "window" && (hover.hovered || row.modelData.item.muted === true)
+                            visible: !root.plasma && row.modelData.item.kind === "window" && (hover.hovered || row.modelData.item.muted === true)
                             width: 16
                             height: 16
                             name: row.modelData.item.muted ? "notifications-disabled-symbolic" : "preferences-system-notifications-symbolic"
