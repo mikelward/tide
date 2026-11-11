@@ -1336,6 +1336,12 @@ tested where it can be without a live session.
   `Qt::Popup` rather than `Qt::ToolTip`; a Hyprland change adding a layer
   parent to the popup grab; or a full-screen transparent layer catching
   the press.
+- **Choose the bar's status icons on the Bar page** (SPEC.md §7.1, §16).
+  The Bar page has only Position (top or bottom). Next: which status icons
+  show (keep-awake, Bluetooth, the system monitor, say), and their order
+  and layout, in `appearance.json` beside `barPosition` or a file of
+  their own. tide for macOS and tide for Chrome share
+  `shell/lib/barsettings.mjs`'s `bar` page id, so theirs should follow.
 - **Test the popovers' input with the pointer** (mikelward/tide#254).
   `shell/integration_test.sh` types with wtype but has no pointer, so
   nothing checks that a popover's rows take hover and clicks; a static

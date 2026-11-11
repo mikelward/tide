@@ -7,9 +7,11 @@ import "lib/history.mjs" as History
 import "lib/mute.mjs" as Mute
 import "lib/notifications.mjs" as Notes
 
-// The notification center (SPEC.md §9): the history, grouped by app, under
-// the bar at the top right of its monitor. The bell and Super+Shift+N open
-// it (HistoryData); a click outside it, or Escape, closes it.
+// The notification center (SPEC.md §9): the history, grouped by app, in
+// its monitor's corner by the bell: under the bar at the top right, or
+// over it at the bottom right when the bar is at the bottom. The bell and
+// Super+Shift+N open it (HistoryData); a click outside it, or Escape,
+// closes it.
 PanelWindow {
     id: root
 
@@ -20,12 +22,15 @@ PanelWindow {
 
     screen: root.panel.screen
     visible: HistoryData.openOn !== "" && HistoryData.openOn === (root.panel.screen?.name ?? "")
+    // Off the bar's exclusive zone, wherever the bar is.
     anchors {
-        top: true
+        top: !Theme.barAtBottom
+        bottom: Theme.barAtBottom
         right: true
     }
     margins {
-        top: 8
+        top: Theme.barAtBottom ? 0 : 8
+        bottom: Theme.barAtBottom ? 8 : 0
         right: 10
     }
     exclusionMode: ExclusionMode.Normal
@@ -37,9 +42,9 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     color: "transparent"
     implicitWidth: 430
-    // As tall as its groups, up to the room below the bar; past that the
+    // As tall as its groups, up to the room the bar leaves; past that the
     // groups scroll.
-    implicitHeight: Notes.stackHeight(card.implicitHeight, screen?.height ?? 0, Theme.barHeight + margins.top, 10)
+    implicitHeight: Notes.stackHeight(card.implicitHeight, screen?.height ?? 0, Theme.barHeight + 8, 10)
 
     // The ages tick only while it's open.
     property real now: Date.now()

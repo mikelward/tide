@@ -7,7 +7,7 @@ test("the pages come in the sidebar's order, each with a label and an icon", () 
     assert.deepEqual(PAGES.map(p => p.id), [
         "displays", "sound", "network", "bluetooth", "mouse", "touchpad", "keyboard", "power",
         "layouts", "workspaces", "floating",
-        "appearance", "notifications", "clipboard", "clocks", "idle", "startup",
+        "appearance", "bar", "notifications", "clipboard", "clocks", "idle", "startup",
     ]);
     for (const page of PAGES) {
         assert.ok(page.label, `${page.id} has a label`);
@@ -20,7 +20,7 @@ test("the pages come in the sidebar's order, each with a label and an icon", () 
     }
 });
 
-test("each page links out to the app SPEC.md §16 names, and Idle, Mouse, Touchpad, Keyboard, Clocks, Layouts, Appearance, Start at login, Notifications, Clipboard, Power, Workspaces and Floating to none", () => {
+test("each page links out to the app SPEC.md §16 names, and Idle, Mouse, Touchpad, Keyboard, Clocks, Layouts, Appearance, Bar, Start at login, Notifications, Clipboard, Power, Workspaces and Floating to none", () => {
     const commands = {};
     for (const page of PAGES) {
         commands[page.id] = page.advanced === null ? null : page.advanced.command;
@@ -36,6 +36,7 @@ test("each page links out to the app SPEC.md §16 names, and Idle, Mouse, Touchp
         clocks: null,
         layouts: null,
         appearance: null,
+        bar: null,
         displays: ["nwg-displays"],
         startup: null,
         notifications: null,
@@ -62,7 +63,7 @@ test("the sidebar groups the pages under Hardware, Windows and General, each pag
     assert.deepEqual(grouped, {
         hardware: ["displays", "sound", "network", "bluetooth", "mouse", "touchpad", "keyboard", "power"],
         windows: ["layouts", "workspaces", "floating"],
-        general: ["appearance", "notifications", "clipboard", "clocks", "idle", "startup"],
+        general: ["appearance", "bar", "notifications", "clipboard", "clocks", "idle", "startup"],
     });
     for (const page of PAGES) {
         assert.equal(GROUPS.filter(g => g.id === page.group).length, 1, `${page.id} is in exactly one group`);
@@ -77,7 +78,7 @@ test("the sidebar is each group's heading, then its pages, and only pages can be
     assert.deepEqual(rows.map(r => (r.heading !== "" ? `# ${r.heading}` : PAGES[r.page].id)), [
         "# Hardware", "displays", "sound", "network", "bluetooth", "mouse", "touchpad", "keyboard", "power",
         "# Windows", "layouts", "workspaces", "floating",
-        "# General", "appearance", "notifications", "clipboard", "clocks", "idle", "startup",
+        "# General", "appearance", "bar", "notifications", "clipboard", "clocks", "idle", "startup",
     ]);
     assert.ok(rows.filter(r => r.heading !== "").every(r => r.page === -1));
     // Every page is a row once, so stepping from one to the next skips the headings.
@@ -117,6 +118,8 @@ test("searching keeps the pages found, under their headings, and drops headings 
     assert.deepEqual(shown("sound"), ["# Hardware", "sound"]);
     assert.deepEqual(shown("shortcuts"), ["# Hardware", "keyboard"]);
     assert.deepEqual(shown("CLIP"), ["# General", "clipboard"]);
+    assert.deepEqual(shown("bar"), ["# General", "bar"]);
+    assert.deepEqual(shown("bottom"), ["# General", "bar"], "where the bar goes finds its page");
     assert.deepEqual(shown("zzz"), []);
     // An empty or blank query shows every page.
     assert.deepEqual(searchedSidebar(""), sidebarRows());

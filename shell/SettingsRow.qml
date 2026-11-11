@@ -3,8 +3,8 @@ import "lib/barsettings.mjs" as BarSettings
 
 // The last row of a bar item's dropdown (SPEC.md §7.1): Settings…, under a
 // line, which closes the dropdown and opens the page a right-click on the
-// item opens. An item whose right-click opens the first page, as none
-// fits, has no such row (barsettings_test.mjs checks).
+// item opens. An item whose right-click opens the Bar page, as no page of
+// its own fits, has no such row (barsettings_test.mjs checks).
 Column {
     id: root
 

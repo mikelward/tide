@@ -41,6 +41,9 @@ Singleton {
     property var fileErrors: []
     // The inactive dim's strength in effect, for the page.
     readonly property real dimStrength: Appearance.dimStrength(root.settings)
+    // Whether the bar runs along the bottom edge (SPEC.md §7.1), which the
+    // Bar page's Position row changes live.
+    readonly property bool barAtBottom: Appearance.barAtBottom(root.settings)
     // The file hyprland.lua reads, written and applied (shell/lib/writes.mjs).
     property var target: Writes.TARGET
 

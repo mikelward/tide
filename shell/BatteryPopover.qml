@@ -16,9 +16,10 @@ PopupWindow {
     }
 
     anchor.item: icon
-    anchor.edges: Edges.Bottom | Edges.Right
-    anchor.gravity: Edges.Bottom | Edges.Left
-    anchor.margins.bottom: -10
+    anchor.edges: Theme.hangEdge | Edges.Right
+    anchor.gravity: Theme.hangEdge | Edges.Left
+    anchor.margins.top: Theme.hang(10).top
+    anchor.margins.bottom: Theme.hang(10).bottom
     grabFocus: true
     color: "transparent"
     implicitWidth: 260

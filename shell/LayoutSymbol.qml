@@ -45,9 +45,11 @@ Text {
     font.letterSpacing: -0.27
 
     // A right-click opens its settings page (SPEC.md §7.1); it takes no
-    // other click.
+    // other click. It grabs the press, as BarHit's does, so the bar's own
+    // right-click doesn't open the Bar page too.
     TapHandler {
         acceptedButtons: Qt.RightButton
+        gesturePolicy: TapHandler.WithinBounds
         onTapped: SettingsData.open(BarSettings.page("layout"))
     }
 }

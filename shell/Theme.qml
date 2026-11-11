@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import "lib/barside.mjs" as BarSide
 import "lib/palette.mjs" as Palette
 
 // The palette, light and dark, from theme/palette.json (through `make
@@ -22,6 +23,12 @@ Singleton {
     }
 
     readonly property int barHeight: 36
+    // Whether the bar runs along the bottom edge (SPEC.md §7.1), from
+    // AppearanceData. On Plasma, tide draws no bar.
+    readonly property bool barAtBottom: !root.plasma && AppearanceData.barAtBottom
+    // The edge of a bar item its popovers and tips hang from, away from
+    // the bar's edge (BarSide.hangEdge).
+    readonly property int hangEdge: BarSide.hangEdge(root.barAtBottom) === "top" ? Edges.Top : Edges.Bottom
     readonly property int chipHeight: 26
     readonly property int chipRadius: 7
 
@@ -61,4 +68,16 @@ Singleton {
 
     readonly property string font: "Inter"
     readonly property string monoFont: "Ubuntu Mono"
+
+    // A popup's anchor margins, {top, bottom}, leaving `gap` px between a
+    // bar item and what hangs from it (BarSide.hangMargins).
+    function hang(gap) {
+        return BarSide.hangMargins(root.barAtBottom, gap);
+    }
+
+    // How far up from the bottom edge to put what ignores exclusive zones
+    // and was `margin` px up, clear of a bottom bar (BarSide.aboveBar).
+    function aboveBar(margin) {
+        return BarSide.aboveBar(root.barAtBottom, root.barHeight, margin);
+    }
 }

@@ -3,8 +3,8 @@ import Quickshell
 import Quickshell.Wayland
 import "lib/notifications.mjs" as Notes
 
-// The notification popups (SPEC.md §9), top right of the focused monitor
-// under the bar, newest on top. There's one per monitor, and only the
+// The notification popups (SPEC.md §9), top right of the focused monitor,
+// under the bar when it's at the top, newest on top. There's one per monitor, and only the
 // focused monitor's shows.
 PanelWindow {
     id: root
@@ -29,7 +29,8 @@ PanelWindow {
         top: 10
         right: 12
     }
-    // Below the bar's exclusive zone, reserving none of its own.
+    // Off the bar's exclusive zone, reserving none of their own: under a
+    // top bar, and at the screen's top edge over a bottom one.
     exclusionMode: ExclusionMode.Normal
     exclusiveZone: 0
     // A layer rule can find the popups by this name, to keep them out of a
@@ -40,8 +41,8 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
     color: "transparent"
     implicitWidth: 360
-    // Three tall popups can outgrow a small output; past the room below
-    // the bar, the stack scrolls.
+    // Three tall popups can outgrow a small output; past the room the bar
+    // leaves, at either edge, the stack scrolls.
     implicitHeight: Notes.stackHeight(column.implicitHeight, screen?.height ?? 0, Theme.barHeight + margins.top, 12)
 
     Flickable {

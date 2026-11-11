@@ -26,11 +26,13 @@ const MODES = ["schedule", "sun", "light", "dark"];
 // The settings that decide light or dark, and every one there is.
 const THEME_KEYS = ["mode", "light", "dark", "latitude", "longitude"];
 const KEYS = THEME_KEYS.concat(["dimStrength", "lightWallpaper", "darkWallpaper", "lightWallpaperPosition",
-    "darkWallpaperPosition", "wallpaperPosition"]);
+    "darkWallpaperPosition", "wallpaperPosition", "barPosition"]);
 // How a picture is placed on a monitor (SPEC.md §15): each mode's own,
 // lightWallpaperPosition or darkWallpaperPosition, else wallpaperPosition,
 // for both.
 export const POSITIONS = Object.freeze(["fill", "fill-top", "fill-bottom", "fit", "stretch"]);
+// Which edge the bar runs along (SPEC.md §7.1), top unless set.
+export const BAR_POSITIONS = Object.freeze(["top", "bottom"]);
 const DAY = 24 * 60 * 60 * 1000;
 
 // "HH:MM" as {h, min}, or null when it isn't a 24-hour time.
@@ -93,6 +95,11 @@ export function parseAppearance(text) {
         case "wallpaperPosition":
             if (!POSITIONS.includes(v)) {
                 return { error: `${key} must be one of ${POSITIONS.map(p => `"${p}"`).join(", ")}` };
+            }
+            break;
+        case "barPosition":
+            if (!BAR_POSITIONS.includes(v)) {
+                return { error: `barPosition must be one of ${BAR_POSITIONS.map(p => `"${p}"`).join(", ")}` };
             }
             break;
         default:
@@ -1174,6 +1181,18 @@ export function positionAt(settings, dark) {
 export function steppedPositionAt(at, steps) {
     return Math.max(0, Math.min(POSITION_CHOICES.length - 1, at + steps));
 }
+
+// Whether `settings` put the bar along the bottom edge (SPEC.md §7.1).
+export function barAtBottom(settings) {
+    return settings.barPosition === "bottom";
+}
+
+// The bar's positions as the Appearance page steps through them (SPEC.md
+// §16), in BAR_POSITIONS' order.
+export const BAR_CHOICES = Object.freeze([
+    Object.freeze({ position: "top", label: "Top" }),
+    Object.freeze({ position: "bottom", label: "Bottom" }),
+]);
 
 // The greeter's copy of a user's look (SPEC.md §11, §15): what the shell
 // keeps in LOOK_ROOT/<user>/ for the greeter, which runs as greetd's own

@@ -1184,6 +1184,11 @@ check "space reserved beyond tide's bar on tidewm is a problem" \
     contains "$out" "eDP-1 reserves 40 px at the bottom beyond tide's bar"
 run "$tw" FAKE_TIDEWM_OUTPUTS="$(monitor '{"x": 50, "y": 30, "width": 1870, "height": 1050}' "$bar")"
 check "and on the left" contains "$out" "eDP-1 reserves 50 px on the left beyond tide's bar"
+bottombar='{"namespace": "tide-bar", "layer": "top", "rect": {"x": 0, "y": 1050, "width": 1920, "height": 30}, "exclusive_zone": 30}'
+run "$tw" FAKE_TIDEWM_OUTPUTS="$(monitor '{"x": 0, "y": 0, "width": 1920, "height": 1050}' "$bottombar")"
+check "tide's bar at the bottom on tidewm reserving its own height is fine" test -z "$(grep 'reserves\|bars on' "$tmp/out")"
+run "$tw" FAKE_TIDEWM_OUTPUTS="$(monitor '{"x": 0, "y": 30, "width": 1920, "height": 1020}' "$bottombar")"
+check "and space reserved at the top, then, is a problem" contains "$out" "eDP-1 reserves 30 px at the top beyond tide's bar"
 run "$tw" FAKE_TIDEWM_OUTPUTS='[{"name": "eDP-1", "active": true, "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080}}]'
 check "a tidewm too old to list layer surfaces is a problem" \
     contains "$out" "tidewm doesn't list eDP-1's layer surfaces, so its bars weren't counted: update tidewm"
@@ -1311,6 +1316,12 @@ if command -v jq >/dev/null 2>&1; then
     run FAKE_MONITORS="$(reserved 0,74,0,0)" FAKE_LAYERS="{\"DP-1\":{\"levels\":{\"2\":[$(bar 0 40 2752 34 tide-bar)]}}}"
     check "a monitor rule's reservation above tide's bar is found though it moves the bar down" \
         contains "$out" "DP-1 reserves 40 px at the top beyond tide's bar"
+    bottom="{\"DP-1\":{\"levels\":{\"2\":[$(bar 0 1118 2752 34 tide-bar)]}}}"
+    run FAKE_MONITORS="$(reserved 0,0,0,34)" FAKE_LAYERS="$bottom"
+    check "tide's bar at the bottom reserving its own height is fine" test -z "$(grep 'reserves\|bars on' "$tmp/out")"
+    run FAKE_MONITORS="$(reserved 0,32,0,34)" FAKE_LAYERS="$bottom"
+    check "with tide's bar at the bottom, space reserved at the top is a problem" \
+        contains "$out" "DP-1 reserves 32 px at the top beyond tide's bar"
     run FAKE_MONITORS="$(reserved 40,34,0,0)" FAKE_LAYERS="$ours"
     check "a side dock is caught by the space it reserves" contains "$out" "DP-1 reserves 40 px on the left beyond tide's bar"
     run FAKE_MONITORS="$(reserved 0,34,0,48)" FAKE_LAYERS="{\"DP-1\":{\"levels\":{\"2\":[$(bar 0 0 2752 34 waybar)]}}}"

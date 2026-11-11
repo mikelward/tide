@@ -21,7 +21,8 @@ PanelWindow {
         monitor: OsdData.monitor
     }, root.modelData?.name ?? "")
     anchors.bottom: true
-    margins.bottom: 60
+    // As far over a bottom bar as it is over the screen's edge otherwise.
+    margins.bottom: Theme.aboveBar(60)
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "tide-osd"
     WlrLayershell.layer: WlrLayer.Overlay
