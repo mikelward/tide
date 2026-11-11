@@ -1,8 +1,6 @@
 import QtQuick
-import QtQuick.Effects
 import Quickshell
 import Quickshell.Services.UPower
-import "lib/appearance.mjs" as Appearance
 import "lib/clocks.mjs" as Clocks
 import "lib/greeter.mjs" as Greeter
 import "lib/lock.mjs" as Lock
@@ -50,7 +48,6 @@ Item {
     property string wallpaperColor: ""
     // How the picture is placed, as the shell places it (Appearance.POSITIONS).
     property string wallpaperPosition: "fill"
-    readonly property var wallpaperPlacement: Appearance.wallpaperPlacement(wallpaperPosition)
     // The line under the field (Lock.statusLine); the greeter says which
     // session is starting.
     readonly property var line: Lock.statusLine(lockState, keyboard)
@@ -264,58 +261,13 @@ Item {
         }
 
         // --- The password face -------------------------------------------
-        Rectangle {
+        Backdrop {
             anchors.fill: parent
             visible: !face.lockState.saver
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0.0; color: face.palette.top }
-                GradientStop { position: 1.0; color: face.palette.bottom }
-            }
-
-            // The wallpaper, over the gradient once it has loaded: drawn
-            // through the blur, and darkened (lightened on the light face),
-            // so the face's text reads on any picture. Decoded at the face's size, which
-            // the blur leaves no detail to spare.
-            Image {
-                id: backdrop
-
-                anchors.fill: parent
-                visible: false
-                source: face.wallpaper === "" ? "" : Appearance.fileUrl(face.wallpaper)
-                // Framed as Wallpaper.qml frames it; a picture fitted whole
-                // has the gradient in its bars.
-                fillMode: face.wallpaperPlacement.stretch ? Image.Stretch : face.wallpaperPlacement.fit ? Image.PreserveAspectFit : Image.PreserveAspectCrop
-                horizontalAlignment: Image.AlignHCenter
-                verticalAlignment: face.wallpaperPlacement.vertical === "top" ? Image.AlignTop : face.wallpaperPlacement.vertical === "bottom" ? Image.AlignBottom : Image.AlignVCenter
-                asynchronous: true
-                sourceSize.width: face.width
-                sourceSize.height: face.height
-                onStatusChanged: {
-                    if (status === Image.Error) {
-                        console.warn(`tide-lock: wallpaper: couldn't load ${face.wallpaper}`);
-                    }
-                }
-            }
-
-            MultiEffect {
-                anchors.fill: parent
-                visible: backdrop.status === Image.Ready
-                source: backdrop
-                autoPaddingEnabled: false
-                blurEnabled: true
-                blur: 1.0
-                blurMax: 64
-                brightness: face.dark ? -Appearance.LOCK_DARKEN : Appearance.LOCK_DARKEN
-            }
-
-            // A color wallpaper: plain, with nothing to blur, darkened as
-            // the picture is (Appearance.lockColor).
-            Rectangle {
-                anchors.fill: parent
-                visible: face.wallpaperColor !== ""
-                color: face.wallpaperColor === "" ? "transparent" : Appearance.lockColor(face.wallpaperColor, face.dark)
-            }
+            dark: face.dark
+            wallpaper: face.wallpaper
+            wallpaperColor: face.wallpaperColor
+            wallpaperPosition: face.wallpaperPosition
 
             // The battery and the notification count, top right, in the
             // bar's order, as the mock shows. A count, never what the

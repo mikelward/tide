@@ -2235,11 +2235,14 @@ test("Super+L locks with tide lock in the tide session, with hyprlock outside it
     eq("hyprlock", bind("SUPER + L").target.args)
 end)
 
-test("the tide session's autostart is uwsm finalize alone", function()
+test("the tide session's autostart is the splash and uwsm finalize alone", function()
     load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
     fire("hyprland.start")
-    eq(1, #S.execs, "one command")
-    eq("uwsm finalize", unlogged(S.execs[1], "tide-hyprland"))
+    eq(2, #S.execs, "two commands")
+    local splash = tmp .. "/.config/quickshell/tide/splash.qml"
+    eq("test -f '" .. splash .. "' && QS_DISABLE_FILE_WATCHER=1 exec qs -p '" .. splash .. "'",
+        unlogged(S.execs[1], "tide-splash"), "the splash, first")
+    eq("uwsm finalize", unlogged(S.execs[2], "tide-hyprland"))
 end)
 
 test("in the tide session, app keys go through tide launch", function()
@@ -2371,7 +2374,7 @@ test("the pointer starts in the middle of the focused monitor", function()
     eq(1, #moves, "one pointer move")
     eq(3200, moves[1].x, "x")
     eq(720, moves[1].y, "y")
-    eq("uwsm finalize", unlogged(S.execs[1], "tide-hyprland"), "and the session still starts")
+    eq("uwsm finalize", unlogged(S.execs[2], "tide-hyprland"), "and the session still starts")
 end)
 
 test("with no monitor to read, the pointer stays put and the session starts", function()
@@ -2379,7 +2382,7 @@ test("with no monitor to read, the pointer stays put and the session starts", fu
     S.active_monitor = nil
     fire("hyprland.start")
     eq(0, #S.dispatched, "no move")
-    eq("uwsm finalize", unlogged(S.execs[1], "tide-hyprland"))
+    eq("uwsm finalize", unlogged(S.execs[2], "tide-hyprland"))
 end)
 
 test("autostart runs on hyprland.start, not at load", function()

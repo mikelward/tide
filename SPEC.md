@@ -433,7 +433,7 @@ agent was made and registered, since `tide-shell` then starts no other.
 flowchart TD
   G[greetd + tide greeter] -->|PAM: auth, unlock keyring| U["uwsm start -e -D tide:Hyprland -- tide-hyprland"]
   U --> W["wayland-wm@tide-hyprland.service (Hyprland)"]
-  W -->|"the only exec-once: uwsm finalize"| GS[graphical-session.target]
+  W -->|"exec-once: the splash, then uwsm finalize"| GS[graphical-session.target]
   GS --> Q["tide.service: bar, launcher, notifications, tray watcher, polkit"]
   GS --> I["hypridle.service (Type=dbus: ready once it owns org.freedesktop.ScreenSaver)"]
   I -->|"lock_cmd, on logind Lock"| L["tide-lock.service (on demand)"]
@@ -442,6 +442,18 @@ flowchart TD
   A --> APPS[apps via uwsm app]
 ```
 
+- **A splash covers the wait** (maintainer, 2026-11-11). Hyprland's
+  empty gray background showed for as long as the shell took to start.
+  Now the session's first command is `shell/splash.qml`: on every
+  monitor, your wallpaper blurred as on the lock (the greeter's copy of
+  your look, §11), the hostname, "Starting tide" and a sliding dot.
+  - It asks `systemctl --user is-active tide.service` each second, and
+    goes once the shell is ready or has failed (the fallback's terminal
+    then shows), or after 2 minutes whatever happens.
+  - After 10 seconds it says "Still starting tide".
+  - The journal gets, as `tide-splash`, each of those with how long it
+    took, so a slow start is measured.
+  - It takes no keys. tidewm's session has none yet (TODO.md).
 - **The session entry** is `tide.desktop` in `wayland-sessions`, so
   the current display manager lists it too (M2).
 - **Each entry's `Exec` is `tide-session hyprland` or `tide-session
@@ -657,8 +669,9 @@ flowchart TD
   sets `TimeoutStopSec=5`, and the hypridle drop-in does too. At
   systemd's default, a process slow to die held the target for 90 s, and
   a login straight after a logout came back to the login screen.
-- **One `exec-once`.** Hyprland's config starts nothing but
-  `uwsm finalize`, and a test in `conf` asserts it.
+- **Two `exec-once`s.** Hyprland's config starts nothing but the splash
+  and `uwsm finalize`, and `hypr/hyprland_test.lua` asserts it. The splash
+  has to show before the session's units start, so it can't be one.
 - **Autostart is an allowlist.** XDG autostart entries run in tide only
   if they are on its list: `nm-applet` while the shell's agent isn't
   running, plus any desktop IDs in `~/.config/tide/autostart`. Everything

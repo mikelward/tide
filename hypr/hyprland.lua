@@ -391,8 +391,8 @@ end
 --------------------------------------------------------------------------------
 -- AUTOSTART
 --------------------------------------------------------------------------------
--- In the tide session this starts nothing but `uwsm finalize` (tide
--- SPEC.md §5.4): tide.service runs the bar, notifications, wallpaper,
+-- In the tide session this starts nothing but the splash and `uwsm
+-- finalize` (tide SPEC.md §5.4): tide.service runs the bar, notifications, wallpaper,
 -- polkit agent and input setup, and hypridle.service the idle daemon, each
 -- once and only in that session. The list below is for a plain Hyprland login.
 -- The pointer starts in the middle of the focused monitor, where the eye
@@ -419,6 +419,11 @@ end
 hl.on("hyprland.start", function()
     center_pointer()
     if tide_session then
+        -- The splash (shell/splash.qml) covers Hyprland's empty background
+        -- until the shell is ready; it goes by itself.
+        local splash = home .. "/.config/quickshell/tide/splash.qml"
+        hl.exec_cmd(logged("test -f " .. sh_quote(splash) .. " && QS_DISABLE_FILE_WATCHER=1 exec qs -p "
+            .. sh_quote(splash), "tide-splash"))
         hl.exec_cmd(logged("uwsm finalize", "tide-hyprland"))
         return
     end
