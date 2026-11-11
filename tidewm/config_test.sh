@@ -75,8 +75,16 @@ check "every tide launch names the app its window grant is for" empty "$nogrant"
 check "the settings tide's shell writes are included, then nwg-displays' outputs, last, so they win" \
     test "$(printf '%s\n' "$lines" | tail -n 2 | tr '\n' '|')" = "include tide-*.conf|include ~/.config/sway/outputs|"
 check "the focus guard is on" contains "$(cat "$cfg")" "focus_guard enable"
+# The lock key runs what Hyprland's session runs: `tide lock`, which locks
+# with no idle daemon running too, where logind's Lock alone has nothing
+# to answer it.
+hlock=$(sed -n 's/^local lock = tide_session and "\([^"]*\)" or .*/\1/p' "$hypr")
+check "hyprland.lua's lock command is found" test -n "$hlock"
 # shellcheck disable=SC2016 # $mod is the config's, not the shell's
-check "the session locks through logind" contains "$(cat "$cfg")" 'bindsym --name=lock $mod+l exec loginctl lock-session'
+check "Super+L locks as Hyprland's session does, with tide lock" \
+    test "$(sed -n 's/^bindsym --name=lock \$mod+l exec //p' "$cfg")" = "$hlock"
+check "which locks with no idle daemon running, and falls back to logind" \
+    test "$hlock" = "tide lock || loginctl lock-session"
 
 # Every name hyprland.lua binds, so keys.json serves both sessions, but the
 # floating rules' key and the layout used last, which have no tidewm
