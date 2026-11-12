@@ -26,7 +26,7 @@ const MODES = ["schedule", "sun", "light", "dark"];
 // The settings that decide light or dark, and every one there is.
 const THEME_KEYS = ["mode", "light", "dark", "latitude", "longitude"];
 const KEYS = THEME_KEYS.concat(["city", "dimStrength", "lightWallpaper", "darkWallpaper", "lightWallpaperPosition",
-    "darkWallpaperPosition", "wallpaperPosition", "barPosition"]);
+    "darkWallpaperPosition", "wallpaperPosition", "barPosition", "barIcons"]);
 // How a picture is placed on a monitor (SPEC.md §15): each mode's own,
 // lightWallpaperPosition or darkWallpaperPosition, else wallpaperPosition,
 // for both.
@@ -108,12 +108,28 @@ export function parseAppearance(text) {
                 return { error: `barPosition must be one of ${BAR_POSITIONS.map(p => `"${p}"`).join(", ")}` };
             }
             break;
+        case "barIcons":
+            // The bar's status icons, in order, each shown or not. Which
+            // ids there are is the bar's own list (baricons.mjs on Linux),
+            // which drops one it doesn't know.
+            if (!barIconsValid(v)) {
+                return { error: 'barIcons must be a list like [{"id": "network", "shown": true}]' };
+            }
+            break;
         default:
             return { error: `unknown setting "${key}"` };
         }
         settings[key] = v;
     }
     return { settings };
+}
+
+// Whether `v` is a list of {id, shown}: an id that's a lowercase name,
+// shown true or false, and nothing else.
+function barIconsValid(v) {
+    return Array.isArray(v) && v.every(e => e !== null && typeof e === "object" && !Array.isArray(e)
+        && typeof e.id === "string" && /^[a-z]+$/.test(e.id) && typeof e.shown === "boolean"
+        && Object.keys(e).length === 2);
 }
 
 const NEEDS_PLACE = 'mode "sun" needs latitude and longitude';

@@ -2112,12 +2112,30 @@ See [`bar.png`](docs/mocks/bar.png).
   Apps. Its click
   target runs out to the bar's left edge, so the corner opens it.
 - **Right:** the Presenting pill while presenter mode is on (§10), privacy
-  pills (screen shared, mic live), third-party tray icons,
-  then the built-in status icons: the keyboard layout (once there are
-  two), keep-awake, Bluetooth and its audio
-  devices, network,
-  volume %, battery %, CPU %, notifications, session. Local's clock comes
-  last.
+  pills (screen shared, mic live), and tidewm's config errors while it has
+  any. Then, by default, third-party tray icons and the built-in status
+  icons: the keyboard layout (once there are two), keep-awake, Bluetooth
+  and its audio devices, network, volume %, battery %, CPU %,
+  notifications, session. Local's clock comes last.
+- **The Bar page chooses which of those show, and their order** (§16).
+  - It's `barIcons` in `appearance.json` (§15): a list of `{"id":
+    "network", "shown": false}`, in the bar's order. The ids are `tray`,
+    `keyboard`, `keepawake`, `bluetooth`, `headphones` (the audio
+    devices), `network`, `volume`, `battery`, `sysmon`, `notifications`,
+    `session` and `clocks`.
+  - `shell/lib/baricons.mjs` makes a stored list whole, as tide for
+    macOS's `bar.icon_list` does. An id it doesn't know or names twice is
+    dropped, so a list from a newer tide still loads. An icon the list
+    leaves out, one added since, goes in after the one it follows by
+    default. Every icon shows unless turned off.
+  - **The clocks are in the list**, as on tide for macOS, so they move and
+    turn off as an icon does.
+  - **The pills and the config errors aren't.** Each shows only while it
+    has something to say: a privacy pill hidden by choice would hide that
+    the screen or mic is in use, and a hidden error would leave a missing
+    key unexplained.
+  - The bar follows a change at once. An icon turned off is gone, and its
+    neighbors close up.
 - **Middle:** the title of the window your typing goes to. Only the
   focused monitor shows one, wherever on that monitor the window is: under
   an open special workspace, or pinned. Every other monitor's bar leaves it
@@ -2400,8 +2418,10 @@ one. It's one component, `BarTip`, so they all look alike.
 
 **Spacing.**
 
-- The status icons sit 10 px apart, and the session icon sits as far
-  from the first clock.
+- The status icons sit 10 px apart, and the icon before the clocks sits
+  as far from the first clock's text. The tray sits 14 px from its
+  neighbors. Whatever the order, the last item's text or icon ends 11 px
+  from the bar's edge (`shell/lib/baricons.mjs`'s `arranged`).
 - The clocks sit 12 px apart: 5 px inside each, either side of its text,
   and 2 px between them.
 - The volume's % and the CPU's are held as wide as two digits, so the
@@ -4654,6 +4674,11 @@ to be focused.
   default, or `bottom` (§7.1). Anything else fails at load, naming the
   setting. A machine can set its own in `appearance.local.json`, which the
   Bar page writes (§16).
+- **The bar's icons.** `barIcons` in `appearance.json` lists the status
+  icons, in order, each shown or not (§7.1). Anything but a list of
+  `{"id": …, "shown": true or false}` fails at load, naming the setting.
+  An id the bar doesn't know is dropped, not an error. A local file's
+  list replaces the shared one whole.
 - **Fonts and icons:**
   - **Inter** for UI and **Ubuntu Mono** (roughly 11 pt) for code. That is
     one setting in `appearance.json`, handed to GTK (`font-name`,
@@ -5319,8 +5344,9 @@ stays hand-written.
   - **Position**, which ‹ and › step between Top and Bottom, is
     `barPosition` in `appearance.local.json` (§15). Every bar moves at
     once, and what opens from it with it.
-  - Which status icons the bar shows, and their order, are to come
-    (TODO.md).
+  - **Icons** lists the status icons in the bar's order (§7.1). Each has
+    ↑ and ↓, which move it, and an On or Off switch. It's `barIcons` in
+    `appearance.local.json`, and the bar follows at once.
 - **Notifications** sets §9's, in `notifications.json` and
   `notifications.local.json`, and lists `muted` from `workspaces.json`.
   - A switch turns Do not disturb on or off now, as the bell does.

@@ -1390,3 +1390,25 @@ test("the bar is at the top unless barPosition puts it at the bottom", () => {
     assert.equal(barAtBottom(bad.settings), false, "a bad one keeps the last good");
     assert.deepEqual(BAR_CHOICES.map(c => c.position), BAR_POSITIONS);
 });
+
+test("barIcons is a list of icons, each shown or not, and anything else fails naming it", () => {
+    const icons = [{ id: "clocks", shown: true }, { id: "network", shown: false }];
+    assert.deepEqual(loadAppearance(JSON.stringify({ barIcons: icons }), null).settings.barIcons, icons);
+    assert.deepEqual(loadAppearance(null, JSON.stringify({ barIcons: icons })).settings.barIcons, icons, "a machine's own");
+    assert.deepEqual(parseAppearance('{"barIcons": [{"id": "gone", "shown": true}]}').settings.barIcons,
+        [{ id: "gone", shown: true }], "an id the bar doesn't know is its to drop, so a newer tide's list loads");
+    for (const bad of ['"network"', '[{"id": "network"}]', '[{"id": "network", "shown": "yes"}]',
+        '[{"id": "network", "shown": true, "at": 2}]', '[{"id": "", "shown": true}]', '[null]', '[["network", true]]']) {
+        const loaded = loadAppearance(`{"barIcons": ${bad}}`, null);
+        assert.equal(loaded.errors.length, 1, bad);
+        assert.match(loaded.errors[0], /^appearance\.json: barIcons must be a list/, bad);
+        assert.equal(loaded.settings.barIcons, undefined, `${bad} keeps the last good`);
+    }
+});
+
+test("the Bar page's icon list is written to the local file, beside the rest", () => {
+    const icons = [{ id: "network", shown: false }];
+    const r = withSetting('{"barPosition": "bottom"}', "barIcons", icons);
+    assert.deepEqual(JSON.parse(r.text), { barPosition: "bottom", barIcons: icons });
+    assert.match(withSetting(null, "barIcons", [{ id: "network" }]).error, /^barIcons must be/);
+});
