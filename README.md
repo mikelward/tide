@@ -76,7 +76,7 @@ For your browser tabs in the switcher, add tide for Chrome (mikelward/tideco) or
 the tide connector to Chrome or Brave. The connector loads unpacked from
 `connector/` (`connector/README.md`).
 
-Then pick **tide** at the display manager. It runs Hyprland through
+Then pick **tide (Hyprland)** at the display manager. It runs Hyprland through
 uwsm as `tide-hyprland`, which gives the session its own systemd
 target, so tide's units never start in a plain Hyprland or Plasma
 login (SPEC.md §5.3). If the display manager doesn't list the session,

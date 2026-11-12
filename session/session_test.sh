@@ -200,7 +200,7 @@ check "and logs what it ran" \
 check "and that it ended" grep -qxF "the tide (tidewm) session ended" "$tmp/session-log"
 out=$(run_session hyprland)
 check "tide-session hyprland runs uwsm with Hyprland's desktops, name and wrapper" \
-    test "$out" = "$(printf '%s\n' "systemd-cat:" "[start]" "[-e]" "[-D]" "[tide:Hyprland]" "[-N]" "[tide]" "[--]" "[tide-hyprland]")"
+    test "$out" = "$(printf '%s\n' "systemd-cat:" "[start]" "[-e]" "[-D]" "[tide:Hyprland]" "[-N]" "[tide (Hyprland)]" "[--]" "[tide-hyprland]")"
 : > "$tmp/session-log"
 FAKE_UWSM=3 run_session tidewm >/dev/null
 check "a uwsm that fails is tide-session's status" test "$?" -eq 3
@@ -273,6 +273,10 @@ check "the tidewm entry is offered only where tidewm is installed" \
     has_line "$tidewm_entry" "TryExec=tidewm"
 check "the tidewm entry says which compositor it runs" \
     has_line "$tidewm_entry" "Name=tide (tidewm)"
+check "and so does Hyprland's" has_line "$entry" "Name=tide (Hyprland)"
+# Its file name stays tide.desktop, so a login screen's remembered choice
+# and the greeter's ordering, both by file name, still find it.
+check "Hyprland's entry keeps its file name" test "$(basename "$entry")" = tide.desktop
 # A stub tidewm runs its -s command as tidewm does, under /bin/sh -c, with
 # a stub uwsm that prints what it was asked. It records the compositor
 # variables it was started with, and gives its command $FAKE_TIDEWM_SWAYSOCK
