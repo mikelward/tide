@@ -11,43 +11,70 @@ import "lib/keepawake.mjs" as KeepAwake
 import "lib/network.mjs" as Net
 import "lib/status.mjs" as Status
 import "lib/barsettings.mjs" as BarSettings
+import "lib/baricons.mjs" as BarIcons
 
-// The status icons before the clocks (SPEC.md §7.4), each with hover text
-// (BarTip) in tide for macOS's words where tide for macOS has the same icon. So far:
-// tidewm's config errors, while it has any; the
-// keyboard layout, once there are two; keep awake;
-// Bluetooth, then one for each connected audio device; network; volume and its %, which scrolls by 5%; battery, red
-// at 20% and below; and the system monitor's CPU %, each with its popover; the
-// notification center's bell; and the session menu.
-// The tray is shell/Tray.qml, to their left. The other icons come later;
-// TODO.md lists them.
-Row {
+// The status icons (SPEC.md §7.4), each with hover text (BarTip) in tide
+// for macOS's words where tide for macOS has the same icon: tidewm's config
+// errors, while it has any, always first; then, in the Bar page's order
+// (appearance.json's barIcons, lib/baricons.mjs), the tray (Tray.qml); the
+// keyboard layout, once there are two; keep awake; Bluetooth, then one for
+// each connected audio device; network; volume and its %, which scrolls by
+// 5%; battery, red at 20% and below; and the system monitor's CPU %, each
+// with its popover; the notification center's bell; the session menu; and
+// the clocks (Clocks.qml). Each one the page turns off is hidden. Each
+// icon's x is baricons.mjs's, which counts the clocks' own room.
+Item {
     id: root
-
-    spacing: 10
 
     // The bar's monitor, which the bell opens the notification center on.
     property string monitorName: ""
     // How far the click targets at the group's ends reach past it (Bar.qml).
     property var reach: ({ left: Click.PAD, right: Click.PAD })
 
+    // The Bar page's list, made whole, and the ids in the order they go.
+    readonly property var icons: BarIcons.iconList(AppearanceData.settings.barIcons)
+    readonly property var order: ["config"].concat(root.icons.map(e => e.id))
+
+    // Whether the Bar page shows the icon `id`.
+    function on(id) {
+        return root.icons.some(e => e.id === id && e.shown);
+    }
+
+    function size(item) {
+        return { width: item.width, shown: item.visible };
+    }
+
+    // Each item's width and whether it shows.
+    readonly property var sizes: ({
+        config: root.size(config),
+        tray: root.size(tray),
+        keyboard: root.size(layout),
+        keepawake: root.size(keepAwake),
+        bluetooth: root.size(bluetooth),
+        headphones: root.size(headphones),
+        network: root.size(network),
+        volume: root.size(volume),
+        battery: root.size(batteryIcon),
+        sysmon: root.size(sysmon),
+        notifications: root.size(bell),
+        session: root.size(session),
+        clocks: root.size(clocks)
+    })
+
+    // Each icon's x, and the group's width. It leaves out the reach past
+    // the ends, which Bar.qml works out from this width: with it, the
+    // width would wait on itself.
+    readonly property var geometry: BarIcons.arranged(root.order, root.sizes)
+    // Each icon's click reach, the group's ends reaching as Bar.qml says.
+    readonly property var placed: BarIcons.arranged(root.order, root.sizes, root.reach)
+
+    implicitWidth: root.geometry.width
+    implicitHeight: Theme.barHeight
+
     // Whether a point in the bar's scene is on the bell's click target.
     function onBell(scenePoint) {
         const area = bellHit.area;
         return bell.visible && area.contains(area.mapFromItem(null, scenePoint.x, scenePoint.y));
-    }
-
-    // How far an icon's click target reaches past it: half the spacing to
-    // a neighbor, and the group's reach at its ends.
-    function reachOf(item) {
-        return Click.groupReach({
-            x: item.x,
-            width: item.width,
-            groupWidth: root.width,
-            spacing: root.spacing,
-            left: root.reach.left,
-            right: root.reach.right
-        });
     }
 
     readonly property var sink: Pipewire.defaultAudioSink
@@ -63,6 +90,7 @@ Row {
     SymbolicIcon {
         id: config
 
+        x: root.geometry.x.config
         anchors.verticalCenter: parent.verticalCenter
         visible: ConfigErrorsData.errors.length > 0
         name: Errors.ICON
@@ -78,7 +106,7 @@ Row {
             settings: BarSettings.page("config")
             id: configHit
 
-            reach: root.reachOf(config)
+            reach: root.placed.reach.config
 
             TapHandler {
                 onTapped: configPopover.toggle(parent)
@@ -92,14 +120,25 @@ Row {
         }
     }
 
+    // Third-party tray icons (Tray.qml).
+    Tray {
+        id: tray
+
+        x: root.geometry.x.tray
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.on("tray")
+        reach: root.placed.reach.tray
+    }
+
     // The keyboard layout, as tide for macOS's input source: up to three letters,
     // only once there are two layouts. A click goes to the next, as
     // Super+Alt+Space does; hovering names it in full.
     Text {
         id: layout
 
+        x: root.geometry.x.keyboard
         anchors.verticalCenter: parent.verticalCenter
-        visible: KeyboardData.count > 1 && KeyboardData.label !== ""
+        visible: root.on("keyboard") && KeyboardData.count > 1 && KeyboardData.label !== ""
         text: KeyboardData.label
         color: Theme.fg
         font.family: Theme.font
@@ -110,7 +149,7 @@ Row {
             settings: BarSettings.page("keyboard")
             id: layoutHit
 
-            reach: root.reachOf(layout)
+            reach: root.placed.reach.keyboard
 
             TapHandler {
                 onTapped: KeyboardData.next()
@@ -131,7 +170,9 @@ Row {
     SymbolicIcon {
         id: keepAwake
 
+        x: root.geometry.x.keepawake
         anchors.verticalCenter: parent.verticalCenter
+        visible: root.on("keepawake")
         name: KeepAwake.ICON
         color: KeepAwakeData.on ? Theme.accent : Theme.fgFaint
 
@@ -139,7 +180,7 @@ Row {
             settings: BarSettings.page("keepawake")
             id: keepAwakeHit
 
-            reach: root.reachOf(keepAwake)
+            reach: root.placed.reach.keepawake
 
             TapHandler {
                 onTapped: KeepAwakeData.toggle()
@@ -162,8 +203,9 @@ Row {
         readonly property var devices: adapter?.devices.values ?? []
         readonly property var view: Bt.bluetoothIcon(adapter)
 
+        x: root.geometry.x.bluetooth
         anchors.verticalCenter: parent.verticalCenter
-        visible: view.visible
+        visible: root.on("bluetooth") && view.visible
         name: view.icon || "bluetooth-active-symbolic"
         color: view.on ? Theme.fg : Theme.fgFaint
 
@@ -171,7 +213,7 @@ Row {
             settings: BarSettings.page("bluetooth")
             id: bluetoothHit
 
-            reach: root.reachOf(bluetooth)
+            reach: root.placed.reach.bluetooth
 
             TapHandler {
                 onTapped: bluetoothPopover.toggle(parent)
@@ -193,33 +235,50 @@ Row {
 
     // An icon beside it for each connected audio device, headphones,
     // headset or speakers, with its name and battery on hover. A click opens
-    // the Bluetooth popover.
-    Repeater {
-        model: Bt.audioIcons(bluetooth.adapter, bluetooth.devices)
+    // the Bluetooth popover. A Row of its own, so the Bar page moves them as
+    // one.
+    Row {
+        id: headphones
 
-        SymbolicIcon {
-            id: audioDevice
+        x: root.geometry.x.headphones
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.on("headphones")
+        spacing: BarIcons.GAP
 
-            required property var modelData
+        Repeater {
+            model: Bt.audioIcons(bluetooth.adapter, bluetooth.devices)
 
-            anchors.verticalCenter: parent.verticalCenter
-            name: modelData.icon
+            SymbolicIcon {
+                id: audioDevice
 
-            BarHit {
-                settings: BarSettings.page("bluetooth")
-                id: audioHit
+                required property var modelData
 
-                reach: root.reachOf(audioDevice)
+                anchors.verticalCenter: parent.verticalCenter
+                name: modelData.icon
 
-                TapHandler {
-                    onTapped: bluetoothPopover.toggle(parent)
+                BarHit {
+                    settings: BarSettings.page("bluetooth")
+                    id: audioHit
+
+                    reach: Click.groupReach({
+                        x: audioDevice.x,
+                        width: audioDevice.width,
+                        groupWidth: headphones.width,
+                        spacing: headphones.spacing,
+                        left: root.placed.reach.headphones.left,
+                        right: root.placed.reach.headphones.right
+                    })
+
+                    TapHandler {
+                        onTapped: bluetoothPopover.toggle(parent)
+                    }
                 }
-            }
 
-            BarTip {
-                item: audioDevice
-                shown: audioHit.hovered
-                text: audioDevice.modelData.tooltip
+                BarTip {
+                    item: audioDevice
+                    shown: audioHit.hovered
+                    text: audioDevice.modelData.tooltip
+                }
             }
         }
     }
@@ -246,8 +305,9 @@ Row {
             connectivity: Networking.connectivity,
         })
 
+        x: root.geometry.x.network
         anchors.verticalCenter: parent.verticalCenter
-        visible: view.visible
+        visible: root.on("network") && view.visible
         name: view.icon || "network-offline-symbolic"
 
         // A VPN's lock (SPEC.md §7.4), on a disc of the bar's color so it
@@ -276,7 +336,7 @@ Row {
             settings: BarSettings.page("network")
             id: networkHit
 
-            reach: root.reachOf(network)
+            reach: root.placed.reach.network
 
             TapHandler {
                 onTapped: networkPopover.toggle(parent)
@@ -307,8 +367,9 @@ Row {
     Row {
         id: volume
 
+        x: root.geometry.x.volume
         anchors.verticalCenter: parent.verticalCenter
-        visible: root.sink !== null
+        visible: root.on("volume") && root.sink !== null
         spacing: 2
 
         SymbolicIcon {
@@ -326,7 +387,7 @@ Row {
                 id: volumeHit
 
                 span: volume
-                reach: root.reachOf(volume)
+                reach: root.placed.reach.volume
 
                 TapHandler {
                     onTapped: volumePopover.toggle(parent)
@@ -392,7 +453,7 @@ Row {
     }
 
     Row {
-        id: battery
+        id: batteryIcon
 
         readonly property var view: Status.batteryView({
             present: root.battery?.isPresent ?? false,
@@ -401,18 +462,19 @@ Row {
         })
         readonly property color ink: view.low ? Theme.danger : Theme.fg
 
+        x: root.geometry.x.battery
         anchors.verticalCenter: parent.verticalCenter
-        visible: view.visible
+        visible: root.on("battery") && view.visible
         spacing: 2
 
         BatteryPopover {
             id: batteryPopover
 
-            icon: battery
+            icon: batteryIcon
         }
 
         BarTip {
-            item: battery
+            item: batteryIcon
             shown: batteryHit.hovered
             text: Status.batteryTip({
                 present: root.battery?.isPresent ?? false,
@@ -425,8 +487,8 @@ Row {
 
         SymbolicIcon {
             anchors.verticalCenter: parent.verticalCenter
-            name: battery.view.icon || "battery-missing-symbolic"
-            color: battery.ink
+            name: batteryIcon.view.icon || "battery-missing-symbolic"
+            color: batteryIcon.ink
 
             // In here, not the Row itself, which would cull a target that
             // takes no room (BarHit.qml).
@@ -434,8 +496,8 @@ Row {
                 settings: BarSettings.page("battery")
                 id: batteryHit
 
-                span: battery
-                reach: root.reachOf(battery)
+                span: batteryIcon
+                reach: root.placed.reach.battery
 
                 TapHandler {
                     onTapped: batteryPopover.toggle(parent)
@@ -445,8 +507,8 @@ Row {
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: battery.view.text
-            color: battery.ink
+            text: batteryIcon.view.text
+            color: batteryIcon.ink
             font.family: Theme.font
             font.pixelSize: 13
             font.weight: Font.Medium
@@ -462,7 +524,9 @@ Row {
         readonly property color ink: SysmonData.view.tone === "danger" ? Theme.danger
             : SysmonData.view.tone === "warn" ? Theme.warn : Theme.fg
 
+        x: root.geometry.x.sysmon
         anchors.verticalCenter: parent.verticalCenter
+        visible: root.on("sysmon")
         spacing: 2
 
         SysmonPopover {
@@ -489,7 +553,7 @@ Row {
                 id: sysmonHit
 
                 span: sysmon
-                reach: root.reachOf(sysmon)
+                reach: root.placed.reach.sysmon
 
                 TapHandler {
                     onTapped: sysmonPopover.toggle(parent)
@@ -525,8 +589,9 @@ Row {
     SymbolicIcon {
         id: bell
 
+        x: root.geometry.x.notifications
         anchors.verticalCenter: parent.verticalCenter
-        visible: NotificationData.enabled
+        visible: root.on("notifications") && NotificationData.enabled
         // A bell with a slash while Do not disturb is on.
         name: NotificationData.dnd ? "notifications-disabled-symbolic" : "preferences-system-notifications-symbolic"
 
@@ -546,7 +611,7 @@ Row {
             settings: BarSettings.page("notifications")
             id: bellHit
 
-            reach: root.reachOf(bell)
+            reach: root.placed.reach.notifications
 
             TapHandler {
                 onTapped: HistoryData.toggleAt(root.monitorName)
@@ -569,14 +634,16 @@ Row {
     SymbolicIcon {
         id: session
 
+        x: root.geometry.x.session
         anchors.verticalCenter: parent.verticalCenter
+        visible: root.on("session")
         name: "system-shutdown-symbolic"
 
         BarHit {
             settings: BarSettings.page("session")
             id: sessionHit
 
-            reach: root.reachOf(session)
+            reach: root.placed.reach.session
 
             TapHandler {
                 onTapped: sessionMenu.toggle(parent)
@@ -594,5 +661,15 @@ Row {
 
             icon: session
         }
+    }
+
+    // Local's clock, and the zones in the bar (SPEC.md §7.3).
+    Clocks {
+        id: clocks
+
+        x: root.geometry.x.clocks
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.on("clocks")
+        reach: root.placed.reach.clocks
     }
 }

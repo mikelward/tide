@@ -120,6 +120,7 @@ test("searching keeps the pages found, under their headings, and drops headings 
     assert.deepEqual(shown("CLIP"), ["# General", "clipboard"]);
     assert.deepEqual(shown("bar"), ["# General", "bar"]);
     assert.deepEqual(shown("bottom"), ["# General", "bar"], "where the bar goes finds its page");
+    assert.deepEqual(shown("tray"), ["# General", "bar"], "so do the bar's icons");
     assert.deepEqual(shown("zzz"), []);
     // An empty or blank query shows every page.
     assert.deepEqual(searchedSidebar(""), sidebarRows());

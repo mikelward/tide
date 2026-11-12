@@ -20,7 +20,7 @@ PanelWindow {
 
     // How far each click target on the right reaches past its ends: the
     // gaps between them split, so none is dead, whatever their spacing.
-    readonly property var reaches: Click.chainReaches([presenter, sharing, mic, tray, statusIcons, clocks].map(item => ({
+    readonly property var reaches: Click.chainReaches([presenter, sharing, mic, statusIcons].map(item => ({
         left: item.x,
         right: item.x + item.width,
         shown: item.visible
@@ -146,39 +146,21 @@ PanelWindow {
         id: mic
 
         reach: bar.reaches[2]
-        anchors.right: tray.left
+        anchors.right: statusIcons.left
         anchors.rightMargin: visible ? 10 : 0
         anchors.verticalCenter: parent.verticalCenter
     }
 
-    Tray {
-        id: tray
-
-        reach: bar.reaches[3]
-        anchors.right: statusIcons.left
-        anchors.rightMargin: 14
-        anchors.verticalCenter: parent.verticalCenter
-    }
-
+    // The tray, the status icons and the clocks, in the Bar page's order
+    // (§7.4). With the clocks' own 5 px, the last clock's text sits 11 px
+    // from the edge.
     StatusIcons {
         id: statusIcons
 
-        reach: bar.reaches[4]
+        reach: bar.reaches[3]
         // Its screen's name is its monitor's, on Hyprland and tidewm alike,
         // and the bell opens the center there (HistoryData.openOn).
         monitorName: bar.screen?.name ?? ""
-        anchors.right: clocks.left
-        // With a clock's own 5 px, the session icon sits as far from the
-        // first clock as the status items sit from each other (§7.4).
-        anchors.rightMargin: 5
-        anchors.verticalCenter: parent.verticalCenter
-    }
-
-    // Local's clock (SPEC.md §7.3).
-    Clocks {
-        id: clocks
-
-        reach: bar.reaches[5]
         anchors.right: parent.right
         anchors.rightMargin: 6
         anchors.verticalCenter: parent.verticalCenter

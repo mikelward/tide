@@ -7,6 +7,20 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **The Bar page's Icons list leaves out the pills** (2026-11-12): the
+  presenter, sharing and mic pills and tidewm's config-errors warning show
+  only while they have something to say, so hiding one would hide that
+  the screen or mic is in use. tide for macOS lists "Camera in use" and
+  "Microphone". Reversible, in `shell/lib/baricons.mjs`.
+- **Bar icon ids are tide for Linux's own** (2026-11-12): `clocks`,
+  `keyboard`, `keepawake`, not tide for macOS's `clock`, `source`,
+  `awake`, so a module shared with it would need one set. The tray,
+  "Other apps' icons", shows by default, as tide for macOS's can't.
+  Reversible, in `shell/lib/baricons.mjs`.
+- **An unknown id in `barIcons` is dropped, not an error** (2026-11-12),
+  as tide for macOS does, so a list from a newer tide still loads; a typo
+  in a hand edit says nothing. Reversible, in `shell/lib/baricons.mjs`.
+
 - **A key's app logs as `tide-keys`** (2026-11-11): the systemd-cat a
   key's command runs under waits while `tide launch` runs the app, so an
   app started from a key logs its output there, and a small `sh` and
@@ -1376,12 +1390,6 @@ tested where it can be without a live session.
   `Qt::Popup` rather than `Qt::ToolTip`; a Hyprland change adding a layer
   parent to the popup grab; or a full-screen transparent layer catching
   the press.
-- **Choose the bar's status icons on the Bar page** (SPEC.md §7.1, §16).
-  The Bar page has only Position (top or bottom). Next: which status icons
-  show (keep-awake, Bluetooth, the system monitor, say), and their order
-  and layout, in `appearance.json` beside `barPosition` or a file of
-  their own. tide for macOS and tide for Chrome share
-  `shell/lib/barsettings.mjs`'s `bar` page id, so theirs should follow.
 - **Test the popovers' input with the pointer** (mikelward/tide#254).
   `shell/integration_test.sh` types with wtype but has no pointer, so
   nothing checks that a popover's rows take hover and clicks; a static

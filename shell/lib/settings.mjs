@@ -149,7 +149,7 @@ export const PAGES = Object.freeze([
         group: "general",
         label: "Bar",
         icon: "user-desktop-symbolic",
-        keywords: ["panel", "taskbar", "top", "bottom"],
+        keywords: ["panel", "taskbar", "top", "bottom", "icons", "status", "tray", "order"],
         about: "",
         advanced: null,
     },
