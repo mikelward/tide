@@ -145,6 +145,14 @@ function keptSettings(lastGood, place) {
     return checkSettings(lastGood, place) ? DEFAULTS : lastGood;
 }
 
+// Whether `set`, a file's settings or a change to them, puts sunrise and
+// sunset somewhere a city already named isn't: a latitude or longitude
+// with no city given for it. The name would stay on the Location row over
+// coordinates it no longer names.
+function movesLocation(set) {
+    return (set.latitude !== undefined || set.longitude !== undefined) && set.city === undefined;
+}
+
 // The settings in effect, from appearance.json and appearance.local.json
 // (SPEC.md §16.1). Each text is the file's contents, or null when it
 // doesn't exist. The local file's settings replace the shared file's one
@@ -166,6 +174,12 @@ export function loadAppearance(sharedText, localText, lastGood = DEFAULTS, place
         if (parsed.error) {
             errors.push(`${name}: ${parsed.error}`);
             continue;
+        }
+        // A city names the latitude and longitude set with it, so a file
+        // that sets either with no city of its own takes the shared one's
+        // name out with them.
+        if (movesLocation(parsed.settings)) {
+            delete settings.city;
         }
         settings = Object.assign(settings, parsed.settings);
     }
@@ -529,12 +543,13 @@ export function parseCoordinate(key, text) {
 }
 
 // appearance.local.json's text with `key` set to `value`, keeping whatever
-// else it says. Each text is the file's, or null when it doesn't exist. The
-// settings panel writes only the .local file (§16.1). A bad value, a file
-// that doesn't parse (never overwritten, so a hand edit gone wrong isn't
-// lost), or settings that wouldn't work together with the shared file's
-// (`mode` "sun" with no latitude and longitude, and no time zone `place`
-// to fall back on, say) is an {error}.
+// else it says, but for `city`, which a latitude or longitude set here
+// takes out: it named the ones before. Each text is the file's, or null
+// when it doesn't exist. The settings panel writes only the .local file
+// (§16.1). A bad value, a file that doesn't parse (never overwritten, so a
+// hand edit gone wrong isn't lost), or settings that wouldn't work
+// together with the shared file's (`mode` "sun" with no latitude and
+// longitude, and no time zone `place` to fall back on, say) is an {error}.
 export function withSetting(localText, key, value, sharedText = null, place = null) {
     return withSettings(localText, { [key]: value }, sharedText, place);
 }
@@ -578,6 +593,10 @@ function withSettings(localText, changes, sharedText, place) {
         if (changes[key] === null) {
             delete local[key];
         }
+    }
+    // A latitude or longitude set by hand is no longer the city's.
+    if (movesLocation(set)) {
+        delete local.city;
     }
     const wrong = checkSettings(Object.assign({}, DEFAULTS, files["appearance.json"], local), place);
     if (wrong) {
