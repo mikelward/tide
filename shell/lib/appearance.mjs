@@ -25,7 +25,7 @@ export const DEFAULTS = Object.freeze({ mode: "schedule", light: "07:00", dark: 
 const MODES = ["schedule", "sun", "light", "dark"];
 // The settings that decide light or dark, and every one there is.
 const THEME_KEYS = ["mode", "light", "dark", "latitude", "longitude"];
-const KEYS = THEME_KEYS.concat(["dimStrength", "lightWallpaper", "darkWallpaper", "lightWallpaperPosition",
+const KEYS = THEME_KEYS.concat(["city", "dimStrength", "lightWallpaper", "darkWallpaper", "lightWallpaperPosition",
     "darkWallpaperPosition", "wallpaperPosition", "barPosition"]);
 // How a picture is placed on a monitor (SPEC.md §15): each mode's own,
 // lightWallpaperPosition or darkWallpaperPosition, else wallpaperPosition,
@@ -76,6 +76,12 @@ export function parseAppearance(text) {
         case "longitude":
             if (typeof v !== "number" || !(v >= -180 && v <= 180)) {
                 return { error: "longitude must be a number from -180 to 180" };
+            }
+            break;
+        case "city":
+            // The name the city picker shows for the latitude and longitude.
+            if (typeof v !== "string" || v.trim() === "" || v.length > 200 || /[\x00-\x1f\x7f]/.test(v)) {
+                return { error: "city must be a name, such as \"Novosibirsk, Russia\"" };
             }
             break;
         case "dimStrength":
@@ -470,18 +476,44 @@ export function steppedTimePast(text, steps, other) {
     return past === next ? text : past;
 }
 
-// The line the page shows about the location, or "": under sunrise and
-// sunset, the time zone's city they're worked out for, and in any mode,
-// when the time zone has no city, why they can't be chosen. Nothing when
-// appearance.json sets a location by hand.
-export function locationHint(settings, place) {
-    if (settings.latitude !== undefined && settings.longitude !== undefined) {
-        return "";
+// The Appearance page's Location row (SPEC.md §16): {shown, label,
+// value}. It shows under sunrise and sunset, and in every mode while that
+// can't be chosen for want of a location. Its value is the city chosen,
+// the coordinates set by hand, or the time zone's city.
+export function locationRow(settings, place) {
+    const where = placed(settings, place);
+    const located = where.latitude !== undefined && where.longitude !== undefined;
+    const set = settings.latitude !== undefined && settings.longitude !== undefined;
+    let value = "None";
+    if (set) {
+        value = settings.city ?? `${settings.latitude}, ${settings.longitude}`;
+    } else if (place) {
+        value = `${place.city}, from your time zone`;
     }
-    if (place) {
-        return settings.mode === "sun" ? `${place.city}, from your time zone` : "";
+    return {
+        shown: settings.mode === "sun" || !located,
+        label: settings.mode === "sun" ? "Location" : "Location for sunrise and sunset",
+        value,
+    };
+}
+
+// The city picker's first row, which takes out appearance.local.json's
+// location (withLocation's null), named for where that leaves sunrise and
+// sunset: appearance.json's location when it sets one, else the time
+// zone's city. null when the local file sets none, or nothing would be
+// left. `settings` are the merged settings, `shared` appearance.json's.
+export function resetLocation(settings, shared, place) {
+    const keys = ["latitude", "longitude", "city"];
+    if (keys.every((k) => settings[k] === shared[k])) {
+        return null;
     }
-    return "Sunrise and sunset need your time zone set to a city";
+    if (shared.latitude !== undefined && shared.longitude !== undefined) {
+        return `Back to ${shared.city ?? `${shared.latitude}, ${shared.longitude}`}, from appearance.json`;
+    }
+    if (shared.latitude === undefined && shared.longitude === undefined && place) {
+        return `Your time zone's city, ${place.city}`;
+    }
+    return null;
 }
 
 // A latitude or longitude as typed on the page: a decimal number, east and
@@ -504,7 +536,28 @@ export function parseCoordinate(key, text) {
 // (`mode` "sun" with no latitude and longitude, and no time zone `place`
 // to fall back on, say) is an {error}.
 export function withSetting(localText, key, value, sharedText = null, place = null) {
-    const bad = parseAppearance(JSON.stringify({ [key]: value }));
+    return withSettings(localText, { [key]: value }, sharedText, place);
+}
+
+// The city picker's choice, as withSetting's {text} or {error}: a city
+// from cities.tsv ({label, latitude, longitude}) sets all three settings,
+// and null takes them out, back to the time zone's city.
+export function withLocation(localText, city, sharedText = null, place = null) {
+    const changes = city === null
+        ? { city: null, latitude: null, longitude: null }
+        : { city: city.label, latitude: city.latitude, longitude: city.longitude };
+    return withSettings(localText, changes, sharedText, place);
+}
+
+// As withSetting, for several settings at once; a null takes one out.
+function withSettings(localText, changes, sharedText, place) {
+    const set = {};
+    for (const key of Object.keys(changes)) {
+        if (changes[key] !== null) {
+            set[key] = changes[key];
+        }
+    }
+    const bad = parseAppearance(JSON.stringify(set));
     if (bad.error) {
         return { error: bad.error };
     }
@@ -520,7 +573,12 @@ export function withSetting(localText, key, value, sharedText = null, place = nu
         }
         files[name] = parsed.settings;
     }
-    const local = Object.assign({}, files["appearance.local.json"], { [key]: value });
+    const local = Object.assign({}, files["appearance.local.json"], set);
+    for (const key of Object.keys(changes)) {
+        if (changes[key] === null) {
+            delete local[key];
+        }
+    }
     const wrong = checkSettings(Object.assign({}, DEFAULTS, files["appearance.json"], local), place);
     if (wrong) {
         return { error: wrong };

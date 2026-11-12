@@ -4523,7 +4523,8 @@ to be focused.
 
   The settings are `mode`, `light` and `dark` (24-hour times like
   `"07:00"`), and `latitude` and `longitude` (decimal degrees, east and
-  north positive). Either one unset is the time zone's. An unknown setting,
+  north positive), and `city`, the name the city picker shows for them.
+  Either one unset is the time zone's. An unknown setting,
   a bad value, or `sun` with no location and no time zone city is an error
   at load (§16.1). The shell waits up to five seconds for `tide-tz` before
   calling it one. Both times are wall
@@ -4971,12 +4972,36 @@ stays hand-written.
   - By the clock, − and + move the light and dark times a quarter hour.
     A step that would land on the other time goes past it, so the two can
     cross, as an overnight schedule needs.
-  - Under sunrise and sunset, a line names the time zone's city they're
-    for, such as "Los Angeles, from your time zone". A zone with no city,
-    such as UTC, says "Sunrise and sunset need your time zone set to a
-    city" in every mode, since that mode can't be chosen. A location set
-    by hand in the files, or over IPC, shows no line. There's no field for
-    one: choosing a city is in `TODO.md`.
+  - Under sunrise and sunset, a Location row names the city they're for:
+    the one chosen, else the time zone's, such as "Los Angeles, from your
+    time zone". Coordinates set by hand show as numbers. With no location
+    at all, as in UTC, the row shows in every mode, as "Location for
+    sunrise and sunset", since that mode can't be chosen without one.
+  - **Its Change button opens a city picker** under it.
+    - It searches `shell/cities/cities.tsv` as you type, with the
+      launcher's fuzzy matcher, and lists the best eight. Accents and
+      punctuation don't count, so "xian" finds Xi’an, and "St", "Ste",
+      "Ft" and "Mt" read as the words they shorten. After a comma, the
+      rest narrows by region or country: "springfield, illinois".
+    - Of equal matches, bigger and nearer come first, near the location
+      in effect. Each counts by orders of magnitude, so London, Ontario
+      leads in Toronto and London, England in Los Angeles. With nothing
+      typed, it lists the nearest cities.
+    - A chosen city is saved as `latitude`, `longitude` and `city`, in
+      `appearance.local.json`. Once one is, the first row takes them out
+      again, named for where that leaves sunrise and sunset: the
+      location `appearance.json` sets, if it sets one, else the time
+      zone's city.
+    - Closing the panel, or going to another page, closes the picker.
+    - ↑ and ↓ move, Enter or a click chooses, and Escape or a click
+      elsewhere closes it with nothing set.
+    - The list is read when the picker first opens, not before.
+  - **The list** is GeoNames' (CC BY 4.0): every city of 100,000 people
+    or more, every capital of a country or a first-level region, and a
+    few towns far north and south that neither reaches, such as Fairbanks
+    and Kiruna. That's about 8,500 cities in 440 KB. `make cities`
+    rebuilds it from download.geonames.org with
+    `shell/cities/generate.mjs`; tide for macOS copies it.
   - A setting that wouldn't work with the rest, such as the same time for light and dark, is refused, and
     the page says why. So is a file that doesn't parse, which is left as
     it is.

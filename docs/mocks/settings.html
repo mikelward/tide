@@ -156,7 +156,7 @@ const positionRow = (which, label) => `<div class="srow"><span class="l">${which
 const appearanceRows = () =>
   '<div class="srow"><span class="l" style="font-variant-numeric:tabular-nums">Dark until 06:42</span><span class="sw" style="width:92px">Light now</span></div>' +
   '<div class="srow"><span class="l">Mode</span><span class="step"><span class="btn"><i class="ms">chevron_left</i></span><span class="v" style="width:140px">Sunrise and sunset</span><span class="btn"><i class="ms">chevron_right</i></span></span></div>' +
-  '<div style="padding:4px 10px;font-size:12px;color:var(--fg-faint)">Los Angeles, from your time zone</div>' +
+  '<div class="srow"><span class="l">Location</span><span style="margin-left:auto;margin-right:8px;color:var(--fg-dim)">Los Angeles, from your time zone</span><span class="sw" style="width:76px">Change</span></div>' +
   '<div class="srow"><span class="l">Dim inactive windows</span><span class="step"><span class="btn"><i class="ms">remove</i></span><span class="v">12%</span><span class="btn"><i class="ms">add</i></span></span></div>' +
   wallpaperRow('Light wallpaper', '', '~/Pictures/dusk.jpg') + positionRow('Light', 'Fill, keep top') +
   `<div class="previews">${preview('DP-1', { width: 3440, height: 1440 }, 'fill-top')}${preview('DP-2', { width: 1440, height: 2560 }, 'fill-top')}</div>` +

@@ -49,6 +49,9 @@
 #                         regenerate the picker's character list,
 #                         shell/chars/chars.tsv, from Unicode's
 #                         emoji-test.txt and UnicodeData.txt (SPEC.md §8.4)
+#   make cities           regenerate the city picker's list,
+#                         shell/cities/cities.tsv, from GeoNames (SPEC.md
+#                         §16); it downloads from download.geonames.org
 
 # Hyprland embeds Lua 5.5; the layout also runs on 5.4, which is what most
 # distributions package today.
@@ -96,7 +99,7 @@ QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test test-fast test-lua test-selftest test-install test-accents fcitx5 build install install-shell install-session mocks palette chars unicode connector-zip unshallow-check release-tag dist
+.PHONY: test test-fast test-lua test-selftest test-install test-accents fcitx5 build install install-shell install-session mocks palette chars cities unicode connector-zip unshallow-check release-tag dist
 test: test-fast test-selftest test-install
 
 # install/tide-setup's tests, one target each, so -j runs them side by side.
@@ -158,11 +161,12 @@ test-fast: test-lua
 	$(MAKE) test-accents
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
 	$(QMLLINT) $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs))
-	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/span_test.mjs shell/lib/minimized_test.mjs shell/lib/mute_test.mjs shell/lib/workspacenames_test.mjs shell/lib/switcher_test.mjs shell/lib/tabs_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/settings_test.mjs shell/lib/settingssearch_test.mjs shell/lib/steps_test.mjs shell/lib/idle_test.mjs shell/lib/writes_test.mjs shell/lib/input_test.mjs shell/lib/keys_test.mjs shell/lib/keymaps_test.mjs shell/lib/outputs_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/sysmon_test.mjs shell/lib/keepawake_test.mjs shell/lib/wallclock_test.mjs shell/lib/presenter_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs shell/lib/vpn_test.mjs shell/lib/mic_test.mjs shell/lib/fuzzy_test.mjs shell/lib/frecency_test.mjs shell/lib/launcher_test.mjs shell/lib/lock_test.mjs shell/lib/greeter_test.mjs shell/lib/splash_test.mjs shell/lib/greetd_test.mjs shell/lib/unplug_test.mjs shell/lib/polkit_test.mjs shell/lib/agent_test.mjs shell/lib/sharepicker_test.mjs shell/lib/picker_test.mjs shell/lib/startup_test.mjs shell/lib/barclick_test.mjs shell/lib/barhit_test.mjs shell/lib/barsettings_test.mjs shell/lib/barside_test.mjs shell/lib/dnd_test.mjs shell/lib/clipboard_test.mjs shell/lib/power_test.mjs shell/lib/workspacepage_test.mjs shell/lib/floating_test.mjs shell/lib/unicode_test.mjs shell/lib/popups_test.mjs shell/lib/persist_test.mjs shell/lib/compositor_test.mjs shell/lib/tidewm_test.mjs shell/lib/configerrors_test.mjs shell/lib/kwin_test.mjs shell/lib/workspacekeys_test.mjs shell/lib/overview_test.mjs
+	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/span_test.mjs shell/lib/minimized_test.mjs shell/lib/mute_test.mjs shell/lib/workspacenames_test.mjs shell/lib/switcher_test.mjs shell/lib/tabs_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/settings_test.mjs shell/lib/settingssearch_test.mjs shell/lib/steps_test.mjs shell/lib/idle_test.mjs shell/lib/writes_test.mjs shell/lib/input_test.mjs shell/lib/keys_test.mjs shell/lib/keymaps_test.mjs shell/lib/outputs_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/sysmon_test.mjs shell/lib/keepawake_test.mjs shell/lib/wallclock_test.mjs shell/lib/presenter_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs shell/lib/vpn_test.mjs shell/lib/mic_test.mjs shell/lib/fuzzy_test.mjs shell/lib/frecency_test.mjs shell/lib/launcher_test.mjs shell/lib/lock_test.mjs shell/lib/greeter_test.mjs shell/lib/splash_test.mjs shell/lib/greetd_test.mjs shell/lib/unplug_test.mjs shell/lib/polkit_test.mjs shell/lib/agent_test.mjs shell/lib/sharepicker_test.mjs shell/lib/picker_test.mjs shell/lib/startup_test.mjs shell/lib/barclick_test.mjs shell/lib/barhit_test.mjs shell/lib/barsettings_test.mjs shell/lib/barside_test.mjs shell/lib/dnd_test.mjs shell/lib/clipboard_test.mjs shell/lib/power_test.mjs shell/lib/workspacepage_test.mjs shell/lib/floating_test.mjs shell/lib/unicode_test.mjs shell/lib/popups_test.mjs shell/lib/persist_test.mjs shell/lib/compositor_test.mjs shell/lib/tidewm_test.mjs shell/lib/configerrors_test.mjs shell/lib/kwin_test.mjs shell/lib/workspacekeys_test.mjs shell/lib/overview_test.mjs shell/lib/cities_test.mjs
 # theme/ is build-time Node, not loaded by the shell, so runs unguarded.
 	$(NODE) --test theme/palette_test.mjs
 	$(NODE) --test connector/bridge_test.js
 	$(NODE) --test shell/chars/generate_test.mjs
+	$(NODE) --test shell/cities/generate_test.mjs
 	$(NODE) theme/generate.mjs --check
 	$(GO) vet ./...
 	$(GO) test ./...
@@ -192,6 +196,18 @@ chars:
 	@test -n "$(EMOJI_TEST)" && test -n "$(UNICODE_DATA)" || { echo "make chars: set EMOJI_TEST and UNICODE_DATA to Unicode's emoji-test.txt and UnicodeData.txt" >&2; exit 2; }
 	$(NODE) shell/chars/generate.mjs "$(EMOJI_TEST)" "$(UNICODE_DATA)" > shell/chars/chars.tsv.tmp || { rm -f shell/chars/chars.tsv.tmp; exit 1; }
 	mv shell/chars/chars.tsv.tmp shell/chars/chars.tsv
+
+# GeoNames' files, downloaded into build/geonames; the list is written
+# whole, then renamed, so a failed run leaves it as it was.
+GEONAMES = https://download.geonames.org/export/dump
+cities:
+	mkdir -p build/geonames
+	curl -fsSL --retry 3 -o build/geonames/cities5000.zip $(GEONAMES)/cities5000.zip
+	curl -fsSL --retry 3 -o build/geonames/admin1CodesASCII.txt $(GEONAMES)/admin1CodesASCII.txt
+	curl -fsSL --retry 3 -o build/geonames/countryInfo.txt $(GEONAMES)/countryInfo.txt
+	unzip -oq -d build/geonames build/geonames/cities5000.zip
+	$(NODE) shell/cities/generate.mjs build/geonames/cities5000.txt build/geonames/admin1CodesASCII.txt build/geonames/countryInfo.txt > shell/cities/cities.tsv.tmp || { rm -f shell/cities/cities.tsv.tmp; exit 1; }
+	mv shell/cities/cities.tsv.tmp shell/cities/cities.tsv
 
 build: build/tide-grant build/tide-msg build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste
 
@@ -278,9 +294,9 @@ install: build install-shell
 # file goes in by rename, so the running shell's reload never finds one
 # missing (shell/install.sh).
 SHELL_FILES = $(patsubst shell/%,%,$(wildcard shell/*.qml) $(wildcard shell/icons/*.svg) \
-	$(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs)) shell/chars/chars.tsv shell/chars/LICENSE-UNICODE)
+	$(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs)) shell/chars/chars.tsv shell/chars/LICENSE-UNICODE shell/cities/cities.tsv)
 install-shell:
-	install -d "$(SHELL_DIR)/lib" "$(SHELL_DIR)/icons" "$(SHELL_DIR)/chars"
+	install -d "$(SHELL_DIR)/lib" "$(SHELL_DIR)/icons" "$(SHELL_DIR)/chars" "$(SHELL_DIR)/cities"
 	sh shell/install.sh shell "$(SHELL_DIR)" $(SHELL_FILES)
 
 # Display managers list sessions from wayland-sessions under the system data

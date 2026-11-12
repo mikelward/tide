@@ -1604,12 +1604,10 @@ tested where it can be without a live session.
 `shell/lib/settings.mjs`. CI opens it and opens the Network page's app
 from the keyboard (`shell/integration_test.sh`).
 
-- **A city for sunrise and sunset.** The Appearance page uses the time
-  zone's city (`tide-tz`'s place, SPEC.md §15), with no way to pick
-  another, since typed coordinates were unfriendly. Pick a city instead:
-  a searchable list from tzdata's tables or a bundled list of cities,
-  written as `latitude` and `longitude`, which the files and IPC still
-  take. A UTC machine can't choose sunrise and sunset until then.
+- **Find my city.** A Find button in the city picker (SPEC.md §16) that
+  asks beacondb.net where this machine's IP address is, on a click only,
+  and offers the nearest city to confirm. GeoClue, or Location Services
+  on the Mac, could follow for Wi-Fi accuracy.
 - In: Idle (below), Sound (the devices, as the volume popover lists them,
   and `pavucontrol`), Network (`nm-connection-editor`) and Bluetooth
   (`blueman-manager`).
