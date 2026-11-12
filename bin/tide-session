@@ -25,7 +25,7 @@ say() {
 }
 
 case ${1:-} in
-    hyprland) desktops=tide:Hyprland name=tide compositor=tide-hyprland ;;
+    hyprland) desktops=tide:Hyprland name="tide (Hyprland)" compositor=tide-hyprland ;;
     tidewm) desktops=tidewm:tide name="tide (tidewm)" compositor=tide-tidewm ;;
     *)
         say "usage: tide-session hyprland|tidewm, not '${1:-}'"

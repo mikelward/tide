@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=tide
+Name=tide (Hyprland)
 Comment=Hyprland with the tide shell, managed by uwsm
 Exec=tide-session hyprland
 TryExec=uwsm
