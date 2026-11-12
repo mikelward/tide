@@ -801,6 +801,8 @@ flowchart TD
     is named `tide-bar`) at its own edge, top or bottom, which a narrow
     bar or a dock holds;
   - portal backend selection;
+  - the portal answering within 5 s. Apps ask it for settings as they
+    start, and a portal that hangs makes each one wait 25 s per question;
   - `hyprctl configerrors`;
   - unscoped autostart entries;
   - hypridle running, since without it idle, suspend and `Super+L` don't
