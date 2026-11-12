@@ -361,6 +361,24 @@ test("what the u flag or RE2 can't take the same way is refused, naming it", () 
     assert.deepEqual(checkTitle("[a\\-z]"), { title: "[a\\-z]" }, "\\- in a class");
 });
 
+test("a class range from or to \\w, \\d or \\s is refused, as the u flag refuses it", () => {
+    // Spelled out, each would compile in JavaScript and not in Hyprland:
+    // RE2 refuses [\w-.]'s `_-.` and [+-\d]'s `+-\p`, and reads [\w-z]'s
+    // `_-z` as a range, where JavaScript's listed ranges leave - a hyphen.
+    // PCRE2 refuses a hyphen after a class, so [\d-x] too.
+    for (const [pattern, end] of [["[\\w-.]", "from \\\\w"], ["[\\w-z]", "from \\\\w"], ["[\\d-x]", "from \\\\d"],
+        ["[a\\s-b]", "from \\\\s"], ["[+-\\d]", "to \\\\d"], ["[--\\w]", "to \\\\w"], ["^[\\w-\\.]+@", "from \\\\w"]]) {
+        assert.match(checkTitle(pattern).error ?? "", new RegExp(`uses a range ${end}.*\\\\-`), pattern);
+        assert.equal(translateTitle(pattern).re2, undefined, `${pattern} has no pattern for Hyprland`);
+    }
+    // A hyphen that's first, last, escaped or straight after a range is one.
+    for (const pattern of ["[\\w-]", "[-\\w]", "[\\w\\-.]", "[a-c-\\d]", "[\\d.-]", "[^\\s-]"]) {
+        assert.deepEqual(checkTitle(pattern), { title: pattern }, pattern);
+    }
+    assert.equal(titled("^[\\w\\-.]+$", "tide-0.3"), true);
+    assert.equal(titled("^[a-c-\\d]+$", "b-2"), true);
+});
+
 test("only conf's float keys' tide-floated event asks, by the window's address", () => {
     assert.equal(floatedEvent("custom", "tide-floated>>0x55AA01"), "55aa01");
     assert.equal(floatedEvent("custom", "tide-attention>>0x55aa01"), null);

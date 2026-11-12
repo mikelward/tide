@@ -5454,6 +5454,10 @@ stays hand-written.
   - Anything else is refused, naming it. That covers a lookaround, a named
     group, a backreference, `[:alpha:]`, `\W` inside a class, and an
     escape the `u` flag refuses, such as `\q` or `\!`.
+  - So is a class range from or to `\w`, `\d` or `\s`, such as `[\w-.]`
+    or `[+-\d]`, which the `u` flag refuses too. Spelled out, RE2 would
+    refuse it or read it as another range. `\-` is a hyphen anywhere in a
+    class, and so is `-` first or last: `[\w.-]`.
   - The shell writes them to `~/.config/hypr/tide-floating.lua` and runs
     `hyprctl eval 'conf_floating.reload()'`, as it starts too.
   - Each rule is Hyprland's whole-text match: the class as `(?i)` and the

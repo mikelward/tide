@@ -85,7 +85,8 @@ const SYNTAX = "^$\\.*+?()[]{}|/";
 // `.` isn't JavaScript's, so neither is ever left to an engine. For PCRE2,
 // whose \v is any vertical space and whose \b goes by Unicode's words,
 // \v is \x0B, \b and \B are spelled out as ASCII's, and a [ in a class
-// is escaped.
+// is escaped. A class range from or to `\w \d \s` is refused, as the u
+// flag refuses it.
 export function translateTitle(pattern) {
     let re2 = "";
     let js = "";
@@ -180,11 +181,18 @@ export function translateTitle(pattern) {
                 return { error: "an empty class, [] or [^], which Hyprland's patterns don't have" };
             }
             both(open);
+            // Whether the atom being read ends a range (`a-z`'s z).
+            let ends = false;
             while (j < pattern.length && pattern[j] !== "]") {
+                // \w, \d or \s, when that's the atom.
+                let set = "";
                 if (pattern[j] === "\\") {
                     const e = escape(j, true);
                     if (e.error) {
                         return { error: e.error };
+                    }
+                    if (CLASSES[pattern[j + 1]] !== undefined) {
+                        set = pattern.slice(j, j + 2);
                     }
                     add(e);
                     j = e.next;
@@ -198,6 +206,20 @@ export function translateTitle(pattern) {
                     add(ch === "[" ? { re2: ch, js: ch, pcre: "\\[" } : { re2: ch, js: ch });
                     j += ch.length;
                 }
+                // A hyphen between two atoms makes them a range. The u flag
+                // refuses one from or to \w, \d or \s, but would take the
+                // ranges each is spelled as here, with the hyphen as itself,
+                // where RE2 reads \w's last character, _, as the range's
+                // start, and PCRE2 refuses a hyphen after any of them.
+                const starts = !ends && pattern[j] === "-" && j + 1 < pattern.length && pattern[j + 1] !== "]";
+                if (set !== "" && (ends || starts)) {
+                    return { error: `a range ${ends ? "to" : "from"} ${set}, which is more than one character; write \\- for a hyphen` };
+                }
+                if (starts) {
+                    both("-");
+                    j++;
+                }
+                ends = starts;
             }
             if (j >= pattern.length) {
                 return { error: "a class with no ]" };
