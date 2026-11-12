@@ -4688,10 +4688,20 @@ PanelWindow {
             property string failed: ""
             property bool read: false
             property int current: 0
+            // Find's answer ({latitude, longitude, accuracyKm}) once it's
+            // in, whether it's asking, and why it couldn't, for this opening.
+            property var found: null
+            property bool finding: false
+            property string findFailed: ""
+            property var request: null
             readonly property var place: AppearanceData.place
-            // Where sunrise and sunset are for now, the location set or the
-            // time zone's city, which the results favor; null for neither.
+            // What the results favor: where Find says this machine is, else
+            // where sunrise and sunset are for now, the location set or the
+            // time zone's city; null for none.
             readonly property var near: {
+                if (found) {
+                    return { latitude: found.latitude, longitude: found.longitude };
+                }
                 const where = Appearance.placed(AppearanceData.settings, place);
                 return where.latitude !== undefined && where.longitude !== undefined ? { latitude: where.latitude, longitude: where.longitude } : null;
             }
@@ -4700,10 +4710,10 @@ PanelWindow {
                 const typed = search.text.trim() !== "";
                 const cities = typed ? Cities.searchCities(cityPicker.cities, search.text, 8, near)
                     : near ? Cities.nearestCities(cityPicker.cities, near, 8) : [];
-                const found = cities.map(c => ({ label: c.label, city: c }));
-                const reset = search.text.trim() === "" ? Appearance.resetLocation(AppearanceData.settings, AppearanceData.sharedSettings, place) : null;
+                const listed = cities.map(c => ({ label: c.label, city: c }));
+                const reset = search.text.trim() === "" && !cityPicker.found ? Appearance.resetLocation(AppearanceData.settings, AppearanceData.sharedSettings, place) : null;
                 const back = reset ? [{ label: reset, city: null }] : [];
-                return back.concat(found);
+                return back.concat(listed);
             }
 
             // Opens under `button`, or over it with no room below, reading
@@ -4719,12 +4729,55 @@ PanelWindow {
                 y = at.y + button.height + 4 + height <= card.height - 6 ? at.y + button.height + 4 : Math.max(6, at.y - 4 - height);
                 search.text = "";
                 current = 0;
+                found = null;
+                findFailed = "";
                 open = true;
                 search.forceActiveFocus();
             }
 
             function close() {
                 open = false;
+                if (request) {
+                    request.abort();
+                    request = null;
+                }
+                finding = false;
+                findTimeout.stop();
+            }
+
+            // Asks beacondb.net where this machine's IP address is, then
+            // lists the cities nearest that, for one to be chosen.
+            function find() {
+                if (finding) {
+                    return;
+                }
+                finding = true;
+                findFailed = "";
+                const xhr = new XMLHttpRequest();
+                request = xhr;
+                xhr.onreadystatechange = () => {
+                    if (xhr.readyState !== XMLHttpRequest.DONE || request !== xhr) {
+                        return;
+                    }
+                    request = null;
+                    finding = false;
+                    findTimeout.stop();
+                    const r = Cities.parseGeolocation(xhr.status, xhr.responseText);
+                    if (r.error) {
+                        findFailed = `Couldn't find your location: ${r.error}`;
+                        console.warn(`tide: city picker: ${r.error}`);
+                        return;
+                    }
+                    console.log(`tide: city picker: found a location to within ${r.accuracyKm ?? "?"} km`);
+                    found = r;
+                    search.text = "";
+                    current = 0;
+                    search.forceActiveFocus();
+                };
+                xhr.open("POST", Cities.GEOLOCATE_URL);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.send(Cities.GEOLOCATE_BODY);
+                findTimeout.restart();
             }
 
             function choose(row) {
@@ -4768,6 +4821,23 @@ PanelWindow {
                 }
             }
 
+            // A Find with no answer in ten seconds gives up.
+            Timer {
+                id: findTimeout
+
+                interval: 10 * 1000
+                onTriggered: {
+                    if (cityPicker.request) {
+                        const xhr = cityPicker.request;
+                        cityPicker.request = null;
+                        xhr.abort();
+                    }
+                    cityPicker.finding = false;
+                    cityPicker.findFailed = "Couldn't find your location: beacondb.net didn't answer";
+                    console.warn("tide: city picker: beacondb.net didn't answer in 10 seconds");
+                }
+            }
+
             Column {
                 id: pickerColumn
 
@@ -4776,44 +4846,77 @@ PanelWindow {
                 width: cityPicker.width - 24
                 spacing: 4
 
-                Rectangle {
+                Item {
                     width: parent.width
                     height: 28
-                    radius: 6
-                    color: Theme.surface2
-                    border.width: search.activeFocus ? 1 : 0
-                    border.color: Theme.accent
 
-                    TextInput {
-                        id: search
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: findButton.left
+                        anchors.rightMargin: 6
+                        height: 28
+                        radius: 6
+                        color: Theme.surface2
+                        border.width: search.activeFocus ? 1 : 0
+                        border.color: Theme.accent
 
-                        anchors.fill: parent
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 8
-                        verticalAlignment: TextInput.AlignVCenter
-                        clip: true
-                        color: Theme.fg
-                        font.family: Theme.font
-                        font.pixelSize: 13
-                        onTextChanged: cityPicker.current = 0
-                        onAccepted: {
-                            if (cityPicker.rows.length > 0) {
-                                cityPicker.choose(cityPicker.rows[Math.min(cityPicker.current, cityPicker.rows.length - 1)]);
+                        TextInput {
+                            id: search
+
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            verticalAlignment: TextInput.AlignVCenter
+                            clip: true
+                            color: Theme.fg
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                            onTextChanged: cityPicker.current = 0
+                            onAccepted: {
+                                if (cityPicker.rows.length > 0) {
+                                    cityPicker.choose(cityPicker.rows[Math.min(cityPicker.current, cityPicker.rows.length - 1)]);
+                                }
+                            }
+                            Keys.onUpPressed: cityPicker.current = Math.max(0, cityPicker.current - 1)
+                            Keys.onDownPressed: cityPicker.current = Math.min(cityPicker.rows.length - 1, cityPicker.current + 1)
+                            Keys.onEscapePressed: {
+                                cityPicker.close();
+                                keys.forceActiveFocus();
+                            }
+
+                            Text {
+                                visible: search.text === ""
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Search cities"
+                                color: Theme.fgFaint
+                                font: search.font
                             }
                         }
-                        Keys.onUpPressed: cityPicker.current = Math.max(0, cityPicker.current - 1)
-                        Keys.onDownPressed: cityPicker.current = Math.min(cityPicker.rows.length - 1, cityPicker.current + 1)
-                        Keys.onEscapePressed: {
-                            cityPicker.close();
-                            keys.forceActiveFocus();
-                        }
+                    }
+
+                    // Find: where this machine is, by its IP address.
+                    Rectangle {
+                        id: findButton
+
+                        anchors.right: parent.right
+                        width: 64
+                        height: 28
+                        radius: 14
+                        color: Theme.surface2
+                        opacity: cityPicker.finding ? 0.5 : 1
+                        Accessible.name: "Find my location"
 
                         Text {
-                            visible: search.text === ""
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "Search cities"
-                            color: Theme.fgFaint
-                            font: search.font
+                            anchors.centerIn: parent
+                            text: cityPicker.finding ? "Finding" : "Find"
+                            color: Theme.fg
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                        }
+
+                        TapHandler {
+                            onTapped: cityPicker.find()
                         }
                     }
                 }
@@ -4859,7 +4962,7 @@ PanelWindow {
                     }
                 }
 
-                // Why there's nothing to choose, when there's something typed.
+                // Why there's nothing to choose, or where Find's answer is from.
                 Text {
                     visible: text !== ""
                     width: pickerColumn.width
@@ -4868,7 +4971,9 @@ PanelWindow {
                     bottomPadding: 4
                     wrapMode: Text.Wrap
                     text: cityPicker.failed !== "" ? cityPicker.failed
-                        : search.text.trim() !== "" && cityPicker.rows.length === 0 ? "No cities match" : ""
+                        : cityPicker.findFailed !== "" ? cityPicker.findFailed
+                        : search.text.trim() !== "" && cityPicker.rows.length === 0 ? "No cities match"
+                        : cityPicker.found && search.text.trim() === "" ? `${Cities.foundText(cityPicker.found)}. ${Cities.GEOLOCATE_CREDIT}.` : ""
                     color: Theme.fgDim
                     font.family: Theme.font
                     font.pixelSize: 12

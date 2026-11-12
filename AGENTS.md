@@ -119,8 +119,8 @@ Shared by every mikelward repo and the user-level agent config; canonical in mik
   tested.
 - **Bad settings**. Fail at load, naming the setting.
 - **Hot path**. No network calls in the bar or launcher.
-- **Hosts**. `make cities` downloads from download.geonames.org; ask for it before
-  running.
+- **Hosts**. `make cities` downloads from download.geonames.org, and the city picker's
+  Find asks api.beacondb.net; ask for them before running either.
 - **Hostnames**. On screen by design; mocks show `host1`.
 - **Merge in order**. Before merging, wait up to 30 minutes for an older open PR that
   has passed Codex and is still moving.

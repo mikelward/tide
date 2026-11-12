@@ -166,3 +166,40 @@ export function searchCities(cities, query, limit = 8, near = null) {
     found.sort((a, b) => b.score - a.score || b.weight - a.weight);
     return found.slice(0, limit).map((f) => f.city);
 }
+
+// The city picker's Find (SPEC.md §16): beacondb.net's geolocation API,
+// asked with nothing but the request itself, so it answers from this
+// machine's IP address. Only on a click; never on the hot path.
+export const GEOLOCATE_URL = "https://api.beacondb.net/v1/geolocate";
+export const GEOLOCATE_BODY = "{}";
+// What the picker says the answer came from: beacondb.net's, and the
+// IP-to-city data's credit, which its license asks for.
+export const GEOLOCATE_CREDIT = "From your IP address, by beacondb.net, with DB-IP's data (CC BY 4.0)";
+
+// beacondb.net's answer, as {latitude, longitude, accuracyKm} or {error}:
+// {"location": {"lat": .., "lng": ..}, "accuracy": metres}, or an error
+// object, or a page that isn't JSON at all.
+export function parseGeolocation(status, text) {
+    let value = null;
+    try {
+        value = JSON.parse(text);
+    } catch (e) {
+        value = null;
+    }
+    if (status !== 200) {
+        const said = value?.error?.message ?? (status === 0 ? "no answer" : `HTTP ${status}`);
+        return { error: `beacondb.net: ${said}` };
+    }
+    const lat = value?.location?.lat;
+    const lng = value?.location?.lng;
+    if (typeof lat !== "number" || typeof lng !== "number" || !(lat >= -90 && lat <= 90) || !(lng >= -180 && lng <= 180)) {
+        return { error: "beacondb.net: an answer with no location" };
+    }
+    const accuracy = typeof value.accuracy === "number" && value.accuracy > 0 ? Math.round(value.accuracy / 1000) : null;
+    return { latitude: lat, longitude: lng, accuracyKm: accuracy };
+}
+
+// The line under the results once Find has answered.
+export function foundText(found) {
+    return found.accuracyKm === null ? "Nearest to you first" : `Nearest to you first, to within about ${found.accuracyKm} km`;
+}

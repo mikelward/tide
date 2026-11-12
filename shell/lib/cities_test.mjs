@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { cityLabel, distanceKm, nearestCities, parseCities, plain, searchCities } from "./cities.mjs";
+import { cityLabel, distanceKm, foundText, nearestCities, parseCities, parseGeolocation, plain, searchCities } from "./cities.mjs";
 
 const { cities, errors } = parseCities(readFileSync(new URL("../cities/cities.tsv", import.meta.url), "utf8"));
 const first = (q) => searchCities(cities, q, 1)[0]?.label;
@@ -84,4 +84,20 @@ test("with nothing typed, the nearest cities are listed", () => {
     const near = nearestCities(cities, LOS_ANGELES, 3).map((c) => c.name);
     assert.equal(near[0], "Los Angeles");
     assert.equal(near.length, 3);
+});
+
+test("Find reads beacondb.net's answer, or says why not", () => {
+    const answer = '{"accuracy":25000,"fallback":"ipf","location":{"lat":55.03,"lng":82.92}}';
+    assert.deepEqual(parseGeolocation(200, answer), { latitude: 55.03, longitude: 82.92, accuracyKm: 25 });
+    assert.deepEqual(parseGeolocation(200, '{"location":{"lat":1,"lng":2}}'), { latitude: 1, longitude: 2, accuracyKm: null });
+    assert.deepEqual(parseGeolocation(404, '{"error":{"code":404,"message":"Not found"}}'), { error: "beacondb.net: Not found" });
+    assert.deepEqual(parseGeolocation(0, ""), { error: "beacondb.net: no answer" });
+    assert.deepEqual(parseGeolocation(502, "<html>"), { error: "beacondb.net: HTTP 502" });
+    assert.deepEqual(parseGeolocation(200, '{"location":{"lat":"x"}}'), { error: "beacondb.net: an answer with no location" });
+});
+
+test("after Find, the nearest city to the answer comes first", () => {
+    const found = parseGeolocation(200, '{"accuracy":25000,"location":{"lat":55.03,"lng":82.92}}');
+    assert.equal(nearestCities(cities, found, 1)[0].name, "Novosibirsk");
+    assert.equal(foundText(found), "Nearest to you first, to within about 25 km");
 });
