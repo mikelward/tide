@@ -819,8 +819,9 @@ const GALLERY_TYPES = ["jpg", "jpeg", "png", "webp", "jxl", "svg"];
 
 // The command that lists every picture under `folders` with its size:
 // tide-pick --list, which reads each one's header, passes over a folder
-// that isn't there, and fails, still listing what it could, when it can't
-// read all of one, a subfolder it may not open say.
+// that isn't there and a link to nothing, and fails, still listing what
+// it could, when it can't read all of one, a subfolder it may not open
+// say.
 export function galleryCommand(folders) {
     return ["tide-pick", "--list"].concat(folders);
 }
