@@ -24,6 +24,7 @@
 #   - the session's portal config (tide-portals.conf, or tidewm's
 #     tidewm-portals.conf) is installed and XDG_CURRENT_DESKTOP selects it;
 #   - in tidewm's session, xdg-desktop-portal-wlr is installed;
+#   - xdg-desktop-portal answers within 5 s;
 #   - Hyprland reports no config errors;
 #   - hypridle and the lock's fallback each have a config, yours or
 #     tide's, and yours isn't a link to a file that's gone;
@@ -1033,6 +1034,15 @@ if test "$compositor" = tidewm; then
     if test -z "$wlr_portal"; then
         problem "xdg-desktop-portal-wlr isn't installed, so sharing a screen or window fails: install your distro's xdg-desktop-portal-wlr package"
     fi
+fi
+
+# The portal answers. Apps ask it for settings as they start (GTK's and
+# Qt's, kitty's colors), and each question waits up to 25 s for an answer
+# that doesn't come, so a portal that hangs makes every app slow to open.
+# Asking starts it where it isn't running, as an app's question would.
+if ! portal=$(busctl --user get-property --timeout=5 org.freedesktop.portal.Desktop \
+    /org/freedesktop/portal/desktop org.freedesktop.portal.Settings version 2>&1); then
+    problem "xdg-desktop-portal didn't answer in 5 s ($(printf '%s\n' "$portal" | tail -n 1)), so apps wait up to 25 s for it as they open: \`journalctl --user -b -u xdg-desktop-portal.service\` says why"
 fi
 
 # In tidewm's session, the bars, the config errors and home are tidewm's

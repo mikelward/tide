@@ -133,7 +133,19 @@ cat > "$fake/busctl" <<'FAKE'
 #!/bin/sh
 # busctl --user get-property ... Locked: the keyring's answer, $FAKE_KEYRING
 # ("b false", unlocked, by default), or fails with $FAKE_KEYRING_FAILS.
+# busctl --user get-property ... org.freedesktop.portal.Desktop ...: the
+# portal's Settings version, or fails with $FAKE_PORTAL_FAILS.
 if test "$2" = get-property; then
+    case " $* " in
+        *" org.freedesktop.portal.Desktop "*)
+            if test -n "$FAKE_PORTAL_FAILS"; then
+                echo "$FAKE_PORTAL_FAILS" >&2
+                exit 1
+            fi
+            echo "u 2"
+            exit 0
+            ;;
+    esac
     if test -n "$FAKE_KEYRING_FAILS"; then
         echo "$FAKE_KEYRING_FAILS" >&2
         exit 1
@@ -411,6 +423,14 @@ run XDG_CURRENT_DESKTOP=KDE
 check "on Plasma, a missing kde.qml is a problem" test "$status" -eq 1
 check "and names it, with the fix" \
     test "$out" = "$tmp/home/.config/quickshell/tide/kde.qml isn't installed, so tide-kde.service has nothing to run: run \`make install\` in the tide checkout"
+
+healthy
+run FAKE_PORTAL_FAILS="Failed to get property version: Connection timed out"
+check "a portal that doesn't answer is a problem" test "$status" -eq 1
+check "and says what apps wait for, and where to look" \
+    test "$out" = "xdg-desktop-portal didn't answer in 5 s (Failed to get property version: Connection timed out), so apps wait up to 25 s for it as they open: \`journalctl --user -b -u xdg-desktop-portal.service\` says why"
+run XDG_CURRENT_DESKTOP=tidewm:tide FAKE_PORTAL_FAILS="Failed to get property version: Connection timed out"
+check "in tidewm's session too" contains "$out" "xdg-desktop-portal didn't answer in 5 s"
 
 healthy
 run FAKE_KEYRING="b true"
