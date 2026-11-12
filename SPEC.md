@@ -4718,6 +4718,9 @@ stays hand-written.
     right-handed touchpad can each have their own speed.
   - `conf` applies the keyboard's options itself. Then `apply-input.sh`
     gives each keyboard them, or its own.
+  - **What isn't set shows tide's own default:** a US layout, right-handed,
+    and Hyprland's scrolling, as anyone gets them. Your own choices go in
+    `input.json`, as conf's do, so the page shows them as set.
   - A Mouse, Touchpad or Keyboard page sets every device of its kind, or
     one by name. ‹ and › step through the ones connected and the ones with
     settings of their own of that kind, and Reset clears them.
