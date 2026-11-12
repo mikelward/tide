@@ -19,14 +19,14 @@ test("mice and touchpads have their own settings, in Hyprland's option names", (
     ]);
 });
 
-test("what's shown until set is conf's config: a left-handed mouse, a right-handed touchpad", () => {
-    assert.equal(shown({}, "mouse", "leftHanded"), true);
+test("what's shown until set is tide's own: right-handed, Hyprland's scrolling, a US layout", () => {
+    assert.equal(shown({}, "mouse", "leftHanded"), false);
     assert.equal(shown({}, "touchpad", "leftHanded"), false);
-    assert.equal(shown({}, "mouse", "scrollSpeed"), 3);
+    assert.equal(shown({}, "mouse", "scrollSpeed"), 1);
     assert.equal(shown({}, "touchpad", "scrollSpeed"), 1);
-    assert.equal(shown({ mouse: { leftHanded: false } }, "mouse", "leftHanded"), false);
+    assert.equal(shown({ mouse: { leftHanded: true } }, "mouse", "leftHanded"), true);
     assert.equal(shown({}, "keyboard", "layout"), "us");
-    assert.equal(shown({}, "keyboard", "variant"), "dvorak");
+    assert.equal(shown({}, "keyboard", "variant"), "");
     assert.equal(shown({}, "keyboard", "repeatDelay"), 600);
     assert.equal(shown({ keyboard: { variant: "" } }, "keyboard", "variant"), "", "no variant is a setting");
 });
@@ -331,7 +331,7 @@ test("each file's devices merge key by key, and a device shows its own setting, 
     assert.deepEqual(errors, []);
     assert.deepEqual(input.devices.trackball, { speed: 0.75, leftHanded: false });
     assert.equal(deviceShown(input, "trackball", "speed"), 0.75);
-    assert.equal(deviceShown(input, "trackball", "scrollSpeed"), 3, "conf's, through every mouse");
+    assert.equal(deviceShown(input, "trackball", "scrollSpeed"), 1, "tide's, through every mouse");
     assert.equal(deviceShown(input, "other-mouse", "speed"), -0.5, "every mouse's");
     assert.equal(deviceShown(input, "toString", "speed"), -0.5, "a name every object has is just a device without settings");
     assert.equal(hasOwn(input, "trackball"), true);

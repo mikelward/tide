@@ -3,14 +3,15 @@
 // the ones set to ~/.config/hypr/tide-input.lua, in Hyprland's own option
 // names, which conf's hyprland.lua reads and applies to each mouse, each
 // touchpad and each keyboard.
-// What isn't set is left to conf's config, so tide's defaults never override
-// a setting made there.
+// What isn't set is left to Hyprland's config: tide's defaults, which the
+// page shows, or the options your own hyprland.lua gives them.
 
 import { jsonError } from "./clocks.mjs";
 
 // Each section's settings: the setting, its row on the page, the Hyprland
-// option it's written as, its kind, and what's shown while it isn't set
-// (conf's config, as tide found it).
+// option it's written as, its kind, and what's shown while it isn't set:
+// tide's own defaults, hyprland.lua's INPUT and MOUSE, so the page says what
+// anyone gets until they change it. Your own choices belong in input.json.
 const SPEED = Object.freeze({ key: "speed", label: "Speed", option: "sensitivity", kind: "speed", shown: 1 });
 // A mouse's acceleration: how much faster a fast move goes than libinput's
 // adaptive curve makes it, 1 being that curve, as conf's config has it.
@@ -22,9 +23,9 @@ export const SECTIONS = Object.freeze({
     mouse: Object.freeze([
         SPEED,
         ACCEL,
-        Object.freeze({ key: "scrollSpeed", label: "Scroll speed", option: "scroll_factor", kind: "scroll", shown: 3 }),
+        Object.freeze({ key: "scrollSpeed", label: "Scroll speed", option: "scroll_factor", kind: "scroll", shown: 1 }),
         Object.freeze(Object.assign({}, NATURAL, { shown: false })),
-        Object.freeze(Object.assign({}, LEFT, { shown: true })),
+        Object.freeze(Object.assign({}, LEFT, { shown: false })),
     ]),
     touchpad: Object.freeze([
         SPEED,
@@ -38,7 +39,7 @@ export const SECTIONS = Object.freeze({
     // each, such as dvorak, or none.
     keyboard: Object.freeze([
         Object.freeze({ key: "layout", label: "Layout", option: "kb_layout", kind: "layout", shown: "us" }),
-        Object.freeze({ key: "variant", label: "Variant", option: "kb_variant", kind: "variant", shown: "dvorak" }),
+        Object.freeze({ key: "variant", label: "Variant", option: "kb_variant", kind: "variant", shown: "" }),
         Object.freeze({ key: "repeatDelay", label: "Repeat delay", option: "repeat_delay", kind: "delay", shown: 600 }),
         Object.freeze({ key: "repeatRate", label: "Repeat rate", option: "repeat_rate", kind: "rate", shown: 25 }),
     ]),
@@ -464,7 +465,7 @@ export function listedDevices(failed, text) {
 }
 
 // What the page shows for `section`.`key`: the setting if it's set, else
-// what conf's config has.
+// tide's default.
 export function shown(input, section, key) {
     const set = (input[section] || {})[key];
     return set === undefined ? setting(section, key).shown : set;
