@@ -213,6 +213,8 @@ This needs Node and Playwright with Chromium.
 
 ## License
 
-Apache-2.0; see `LICENSE`. The dwl fork explored in SPEC.md §21.1 lives in
+Apache-2.0; see `LICENSE`. The city list (`shell/cities/cities.tsv`) is
+from [GeoNames](https://www.geonames.org/), under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The dwl fork explored in SPEC.md §21.1 lives in
 its own repository, [mikelward/tidewm](https://github.com/mikelward/tidewm), under
 dwl's GPL-3.0-or-later license.

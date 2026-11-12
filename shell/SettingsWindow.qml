@@ -7,6 +7,7 @@ import Quickshell.Services.UPower
 import Quickshell.Wayland
 import "lib/appearance.mjs" as Appearance
 import "lib/audio.mjs" as Audio
+import "lib/cities.mjs" as Cities
 import "lib/barside.mjs" as BarSide
 import "lib/clipboard.mjs" as Clip
 import "lib/dnd.mjs" as Dnd
@@ -54,6 +55,7 @@ PanelWindow {
     onPageChanged: {
         wallpaperColors.close();
         wallpaperGrid.close();
+        cityPicker.close();
         section = "";
         pageFlick.contentY = 0;
     }
@@ -114,6 +116,7 @@ PanelWindow {
         KeysData.stop();
         wallpaperColors.close();
         wallpaperGrid.close();
+        cityPicker.close();
         visible = false;
     }
 
@@ -2244,19 +2247,68 @@ PanelWindow {
                             }
                         }
 
-                        // Where sunrise and sunset are for: the time zone's
-                        // city, or why they can't be chosen.
-                        Text {
-                            visible: text !== ""
-                            x: 10
-                            width: appearance.width - 20
-                            topPadding: 4
-                            bottomPadding: 4
-                            wrapMode: Text.Wrap
-                            text: Appearance.locationHint(appearance.settings, appearance.place)
-                            color: Theme.fgFaint
-                            font.family: Theme.font
-                            font.pixelSize: 12
+                        // Where sunrise and sunset are for, and Change,
+                        // which opens the city picker under it.
+                        Item {
+                            id: location
+
+                            readonly property var row: Appearance.locationRow(appearance.settings, appearance.place)
+
+                            visible: row.shown
+                            width: appearance.width
+                            implicitHeight: 32
+
+                            Text {
+                                id: locationLabel
+
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: location.row.label
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Text {
+                                anchors.left: locationLabel.right
+                                anchors.leftMargin: 12
+                                anchors.right: change.left
+                                anchors.rightMargin: 8
+                                anchors.verticalCenter: parent.verticalCenter
+                                horizontalAlignment: Text.AlignRight
+                                elide: Text.ElideRight
+                                text: location.row.value
+                                color: Theme.fgDim
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Rectangle {
+                                id: change
+
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 76
+                                height: 26
+                                radius: 13
+                                color: Theme.surface2
+                                Accessible.name: "Change location"
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "Change"
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                }
+
+                                TapHandler {
+                                    onTapped: cityPicker.show(change)
+                                }
+                            }
                         }
 
                         // The inactive dim's strength (§6.2), which − and +
@@ -4613,11 +4665,214 @@ PanelWindow {
         // anywhere else closes them, and goes no further.
         MouseArea {
             anchors.fill: parent
-            visible: wallpaperColors.visible || wallpaperGrid.visible
+            visible: wallpaperColors.visible || wallpaperGrid.visible || cityPicker.visible
             onPressed: {
                 wallpaperColors.close();
                 wallpaperGrid.close();
+                cityPicker.close();
                 keys.forceActiveFocus();
+            }
+        }
+
+        // The city picker (§16), under the Location row's Change: a search
+        // of shell/cities/cities.tsv as you type, best and nearest first,
+        // or with nothing typed the nearest cities; and above them, once a
+        // city is chosen, the time zone's city again.
+        // ↑ and ↓ move through them, Enter or a click chooses one, and
+        // Escape, or a click anywhere else, closes it with nothing set.
+        Rectangle {
+            id: cityPicker
+
+            property bool open: false
+            property var cities: []
+            property string failed: ""
+            property bool read: false
+            property int current: 0
+            readonly property var place: AppearanceData.place
+            // Where sunrise and sunset are for now, the location set or the
+            // time zone's city, which the results favor; null for neither.
+            readonly property var near: {
+                const where = Appearance.placed(AppearanceData.settings, place);
+                return where.latitude !== undefined && where.longitude !== undefined ? { latitude: where.latitude, longitude: where.longitude } : null;
+            }
+            // With nothing typed, the cities nearest it.
+            readonly property var rows: {
+                const typed = search.text.trim() !== "";
+                const cities = typed ? Cities.searchCities(cityPicker.cities, search.text, 8, near)
+                    : near ? Cities.nearestCities(cityPicker.cities, near, 8) : [];
+                const found = cities.map(c => ({ label: c.label, city: c }));
+                const reset = search.text.trim() === "" ? Appearance.resetLocation(AppearanceData.settings, AppearanceData.sharedSettings, place) : null;
+                const back = reset ? [{ label: reset, city: null }] : [];
+                return back.concat(found);
+            }
+
+            // Opens under `button`, or over it with no room below, reading
+            // the list the first time: about 440 KB, so not before.
+            function show(button) {
+                if (!read) {
+                    read = true;
+                    // Blocks until onLoaded or onLoadFailed has run.
+                    citiesFile.text();
+                }
+                const at = button.mapToItem(card, 0, 0);
+                x = Math.max(6, Math.min(at.x + button.width - width, card.width - width - 6));
+                y = at.y + button.height + 4 + height <= card.height - 6 ? at.y + button.height + 4 : Math.max(6, at.y - 4 - height);
+                search.text = "";
+                current = 0;
+                open = true;
+                search.forceActiveFocus();
+            }
+
+            function close() {
+                open = false;
+            }
+
+            function choose(row) {
+                close();
+                keys.forceActiveFocus();
+                const city = row.city === null ? null : { label: row.city.label, latitude: row.city.latitude, longitude: row.city.longitude };
+                appearance.refused = AppearanceData.setLocation(city);
+                root.report(appearance.refused);
+            }
+
+            visible: open
+            width: 360
+            height: pickerColumn.implicitHeight + 24
+            radius: 12
+            color: Theme.surface
+            border.color: Theme.edge
+
+            // Takes its own presses, so they don't close it.
+            MouseArea {
+                anchors.fill: parent
+            }
+
+            FileView {
+                id: citiesFile
+
+                path: decodeURIComponent(Qt.resolvedUrl("cities/cities.tsv").toString().replace(/^file:\/\//, ""))
+                printErrors: false
+                preload: false
+                blockLoading: true
+                onLoaded: {
+                    const r = Cities.parseCities(text());
+                    for (const error of r.errors) {
+                        console.warn(`tide: ${path}: ${error}`);
+                    }
+                    cityPicker.cities = r.cities;
+                    cityPicker.failed = r.cities.length === 0 ? `No cities in ${path}` : "";
+                }
+                onLoadFailed: error => {
+                    cityPicker.failed = `Couldn't read the city list: ${FileViewError.toString(error)}`;
+                    console.warn(`tide: ${path}: ${FileViewError.toString(error)}`);
+                }
+            }
+
+            Column {
+                id: pickerColumn
+
+                x: 12
+                y: 12
+                width: cityPicker.width - 24
+                spacing: 4
+
+                Rectangle {
+                    width: parent.width
+                    height: 28
+                    radius: 6
+                    color: Theme.surface2
+                    border.width: search.activeFocus ? 1 : 0
+                    border.color: Theme.accent
+
+                    TextInput {
+                        id: search
+
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        verticalAlignment: TextInput.AlignVCenter
+                        clip: true
+                        color: Theme.fg
+                        font.family: Theme.font
+                        font.pixelSize: 13
+                        onTextChanged: cityPicker.current = 0
+                        onAccepted: {
+                            if (cityPicker.rows.length > 0) {
+                                cityPicker.choose(cityPicker.rows[Math.min(cityPicker.current, cityPicker.rows.length - 1)]);
+                            }
+                        }
+                        Keys.onUpPressed: cityPicker.current = Math.max(0, cityPicker.current - 1)
+                        Keys.onDownPressed: cityPicker.current = Math.min(cityPicker.rows.length - 1, cityPicker.current + 1)
+                        Keys.onEscapePressed: {
+                            cityPicker.close();
+                            keys.forceActiveFocus();
+                        }
+
+                        Text {
+                            visible: search.text === ""
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Search cities"
+                            color: Theme.fgFaint
+                            font: search.font
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: cityPicker.rows
+
+                    Rectangle {
+                        id: cityRow
+
+                        required property var modelData
+                        required property int index
+
+                        width: pickerColumn.width
+                        height: 28
+                        radius: 6
+                        color: index === cityPicker.current ? Theme.surface2 : "transparent"
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 8
+                            anchors.right: parent.right
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            elide: Text.ElideRight
+                            text: cityRow.modelData.label
+                            color: Theme.fg
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                        }
+
+                        HoverHandler {
+                            onHoveredChanged: {
+                                if (hovered) {
+                                    cityPicker.current = cityRow.index;
+                                }
+                            }
+                        }
+
+                        TapHandler {
+                            onTapped: cityPicker.choose(cityRow.modelData)
+                        }
+                    }
+                }
+
+                // Why there's nothing to choose, when there's something typed.
+                Text {
+                    visible: text !== ""
+                    width: pickerColumn.width
+                    leftPadding: 8
+                    topPadding: 4
+                    bottomPadding: 4
+                    wrapMode: Text.Wrap
+                    text: cityPicker.failed !== "" ? cityPicker.failed
+                        : search.text.trim() !== "" && cityPicker.rows.length === 0 ? "No cities match" : ""
+                    color: Theme.fgDim
+                    font.family: Theme.font
+                    font.pixelSize: 12
+                }
             }
         }
 

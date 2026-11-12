@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
     DEFAULTS, LOCAL, parseTime, parseAppearance, loadAppearance, sunDown,
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
-    hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, placed, locationHint, steppedTime, steppedTimePast, parseCoordinate, withSetting,
+    hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, placed, locationRow, resetLocation, withLocation, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
     expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
@@ -410,11 +410,42 @@ test("sunrise and sunset from a time zone that loses its city fall back to the d
     assert.deepEqual(loadAppearance("{", null, typed, null).settings, typed, "a location typed still works");
 });
 
-test("the page says where sunrise and sunset are for, or why they can't be chosen", () => {
-    assert.equal(locationHint({ mode: "sun" }, LA), "Los Angeles, from your time zone");
-    assert.equal(locationHint({ mode: "schedule" }, LA), "", "only under sunrise and sunset");
-    assert.equal(locationHint({ mode: "schedule" }, null), "Sunrise and sunset need your time zone set to a city");
-    assert.equal(locationHint({ mode: "sun", latitude: 1, longitude: 2 }, LA), "", "a location set by hand");
+test("the Location row names the city chosen, or the time zone's", () => {
+    assert.deepEqual(locationRow({ mode: "sun" }, LA), { shown: true, label: "Location", value: "Los Angeles, from your time zone" });
+    assert.equal(locationRow({ mode: "schedule" }, LA).shown, false, "only under sunrise and sunset");
+    assert.deepEqual(locationRow({ mode: "schedule" }, null), { shown: true, label: "Location for sunrise and sunset", value: "None" },
+        "with no time zone city, it's how to reach sunrise and sunset");
+    const chosen = { mode: "sun", latitude: 55.04, longitude: 82.93, city: "Novosibirsk, Russia" };
+    assert.equal(locationRow(chosen, LA).value, "Novosibirsk, Russia");
+    assert.equal(locationRow({ mode: "sun", latitude: 1, longitude: 2 }, LA).value, "1, 2", "coordinates set by hand");
+    assert.equal(locationRow({ mode: "sun", city: "Atlantis" }, LA).value, "Los Angeles, from your time zone", "a city with no coordinates is no location");
+    assert.equal(resetLocation(chosen, {}, LA), "Your time zone's city, Los Angeles");
+    assert.equal(resetLocation({ mode: "sun" }, {}, LA), null, "already the time zone's");
+    assert.equal(resetLocation(chosen, {}, null), null, "no city to go back to");
+});
+
+test("going back names the shared file's location when it sets one", () => {
+    const shared = { latitude: 51.51, longitude: -0.13, city: "London, England, United Kingdom" };
+    const chosen = { mode: "sun", latitude: 55.04, longitude: 82.93, city: "Novosibirsk, Russia" };
+    assert.equal(resetLocation(chosen, shared, LA), "Back to London, England, United Kingdom, from appearance.json");
+    assert.equal(resetLocation(Object.assign({ mode: "sun" }, shared), shared, LA), null, "the shared one is in effect already");
+    assert.equal(resetLocation(chosen, { latitude: 51.51, longitude: -0.13 }, LA), "Back to 51.51, -0.13, from appearance.json");
+    assert.equal(resetLocation(chosen, { latitude: 51.51 }, LA), null, "half a shared location: going back would mix it with the zone's");
+    // What it names is where the merged settings end up.
+    const local = withLocation(JSON.stringify(chosen), null, JSON.stringify(shared), LA);
+    const merged = loadAppearance(JSON.stringify(shared), local.text, DEFAULTS, LA).settings;
+    assert.equal(merged.city, "London, England, United Kingdom");
+});
+
+test("choosing a city sets its name and coordinates, and clearing it takes them out", () => {
+    const local = JSON.stringify({ mode: "sun", dimStrength: 0.2 });
+    const city = { label: "Novosibirsk, Russia", latitude: 55.04, longitude: 82.93 };
+    const set = withLocation(local, city);
+    assert.deepEqual(JSON.parse(set.text), { mode: "sun", latitude: 55.04, longitude: 82.93, city: "Novosibirsk, Russia", dimStrength: 0.2 });
+    assert.deepEqual(JSON.parse(withLocation(set.text, null, null, LA).text), { mode: "sun", dimStrength: 0.2 });
+    assert.equal(withLocation(set.text, null).error, 'mode "sun" needs latitude and longitude', "not with no time zone city to fall back on");
+    assert.match(withLocation(null, { label: "", latitude: 1, longitude: 2 }).error, /^city must be a name/);
+    assert.match(parseAppearance(JSON.stringify({ city: "a\nb" })).error, /^city must be a name/);
 });
 
 test("the mode reaches sunrise and sunset with the time zone's place", () => {

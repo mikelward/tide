@@ -27,6 +27,9 @@ Singleton {
 
     // The settings in effect: the last good ones.
     property var settings: Appearance.DEFAULTS
+    // appearance.json's own settings, as the last load read them, which the
+    // city picker's way back names (Appearance.resetLocation).
+    property var sharedSettings: ({})
     property bool loaded: false
     // Where tzdata puts the local zone's main city, from tide-tz (ClockData),
     // or null: sunrise and sunset fall back to it with no location set
@@ -176,6 +179,8 @@ Singleton {
         // than being taken for missing.
         if (broken.length === 0) {
             root.settings = result.settings;
+            const sharedText = textOf(shared);
+            root.sharedSettings = sharedText === null ? {} : (Appearance.parseAppearance(sharedText).settings ?? {});
         }
         root.loaded = true;
         root.fileErrors = errors;
@@ -239,15 +244,26 @@ Singleton {
     // last loaded, so a hand edit made a moment ago is built on, and one
     // that doesn't parse is left as it is. Returns why it didn't, or "".
     function set(key, value) {
+        return root.change(key, (localText, sharedText) => Appearance.withSetting(localText, key, value, sharedText, root.place));
+    }
+
+    // Sets the city picker's choice, {label, latitude, longitude}, or with
+    // null goes back to the time zone's city (§16). Returns why not, or "".
+    function setLocation(city) {
+        return root.change("the location", (localText, sharedText) => Appearance.withLocation(localText, city, sharedText, root.place));
+    }
+
+    // Writes what `edit` makes of the files' texts, as `set` does.
+    function change(what, edit) {
         const sharedText = sharedNow.readNow();
         const localText = localNow.readNow();
         const broken = [sharedNow.broken, localNow.broken].filter(b => b !== "");
         if (broken.length > 0) {
-            return `${broken[0]}; not changing ${key}`;
+            return `${broken[0]}; not changing ${what}`;
         }
-        const result = Appearance.withSetting(localText, key, value, sharedText, root.place);
+        const result = edit(localText, sharedText);
         if (result.error) {
-            return `${result.error}; not changing ${key}`;
+            return `${result.error}; not changing ${what}`;
         }
         const error = localNow.writeNow(result.text);
         root.saveFailure = error === "" ? "" : `${error}; appearance setting not saved`;
