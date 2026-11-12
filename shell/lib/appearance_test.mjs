@@ -448,6 +448,33 @@ test("choosing a city sets its name and coordinates, and clearing it takes them 
     assert.match(parseAppearance(JSON.stringify({ city: "a\nb" })).error, /^city must be a name/);
 });
 
+test("a latitude or longitude set by hand drops the name of the city they were", () => {
+    const city = { label: "Novosibirsk, Russia", latitude: 55.04, longitude: 82.93 };
+    const picked = withLocation(JSON.stringify({ mode: "sun" }), city).text;
+    // `setAppearance latitude 37.77` over IPC, after the picker chose a city.
+    const typed = withSetting(picked, "latitude", 37.77);
+    assert.deepEqual(JSON.parse(typed.text), { mode: "sun", latitude: 37.77, longitude: 82.93 });
+    assert.equal(locationRow(loadAppearance(null, typed.text, DEFAULTS, LA).settings, LA).value, "37.77, 82.93",
+        "coordinates set by hand show as numbers, not as the city they no longer are");
+    assert.equal(JSON.parse(withSetting(typed.text, "longitude", -122.42).text).city, undefined);
+    assert.equal(JSON.parse(withSetting(picked, "dimStrength", 0.2).text).city, "Novosibirsk, Russia", "any other setting leaves it");
+    assert.equal(JSON.parse(withLocation(typed.text, city).text).city, "Novosibirsk, Russia", "choosing a city names it again");
+});
+
+test("a file's latitude or longitude takes the place of the shared file's city", () => {
+    const shared = JSON.stringify({ mode: "sun", latitude: 51.51, longitude: -0.13, city: "London, England, United Kingdom" });
+    const here = loadAppearance(shared, JSON.stringify({ latitude: 37.77, longitude: -122.42 }), DEFAULTS, LA).settings;
+    assert.equal(here.city, undefined);
+    assert.equal(locationRow(here, LA).value, "37.77, -122.42", "not London, whose sunrise it no longer follows");
+    assert.equal(resetLocation(here, JSON.parse(shared), LA), "Back to London, England, United Kingdom, from appearance.json");
+    const half = loadAppearance(shared, JSON.stringify({ latitude: 37.77 }), DEFAULTS, LA).settings;
+    assert.equal(locationRow(half, LA).value, "37.77, -0.13", "one of the two is enough to be somewhere else");
+    const named = loadAppearance(shared, JSON.stringify({ latitude: 37.77, longitude: -122.42, city: "Home" }), DEFAULTS, LA).settings;
+    assert.equal(locationRow(named, LA).value, "Home", "a file that names its own keeps it");
+    assert.equal(loadAppearance(shared, JSON.stringify({ dimStrength: 0.2 }), DEFAULTS, LA).settings.city, "London, England, United Kingdom",
+        "a file that sets neither leaves the shared city");
+});
+
 test("the mode reaches sunrise and sunset with the time zone's place", () => {
     const at = mode => MODE_CHOICES.findIndex(c => c.mode === mode);
     assert.equal(steppedModeAt({}, at("schedule"), 1, LA), at("sun"));

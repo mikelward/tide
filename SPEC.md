@@ -4524,7 +4524,9 @@ to be focused.
   The settings are `mode`, `light` and `dark` (24-hour times like
   `"07:00"`), and `latitude` and `longitude` (decimal degrees, east and
   north positive), and `city`, the name the city picker shows for them.
-  Either one unset is the time zone's. An unknown setting,
+  Either one unset is the time zone's. A `city` names only the
+  coordinates set with it. A file that sets a `latitude` or `longitude`
+  and no `city` drops the shared file's. An unknown setting,
   a bad value, or `sun` with no location and no time zone city is an error
   at load (§16.1). The shell waits up to five seconds for `tide-tz` before
   calling it one. Both times are wall
@@ -4977,9 +4979,12 @@ stays hand-written.
     cross, as an overnight schedule needs.
   - Under sunrise and sunset, a Location row names the city they're for:
     the one chosen, else the time zone's, such as "Los Angeles, from your
-    time zone". Coordinates set by hand show as numbers. With no location
-    at all, as in UTC, the row shows in every mode, as "Location for
-    sunrise and sunset", since that mode can't be chosen without one.
+    time zone". Coordinates set by hand show as numbers. Setting one, as
+    `setAppearance latitude` does, takes a chosen city's name out of
+    `appearance.local.json`: the location is no longer that city's. With
+    no location at all, as in UTC, the row shows in every mode, as
+    "Location for sunrise and sunset", since that mode can't be chosen
+    without one.
   - **Its Change button opens a city picker** under it.
     - It searches `shell/cities/cities.tsv` as you type, with the
       launcher's fuzzy matcher, and lists the best eight. Accents and
