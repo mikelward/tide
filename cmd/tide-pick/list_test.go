@@ -153,3 +153,29 @@ func TestListsWhatItCanReadThenFails(t *testing.T) {
 		t.Fatalf("got %q", stdout.String())
 	}
 }
+
+// A link into a package that's been removed, say: find -L, which this
+// replaced, passed over one without a word.
+func TestPassesOverALinkToNothing(t *testing.T) {
+	dir := t.TempDir()
+	writePNG(t, filepath.Join(dir, "a.png"), 2, 1)
+	for name, target := range map[string]string{"default.png": "gone/default.png", "theme": "gone", "README": "gone/README"} {
+		if err := os.Symlink(filepath.Join(dir, target), filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"--list", dir}, &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("got %d %q: every picture there was listed, so it's no failure", code, stderr.String())
+	}
+	if stdout.String() != "2\t1\t"+filepath.Join(dir, "a.png")+"\n" {
+		t.Fatalf("got %q", stdout.String())
+	}
+	// Said, for the log, since a wallpaper that never shows is a puzzle.
+	for _, name := range []string{"default.png", "theme", "README"} {
+		if !strings.Contains(stderr.String(), filepath.Join(dir, name)) {
+			t.Errorf("stderr doesn't name %s: %q", name, stderr.String())
+		}
+	}
+}

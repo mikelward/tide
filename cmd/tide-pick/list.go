@@ -9,8 +9,9 @@ package main
 // It prints a line for each picture under each DIR, following links, six
 // folders deep at most: its width, its height and its path, separated by
 // tabs. A size it can't read from the file's header is 0 0. A DIR that isn't
-// there is passed over. One it can't read all of still lists what it could,
-// then exits 2 with why on stderr.
+// there is passed over. So is a link to nothing, or a file that goes as it
+// lists, which it names on stderr. A DIR it can't read all of still lists
+// what it could, then exits 2 with why on stderr.
 
 import (
 	"bufio"
@@ -55,6 +56,14 @@ func list(dirs []string, stdout, stderr io.Writer) int {
 			path := filepath.Join(dir, e.Name())
 			// Stat, not the entry's own type, follows a link.
 			info, err := os.Stat(path)
+			if errors.Is(err, fs.ErrNotExist) {
+				// A link to nothing, or a file gone since its folder was
+				// read, is no picture that couldn't be listed. So it's
+				// passed over, as a DIR that isn't there is and as find -L
+				// did, and said for the log.
+				fmt.Fprintf(stderr, "tide-pick: passing over %s, a link to nothing or a file just gone\n", path)
+				continue
+			}
 			if err != nil {
 				fail(err)
 				continue

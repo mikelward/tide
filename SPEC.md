@@ -5106,7 +5106,8 @@ stays hand-written.
     - It lists the folders afresh each time it opens, so a picture you've
       just downloaded shows.
     - A folder it can't read all of, a subfolder it may not open say,
-      still shows what it could, with why over the grid.
+      still shows what it could, with why over the grid. A link to
+      nothing is passed over, and named in the journal.
     - **Unsplash** and **Wallhaven**, at its top, find more in your
       browser, and close the panel. One saved to `~/Pictures/wallpapers`
       shows in the grid.
