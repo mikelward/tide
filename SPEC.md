@@ -4995,6 +4995,20 @@ stays hand-written.
     - Closing the panel, or going to another page, closes the picker.
     - ↑ and ↓ move, Enter or a click chooses, and Escape or a click
       elsewhere closes it with nothing set.
+    - **Find**, beside the search, asks beacondb.net where this machine
+      is, by its IP address, and lists the cities nearest that, for one
+      to be chosen. A line under them says how close it is, such as "to
+      within about 25 km", and credits beacondb.net and DB-IP's data (CC
+      BY 4.0), as DB-IP's license asks.
+      - It's one `POST {}` to `https://api.beacondb.net/v1/geolocate`, on a
+        click only. It sends the IP address to beacondb.net and nothing
+        else. It gives up after ten seconds, and a failure says why under
+        the results and in the journal.
+      - A VPN or a mobile network can put it hundreds of kilometers off,
+        which is why it lists cities rather than choosing one.
+      - **Cost and reliability:** free, with no key; beacondb.net is a
+        community service, so a lookup can fail, and searching still
+        works.
     - The list is read when the picker first opens, not before.
   - **The list** is GeoNames' (CC BY 4.0): every city of 100,000 people
     or more, every capital of a country or a first-level region, and a

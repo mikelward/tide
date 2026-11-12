@@ -1604,10 +1604,9 @@ tested where it can be without a live session.
 `shell/lib/settings.mjs`. CI opens it and opens the Network page's app
 from the keyboard (`shell/integration_test.sh`).
 
-- **Find my city.** A Find button in the city picker (SPEC.md §16) that
-  asks beacondb.net where this machine's IP address is, on a click only,
-  and offers the nearest city to confirm. GeoClue, or Location Services
-  on the Mac, could follow for Wi-Fi accuracy.
+- **Find by Wi-Fi.** The city picker's Find (SPEC.md §16) goes by IP
+  address. GeoClue, or Location Services on the Mac, could place it by
+  Wi-Fi instead, to within a city where a VPN would mislead it.
 - In: Idle (below), Sound (the devices, as the volume popover lists them,
   and `pavucontrol`), Network (`nm-connection-editor`) and Bluetooth
   (`blueman-manager`).
