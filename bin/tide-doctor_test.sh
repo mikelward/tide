@@ -56,6 +56,17 @@ if test "$2" = show && test "$4" = MainPID; then
     echo "${FAKE_MAIN_PID:-100}"
     exit 0
 fi
+# show -p Wants --value wayland-session@tide-X.target: the units the
+# session's target starts, all of tide's unless $FAKE_WANTS says which, or
+# it fails with $FAKE_WANTS_FAILS.
+if test "$2" = show && test "$4" = Wants; then
+    if test -n "$FAKE_WANTS_FAILS"; then
+        echo "$FAKE_WANTS_FAILS" >&2
+        exit 1
+    fi
+    echo "${FAKE_WANTS-tide.service tide-clipboard.service tide-fcitx5.service}"
+    exit 0
+fi
 if test "$2" = show && test "$4" = ActiveEnterTimestampMonotonic; then
     echo "${FAKE_SESSION_START:-100}"
     exit 0
@@ -423,6 +434,16 @@ run XDG_CURRENT_DESKTOP=KDE
 check "on Plasma, a missing kde.qml is a problem" test "$status" -eq 1
 check "and names it, with the fix" \
     test "$out" = "$tmp/home/.config/quickshell/tide/kde.qml isn't installed, so tide-kde.service has nothing to run: run \`make install\` in the tide checkout"
+
+healthy
+run XDG_CURRENT_DESKTOP=tidewm:tide FAKE_WANTS="tide-fcitx5.service"
+check "a shell the session doesn't start is a problem" test "$status" -eq 1
+check "and says what that costs and how to fix it" contains "$out" \
+    "tide.service doesn't start with the tide (tidewm) session (wayland-session@tide-tidewm.target doesn't want it), so the shell starts only when an app key asks for it, after nm-applet and the other autostart apps: \`systemctl --user reenable tide.service\`, as \`setup\` does"
+check "and the clipboard's too" contains "$out" \
+    "tide-clipboard.service doesn't start with the tide (tidewm) session (wayland-session@tide-tidewm.target doesn't want it), so Super+V keeps no history"
+run FAKE_WANTS_FAILS="Failed to connect to bus"
+check "a manager that won't say is a problem too" contains "$out" "couldn't ask which units wayland-session@tide-hyprland.target starts (Failed to connect to bus)"
 
 healthy
 run FAKE_PORTAL_FAILS="Failed to get property version: Connection timed out"

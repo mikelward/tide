@@ -801,6 +801,10 @@ flowchart TD
     is named `tide-bar`) at its own edge, top or bottom, which a narrow
     bar or a dock holds;
   - portal backend selection;
+  - the session's target starting the shell and the clipboard history.
+    An install enabled before tidewm's session existed links them to
+    Hyprland's only, so in tidewm's the shell waits for an app key, after
+    the autostart apps it should precede;
   - the portal answering within 5 s. Apps ask it for settings as they
     start, and a portal that hangs makes each one wait 25 s per question;
   - `hyprctl configerrors`;
