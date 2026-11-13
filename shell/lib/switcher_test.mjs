@@ -48,6 +48,18 @@ test("each key opens its own tab, and the same key again closes it", () => {
 const named = (...names) => names.map((name, i) => ({ id: -1338 - i, name }));
 const win = (address, workspace, app, extra = {}) => Object.assign({ address, workspace, app, urgent: false, fullscreen: 0 }, extra);
 
+test("the Workspaces tab says a workspace whose windows are all minimized is", () => {
+    const list = barWorkspaces({
+        monitor: "DP-1",
+        monitors: [{ name: "DP-1", workspace: -1338 }],
+        workspaces: named("in").concat([{ id: -98, name: "special:minimized:PR-12" }]),
+        windows: [win("a", -1338, "thunderbird"), Object.assign(win("b", -98, "kitty"), { workspaceName: "special:minimized:PR-12" })],
+        standing: ["in"],
+    });
+    const rows = workspaceRows(list, "");
+    assert.deepEqual(rows.map((r) => [r.item.name, r.item.sub]), [["in", "home · current"], ["PR-12", "minimized"]]);
+});
+
 test("the Workspaces tab lists the bar's workspaces, current one said so", () => {
     const list = barWorkspaces({
         monitor: "DP-1",

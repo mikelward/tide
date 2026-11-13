@@ -408,8 +408,16 @@ function icons(windows, marked) {
 // newer ID, doesn't move it.
 export function workspaceOrder(workspaces, standing) {
     const byName = new Map();
+    // Workspaces Hyprland destroyed once all their windows were minimized
+    // (SPEC.md §6.7): their windows wait on special:minimized:NAME.
+    const waiting = [];
     for (const w of workspaces) {
         const raw = String(w.name ?? "");
+        const from = minimizedFrom(raw);
+        if (from !== null) {
+            waiting.push({ name: workspaceOf(from) });
+            continue;
+        }
         if (!Number.isInteger(w.id) || raw.startsWith("special:")) {
             continue;
         }
@@ -451,6 +459,17 @@ export function workspaceOrder(workspaces, standing) {
     for (const w of named.concat(numbered)) {
         out.push({ id: w.id, ids: w.ids, name: String(w.name || w.id), standing: false, home: false });
     }
+    // One whose windows are all minimized stays on the bar, as on tidewm,
+    // where the workspace itself waits: not made, as a standing one not
+    // made yet is, so going there by name makes it again and shows its
+    // tray. Each comes once, after the rest, by name, as the overview
+    // lists them: Hyprland keeps no order for one it destroyed.
+    waiting.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const w of waiting) {
+        if (!out.some((o) => sameName(o.name, w.name))) {
+            out.push({ id: null, ids: [], name: w.name, standing: false, home: false, minimized: true });
+        }
+    }
     return out;
 }
 
@@ -464,10 +483,11 @@ export function barName(name) {
 // What one monitor's bar shows: every workspace in workspaceOrder's order,
 // each as
 //
-//   {id, ids, name, label, standing, home, state, urgent, big, count, app,
-//    icons: [{address, app, marked, restoreTo}], more}
+//   {id, ids, name, label, standing, home, waiting, state, urgent, big,
+//    count, app, icons: [{address, app, marked, restoreTo}], more}
 //
-// where ids are its parts' IDs (workspaceOrder); label is the name as the
+// where ids are its parts' IDs (workspaceOrder); waiting is one Hyprland
+// destroyed whose windows are all minimized (workspaceOrder); label is the name as the
 // bar shows it (barName); state is "current" (this monitor's workspace, or
 // its part of one spanning monitors), "elsewhere" (shown on another monitor
 // only, as when workspaces don't span them), "occupied" or "empty", which a standing workspace not made yet
@@ -508,6 +528,7 @@ export function barWorkspaces({ monitor, monitors, workspaces, windows, marks = 
             label: barName(ws.name),
             standing: ws.standing,
             home: ws.home,
+            waiting: ws.minimized === true,
             state,
             urgent: here.concat(minimized).some((w) => marked.has(w.address)),
             big: here.some((w) => w.fullscreen > 0),
