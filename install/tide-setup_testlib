@@ -617,10 +617,20 @@ MOCK
     # removes the link. A user unit is enabled or masked saying so, as
     # systemctl does; enabling the one \$FAKE_USER_ENABLE_FAILS names fails,
     # saying why.
+    # The system bus, dbus.service, is \$FAKE_DBUS_BUS, or dbus-broker's
+    # unit, as on Fedora and Arch, and the user manager's is
+    # \$FAKE_DBUS_USER_BUS, or the same. Enabling dbus-broker's unit for the
+    # system (enable --no-reload) or the user buses (--global) makes
+    # $T/dbus-broker-system or $T/dbus-broker-global, which is-enabled
+    # reads, or fails with \$FAKE_DBUS_ENABLE_FAILS, saying why.
     cat > "$T/bin/systemctl" <<MOCK
 #!/bin/sh
 printf "%s\\n" "systemctl \$*" >> "$CALLS"
 test "\$2" != show-environment || exit \${FAKE_NO_USER_MANAGER:-0}
+if test "\$*" = "--user show --property=Id --value dbus.service"; then
+    echo "\${FAKE_DBUS_USER_BUS-\${FAKE_DBUS_BUS-dbus-broker.service}}"
+    exit 0
+fi
 if test "\$1" = show; then
     case "\$4:\${2#--property=}" in
         display-manager.service:LoadState)
@@ -633,6 +643,7 @@ if test "\$1" = show; then
             if test -s "$T/dm"; then echo loaded; else echo not-found; fi
             ;;
         display-manager.service:Id) cat "$T/dm" ;;
+        dbus.service:Id) echo "\${FAKE_DBUS_BUS-dbus-broker.service}" ;;
         greetd.service:LoadState) if test -e "$T/greetd-installed"; then echo loaded; else echo not-found; fi ;;
         greetd.service:Conflicts)
             test -z "\$FAKE_CONFLICTS_FAILS" || exit 1
@@ -696,6 +707,19 @@ case "\$*" in
             exit 1
         fi
         echo "Created symlink '$T/home/.config/systemd/user/tide-session.target.wants/\$unit' → '$T/home/.config/systemd/user/\$unit'." >&2
+        ;;
+    "is-enabled dbus-broker.service" | "--global is-enabled dbus-broker.service")
+        if test "\$1" = --global; then scope=global; else scope=system; fi
+        if test -e "$T/dbus-broker-\$scope"; then echo enabled; else echo disabled; exit 1; fi
+        ;;
+    "enable --no-reload dbus-broker.service" | "--global enable dbus-broker.service")
+        if test "\$1" = --global; then scope=global; dir=user; else scope=system; dir=system; fi
+        if test -n "\$FAKE_DBUS_ENABLE_FAILS"; then
+            echo "Failed to enable unit: File /etc/systemd/\$dir/dbus.service already exists and is a symlink to /usr/lib/systemd/\$dir/dbus-daemon.service." >&2
+            exit 1
+        fi
+        : > "$T/dbus-broker-\$scope"
+        echo "Created symlink '/etc/systemd/\$dir/dbus.service' → '/usr/lib/systemd/\$dir/dbus-broker.service'." >&2
         ;;
     "--user is-active "*)
         # A tide session is running only with \$FAKE_TIDE_SESSION.

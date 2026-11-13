@@ -146,6 +146,74 @@ setup; ARGS=(--no-sudo); run FAKE_GROUPS="user"
 check "--no-sudo adds no group" lacks "$calls" "usermod -aG video"
 teardown
 
+# dbus-broker runs the buses in place of dbus-daemon, which can hold a
+# login's portal for 2 minutes (tide SPEC.md §5.4). The switch waits for a
+# reboot: the running bus is never stopped.
+setup; ARGS=(); run FAKE_DBUS_BUS=dbus.service
+check "dbus-broker: installed where dbus-daemon is the bus" has "$calls" "apt-get install -y --no-upgrade dbus-broker -o"
+check "dbus-broker: enabled for the system bus, without reloading systemd" \
+    has "$calls" "sudo systemctl enable --no-reload dbus-broker.service"
+check "dbus-broker: enabled for the session buses" has "$calls" "sudo systemctl --global enable dbus-broker.service"
+check "dbus-broker: the running bus isn't stopped" lacks "$calls" "stop dbus"
+check "dbus-broker: nor restarted" lacks "$calls" "restart dbus"
+check "dbus-broker: says it takes a reboot" \
+    has "$output" "dbus-broker runs the system and session buses after a reboot, in place of dbus-daemon"
+check "dbus-broker: the switch is no problem" test "$status" -eq 0
+teardown
+
+setup; ARGS=(); run
+check "dbus-broker: none installed where it's the bus already" lacks "$calls" "--no-upgrade dbus-broker"
+check "dbus-broker: none enabled where it's the bus already" lacks "$calls" "enable --no-reload dbus-broker"
+check "dbus-broker: no session bus enabled where it's the bus already" lacks "$calls" "--global enable"
+check "dbus-broker: nothing said where it's the bus already" lacks "$output" "dbus-broker"
+teardown
+
+# Enabled by an earlier run, not yet rebooted into.
+setup; : > "$T/dbus-broker-system"; : > "$T/dbus-broker-global"; ARGS=(); run FAKE_DBUS_BUS=dbus.service
+check "dbus-broker: none enabled again before the reboot" lacks "$calls" "enable --no-reload dbus-broker"
+check "dbus-broker: nor for the session buses" lacks "$calls" "--global enable"
+teardown
+
+setup; ARGS=(); run FAKE_DBUS_USER_BUS=dbus.service
+check "dbus-broker: only the session buses switched where only they need it" \
+    has "$calls" "sudo systemctl --global enable dbus-broker.service"
+check "dbus-broker: the system bus's left as it is" lacks "$calls" "enable --no-reload dbus-broker"
+check "dbus-broker: says which" has "$output" "dbus-broker runs the session bus after a reboot"
+teardown
+
+setup; ARGS=(); run SETUP_OS=redhat FAKE_DBUS_BUS=dbus.service
+check "dbus-broker: installed with dnf on Fedora" has "$calls" "dnf install -y --setopt=best=False dbus-broker"
+check "dbus-broker: and enabled there" has "$calls" "sudo systemctl enable --no-reload dbus-broker.service"
+teardown
+
+setup; ARGS=(--no-sudo); run FAKE_DBUS_BUS=dbus.service
+check "dbus-broker: --no-sudo enables nothing" lacks "$calls" "enable --no-reload dbus-broker"
+check "dbus-broker: --no-sudo runs no sudo" lacks "$calls" "sudo "
+check "dbus-broker: --no-sudo warns what dbus-daemon costs" \
+    has "$output" "dbus-daemon runs the system and session buses, which can leave apps waiting 2 minutes for the portal when you log in right after logging out; run setup without --no-sudo to switch to dbus-broker"
+check "dbus-broker: --no-sudo's warning isn't fatal" test "$status" -eq 0
+teardown
+
+setup; ARGS=(--no-install); run FAKE_DBUS_BUS=dbus.service
+check "dbus-broker: --no-install leaves the bus alone" lacks "$calls" "dbus-broker.service"
+teardown
+
+setup; ARGS=(); run FAKE_DBUS_BUS=dbus.service FAKE_DBUS_ENABLE_FAILS=1
+check "dbus-broker: a failed enable isn't fatal" test "$status" -eq 0
+check "dbus-broker: a failed enable says what systemctl said" \
+    has "$output" "Failed to enable unit: File /etc/systemd/system/dbus.service already exists"
+check "dbus-broker: and what it costs" \
+    has "$output" "couldn't enable dbus-broker for the system bus, so dbus-daemon still runs it, which can leave apps waiting 2 minutes"
+check "dbus-broker: and for the session buses" has "$output" "couldn't enable dbus-broker for the session bus"
+check "dbus-broker: claims no switch" lacks "$output" "after a reboot, in place of dbus-daemon"
+teardown
+
+setup; ARGS=(); run FAKE_DBUS_BUS=dbus.service FAKE_MISSING=dbus-broker
+check "dbus-broker: none to install isn't fatal" test "$status" -eq 0
+check "dbus-broker: none to install says so" has "$output" "couldn't install dbus-broker, so dbus-daemon still runs the system and session buses"
+check "dbus-broker: none to install enables none" lacks "$calls" "enable --no-reload dbus-broker"
+teardown
+
 # Without the copr plugin there's no COPR, and that costs only the bar.
 setup; ARGS=(); run SETUP_OS=redhat FAKE_DNF_PLUGIN_FAILS=1
 check "a missing copr plugin isn't fatal" test "$status" -eq 0

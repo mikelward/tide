@@ -7,6 +7,13 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **setup switches any distro's buses to dbus-broker** (2026-11-13), not
+  only Debian's and Ubuntu's, wherever systemd says dbus-daemon runs one;
+  Fedora and Arch use dbus-broker already, so there it does nothing. Other
+  systems get a warning with the commands, and one whose systemd can't say
+  which unit runs the bus is left alone. The system enable passes
+  `--no-reload`, so nothing changes until a reboot. Reversible:
+  `use_dbus_broker` in `install/tide-setup`.
 - **The Bar page's Icons list leaves out the pills** (2026-11-12): the
   presenter, sharing and mic pills and tidewm's config-errors warning show
   only while they have something to say, so hiding one would hide that

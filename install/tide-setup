@@ -1563,6 +1563,99 @@ join_video_group() {
     fi
 }
 
+# dbus-broker, not dbus-daemon, runs the system and session buses (tide
+# SPEC.md §5.4). dbus-daemon can miss that a unit it asked systemd to start
+# for a D-Bus name failed, and then holds every request for that name for
+# its service_start_timeout, 2 minutes on the session bus. A login straight
+# after a logout met one such: the old session's portal had asked for its
+# GTK backend as the display went, and the new session's apps waited on
+# the portal for 2 minutes. dbus-broker hears the failure from systemd and
+# fails the request at once. Fedora and Arch use it already; Debian and
+# Ubuntu package it but keep dbus-daemon.
+#
+# Its unit says Alias=dbus.service, so enabling it puts that alias in /etc,
+# ahead of dbus-daemon's dbus.service; Debian's package enables it as it
+# installs, too. Nothing is stopped or restarted: the running bus can't be
+# replaced under a session, so the switch takes effect at the next boot.
+# --no-reload keeps the running system manager as it is until then.
+
+# dbus_broker_is SCOPE: whether dbus-broker is the system bus (SCOPE
+# system) or the session bus (SCOPE user), now or from the next boot.
+dbus_broker_is() {
+    if test "$1" = system; then
+        test "$_db_system_unit" = dbus-broker.service && return 0
+        _db_enabled=$(systemctl is-enabled dbus-broker.service 2>/dev/null)
+    else
+        # The user manager may not be reachable (--no-sudo over ssh, say);
+        # then --global is-enabled answers alone.
+        test "$(systemctl --user show --property=Id --value dbus.service 2>/dev/null)" = dbus-broker.service \
+            && return 0
+        _db_enabled=$(systemctl --global is-enabled dbus-broker.service 2>/dev/null)
+    fi
+    # is-enabled fails, saying why on stderr, for a unit that isn't
+    # installed, which isn't enabled either.
+    test "$_db_enabled" = enabled
+}
+
+use_dbus_broker() {
+    is_command systemctl || return 0
+    if ! _db_system_unit=$(systemctl show --property=Id --value dbus.service 2>&1); then
+        warn "couldn't ask systemd which program runs the system bus ($(printf '%s\n' "$_db_system_unit" | tail -n 1)), so it's left as it is"
+        return 0
+    fi
+    _db_scopes=
+    dbus_broker_is system || _db_scopes=system
+    dbus_broker_is user || _db_scopes="$_db_scopes user"
+    _db_scopes=${_db_scopes# }
+    case "$_db_scopes" in
+        "") detail "dbus-broker runs the system and session buses already"; return 0 ;;
+        system) _db_buses="system bus" ;;
+        user) _db_buses="session bus" ;;
+        *) _db_buses="system and session buses" ;;
+    esac
+    _db_why="which can leave apps waiting 2 minutes for the portal when you log in right after logging out"
+    if test "$SUDO" = no; then
+        warn "dbus-daemon runs the $_db_buses, $_db_why; run $SETUP_COMMAND without --no-sudo to switch to dbus-broker"
+        return 0
+    fi
+    case "$(detect_os)" in
+        debian | redhat | arch) ;;
+        *)
+            warn "dbus-daemon runs the $_db_buses, $_db_why; install dbus-broker, run 'sudo systemctl enable dbus-broker.service' and 'sudo systemctl --global enable dbus-broker.service', and reboot"
+            return 0
+            ;;
+    esac
+    pkg_begin "$(pkg_manager)" "Installing dbus-broker, to run the $_db_buses"
+    _db_status=0
+    install_all dbus-broker || _db_status=$?
+    pkg_end
+    if test "$_db_status" -ne 0; then
+        warn "couldn't install dbus-broker, so dbus-daemon still runs the $_db_buses, $_db_why"
+        return 0
+    fi
+    _db_switched=
+    for _db_scope in $_db_scopes; do
+        if test "$_db_scope" = system; then
+            set -- systemctl enable --no-reload dbus-broker.service
+            _db_bus="system bus"
+        else
+            set -- systemctl --global enable dbus-broker.service
+            _db_bus="session bus"
+        fi
+        if sudo_logged "$@"; then
+            _db_switched="${_db_switched:+$_db_switched and }$_db_bus"
+        else
+            warn "couldn't enable dbus-broker for the $_db_bus, so dbus-daemon still runs it, $_db_why"
+        fi
+    done
+    if test -n "$_db_switched"; then
+        case "$_db_switched" in
+            *" and "*) _db_switched="system and session buses" ;;
+        esac
+        info "dbus-broker runs the $_db_switched after a reboot, in place of dbus-daemon"
+    fi
+}
+
 # install_quickshell installs Quickshell in a step of its own, so a distro
 # that doesn't package it costs only tide's bar, not the rest. Installed
 # from the distro, it's a package step (see pkg_end); built, the build
@@ -7102,6 +7195,9 @@ else
         build_hyprland || hyprland_build_kept \
             || warn "Hyprland $MIN_HYPRLAND or later couldn't be built; rerun $SETUP_COMMAND to retry"
     fi
+fi
+if test "$INSTALL" != no; then
+    use_dbus_broker
 fi
 check_compositors
 install_tide
