@@ -459,6 +459,34 @@ flowchart TD
   - The journal gets, as `tide-splash`, each of those with how long it
     took, so a slow start is measured.
   - It takes no keys. tidewm's session has none yet (TODO.md).
+- **A boot splash comes before it** (maintainer, 2026-11-13), with
+  `tide-setup --splash`: a Plymouth theme, `plymouth/tide`, of tide's logo
+  and name on black, with a spinner under them. Every screen from power on
+  to the screensaver is in `docs/mocks/startup.png`.
+  - It's drawn by Plymouth's own `two-step` plugin, from images
+    `plymouth/render.js` draws (`make splash-images`). No script runs at
+    boot.
+  - The background is black from the initramfs on, as is the greeter's
+    first frame, so neither shows a flash.
+  - An encrypted disk asks for its passphrase in the spinner's place.
+    Plymouth draws the field, then the prompt under it, then the keyboard
+    layout and "Caps Lock is on" in a row. The login screen and the lock
+    copy that order (§10). The layout's name comes from the distro's own
+    `keymap-render.png`, copied from its spinner theme, since it must match
+    the Plymouth that draws it. Plymouth can't tell when there's no
+    keyboard, so the splash never says so.
+  - Restart and shut down show it too.
+  - setup installs Plymouth with the plugin, then the theme (`make
+    install-splash`), makes it the default and rebuilds the initramfs. On
+    Debian and Ubuntu the default is the `default.plymouth` alternative,
+    and a `Theme=` in `plymouthd.conf` is changed to tide's, since it
+    wins. On Fedora and Arch it's `plymouth-set-default-theme`. A run that
+    finds the theme and the default in place rebuilds nothing, unless a
+    note in `/var/lib/setup-tide` says the last run's rebuild didn't
+    finish.
+  - It warns when the kernel command line has no `splash` (or Fedora's
+    `rhgb`), and on Arch when mkinitcpio's `HOOKS` has no `plymouth`:
+    either way the boot shows text.
 - **The session entry** is `tide.desktop` in `wayland-sessions`, so
   the current display manager lists it too (M2).
 - **Each entry's `Exec` is `tide-session hyprland` or `tide-session
@@ -3588,8 +3616,9 @@ today's `hypridle.conf`:
 
 **The screensaver** is the lock's idle face, not a separate program:
 
-- a black screen with the hostname, a large time and the date in low
-  contrast;
+- the password face's top two lines, the hostname and the date and
+  time, in the same sizes and weights, white on black, with no user,
+  field or buttons (maintainer, 2026-11-13);
 - it moves to a new spot each minute to spare OLED panels;
 - any input brings back the password face, and a typed key lands in the
   password field.
@@ -3771,9 +3800,11 @@ talk, a demo, or a meeting room's screen.
   monitor's, or one with no keyboard to type with, as when a monitor's
   KVM has switched its USB keyboard to another machine. A failed attempt's
   red border wins over both.
-  - With no keyboard, the layout's place under the field says "No
-    keyboard", on every face (maintainer, 2026-11-13). A keyboard brings
-    the layout back. The line under it keeps PAM's message or the failure.
+  - With no keyboard, "No keyboard" sits beside the layout under the
+    field, on every face, where "Caps Lock is on" goes (maintainer,
+    2026-11-13). Hyprland names no layout with no keyboard, so the last
+    one named stays. The line under the row keeps PAM's message or the
+    failure.
   - A keyboard is an input device udev tags `ID_INPUT_KEYBOARD`: one with
     every key from Esc to D. A power button isn't one. A USB receiver's
     keyboard part is, paired or not.
@@ -3801,7 +3832,13 @@ talk, a demo, or a meeting room's screen.
   field, in dim text after a keyboard icon ("Dvorak"), following a switch,
   so a failed password isn't a layout mystery. It sits where the boot
   splash names it, so the two look alike (maintainer, 2026-11-13).
-  The field is 240 px wide. Main is
+  The field is 240 px wide.
+- **Caps Lock:** "Caps Lock is on", in the bar's urgent yellow, sits beside
+  the layout while it's on, as on the boot splash. `tide caps-lock` reads
+  the keyboards' Caps Lock lights, which Hyprland and tidewm both set. The
+  lock and the greeter run it at start, when a keyboard comes or goes, and
+  each time Caps Lock is released. A keyboard with no light can't say, so
+  nothing shows for it. "No keyboard" wins over it. Main is
   Hyprland's word: the keyboard last typed on. It's read again on each
   switch, after each failed password, and when a keyboard comes or goes,
   so an unplugged keyboard's layout doesn't linger.

@@ -29,7 +29,9 @@ Where dbus-daemon runs the message buses (Debian, Ubuntu), it installs and
 enables dbus-broker in its place, from the next boot (SPEC.md §5.4).
 It leaves the display manager as it is, with tide as one more session;
 `--greeter` makes greetd, with tide's greeter, the login screen, and
-`--no-greeter` puts back the one it replaced. `--help` lists the rest.
+`--no-greeter` puts back the one it replaced. `--splash` makes tide's
+boot splash, its logo and a spinner on black, the one shown from the next
+boot (SPEC.md §5.3). `--help` lists the rest.
 `git pull` and run it again to update.
 
 Each push to main is also a release, tagged `v0.MINOR.<commits>`, on the

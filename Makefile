@@ -99,7 +99,7 @@ QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test test-fast test-lua test-selftest test-install test-accents fcitx5 build install install-shell install-session mocks palette chars cities unicode connector-zip unshallow-check release-tag dist
+.PHONY: test test-fast test-lua test-selftest test-install test-accents fcitx5 build install install-shell install-session install-splash splash-images mocks palette chars cities unicode connector-zip unshallow-check release-tag dist
 test: test-fast test-selftest test-install
 
 # install/tide-setup's tests, one target each, so -j runs them side by side.
@@ -113,6 +113,7 @@ INSTALL_TESTS = \
 	install/tide-setup_greeter_pam_modules_test \
 	install/tide-setup_greetd_unit_test \
 	install/tide-setup_greetd_test \
+	install/tide-setup_splash_test \
 	install/tide-setup_pam_test
 # Phony here, below the list: a .PHONY above it would see it empty.
 .PHONY: $(INSTALL_TESTS)
@@ -158,6 +159,7 @@ test-fast: test-lua
 	sh .github/workflows/ci_test.sh
 	sh .github/workflows/release_test.sh
 	sh install/pins_test.sh
+	sh plymouth/theme_test.sh
 	$(MAKE) test-accents
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
 	$(QMLLINT) $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs))
@@ -350,6 +352,24 @@ connector-zip: unshallow-check
 # found through NODE_PATH; a project-local one works without it.
 mocks:
 	NODE_PATH="$$(npm root -g)" node docs/mocks/render.js
+
+# The boot splash's images (plymouth/tide), drawn from plymouth/images.html.
+splash-images:
+	NODE_PATH="$$(npm root -g)" node plymouth/render.js
+
+# The boot splash theme, where Plymouth looks for themes whatever PREFIX is
+# (SPEC.md §5.3). The keyboard layout's names come prerendered, in a
+# keymap-render.png that must match the Plymouth it runs under, so it's
+# the distro's own, from its spinner theme, copied (not linked: the
+# initramfs gets this folder alone). Without one, the disk unlock shows no
+# layout. tide-setup --splash runs this as root, then makes it the default.
+SPLASH_DIR = $(DESTDIR)/usr/share/plymouth/themes/tide
+DISTRO_KEYMAP_RENDER ?= /usr/share/plymouth/themes/spinner/keymap-render.png
+install-splash:
+	install -d "$(SPLASH_DIR)"
+	install -m 644 plymouth/tide/tide.plymouth plymouth/tide/*.png "$(SPLASH_DIR)/"
+	if test -f "$(DISTRO_KEYMAP_RENDER)"; then install -m 644 "$(DISTRO_KEYMAP_RENDER)" "$(SPLASH_DIR)/keymap-render.png"; \
+	else rm -f "$(SPLASH_DIR)/keymap-render.png"; fi
 
 # Releases (.github/workflows/release.yml): every push to main is one,
 # tagged v0.MINOR.<commits on main>, as tidewm's and tideco's are. Bump
