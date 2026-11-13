@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: boot splash</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .faces { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 22px; }
+  .face {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    color: #ededf1;
+    box-shadow: 0 0 0 1px #2a2a30;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
+  .brand svg { width: 44px; height: 44px; }
+  .brand span { font-size: 34px; font-weight: 600; letter-spacing: -.02em; color: #ededf1; }
+  .face > .spin, .face > .prompt { margin-top: 0; }
+  .tag { position: absolute; left: 14px; top: 12px; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.28); }
+  /* The spinner: a quarter arc in fg-dim over a faint ring, the frames
+     plymouth/tide/generate.mjs draws. */
+  .spin { width: 22px; height: 22px; }
+  .spin .track { stroke: #2a2a2f; }
+  .spin .arc { stroke: #9a9aa6; }
+  .msg { position: absolute; left: 0; right: 0; top: calc(50% + 70px); text-align: center; font-size: 11px; color: #9a9aa6; }
+  .prompt { font-size: 12px; color: #9a9aa6; margin-top: 10px; }
+  .entry { display: flex; align-items: center; gap: 8px; }
+  .entry .ms { font-size: 18px; color: #9a9aa6; }
+  .box { width: 200px; height: 30px; border-radius: 8px; background: #2a2a2f; box-shadow: inset 0 0 0 1px rgba(255,255,255,.09); display: flex; align-items: center; padding: 0 10px; gap: 5px; }
+  .box i { width: 6px; height: 6px; border-radius: 50%; background: #ededf1; }
+  .kbrow { display: flex; align-items: center; gap: 14px; margin-top: 10px; font-size: 12px; color: rgba(255,255,255,.55); }
+  .kbrow span { display: flex; align-items: center; gap: 5px; }
+  .kbrow .ms { font-size: 16px; }
+  .kbrow .caps { color: #f8e45c; font-weight: 600; }
+  .face > .caps { margin-top: 8px; font-size: 10.5px; font-weight: 700; color: #f8e45c; display: flex; align-items: center; gap: 4px; }
+  .caps .ms { font-size: 14px; }
+  .kb { position: absolute; left: 0; right: 0; bottom: 18%; text-align: center; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: rgba(255,255,255,.4); }
+</style>
+</head>
+<body class="sheet" data-width="1360" data-scale="2">
+<h1>Boot splash</h1>
+<p class="lede">From the boot loader to the login screen, tide shows its logo and name on black, with a small spinner below. The black matches the firmware’s screen and the greeter’s first frame, so one follows another without a flash. It is a Plymouth theme on Plymouth’s own <code>two-step</code> plugin, which <code>tide-setup --splash</code> installs and makes the default.</p>
+<div class="faces">
+  <div>
+    <div class="face">
+      <span class="tag">Boot</span>
+      <div class="brand"><svg viewBox="0 0 16 16" fill="none" stroke="#3584e4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0"/><path d="M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/></svg><span>tide</span></div>
+      <svg class="spin" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round">
+        <circle class="track" cx="12" cy="12" r="10"/>
+        <path class="arc" d="M12 2 A10 10 0 0 1 22 12"/>
+      </svg>
+    </div>
+    <div class="cap"><b>Boot.</b> tide’s two waves, in the bar’s accent blue, and its name sit in the middle of every screen. The spinner below them is in the bar’s dim text color over a faint ring, and turns once a second. It shows from the moment the initramfs starts until greetd’s greeter draws, or the display manager you kept.</div>
+  </div>
+  <div>
+    <div class="face">
+      <span class="tag">Unlock the disk</span>
+      <div class="brand"><svg viewBox="0 0 16 16" fill="none" stroke="#3584e4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0"/><path d="M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/></svg><span>tide</span></div>
+      <div class="entry"><i class="ms">lock</i><div class="box"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="prompt">Please unlock disk nvme0n1p3_crypt</div>
+      <div class="kbrow"><span><i class="ms">keyboard</i>Dvorak</span><span class="caps"><i class="ms">keyboard_capslock</i>Caps Lock is on</span></div>
+    </div>
+    <div class="cap"><b>Unlock the disk.</b> An encrypted disk asks for its passphrase in place of the spinner, under the logo. Each key typed adds a dot. Under the field are cryptsetup’s prompt, then the keyboard layout the initramfs types in and, when it’s on, Caps Lock. Plymouth fixes that order.</div>
+  </div>
+  <div>
+    <div class="face">
+      <span class="tag">Boot · a message</span>
+      <div class="brand"><svg viewBox="0 0 16 16" fill="none" stroke="#3584e4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0"/><path d="M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/></svg><span>tide</span></div>
+      <svg class="spin" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" style="transform: rotate(150deg)">
+        <circle class="track" cx="12" cy="12" r="10"/>
+        <path class="arc" d="M12 2 A10 10 0 0 1 22 12"/>
+      </svg>
+      <div class="msg">Checking disk /dev/nvme0n1p2 (34% done)</div>
+    </div>
+    <div class="cap"><b>A message.</b> What the boot sends Plymouth to show, such as a disk check’s progress, goes under the spinner. Esc swaps the splash for the boot’s text messages, and back.</div>
+  </div>
+  <div>
+    <div class="face">
+      <span class="tag">Restart and shut down</span>
+      <div class="brand"><svg viewBox="0 0 16 16" fill="none" stroke="#3584e4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0"/><path d="M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/></svg><span>tide</span></div>
+      <svg class="spin" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" style="transform: rotate(270deg)">
+        <circle class="track" cx="12" cy="12" r="10"/>
+        <path class="arc" d="M12 2 A10 10 0 0 1 22 12"/>
+      </svg>
+    </div>
+    <div class="cap"><b>Restart and shut down.</b> The same spinner, while services stop. Updates installed at boot (an offline update on Fedora) show a progress bar under it, with Plymouth’s own title.</div>
+  </div>
+</div>
+</body>
+</html>
