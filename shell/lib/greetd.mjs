@@ -17,8 +17,12 @@
 //   { type: "readyToLaunch" }          logged in; launch() hands it the session
 //   { type: "launched" }               greetd took the session; time to exit
 //   { type: "error", message }         anything else that ended the login
+//   { type: "debug", message }         for the journal only
 // A login that ends in a failure or an error is cancelled at greetd, which
-// otherwise keeps it half set up and refuses the next create_session.
+// otherwise keeps it half set up and refuses the next create_session. Where
+// greetd has already ended it, as 0.10 does a login PAM refused, that cancel
+// fails ("unable to send message: Connection refused") and the next login
+// starts all the same, so its failure is only logged.
 
 export const INITIAL = Object.freeze({
     // "inactive", "authenticating", "ready" (logged in, not launched),
@@ -30,7 +34,8 @@ export const INITIAL = Object.freeze({
     // Whether this login already started over once on "a session is
     // already being configured", so a second one is an error, not a loop.
     restarted: false,
-    // The requests still waiting for a reply, oldest first: { type, login }.
+    // The requests still waiting for a reply, oldest first: { type, login },
+    // and `afterFailure` on a cancel that tidies up a login that failed.
     waiting: Object.freeze([]),
 });
 
@@ -39,18 +44,18 @@ function result(state, requests, events) {
 }
 
 // Sends `request` for the state's login.
-function sending(state, requests, request) {
+function sending(state, requests, request, afterFailure = false) {
     requests.push(request);
-    return Object.assign({}, state, {
-        waiting: state.waiting.concat([{ type: request.type, login: state.login }]),
-    });
+    const waiting = { type: request.type, login: state.login };
+    if (afterFailure) waiting.afterFailure = true;
+    return Object.assign({}, state, { waiting: state.waiting.concat([waiting]) });
 }
 
 // Ends the current login at greetd: a new login, with a cancel_session sent
-// for it.
-function cancelling(state, requests) {
+// for it. `afterFailure` for a login greetd may have ended already.
+function cancelling(state, requests, afterFailure = false) {
     const next = Object.assign({}, state, { phase: "inactive", login: state.login + 1, responseRequired: false });
-    return sending(next, requests, { type: "cancel_session" });
+    return sending(next, requests, { type: "cancel_session" }, afterFailure);
 }
 
 // Starts a login for `user`, cancelling whatever greetd has going first.
@@ -121,6 +126,9 @@ export function received(state, line) {
     if (head.type === "cancel_session") {
         // Nothing waits on a cancel, but a failed one leaves greetd's
         // session in place, so the next login would be refused.
+        if (reply.type === "error" && head.afterFailure) {
+            return result(s, [], [{ type: "debug", message: `couldn't cancel the login after it failed: ${reply.description}` }]);
+        }
         if (reply.type === "error") {
             return result(s, [], [{ type: "error", message: `couldn't cancel the login: ${reply.description}` }]);
         }
@@ -174,7 +182,7 @@ function conversed(state, reply) {
         s = sending(s, requests, { type: "create_session", username: user });
         return result(s, requests, []);
     }
-    const s = cancelling(state, requests);
+    const s = cancelling(state, requests, true);
     if (reply.type === "error" && reply.error_type === "auth_error") {
         return result(s, requests, [{ type: "authFailure", message: String(reply.description ?? "") }]);
     }

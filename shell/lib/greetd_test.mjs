@@ -179,6 +179,34 @@ test("a failed cancel is reported", () => {
     assert.deepEqual(r.events, [{ type: "error", message: "couldn't cancel the login: pam_end failed" }]);
 });
 
+// greetd 0.10 has already ended a login PAM refused: the cancel that
+// follows reaches its gone worker and fails ("unable to send message:
+// Connection refused"). The person still hears that the password was wrong,
+// not that, and the next login starts as usual.
+test("a failed cancel after a wrong password is only logged", () => {
+    const refused = { type: "error", error_type: "error", description: "unable to send message: Connection refused (os error 111)" };
+    const r = run([
+        (s) => createSession(s, "probe"),
+        ["create_session", PASSWORD],
+        (s) => respond(s, "wrong"),
+        ["post_auth_message_response", WRONG],
+        ["cancel_session", refused],
+        (s) => createSession(s, "probe"),
+        ["create_session", PASSWORD],
+    ]);
+    assert.deepEqual(r.events.map((e) => e.type), ["authMessage", "authFailure", "debug", "authMessage"]);
+    assert.equal(r.events[2].message, "couldn't cancel the login after it failed: unable to send message: Connection refused (os error 111)");
+    assert.equal(r.state.phase, "authenticating");
+});
+
+test("a failed cancel after another error is only logged", () => {
+    const r = run([(s) => createSession(s, "probe"),
+        ["create_session", { type: "error", error_type: "error", description: "session not active" }],
+        ["cancel_session", { type: "error", error_type: "error", description: "pam_end failed" }]]);
+    assert.deepEqual(r.events, [{ type: "error", message: "session not active" },
+        { type: "debug", message: "couldn't cancel the login after it failed: pam_end failed" }]);
+});
+
 test("a login left configured is cancelled and started over, once", () => {
     const busy = { type: "error", error_type: "error", description: "a session is already being configured" };
     const r = run([
