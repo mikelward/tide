@@ -71,6 +71,31 @@ test("past the last monitor, nothing", function()
     eq(mon, nil, "none to the left either")
 end)
 
+test("up and down are the same rule on turned boxes", function()
+    -- A over B: A in tile, B with one window.
+    local m = direction.turned({
+        { name = "A", area = box(0, 34, 1920, 1046), box = box(0, 0, 1920, 1080), tiles = {
+            tile("a1", 0, 0, 1056, 1080), tile("a2", 1056, 0, 864, 540), tile("a3", 1056, 540, 864, 540),
+        } },
+        { name = "B", box = box(0, 1080, 1920, 1080), tiles = { tile("b1", 0, 1080, 1920, 1080) } },
+    })
+    eq(m[1].area.y, 34, "the area is kept as it was")
+    eq(m[1].tiles[2].address, "a2", "other fields are kept")
+    local turned = direction.turn
+    local hit, mon = direction.find(turned(box(1056, 0, 864, 540)), "A", m, 1)
+    eq(hit.address, "a3", "below the stack's top is its bottom")
+    eq(mon.name, "A", "on the same monitor")
+    hit = direction.find(turned(box(1056, 540, 864, 540)), "A", m, -1)
+    eq(hit.address, "a2", "and back up")
+    hit, mon = direction.find(turned(box(1056, 540, 864, 540)), "A", m, 1)
+    eq(mon.name, "B", "past the bottom, the monitor below")
+    eq(hit.address, "b1", "its window")
+    hit, mon = direction.find(turned(box(0, 1080, 1920, 1080)), "B", m, -1)
+    eq(hit.address, "a1", "up from B, the window sharing the most width at A's bottom edge")
+    hit, mon = direction.find(turned(box(0, 0, 1056, 1080)), "A", m, -1)
+    eq(mon, nil, "nothing above the top monitor")
+end)
+
 test("a monitor that way with no windows is picked with no window", function()
     local m = pair()
     m[2].tiles = {}

@@ -11,6 +11,16 @@ once you have agreed with it or reversed it.
   (2026-11-13), through `tide caps-lock`, since tidewm's IPC has no Caps
   Lock state and Hyprland reports it without an event. A keyboard with no
   light can't say.
+- **Up and down in the presets** (2026-11-13): i3's, sway's and bspwm's
+  up and down keys (`K`/`L`, `J`/`K`, the arrows) are now the window
+  above and below, as they are there, not up and down the stack; dwm's
+  and xmonad's `J`/`K` stay the stack.
+- **Arrows need a window that shares the row** (2026-11-13): on the
+  focused monitor, `Super` and an arrow only goes to a window sharing some
+  height (width, going up or down), so from the master `Super+Up` goes to
+  the monitor above, not the top of the stack. This changes left and right
+  too, in a layout with the master on top. tidewm's own `focus up` still
+  takes the stack.
 
 - **setup switches any distro's buses to dbus-broker** (2026-11-13), not
   only Debian's and Ubuntu's, wherever systemd says dbus-daemon runs one;
@@ -2138,7 +2148,7 @@ Deferred: it needs a Hyprland patch, and the MVP comes first.
   `m_wantsInitialFullscreen`, and `fullscreen_client` stays 0 because the
   request was never applied.
 - Until then, a window that opens fullscreen (a game, a video player
-  started with `--fullscreen`) comes up tiled; `Super+Shift+Up` makes it
+  started with `--fullscreen`) comes up tiled; `Super+Shift+X` makes it
   fullscreen.
 - Plan: expose the request as a window field (a few lines in
   `LuaWindow.cpp`), next to the pointer-button event (§14.3); the guard

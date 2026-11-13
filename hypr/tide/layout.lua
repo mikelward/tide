@@ -103,9 +103,10 @@ end
 
 local config = copy(M.defaults)
 local workspaces = {}
--- The window Super+Shift+Left or Right is moving onto another monitor, as
--- { address, ws, d, from }: where it lands in that workspace's order
--- (direction.landing) once its relayout sees it. Set by move_side, taken by
+-- The window Super+Shift and an arrow is moving onto another monitor, as
+-- { address, ws, d, from, vertical }: where it lands in that workspace's
+-- order (direction.landing, on turned boxes going up or down) once its
+-- relayout sees it. Set by move_side, taken by
 -- the next relayout of `ws` that has the window new to it.
 local arriving
 
@@ -302,7 +303,7 @@ local function recalculate(ctx)
     -- The first relayout of a workspace, after a config load too, takes
     -- Hyprland's order as it is.
     local master = st.order[1]
-    -- A window Super+Shift+Left or Right moved here lands at the edge it
+    -- A window Super+Shift and an arrow moved here lands at the edge it
     -- came in by. Seen anywhere else first, it went elsewhere, and later
     -- goes where new windows go.
     if arriving and arriving.ws ~= id and index_of(now, arriving.address) then
@@ -315,6 +316,11 @@ local function recalculate(ctx)
         end
         arriving = nil
         local slots = geometry.arrange(st.mode, ctx.area, #order + 1, st.opts[st.mode], single_rules(st))
+        if a.vertical then
+            for i, b in ipairs(slots) do
+                slots[i] = direction.turn(b)
+            end
+        end
         return direction.landing(slots, a.d, a.from)
     end
     st.order = st.seen and follow(st, now, place_new) or now
@@ -572,8 +578,10 @@ end
 -- The monitors as direction.find takes them, with the tiles each shows in
 -- layout order, plus the focused one's name and the focused window: nil if
 -- Hyprland can't be read. A monitor showing a fullscreen window offers no
--- tiles, since they're behind it.
-local function sides()
+-- tiles, since they're behind it. With `vertical`, the boxes are turned
+-- (direction.turned), so the rule goes up and down; the focused window's
+-- `from` is its box as the rule sees it, and `box` stays as it is.
+local function sides(vertical)
     local ok_mon, mons = pcall(hl.get_monitors)
     local ok_win, wins = pcall(hl.get_windows)
     if not (ok_mon and type(mons) == "table" and ok_win and type(wins) == "table") then
@@ -644,25 +652,49 @@ local function sides()
         end
     end
     here.tiles = from_tiles
+    if mine then
+        mine.from = mine.box
+    end
+    if vertical then
+        list = direction.turned(list)
+        for _, m in ipairs(list) do
+            if m.name == here.name then
+                here = m
+            end
+        end
+        if mine and mine.box then
+            mine.from = direction.turn(mine.box)
+        end
+    end
     return list, here, mine
 end
 
--- Super+Left / Super+Right (d = -1 / 1): focus the window that way, going
--- on at the monitor's edge to the nearest window on the next monitor that
--- way, or to that monitor itself if it shows none. Past the last monitor,
--- nothing.
-function M.focus_side(d)
-    local list, here, mine = sides()
+-- Super and an arrow (d = -1 left or up, 1 right or down): focus the
+-- window that way, going on at the monitor's edge to the nearest window on
+-- the next monitor that way, or to that monitor itself if it shows none.
+-- Past the last monitor, nothing.
+local function focus_way(d, vertical)
+    local list, here, mine = sides(vertical)
     if not list then
         return
     end
-    local from = mine and mine.box or here.box
+    local from = mine and mine.from or here.box
     local tile, mon = direction.find(from, here.name, list, d)
     if tile then
         hl.dispatch(hl.dsp.focus({ window = selector(tile.address) }))
     elseif mon then
         hl.dispatch(hl.dsp.focus({ monitor = mon.name }))
     end
+end
+
+-- Super+Left / Super+Right (d = -1 / 1).
+function M.focus_side(d)
+    focus_way(d, false)
+end
+
+-- Super+Up / Super+Down (d = -1 / 1).
+function M.focus_vertical(d)
+    focus_way(d, true)
 end
 
 -- A floating window goes onto the next monitor that way, still floating,
@@ -675,6 +707,7 @@ local function move_float(d, list, here, mine)
     if not mon or mon.active == nil then
         return
     end
+    -- Turned boxes leave `area` as it is, so this is the same either way.
     local to = direction.place(mine.box, here.area, mon.area)
     local w = selector(mine.address)
     hl.dispatch(hl.dsp.window.move({ monitor = mon.name, follow = true, window = w }))
@@ -684,15 +717,14 @@ local function move_float(d, list, here, mine)
     hl.dispatch(hl.dsp.window.move({ x = to.x, y = to.y, window = w }))
 end
 
--- Super+Shift+Left / Super+Shift+Right: move the focused window the same
--- way. On its monitor a tile swaps with the window focus_side would pick;
--- at the edge it goes onto the next monitor, joining the workspace there
--- at the edge it came in by, and keeps focus. A floating window goes
--- straight to the next monitor (move_float). Past the last monitor,
--- nothing.
-function M.move_side(d)
+-- Super+Shift and an arrow: move the focused window the same way. On its
+-- monitor a tile swaps with the window focus_way would pick; at the edge
+-- it goes onto the next monitor, joining the workspace there at the edge
+-- it came in by, and keeps focus. A floating window goes straight to the
+-- next monitor (move_float). Past the last monitor, nothing.
+local function move_way(d, vertical)
     arriving = nil
-    local list, here, mine = sides()
+    local list, here, mine = sides(vertical)
     if not list or not mine or not mine.box or mine.ws == nil then
         return
     end
@@ -700,16 +732,26 @@ function M.move_side(d)
         move_float(d, list, here, mine)
         return
     end
-    local tile, mon = direction.find(mine.box, here.name, list, d)
+    local tile, mon = direction.find(mine.from, here.name, list, d)
     if not mon then
         return
     end
     if mon == here then
         hl.dispatch(hl.dsp.window.swap({ target = selector(tile.address) }))
     elseif mon.active ~= nil then
-        arriving = { address = mine.address, ws = mon.active, d = d, from = mine.box }
+        arriving = { address = mine.address, ws = mon.active, d = d, from = mine.from, vertical = vertical }
         hl.dispatch(hl.dsp.window.move({ monitor = mon.name, follow = true }))
     end
+end
+
+-- Super+Shift+Left / Super+Shift+Right (d = -1 / 1).
+function M.move_side(d)
+    move_way(d, false)
+end
+
+-- Super+Shift+Up / Super+Shift+Down (d = -1 / 1).
+function M.move_vertical(d)
+    move_way(d, true)
 end
 
 -- Dragging a split edge with the pointer, no modifier held (SPEC.md §6.6).

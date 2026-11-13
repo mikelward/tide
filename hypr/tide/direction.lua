@@ -1,16 +1,52 @@
--- Left and right between windows and monitors (SPEC.md §6.6): which window
--- Super+Left and Right select, where Super+Shift+Left and Right move the
--- window, and where a moved window lands on the next monitor, tiled or
--- floating. Pure geometry
+-- Left, right, up and down between windows and monitors (SPEC.md §6.6):
+-- which window Super and an arrow selects, where Super+Shift and an arrow
+-- moves the window, and where a moved window lands on the next monitor,
+-- tiled or floating. Pure geometry
 -- on { x, y, w, h } boxes, with no Hyprland API, so it tests in plain Lua
 -- with made-up monitors. tide for macOS's direction.lua is the same rule.
 --
 -- One rule picks both a window and a monitor: of the boxes on that side,
 -- the one sharing the most height with where you are, then the one whose
 -- center is nearest, then the first listed. "On that side" means its
--- center is left (d < 0) or right (d > 0) of yours.
+-- center is left (d < 0) or right (d > 0) of yours. On your own monitor
+-- a window must also share some height with you, so the stack is not left
+-- of the master in a layout with the master on top, nor above it with the
+-- master on the left.
+--
+-- Up and down are the same rule on turned boxes (M.turned): x and y swap,
+-- and so do w and h, so "left" is up and "height" is width.
 
 local M = {}
+
+-- `b` turned on its diagonal: x and y swap, and so do w and h.
+function M.turn(b)
+    return { x = b.y, y = b.x, w = b.h, h = b.w }
+end
+
+-- `monitors`, as M.find takes them, with every box turned (M.turn): each
+-- monitor's own and its tiles'. The rule then goes up (d < 0) and down
+-- (d > 0). Other fields, `area` among them, are kept as they are.
+function M.turned(monitors)
+    local out = {}
+    for i, m in ipairs(monitors) do
+        local t = {}
+        for k, v in pairs(m) do
+            t[k] = v
+        end
+        t.box = M.turn(m.box)
+        t.tiles = {}
+        for j, tile in ipairs(m.tiles or {}) do
+            local c = {}
+            for k, v in pairs(tile) do
+                c[k] = v
+            end
+            c.box = M.turn(tile.box)
+            t.tiles[j] = c
+        end
+        out[i] = t
+    end
+    return out
+end
 
 local function center(b)
     return b.x + b.w / 2, b.y + b.h / 2
@@ -87,10 +123,10 @@ function M.next_monitor(cur, monitors, d)
     return next_one and next_one.monitor
 end
 
--- Where Super+Left or Right goes from `box` on monitor `here`. `monitors`
+-- Where Super and an arrow goes from `box` on monitor `here`. `monitors`
 -- is every monitor, each { name, box, tiles }, its tiles each { address,
 -- box }, in layout order. Returns the tile picked and its monitor: on this
--- monitor if one is that way; at its edge, on the next monitor that way,
+-- monitor if one sharing some height with `box` is that way; at its edge, on the next monitor that way,
 -- at the edge you come in by and picked against `box` as well; nil for the
 -- tile if that monitor has none; nil for both with no monitor that way.
 function M.find(box, here, monitors, d)
@@ -103,7 +139,13 @@ function M.find(box, here, monitors, d)
     if not cur then
         return nil
     end
-    local hit = M.pick(box, cur.tiles, d)
+    local level = {}
+    for _, t in ipairs(cur.tiles) do
+        if M.overlap(box, t.box) > 0 then
+            level[#level + 1] = t
+        end
+    end
+    local hit = M.pick(box, level, d)
     if hit then
         return hit, cur
     end
