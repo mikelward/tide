@@ -14,7 +14,7 @@ const NAMES = new Set([
     "grow_master", "shrink_master", "add_master", "remove_master", "swap_master", "focus_down", "focus_up",
     "move_down", "move_up", "maximize", "fullscreen", "restore", "float", "floating_rule", "resize_mode",
     "previous_workspace", "next_workspace", "move_to_previous_workspace", "move_to_next_workspace",
-    "focus_left", "focus_right", "move_left", "move_right", "home_or_back", "home", "last_other_workspace", "last_layout",
+    "focus_left", "focus_right", "move_left", "move_right", "focus_above", "focus_below", "move_above", "move_below", "home_or_back", "home", "last_other_workspace", "last_layout",
     "go_to_workspace", "move_to_workspace", "attention", "screenshot", "screenshot_window", "screenshot_region",
     "mute_microphone", "reload",
 ]);

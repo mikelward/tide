@@ -93,7 +93,7 @@ local function helper(name)
 end
 for _, n in ipairs({ "cycle_next", "cycle_prev", "last_mode", "toggle_monocle", "grow", "shrink",
                      "add_master", "remove_master", "swap_with_master", "focus", "move",
-                     "focus_side", "move_side", "drag_press", "drag_release" }) do
+                     "focus_side", "move_side", "focus_vertical", "move_vertical", "drag_press", "drag_release" }) do
     M[n] = helper(n)
 end
 function M.setup(opts) M.setup_opts = opts end
@@ -853,7 +853,8 @@ test("every key in the spec is bound", function()
         "SUPER + J", "SUPER + K", "SUPER + SHIFT + J", "SUPER + SHIFT + K",
         "SUPER + Return", "SUPER + SHIFT + Return", "SUPER + backslash", "SUPER + slash", "SUPER + equal", "SUPER + minus",
         "SUPER + period", "SUPER + comma", "SUPER + grave", "SUPER + O",
-        "SUPER + Up", "SUPER + SHIFT + Up", "SUPER + Down",
+        "SUPER + Up", "SUPER + Down", "SUPER + SHIFT + Up", "SUPER + SHIFT + Down",
+        "SUPER + X", "SUPER + SHIFT + X",
         "SUPER + SHIFT + F", "SUPER + Insert", "SUPER + SHIFT + R",
         "SUPER + Tab", "SUPER + Home", "SUPER + End", "SUPER + A", "ALT + Tab",
         "SUPER + 1", "SUPER + 5", "SUPER + 9", "SUPER + SHIFT + 1", "SUPER + SHIFT + 9",
@@ -1267,29 +1268,46 @@ test("a span.lua missing a function is reported, and the keys switch one monitor
     eq("focus name:re", targets(run("SUPER + Page_Down")))
 end)
 
-test("Super+Left/Right and Super+Shift+Left/Right are the tide layout's window keys", function()
+test("Super and the arrows, with or without Shift, are the tide layout's window keys", function()
     load({ layout = FAKE_LAYOUT })
     local qs = _G.fake_layout
-    run("SUPER + Left")
-    run("SUPER + Right")
-    run("SUPER + SHIFT + Left")
-    run("SUPER + SHIFT + Right")
-    eq("focus_side -1", qs.calls[1][1] .. " " .. qs.calls[1][2])
-    eq("focus_side 1", qs.calls[2][1] .. " " .. qs.calls[2][2])
-    eq("move_side -1", qs.calls[3][1] .. " " .. qs.calls[3][2])
-    eq("move_side 1", qs.calls[4][1] .. " " .. qs.calls[4][2])
+    for _, k in ipairs({ "Left", "Right", "Up", "Down", "SHIFT + Left", "SHIFT + Right", "SHIFT + Up", "SHIFT + Down" }) do
+        run("SUPER + " .. k)
+    end
+    local want = { "focus_side -1", "focus_side 1", "focus_vertical -1", "focus_vertical 1",
+                   "move_side -1", "move_side 1", "move_vertical -1", "move_vertical 1" }
+    for i, w in ipairs(want) do
+        eq(w, qs.calls[i][1] .. " " .. qs.calls[i][2])
+    end
     eq("Focus the window to the left", bind("SUPER + Left").opts.description)
+    eq("Focus the window above", bind("SUPER + Up").opts.description)
     eq("Move the window right", bind("SUPER + SHIFT + Right").opts.description)
+    eq("Move the window down", bind("SUPER + SHIFT + Down").opts.description)
+end)
+
+test("a tide layout without up and down keeps left and right, and Hyprland's go up and down", function()
+    load({ layout = (FAKE_LAYOUT:gsub('"focus_vertical", "move_vertical", ', "")) })
+    local qs = _G.fake_layout
+    run("SUPER + Left")
+    eq("focus_side -1", qs.calls[1][1] .. " " .. qs.calls[1][2], "left is the layout's")
+    local u = bind("SUPER + Up").target
+    truthy(is_dsp(u, "focus"), "up is Hyprland's movefocus")
+    eq("up", u.args.direction)
+    eq("down", bind("SUPER + Down").target.args.direction)
+    S.active_window = { address = "0x55aa01", floating = false }
+    eq("down", run("SUPER + SHIFT + Down")[1].args.direction)
 end)
 
 test("without them, Super+Left/Right are Hyprland's movefocus and movewindow", function()
-    for _, layout in ipairs({ false, (FAKE_LAYOUT:gsub('"focus_side", "move_side", ', "")) }) do
+    for _, layout in ipairs({ false, (FAKE_LAYOUT:gsub('"focus_side", "move_side", "focus_vertical", "move_vertical", ', "")) }) do
         load(layout and { layout = layout } or nil)
         local what = layout and "an older tide layout" or "master"
         local l, r = bind("SUPER + Left").target, bind("SUPER + Right").target
         truthy(is_dsp(l, "focus"), what)
         eq("left", l.args.direction, what)
         eq("right", r.args.direction, what)
+        eq("up", bind("SUPER + Up").target.args.direction, what)
+        eq("down", bind("SUPER + Down").target.args.direction, what)
         S.active_window = { address = "0x55aa01", floating = false }
         local ml, mr = run("SUPER + SHIFT + Left"), run("SUPER + SHIFT + Right")
         truthy(is_dsp(ml[1], "window.move"), what)
@@ -1506,13 +1524,16 @@ end)
 
 test("maximize, fullscreen and restore", function()
     load()
-    local up = bind("SUPER + Up").target
-    eq("maximized", up.args.mode)
-    eq("toggle", up.args.action)
-    local sup = bind("SUPER + SHIFT + Up").target
-    eq("fullscreen", sup.args.mode)
-    local d = run("SUPER + Down")
-    eq(2, #d, "Super+Down undoes both modes")
+    local x = bind("SUPER + X").target
+    eq("maximized", x.args.mode)
+    eq("toggle", x.args.action)
+    local sx = bind("SUPER + SHIFT + X").target
+    eq("fullscreen", sx.args.mode)
+    eq("toggle", sx.args.action)
+    -- Restore has no key by default; give it one to run it.
+    load({ keys = [[return { keys = { restore = { "SUPER + Delete" } } }]] })
+    local d = run("SUPER + Delete")
+    eq(2, #d, "restore undoes both modes")
     local modes = {}
     for _, x in ipairs(d) do
         eq("unset", x.args.action)
@@ -3410,8 +3431,8 @@ test("keys a fixed binding or another given binding has are refused, and said so
 end)
 
 test("a name tide-keys.lua has and this file doesn't is reported, and the rest applied", function()
-    load({ keys = [[return { keys = { teleport = { "SUPER + D" }, lock = { "SUPER + X" } } }]] })
-    eq("Lock", bound("SUPER + X").opts.description)
+    load({ keys = [[return { keys = { teleport = { "SUPER + D" }, lock = { "SUPER + U" } } }]] })
+    eq("Lock", bound("SUPER + U").opts.description)
     eq(nil, bound("SUPER + D"))
     eq(1, #S.notifications)
     truthy(S.notifications[1].text:find("no binding is called teleport", 1, true), S.notifications[1].text)
@@ -3422,11 +3443,11 @@ test("a broken or wrong tide-keys.lua is reported, and every key is its default"
         "this is not lua",
         "return 1",
         [[return { keys = {}, extra = 1 }]],
-        [[return { keys = { lock = "SUPER + X" } }]],
-        [[return { keys = { lock = { "SUPER + X", 2 } } }]],
-        [[return { keys = { lock = { [1] = "SUPER + X", [3] = "SUPER + Y" } } }]],
+        [[return { keys = { lock = "SUPER + U" } }]],
+        [[return { keys = { lock = { "SUPER + U", 2 } } }]],
+        [[return { keys = { lock = { [1] = "SUPER + U", [3] = "SUPER + Y" } } }]],
         [[return { keys = { lock = { "" } } }]],
-        [[return { keys = { [1] = { "SUPER + X" } } }]],
+        [[return { keys = { [1] = { "SUPER + U" } } }]],
         [[return { keys = { lock = { "a", "b", "c", "d", "e", "f", "g", "h", "i" } } }]],
         [[os.exit(1)]],
     }) do
@@ -3434,22 +3455,22 @@ test("a broken or wrong tide-keys.lua is reported, and every key is its default"
         eq(1, #S.notifications, text)
         truthy(S.notifications[1].text:find("tide-keys.lua (none of it applied", 1, true), S.notifications[1].text)
         eq("Lock", bound("SUPER + L").opts.description, text)
-        eq(nil, bound("SUPER + X"), text)
+        eq(nil, bound("SUPER + U"), text)
     end
 end)
 
 test("conf_keys.reload binds the file's new keys, freeing the old ones", function()
     load()
     eq("function", type(conf_keys.reload))
-    write(TIDE_KEYS, [[return { keys = { lock = { "SUPER + X" }, monocle = { "SUPER + grave" } } }]])
+    write(TIDE_KEYS, [[return { keys = { lock = { "SUPER + U" }, monocle = { "SUPER + grave" } } }]])
     conf_keys.reload()
     eq(nil, bound("SUPER + L"))
-    eq("Lock", bound("SUPER + X").opts.description)
+    eq("Lock", bound("SUPER + U").opts.description)
     eq(nil, bound("SUPER + O"), "monocle keeps one of its two")
     truthy(bound("SUPER + grave"), "monocle's other")
     remove(TIDE_KEYS)
     conf_keys.reload()
-    eq(nil, bound("SUPER + X"), "back to the defaults")
+    eq(nil, bound("SUPER + U"), "back to the defaults")
     eq("Lock", bound("SUPER + L").opts.description)
     truthy(bound("SUPER + O"))
     same({ "SUPER + L" }, listed_keys().lock.keys)
@@ -3471,7 +3492,7 @@ end)
 test("hyprland.local.lua's keys stay its own through a reload of tide's keys", function()
     load({ ["local"] = "hl.unbind('SUPER + E')\nhl.bind('SUPER + E', hl.dsp.exec_cmd('nautilus'))" })
     same({}, listed_keys().files.keys, "Files gave up Super+E")
-    write(TIDE_KEYS, [[return { keys = { lock = { "SUPER + X" }, terminal = { "SUPER + E" } } }]])
+    write(TIDE_KEYS, [[return { keys = { lock = { "SUPER + U" }, terminal = { "SUPER + E" } } }]])
     conf_keys.reload()
     eq("nautilus", bound("SUPER + E").target.args)
     same({}, listed_keys().terminal.keys)

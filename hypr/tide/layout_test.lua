@@ -1530,6 +1530,53 @@ test("Super+Left and Right focus the window that way, then the next monitor's", 
     eq(#hl.dispatched, n, "nor before the first")
 end)
 
+-- Monitor A above monitor B.
+local HD_BELOW = { x = 0, y = 1080, w = 1920, h = 1080 }
+local function stacked_monitors()
+    local qs, layout = fresh()
+    hl.monitors = {
+        { name = "A", x = 0, y = 0, width = 1920, height = 1080, ws = 1, focused = true },
+        { name = "B", x = 0, y = 1080, width = 1920, height = 1080, ws = 2 },
+    }
+    return qs, layout
+end
+
+test("Super+Up and Down go up and down the stack, then to the monitor below", function()
+    local qs, layout = stacked_monitors()
+    lay(layout, HD, 1, { 1, 2, 3 })
+    lay(layout, HD_BELOW, 2, { 4, 5 })
+    hl.active_window = "0x102"
+    qs.focus_vertical(1)
+    eq(last().arg, "address:0x103", "below the stack's top is its bottom")
+    hl.active_window = "0x103"
+    qs.focus_vertical(-1)
+    eq(last().arg, "address:0x102", "and back up")
+    qs.focus_vertical(1)
+    eq(last().arg, "address:0x105", "past the bottom, B's window sharing the most width")
+    local n = #hl.dispatched
+    hl.active_window = "0x101"
+    qs.focus_vertical(-1)
+    eq(#hl.dispatched, n, "nothing above the top monitor, not the stack beside it")
+    qs.focus_vertical(1)
+    eq(last().arg, "address:0x104", "below the master is B's master, not the stack beside it")
+end)
+
+test("Super+Shift+Up and Down swap in the stack, and land at the top edge of the monitor below", function()
+    local qs, layout = stacked_monitors()
+    lay(layout, HD, 1, { 1, 2, 3 })
+    lay(layout, HD_BELOW, 2, { 4, 5 })
+    hl.active_window = "0x103"
+    qs.move_vertical(-1)
+    eq(last().kind, "swap", "a swap")
+    eq(last().arg, "address:0x102", "with the window above")
+    qs.move_vertical(1)
+    eq(last().kind, "move", "a move")
+    eq(last().monitor, "B", "to the monitor below")
+    lay(layout, HD, 1, { 1, 2 })
+    lay(layout, HD_BELOW, 2, { 4, 5, 3 })
+    eq(order_of(qs, 2), "0x104 0x103 0x105", "at the top of B's stack, under where it was")
+end)
+
 test("a monitor that way showing no windows, or a fullscreen one, takes focus itself", function()
     local qs, layout = two_monitors()
     lay(layout, HD, 1, { 1, 2 })

@@ -106,8 +106,9 @@ check "Super+Ctrl+R reloads with tide reload" \
 
 # Every name hyprland.lua binds, so keys.json serves both sessions, but the
 # floating rules' key and the layout used last, which have no tidewm
-# command yet.
-hnames=$(grep -oE '^ *bind\("[a-z0-9_]+"' "$hypr" | sed 's/.*"\(.*\)"/\1/' | sort -u | grep -vxE 'floating_rule|last_layout')
+# command yet, and restore, which has no key by default (Super+X and
+# Super+Shift+X toggle).
+hnames=$(grep -oE '^ *bind\("[a-z0-9_]+"' "$hypr" | sed 's/.*"\(.*\)"/\1/' | sort -u | grep -vxE 'floating_rule|last_layout|restore')
 tnames=$(sed -n 's/^bindsym .*--name=\([a-z0-9_]*\) .*/\1/p' "$cfg" | sort -u)
 missing=$(printf '%s\n' "$hnames" | grep -vxF "$tnames" || true)
 check "each of hyprland.lua's named bindings is here too${missing:+: $missing}" empty "$missing"

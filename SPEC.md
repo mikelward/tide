@@ -1301,11 +1301,13 @@ in how long they last and what stays visible:
 | | Keys | What happens | Bar |
 |---|---|---|---|
 | **Monocle** (a layout) | ``Super+` ``, `Super+O` | Every window on the workspace fills the tiling area. `Super+J` / `K` flip between them, and new windows open full-size too. The same key goes back to the workspace's previous layout. | visible, showing `[n]` |
-| **Maximize** (this window) | `Super+Up` | Just the current window covers the tiling area; the others stay tiled behind it. It lasts until you toggle it, close the window, or focus another window on the workspace. | visible |
-| **Fullscreen** (this window) | `Super+Shift+Up`, or the app's own `F11` | The window covers the whole monitor, bar included. | hidden |
+| **Maximize** (this window) | `Super+X` | Just the current window covers the tiling area; the others stay tiled behind it. It lasts until you toggle it, close the window, or focus another window on the workspace. | visible |
+| **Fullscreen** (this window) | `Super+Shift+X`, or the app's own `F11` | The window covers the whole monitor, bar included. | hidden |
 
-- `Super+Down` returns the current window to the tiled layout from either
-  maximize or fullscreen.
+- Each key toggles its own state, so pressed again it puts the window back
+  in its tile. **Restore** puts it back from either, with no key by
+  default; Keyboard's shortcuts can give it one (§16). tidewm's session
+  has no restore.
 - **Hyprland pieces.** Maximize and fullscreen are Hyprland's own `fullscreen`
   states: 1 is maximized, 0 is fullscreen. Monocle is a mode of the
   tide layout.
@@ -1878,8 +1880,8 @@ with new keys in **bold**:
 | **`Super+Shift+1…9`** | send the focused window to the Nth workspace in the bar's order, staying where you are |
 | **`Super+0`** / **`Super+Shift+0`** | go to / send the focused window to the last workspace in the bar's order, as `Super+1…9` and `Super+Shift+1…9` do |
 | **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
-| **`Super+Left`** / **`Right`** | focus the window to the left / right of the focused one; at a monitor's edge, the nearest window on the next monitor that way, or that monitor itself if it shows none; past the last monitor, nothing (as in tide for macOS; the rule is below) |
-| **`Super+Shift+Left`** / **`Right`** | move the focused window the same way: on its monitor it swaps with the window that way; at the edge it goes onto the next monitor, joining the workspace showing there at the edge it came in by, and keeps focus. A floating window goes straight onto the next monitor that way, still floating, at the same relative spot and its size (the rule is below), and keeps focus. Past the last monitor, nothing |
+| **`Super+Left`** / **`Right`** / **`Up`** / **`Down`** | focus the window to the left / right / above / below the focused one; at a monitor's edge, the nearest window on the next monitor that way, or that monitor itself if it shows none; past the last monitor, nothing (as in tide for macOS; the rule is below) |
+| **`Super+Shift+Left`** / **`Right`** / **`Up`** / **`Down`** | move the focused window the same way: on its monitor it swaps with the window that way; at the edge it goes onto the next monitor, joining the workspace showing there at the edge it came in by, and keeps focus. A floating window goes straight onto the next monitor that way, still floating, at the same relative spot and its size (the rule is below), and keeps focus. Past the last monitor, nothing |
 | `Super+PgUp` / `PgDn` | previous / next workspace in the bar's order that has a window, wrapping from the last to home and back. An empty one, standing or made, is passed over, and so is one whose only windows are minimized (§6.7): Hyprland has none on it. With no other that has a window, nothing |
 | **`Super+Shift+PgUp`** / **`PgDn`** | move the window to the previous / next workspace in the bar's order, empty or not, wrapping as `Super+PgUp` does, and follow it |
 | `Super+J` / `K`, `Super+Shift+J` / `K` | focus / move down and up the stack |
@@ -1891,7 +1893,8 @@ with new keys in **bold**:
 | `Super+.` / `Super+,` | next / previous layout |
 | none by default | **the layout used last**: the workspace's mode before this one, so two presses come back, as dwm's `Super+Space` does; dwm's preset (§16) puts it there, and Keyboard's shortcuts can give it any key |
 | ``Super+` ``, **`Super+O`** | toggle monocle (`O` as in one window, and the key tide for Chrome uses on ChromeOS, where Chrome can't bind a backtick) |
-| **`Super+Up`** / **`Super+Shift+Up`** / **`Super+Down`** | maximize / fullscreen / restore the current window |
+| **`Super+X`** / **`Super+Shift+X`** | toggle maximize / fullscreen on the current window (§6.3) |
+| none by default | **restore**: the current window back in its tile from maximize or fullscreen |
 | `Super+Shift+F`, `Super+Insert` | toggle floating |
 | **`Super+Alt+F`** | open the Floating settings (§16) with a rule filled in for the focused window, its class and exact title, the title selected to trim; Enter adds it, Esc doesn't |
 | **`Super`+middle-click** | toggle maximize on the window under the pointer |
@@ -1921,10 +1924,14 @@ and sway's `Super+Shift+C` is their preset's (§16).
 - A plain Hyprland login, outside the tide session, binds it to
   `hyprctl reload` alone.
 
-Left and right use one rule, tide for macOS's, in the layout's `direction.lua`
+The arrows use one rule, tide for macOS's, in the layout's `direction.lua`
 (§20). Of the windows or monitors whose center is on that side, it takes
 the one sharing the most height with where you are, then the one whose
-center is nearest, then the first in layout order. The next monitor is
+center is nearest, then the first in layout order. On the focused
+monitor, a window must share some height with yours. So in tile, the
+stack isn't above or below the master: from the master, `Super+Up` goes
+to the monitor above. Up and down are the same rule turned on its side,
+sharing width instead of height. The next monitor is
 compared against the current monitor. A window on it is one at the edge you
 come in by, compared against the focused window. A moved window lands in the
 place in that workspace's layout nearest that edge, sharing the most height
@@ -1953,7 +1960,8 @@ window order, which isn't the layout's, and never leaves the monitor
 (`CLuaTiledAlgorithm::moveTargetInDirection`). For a floating window it only
 pushes it against the edge of its own monitor's work area
 (`CDefaultFloatingAlgorithm::moveTargetInDirection`). So the keys call the
-layout's `focus_side` and `move_side`; without the tide layout, conf binds
+layout's `focus_side` and `move_side`, and `focus_vertical` and
+`move_vertical` for up and down; without the tide layout, conf binds
 the built-in dispatchers instead, with a monitor move for a floating window.
 
 - **Dragging the master/stack edge.** A plain left-press within 4 px

@@ -628,7 +628,7 @@ else
     }
 end
 
--- Super+Left / Right and Super+Shift+Left / Right (tide SPEC.md §6.6):
+-- Super and an arrow, and Super+Shift and an arrow (tide SPEC.md §6.6):
 -- focus or move the window that way, going on to the next monitor at the
 -- edge. The tide layout's helpers share one rule and do nothing past the
 -- last monitor. Without them (master, or an older tide layout), Hyprland's
@@ -640,6 +640,7 @@ end
 -- would, still floating; past the last monitor, nothing.
 local function move_side(dir)
     local tiled = hl.dsp.window.move({ direction = dir })
+    -- Hyprland's monitor directions are l, r, u and d.
     local mon = dir:sub(1, 1)
     return function()
         local ok, w = pcall(hl.get_active_window)
@@ -659,21 +660,30 @@ local function move_side(dir)
         end
     end
 end
-local side
+local side = {}
 if qs and type(qs.focus_side) == "function" and type(qs.move_side) == "function" then
-    side = {
-        focus_left = function() qs.focus_side(-1) end,
-        focus_right = function() qs.focus_side(1) end,
-        move_left = function() qs.move_side(-1) end,
-        move_right = function() qs.move_side(1) end,
-    }
+    side.focus_left = function() qs.focus_side(-1) end
+    side.focus_right = function() qs.focus_side(1) end
+    side.move_left = function() qs.move_side(-1) end
+    side.move_right = function() qs.move_side(1) end
 else
-    side = {
-        focus_left = hl.dsp.focus({ direction = "left" }),
-        focus_right = hl.dsp.focus({ direction = "right" }),
-        move_left = move_side("left"),
-        move_right = move_side("right"),
-    }
+    side.focus_left = hl.dsp.focus({ direction = "left" })
+    side.focus_right = hl.dsp.focus({ direction = "right" })
+    side.move_left = move_side("left")
+    side.move_right = move_side("right")
+end
+-- Up and down, checked apart: a tide layout older than them has left and
+-- right alone.
+if qs and type(qs.focus_vertical) == "function" and type(qs.move_vertical) == "function" then
+    side.focus_above = function() qs.focus_vertical(-1) end
+    side.focus_below = function() qs.focus_vertical(1) end
+    side.move_above = function() qs.move_vertical(-1) end
+    side.move_below = function() qs.move_vertical(1) end
+else
+    side.focus_above = hl.dsp.focus({ direction = "up" })
+    side.focus_below = hl.dsp.focus({ direction = "down" })
+    side.move_above = move_side("up")
+    side.move_below = move_side("down")
 end
 
 hl.config({
@@ -1254,11 +1264,12 @@ bind("focus_up", key("K"), act.focus_prev, does("Focus up the stack"))
 bind("move_down", key("SHIFT + J"), act.move_next, does("Move down the stack"))
 bind("move_up", key("SHIFT + K"), act.move_prev, does("Move up the stack"))
 
--- One window big: maximize keeps the bar, fullscreen covers it, and
--- Super+Down undoes either. Unset is a no-op for a mode that isn't on.
-bind("maximize", key("Up"), hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }), does("Maximize"))
-bind("fullscreen", key("SHIFT + Up"), hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }), does("Fullscreen"))
-bind("restore", key("Down"), function()
+-- One window big: maximize keeps the bar, fullscreen covers it, and each
+-- key toggles its own. Restore undoes either, with no key by default.
+-- Unset is a no-op for a mode that isn't on.
+bind("maximize", key("X"), hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }), does("Maximize"))
+bind("fullscreen", key("SHIFT + X"), hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }), does("Fullscreen"))
+bind("restore", {}, function()
     hl.dispatch(hl.dsp.window.fullscreen({ mode = "fullscreen", action = "unset" }))
     hl.dispatch(hl.dsp.window.fullscreen({ mode = "maximized", action = "unset" }))
 end, does("Restore"))
@@ -1706,11 +1717,15 @@ bind("previous_workspace", key("Page_Up"), step_workspace(-1, false), does("Prev
 bind("next_workspace", key("Page_Down"), step_workspace(1, false), does("Next workspace"))
 bind("move_to_previous_workspace", key("SHIFT + Page_Up"), step_workspace(-1, true), does("Move the window to the previous workspace"))
 bind("move_to_next_workspace", key("SHIFT + Page_Down"), step_workspace(1, true), does("Move the window to the next workspace"))
--- Left and right are windows, across monitors, as in tide for macOS (above).
+-- The arrows are windows, across monitors, as in tide for macOS (above).
 bind("focus_left", key("Left"), side.focus_left, does("Focus the window to the left"))
 bind("focus_right", key("Right"), side.focus_right, does("Focus the window to the right"))
+bind("focus_above", key("Up"), side.focus_above, does("Focus the window above"))
+bind("focus_below", key("Down"), side.focus_below, does("Focus the window below"))
 bind("move_left", key("SHIFT + Left"), side.move_left, does("Move the window left"))
 bind("move_right", key("SHIFT + Right"), side.move_right, does("Move the window right"))
+bind("move_above", key("SHIFT + Up"), side.move_above, does("Move the window up"))
+bind("move_below", key("SHIFT + Down"), side.move_below, does("Move the window down"))
 
 -- Super+1…9: the Nth workspace in the bar's order, so Super+1 is home, as
 -- Super+Home is. Super+Shift+1…9 sends the focused window there and stays,
