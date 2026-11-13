@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: no keyboard</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .faces { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 22px; }
+  .face {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    color: #f2f2f6;
+    box-shadow: 0 0 0 1px #2a2a30;
+    background:
+      radial-gradient(360px 220px at 22% 28%, rgba(38, 105, 110, .55), transparent 70%),
+      radial-gradient(420px 260px at 82% 78%, rgba(98, 52, 140, .55), transparent 70%),
+      #10172a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .face::before { content: ''; position: absolute; inset: 0; backdrop-filter: blur(0); background: rgba(8, 10, 18, .35); }
+  .face > * { position: relative; }
+  .host { font-size: 32px; font-weight: 700; letter-spacing: -.02em; line-height: 1; }
+  .fclocks { display: flex; gap: 14px; margin-top: 12px; font-feature-settings: 'tnum' 1; font-size: 13px; color: rgba(255,255,255,.7); }
+  .fclocks b { font-weight: 600; color: #fff; }
+  .fclocks .tz { font-size: 10px; font-weight: 700; letter-spacing: .05em; margin-right: 4px; color: rgba(255,255,255,.55); }
+  .who { display: flex; align-items: center; gap: 10px; margin-top: 26px; }
+  .av { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #3584e4, #9141ac); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .who .n { font-weight: 600; font-size: 20px; }
+  .pw { margin-top: 12px; width: 240px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 14px; letter-spacing: .25em; }
+  .pw .ms { font-size: 18px; color: rgba(255,255,255,.6); letter-spacing: 0; }
+  .kbrow { display: flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 12px; color: rgba(255,255,255,.55); }
+  .kbrow .ms { font-size: 16px; }
+  .pw.err { box-shadow: inset 0 0 0 1.5px #ff7b63; }
+  .pw.focus { box-shadow: inset 0 0 0 1.5px #78aeed; }
+  .pw.err.focus { box-shadow: inset 0 0 0 1.5px #ff7b63; }
+  .pw .caret { flex: none; width: 2px; height: 18px; border-radius: 1px; background: #f2f2f6; }
+  .pw .caret.after { margin-left: -6px; }
+  .pw .caret.before { margin-right: -5px; }
+  .errmsg { margin-top: 8px; font-size: 12px; color: #ff9e8a; font-weight: 600; }
+  .sess { position: absolute; left: 16px; bottom: 14px; display: flex; gap: 8px; }
+  .chipx { height: 28px; border-radius: 14px; background: rgba(255,255,255,.1); display: flex; align-items: center; gap: 6px; padding: 0 12px 0 10px; font-size: 12px; font-weight: 600; }
+  .chipx .ms { font-size: 16px; }
+  .pwr { position: absolute; right: 14px; bottom: 12px; display: flex; gap: 6px; }
+  .pwr span { width: 32px; height: 32px; border-radius: 16px; background: rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; }
+  .pwr .ms { font-size: 18px; }
+  .corner { position: absolute; right: 16px; top: 12px; font-size: 11.5px; color: rgba(255,255,255,.55); display: flex; gap: 12px; align-items: center; }
+  .corner .ms { font-size: 15px; }
+  .tag { position: absolute; left: 14px; top: 12px; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.5); }
+  .ambient { background: #000; }
+  .ambient::before { display: none; }
+  .ambient .blk { position: absolute; left: 58%; top: 30%; text-align: left; }
+  .ambient .host { font-size: 26px; color: rgba(255,255,255,.42); }
+  .ambient .big { font-size: 64px; font-weight: 300; color: rgba(255,255,255,.5); letter-spacing: -.02em; font-feature-settings: 'tnum' 1; line-height: 1.05; margin-top: 6px; }
+  .ambient .fclocks { color: rgba(255,255,255,.35); margin-top: 6px; }
+  .ambient .fclocks b { color: rgba(255,255,255,.5); }
+  .ambient .fclocks .tz { color: rgba(255,255,255,.3); }
+  .ghost { position: absolute; border: 1px dashed rgba(255,255,255,.14); border-radius: 8px; }
+</style>
+</head>
+<body class="sheet" data-width="1360" data-scale="2">
+<h1>No keyboard</h1>
+<p class="lede">The lock and the login screen with no keyboard to type with, as when a KVM has switched it away. Two places for the words, under the narrower field.</p>
+<div class="faces">
+  <div>
+    <div class="face">
+      <span class="tag">A · instead of the layout</span>
+      <div class="host">host1</div>
+      <div class="fclocks"><span>Mon Sep 28 <b>19:47</b></span></div>
+      <div class="who"><span class="av">U</span><div><div class="n">user</div></div></div>
+      <div class="pw"><i class="ms">lock</i><span style="letter-spacing:0;font-size:13px;color:rgba(255,255,255,.45)">Password</span></div>
+      <div class="kbrow"><i class="ms">keyboard</i>No keyboard</div>
+      <div class="pwr"><span><i class="ms">restart_alt</i></span><span><i class="ms">power_settings_new</i></span></div>
+    </div>
+    <div class="cap"><b>A. Instead of the layout.</b> One slot under the field: the layout’s name, or “No keyboard” while there’s none. A keyboard plugged in brings the name back.</div>
+  </div>
+  <div>
+    <div class="face">
+      <span class="tag">B · where Caps Lock goes</span>
+      <div class="host">host1</div>
+      <div class="fclocks"><span>Mon Sep 28 <b>19:47</b></span></div>
+      <div class="who"><span class="av">U</span><div><div class="n">user</div></div></div>
+      <div class="pw"><i class="ms">lock</i><span style="letter-spacing:0;font-size:13px;color:rgba(255,255,255,.45)">Password</span></div>
+      <div class="kbrow"><i class="ms">keyboard</i>Dvorak<span style="margin-left:14px;display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.75);font-weight:600"><i class="ms">keyboard_off</i>No keyboard</span></div>
+      <div class="pwr"><span><i class="ms">restart_alt</i></span><span><i class="ms">power_settings_new</i></span></div>
+    </div>
+    <div class="cap"><b>B. Where Caps Lock goes.</b> The layout stays, and “No keyboard” sits beside it, where “Caps Lock is on” shows on the boot splash, a little brighter so it stands out. They never show together: Caps Lock needs a keyboard.</div>
+  </div>
+</div>
+</body>
+</html>
