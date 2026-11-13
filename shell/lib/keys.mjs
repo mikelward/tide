@@ -498,8 +498,8 @@ export function tidewmKeys(keys) {
     return mods.concat([last]).join("+");
 }
 
-// What a binding named `name` does, from its name, as tidewm's lines say
-// no more: "next_keyboard_layout" is "Next keyboard layout".
+// What a binding named `name` does, from its name, for one whose lines
+// give no --desc: "next_keyboard_layout" is "Next keyboard layout".
 export function nameLabel(name) {
     const words = name.replace(/_/g, " ");
     return words.charAt(0).toUpperCase() + words.slice(1);
@@ -539,7 +539,9 @@ export function parseTidewmCatalog(text) {
         if (keys.includes(null) || defaults.includes(null)) {
             return { error: `${what}: ${b.name}'s keys have a modifier tide doesn't know` };
         }
-        binds.push({ name: b.name, does: nameLabel(b.name), defaults, keys });
+        // Its --desc, where its lines give one, as Hyprland's description.
+        const described = typeof b.description === "string" ? b.description.replace(/\s+/g, " ").trim() : "";
+        binds.push({ name: b.name, does: described || nameLabel(b.name), defaults, keys });
     }
     return { binds };
 }

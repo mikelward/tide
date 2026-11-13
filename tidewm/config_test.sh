@@ -23,9 +23,12 @@ empty() { test -z "$1"; }
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
-# The file with each binding's --name=NAME left out, for the checks of
-# what a key runs, which don't care what it's called.
-sed 's/^\(bindsym .*\)--name=[a-z0-9_]* /\1/' "$cfg" >"$tmp/plain"
+# The file with each binding's --name=NAME and --desc "TEXT" left out,
+# for the checks of what a key runs, which don't care what it's called or
+# how the Shortcuts page describes it.
+sed -e 's/^\([[:space:]]*bind[a-z]* .*\)--name=[a-z0-9_]* /\1/' -e 's/--desc "[^"]*" //' "$cfg" >"$tmp/plain"
+# And with only --desc left out, for the checks of a named binding.
+sed 's/--desc "[^"]*" //' "$cfg" >"$tmp/named"
 
 # The file's lines, comments and blank lines left out, an input block's
 # lines prefixed "  ", a mode's read as the top level's.
@@ -70,15 +73,20 @@ dup=$(printf '%s\n' "$keys" | sort | uniq -d)
 check "no key is bound twice${dup:+: $dup}" empty "$dup"
 
 for k in Ctrl+w Ctrl+Shift+w Ctrl+q Alt+F4; do
-    check "a pinned window keeps $k from closing it" contains "$(cat "$cfg")" "bindsym --kept-open $k kill"
+    check "a pinned window keeps $k from closing it" contains "$(cat "$tmp/plain")" "bindsym --kept-open $k kill"
 done
 
 nogrant=$(grep 'exec tide launch' "$cfg" | grep -v 'tide launch --app ' || true)
 check "every tide launch names the app its window grant is for" empty "$nogrant"
 
+# Every binding says what it does, as Hyprland's do, for the Shortcuts
+# page (SPEC.md §16): tidewm lists a --desc as its description.
+undescribed=$(grep -E '^[[:space:]]*bind(sym|switch|code) ' "$cfg" | grep -v -- '--desc "[^"]' || true)
+check "every binding has a description${undescribed:+: $undescribed}" empty "$undescribed"
+
 check "the settings tide's shell writes are included, then nwg-displays' outputs, last, so they win" \
     test "$(printf '%s\n' "$lines" | tail -n 2 | tr '\n' '|')" = "include tide-*.conf|include ~/.config/sway/outputs|"
-check "the focus guard is on" contains "$(cat "$cfg")" "focus_guard enable"
+check "the focus guard is on" contains "$(cat "$tmp/plain")" "focus_guard enable"
 # The lock key runs what Hyprland's session runs: `tide lock`, which locks
 # with no idle daemon running too, where logind's Lock alone has nothing
 # to answer it.
@@ -86,7 +94,7 @@ hlock=$(sed -n 's/^local lock = tide_session and "\([^"]*\)" or .*/\1/p' "$hypr"
 check "hyprland.lua's lock command is found" test -n "$hlock"
 # shellcheck disable=SC2016 # $mod is the config's, not the shell's
 check "Super+L locks as Hyprland's session does, with tide lock" \
-    test "$(sed -n 's/^bindsym --name=lock \$mod+l exec //p' "$cfg")" = "$hlock"
+    test "$(sed -n 's/^bindsym --name=lock \$mod+l exec //p' "$tmp/named")" = "$hlock"
 check "which locks with no idle daemon running, and falls back to logind" \
     test "$hlock" = "tide lock || loginctl lock-session"
 
@@ -94,7 +102,7 @@ check "which locks with no idle daemon running, and falls back to logind" \
 # own reload would leave a shell that isn't running stopped.
 # shellcheck disable=SC2016 # $mod is the config's, not the shell's
 check "Super+Ctrl+R reloads with tide reload" \
-    test "$(sed -n 's/^bindsym --name=reload \$mod+Ctrl+r exec //p' "$cfg")" = "tide reload"
+    test "$(sed -n 's/^bindsym --name=reload \$mod+Ctrl+r exec //p' "$tmp/named")" = "tide reload"
 
 # Every name hyprland.lua binds, so keys.json serves both sessions, but the
 # floating rules' key and the layout used last, which have no tidewm
@@ -108,7 +116,7 @@ check "each of hyprland.lua's named bindings is here too${missing:+: $missing}" 
 for personal in runenv dvorak kitty left_handed; do
     check "nothing personal: no $personal" empty "$(grep -v '^ *#' "$cfg" | grep "$personal" || true)"
 done
-check "Super+T opens the default terminal" contains "$(cat "$cfg")" "--name=terminal \$mod+t exec tide launch --app '*' -- xdg-terminal-exec"
+check "Super+T opens the default terminal" contains "$(cat "$tmp/named")" "--name=terminal \$mod+t exec tide launch --app '*' -- xdg-terminal-exec"
 
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh tidewm/config_test.sh

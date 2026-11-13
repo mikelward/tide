@@ -447,3 +447,11 @@ test("on tidewm, your keys are written only once it's said it takes rebind lines
     assert.equal(keysWritable(true, false), false, "a tidewm from before named bindings would reject the file");
     assert.equal(keysWritable(true, true), true);
 });
+
+test("a named tidewm binding's --desc says what it does on the page, else its name", () => {
+    const text = JSON.stringify([
+        { type: "key", name: "home", mode: "default", keys: ["Mod4+Home"], default_keys: ["Mod4+Home"], description: "Home workspace" },
+        { type: "key", name: "next_layout", mode: "default", keys: ["Mod4+period"], default_keys: ["Mod4+period"], description: "" },
+    ]);
+    assert.deepEqual(parseTidewmCatalog(text).binds.map((b) => b.does), ["Home workspace", "Next layout"]);
+});
