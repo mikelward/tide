@@ -7,6 +7,11 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **"Caps Lock is on" reads the keyboards' Caps Lock lights**
+  (2026-11-13), through `tide caps-lock`, since tidewm's IPC has no Caps
+  Lock state and Hyprland reports it without an event. A keyboard with no
+  light can't say.
+
 - **setup switches any distro's buses to dbus-broker** (2026-11-13), not
   only Debian's and Ubuntu's, wherever systemd says dbus-daemon runs one;
   Fedora and Arch use dbus-broker already, so there it does nothing. Other
@@ -1217,6 +1222,16 @@ the session's keys (SPEC.md §5.4). Left:
 - [ ] **Find why the shell took about a minute to start** on the first
   login after the greeter: the splash logs the time (`journalctl -t
   tide-splash`), and tide.service's journal says where it went.
+
+## Boot splash (SPEC.md §5.3)
+
+- [x] **`tide-setup --splash`**: a Plymouth theme of tide's logo and name,
+  with a spinner, on black.
+- [ ] **Keep the splash's last frame until the greeter draws**, as GDM
+  does with `plymouth quit --retain-splash`, if a text console shows
+  between them.
+- [ ] **Check it on a real boot**: the disk unlock's layout row, a
+  HiDPI screen (Plymouth scales the 1x images), and shutdown.
 
 ## Free-standing tide
 

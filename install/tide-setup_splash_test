@@ -1,0 +1,162 @@
+#!/bin/bash
+# Tests for tide-setup: --splash, tide's boot splash
+#
+# The harness, its fixtures and mocks are in tide-setup_testlib.
+
+# shellcheck source=tide-setup_testlib
+. "$(dirname "$0")/tide-setup_testlib"
+
+set -e
+
+# splash_setup: the checkout's theme, an empty themes folder, a kernel
+# command line with "splash", and mocks for Plymouth and the tools that
+# pick its theme and rebuild the initramfs. Each logs its argv to $CALLS.
+# plymouth's plugins are in $T/plymouth-plugins, with two-step's unless
+# $FAKE_NO_TWO_STEP. update-alternatives --query names $FAKE_ALTERNATIVE, and
+# plymouth-set-default-theme with no arguments names $FAKE_THEME. A tool
+# named in $FAKE_SPLASH_FAILS fails.
+splash_setup() {
+    mkdir -p "$T/src/tide/plymouth/tide" "$T/plymouth-themes" "$T/plymouth-plugins"
+    echo "[Plymouth Theme]" > "$T/src/tide/plymouth/tide/tide.plymouth"
+    echo "png" > "$T/src/tide/plymouth/tide/lock.png"
+    echo "BOOT_IMAGE=/vmlinuz root=UUID=0 ro quiet splash" > "$T/cmdline"
+    for tool in update-alternatives update-initramfs plymouth-set-default-theme dracut mkinitcpio plymouth; do
+        cat > "$T/bin/$tool" <<MOCK
+#!/bin/sh
+printf "%s\\n" "$tool \$*" >> "$CALLS"
+case " \$FAKE_SPLASH_FAILS " in *" $tool "*) exit 1 ;; esac
+case "$tool \$1" in
+    "plymouth --get-splash-plugin-path")
+        test -n "\$FAKE_NO_TWO_STEP" || : > "$T/plymouth-plugins/two-step.so"
+        echo "$T/plymouth-plugins" ;;
+    "update-alternatives --query") printf "Name: default.plymouth\\nValue: %s\\n" "\$FAKE_ALTERNATIVE" ;;
+    "plymouth-set-default-theme ") echo "\$FAKE_THEME" ;;
+esac
+MOCK
+        chmod +x "$T/bin/$tool"
+    done
+}
+
+# splash_installed_already: the checkout's theme installed, file for file.
+splash_installed_already() {
+    mkdir -p "$T/plymouth-themes/tide"
+    cp "$T/src/tide/plymouth/tide/"* "$T/plymouth-themes/tide/"
+}
+
+splash_run() {
+    run SETUP_PLYMOUTH_THEMES="$T/plymouth-themes" SETUP_KERNEL_CMDLINE="$T/cmdline" "$@"
+}
+
+# Without --splash, nothing of Plymouth's is touched.
+setup; splash_setup; ARGS=(); splash_run
+check "without --splash, Plymouth isn't installed" lacks "$calls" "plymouth-theme-spinner"
+check "nor its theme" lacks "$calls" "install-splash"
+check "nor the initramfs rebuilt" lacks "$calls" "update-initramfs"
+teardown
+
+# Debian and Ubuntu: the alternative, then the initramfs.
+setup; splash_setup; ARGS=(--splash); splash_run
+theme=$T/plymouth-themes/tide/tide.plymouth
+check "exits 0" test "$status" -eq 0
+check "installs Plymouth, with the package each distro keeps two-step in" \
+    has "$calls" "apt-get install -y --no-upgrade plymouth plymouth-themes plymouth-theme-spinner"
+check "installs the theme as root" has "$calls" "sudo make -C $T/src/tide install-splash"
+check "adds it as the default.plymouth alternative" \
+    has "$calls" "sudo update-alternatives --install $T/plymouth-themes/default.plymouth default.plymouth $theme 100"
+check "and picks it" has "$calls" "sudo update-alternatives --set default.plymouth $theme"
+check "then rebuilds the initramfs, which carries the theme" has "$calls" "sudo update-initramfs -u"
+first=$(printf '%s\n' "$calls" | grep -n -e 'update-alternatives --set' -e 'update-initramfs' | head -n 1)
+check "after picking it" has "$first" "update-alternatives --set"
+check "says when it shows" has "$output" "tide's boot splash shows from the next boot"
+check "warns of nothing" lacks "$output" "Warning:"
+teardown
+
+# Run again with it all in place: nothing is rebuilt.
+setup; splash_setup; splash_installed_already; ARGS=(--splash)
+splash_run FAKE_ALTERNATIVE="$T/plymouth-themes/tide/tide.plymouth"
+check "with the theme and the default in place, the initramfs isn't rebuilt" lacks "$calls" "update-initramfs"
+check "nor the theme installed again" lacks "$calls" "install-splash"
+teardown
+
+# A checkout whose theme changed installs it again.
+setup; splash_setup; splash_installed_already; echo "new" > "$T/src/tide/plymouth/tide/lock.png"; ARGS=(--splash)
+splash_run FAKE_ALTERNATIVE="$T/plymouth-themes/tide/tide.plymouth"
+check "a changed theme is installed again" has "$calls" "install-splash"
+check "and the initramfs rebuilt" has "$calls" "sudo update-initramfs -u"
+teardown
+
+# Another theme named in plymouthd.conf wins over the alternative, so it's
+# changed to tide's; the rest of the file is kept.
+setup; splash_setup; mkdir -p "$T/etc/plymouth"
+printf '[Daemon]\nTheme=bgrt\nShowDelay=0\n' > "$T/etc/plymouth/plymouthd.conf"; ARGS=(--splash); splash_run
+check "plymouthd.conf's theme becomes tide's" test "$(cat "$T/etc/plymouth/plymouthd.conf")" = "[Daemon]
+Theme=tide
+ShowDelay=0"
+teardown
+setup; splash_setup; splash_installed_already; mkdir -p "$T/etc/plymouth"
+printf '[Daemon]\nTheme=bgrt\n' > "$T/etc/plymouth/plymouthd.conf"; ARGS=(--splash)
+splash_run FAKE_ALTERNATIVE="$T/plymouth-themes/tide/tide.plymouth"
+check "the alternative alone isn't the default while plymouthd.conf names another" has "$calls" "update-initramfs"
+teardown
+
+# Fedora and Arch: plymouth-set-default-theme, then their initramfs tools.
+setup; splash_setup; ARGS=(--splash); splash_run SETUP_OS=redhat
+check "Fedora installs Plymouth's two-step plugin" has "$calls" "plymouth plymouth-plugin-two-step plymouth-theme-spinner"
+check "Fedora picks the theme with plymouth-set-default-theme" has "$calls" "sudo plymouth-set-default-theme tide"
+check "Fedora rebuilds with dracut" has "$calls" "sudo dracut --force"
+check "Fedora leaves the alternatives be" lacks "$calls" "update-alternatives --install"
+teardown
+setup; splash_setup; splash_installed_already; ARGS=(--splash); splash_run SETUP_OS=redhat FAKE_THEME=tide
+check "Fedora with tide's theme the default rebuilds nothing" lacks "$calls" "dracut"
+teardown
+setup; splash_setup; ARGS=(--splash); splash_run SETUP_OS=arch
+check "Arch rebuilds with mkinitcpio" has "$calls" "sudo mkinitcpio -P"
+teardown
+# Arch's initramfs has Plymouth only with its hook.
+setup; splash_setup; printf 'MODULES=()\nHOOKS=(base udev autodetect block filesystems fsck)\n' > "$T/etc/mkinitcpio.conf"
+ARGS=(--splash); splash_run SETUP_OS=arch
+check "Arch without the plymouth hook says to add it" has "$output" "HOOKS has no plymouth, so the boot shows no splash"
+teardown
+setup; splash_setup; printf 'HOOKS=(base udev plymouth autodetect block filesystems)\n' > "$T/etc/mkinitcpio.conf"
+ARGS=(--splash); splash_run SETUP_OS=arch
+check "Arch with the hook isn't warned" lacks "$output" "HOOKS has no plymouth"
+teardown
+
+# What keeps it from showing, or from installing.
+setup; splash_setup; echo "BOOT_IMAGE=/vmlinuz ro quiet" > "$T/cmdline"; ARGS=(--splash); splash_run
+check "a kernel command line without splash is a warning" has "$output" "the kernel command line has no 'splash'"
+check "which still installs the theme" has "$calls" "sudo update-initramfs -u"
+teardown
+setup; splash_setup; echo "BOOT_IMAGE=/vmlinuz ro rhgb quiet" > "$T/cmdline"; ARGS=(--splash); splash_run SETUP_OS=redhat
+check "Fedora's rhgb shows the splash too" lacks "$output" "has no 'splash'"
+teardown
+setup; splash_setup; ARGS=(--splash); splash_run FAKE_NO_TWO_STEP=1
+check "without the two-step plugin, it says so" has "$output" "Plymouth's two-step plugin isn't in $T/plymouth-plugins"
+check "and installs no theme that couldn't show" lacks "$calls" "install-splash"
+check "and isn't fatal" test "$status" -eq 0
+teardown
+setup; splash_setup; ARGS=(--splash); splash_run FAKE_SPLASH_FAILS=update-initramfs
+check "a failed rebuild says the old splash stays" has "$output" "couldn't rebuild the initramfs (update-initramfs -u), so the boot shows the old splash"
+check "and isn't fatal" test "$status" -eq 0
+check "and notes the rebuild is still to do" test -e "$T/var/lib/setup-tide/splash-rebuild-pending"
+teardown
+# The rerun after a failed rebuild finds the theme and the default in
+# place, but the note says the rebuild never finished, so it's done again.
+setup; splash_setup; splash_installed_already; mkdir -p "$T/var/lib/setup-tide"
+echo "tide's boot splash needs an initramfs rebuild" > "$T/var/lib/setup-tide/splash-rebuild-pending"; ARGS=(--splash)
+splash_run FAKE_ALTERNATIVE="$T/plymouth-themes/tide/tide.plymouth"
+check "a rebuild that failed last time is done on the rerun" has "$calls" "sudo update-initramfs -u"
+check "and its note goes once it's done" test ! -e "$T/var/lib/setup-tide/splash-rebuild-pending"
+teardown
+setup; splash_setup; ARGS=(--splash); splash_run
+check "a rebuild that works leaves no note" test ! -e "$T/var/lib/setup-tide/splash-rebuild-pending"
+teardown
+setup; splash_setup; ARGS=(--splash); splash_run FAKE_SPLASH_FAILS=update-alternatives
+check "a default it couldn't pick is a warning" has "$output" "couldn't make tide's boot splash Plymouth's default"
+check "and nothing is rebuilt for it" lacks "$calls" "update-initramfs"
+teardown
+setup; splash_setup; ARGS=(--splash --no-sudo); splash_run
+check "--no-sudo leaves the boot splash alone" lacks "$calls" "install-splash"
+teardown
+
+finish

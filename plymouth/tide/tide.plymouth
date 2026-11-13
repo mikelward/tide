@@ -1,0 +1,59 @@
+[Plymouth Theme]
+Name=tide
+Description=tide's logo and name on black, with a spinner
+ModuleName=two-step
+
+[two-step]
+ImageDir=/usr/share/plymouth/themes/tide
+WatermarkHorizontalAlignment=.5
+WatermarkVerticalAlignment=.42
+HorizontalAlignment=.5
+VerticalAlignment=.55
+DialogHorizontalAlignment=.5
+DialogVerticalAlignment=.55
+TitleHorizontalAlignment=.5
+TitleVerticalAlignment=.62
+Transition=none
+TransitionDuration=0.0
+BackgroundStartColor=0x000000
+BackgroundEndColor=0x000000
+ProgressBarBackgroundColor=0x2a2a2f
+ProgressBarForegroundColor=0x9a9aa6
+MessageBelowAnimation=true
+
+[boot-up]
+UseEndAnimation=false
+
+[shutdown]
+UseEndAnimation=false
+
+[reboot]
+UseEndAnimation=false
+
+[updates]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Installing updates
+SubTitle=Keep your computer on
+
+[system-upgrade]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Upgrading the system
+SubTitle=Keep your computer on
+
+[firmware-upgrade]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Upgrading firmware
+SubTitle=Keep your computer on
+
+[system-reset]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Resetting the system
+SubTitle=Keep your computer on

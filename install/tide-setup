@@ -75,6 +75,11 @@
 #   gnome-keyring, as GDM does. Without either, a greetd that setup made
 #   the display manager stays it, kept up to date, and any other display
 #   manager is left alone;
+# - with --splash, installs Plymouth and tide's boot splash, a Plymouth
+#   theme of tide's logo and name on black with a spinner, makes it the
+#   default and rebuilds the initramfs, from the next boot (see
+#   setup_splash). It skips all that while the theme and the default are
+#   already tide's, and warns when the kernel command line won't show it;
 # - ends by checking that the tide session will be at the login screen
 #   (its entry is installed, and so is uwsm, without which the login
 #   screen hides it), that Hyprland is there to start it, and that its qs
@@ -90,7 +95,7 @@
 #     install/tide-setup [--no-install] [--no-sudo] [--ignore-errors]
 #                      [--no-build-hyprland] [--no-tidewm]
 #                      [--dm tide|sddm|gdm|keep | --greeter | --no-greeter]
-#                      [--github PREFIX]
+#                      [--splash] [--github PREFIX]
 #                      [-v | --verbose] [-h | --help]
 #
 # --no-install skips the packages and the root `make install-session`.
@@ -105,7 +110,8 @@
 # it the display manager from the next boot.
 # --greeter makes greetd the display manager. --no-greeter puts back the
 # one setup replaced with greetd. Without either, the display manager stays
-# as it is. --github PREFIX, or $GITHUB_PREFIX, clones what it clones from
+# as it is. --splash makes tide's boot splash the default; without it, the
+# boot splash stays as it is. --github PREFIX, or $GITHUB_PREFIX, clones what it clones from
 # GitHub (Quickshell, Hyprland and its libraries and submodules, tidewm)
 # from a mirror instead. Only the host changes: each pinned source build
 # still checks out its pinned commit, so a mirror can't swap what's built.
@@ -149,6 +155,8 @@ GITHUB_PREFIX="${GITHUB_PREFIX:-}"
 # --dm=tide) makes greetd it, no (--no-greeter) puts back the one greetd
 # replaced, and sddm or gdm (--dm) makes that one it.
 GREETER=keep
+# Whether to install tide's boot splash and make it the default (--splash).
+SPLASH=no
 
 # Overridable for tests, which can't touch the real /etc.
 # Where packages install D-Bus activation files and systemd user units.
@@ -385,6 +393,9 @@ fi
 # Where setup notes the display manager greetd replaced, for --no-greeter.
 STATE_DIR="${SETUP_STATE_DIR:-/var/lib/setup-tide}"
 PREVIOUS_DM_FILE="$STATE_DIR/previous-display-manager"
+# There while a boot splash install hasn't reached its initramfs rebuild's
+# end, so a rerun finishes it rather than finding the theme in place.
+SPLASH_PENDING_FILE="$STATE_DIR/splash-rebuild-pending"
 
 # tide's make install builds tide-grant with this Go, which
 # must be at least MIN_GO (its go.mod). setup installs Go for everything
@@ -592,7 +603,7 @@ usage() {
 Usage: tide-setup [--no-install] [--no-sudo] [--ignore-errors]
                   [--no-build-hyprland] [--upgrade]
                   [--dm tide|sddm|gdm|keep | --greeter | --no-greeter]
-                  [--github PREFIX] [-v | --verbose] [-h | --help]
+                  [--splash] [--github PREFIX] [-v | --verbose] [-h | --help]
 
 Install the tide session from this checkout, beside the desktop you have.
 The display manager stays as it is, with tide as one more session, unless
@@ -619,6 +630,8 @@ Options:
                    the display manager from the next boot
   --no-greeter     If this made greetd the display manager, put back the
                    one it replaced
+  --splash         Make tide's boot splash, its logo and a spinner on black,
+                   the one shown from the next boot
   --github PREFIX  Clone from a GitHub mirror at PREFIX (git@ghe.corp: or
                    https://ghe.corp/) instead of github.com, for the
                    Quickshell, Hyprland and tidewm source builds. A bare host is
@@ -660,6 +673,8 @@ while test $# -gt 0; do
         --no-tidewm) BUILD_TIDEWM=no ;;
         --greeter) GREETER=yes ;;
         --no-greeter) GREETER=no ;;
+        --splash) SPLASH=yes ;;
+        --no-splash) SPLASH=no ;;
         --dm)
             if test $# -lt 2; then
                 warn "--dm needs one of tide, sddm, gdm or keep"
@@ -7135,6 +7150,137 @@ check_session() {
     return 1
 }
 
+# --- The boot splash ---
+
+# Where Plymouth's themes are, the kernel's command line, and the Plymouth
+# and mkinitcpio settings that can pick a theme or leave Plymouth out.
+# Overridable for tests.
+PLYMOUTH_THEMES="${SETUP_PLYMOUTH_THEMES:-/usr/share/plymouth/themes}"
+KERNEL_CMDLINE="${SETUP_KERNEL_CMDLINE:-/proc/cmdline}"
+PLYMOUTHD_CONF="${SETUP_ETC:-/etc}/plymouth/plymouthd.conf"
+MKINITCPIO_CONF="${SETUP_ETC:-/etc}/mkinitcpio.conf"
+
+# splash_installed: whether the installed theme is this checkout's, file
+# for file (keymap-render.png is the distro's, so it isn't compared).
+splash_installed() {
+    for _sp_file in "$TIDE_DIR"/plymouth/tide/*; do
+        cmp -s "$_sp_file" "$PLYMOUTH_THEMES/tide/${_sp_file##*/}" || return 1
+    done
+}
+
+# splash_default: whether tide's theme is Plymouth's default. Debian and
+# Ubuntu pick it with the default.plymouth alternative, which a Theme= in
+# plymouthd.conf overrides; Fedora and Arch with plymouth-set-default-theme.
+splash_default() {
+    case "$(detect_os)" in
+        debian)
+            LC_ALL=C update-alternatives --query default.plymouth 2>/dev/null |
+                grep -qx "Value: $PLYMOUTH_THEMES/tide/tide.plymouth" || return 1
+            ! grep -q '^Theme=' "$PLYMOUTHD_CONF" 2>/dev/null || grep -qx 'Theme=tide' "$PLYMOUTHD_CONF"
+            ;;
+        *) test "$(plymouth-set-default-theme 2>/dev/null)" = tide ;;
+    esac
+}
+
+# setup_splash: --splash's boot splash (tide SPEC.md §5.3). Installs
+# Plymouth with its two-step plugin, which draws tide's theme, installs the
+# theme, makes it the default and rebuilds the initramfs, which carries the
+# theme from the next boot. A run that finds it all in place already
+# rebuilds nothing. Each step that fails is a warning: the boot still
+# works, with the splash it had.
+setup_splash() {
+    case "$(detect_os)" in
+        debian) _sp_pkgs="plymouth plymouth-themes plymouth-theme-spinner" ;;
+        redhat) _sp_pkgs="plymouth plymouth-plugin-two-step plymouth-theme-spinner" ;;
+        arch) _sp_pkgs=plymouth ;;
+        *)
+            warn "unknown OS, so tide's boot splash isn't installed"
+            return 0
+            ;;
+    esac
+    pkg_begin "$(pkg_manager)" "Installing Plymouth, for tide's boot splash"
+    # Each distro has some of these names: Ubuntu's two-step plugin is in
+    # plymouth-theme-spinner, Debian's in plymouth-themes. Whether the
+    # plugin came is checked below, so a name it doesn't have is no warning.
+    # shellcheck disable=SC2086  # word-split the package list
+    install_all $_sp_pkgs || :
+    pkg_end
+    if ! is_command plymouth; then
+        warn "Plymouth didn't install, so tide's boot splash isn't installed; rerun $SETUP_COMMAND --splash to retry"
+        return 0
+    fi
+    _sp_plugins=$(plymouth --get-splash-plugin-path 2>/dev/null) || _sp_plugins=
+    if test -n "$_sp_plugins" && test ! -f "$_sp_plugins/two-step.so"; then
+        warn "Plymouth's two-step plugin isn't in $_sp_plugins, so tide's boot splash wouldn't show; install the package that has it, then rerun $SETUP_COMMAND --splash"
+        return 0
+    fi
+
+    if splash_installed && splash_default && test ! -e "$SPLASH_PENDING_FILE"; then
+        detail "tide's boot splash is the default already"
+    else
+        info "Making tide's boot splash the default"
+        # Noted first: a step below that fails leaves the theme half in
+        # place, which a rerun would otherwise take for done.
+        install_text "$SPLASH_PENDING_FILE" "tide's boot splash needs an initramfs rebuild" ||
+            warn "couldn't note the boot splash's install in $SPLASH_PENDING_FILE, so if it fails, a rerun may not finish it"
+        if ! sudo_logged make -C "$TIDE_DIR" install-splash; then
+            warn "couldn't install tide's boot splash in $PLYMOUTH_THEMES/tide; rerun $SETUP_COMMAND --splash to retry"
+            return 0
+        fi
+        case "$(detect_os)" in
+            debian)
+                if ! sudo_logged update-alternatives --install "$PLYMOUTH_THEMES/default.plymouth" default.plymouth \
+                        "$PLYMOUTH_THEMES/tide/tide.plymouth" 100 ||
+                    ! sudo_logged update-alternatives --set default.plymouth "$PLYMOUTH_THEMES/tide/tide.plymouth"; then
+                    warn "couldn't make tide's boot splash Plymouth's default; rerun $SETUP_COMMAND --splash to retry"
+                    return 0
+                fi
+                # A theme named in plymouthd.conf wins over the alternative.
+                if grep -q '^Theme=' "$PLYMOUTHD_CONF" 2>/dev/null && ! grep -qx 'Theme=tide' "$PLYMOUTHD_CONF"; then
+                    if ! sudo_logged sed -i 's/^Theme=.*/Theme=tide/' "$PLYMOUTHD_CONF"; then
+                        warn "couldn't set Theme=tide in $PLYMOUTHD_CONF, whose theme wins over tide's"
+                        return 0
+                    fi
+                fi
+                _sp_rebuild="update-initramfs -u"
+                ;;
+            redhat | arch)
+                if ! sudo_logged plymouth-set-default-theme tide; then
+                    warn "couldn't make tide's boot splash Plymouth's default; rerun $SETUP_COMMAND --splash to retry"
+                    return 0
+                fi
+                case "$(detect_os)" in
+                    redhat) _sp_rebuild="dracut --force" ;;
+                    arch) _sp_rebuild="mkinitcpio -P" ;;
+                esac
+                ;;
+        esac
+        # The initramfs carries the theme: without a rebuild, the boot
+        # shows the last one until the next kernel update.
+        info "Rebuilding the initramfs, for the boot splash"
+        # shellcheck disable=SC2086  # the command and its options
+        if ! sudo_logged $_sp_rebuild; then
+            warn "couldn't rebuild the initramfs ($_sp_rebuild), so the boot shows the old splash until it's rebuilt; rerun $SETUP_COMMAND --splash to retry"
+            return 0
+        fi
+        sudo_logged rm -f "$SPLASH_PENDING_FILE" ||
+            warn "couldn't remove $SPLASH_PENDING_FILE, so the next $SETUP_COMMAND --splash rebuilds the initramfs again"
+        info "tide's boot splash shows from the next boot"
+    fi
+
+    # What else can keep it from showing. Arch's initramfs has Plymouth
+    # only with its hook.
+    if test "$(detect_os)" = arch && test -f "$MKINITCPIO_CONF" &&
+        ! grep -Eq '^HOOKS=.*[( ]plymouth[ )]' "$MKINITCPIO_CONF"; then
+        warn "$MKINITCPIO_CONF's HOOKS has no plymouth, so the boot shows no splash; add it after udev (or systemd), then run sudo mkinitcpio -P"
+    fi
+    # Plymouth shows a splash only when the kernel is told to: "splash", or
+    # Fedora's "rhgb".
+    if test -r "$KERNEL_CMDLINE" && ! grep -Eq '(^| )(splash|rhgb)( |$)' "$KERNEL_CMDLINE"; then
+        warn "the kernel command line has no 'splash', so the boot shows text, not tide's splash; add 'quiet splash' to it in the boot loader's settings (GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub, then update-grub)"
+    fi
+}
+
 # --- Main ---
 
 # Only Hyprland's build (TIDE_SETUP_ONLY=hyprland), or only tidewm's
@@ -7220,6 +7366,9 @@ if test "$SUDO" = no; then
 else
     make_look_dir
     setup_greeter
+    if test "$SPLASH" = yes; then
+        setup_splash
+    fi
 fi
 
 if ! check_session; then
