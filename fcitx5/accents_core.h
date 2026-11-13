@@ -67,9 +67,16 @@ Settings parseSettings(const std::string &text,
 // What the input context says about itself, at each event.
 struct Context {
     bool password = false;          // Password or Sensitive
-    bool surroundingText = false;   // can delete text before the cursor
+    // The character just before the cursor, as the app last reported it;
+    // empty where it reports none. Some apps report none (kitty), and
+    // fcitx5 drops a deletion of text it hasn't seen.
+    std::string beforeCursor;
     std::string program;            // may be empty where fcitx5 can't tell
 };
+
+// The character before the cursorChars'th character of UTF-8 text, or ""
+// at the start or past the end.
+std::string charBefore(const std::string &text, size_t cursorChars);
 
 // X keysyms the machine knows by number.
 namespace keysym {
@@ -150,6 +157,8 @@ private:
     const Settings *settings_;
     State state_ = State::Idle;
     int heldCode_ = 0;
+    // What the held key typed.
+    std::string letter_;
     bool heldDown_ = false;
     std::vector<std::string> candidates_;
     int highlight_ = -1;
