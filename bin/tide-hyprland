@@ -4,8 +4,9 @@
 #
 # uwsm names a session after its compositor command, so starting Hyprland
 # through this wrapper gives the session its own target,
-# wayland-session@tide-hyprland.target. tide's units hang off that
-# target, so a plain Hyprland login, or Plasma, never starts them.
+# wayland-session@tide\x2dhyprland.target (uwsm escapes the - in a unit
+# name). tide's units hang off that target, so a plain Hyprland login, or
+# Plasma, never starts them.
 #
 # Hyprland 0.53 and later start through start-hyprland, a watchdog that
 # restarts a crashed Hyprland in safe mode; without it, Hyprland warns at

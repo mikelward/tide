@@ -3,8 +3,8 @@
 # option beside tide-hyprland, which stays the default.
 # uwsm names a session after its compositor command, so starting tidewm
 # through this wrapper gives the session its own target,
-# wayland-session@tide-tidewm.target, which tide's units hang off as they
-# do the Hyprland session's.
+# wayland-session@tide\x2dtidewm.target (uwsm escapes the - in a unit
+# name), which tide's units hang off as they do the Hyprland session's.
 # tidewm runs its -s command once its Wayland socket and its IPC are up,
 # so that's where `uwsm finalize` goes, as Hyprland's one exec-once: it
 # hands WAYLAND_DISPLAY, DISPLAY and tidewm's IPC socket, SWAYSOCK, to

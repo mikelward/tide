@@ -688,7 +688,7 @@ case "\$*" in
         rm -f "$T/greetd-wanted"
         if test -s "$T/dm" && test "\$(cat "$T/dm")" = greetd.service; then : > "$T/dm"; fi
         ;;
-    "--user enable "*)
+    "--user enable "* | "--user reenable "*)
         # The unit is the last word, after any --now.
         for unit; do :; done
         if test "\$unit" = "\$FAKE_USER_ENABLE_FAILS"; then

@@ -481,7 +481,10 @@ flowchart TD
 - **`tide-hyprland`** is a wrapper that execs `start-hyprland`,
   Hyprland's crash watchdog, or `Hyprland` where that's missing. uwsm names a
   session after its compositor command, so the wrapper gives tide
-  its own session target, `wayland-session@tide-hyprland.target`. A
+  its own session target, `wayland-session@tide\x2dhyprland.target`:
+  uwsm escapes the command's name for the unit name, as `systemd-escape`
+  does, so its `-` is `\x2d`. A target named with a plain `-` is another
+  unit, which nothing starts. A
   plain Hyprland login gets `wayland-session@hyprland.desktop.target`
   instead, and starts none of tide's units.
 - **A login says how far it got.** `tide-hyprland` and `tide-tidewm` log
@@ -541,7 +544,7 @@ flowchart TD
   tidewm is installed. It runs `uwsm start -e -D tidewm:tide -- tide-tidewm`,
   and the wrapper execs tidewm with `uwsm finalize SWAYSOCK I3SOCK` as its
   startup command, so the session gets its own target,
-  `wayland-session@tide-tidewm.target`, and tidewm's IPC socket. Quickshell's
+  `wayland-session@tide\x2dtidewm.target`, and tidewm's IPC socket. Quickshell's
   I3 client reads `I3SOCK` first, so it's handed on too: tidewm's own, or
   `SWAYSOCK`'s value from a tidewm that sets none, which replaces one the
   user manager kept from an earlier session. The wrapper also starts
@@ -619,8 +622,8 @@ flowchart TD
 ### 5.4 Guards that keep it that way
 
 - **Scoped units.** tide's units are `WantedBy=` the tide
-  sessions' targets (`wayland-session@tide-hyprland.target`, and
-  `wayland-session@tide-tidewm.target` for tidewm's, §5.3) and
+  sessions' targets (`wayland-session@tide\x2dhyprland.target`, and
+  `wayland-session@tide\x2dtidewm.target` for tidewm's, §5.3) and
   `PartOf=graphical-session.target`, never plainly
   `WantedBy=graphical-session.target`. Plasma also reaches that target, and
   that is exactly how swaync leaked into KDE. Nothing tide installs
@@ -802,9 +805,9 @@ flowchart TD
     bar or a dock holds;
   - portal backend selection;
   - the session's target starting the shell and the clipboard history.
-    An install enabled before tidewm's session existed links them to
-    Hyprland's only, so in tidewm's the shell waits for an app key, after
-    the autostart apps it should precede;
+    Without them, as an older tide linked them to the targets' unescaped
+    names, the shell waits for an app key, after the autostart apps it
+    should precede;
   - the portal answering within 5 s. Apps ask it for settings as they
     start, and a portal that hangs makes each one wait 25 s per question;
   - `hyprctl configerrors`;
