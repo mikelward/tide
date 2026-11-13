@@ -4110,8 +4110,11 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
     chosen. Its identifier is ext-foreign-toplevel-list's, which tidewm's
     tree gives each window too (`foreign_toplevel_identifier`), so the
     dialog names each by the shell's own: its app's icon, its workspace,
-    and the focused one. It has no thumbnail there, which needs Hyprland's
-    toplevels. It
+    and the focused one. Its thumbnail is taken once as the dialog
+    opens, with `grim -T` by that identifier, as the overview's are
+    (§8.7), into `$XDG_RUNTIME_DIR/tide/share-picker`; until it's there,
+    or if grim can't take it, the app's icon shows (maintainer,
+    2026-11-13). It
     offers only the outputs xdpw listed, none for a request for windows
     alone. xdpw's own restore tokens stand in for the reuse box.
 

@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Widgets
+import "lib/overview.mjs" as Ov
 import "lib/sharepicker.mjs" as Picker
 import "lib/workspaces.mjs" as Ws
 
@@ -28,6 +29,14 @@ PanelWindow {
     // The highlighted option's tile, kept in view as it moves and as the
     // list lays out.
     property Item chosenTile: null
+    // Bumped at each open; on tidewm, the open whose window pictures grim
+    // has taken, until which the windows show their icons.
+    property int session: 0
+    property int shotsFor: 0
+    readonly property string shotDir: {
+        const run = Quickshell.env("XDG_RUNTIME_DIR");
+        return run ? `${run}/tide/share-picker` : "";
+    }
 
     onChosenTileChanged: Qt.callLater(root.reveal)
 
@@ -70,8 +79,39 @@ PanelWindow {
             address: Compositor.tidewm ? (Compositor.tidewmActive?.address ?? null) : Ws.normalizeAddress(Hyprland.activeToplevel?.address)
         }, root.last, Date.now());
         root.reply = replyPath;
+        root.session += 1;
+        root.takeShots(windows);
         visible = true;
         keys.forceActiveFocus();
+    }
+
+    // tidewm: each window's picture, once, as it opens, with `grim -T` by
+    // the identifier xdpw names it by, as the overview takes them
+    // (Ov.shotsCommand). Hyprland's come from ScreencopyView instead.
+    function takeShots(windows) {
+        if (!Compositor.tidewm) {
+            return;
+        }
+        const command = Ov.shotsCommand(root.shotDir, windows.map(w => w.id));
+        if (command === null) {
+            return;
+        }
+        shots.takingFor = root.session;
+        shots.command = command;
+        shots.running = true;
+    }
+
+    Process {
+        id: shots
+
+        property int takingFor: 0
+
+        onExited: (code, status) => {
+            if (code !== 0) {
+                console.warn(`tide: the share picker's grim -T exited ${code}; some windows show their icon`);
+            }
+            root.shotsFor = shots.takingFor;
+        }
     }
 
     // Writes `line` to the open request's pipe, empty for no, and closes.
@@ -336,7 +376,11 @@ PanelWindow {
                                     required property var modelData
                                     readonly property var option: modelData.option
                                     readonly property bool chosen: modelData.index === root.selected
-                                    readonly property var shot: root.visible ? (option.kind === "window" ? Hyprland.toplevels.values.find(t => Ws.normalizeAddress(t.address) === option.address)?.wayland ?? null : Quickshell.screens.find(s => s.name === option.screen) ?? null) : null
+                                    readonly property var shot: root.visible ? (option.kind === "window" ? (Compositor.tidewm ? null : Hyprland.toplevels.values.find(t => Ws.normalizeAddress(t.address) === option.address)?.wayland ?? null) : Quickshell.screens.find(s => s.name === option.screen) ?? null) : null
+                                    // tidewm's window picture, once this open's are taken.
+                                    readonly property string shotFile: Compositor.tidewm && option.kind === "window" ? (Ov.shotFile(root.shotDir, option.id) ?? "") : ""
+                                    readonly property string shotSource: tile.shotFile !== "" && root.shotsFor === root.session
+                                        ? `file://${tile.shotFile}?${root.session}` : ""
 
                                     width: (option.kind === "window" ? 196 : 250) + 12
                                     height: thumb.height + label.height + 18
@@ -378,8 +422,20 @@ PanelWindow {
                                             constraintSize: Qt.size(thumb.width, thumb.height)
                                         }
 
+                                        Image {
+                                            id: picture
+
+                                            anchors.fill: parent
+                                            visible: tile.shotSource !== "" && status === Image.Ready
+                                            source: tile.shotSource
+                                            cache: false
+                                            asynchronous: true
+                                            fillMode: Image.PreserveAspectFit
+                                            sourceSize: Qt.size(thumb.width * 2, thumb.height * 2)
+                                        }
+
                                         IconImage {
-                                            visible: !view.hasContent && tile.option.kind === "window"
+                                            visible: !view.hasContent && !picture.visible && tile.option.kind === "window"
                                             anchors.centerIn: parent
                                             implicitSize: 40
                                             source: Quickshell.iconPath(DesktopEntries.heuristicLookup(tile.option.cls)?.icon ?? tile.option.cls, "application-x-executable")

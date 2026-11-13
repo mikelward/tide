@@ -1,4 +1,5 @@
 // Tests for sharepicker.mjs.
+import { shotFile } from "./overview.mjs";
 import { test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -103,6 +104,17 @@ test("xdpw's windows are named from tidewm's, by its identifier, for their icon 
         { id: "c3d4", cls: "", title: "gone", address: null },
     ]);
     assert.deepEqual(namedWindows(windows, undefined), windows);
+});
+
+test("each window's option keeps the portal's id, which tidewm's pictures are taken by", () => {
+    const windows = namedWindows(parseWindows("a1b2[HC>][HT>]~/src[HE>]0[HA>]"),
+        [{ address: "12", app: "kitty", identifier: "a1b2", workspace: 2 }]);
+    const opts = options([], windows, () => 2, 2);
+    assert.deepEqual(opts.map((o) => [o.kind, o.id, o.key]), [["window", "a1b2", "window:a1b2"]]);
+    // The picture's file is named by it, and an id a file name couldn't
+    // hold safely gets none, so the icon shows.
+    assert.equal(shotFile("/run/user/1000/tide/share-picker", opts[0].id), "/run/user/1000/tide/share-picker/a1b2.jpg");
+    assert.equal(shotFile("/run/user/1000/tide/share-picker", "../x"), null);
 });
 
 test("xdph's request may share any screen, xdpw's only the outputs it offered", () => {
