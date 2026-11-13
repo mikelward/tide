@@ -289,9 +289,12 @@ mkdir -p "$tmp/input/event0/device" "$tmp/udev" || exit 1
 printf '13:64\n' >"$tmp/input/event0/dev" || exit 1
 printf 'Test keyboard\n' >"$tmp/input/event0/device/name" || exit 1
 printf 'E:ID_INPUT=1\nE:ID_INPUT_KEY=1\nE:ID_INPUT_KEYBOARD=1\n' >"$tmp/udev/c13:64" || exit 1
+# tide caps-lock, over that keyboard's Caps Lock light, off.
+mkdir -p "$tmp/leds/input0::capslock" || exit 1
+printf '0\n' >"$tmp/leds/input0::capslock/brightness" || exit 1
 cat >"$tmp/helpers/real/tide" <<EOF || exit 1
 #!/bin/sh
-TIDE_KEYBOARDS_SYS="$tmp/input" TIDE_KEYBOARDS_UDEV="$tmp/udev" exec sh "$PWD/bin/tide" "\$@"
+TIDE_KEYBOARDS_SYS="$tmp/input" TIDE_KEYBOARDS_UDEV="$tmp/udev" TIDE_LEDS_SYS="$tmp/leds" exec sh "$PWD/bin/tide" "\$@"
 EOF
 chmod +x "$tmp/helpers/real/tide" || exit 1
 # With the Go that's installed, as the Makefile builds. Without git's
@@ -633,7 +636,7 @@ load() {
     # tzdata; the stand-ins' answers), so anything the shell's commands
     # warn of is a failure.
     # On tidewm, Quickshell's I3 module logs a command tidewm refused.
-    if grep -E "tide: (busctl|gdbus|tide-tz|tide-sysmon|tide-msg|tidewm can't|clocks|bar title|focus|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl|tide-msg)|replay|tell|apply|keep|read tidewm)|tide-(lock|greeter): (hyprctl|tide-msg|couldn't start (hyprctl|tide-msg)|keyboards)|Error occurred while running command" "$log" >"$tmp/reports"; then
+    if grep -E "tide: (busctl|gdbus|tide-tz|tide-sysmon|tide-msg|tidewm can't|clocks|bar title|focus|gsettings|nmcli|no nmcli|systemctl|hyprctl binds)|tide: couldn't (start (tide-|hyprctl|gsettings|systemctl)|run (nmcli|hyprctl|tide-msg)|replay|tell|apply|keep|read tidewm)|tide-(lock|greeter): (hyprctl|tide-msg|couldn't start (hyprctl|tide-msg)|keyboards|caps lock)|Error occurred while running command" "$log" >"$tmp/reports"; then
         echo "FAIL: $_what loaded, but its commands warned:" >&2
         cat "$tmp/reports" >&2
         exit 1
@@ -2275,7 +2278,7 @@ start_session {"cmd": ["tide-session hyprland"], "env": ["XDG_SESSION_TYPE=wayla
 # settings, whether a popover is open, the monitors and their settings, the
 # dim strength, home and its apps' rules, or the floating rules.
 # The lock and the greeter only ask for the keyboards, for their layout
-# names, and listen for a wake, for their clocks.
+# names, and Caps Lock, and listen for a wake, for their clocks.
 shell_runs='tide-tz
 tide-sysmon probe
 hyprctl activewindow -j
@@ -2344,6 +2347,7 @@ echo "ok: the shell writes the display settings, and new ones, and applies them"
 echo "ok: make install-shell over the running shell reloads it once, after every file"
 load_runs='hyprctl devices -j
 tide keyboards
+tide caps-lock
 udevadm monitor --udev --subsystem-match=input
 gdbus monitor --system --dest org.freedesktop.login1'
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"
@@ -2409,6 +2413,7 @@ load tidewm-lock "the lock" -p "$tmp/home/.config/quickshell/tide/lock.qml"
 load_compositor=
 load_runs='hyprctl devices -j
 tide keyboards
+tide caps-lock
 udevadm monitor --udev --subsystem-match=input
 gdbus monitor --system --dest org.freedesktop.login1'
 # A clocks.local.json and a wallpaper record the lock refuses, which it

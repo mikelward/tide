@@ -220,11 +220,19 @@ export function statusLine(state) {
     return { text: state.message, error: state.error };
 }
 
-// What sits under the password field, as on the boot splash (SPEC.md
-// §10): the layout's name (layoutName), or NO_KEYBOARD while there's no
-// keyboard (hasKeyboard). "" when there's a keyboard but no layout to show.
-export function layoutLine(layout, keyboard) {
-    return keyboard ? layout : NO_KEYBOARD;
+// What "Caps Lock is on" says, beside the layout (SPEC.md §10).
+export const CAPS_LOCK_ON = "Caps Lock is on";
+
+// The row under the password field, as the boot splash has it (SPEC.md
+// §10): the layout's name, then, beside it, "No keyboard" while there's
+// none (hasKeyboard), else "Caps Lock is on" while it's on. With no
+// keyboard Hyprland names no layout, so `last`, the last one named, stands
+// in. Returns {layout, flag, kind}: kind "keyboard", "caps" or "" for none.
+export function layoutRow({ layout, last, keyboard, capsLock }) {
+    const name = layout || (keyboard ? "" : last || "");
+    if (!keyboard) return { layout: name, flag: NO_KEYBOARD, kind: "keyboard" };
+    if (capsLock === true) return { layout: name, flag: CAPS_LOCK_ON, kind: "caps" };
+    return { layout: name, flag: "", kind: "" };
 }
 
 // Where the face's middle column starts (SPEC.md §10), so nothing on it
@@ -533,20 +541,37 @@ export function keyboardsNext(state, event) {
     }));
 }
 
+// Whether Caps Lock is on (SPEC.md §10), from `tide caps-lock`, read at
+// start, when a keyboard comes or goes, and each time Caps Lock is
+// pressed, one read at a time as the layout's is.
+//   on         true, false, or null while it can't be told
+//   querying, again   as for the layout
+export const CAPS_LOCK_INITIAL = Object.freeze({ on: null, querying: false, again: false });
+
+// Events: {type: "refresh"} and {type: "answer", text} (`tide caps-lock`'s
+// output, null when it failed, which hides "Caps Lock is on" rather than
+// keep one that may be stale). Returns {state, query}, as layoutNext does.
+export function capsLockNext(state, event) {
+    return readNext("caps lock", state, event, (answer) => {
+        const text = typeof answer.text === "string" ? answer.text.trim() : "";
+        return { on: text === "on" ? true : text === "off" ? false : null };
+    });
+}
+
 export function hasKeyboard(state) {
     return !state.watching || state.count === null || state.count > 0;
 }
 
 // The face's colors, light or dark (SPEC.md §10, §11): the background's
 // gradient, the text, the red that warns, a failed attempt's border, the
-// accent and a quiet border, and `ink`, the color the face's
+// accent, "Caps Lock is on"'s yellow and a quiet border, and `ink`, the color the face's
 // see-through whites are mixed from: white on the dark face, black on the
 // light one. `wash` is how far a wallpaper is darkened (dark) or
 // lightened (light) behind it, so the text reads on any picture.
 export function facePalette(dark = true) {
     return dark
-        ? Object.freeze({ dark: true, top: "#13303a", bottom: "#241a3a", text: "#f2f2f6", warn: "#ff9e8a", error: "#ff7b63", accent: PALETTE.dark.accent, quiet: "#29ffffff", ink: 1 })
-        : Object.freeze({ dark: false, top: "#d9edf1", bottom: "#e8e0f3", text: "#1f1f24", warn: "#b3261e", error: "#c62828", accent: PALETTE.light.accent, quiet: "#29000000", ink: 0 });
+        ? Object.freeze({ dark: true, top: "#13303a", bottom: "#241a3a", text: "#f2f2f6", warn: "#ff9e8a", error: "#ff7b63", accent: PALETTE.dark.accent, caps: PALETTE.dark.urgent, quiet: "#29ffffff", ink: 1 })
+        : Object.freeze({ dark: false, top: "#d9edf1", bottom: "#e8e0f3", text: "#1f1f24", warn: "#b3261e", error: "#c62828", accent: PALETTE.light.accent, caps: PALETTE.light.urgent, quiet: "#29000000", ink: 0 });
 }
 
 // The password field's border, and whether its caret shows (SPEC.md §10):

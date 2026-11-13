@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { exitCode, CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, facePalette, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutLine, layoutName, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
+import { exitCode, CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, facePalette, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutRow, layoutName, CAPS_LOCK_INITIAL, CAPS_LOCK_ON, capsLockNext, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -544,14 +544,42 @@ test("an input event during a read reads once more after it", () => {
     assert.equal(r.state.count, 1);
 });
 
-test("with no keyboard, the layout's place says so, and a failure stays on its line", () => {
-    assert.equal(layoutLine("Dvorak", true), "Dvorak");
-    // The KVM switches away.
-    assert.equal(layoutLine("Dvorak", false), NO_KEYBOARD);
-    assert.equal(layoutLine("", false), "No keyboard");
-    assert.equal(layoutLine("", true), "");
+test("the row under the field names the layout, and No keyboard or Caps Lock beside it", () => {
+    assert.deepEqual(layoutRow({ layout: "Dvorak", last: "Dvorak", keyboard: true, capsLock: false }),
+        { layout: "Dvorak", flag: "", kind: "" });
+    assert.deepEqual(layoutRow({ layout: "Dvorak", last: "Dvorak", keyboard: true, capsLock: true }),
+        { layout: "Dvorak", flag: CAPS_LOCK_ON, kind: "caps" });
+    // Unknown is shown as off.
+    assert.deepEqual(layoutRow({ layout: "Dvorak", last: "", keyboard: true, capsLock: null }),
+        { layout: "Dvorak", flag: "", kind: "" });
+    // The KVM switches away: Hyprland names no layout, so the last one stays.
+    assert.deepEqual(layoutRow({ layout: "", last: "Dvorak", keyboard: false, capsLock: true }),
+        { layout: "Dvorak", flag: NO_KEYBOARD, kind: "keyboard" });
+    assert.deepEqual(layoutRow({ layout: "", last: "", keyboard: false, capsLock: null }),
+        { layout: "", flag: "No keyboard", kind: "keyboard" });
+    // With a keyboard, a layout that can't be read isn't guessed.
+    assert.deepEqual(layoutRow({ layout: "", last: "Dvorak", keyboard: true, capsLock: false }),
+        { layout: "", flag: "", kind: "" });
     const failed = run(INITIAL, ...type("pw"), { type: "submit" }, prompt, { type: "done", result: "failed" }).state;
     assert.deepEqual(statusLine(failed), { text: WRONG, error: true });
+});
+
+test("Caps Lock is read one at a time, and an answer it can't read hides it", () => {
+    let r = capsLockNext(CAPS_LOCK_INITIAL, { type: "refresh" });
+    assert.equal(r.query, true);
+    r = capsLockNext(r.state, { type: "refresh" });
+    assert.equal(r.query, false);
+    r = capsLockNext(r.state, { type: "answer", text: "on\n" });
+    assert.equal(r.state.on, true);
+    // The refresh during the read reads again.
+    assert.equal(r.query, true);
+    r = capsLockNext(r.state, { type: "answer", text: "off\n" });
+    assert.equal(r.state.on, false);
+    assert.equal(r.query, false);
+    for (const text of [null, "", "dim\n"]) {
+        r = capsLockNext(capsLockNext(r.state, { type: "refresh" }).state, { type: "answer", text });
+        assert.equal(r.state.on, null, String(text));
+    }
 });
 
 test("the field shows its focus in the accent, with a caret, only with focus and a keyboard", () => {
@@ -679,6 +707,8 @@ test("the face is light or dark, its ink white on dark and black on light", () =
     assert.equal(light.ink, 0);
     assert.notEqual(light.top, dark.top);
     assert.equal(light.text, "#1f1f24");
+    // Caps Lock in the bar's urgent yellow, dark enough to read on the light face.
+    assert.deepEqual([dark.caps, light.caps], ["#f8e45c", "#8a5d00"]);
     // The field's border follows: the light palette's accent and a dark hairline.
     assert.deepEqual(fieldLook({ focused: true, keyboard: true, error: false, dark: false }), { border: "#1c71d8", borderWidth: 1.5, caret: true });
     assert.equal(fieldLook({ focused: false, keyboard: true, error: false, dark: false }).border, "#29000000");

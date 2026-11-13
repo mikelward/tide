@@ -58,13 +58,22 @@ ShellRoot {
         id: keymap
     }
 
+    // Whether Caps Lock is on, for "Caps Lock is on" under the field
+    // (LockCapsLock.qml).
+    LockCapsLock {
+        id: capsLockLight
+    }
+
     // Whether there's a keyboard to type with, for the field's focus
     // (LockKeyboards.qml). A keyboard coming or going can change the main
-    // one, so the layout is read again.
+    // one, so the layout and Caps Lock are read again.
     LockKeyboards {
         id: keyboards
 
-        onCountChanged: keymap.refresh()
+        onCountChanged: {
+            keymap.refresh();
+            capsLockLight.refresh();
+        }
     }
 
     // The notification count in the corner: read from the history the bar
@@ -293,8 +302,10 @@ ShellRoot {
             powerBusy: powerActions.busy
             layout: keymap.layoutName
             keyboard: keyboards.present
+            capsLock: capsLockLight.on
             unread: root.unread
             onEvent: event => root.dispatch(event)
+            onCapsLockPressed: capsLockLight.refresh()
             onPower: id => powerActions.press(id)
         }
     }

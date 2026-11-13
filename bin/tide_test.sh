@@ -1350,6 +1350,40 @@ check "and says where it looked" contains "$(cat "$tmp/err")" "can't read the in
 run TIDE_KEYBOARDS_SYS="$input" TIDE_KEYBOARDS_UDEV="$tmp/no-udev" "$qs" keyboards
 check "without udev's data, keyboards exits 1" test $? -eq 1
 check "and says where it looked" contains "$(cat "$tmp/err")" "can't read udev's data in $tmp/no-udev"
+
+# tide caps-lock: the keyboards' Caps Lock lights, as /sys/class/leds lays
+# them out, beside another light that isn't one.
+leds=$tmp/leds
+# led NAME BRIGHTNESS: a light and its brightness.
+led() {
+    mkdir -p "$leds/$1"
+    printf '%s\n' "$2" > "$leds/$1/brightness"
+}
+caps_lock() {
+    run TIDE_LEDS_SYS="$leds" "$qs" caps-lock
+}
+led input3::numlock 1
+led input3::capslock 0
+caps_lock
+check "caps-lock exits 0" test $? -eq 0
+check "with its light off, caps-lock says off" test "$(cat "$tmp/out")" = off
+check "and says nothing else" test ! -s "$tmp/err"
+led input3::capslock 1
+caps_lock
+check "with its light on, caps-lock says on" test "$(cat "$tmp/out")" = on
+# Two keyboards, one lit: the other's light may lag behind.
+led input3::capslock 0
+led input9::capslock 1
+caps_lock
+check "with any light on, caps-lock says on" test "$(cat "$tmp/out")" = on
+rm -r "$leds/input3::capslock" "$leds/input9::capslock"
+caps_lock
+status=$?
+check "with no Caps Lock light, caps-lock prints nothing" test ! -s "$tmp/out"
+check "and exits 0" test "$status" -eq 0
+run TIDE_LEDS_SYS="$tmp/no-leds" "$qs" caps-lock
+check "without the lights, caps-lock exits 1" test $? -eq 1
+check "and says where it looked" contains "$(cat "$tmp/err")" "can't read the lights in $tmp/no-leds"
 keyboards extra
 check "keyboards takes no arguments" test $? -eq 2
 

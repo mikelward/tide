@@ -575,6 +575,10 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                     tide keyboards >/dev/null 2>&1 &
                     udevadm monitor --udev --subsystem-match=input >/dev/null 2>&1 &
                 fi
+                # And Caps Lock, for "Caps Lock is on" under the field.
+                if ! test -e "\$(dirname "\$0")/no-caps-lock"; then
+                    tide caps-lock >/dev/null 2>&1 &
+                fi
                 ;;
         esac
     fi
@@ -1824,6 +1828,14 @@ stubs "$tmp/no-keyboard-watch" "exit 0" "$loaded"
 run "$tmp/no-keyboard-watch"
 check "a lock and greeter that never count the keyboards for the field's focus fail" test "$code" -ne 0
 check "and say so" contains "$out" 'never ran "tide keyboards..." in 2 s'
+}
+
+case_129() {
+stubs "$tmp/no-caps-lock" "exit 0" "$loaded"
+: >"$tmp/no-caps-lock/no-caps-lock" || exit 1
+run "$tmp/no-caps-lock"
+check "a lock and greeter that never read Caps Lock fail" test "$code" -ne 0
+check "and say so" contains "$out" 'never ran "tide caps-lock..." in 2 s'
 }
 
 case_128() {
