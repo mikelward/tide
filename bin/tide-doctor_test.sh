@@ -69,6 +69,16 @@ if test "$2" = show && test "$4" = Wants; then
     echo "${FAKE_WANTS-tide.service tide-clipboard.service tide-fcitx5.service}"
     exit 0
 fi
+# show -p Id --value dbus.service: the session bus's unit, $FAKE_BUS_UNIT
+# or dbus-broker's, or it fails with $FAKE_BUS_UNIT_FAILS.
+if test "$2" = show && test "$4" = Id && test "$6" = dbus.service; then
+    if test -n "$FAKE_BUS_UNIT_FAILS"; then
+        echo "$FAKE_BUS_UNIT_FAILS" >&2
+        exit 1
+    fi
+    echo "${FAKE_BUS_UNIT:-dbus-broker.service}"
+    exit 0
+fi
 if test "$2" = show && test "$4" = ActiveEnterTimestampMonotonic; then
     echo "${FAKE_SESSION_START:-100}"
     exit 0
@@ -456,6 +466,15 @@ check "and says what apps wait for, and where to look" \
     test "$out" = "xdg-desktop-portal didn't answer in 5 s (Failed to get property version: Connection timed out), so apps wait up to 25 s for it as they open: \`journalctl --user -b -u xdg-desktop-portal.service\` says why"
 run XDG_CURRENT_DESKTOP=tidewm:tide FAKE_PORTAL_FAILS="Failed to get property version: Connection timed out"
 check "in tidewm's session too" contains "$out" "xdg-desktop-portal didn't answer in 5 s"
+
+healthy
+run FAKE_BUS_UNIT=dbus.service
+check "dbus-daemon as the session bus is a problem" test "$status" -eq 1
+check "and says what it costs and that setup switches it" \
+    test "$out" = "dbus-daemon runs the session bus, so logging in right after logging out can leave apps waiting 2 minutes for the portal: \`setup\` switches it to dbus-broker, after a reboot"
+run FAKE_BUS_UNIT_FAILS="Failed to connect to bus: No medium found"
+check "a session bus that can't be named is a problem" \
+    test "$out" = "couldn't ask which program runs the session bus (Failed to connect to bus: No medium found): \`systemctl --user status dbus.service\` says"
 
 healthy
 run FAKE_KEYRING="b true"

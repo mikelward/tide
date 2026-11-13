@@ -355,6 +355,7 @@ work". The old setup shows how it fought itself:
 | Lock screen | `tide-lock`, a separate Quickshell process with the same QML (`WlSessionLock` + PAM service `tide-lock`) | hypridle's `lock_cmd`, on logind's `Lock` signal → `tide-lock.service` | hyprlock runs only as the lock's fallback (§10) |
 | Idle timeline, `org.freedesktop.ScreenSaver`, logind lock and sleep bridge | hypridle (§10) | `hypridle.service` | swayidle not run; the shell does not time idle |
 | Screen-share picker | tide, via xdph `custom_picker_binary` | xdph, on demand | `hyprland-share-picker` |
+| System and session buses | dbus-broker (§5.4) | `dbus.service`, its alias, in the system and user managers | dbus-daemon: the installer enables dbus-broker where the distro keeps dbus-daemon |
 | Portals | `xdg-desktop-portal` + `-hyprland` + `-gtk` | D-Bus activation | `-kde`, `-gnome`, `-wlr` never selected: `tide-portals.conf` names `hyprland;gtk`. tidewm's session (§5.3) reads `tidewm-portals.conf`, `wlr;gtk`, instead |
 | Theme schedule | tide | `tide.service` | `theme-daemon.sh` retired |
 | Audio | PipeWire + WirePlumber | their own socket units | PulseAudio |
@@ -676,6 +677,32 @@ flowchart TD
   sets `TimeoutStopSec=5`, and the hypridle drop-in does too. At
   systemd's default, a process slow to die held the target for 90 s, and
   a login straight after a logout came back to the login screen.
+- **dbus-broker runs the buses, not dbus-daemon.** A login straight after
+  a logout, on 2026-11-12, waited 2 minutes for the portal:
+  - As Hyprland exited, its portal asked the session bus for its GTK
+    backend. systemd started `xdg-desktop-portal-gtk`, which failed at
+    once, as the display was gone.
+  - dbus-daemon never heard of the failure. It held the request for its
+    full `service_start_timeout`, 120 s on the session bus.
+  - The new session's portal asked for the same name 19 s later and
+    joined that wait. It gave up first, with no working backend, and each
+    app then waited 25 s per portal call. uwsm's own log suggests
+    dbus-broker.
+  - dbus-broker's launcher watches the job it asks systemd for, and the
+    unit, and fails a pending request as soon as either fails.
+
+  Fedora and Arch use dbus-broker already. Debian and Ubuntu package it
+  but keep dbus-daemon. So the installer, finding dbus-daemon behind the
+  system's or the user managers' `dbus.service`, installs `dbus-broker`
+  and enables its units: `systemctl enable --no-reload` for the system,
+  `systemctl --global enable` for every user. Each unit has
+  `Alias=dbus.service`, and the alias in `/etc` comes before
+  dbus-daemon's unit; Debian's package enables both as it installs,
+  too. Nothing is stopped or restarted. The bus can't be swapped under a
+  running session, so the switch takes effect at the next boot, and the
+  installer says so. Under `--no-sudo`, or where it can't, it warns what
+  dbus-daemon costs. `tide doctor` reports a session bus that is still
+  dbus-daemon's.
 - **Two `exec-once`s.** Hyprland's config starts nothing but the splash
   and `uwsm finalize`, and `hypr/hyprland_test.lua` asserts it. The splash
   has to show before the session's units start, so it can't be one.
@@ -810,6 +837,7 @@ flowchart TD
     should precede;
   - the portal answering within 5 s. Apps ask it for settings as they
     start, and a portal that hangs makes each one wait 25 s per question;
+  - dbus-broker, not dbus-daemon, running the session bus (above);
   - `hyprctl configerrors`;
   - unscoped autostart entries;
   - hypridle running, since without it idle, suspend and `Super+L` don't
@@ -5811,7 +5839,7 @@ light/dark switch.
 
 | Repo | Gets |
 |---|---|
-| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service` and its fallback, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. The default Hyprland config, with tide's keys, rules and input scripts, tidewm's, and hypridle's (§6.8, §10). The tide connector, the browser extension in `connector/` (§8.3). `make install`. The installer, `install/tide-setup`: distro packages, the pinned source builds, units, fcitx5, greetd and the greeter, and the tabs host manifest. Releases, one per push to main (`make dist`, `release.yml`). `deps.lock`, the pins of what's built from source (Quickshell, Hyprland and its libraries, and wlroots for tidewm, whose latest `main` is built unpinned), which the installer and CI read through `install/pins`. |
+| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme. The session: its `wayland-sessions` entry and `tide-hyprland` wrapper, the units (`tide.service`, `tide-lock.service` and its fallback, `tide-clipboard.service`, the `hypridle.service` drop-in), `tide-portals.conf`, the `tide-lock` PAM file. The greeter: `tide-greeter`, its Hyprland config and the greetd config template. `tide-share-picker`. `tide doctor`, `tide launch`, `tide workspace`, `tide grant`, `tide clipboard` and `tide idle-suspend`. `tide-agent`, the network and Bluetooth agent (§5.6). `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3). The Lua tiling layout. The default Hyprland config, with tide's keys, rules and input scripts, tidewm's, and hypridle's (§6.8, §10). The tide connector, the browser extension in `connector/` (§8.3). `make install`. The installer, `install/tide-setup`: distro packages, dbus-broker for the buses, the pinned source builds, units, fcitx5, greetd and the greeter, and the tabs host manifest. Releases, one per push to main (`make dist`, `release.yml`). `deps.lock`, the pins of what's built from source (Quickshell, Hyprland and its libraries, and wlroots for tidewm, whose latest `main` is built unpinned), which the installer and CI read through `install/pins`. |
 | **conf** | The personal config: Hyprland in Lua, loading tide's with its owner's preferences (§6.8): the Dvorak layout, left-handed mice, kitty, the app keys for the launcher scripts, `runenv`, waybar, swaync and fuzzel outside tide; its tidewm config, which includes tide's and changes the same (§6.8); uwsm env; the shared `~/.config/tide/*.json` defaults (clocks, idle, layouts, workspaces: the standing workspaces, home's apps and each workspace's own settings), the `persistent` workspace rule for home and the pinned apps' close keys, read from the shell's `tide-workspaces.lua`, shpool and tmux sessions named from `TIDE_WORKSPACE`, with `*.local.json` left per machine (§16.1); `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **tideco** | tide for Chrome: tiling on chromeOS. On Linux it can list the browser's tabs in the Windows tab, as tide's own connector does (§8.3). |
 | **scripts** | `setup`, which runs tide's installer through `setup-tide`, then its owner's extras: the launcher scripts' desktop entries, the GDM hostname banner and the retired lid drop-ins' cleanup. `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |
@@ -6597,6 +6625,23 @@ Checked 2026-10-06, for §5.4's activatable-services check:
   [`selinux_config.c`](https://github.com/SELinuxProject/selinux/blob/3.9/libselinux/src/selinux_config.c)
   (the policy root is `/etc/selinux/` plus the config's `SELINUXTYPE`,
   `targeted` by default)
+
+Checked 2026-11-13, for §5.4's switch to dbus-broker:
+
+- dbus-broker 37:
+  [`src/launch/service.c`](https://github.com/bus1/dbus-broker/blob/v37/src/launch/service.c)
+  (the launcher starts an activation's unit itself, watches systemd's
+  `JobRemoved` for its job and the unit's `ActiveState`, and on a failed
+  job or a `failed` unit resets the activation, which fails the pending
+  requests)
+- Ubuntu 24.04's `dbus-session-bus-common` 1.14.10:
+  `/usr/share/dbus-1/session.conf` sets `service_start_timeout` to
+  120000 ms
+- Ubuntu 24.04's `dbus-broker` 35-2ubuntu0.1: its system and user
+  `dbus-broker.service` say `Alias=dbus.service`; its postinst enables
+  both and asks for a reboot rather than restarting the bus; its
+  `README.Debian` says the alias in `/etc` takes precedence over
+  dbus-daemon's unit, and that replacing the system bus takes a reboot
 
 Checked 2026-10-05, for §21.2:
 

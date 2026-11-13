@@ -25,6 +25,8 @@ It installs the distro packages, builds what the distro lacks or has too
 old from the pins in `deps.lock` (Quickshell, and Hyprland on Debian and
 Ubuntu), runs both installs below, enables tide's units, sets up fcitx5
 for accents and the browser tabs' host, and checks the session will start.
+Where dbus-daemon runs the message buses (Debian, Ubuntu), it installs and
+enables dbus-broker in its place, from the next boot (SPEC.md §5.4).
 It leaves the display manager as it is, with tide as one more session;
 `--greeter` makes greetd, with tide's greeter, the login screen, and
 `--no-greeter` puts back the one it replaced. `--help` lists the rest.
@@ -61,7 +63,10 @@ which it reads the session bus's config with, and NetworkManager's nmcli,
 which the network menu lists VPNs with, and wl-clipboard, openssl and
 libsecret-tools' secret-tool, which keep the clipboard history the picker
 on `Super+V` lists, encrypted (SPEC.md §8.4), and wtype, which types what the picker's Fill tab on
-`Super+Shift+V` chooses. `install/tide-setup` installs them all. For Bitwarden
+`Super+Shift+V` chooses. `install/tide-setup` installs them all. Use
+dbus-broker for the system and session buses, as it does: install it,
+`sudo systemctl enable dbus-broker.service` and `sudo systemctl --global
+enable dbus-broker.service`, then reboot. For Bitwarden
 logins on the Fill tab, install rbw, the unofficial Bitwarden client, and
 run `rbw config set email` and `rbw login` once. For accents on a held
 letter, `install/tide-setup` installs fcitx5 and builds tide's own add-on,
