@@ -3246,7 +3246,9 @@ plain long press.
   relay, so the switch in §21.1 leaves it as it is.
 - **Session.** `tide-fcitx5.service` runs `fcitx5 --replace` in either
   tide session, before autostarted apps, and is skipped where fcitx5 isn't
-  installed. `QT_IM_MODULE=fcitx` and `XMODIFIERS=@im=fcitx` point Qt and
+  installed. It runs without fcitx5's tray icon
+  (`--disable=notificationitem`), whose menu only switches input methods,
+  configures fcitx5 and restarts it. `QT_IM_MODULE=fcitx` and `XMODIFIERS=@im=fcitx` point Qt and
   X11 apps at it. The compositor's wrapper (`tide-hyprland`,
   `tide-tidewm`) sets them where fcitx5 is installed, so every app the
   compositor starts has them: `uwsm app` keeps its caller's environment.

@@ -23,7 +23,9 @@ Type=dbus
 BusName=org.fcitx.Fcitx5
 # Skipped, not failed, where fcitx5 isn't installed.
 ExecCondition=/bin/sh -c 'command -v fcitx5 >/dev/null'
-ExecStart=fcitx5 --replace
+# No tray icon: its menu only switches input methods, configures and
+# restarts fcitx5, and tide has one input method, set up by tide-setup.
+ExecStart=fcitx5 --replace --disable=notificationitem
 ExecStartPost=systemctl --user set-environment QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx
 ExecStopPost=systemctl --user unset-environment QT_IM_MODULE XMODIFIERS
 Restart=on-failure
