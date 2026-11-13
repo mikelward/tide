@@ -1203,6 +1203,16 @@ once you have agreed with it or reversed it.
   whose monitor is gone isn't noted, and goes to the main monitor.
   Reversible: `span.note`.
 
+## One default dim on both compositors (SPEC.md §6.2)
+
+Hyprland's default dim is 0.12 (`hypr/hyprland.lua`, `appearance.mjs`'s
+`DIM_STRENGTH`), but tidewm's is 0.07 (`tidewm/tide.conf`), so without an
+Appearance setting the two dim differently. SPEC §6.2's reasons for 0.12
+were lost on the way to tidewm.
+
+- [ ] The maintainer picks the default again by eye, on both compositors.
+- [ ] Both configs, the Appearance page's default and SPEC §6.2 use it.
+
 ## Logs that outlast what made them (AGENTS.md **Logs**)
 
 Each process logs its start, its end and how, and its errors, where a
