@@ -1218,7 +1218,7 @@ the session's keys (SPEC.md §5.4). Left:
 
 ## The session's splash (SPEC.md §5.3)
 
-- [ ] **A splash in tidewm's session too**, from its startup command.
+- [x] **A splash in tidewm's session too**, from its startup command.
 - [ ] **Find why the shell took about a minute to start** on the first
   login after the greeter: the splash logs the time (`journalctl -t
   tide-splash`), and tide.service's journal says where it went.

@@ -458,7 +458,9 @@ flowchart TD
   - After 10 seconds it says "Still starting tide".
   - The journal gets, as `tide-splash`, each of those with how long it
     took, so a slow start is measured.
-  - It takes no keys. tidewm's session has none yet (TODO.md).
+  - It takes no keys.
+  - tidewm's session starts it too, first in tidewm's startup command
+    (`bin/tide-tidewm`), in the background (maintainer, 2026-11-13).
 - **A boot splash comes before it** (maintainer, 2026-11-13), with
   `tide-setup --splash`: a Plymouth theme, `plymouth/tide`, of tide's logo
   and name on black, with a spinner under them. Every screen from power on

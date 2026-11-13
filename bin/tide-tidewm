@@ -90,5 +90,27 @@ if test "$given" = no && ! test -e "$config_dir/config" && ! test -e "$HOME/.con
 fi
 # The startup command logs first, as that's the first sign tidewm is up.
 start="logger -t tide-tidewm -- 'tidewm is up; going home and telling uwsm the session is ready' 2>/dev/null; $start"
+# Before anything, the splash (shell/splash.qml), in the background, as
+# Hyprland's session starts it: your wallpaper, the hostname and "Starting
+# tide" over tidewm's empty background until the shell is ready. It goes
+# by itself. Its output goes to the journal as tide-splash. One that can't
+# start leaves the background as it was, which is said here.
+splash=$HOME/.config/quickshell/tide/splash.qml
+if ! test -f "$splash"; then
+    say "no splash at $splash, so tidewm's background shows until the shell is ready"
+elif ! command -v qs >/dev/null 2>&1; then
+    say "no qs on PATH for the splash, so tidewm's background shows until the shell is ready"
+else
+    case $splash in
+        *\'*) say "not starting the splash, as its path $splash holds a quote" ;;
+        *)
+            runner=
+            if command -v systemd-cat >/dev/null 2>&1; then
+                runner="systemd-cat --identifier=tide-splash "
+            fi
+            start="QS_DISABLE_FILE_WATCHER=1 ${runner}qs -p '$splash' & $start"
+            ;;
+    esac
+fi
 say "starting tidewm, home $home: $*"
 exec tidewm -s "$start" "$@"
