@@ -17,7 +17,7 @@ Scope {
     readonly property bool present: Lock.hasKeyboard(current)
     // How many, null while unknown: the lock and the greeter read the
     // layout again when it changes, so a keyboard that went takes its
-    // layout's badge with it.
+    // layout's name with it.
     readonly property var count: current.count
 
     property var current: Lock.KEYBOARDS_INITIAL

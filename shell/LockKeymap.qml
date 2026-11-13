@@ -6,12 +6,12 @@ import Quickshell.Io
 import "lib/compositor.mjs" as Comp
 import "lib/lock.mjs" as Lock
 
-// The main keyboard's layout, for the badge by the login and lock field
+// The main keyboard's layout, named under the login and lock field
 // (Lock.layoutNext): read from hyprctl at start, again on each layout
 // switch Hyprland reports, and again on refresh(), which the lock and the
-// greeter call when a password fails, since that is when the badge matters
+// greeter call when a password fails, since that is when the layout matters
 // and the main keyboard may have changed with no event (an unplug).
-// Unknown, the badge is hidden rather than guessed. The bar's layout label
+// Unknown, the name is hidden rather than guessed. The bar's layout label
 // (KeyboardData) reads it too, with the main keyboard's layout count and
 // which is active. On tidewm (§5.3) it's tidewm's GET_INPUTS, read again on
 // each of its input events.
@@ -20,7 +20,7 @@ Scope {
 
     // Names the process in its warnings.
     property string name: "tide-lock"
-    readonly property string badge: Lock.layoutBadge(current.keymap)
+    readonly property string layoutName: Lock.layoutName(current.keymap)
     readonly property bool tidewm: Comp.isTidewm(Quickshell.env("XDG_CURRENT_DESKTOP"))
     // The tide-msg to ask tidewm with: the greeter names the one setup
     // checked, beside tide-greeter, rather than whichever is first on PATH.
@@ -62,7 +62,7 @@ Scope {
             onStreamFinished: {
                 const keyboard = root.tidewm ? Lock.tidewmKeyboard(text) : Lock.mainKeyboard(text);
                 if (keyboard === null) {
-                    console.warn(`${root.name}: ${devices.command.join(" ")} gave no keyboard; the layout badge stays hidden`);
+                    console.warn(`${root.name}: ${devices.command.join(" ")} gave no keyboard; the layout's name stays hidden`);
                 }
                 devices.answered = true;
                 root.layoutEvent(Object.assign({ type: "answer", keymap: null }, keyboard));
@@ -79,7 +79,7 @@ Scope {
                 return;
             }
             if (!started) {
-                console.warn(`${root.name}: couldn't start ${root.reader}; the layout badge stays hidden`);
+                console.warn(`${root.name}: couldn't start ${root.reader}; the layout's name stays hidden`);
             }
             // No output to answer with: the read is over all the same.
             if (!answered) {

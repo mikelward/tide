@@ -206,7 +206,7 @@ BINDS = [
 
 # What the shell runs hyprctl for: the focused window at startup, the
 # windows, for the name prompt to judge a window first focused, the
-# keyboards for the lock's layout badge, the key bindings and the monitors
+# keyboards for the lock's layout name, the key bindings and the monitors
 # for the settings panel's Keys and Displays pages, and the focus guard's
 # calls.
 CTL = {

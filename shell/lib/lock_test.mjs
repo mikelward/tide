@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { exitCode, CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, facePalette, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutBadge, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
+import { exitCode, CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, facePalette, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutLine, layoutName, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -64,7 +64,7 @@ test("Enter starts PAM and answers its prompt with the typed password", () => {
     assert.equal(r.state.checking, true);
     assert.equal(r.state.input, "");
     assert.equal(fieldText(r.state), "");
-    assert.deepEqual(statusLine(r.state, true), { text: "Checking", error: false });
+    assert.deepEqual(statusLine(r.state), { text: "Checking", error: false });
     const answered = next(r.state, prompt);
     assert.deepEqual(answered.actions, [{ type: "respond", text: "pw" }]);
     assert.equal(answered.state.pending, null);
@@ -414,13 +414,13 @@ test("a late signal from a finished run changes nothing", () => {
     assert.equal(powerNext(POWER_IDLE, { type: "stopped" }).state, POWER_IDLE);
 });
 
-test("the layout badge is the layout's variant, in capitals", () => {
-    assert.equal(layoutBadge("English (Dvorak)"), "DVORAK");
-    assert.equal(layoutBadge("English (US)"), "US");
-    assert.equal(layoutBadge("German"), "GERMAN");
-    assert.equal(layoutBadge("English (US, intl., with dead keys)"), "US, INTL., WITH DEAD KEYS");
-    assert.equal(layoutBadge(""), "");
-    assert.equal(layoutBadge(undefined), "");
+test("the layout's name is its variant, as xkb writes it", () => {
+    assert.equal(layoutName("English (Dvorak)"), "Dvorak");
+    assert.equal(layoutName("English (US)"), "US");
+    assert.equal(layoutName("German"), "German");
+    assert.equal(layoutName("English (US, intl., with dead keys)"), "US, intl., with dead keys");
+    assert.equal(layoutName(""), "");
+    assert.equal(layoutName(undefined), "");
 });
 
 test("the main keyboard's keymap comes from hyprctl devices", () => {
@@ -450,7 +450,7 @@ function layout(state, ...events) {
     return { state, queries };
 }
 
-test("each refresh reads hyprctl, and the badge takes its answer", () => {
+test("each refresh reads hyprctl, and the layout takes its answer", () => {
     const first = layout(LAYOUT_INITIAL, { type: "refresh" }, { type: "answer", keymap: "English (Dvorak)" });
     assert.equal(first.queries, 1);
     assert.equal(first.state.keymap, "English (Dvorak)");
@@ -479,7 +479,7 @@ test("a refresh while a read runs reads again once, after it", () => {
     assert.equal(done.state.querying, false);
 });
 
-test("a failed read hides the badge, and a refresh during it still rereads", () => {
+test("a failed read hides the layout, and a refresh during it still rereads", () => {
     let { state } = layout(LAYOUT_INITIAL, { type: "refresh" }, { type: "answer", keymap: "German" });
     const failed = layout(state, { type: "refresh" }, { type: "refresh" }, { type: "answer", keymap: null });
     assert.equal(failed.state.keymap, "");
@@ -544,17 +544,14 @@ test("an input event during a read reads once more after it", () => {
     assert.equal(r.state.count, 1);
 });
 
-test("with no keyboard, the line says so, over a failure, which comes back with one", () => {
+test("with no keyboard, the layout's place says so, and a failure stays on its line", () => {
+    assert.equal(layoutLine("Dvorak", true), "Dvorak");
+    // The KVM switches away.
+    assert.equal(layoutLine("Dvorak", false), NO_KEYBOARD);
+    assert.equal(layoutLine("", false), "No keyboard");
+    assert.equal(layoutLine("", true), "");
     const failed = run(INITIAL, ...type("pw"), { type: "submit" }, prompt, { type: "done", result: "failed" }).state;
-    assert.deepEqual(statusLine(failed, true), { text: WRONG, error: true });
-    // The KVM switches away: not a failure, so not in red.
-    assert.deepEqual(statusLine(failed, false), { text: NO_KEYBOARD, error: false });
-    assert.deepEqual(statusLine(INITIAL, false), { text: "No keyboard", error: false });
-});
-
-test("a check under way still says Checking with no keyboard", () => {
-    const checking = run(INITIAL, ...type("pw"), { type: "submit" }).state;
-    assert.deepEqual(statusLine(checking, false), { text: "Checking", error: false });
+    assert.deepEqual(statusLine(failed), { text: WRONG, error: true });
 });
 
 test("the field shows its focus in the accent, with a caret, only with focus and a keyboard", () => {
@@ -635,7 +632,7 @@ test("the layout switch is Hyprland's switchxkblayout or tidewm's input command"
     assert.throws(() => switchLayoutCommand("1; kill", true), /not a layout index/);
 });
 
-test("the bar's layout label is up to three letters of the badge, as tide for macOS's", () => {
+test("the bar's layout label is up to three letters of the layout's name, as tide for macOS's", () => {
     assert.equal(layoutLabel("English (US)"), "US");
     assert.equal(layoutLabel("English (Dvorak)"), "DVO");
     assert.equal(layoutLabel("German"), "GER");

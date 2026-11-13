@@ -264,7 +264,7 @@ the other candidate, and multiple monitors rule it out (checked on cage
   uses only the last one connected.
 
 Both are installed for the sessions anyway, and `tide-msg --type
-get_inputs` or `hyprctl devices` gives the greeter the same layout badge as
+get_inputs` or `hyprctl devices` gives the greeter the same layout name as
 the lock.
 
 ### 3.5 Look
@@ -3771,12 +3771,9 @@ talk, a demo, or a meeting room's screen.
   monitor's, or one with no keyboard to type with, as when a monitor's
   KVM has switched its USB keyboard to another machine. A failed attempt's
   red border wins over both.
-  - With no keyboard, the line under the field says "No keyboard", on
-    every face, in its usual color (maintainer, 2026-11-05). The line
-    shows the first thing to act on, and the keyboard comes before the
-    password. So it takes the place of PAM's message or the failure,
-    which come back with a keyboard. "Checking" still shows while an
-    attempt is checked, and on the greeter so does the session starting.
+  - With no keyboard, the layout's place under the field says "No
+    keyboard", on every face (maintainer, 2026-11-13). A keyboard brings
+    the layout back. The line under it keeps PAM's message or the failure.
   - A keyboard is an input device udev tags `ID_INPUT_KEYBOARD`: one with
     every key from Esc to D. A power button isn't one. A USB receiver's
     keyboard part is, paired or not.
@@ -3800,8 +3797,11 @@ talk, a demo, or a meeting room's screen.
   count, never what they say; none when there are none, and none while
   the shell isn't the notification server (`TIDE_NOTIFICATIONS` until
   swaync retires), since nothing could then mark a leftover history seen.
-- **Layout badge:** the main keyboard's layout sits in the field ("DVORAK"),
-  following a switch, so a failed password isn't a layout mystery. Main is
+- **Keyboard layout:** the main keyboard's layout is named under the
+  field, in dim text after a keyboard icon ("Dvorak"), following a switch,
+  so a failed password isn't a layout mystery. It sits where the boot
+  splash names it, so the two look alike (maintainer, 2026-11-13).
+  The field is 240 px wide. Main is
   Hyprland's word: the keyboard last typed on. It's read again on each
   switch, after each failed password, and when a keyboard comes or goes,
   so an unplugged keyboard's layout doesn't linger.
@@ -3983,7 +3983,7 @@ talk, a demo, or a meeting room's screen.
   two, and uwsm sets the third for tide anyway.
 - **Keyboard.** The greeter uses the system's X11 keymap, as localed has it,
   which `setup` sets to the session's layout (US Dvorak, Compose on Caps).
-  It shows the same layout badge by the password field as the lock.
+  It names the layout under the password field, as the lock does.
 - **Keyring.** PAM unlocks gnome-keyring with the login password, so Chrome
   and other secret users don't prompt again. This needs
   `pam_gnome_keyring` in greetd's PAM stack, which `setup --greeter` adds
@@ -4900,7 +4900,7 @@ stays hand-written.
     bar's layout label (§7.4) does the same from the shell: it reads the
     main keyboard afresh first, since Hyprland can make another keyboard
     main with no event, and switches once that answer is in.
-  - On tidewm (§5.3), the label, the lock's badge and the greeter's read
+  - On tidewm (§5.3), the label, and the lock's and the greeter's layout names, read
     the first keyboard tidewm's `GET_INPUTS` lists, again on each of its
     input events, and the click switches with tidewm's `input
     type:keyboard xkb_switch_layout N`, as conf's key there does with
@@ -5833,7 +5833,7 @@ light/dark switch.
 | `PATH` missing in keybinds | a launcher key does nothing | `runenv`, as today, and `environment.d` for units |
 | XWayland apps blurry at fractional scale | fuzzy Electron/X11 apps | `xwayland:force_zero_scaling`, and Electron on native Wayland (`ELECTRON_OZONE_PLATFORM_HINT=auto`) |
 | Cursor size differs per app | big cursor in GTK, small in Qt | one `XCURSOR_*`/`HYPRCURSOR_*` in the uwsm env |
-| Dvorak missing at login | the password "doesn't work" | the greeter uses the session layout and shows a badge |
+| Dvorak missing at login | the password "doesn't work" | the greeter uses the session layout and names it |
 | Hyprland config breaks on upgrade | red config-error banner | pinned version, Lua config, CI loads it, upgrades as their own PRs |
 | Tray icon missing | an app started before the tray watcher | the shell (the watcher) is ordered before autostart |
 | `Super` tap misfires | the launcher opens after every `Super+<key>` on Hyprland 0.56.x | `conf` binds the tap only from Hyprland 0.57, which has the keybind fix; `Super+Space` before (§8) |
@@ -5948,7 +5948,7 @@ are what "done" means.
     container: it followed the window events.
   - The lock loads there too, and fails unless it listens for tidewm's
     input events and asks `tide-msg` for the keyboard as it starts and
-    again once the input event is played, for its layout badge, and asks Hyprland
+    again once the input event is played, for its layout's name, and asks Hyprland
     nothing.
   - `hyprctl` is a stand-in too, from the same file, and answers at once
     from the same fixtures. The bar asks it for the window focused at
@@ -5977,7 +5977,7 @@ are what "done" means.
     does with a monitor's line isn't covered.
   - The test fails if the shell, the lock or the greeter never makes one
     of those calls, each told apart by its arguments. It also fails if the
-    title, a layout badge, the focus guard calls, `gsettings` or `nmcli`
+    title, a layout's name, the focus guard calls, `gsettings` or `nmcli`
     warn of anything.
 - **The bar's clocks are drawn.** The shell's own commands are on its PATH
   in that test: `tide-tz`, built for the run, and a stand-in `tide-sysmon`.
