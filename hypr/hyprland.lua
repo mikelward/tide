@@ -1216,6 +1216,10 @@ end
 bind("minimize", key("Z"), exec("qs -c tide ipc call windows minimize || notify-send -a tide 'No minimize' "
     .. "'Super+Z minimizes a window in the tide shell, which is not running.'"), does("Minimize the window"))
 bind("lock", key("L"), exec(lock), does("Lock"))
+-- Super+Ctrl+R: reload the config (tide SPEC.md §6.6). In the tide session
+-- `tide reload` also starts tide's shell if it isn't running, never
+-- restarting one that is, and says what failed.
+bind("reload", key("CTRL + R"), exec(tide_session and "tide reload" or "hyprctl reload"), does("Reload the config"))
 -- Super+S: keep awake, Super+P: presenter mode, Do not disturb and keep
 -- awake together (tide SPEC.md §10). tide's shell holds both and shows
 -- the OSD; without it nothing could, so a notification says why.

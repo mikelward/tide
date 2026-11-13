@@ -16,7 +16,7 @@ const NAMES = new Set([
     "previous_workspace", "next_workspace", "move_to_previous_workspace", "move_to_next_workspace",
     "focus_left", "focus_right", "move_left", "move_right", "home_or_back", "home", "last_other_workspace", "last_layout",
     "go_to_workspace", "move_to_workspace", "attention", "screenshot", "screenshot_window", "screenshot_region",
-    "mute_microphone",
+    "mute_microphone", "reload",
 ]);
 
 test("every preset is listed once, tide's first", () => {
@@ -46,4 +46,12 @@ for (const name of PRESET_NAMES) {
 test("a preset's keys are written as a recording writes them", () => {
     // Super+Shift+Return, as a press records it.
     assert.equal(recordedKeys(0x01000004, 0x10000000 | 0x02000000).keys, PRESETS.dwm.keys.terminal[0]);
+});
+
+test("each preset reloads on the key its window manager reloads or restarts on", () => {
+    assert.deepEqual(PRESETS.i3.keys.reload, ["SUPER + SHIFT + C"]);
+    assert.deepEqual(PRESETS.sway.keys.reload, ["SUPER + SHIFT + C"]);
+    assert.deepEqual(PRESETS.xmonad.keys.reload, ["SUPER + Q"]);
+    assert.deepEqual(PRESETS.bspwm.keys.reload, ["SUPER + ALT + R"]);
+    assert.equal(PRESETS.dwm.keys.reload, undefined, "dwm has none, so tide's key stays");
 });

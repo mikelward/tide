@@ -90,6 +90,12 @@ check "Super+L locks as Hyprland's session does, with tide lock" \
 check "which locks with no idle daemon running, and falls back to logind" \
     test "$hlock" = "tide lock || loginctl lock-session"
 
+# The reload key runs `tide reload`, as Hyprland's session does: tidewm's
+# own reload would leave a shell that isn't running stopped.
+# shellcheck disable=SC2016 # $mod is the config's, not the shell's
+check "Super+Ctrl+R reloads with tide reload" \
+    test "$(sed -n 's/^bindsym --name=reload \$mod+Ctrl+r exec //p' "$cfg")" = "tide reload"
+
 # Every name hyprland.lua binds, so keys.json serves both sessions, but the
 # floating rules' key and the layout used last, which have no tidewm
 # command yet.

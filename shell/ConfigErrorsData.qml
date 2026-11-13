@@ -10,7 +10,8 @@ import "lib/configerrors.mjs" as Errors
 // `tide-msg` each time the listener connects, when a key reloads the
 // config, and after each reload the shell asks for itself (reloaded());
 // the bar's warning shows them, and one notification says they're there
-// (lib/configerrors.mjs). A reload from anywhere else, as `tide-msg
+// (lib/configerrors.mjs). `tide reload` says when it has reloaded (the
+// `configerrors` IPC target); a reload from anywhere else, as `tide-msg
 // reload` in a terminal, isn't heard: tidewm has no event for it. In
 // Hyprland's session it listens to nothing and asks nothing.
 Singleton {
@@ -34,6 +35,17 @@ Singleton {
     function reloaded() {
         if (root.listening) {
             root.ask();
+        }
+    }
+
+    // `qs -c tide ipc call configerrors reloaded`, from `tide reload`
+    // (Super+Ctrl+R), which reloads tidewm's config with tide-msg, a reload
+    // the listener doesn't hear.
+    IpcHandler {
+        target: "configerrors"
+
+        function reloaded(): void {
+            root.reloaded();
         }
     }
 

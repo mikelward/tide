@@ -20,6 +20,8 @@ check() {
 contains() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
 lacks() { ! contains "$@"; }
 not_contains() { ! contains "$@"; }
+nl='
+'
 
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
@@ -1384,6 +1386,54 @@ check "web-app prefers scripts' chrome" test "$(cat "$log")" = "chrome --app=htt
 web mail.google.com
 check "web-app refuses what isn't a web address" test "$?:$(cat "$log")" = "2:"
 check "and says why" contains "$(cat "$tmp/err")" "mail.google.com isn't a web address"
+
+# reload: Super+Ctrl+R (SPEC.md §6.6). The compositor's config, then the
+# shell, started only when it isn't running.
+run FAKE_IS_ACTIVE=active "$qs" reload
+check "reload exits 0 when Hyprland reloads and the shell runs" test $? -eq 0
+check "reload is hyprctl reload, and leaves a running shell alone" \
+    test "$(cat "$log")" = "hyprctl reload${nl}systemctl --user is-active tide.service"
+check "a clean reload says nothing" test ! -s "$tmp/err"
+run FAKE_IS_ACTIVE=inactive "$qs" reload
+check "reload starts a shell that isn't running" \
+    test "$?:$(grep '^systemctl' "$log" | tail -n 1)" = "0:systemctl --user start tide.service"
+check "without resetting one that hasn't failed" lacks "$(cat "$log")" "reset-failed"
+run FAKE_IS_ACTIVE=failed "$qs" reload
+check "reload resets a shell that failed, then starts it" \
+    test "$(grep '^systemctl' "$log" | tail -n 2 | tr '\n' '|')" = "systemctl --user reset-failed tide.service|systemctl --user start tide.service|"
+run FAKE_IS_ACTIVE=inactive FAKE_SYSTEMCTL_STATUS=1 "$qs" reload
+check "reload exits 1 when the shell couldn't start" test $? -eq 1
+check "and says why" contains "$(cat "$tmp/err")" "tide reload: the shell was inactive, and couldn't start: Job failed"
+check "in a notification too" contains "$(cat "$log")" "notify-send -a tide The shell didn't start Run tide doctor to see why."
+run FAKE_IS_ACTIVE=active FAKE_HYPRCTL_REPLY='error: config file not found' "$qs" reload
+check "reload exits 1 when Hyprland doesn't reload" test $? -eq 1
+check "and says what Hyprland said" \
+    contains "$(cat "$tmp/err")" "tide reload: Hyprland didn't reload its config: error: config file not found"
+check "in a notification too" contains "$(cat "$log")" "notify-send -a tide Config not reloaded error: config file not found"
+run FAKE_IS_ACTIVE=inactive FAKE_HYPRCTL_REPLY='error' "$qs" reload
+check "a failed reload still starts the shell" contains "$(cat "$log")" "systemctl --user start tide.service"
+run FAKE_IS_ACTIVE=active "$tw" "$qs" reload
+check "on tidewm, reload is tide-msg reload, then tells the running shell, and asks Hyprland nothing" \
+    test "$?:$(cat "$log")" = "0:tide-msg reload${nl}systemctl --user is-active tide.service${nl}qs -c tide ipc call configerrors reloaded"
+run FAKE_IS_ACTIVE=inactive "$tw" "$qs" reload
+check "on tidewm, a shell that's started isn't told: it reads the errors as it starts" \
+    lacks "$(cat "$log")" "qs "
+run FAKE_IS_ACTIVE=active FAKE_TIDEMSG_STATUS=1 FAKE_TIDEMSG_ERROR='reload: /c:3: no setting is called bindcode' "$tw" "$qs" reload
+check "on tidewm, reload exits 1 when tidewm refuses the file" test $? -eq 1
+check "and says tidewm's errors" \
+    contains "$(cat "$tmp/err")" "tide reload: tidewm didn't reload its config: tide-msg: reload: /c:3: no setting is called bindcode"
+check "in a notification too" \
+    contains "$(cat "$log")" "notify-send -a tide Config not reloaded tide-msg: reload: /c:3: no setting is called bindcode"
+check "and the shell is told, so the bar shows the errors" contains "$(cat "$log")" "qs -c tide ipc call configerrors reloaded"
+run FAKE_IS_ACTIVE=active FAKE_QS_STATUS=255 FAKE_QS_SAYS="Target not found" "$tw" "$qs" reload
+check "a shell that can't be told isn't a failed reload" test $? -eq 0
+check "but is reported" \
+    contains "$(cat "$tmp/err")" "tide reload: couldn't tell the shell the config was reloaded, so the bar may show old errors: Target not found"
+run XDG_CURRENT_DESKTOP=Hyprland "$qs" reload
+check "outside tide, reload exits 2, doing nothing" test "$?:$(cat "$log")" = "2:"
+check "and says why" contains "$(cat "$tmp/err")" "tide reload: not in a tide session"
+run "$qs" reload now
+check "reload takes no arguments" test $? -eq 2
 
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh "$qs" bin/tide_test.sh
