@@ -151,6 +151,16 @@ test("tidewm's bindings are its config file's, each doing its command", () => {
     ]);
 });
 
+test("a tidewm binding's description, from --desc, says what it does in place of its command", () => {
+    const text = JSON.stringify([
+        { type: "key", keys: "Mod4+Home", command: "exec qs -c tide ipc call workspaces home", description: "Go  home", mode: "default" },
+        { type: "key", keys: "Ctrl+w", command: "kill", description: "Close the window", mode: "default", kept_open: true },
+        { type: "key", keys: "Mod4+Return", command: "exec foot", description: "", mode: "default" },
+    ]);
+    assert.deepEqual(parseTidewmBinds(text).binds.map((b) => b.does),
+        ["Go home", "Close the window, in a pinned window", "exec foot"]);
+});
+
 test("a tidewm listing that can't be read says why", () => {
     assert.deepEqual(listedTidewmBinds(true, ""), { binds: [], error: "couldn't run tide-msg --type get_bindings" });
     assert.equal(listedTidewmBinds(false, '{"success": false, "error": "unsupported message type"}').error,
