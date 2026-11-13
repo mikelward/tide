@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: from power on to the screensaver</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px 18px; }
+  .step .n { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9a9aa6; margin-bottom: 6px; }
+  .face {
+    width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; position: relative;
+    color: #f2f2f6; box-shadow: 0 0 0 1px #2a2a30; background: #000;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 9px;
+  }
+  .wall {
+    background:
+      radial-gradient(200px 120px at 22% 28%, rgba(38, 105, 110, .55), transparent 70%),
+      radial-gradient(240px 150px at 82% 78%, rgba(98, 52, 140, .55), transparent 70%),
+      #10172a;
+  }
+  .blur { filter: none; }
+  .desk { background: linear-gradient(135deg, #16213a, #2b1c3f); justify-content: flex-start; align-items: stretch; }
+  .desk .bar { justify-content: flex-start; height: 14px; background: rgba(22,22,26,.96); display: flex; align-items: center; gap: 6px; padding: 0 6px; }
+  .desk .bar svg { width: 9px; height: 9px; }
+  .desk .bar i { flex: none; width: 10px; height: 6px; border-radius: 2px; background: #38383e; }
+  .desk .bar i.on { background: #3584e4; }
+  .desk .wins { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; }
+  .desk .wins div { background: #2a2a2f; border-radius: 4px; }
+  .brand { display: flex; align-items: center; gap: 5px; }
+  .brand svg { width: 20px; height: 20px; }
+  .brand span { font-size: 16px; font-weight: 600; letter-spacing: -.02em; }
+  .spin { width: 11px; height: 11px; margin-top: 18px; }
+  .entry { display: flex; align-items: center; gap: 4px; margin-top: 14px; }
+  .entry .ms { font-size: 10px; color: #9a9aa6; }
+  .box { width: 108px; height: 17px; border-radius: 5px; background: #2a2a2f; display: flex; align-items: center; padding: 0 6px; gap: 3px; }
+  .box i:not(.ms) { width: 3px; height: 3px; border-radius: 50%; background: #ededf1; }
+  .prompt { font-size: 7px; color: #9a9aa6; margin-top: 5px; }
+  .kbrow { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 7px; color: rgba(255,255,255,.55); }
+  .kbrow span { display: flex; align-items: center; gap: 3px; }
+  .kbrow .ms { font-size: 9px; }
+  .kbrow .hi { color: rgba(255,255,255,.8); font-weight: 600; }
+  .kbrow .caps { color: #f8e45c; font-weight: 600; }
+  .host { font-size: 16px; font-weight: 700; letter-spacing: -.02em; line-height: 1; }
+  .clk { font-size: 7px; color: rgba(255,255,255,.7); margin-top: 5px; }
+  .clk b { color: #fff; font-weight: 600; }
+  .who { display: flex; align-items: center; gap: 5px; margin-top: 10px; font-size: 10px; font-weight: 600; }
+  .av { width: 16px; height: 16px; border-radius: 50%; background: linear-gradient(135deg, #3584e4, #9141ac); display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; }
+  .pw { margin-top: 6px; width: 120px; height: 19px; border-radius: 5px; background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px #78aeed; display: flex; align-items: center; padding: 0 6px; gap: 3px; }
+  .pw .ms { font-size: 9px; color: rgba(255,255,255,.6); }
+  .pw i:not(.ms) { width: 3px; height: 3px; border-radius: 50%; background: #fff; }
+  .starting { font-size: 8px; color: rgba(255,255,255,.75); margin-top: 6px; }
+  .ghost { position: absolute; border: 1px dashed rgba(255,255,255,.14); border-radius: 5px; }
+  .cap { font-size: 12.5px; }
+</style>
+</head>
+<body class="sheet" data-width="1360" data-scale="2">
+<h1>From power on to the screensaver</h1>
+<p class="lede">Every screen tide shows, in order. Steps 1–3 are the boot splash (Plymouth, installed by <code>tide-setup --splash</code>); 4 is the greeter (greetd, installed by <code>--greeter</code>); 5 is the session’s own splash; 7 and 8 are the lock. The black of steps 1–3 runs into the greeter’s first frame, which is black too.</p>
+<div class="flow">
+  <div class="step">
+    <div class="n">1 · Boot</div>
+    <div class="face">
+      <div class="brand"><svg viewBox="0 0 16 16" fill="none" stroke="#3584e4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0"/><path d="M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/></svg><span>tide</span></div>
+      <svg class="spin" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="10" stroke="#2a2a2f"/><path d="M12 2 A10 10 0 0 1 22 12" stroke="#9a9aa6"/></svg>
+    </div>
+    <div class="cap">From the initramfs on: tide’s logo and name, and the spinner. The firmware’s own logo shows before this, if it has one.</div>
+  </div>
+  <div class="step">
+    <div class="n">2 · Unlock the disk</div>
+    <div class="face">
+      <div class="brand"><svg viewBox="0 0 16 16" fill="none" stroke="#3584e4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0"/><path d="M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/></svg><span>tide</span></div>
+      <div class="entry"><i class="ms">lock</i><div class="box"><i></i><i></i><i></i><i></i></div></div>
+      <div class="prompt">Please unlock disk nvme0n1p3_crypt</div>
+      <div class="kbrow"><span><i class="ms">keyboard</i>Dvorak</span><span class="caps"><i class="ms">keyboard_capslock</i>Caps Lock is on</span></div>
+    </div>
+    <div class="cap">Only with an encrypted disk. The layout is the text console’s; Caps Lock shows while it’s on. Plymouth can’t tell when there’s no keyboard.</div>
+  </div>
+  <div class="step">
+    <div class="n">3 · Boot, then black</div>
+    <div class="face">
+      <div class="brand"><svg viewBox="0 0 16 16" fill="none" stroke="#3584e4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0"/><path d="M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/></svg><span>tide</span></div>
+      <svg class="spin" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" style="transform:rotate(200deg)"><circle cx="12" cy="12" r="10" stroke="#2a2a2f"/><path d="M12 2 A10 10 0 0 1 22 12" stroke="#9a9aa6"/></svg>
+    </div>
+    <div class="cap">The spinner again until the system is up. Plymouth quits just before greetd starts; the greeter’s compositor starts black.</div>
+  </div>
+  <div class="step">
+    <div class="n">4 · Login</div>
+    <div class="face wall">
+      <div class="host">host1</div>
+      <div class="clk">Mon Sep 28 <b>09:12</b></div>
+      <div class="who"><span class="av">U</span>user</div>
+      <div class="pw" style="box-shadow: inset 0 0 0 1px rgba(255,255,255,.16)"><i class="ms">lock</i></div>
+      <div class="kbrow"><span><i class="ms">keyboard</i>Dvorak</span><span class="hi"><i class="ms">keyboard_off</i>No keyboard</span></div>
+    </div>
+    <div class="cap">The greeter, on the last user’s wallpaper. Under the field: the layout, then “Caps Lock is on” or, as here, “No keyboard” in the slot beside it, as on the disk unlock. With no keyboard the field has a quiet border.</div>
+  </div>
+  <div class="step">
+    <div class="n">5 · Starting tide</div>
+    <div class="face wall">
+      <div class="host">host1</div>
+      <div class="starting">Starting tide</div>
+    </div>
+    <div class="cap">The session’s splash, as now: your wallpaper blurred, until the bar is up.</div>
+  </div>
+  <div class="step">
+    <div class="n">6 · Desktop</div>
+    <div class="face desk">
+      <div class="bar"><svg viewBox="0 0 16 16" fill="none" stroke="#3584e4" stroke-width="2" stroke-linecap="round"><path d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0"/><path d="M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/></svg><i class="on"></i><i></i><i></i></div>
+      <div class="wins"><div></div><div></div></div>
+    </div>
+    <div class="cap">tide.</div>
+  </div>
+  <div class="step">
+    <div class="n">7 · Lock</div>
+    <div class="face wall">
+      <div class="host">host1</div>
+      <div class="clk">Mon Sep 28 <b>19:47</b></div>
+      <div class="who"><span class="av">U</span>user</div>
+      <div class="pw"><i class="ms">lock</i><i></i><i></i></div>
+      <div class="kbrow"><span><i class="ms">keyboard</i>Dvorak</span></div>
+    </div>
+    <div class="cap">Super+L, the lid, suspend. The greeter’s face without the pickers, the same row under the field.</div>
+  </div>
+  <div class="step">
+    <div class="n">8 · Screensaver</div>
+    <div class="face">
+      <div class="ghost" style="left:8%;top:14%;width:96px;height:42px"></div>
+      <div style="position:absolute;left:46%;top:46%;display:flex;flex-direction:column;align-items:center">
+        <div class="host">host1</div>
+        <div class="clk">Mon Sep 28 <b>19:52</b></div>
+      </div>
+    </div>
+    <div class="cap">After 5 minutes idle, the lock opens on this: the lock’s hostname and time, white on black, in a new spot each minute. Any key or mouse move brings back step 7. The displays go off 30 s later.</div>
+  </div>
+  <div class="step">
+    <div class="n">9 · Restart and shut down</div>
+    <div class="face">
+      <div class="brand"><svg viewBox="0 0 16 16" fill="none" stroke="#3584e4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M1.75 6.25q2.083-2 4.167 0t4.166 0t4.167 0"/><path d="M1.75 10.75q2.083-2 4.167 0t4.166 0t4.167 0"/></svg><span>tide</span></div>
+      <svg class="spin" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" style="transform:rotate(90deg)"><circle cx="12" cy="12" r="10" stroke="#2a2a2f"/><path d="M12 2 A10 10 0 0 1 22 12" stroke="#9a9aa6"/></svg>
+    </div>
+    <div class="cap">The boot splash again while services stop.</div>
+  </div>
+</div>
+</body>
+</html>
