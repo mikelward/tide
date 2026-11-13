@@ -30,7 +30,7 @@
 
 import { initial as runInitial, step as runStep } from "./launch.mjs";
 import { PALETTE } from "./palette.mjs";
-import { ACTIONS, actionCommand, blockers } from "./session.mjs";
+import { ACTIONS, actionCommand, blockers, sessionsOnly } from "./session.mjs";
 
 export const INITIAL = Object.freeze({
     input: "",
@@ -329,7 +329,10 @@ export function powerMessage(label, run) {
 //   run      that run's launch.mjs state
 //   stopped  whether its process has stopped
 //   message  powerMessage for it, once it's done
-export const POWER_IDLE = Object.freeze({ action: "", run: runInitial(), stopped: true, message: "" });
+// `force` is whether this run skips systemctl's own check; `confirm` the
+// action a second press may run that way, after only other logged-in
+// sessions blocked it.
+export const POWER_IDLE = Object.freeze({ action: "", run: runInitial(), stopped: true, message: "", force: false, confirm: "" });
 
 export function powerBusy(state) {
     return state.action !== "" && !(state.run.done && state.stopped);
@@ -340,29 +343,43 @@ export function powerBusy(state) {
 //   {type: "started"}, {type: "exited", code}, {type: "stderr", text},
 //   {type: "stopped"}     the Process's signals
 // Returns {state, command}; `command` is null unless a press started a run.
+//
+// Another logged-in session, as your own console login is under the
+// greeter, stops a power action only once: it's named, and pressing the same
+// button again goes ahead. logind still lets that through only where its
+// policy allows it (reboot-multiple-sessions, yes for the active session),
+// and still refuses past an inhibitor, which never asks again.
 export function powerNext(state, event) {
     if (event.type === "press") {
         if (powerBusy(state)) {
             return { state, command: null };
         }
-        const command = actionCommand(event.id, false);
+        const force = state.confirm === event.id;
         return {
-            state: Object.freeze({ action: event.id, run: runInitial(), stopped: false, message: "" }),
-            command,
+            state: Object.freeze({ action: event.id, run: runInitial(), stopped: false, message: "", force, confirm: "" }),
+            command: actionCommand(event.id, force),
         };
     }
     if (state.action === "") {
         return { state, command: null };
     }
-    const command = actionCommand(state.action, false);
+    const command = actionCommand(state.action, state.force);
     const run = runStep(state.run, event, command);
     const stopped = state.stopped || event.type === "stopped";
     let message = state.message;
+    let confirm = state.confirm;
     if (run.done && !state.run.done) {
         const label = ACTIONS.find((a) => a.id === state.action)?.label ?? state.action;
-        message = powerMessage(label, run);
+        const sessions = state.force || run.code === 0 || run.code === null || run.code === undefined
+            ? [] : sessionsOnly(run.errors || "");
+        if (sessions.length > 0) {
+            confirm = state.action;
+            message = `${sessions.join("; ")}. Press ${label} again to ${label.toLowerCase()} anyway.`;
+        } else {
+            message = powerMessage(label, run);
+        }
     }
-    return { state: Object.freeze({ action: state.action, run, stopped, message }), command: null };
+    return { state: Object.freeze({ action: state.action, run, stopped, message, force: state.force, confirm }), command: null };
 }
 
 // The keyboard layout's name under the password field (SPEC.md §10), so
