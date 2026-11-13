@@ -50,14 +50,14 @@ Item {
     property string wallpaperPosition: "fill"
     // The line under the field (Lock.statusLine); the greeter says which
     // session is starting.
-    readonly property var line: Lock.statusLine(lockState, keyboard)
+    readonly property var line: Lock.statusLine(lockState)
     property string status: line.text
     // The last power action's trouble, if any (Lock.powerMessage).
     property string powerMessage: ""
     property bool powerBusy: false
     // How many notifications arrived since the center was last open (lock).
     property int unread: 0
-    // The keyboard layout badge (Lock.layoutBadge), "" when unknown.
+    // The keyboard layout's name (Lock.layoutName), "" when unknown.
     property string layout: ""
     // Whether there's a keyboard to type with (LockKeyboards.present).
     property bool keyboard: true
@@ -428,7 +428,7 @@ Item {
                     id: field
 
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 270
+                    width: 240
                     height: 38
                     radius: 10
                     color: face.ink(0.1)
@@ -466,42 +466,42 @@ Item {
                         visible: face.look.caret && Lock.caretShown(face.caretTicks)
                         color: face.palette.text
                     }
+                }
 
-                    // The keyboard layout, so a failed password isn't a
-                    // layout mystery. It takes only the room the field's
-                    // text leaves, elided to fit and hidden below a few
-                    // letters, so it never covers a keystroke.
-                    Rectangle {
-                        readonly property real room: parent.width - entry.anchors.leftMargin - entry.implicitWidth - 8 - anchors.rightMargin
+                // The keyboard layout, so a failed password isn't a layout
+                // mystery, or "No keyboard" while there's none
+                // (Lock.layoutLine), where the boot splash names it: under
+                // the field, in dim text. It keeps its height when empty,
+                // so the name appearing moves nothing.
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    height: layoutText.implicitHeight
+                    spacing: 5
 
-                        visible: face.layout !== "" && room >= 36
+                    SymbolicIcon {
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.right: parent.right
-                        anchors.rightMargin: 8
-                        width: Math.min(badge.implicitWidth + 12, 108, room)
-                        height: 20
-                        radius: 5
-                        color: face.ink(0.14)
+                        visible: layoutText.text !== ""
+                        name: "input-keyboard-symbolic"
+                        color: face.ink(0.55)
+                    }
 
-                        Text {
-                            id: badge
+                    Text {
+                        id: layoutText
 
-                            anchors.centerIn: parent
-                            width: Math.min(implicitWidth, parent.width - 12)
-                            elide: Text.ElideRight
-                            // Hyprland's text, never markup.
-                            textFormat: Text.PlainText
-                            text: face.layout
-                            color: face.ink(0.85)
-                            font.family: "Inter"
-                            font.pixelSize: 11
-                            font.weight: Font.Bold
-                        }
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.min(implicitWidth, field.width)
+                        elide: Text.ElideRight
+                        // Hyprland's text, never markup.
+                        textFormat: Text.PlainText
+                        text: Lock.layoutLine(face.layout, face.keyboard)
+                        color: face.ink(0.55)
+                        font.family: "Inter"
+                        font.pixelSize: 12
                     }
                 }
 
-                // "Checking", "No keyboard", PAM's message, or the failure,
-                // under the field.
+                // "Checking", PAM's message, or the failure, under the
+                // layout.
                 // It keeps a line's room when empty, so one appearing moves
                 // nothing.
                 Text {

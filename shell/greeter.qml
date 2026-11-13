@@ -187,7 +187,7 @@ ShellRoot {
         id: powerActions
     }
 
-    // The keyboard's layout, for the badge by the field (LockKeymap.qml).
+    // The keyboard's layout, named under the field (LockKeymap.qml).
     LockKeymap {
         id: keymap
         name: "tide-greeter"
@@ -195,7 +195,7 @@ ShellRoot {
     }
 
     // Whether there's a keyboard to type with, for the field's focus
-    // (LockKeyboards.qml); the badge is read again as one comes or goes.
+    // (LockKeyboards.qml); the layout is read again as one comes or goes.
     LockKeyboards {
         id: keyboards
         name: "tide-greeter"
@@ -425,10 +425,10 @@ ShellRoot {
                 wallpaper: root.shown?.path ?? ""
                 wallpaperColor: root.shown?.color ?? ""
                 wallpaperPosition: root.shown?.position ?? "fill"
-                status: Greeter.statusText(root.face, root.chosen?.name ?? "", Lock.statusLine(root.face, keyboards.present).text)
+                status: Greeter.statusText(root.face, root.chosen?.name ?? "", Lock.statusLine(root.face).text)
                 powerMessage: powerActions.message
                 powerBusy: powerActions.busy
-                layout: keymap.badge
+                layout: keymap.layoutName
                 keyboard: keyboards.present
                 users: root.users
                 userName: root.user

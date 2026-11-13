@@ -53,14 +53,14 @@ ShellRoot {
         id: powerActions
     }
 
-    // The main keyboard's layout, for the badge by the field (LockKeymap.qml).
+    // The main keyboard's layout, named under the field (LockKeymap.qml).
     LockKeymap {
         id: keymap
     }
 
     // Whether there's a keyboard to type with, for the field's focus
     // (LockKeyboards.qml). A keyboard coming or going can change the main
-    // one, so the badge is read again.
+    // one, so the layout is read again.
     LockKeyboards {
         id: keyboards
 
@@ -291,7 +291,7 @@ ShellRoot {
             dark: root.dark
             powerMessage: powerActions.message
             powerBusy: powerActions.busy
-            layout: keymap.badge
+            layout: keymap.layoutName
             keyboard: keyboards.present
             unread: root.unread
             onEvent: event => root.dispatch(event)

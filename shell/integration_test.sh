@@ -29,7 +29,7 @@
 # run, so the clocks are drawn from tzdata; a stand-in tide-sysmon whose
 # probe finds no sensors, so the system monitor parses one but reads no
 # sensor files; a stand-in hyprctl, answering from the stand-in
-# Hyprland's fixtures, for the bar's title, the lock's layout badge and
+# Hyprland's fixtures, for the bar's title, the lock's layout name and
 # the focus guard's calls, conf's conf_input.reload() and
 # conf_appearance.reload() and the Keyboard page's shortcuts; stand-in
 # gsettings and nmcli, for light and dark and the VPNs, whose monitors
@@ -675,7 +675,7 @@ tidewm_asked() {
         cat "$tmp/reports" >&2
         exit 1
     fi
-    # The lock asks only for the keyboard's layout, for its badge, and
+    # The lock asks only for the keyboard's layout, for its name, and
     # again on each of tidewm's input events (LockKeymap.qml).
     if test "$_name" = tidewm-lock; then
         if ! grep -q '^subscribe .*"input"' "$tmp/answered"; then
@@ -2275,7 +2275,7 @@ start_session {"cmd": ["tide-session hyprland"], "env": ["XDG_SESSION_TYPE=wayla
 # settings, whether a popover is open, the monitors and their settings, the
 # dim strength, home and its apps' rules, or the floating rules.
 # The lock and the greeter only ask for the keyboards, for their layout
-# badges, and listen for a wake, for their clocks.
+# names, and listen for a wake, for their clocks.
 shell_runs='tide-tz
 tide-sysmon probe
 hyprctl activewindow -j
@@ -2399,8 +2399,8 @@ fi
 # unlocking, and sway then keeps the screen locked until another lock
 # unlocks it (below), so anything drawn before then, or photographed,
 # would be hidden behind it.
-# The lock in tidewm's session first: its keyboard's layout, for the
-# badge, from tidewm's inputs. It too is left holding the screen, which
+# The lock in tidewm's session first: its keyboard's layout, for its
+# name, from tidewm's inputs. It too is left holding the screen, which
 # the lock below takes over.
 load_compositor=tidewm
 load_runs='tide-msg --type get_inputs

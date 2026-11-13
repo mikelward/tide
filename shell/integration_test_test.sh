@@ -1602,7 +1602,7 @@ check "and says so" contains "$out" "hypr/tide/focus.lua has no tide_focus.set_o
 
 case_60() {
 stubs "$tmp/badge-warns" "exit 0" "$loaded"
-echo "  WARN qml: tide-lock: hyprctl devices gave no keyboard; the layout badge stays hidden" >"$tmp/badge-warns/load-lock.txt" || exit 1
+echo "  WARN qml: tide-lock: hyprctl devices gave no keyboard; the layout's name stays hidden" >"$tmp/badge-warns/load-lock.txt" || exit 1
 run "$tmp/badge-warns"
 check "a lock that can't read its keyboards fails" test "$code" -ne 0
 check "as the lock loads" contains "$out" "the lock loaded, but its commands warned"

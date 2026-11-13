@@ -209,19 +209,22 @@ export function fieldText(state) {
     return "";
 }
 
-// What the line under the field says while there's no keyboard to type
-// with (SPEC.md §10).
+// What the layout's place under the field says while there's no keyboard
+// to type with (SPEC.md §10), as when a KVM has switched it away.
 export const NO_KEYBOARD = "No keyboard";
 
-// The line under the field, and whether it's a failure's, drawn in red:
-// "Checking" while PAM checks; else "No keyboard" while there's none
-// (hasKeyboard), as when a KVM has switched it away, since a keyboard
-// comes before the password; else PAM's message or the failure. Those are
-// kept, and come back with a keyboard.
-export function statusLine(state, keyboard) {
+// The line under the layout, and whether it's a failure's, drawn in red:
+// "Checking" while PAM checks, else PAM's message or the failure.
+export function statusLine(state) {
     if (state.checking) return { text: "Checking", error: false };
-    if (!keyboard) return { text: NO_KEYBOARD, error: false };
     return { text: state.message, error: state.error };
+}
+
+// What sits under the password field, as on the boot splash (SPEC.md
+// §10): the layout's name (layoutName), or NO_KEYBOARD while there's no
+// keyboard (hasKeyboard). "" when there's a keyboard but no layout to show.
+export function layoutLine(layout, keyboard) {
+    return keyboard ? layout : NO_KEYBOARD;
 }
 
 // Where the face's middle column starts (SPEC.md §10), so nothing on it
@@ -354,15 +357,15 @@ export function powerNext(state, event) {
     return { state: Object.freeze({ action: state.action, run, stopped, message }), command: null };
 }
 
-// The keyboard layout badge by the password field (SPEC.md §10), so a
-// failed password isn't a layout mystery. Hyprland names a layout by its
-// xkb description, "English (Dvorak)" or "English (US)": the badge is the
-// part in parentheses, else the whole name, in capitals ("DVORAK", "US",
-// "GERMAN"). "" when there's no layout to show.
-export function layoutBadge(name) {
+// The keyboard layout's name under the password field (SPEC.md §10), so
+// a failed password isn't a layout mystery. Hyprland names a layout by its
+// xkb description, "English (Dvorak)" or "English (US)": the name is the
+// part in parentheses, else the whole description ("Dvorak", "US",
+// "German"). "" when there's no layout to show.
+export function layoutName(name) {
     const text = String(name || "").trim();
     const inner = /\(([^()]+)\)\s*$/.exec(text);
-    return (inner ? inner[1].trim() : text).toUpperCase();
+    return inner ? inner[1].trim() : text;
 }
 
 // The main keyboard from `hyprctl devices -j` (Hyprland 0.56):
@@ -390,7 +393,7 @@ export function mainKeyboard(text) {
     };
 }
 
-// Just its layout's description, or null, for the lock's badge.
+// Just its layout's description, or null, for the lock's layout name.
 // The keyboard from tidewm's GET_INPUTS (`tide-msg --type get_inputs`),
 // as mainKeyboard reads Hyprland's: sway's [{type, xkb_active_layout_name,
 // xkb_active_layout_index, xkb_layout_names}]. tidewm marks none main, and
@@ -429,10 +432,10 @@ export function mainKeymap(text) {
 }
 
 // The bar's layout label (SPEC.md §7.4), as tide for macOS's: up to three
-// letters of the badge's name, so "English (US)" is US, "English
-// (Dvorak)" DVO and "German" GER.
+// letters of the layout's name, in capitals, so "English (US)" is US,
+// "English (Dvorak)" DVO and "German" GER.
 export function layoutLabel(name) {
-    return layoutBadge(name).replace(/[^A-Z0-9]/g, "").slice(0, 3);
+    return layoutName(name).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
 }
 
 // Whether the layout read has settled: no read running and none due, so
@@ -452,7 +455,7 @@ export function nextLayout({ index, count }) {
     return (index + 1) % count;
 }
 
-// Which layout the badge shows. Only `hyprctl devices -j` says which
+// Which layout the face names. Only `hyprctl devices -j` says which
 // keyboard is the main one, and in Hyprland 0.56 that changes: it's the
 // keyboard last typed on (onKeyboardMod), or another one after an unplug,
 // which sends no event. So nothing here remembers a keyboard. Each
@@ -469,7 +472,7 @@ export const LAYOUT_INITIAL = Object.freeze({ keymap: "", index: null, count: 0,
 // Events: {type: "refresh"} (the lock starts, Hyprland reports a layout
 // switch, or a password fails) and {type: "answer", keymap, index, count}
 // (mainKeyboard's result, keymap null when the read failed, which hides
-// the badge rather than keep a layout that may be stale). Returns {state,
+// the layout rather than keep a layout that may be stale). Returns {state,
 // query}: `query` asks the QML to start a read.
 export function layoutNext(state, event) {
     return readNext("layout", state, event, (answer) => {

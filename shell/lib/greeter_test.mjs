@@ -5,7 +5,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { INITIAL, NO_KEYBOARD, next, statusLine } from "./lock.mjs";
+import { INITIAL, next, statusLine } from "./lock.mjs";
 import {
     DISPLAYS_INITIAL, DISPLAYS_OFF_AFTER, LISTING_SCRIPT, SAVER_AFTER, SHELL_ID, SHELL_SESSION, authFailureEvent, canPickUser, displaysCommand,
     displaysNext, execCommand, fileId, greetdError, parseDesktopEntry, parseListing,
@@ -192,13 +192,14 @@ test("a greetd error after the password was taken asks for it again", () => {
     assert.equal(statusText(after, "tide", after.message), after.message);
 });
 
-test("the session starting wins over no keyboard", () => {
+test("the line under the field says Checking, then which session is starting", () => {
     let state = next(INITIAL, { type: "key", text: "x" }).state;
     state = next(state, { type: "submit" }).state;
-    assert.equal(statusText(state, "tide", statusLine(state, false).text), "Checking");
+    assert.equal(statusText(state, "tide", statusLine(state).text), "Checking");
     state = next(state, { type: "done", result: "success" }).state;
-    assert.equal(statusText(state, "tide", statusLine(state, false).text), "Starting tide");
-    assert.equal(statusText(INITIAL, "tide", statusLine(INITIAL, false).text), NO_KEYBOARD);
+    assert.equal(statusText(state, "tide", statusLine(state).text), "Starting tide");
+    // No keyboard is the layout's place to say (Lock.layoutLine), not this line's.
+    assert.equal(statusText(INITIAL, "tide", statusLine(INITIAL).text), "");
 });
 
 test("a greetd error while checking keeps what was typed since", () => {
