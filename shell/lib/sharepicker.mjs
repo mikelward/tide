@@ -95,6 +95,7 @@ export function options(screens, windows, workspaceOf, current) {
         all.push({
             kind: "window",
             key: `window:${w.id}`,
+            id: w.id,
             address: w.address,
             label: w.title || w.cls,
             detail: ws === null || ws === undefined ? "" : String(ws),
