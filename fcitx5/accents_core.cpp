@@ -558,6 +558,23 @@ void Machine::close(Result &r) {
     highlight_ = -1;
 }
 
+std::string charBefore(const std::string &text, size_t cursorChars) {
+    if (cursorChars == 0)
+        return "";
+    size_t start = std::string::npos, i = 0, n = 0;
+    while (i < text.size() && n < cursorChars) {
+        start = i;
+        ++i;
+        // Skip the character's continuation bytes.
+        while (i < text.size() && (uint8_t(text[i]) & 0xc0) == 0x80)
+            ++i;
+        ++n;
+    }
+    if (n < cursorChars)
+        return "";
+    return text.substr(start, i - start);
+}
+
 Result Machine::idlePress(const KeyPress &key, const Context &ctx) {
     Result r;
     if (key.otherModifiers || off(ctx))
@@ -578,6 +595,7 @@ Result Machine::idlePress(const KeyPress &key, const Context &ctx) {
     candidates_ = std::move(accents);
     state_ = State::Held;
     heldCode_ = key.code;
+    letter_ = key.text;
     heldDown_ = true;
     return r;
 }
@@ -685,9 +703,11 @@ Result Machine::choose(int index, const Context &ctx) {
     r.consume = true;
     std::string accent = candidates_[index];
     close(r);
-    // The letter typed on the press makes way for the accent.
-    r.actions.push_back(act(ctx.surroundingText ? Action::DeleteBefore
-                                                : Action::BackSpace));
+    // The letter typed on the press makes way for the accent: deleted as
+    // surrounding text where the app shows it before the cursor, else with
+    // a Backspace.
+    r.actions.push_back(act(ctx.beforeCursor == letter_ ? Action::DeleteBefore
+                                                         : Action::BackSpace));
     r.actions.push_back(Action{Action::Commit, accent, 0, {}, -1});
     return r;
 }

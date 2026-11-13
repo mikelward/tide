@@ -3183,9 +3183,12 @@ plain long press.
 - **A quick tap** is just the letter. Another key before the hold time
   ends the hold too.
 - **Replacing the letter.** Where the app reports its surrounding text,
-  the letter is deleted through text-input's delete-surrounding-text.
-  Elsewhere a Backspace press and release is sent first. Both are followed
-  by the accent's commit.
+  with the letter just before the cursor, the letter is deleted through
+  text-input's delete-surrounding-text. Elsewhere a Backspace press and
+  release is sent first. Both are followed by the accent's commit. On
+  Wayland, fcitx5 says every app has surrounding text, but drops a
+  deletion of text the app never reported. kitty reports none, so it gets
+  the Backspace.
 - **Not everywhere.** Never in a password field (fcitx5's `Password` or
   `Sensitive`): every key goes straight through. Off in the programs
   listed in `accents.conf`, by fcitx5's name for the program. fcitx5

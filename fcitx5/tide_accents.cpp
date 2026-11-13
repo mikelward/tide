@@ -20,6 +20,7 @@
 #include <unistd.h>
 #include <fcitx/inputpanel.h>
 #include <fcitx/instance.h>
+#include <fcitx/surroundingtext.h>
 #include <fcitx/userinterface.h>
 
 #include <cstdlib>
@@ -199,7 +200,9 @@ private:
         ta::Context ctx;
         auto caps = ic->capabilityFlags();
         ctx.password = caps.testAny(CapabilityFlag::PasswordOrSensitive);
-        ctx.surroundingText = caps.test(CapabilityFlag::SurroundingText);
+        const auto &text = ic->surroundingText();
+        if (caps.test(CapabilityFlag::SurroundingText) && text.isValid())
+            ctx.beforeCursor = ta::charBefore(text.text(), text.cursor());
         ctx.program = ic->program();
         return ctx;
     }

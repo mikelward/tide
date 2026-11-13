@@ -127,7 +127,7 @@ static void testHoldShows() {
 static void testDigitPicks() {
     current = "digit picks";
     Fixture f;
-    f.ctx.surroundingText = true;
+    f.ctx.beforeCursor = "e";
     holdE(f);
     Result r = f.m.press(digitKey(2), f.ctx);
     CHECK(r.consume);
@@ -150,12 +150,48 @@ static void testDigitPicks() {
 static void testBackSpaceWithoutSurrounding() {
     current = "backspace without surrounding text";
     Fixture f;
-    f.ctx.surroundingText = false;
     holdE(f);
     Result r = f.m.press(digitKey(1), f.ctx);
     CHECK((r.actions == std::vector<Action>{plain(Action::HideCandidates),
                                             plain(Action::BackSpace),
                                             commit("è")}));
+}
+
+// An app that shows no surrounding text, or not the letter just typed
+// (kitty shows none, and fcitx5 still says it can delete it), gets a
+// Backspace, so the letter doesn't stay beside its accent.
+static void testBackSpaceUnlessLetterShown() {
+    current = "backspace unless the letter is shown";
+    for (const char *before : {"", "x", "é"}) {
+        Fixture f;
+        f.ctx.beforeCursor = before;
+        holdE(f);
+        Result r = f.m.press(digitKey(2), f.ctx);
+        CHECK((r.actions == std::vector<Action>{plain(Action::HideCandidates),
+                                                plain(Action::BackSpace),
+                                                commit("é")}));
+    }
+    // A capital is matched as typed.
+    Fixture g;
+    g.ctx.beforeCursor = "E";
+    g.m.press(E(), g.ctx);
+    g.m.timerFired(g.ctx);
+    Result r = g.m.press(digitKey(2), g.ctx);
+    CHECK((r.actions == std::vector<Action>{plain(Action::HideCandidates),
+                                            plain(Action::DeleteBefore),
+                                            commit("É")}));
+}
+
+static void testCharBefore() {
+    current = "char before";
+    CHECK(charBefore("", 0) == "");
+    CHECK(charBefore("abc", 0) == "");
+    CHECK(charBefore("abc", 1) == "a");
+    CHECK(charBefore("abc", 3) == "c");
+    CHECK(charBefore("abc", 4) == "");
+    CHECK(charBefore("aéb", 2) == "é");
+    CHECK(charBefore("aéb", 3) == "b");
+    CHECK(charBefore("ẞe", 1) == "ẞ");
 }
 
 static void testArrowsAndEnter() {
@@ -327,7 +363,7 @@ static void testPassThrough() {
 static void testClick() {
     current = "click";
     Fixture f;
-    f.ctx.surroundingText = true;
+    f.ctx.beforeCursor = "e";
     // A click with no list does nothing.
     CHECK(f.m.pick(0, f.ctx).actions.empty());
     holdE(f);
@@ -344,7 +380,7 @@ static void testHeldAfterClose() {
     current = "held after close";
     for (int how = 0; how < 3; how++) {
         Fixture f;
-        f.ctx.surroundingText = true;
+        f.ctx.beforeCursor = "e";
         holdE(f);
         if (how == 0)
             f.m.pick(1, f.ctx);
@@ -415,7 +451,7 @@ static void testAppReset() {
     // It forgets no key that's still down: after a pick, Chromium resets
     // again, and the held letter's repeats still type nothing.
     Fixture g;
-    g.ctx.surroundingText = true;
+    g.ctx.beforeCursor = "e";
     holdE(g);
     g.m.pick(1, g.ctx);
     g.m.appReset();
@@ -569,6 +605,8 @@ int main(int argc, char **argv) {
     testHoldShows();
     testDigitPicks();
     testBackSpaceWithoutSurrounding();
+    testBackSpaceUnlessLetterShown();
+    testCharBefore();
     testArrowsAndEnter();
     testEscape();
     testOtherKey();
