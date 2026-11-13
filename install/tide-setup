@@ -7161,11 +7161,17 @@ PLYMOUTHD_CONF="${SETUP_ETC:-/etc}/plymouth/plymouthd.conf"
 MKINITCPIO_CONF="${SETUP_ETC:-/etc}/mkinitcpio.conf"
 
 # splash_installed: whether the installed theme is this checkout's, file
-# for file (keymap-render.png is the distro's, so it isn't compared).
+# for file, and its keymap-render.png the distro's spinner theme's.
 splash_installed() {
     for _sp_file in "$TIDE_DIR"/plymouth/tide/*; do
         cmp -s "$_sp_file" "$PLYMOUTH_THEMES/tide/${_sp_file##*/}" || return 1
     done
+    # The layout names' picture must match the Plymouth that draws them, so
+    # a Plymouth upgrade that changes the spinner theme's copies it again.
+    _sp_keymap=$PLYMOUTH_THEMES/spinner/keymap-render.png
+    if test -f "$_sp_keymap"; then
+        cmp -s "$_sp_keymap" "$PLYMOUTH_THEMES/tide/keymap-render.png" || return 1
+    fi
 }
 
 # splash_default: whether tide's theme is Plymouth's default. Debian and

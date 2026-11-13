@@ -78,6 +78,21 @@ check "with the theme and the default in place, the initramfs isn't rebuilt" lac
 check "nor the theme installed again" lacks "$calls" "install-splash"
 teardown
 
+# A Plymouth upgrade that changes the spinner theme's keymap-render.png,
+# which must match Plymouth's own, has it copied again: the theme is
+# installed and the initramfs rebuilt.
+setup; splash_setup; splash_installed_already; mkdir -p "$T/plymouth-themes/spinner"
+echo "new" > "$T/plymouth-themes/spinner/keymap-render.png"; echo "old" > "$T/plymouth-themes/tide/keymap-render.png"; ARGS=(--splash)
+splash_run FAKE_ALTERNATIVE="$T/plymouth-themes/tide/tide.plymouth"
+check "a Plymouth whose layout names changed installs the theme again" has "$calls" "install-splash"
+check "and rebuilds the initramfs" has "$calls" "sudo update-initramfs -u"
+teardown
+setup; splash_setup; splash_installed_already; mkdir -p "$T/plymouth-themes/spinner"
+echo "same" > "$T/plymouth-themes/spinner/keymap-render.png"; echo "same" > "$T/plymouth-themes/tide/keymap-render.png"; ARGS=(--splash)
+splash_run FAKE_ALTERNATIVE="$T/plymouth-themes/tide/tide.plymouth"
+check "with the layout names current, nothing is rebuilt" lacks "$calls" "update-initramfs"
+teardown
+
 # A checkout whose theme changed installs it again.
 setup; splash_setup; splash_installed_already; echo "new" > "$T/src/tide/plymouth/tide/lock.png"; ARGS=(--splash)
 splash_run FAKE_ALTERNATIVE="$T/plymouth-themes/tide/tide.plymouth"
