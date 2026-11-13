@@ -1292,6 +1292,9 @@ See [`layouts.png`](docs/mocks/layouts.png).
 - Video, picture-in-picture and screen-share preview windows get a `nodim`
   window rule, so a call on the other monitor doesn't look washed out.
 - Strength is a setting, on the Appearance page (§16), a point at a time.
+- The dim fades as focus moves, over 300 ms, as a new window fades in. On
+  tidewm, these are `fade_duration 300`, and floating windows cast a soft
+  shadow with `shadows enable`, as Hyprland's do (maintainer, 2026-11-13).
 
 ### 6.3 One window big: monocle, maximize, fullscreen
 
@@ -6210,7 +6213,9 @@ such as `centeredmaster`, scenefx, and what niri, sway and KWin can do beyond
   in their own file, included from `config.h`, without touching `dwl.c`.
 - **Dimming** (§6.2) is a translucent rectangle over each unfocused window in
   the wlroots scene graph, about 30 lines. No effects library is needed.
-  Blur, rounded corners and animations would need scenefx, and aren't wanted.
+  Nor is one for fades and floating windows' shadows, tidewm's own
+  `effects.h` (maintainer, 2026-11-13). Blur and rounded corners would need
+  scenefx.
 - **Tap Super** (R14) and the focus guard (§14.3) become our own C, instead
   of waiting on Hyprland's main branch and its Lua API.
 - **Resize** is Super+drag: floating windows have it built in, and dragging
