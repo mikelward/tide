@@ -14,7 +14,7 @@ import "lib/barsettings.mjs" as BarSettings
 import "lib/baricons.mjs" as BarIcons
 
 // The status icons (SPEC.md §7.4), each with hover text (BarTip) in tide
-// for macOS's words where tide for macOS has the same icon: tidewm's config
+// for macOS's words where tide for macOS has the same icon: the compositor's config
 // errors, while it has any, always first; then, in the Bar page's order
 // (appearance.json's barIcons, lib/baricons.mjs), the tray (Tray.qml); the
 // keyboard layout, once there are two; keep awake; Bluetooth, then one for
@@ -85,7 +85,7 @@ Item {
         objects: [root.sink]
     }
 
-    // tidewm's config errors: a warning triangle, only while its config
+    // The compositor's config errors: a warning triangle, only while its config
     // has errors, which hovering counts and a click lists (lib/configerrors.mjs).
     SymbolicIcon {
         id: config
@@ -116,7 +116,7 @@ Item {
         BarTip {
             item: config
             shown: configHit.hovered
-            text: Errors.summary(ConfigErrorsData.errors)
+            text: Errors.summary(ConfigErrorsData.errors, ConfigErrorsData.compositorName)
         }
     }
 

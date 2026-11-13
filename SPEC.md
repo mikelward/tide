@@ -2468,7 +2468,8 @@ See [`bar.png`](docs/mocks/bar.png).
 
 **Config errors.** tidewm leaves a bad config line out and starts
 anyway, so a key or a setting is missing with nothing to say why (its
-`docs/config.md`).
+`docs/config.md`). Hyprland does too. Both sessions show them the same
+way, in the bar (maintainer, 2026-11-13).
 
 - The shell asks tidewm for its `GET_CONFIG`, whose `errors` lists them,
   with `tide-msg --type get_config`. It asks as it connects, when a key
@@ -2476,8 +2477,14 @@ anyway, so a key or a setting is missing with nothing to say why (its
   `tide-msg reload` of its own (§16), and when `tide reload`
   (`Super+Ctrl+R`, §6.6) says it has reloaded (`qs -c tide ipc call
   configerrors reloaded`).
-- tidewm has no event for a reload. So one from a terminal isn't seen
-  until the next of those.
+- tidewm also sends i3's and sway's `workspace` event, `reload`, after
+  each reload, from anywhere, as `tide-msg reload` in a terminal, and the
+  shell asks again on it.
+- On Hyprland the shell runs `hyprctl configerrors`, one error a line,
+  as it starts and on each `configreloaded` event. tide's Hyprland config
+  sets `debug:suppress_errors` in the tide session, so Hyprland's own red
+  banner gives way to the bar's warning. A plain Hyprland login keeps the
+  banner.
 - While there are errors, a warning triangle is the first status icon. A
   click lists them, the first eight, then how many more. It goes when a
   load has none.
@@ -2488,8 +2495,6 @@ anyway, so a key or a setting is missing with nothing to say why (its
 - A reply that can't be read, as an older tidewm's without `errors`,
   shows nothing, and the log says why.
 - `tide doctor` lists every error (§5.4).
-- Hyprland's session shows none of this: `hyprctl configerrors` is its
-  own.
 
 **Wired.** A cable wins over Wi-Fi on the icon. With nothing else up, the
 icon shows a wired connection on its way up, and a cable that's in with

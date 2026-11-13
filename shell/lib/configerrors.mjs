@@ -93,13 +93,19 @@ export function retry(state) {
     return loaded(state, state.errors);
 }
 
+// The compositor whose config it is, as the words below name it.
+export function compositorName(tidewm) {
+    return tidewm ? "tidewm" : "Hyprland";
+}
+
 // "tidewm's config has 2 errors", the notification's summary, the bar
-// icon's hover text and the list's heading; "" for none.
-export function summary(errors) {
+// icon's hover text and the list's heading; "" for none. `name` is the
+// compositor's (compositorName).
+export function summary(errors, name = "tidewm") {
     if (errors.length === 0) {
         return "";
     }
-    return `tidewm's config has ${errors.length} ${errors.length === 1 ? "error" : "errors"}`;
+    return `${name}'s config has ${errors.length} ${errors.length === 1 ? "error" : "errors"}`;
 }
 
 // The notification's second line: where to see them.
@@ -110,8 +116,18 @@ export function body(errors) {
 // The notify-send command for `errors`. Critical, so it stays until it's
 // dismissed. notify-send hands it to whichever server owns the
 // notifications name: swaync, or the shell itself (§9).
-export function notifyCommand(errors) {
-    return ["notify-send", "--app-name=tide", "--urgency=critical", `--icon=${ICON}`, summary(errors), body(errors)];
+export function notifyCommand(errors, name = "tidewm") {
+    return ["notify-send", "--app-name=tide", "--urgency=critical", `--icon=${ICON}`, summary(errors, name), body(errors)];
+}
+
+// `hyprctl configerrors`' output, one error a line and nothing when there
+// are none: { errors }, as replyErrors gives tidewm's, or { why } when
+// hyprctl said nothing at all, as when it couldn't reach Hyprland.
+export function hyprlandErrors(text, ok = true) {
+    if (!ok || typeof text !== "string") {
+        return { why: "hyprctl configerrors failed" };
+    }
+    return { errors: text.split("\n").map(e => e.trim()).filter(e => e !== "") };
 }
 
 // One error as tidewm words it, "/path/to/config:12: what's wrong", in
@@ -140,8 +156,8 @@ export function listed(errors, home = "") {
 }
 
 // The list's last line: what to do about them.
-export function advice(errors) {
-    return `Fix ${errors.length === 1 ? "it" : "them"}, then reload tidewm's config.`;
+export function advice(errors, name = "tidewm") {
+    return `Fix ${errors.length === 1 ? "it" : "them"}, then reload ${name}'s config.`;
 }
 
 function commandsOf(command) {
@@ -179,6 +195,11 @@ export function asksForErrors(type, data) {
     }
     if (type === "tick") {
         return event?.first === true;
+    }
+    // A reload from anywhere, as `tide-msg reload` in a terminal, as i3
+    // and sway say it.
+    if (type === "workspace") {
+        return event?.change === "reload";
     }
     if (type !== "binding" || event?.change !== "run" || typeof event.binding?.command !== "string") {
         return false;

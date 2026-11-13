@@ -207,14 +207,15 @@ BINDS = [
 # What the shell runs hyprctl for: the focused window at startup, the
 # windows, for the name prompt to judge a window first focused, the
 # keyboards for the lock's layout name, the key bindings and the monitors
-# for the settings panel's Keys and Displays pages, and the focus guard's
-# calls.
+# for the settings panel's Keys and Displays pages, the config's errors
+# (none) for the bar's warning, and the focus guard's calls.
 CTL = {
     ("activewindow", "-j"): lambda: json.dumps(ANSWERS["j/activewindow"]),
     ("clients", "-j"): lambda: json.dumps(ANSWERS["j/clients"]),
     ("devices", "-j"): lambda: json.dumps(ANSWERS["j/devices"]),
     ("binds", "-j"): lambda: json.dumps(BINDS),
     ("monitors", "all", "-j"): lambda: json.dumps(ANSWERS["j/monitors"]),
+    ("configerrors",): lambda: "",
 }
 
 

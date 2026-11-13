@@ -2338,6 +2338,13 @@ test("Hyprland's log also goes to stdout, for the journal, without color codes",
     eq(false, S.config.debug.colored_stdout_logs, "colored")
 end)
 
+test("in the tide session the bar shows config errors, so Hyprland's banner is hidden", function()
+    load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
+    eq(true, S.config.debug.suppress_errors, "tide session")
+    load({ env = { XDG_CURRENT_DESKTOP = "Hyprland" } })
+    eq(false, S.config.debug.suppress_errors, "a plain Hyprland login keeps the banner")
+end)
+
 test("a tide session key logs its start, output and end to the journal", function()
     load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
     local args = bind("SUPER + L").target.args
