@@ -32,9 +32,10 @@
   .who { display: flex; align-items: center; gap: 10px; margin-top: 26px; }
   .av { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #3584e4, #9141ac); display: flex; align-items: center; justify-content: center; font-weight: 700; }
   .who .n { font-weight: 600; font-size: 20px; }
-  .pw { margin-top: 12px; width: 270px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 14px; letter-spacing: .25em; }
+  .pw { margin-top: 12px; width: 240px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); display: flex; align-items: center; padding: 0 12px; gap: 8px; font-size: 14px; letter-spacing: .25em; }
   .pw .ms { font-size: 18px; color: rgba(255,255,255,.6); letter-spacing: 0; }
-  .pw .kb { margin-left: auto; letter-spacing: 0; font-size: 10.5px; font-weight: 700; background: rgba(255,255,255,.14); border-radius: 5px; padding: 2px 6px; color: rgba(255,255,255,.85); }
+  .kbrow { display: flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 12px; color: rgba(255,255,255,.55); }
+  .kbrow .ms { font-size: 16px; }
   .pw.err { box-shadow: inset 0 0 0 1.5px #ff7b63; }
   .pw.focus { box-shadow: inset 0 0 0 1.5px #78aeed; }
   .pw.err.focus { box-shadow: inset 0 0 0 1.5px #ff7b63; }
@@ -74,11 +75,12 @@
       <div class="host">host1</div>
       <div class="fclocks"><span>Mon Sep 28 <b>09:12</b></span></div>
       <div class="who"><span class="av">U</span><div><div class="n">user</div></div></div>
-      <div class="pw focus"><i class="ms">lock</i><span class="caret before"></span><span style="color:rgba(255,255,255,.45);letter-spacing:0;font-size:13px">Password</span><span class="kb">DVORAK</span></div>
+      <div class="pw focus"><i class="ms">lock</i><span class="caret before"></span><span style="color:rgba(255,255,255,.45);letter-spacing:0;font-size:13px">Password</span></div>
+      <div class="kbrow"><i class="ms">keyboard</i>Dvorak</div>
       <div class="sess"><span class="chipx"><i class="ms">desktop_windows</i>tide<i class="ms">expand_more</i></span><span class="chipx"><i class="ms">person</i>Other user</span></div>
       <div class="pwr"><span><i class="ms">restart_alt</i></span><span><i class="ms">power_settings_new</i></span></div>
     </div>
-    <div class="cap"><b>Login.</b> The last user is preselected, so boot, type the password, Enter. The session chip lists the <code>wayland-sessions</code> entries (tide first), plus a plain TTY shell as a way out if the desktop is broken. The keyboard layout matches the session (Dvorak), with a badge so a failed password isn’t a layout mystery.</div>
+    <div class="cap"><b>Login.</b> The last user is preselected, so boot, type the password, Enter. The session chip lists the <code>wayland-sessions</code> entries (tide first), plus a plain TTY shell as a way out if the desktop is broken. The keyboard layout matches the session (Dvorak), and its name sits under the field, in dim text as on the boot splash, so a failed password isn’t a layout mystery.</div>
   </div>
 
   <div>
@@ -88,7 +90,8 @@
       <div class="host">host1</div>
       <div class="fclocks"><span>Mon Sep 28 <b>19:47</b></span></div>
       <div class="who"><span class="av">U</span><div><div class="n">user</div></div></div>
-      <div class="pw focus"><i class="ms">lock</i><span>••••••</span><span class="caret after"></span><span class="kb">DVORAK</span></div>
+      <div class="pw focus"><i class="ms">lock</i><span>••••••</span><span class="caret after"></span></div>
+      <div class="kbrow"><i class="ms">keyboard</i>Dvorak</div>
       <div class="sess"><span class="chipx"><i class="ms">bedtime</i>Suspend</span></div>
       <div class="pwr"><span><i class="ms">restart_alt</i></span><span><i class="ms">power_settings_new</i></span></div>
     </div>
@@ -101,13 +104,26 @@
       <div class="host">host1</div>
       <div class="fclocks"><span>Mon Sep 28 <b>19:47</b></span></div>
       <div class="who"><span class="av">U</span><div><div class="n">user</div></div></div>
-      <div class="pw err focus"><i class="ms">lock</i><span class="caret before"></span><span style="letter-spacing:0;font-size:13px;color:rgba(255,255,255,.45)">Password</span><span class="kb">DVORAK</span></div>
+      <div class="pw err focus"><i class="ms">lock</i><span class="caret before"></span><span style="letter-spacing:0;font-size:13px;color:rgba(255,255,255,.45)">Password</span></div>
+      <div class="kbrow"><i class="ms">keyboard</i>Dvorak</div>
       <div class="errmsg">Wrong password. Try again.</div>
       <div class="pwr"><span><i class="ms">restart_alt</i></span><span><i class="ms">power_settings_new</i></span></div>
     </div>
     <div class="cap"><b>Failure</b>: the field clears, with no animation. PAM’s own messages (faillock countdowns, “fingerprint not recognized”) are shown verbatim below the field.</div>
   </div>
 
+  <div>
+    <div class="face">
+      <span class="tag">Lock · no keyboard</span>
+      <div class="host">host1</div>
+      <div class="fclocks"><span>Mon Sep 28 <b>19:47</b></span></div>
+      <div class="who"><span class="av">U</span><div><div class="n">user</div></div></div>
+      <div class="pw"><i class="ms">lock</i><span style="letter-spacing:0;font-size:13px;color:rgba(255,255,255,.45)">Password</span></div>
+      <div class="kbrow"><i class="ms">keyboard_off</i>No keyboard</div>
+      <div class="pwr"><span><i class="ms">restart_alt</i></span><span><i class="ms">power_settings_new</i></span></div>
+    </div>
+    <div class="cap"><b>No keyboard</b>: while there’s none to type with, as when a KVM has switched it away, the layout’s place says so, and the field has a quiet border and no caret. A keyboard plugged in brings the layout back.</div>
+  </div>
   <div>
     <div class="face ambient">
       <span class="tag" style="color:rgba(255,255,255,.28)">Screensaver · ambient</span>
