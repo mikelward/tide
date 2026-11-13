@@ -41,12 +41,18 @@ lines=$(awk '
     { print }' "$tmp/plain")
 
 bad=$(printf '%s\n' "$lines" | grep -v '^  ' | awk '{ print $1 }' | grep -vxE \
-    'set|bindsym|bindswitch|for_window|output|input|mode|single_window|dim_inactive|default_border|focus_guard|floating_modifier|xwayland_scaling|include' || true)
+    'set|bindsym|bindswitch|for_window|output|input|mode|single_window|dim_inactive|default_border|fade_duration|shadows|focus_guard|floating_modifier|xwayland_scaling|include' || true)
 check "every line is a directive tidewm takes${bad:+: $bad}" empty "$bad"
 
 # As tide on Hyprland: dimming, not a border, shows the focused window.
 border=$(printf '%s\n' "$lines" | awk '$1 == "default_border"' | tail -n 1)
 check "windows have no border (default_border none, not '$border')" test "$border" = "default_border none"
+
+# As tide on Hyprland: fades over 300 ms, and floating windows' shadows.
+fade=$(printf '%s\n' "$lines" | awk '$1 == "fade_duration"' | tail -n 1)
+check "windows fade over 300 ms, as on Hyprland (not '$fade')" test "$fade" = "fade_duration 300"
+shadows=$(printf '%s\n' "$lines" | awk '$1 == "shadows"' | tail -n 1)
+check "floating windows cast shadows (not '$shadows')" test "$shadows" = "shadows enable"
 
 blocks=$(grep -E '{[[:space:]]*$' "$cfg" | grep -vE '^(input|mode) ' || true)
 check "the file's blocks are input blocks and modes" empty "$blocks"
