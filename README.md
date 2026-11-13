@@ -99,7 +99,7 @@ installed, and setup warns about one that couldn't be. The shell reads
 tidewm's IPC there: the bar's workspaces, windows, title and layout
 symbol, the switcher, the launcher's screenshots and the Sharing pill
 all work, and screen sharing goes through xdg-desktop-portal-wlr, which
-`tide doctor` checks for. It hasn't had a real login yet. Hyprland's
+`tide doctor` checks for. Its maintainer uses it every day. Hyprland's
 stays the default. tidewm's keys are tide's own config,
 `~/.config/tidewm/tide.conf`, which `make install` puts there and the
 session runs when you have no `~/.config/tidewm/config`; yours can
