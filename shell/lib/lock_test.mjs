@@ -398,6 +398,37 @@ test("a power action that works says nothing, whatever the order", () => {
     }
 });
 
+test("another logged-in session stops a restart once, and a second press goes ahead", () => {
+    const loggedIn = "User user is logged in on tty1.\nPlease retry operation after closing inhibitors and logging out other users.\n";
+    const first = power(POWER_IDLE, { type: "press", id: "reboot" }, { type: "started" },
+        { type: "exited", code: 1 }, { type: "stderr", text: loggedIn }, { type: "stopped" }).state;
+    assert.equal(first.message, "user is logged in on tty1. Press Restart again to restart anyway.");
+    assert.equal(powerBusy(first), false);
+    // The same button again skips systemctl's own check; logind still
+    // decides.
+    const again = power(first, { type: "press", id: "reboot" });
+    assert.deepEqual(again.command, ["systemctl", "--check-inhibitors=no", "reboot"]);
+    // A different button asks afresh.
+    assert.deepEqual(power(first, { type: "press", id: "poweroff" }).command,
+        ["systemctl", "--check-inhibitors=yes", "poweroff"]);
+    // A forced run that fails says why, and the next press checks again.
+    const failed = power(again.state, { type: "started" }, { type: "exited", code: 1 },
+        { type: "stderr", text: "Failed to reboot: Access denied\n" }, { type: "stopped" }).state;
+    assert.equal(failed.message, "Restart failed: Failed to reboot: Access denied");
+    assert.deepEqual(power(failed, { type: "press", id: "reboot" }).command,
+        ["systemctl", "--check-inhibitors=yes", "reboot"]);
+});
+
+test("an inhibitor never offers to go ahead, even beside a logged-in session", () => {
+    const both = 'Operation inhibited by "Firefox" (PID 42 "firefox", user user), reason is "Playing video".\n'
+        + "User user is logged in on tty1.\n";
+    const done = power(POWER_IDLE, { type: "press", id: "reboot" }, { type: "started" },
+        { type: "exited", code: 1 }, { type: "stderr", text: both }, { type: "stopped" }).state;
+    assert.equal(done.message, "Restart is blocked by Firefox: Playing video; user is logged in on tty1.");
+    assert.deepEqual(power(done, { type: "press", id: "reboot" }).command,
+        ["systemctl", "--check-inhibitors=yes", "reboot"]);
+});
+
 test("a power command that can't start frees the buttons and says so", () => {
     const { state } = power(POWER_IDLE, { type: "press", id: "poweroff" }, { type: "stopped" });
     assert.equal(powerBusy(state), false);

@@ -52,6 +52,16 @@ export function blockers(stderr) {
     return found;
 }
 
+// The other logged-in users that blocked a power action, from systemctl's
+// stderr, when they're all that blocked it: no inhibitor, which logind
+// enforces whatever systemctl is told, and nothing else failed. Otherwise
+// an empty list.
+export function sessionsOnly(stderr) {
+    const lines = String(stderr).split("\n");
+    if (lines.some((line) => /Operation inhibited by /.test(line))) return [];
+    return blockers(stderr);
+}
+
 // Whether an action can be blocked by inhibitors, and so may ask first.
 export function isPower(id) {
     return POWER.has(id);

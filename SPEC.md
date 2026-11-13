@@ -3857,7 +3857,11 @@ talk, a demo, or a meeting room's screen.
   left-handed mouse needs no setting there.
 - **Power from the lock:** Suspend at the bottom left, Restart and Shut down
   at the bottom right, through logind like the session menu, but never past
-  an inhibitor: what blocks one is named under the buttons. The battery sits
+  an inhibitor: what blocks one is named under the buttons. Another
+  logged-in session, as a console login is, is named too, and pressing the
+  same button again goes ahead (maintainer, 2026-11-13): logind allows the
+  active session that (`reboot-multiple-sessions`) and still refuses past
+  an inhibitor. The battery sits
   at the top right, before the notification count.
 - **Triggers:** `Super+L`, idle, suspend, and lid-close without an external
   display.
@@ -4015,7 +4019,8 @@ talk, a demo, or a meeting room's screen.
     - **Shell** comes last: the user's login shell on greetd's VT, the way
       out if the desktop is broken.
   - Restart and Shut down, as on the lock: through logind, never past an
-    inhibitor.
+    inhibitor, and past another logged-in session, such as your own
+    console login, on a second press.
   - **The pickers take keys too.** Tab and Shift+Tab move between the
     field and the chips, which show it with an accent border. On a chip,
     Enter, Space or Down opens its list, Up and Down move through it, and
