@@ -130,6 +130,7 @@ export function workspaceRows(list, query) {
     const rows = list.map((w) => {
         const count = w.count;
         const what = w.state === "current" ? "current"
+            : w.waiting ? "minimized"
             : w.id === null ? "not made yet"
             : count === 0 ? "empty"
             : count === 1 ? "1 window" : `${count} windows`;

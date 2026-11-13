@@ -2090,12 +2090,14 @@ not taken.
   under today's model of one workspace per monitor (§6.5). A restored window goes back to its workspace on
   whichever monitor shows it. This is to be revisited with that model
   (§21).
-- **A workspace whose windows are all minimized** has none left to
-  Hyprland, so it's destroyed once you leave it, as an empty one is
-  (§6.5). Its minimized windows wait under its name. A standing one stays
-  on the bar, and going there shows the tray. Any other is gone from the
-  bar until one of its windows is restored from the Windows tab, which
-  makes it again.
+- **A workspace whose windows are all minimized** stays on the bar, with
+  no icons (maintainer, 2026-11-13), as on tidewm. Going there shows the
+  tray, and the switcher's Workspaces tab says it's minimized.
+  - Hyprland destroys it once you leave it, as an empty one is (§6.5),
+    since it has no windows left. Its minimized windows wait under its
+    name, so the bar lists one for each name a minimized window waits
+    under that no workspace has, after the rest, by name, as a standing
+    one not made yet is listed. Going there makes it again.
 - **Hyprland pieces** (checked in 0.56.2's source):
   - Hyprland has no minimize. A minimized window moves to a special
     workspace named after the one it came from,
@@ -2126,8 +2128,7 @@ not taken.
   says is `minimized` as one on Hyprland's minimize workspace, and the
   bar, the tray and the switcher treat it alike. Focusing it, by any
   means, brings it back, as `[con_id=N] focus` does from the tray. Its
-  workspace stays while it waits, so one whose windows are all minimized
-  stays on the bar, with no icons, where Hyprland's is gone.
+  workspace stays while it waits, so it's on the bar as Hyprland's is.
 
 ### 6.8 The Hyprland config
 

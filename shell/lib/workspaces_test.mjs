@@ -44,6 +44,30 @@ test("the other workspaces follow in the order they were made, then numbered one
         ["in", "re", "oc", "me", "PR-12", "docs", "1", "2"]);
 });
 
+test("a workspace whose windows are all minimized stays on the bar after Hyprland destroys it", () => {
+    // Hyprland destroyed "PR-12" as its last window was minimized; that
+    // window waits on special:minimized:PR-12. "docs" is still there, and
+    // its minimized window adds nothing.
+    const workspaces = named("in", "docs").concat([
+        { id: -98, name: "special:minimized:PR-12" },
+        { id: -97, name: "special:minimized:docs" },
+        { id: -96, name: "special:minimized:re" },
+        { id: -95, name: "special:minimized:wide@DP-2" },
+    ]);
+    const order = workspaceOrder(workspaces, standing);
+    assert.deepEqual(order.map((w) => w.name), ["in", "re", "oc", "me", "docs", "PR-12", "wide"]);
+    const waiting = order.find((w) => w.name === "PR-12");
+    assert.deepEqual([waiting.id, waiting.ids, waiting.standing, waiting.minimized], [null, [], false, true]);
+    // A standing one is listed once, as standing.
+    assert.equal(order.filter((w) => w.name === "re").length, 1);
+    assert.equal(order.find((w) => w.name === "re").minimized, undefined);
+    const bar = barWorkspaces({ monitor: "DP-1", monitors: [{ name: "DP-1", workspace: -1338 }],
+        workspaces, windows: [{ address: "0xa", workspace: -98, workspaceName: "special:minimized:PR-12", app: "kitty" }], standing });
+    const row = bar.find((w) => w.name === "PR-12");
+    assert.deepEqual([row.state, row.waiting, row.count], ["empty", true, 0]);
+    assert.equal(bar.find((w) => w.name === "docs").waiting, false);
+});
+
 test("a standing name matches a workspace's without case, keeping the workspace's", () => {
     const order = workspaceOrder(named("RE"), standing);
     assert.deepEqual(order.map((w) => w.name), ["in", "RE", "oc", "me"]);
