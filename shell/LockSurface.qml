@@ -20,9 +20,11 @@ WlSessionLockSurface {
     property int unread: 0
     property string layout: ""
     property bool keyboard: true
+    property bool capsLock: false
 
     signal event(var event)
     signal power(string id)
+    signal capsLockPressed()
 
     color: "#000000"
 
@@ -42,7 +44,9 @@ WlSessionLockSurface {
         unread: surface.unread
         layout: surface.layout
         keyboard: surface.keyboard
+        capsLock: surface.capsLock
         onEvent: event => surface.event(event)
+        onCapsLockPressed: surface.capsLockPressed()
         onPower: id => surface.power(id)
     }
 }

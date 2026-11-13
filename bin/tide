@@ -245,6 +245,16 @@
 #     switches to this machine and away. Exits 1, saying why, if it can't
 #     read the input devices from /sys or udev's data from /run/udev.
 #
+#   tide caps-lock
+#
+#     Prints "on" while Caps Lock is on and "off" while it's off, as the
+#     keyboards' Caps Lock lights show it, which every compositor sets. The
+#     lock and the greeter say "Caps Lock is on" under the password field
+#     (SPEC.md §10), and run it at start, when a keyboard comes or goes, and
+#     each time Caps Lock is pressed. Prints nothing when no keyboard has
+#     the light, since then it can't tell. Exits 1, saying why, if it can't
+#     read /sys/class/leds.
+#
 #   tide clipboard store | list | copy ID | put TEXT | delete ID | wipe
 #
 #     The clipboard history behind the picker on Super+V (SPEC.md §8.4);
@@ -287,6 +297,7 @@ usage() {
     echo "       $prog reload" >&2
     echo "       $prog prompt-focus" >&2
     echo "       $prog keyboards" >&2
+    echo "       $prog caps-lock" >&2
     echo "       $prog clipboard store | list | copy ID | put TEXT | delete ID | wipe" >&2
     echo "       $prog fill list | type snippet NAME | type login ID FIELD | unlock" >&2
     echo "       $prog doctor" >&2
@@ -1630,6 +1641,29 @@ keyboards() {
     done
 }
 
+# The lights' directory, overridable for the tests.
+caps_lock_leds=${TIDE_LEDS_SYS:-/sys/class/leds}
+
+caps_lock() {
+    test $# -eq 0 || usage
+    if ! test -d "$caps_lock_leds" || ! test -r "$caps_lock_leds"; then
+        echo "$prog caps-lock: can't read the lights in $caps_lock_leds" >&2
+        exit 1
+    fi
+    # Each keyboard with the light has an inputN::capslock; it's on if
+    # any is lit. A light that goes while this reads is skipped.
+    state=
+    for led in "$caps_lock_leds"/*::capslock; do
+        IFS= read -r brightness 2>/dev/null <"$led/brightness" || continue
+        case "$brightness" in
+            0) state=${state:-off} ;;
+            ''|*[!0-9]*) ;;
+            *) state=on ;;
+        esac
+    done
+    test -z "$state" || printf '%s\n' "$state"
+}
+
 case "${1:-}" in
     launch) shift; launch "$@" ;;
     app-classes) shift; app_classes "$@" ;;
@@ -1650,6 +1684,7 @@ case "${1:-}" in
     reload) shift; reload "$@" ;;
     prompt-focus) shift; prompt_focus "$@" ;;
     keyboards) shift; keyboards "$@" ;;
+    caps-lock) shift; caps_lock "$@" ;;
     # Installed beside this script.
     doctor) shift; exec sh "$(dirname "$0")/tide-doctor" "$@" ;;
     clipboard) shift; exec sh "$(dirname "$0")/tide-clipboard" "$@" ;;

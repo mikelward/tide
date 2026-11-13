@@ -194,13 +194,24 @@ ShellRoot {
         msg: root.msg
     }
 
+    // Whether Caps Lock is on, for "Caps Lock is on" under the field
+    // (LockCapsLock.qml).
+    LockCapsLock {
+        id: capsLockLight
+        name: "tide-greeter"
+    }
+
     // Whether there's a keyboard to type with, for the field's focus
-    // (LockKeyboards.qml); the layout is read again as one comes or goes.
+    // (LockKeyboards.qml); the layout and Caps Lock are read again as one
+    // comes or goes.
     LockKeyboards {
         id: keyboards
         name: "tide-greeter"
 
-        onCountChanged: keymap.refresh()
+        onCountChanged: {
+            keymap.refresh();
+            capsLockLight.refresh();
+        }
     }
 
     // A read's output counts once its stream ends, which a started command
@@ -430,6 +441,8 @@ ShellRoot {
                 powerBusy: powerActions.busy
                 layout: keymap.layoutName
                 keyboard: keyboards.present
+                capsLock: capsLockLight.on
+                onCapsLockPressed: capsLockLight.refresh()
                 users: root.users
                 userName: root.user
                 userPickable: Greeter.canPickUser(root.face)

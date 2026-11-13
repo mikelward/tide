@@ -14,8 +14,9 @@ import "lib/status.mjs" as Status
 // password field, with PAM's messages under it. The lock adds the
 // notification count, the battery and Suspend; the greeter adds the
 // session and user pickers in their place. The
-// screensaver face, for an idle lock: black, the hostname and a large time
-// in low contrast, moved to a new spot each minute.
+// screensaver face, for an idle lock: the hostname and the date and time,
+// as the password face has them, white on black, moved to a new spot each
+// minute.
 //
 // The process owns the state; this draws it and sends it each key, pointer
 // motion and pick. Nothing here animates but the caret's blink, and every
@@ -61,6 +62,22 @@ Item {
     property string layout: ""
     // Whether there's a keyboard to type with (LockKeyboards.present).
     property bool keyboard: true
+    // Whether Caps Lock is on (LockCapsLock.on).
+    property bool capsLock: false
+    // The last layout named, which stays beside "No keyboard" while there's
+    // none, since then Hyprland names none (Lock.layoutRow).
+    property string lastLayout: ""
+    onLayoutChanged: {
+        if (layout !== "") {
+            lastLayout = layout;
+        }
+    }
+    readonly property var layoutRow: Lock.layoutRow({
+        layout: face.layout,
+        last: face.lastLayout,
+        keyboard: face.keyboard,
+        capsLock: face.capsLock,
+    })
 
     // Light or dark (SPEC.md §10, §11): the lock's follows the shell's
     // mode, the greeter's the last user's. The screensaver stays black.
@@ -163,6 +180,8 @@ Item {
     }
 
     signal event(var event)
+    // Caps Lock was pressed, so whether it's on is read again.
+    signal capsLockPressed()
     signal power(string id)
     signal pickUser(string name)
     signal pickSession(string id)
@@ -183,6 +202,14 @@ Item {
 
         anchors.fill: parent
         focus: true
+
+        // The compositor lights Caps Lock as the key goes down, so by the
+        // time it's released the light says whether it's on.
+        Keys.onReleased: keyEvent => {
+            if (keyEvent.key === Qt.Key_CapsLock) {
+                face.capsLockPressed();
+            }
+        }
 
         Keys.onPressed: keyEvent => {
             keyEvent.accepted = true;
@@ -469,34 +496,63 @@ Item {
                 }
 
                 // The keyboard layout, so a failed password isn't a layout
-                // mystery, or "No keyboard" while there's none
-                // (Lock.layoutLine), where the boot splash names it: under
-                // the field, in dim text. It keeps its height when empty,
-                // so the name appearing moves nothing.
+                // mystery, and beside it "No keyboard" while there's none
+                // or "Caps Lock is on" (Lock.layoutRow): where the boot
+                // splash has them, under the field, the layout in dim
+                // text. It keeps its height when empty, so nothing moves
+                // as they come and go.
                 Row {
                     anchors.horizontalCenter: parent.horizontalCenter
                     height: layoutText.implicitHeight
-                    spacing: 5
+                    spacing: 14
 
-                    SymbolicIcon {
+                    Row {
                         anchors.verticalCenter: parent.verticalCenter
-                        visible: layoutText.text !== ""
-                        name: "input-keyboard-symbolic"
-                        color: face.ink(0.55)
+                        visible: face.layoutRow.layout !== ""
+                        spacing: 5
+
+                        SymbolicIcon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: "input-keyboard-symbolic"
+                            color: face.ink(0.55)
+                        }
+
+                        Text {
+                            id: layoutText
+
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Math.min(implicitWidth, field.width - 130)
+                            elide: Text.ElideRight
+                            // Hyprland's text, never markup.
+                            textFormat: Text.PlainText
+                            text: face.layoutRow.layout
+                            color: face.ink(0.55)
+                            font.family: "Inter"
+                            font.pixelSize: 12
+                        }
                     }
 
-                    Text {
-                        id: layoutText
-
+                    Row {
                         anchors.verticalCenter: parent.verticalCenter
-                        width: Math.min(implicitWidth, field.width)
-                        elide: Text.ElideRight
-                        // Hyprland's text, never markup.
-                        textFormat: Text.PlainText
-                        text: Lock.layoutLine(face.layout, face.keyboard)
-                        color: face.ink(0.55)
-                        font.family: "Inter"
-                        font.pixelSize: 12
+                        visible: face.layoutRow.flag !== ""
+                        spacing: 5
+
+                        SymbolicIcon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: face.layoutRow.kind === "caps" ? "caps-lock-symbolic.svg" : "input-keyboard-symbolic"
+                            color: flagText.color
+                        }
+
+                        Text {
+                            id: flagText
+
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: face.layoutRow.flag
+                            color: face.layoutRow.kind === "caps" ? face.palette.caps : face.ink(0.8)
+                            font.family: "Inter"
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                        }
                     }
                 }
 
@@ -580,8 +636,10 @@ Item {
         }
 
         // --- The screensaver face ----------------------------------------
-        // Black, low contrast, and a new spot each minute (Lock.saverPosition)
-        // to spare OLED panels. The window behind is black too.
+        // The password face's top two lines, the hostname and the date and
+        // time, in the same sizes and weights, white on black, at a new spot
+        // each minute (Lock.saverPosition) to spare OLED panels. The window
+        // behind is black too.
         Column {
             id: saver
 
@@ -592,30 +650,24 @@ Item {
             visible: face.lockState.saver
             x: spot.x
             y: spot.y
-            spacing: 6
+            spacing: 12
 
             Text {
+                anchors.horizontalCenter: parent.horizontalCenter
                 text: face.hostname
-                color: Qt.rgba(1, 1, 1, 0.42)
+                color: "#ffffff"
                 font.family: "Inter"
-                font.pixelSize: 26
+                font.pixelSize: 32
                 font.weight: Font.Bold
             }
 
             Text {
-                text: Clocks.formatWall(clock.date.getHours(), clock.date.getMinutes(), face.hour24)
-                color: Qt.rgba(1, 1, 1, 0.5)
-                font.family: "Inter"
-                font.pixelSize: 64
-                font.weight: Font.Light
-                font.features: { "tnum": 1 }
-            }
-
-            Text {
-                text: Qt.formatDate(clock.date, "dddd, MMMM d")
-                color: Qt.rgba(1, 1, 1, 0.35)
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: `${Qt.formatDate(clock.date, "ddd MMM d")}  ${Clocks.formatWall(clock.date.getHours(), clock.date.getMinutes(), face.hour24)}`
+                color: Qt.rgba(1, 1, 1, 0.7)
                 font.family: "Inter"
                 font.pixelSize: 13
+                font.features: { "tnum": 1 }
             }
         }
     }
