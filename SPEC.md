@@ -5013,8 +5013,10 @@ stays hand-written.
   `hyprctl binds -j`, as the shell starts and again as the Keyboard page
   shows, below its settings under a Shortcuts heading. On tidewm (§5.3)
   they're its config file's, from its own `GET_BINDINGS`, through
-  `tide-msg --type get_bindings`, each doing its command, as its lines
-  have no descriptions; a named one says what it does by its name.
+  `tide-msg --type get_bindings`. Each says what it does by its
+  `--desc`, which tide's `tidewm/tide.conf` gives every binding in
+  Hyprland's words (maintainer, 2026-11-13); a line without one shows its
+  command, and a named one its name.
   - They were a Keys page of their own. Keyboard has them now, as macOS's
     Keyboard settings have its shortcuts.
   - `openPage keys`, and the launcher's Keyboard shortcuts, open Keyboard
