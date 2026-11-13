@@ -32,7 +32,8 @@
 -- the last part of a qualified one, and a site matching its Chrome and
 -- Chromium `--app` windows, its subdomains' too, in any profile. A
 -- monitor's part of a workspace (NAME@OUT, span.lua) is that workspace, and
--- a minimized window, on a special workspace, is on none. Workspace names
+-- a minimized window (special:minimized:NAME) is on the one it came from;
+-- on any other special workspace, it's on none. Workspace names
 -- match ignoring case, ASCII case only: Lua's lower() knows no other.
 
 local M = {}
@@ -69,9 +70,14 @@ local function normalize(id)
     return n ~= "" and n or nil
 end
 
--- The workspace a Hyprland workspace's name is a part of, or nil for a
--- special one: NAME@OUT is NAME (span.lua, span.mjs's workspaceOf).
+-- The workspace a Hyprland workspace's name is a part of: NAME@OUT is NAME
+-- (span.lua, span.mjs's workspaceOf), and so is special:minimized:NAME,
+-- the minimized windows' from it (minimized.mjs); nil for another special
+-- one.
 local function workspace_of(name)
+    if type(name) == "string" then
+        name = name:gsub("^special:minimized:(.)", "%1")
+    end
     if type(name) ~= "string" or name == "" or name:find("^special:") then
         return nil
     end

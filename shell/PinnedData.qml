@@ -19,8 +19,7 @@ Singleton {
     id: root
 
     // The workspace the window ({app, workspaceName}) is pinned on, or
-    // null. A minimized window is on its minimize workspace, so it's
-    // pinned on none.
+    // null. A minimized window is pinned on the workspace it came from.
     function pinnedOn(w) {
         return Names.pinnedOn(w.app, w.workspaceName, WorkspacesData.settings, WorkspacesData.resolved);
     }

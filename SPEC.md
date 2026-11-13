@@ -1667,9 +1667,9 @@ workspace it's on stays open there.
     and `Alt+F4`, while the pinned window is focused. The app never sees
     them, so `Ctrl+W` doesn't close a Chrome app window's tab or the
     window, nor `Ctrl+Q` quit Chrome. Every other window still gets them.
-- It's pinned where it is, not as an app: moved to another workspace, or
-  minimized, it closes as any other does. Another app's window on that
-  workspace closes as usual.
+- It's pinned where it is, not as an app: moved to another workspace, it
+  closes as any other does. Minimized, it's still pinned (maintainer,
+  2026-11-13). Another app's window on that workspace closes as usual.
 - **The window's own close button still closes it.** So do the app's menus
   and a `hyprctl dispatch` from elsewhere. Neither Hyprland nor the shell
   hears of those before the app acts.
@@ -1715,7 +1715,7 @@ workspace it's on stays open there.
   - It binds the app's close and quit keys with `--kept-open`, a binding
     that counts only while you're typing in a window kept open, so every
     other window still gets them.
-  - A minimized window closes, as tidewm doesn't keep one open.
+  - A minimized window stays kept open, as it's still on its workspace.
 
 **The short name.**
 
