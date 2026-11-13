@@ -26,6 +26,7 @@ has_line() { grep -qxF -- "$2" "$1"; }
 lacks_line_matching() { ! grep -qE -- "$2" "$1"; }
 # not COMMAND...: succeeds when COMMAND fails.
 not() { ! "$@"; }
+has() { case $1 in *"$2"*) return 0 ;; esac; return 1; }
 
 unit=systemd/user/tide.service
 dropin=systemd/user/hypridle.service.d/tide.conf
@@ -349,8 +350,9 @@ mkdir -p "$tmp/tidewm-config/hypr"
 # tidewm_start [VAR=VALUE...]: what the wrapper's tidewm and its startup
 # command print, with the shell's config under $tmp/tidewm-config.
 tidewm_start() {
-    env PATH="$tmp/tidewm-bin:/usr/bin:/bin" XDG_CONFIG_HOME="$tmp/tidewm-config" "$@" /bin/sh "$tidewm_wrapper" -c x 2>/dev/null
+    env PATH="$tmp/tidewm-bin:/usr/bin:/bin" HOME="$tmp/tidewm-home" XDG_CONFIG_HOME="$tmp/tidewm-config" "$@" /bin/sh "$tidewm_wrapper" -c x 2>/dev/null
 }
+mkdir -p "$tmp/tidewm-home"
 : > "$tmp/logged"
 tidewm_ran=$(tidewm_start)
 check "the tidewm wrapper starts tidewm, passing its arguments through" \
@@ -359,6 +361,23 @@ check "before the shell has named home, tidewm goes to in and keeps it" \
     test "$(printf '%s\n' "$tidewm_ran" | sed -n 2p)" = "tide-msg workspace number in; persist workspace in"
 check "tidewm's startup command finalizes the session with tidewm's IPC socket, under both names" \
     test "$(printf '%s\n' "$tidewm_ran" | sed -n 3p)" = "uwsm finalize SWAYSOCK I3SOCK"
+# The splash covers tidewm's empty background until the shell is ready,
+# as in Hyprland's session: started first, in the background, its output
+# to the journal as tide-splash. Without it installed, or without qs, the
+# session starts as before, and the log says why there's no splash.
+check "with no splash installed, the startup command starts none" \
+    not has "$tidewm_ran" "qs -p"
+check "and the log says so" grep -qF -- "-t tide-tidewm -- no splash at $tmp/tidewm-home/.config/quickshell/tide/splash.qml" "$tmp/logged"
+mkdir -p "$tmp/tidewm-home/.config/quickshell/tide"
+: > "$tmp/tidewm-home/.config/quickshell/tide/splash.qml"
+check "with the splash but no qs, it starts none" not has "$(tidewm_start)" "qs -p"
+printf '#!/bin/sh\n' > "$tmp/tidewm-bin/qs"
+printf '#!/bin/sh\n' > "$tmp/tidewm-bin/systemd-cat"
+chmod +x "$tmp/tidewm-bin/qs" "$tmp/tidewm-bin/systemd-cat"
+splash_ran=$(tidewm_start | head -n 1)
+check "with both, the startup command starts the splash first, in the background, logged as tide-splash" \
+    test "$splash_ran" = "tidewm -s QS_DISABLE_FILE_WATCHER=1 systemd-cat --identifier=tide-splash qs -p '$tmp/tidewm-home/.config/quickshell/tide/splash.qml' & ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c x"
+rm "$tmp/tidewm-bin/qs" "$tmp/tidewm-bin/systemd-cat" "$tmp/tidewm-home/.config/quickshell/tide/splash.qml"
 # Quickshell's I3 client reads I3SOCK before SWAYSOCK. A tidewm that sets
 # only SWAYSOCK has it handed on as I3SOCK too, so one the user manager
 # kept from an earlier session is replaced; a tidewm that sets its own
