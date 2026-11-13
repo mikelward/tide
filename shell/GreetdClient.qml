@@ -62,6 +62,8 @@ Scope {
                 root.readyToLaunch();
             } else if (event.type === "launched") {
                 Qt.quit();
+            } else if (event.type === "debug") {
+                console.debug(`tide-greeter: greetd: ${event.message}`);
             } else {
                 root.error(event.message);
             }

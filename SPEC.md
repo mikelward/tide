@@ -4019,6 +4019,9 @@ talk, a demo, or a meeting room's screen.
     for an earlier one, whatever it says.
   - A login that fails or errors is cancelled at greetd, which otherwise
     keeps it half set up and refuses the next.
+    greetd 0.10 has already ended a login PAM refused, so that cancel
+    fails with "unable to send message: Connection refused". The greeter
+    only logs that, and still says the password was wrong.
   - `tide-greetd` failing ends the connection: the greeter says why, and
     the next login starts it again.
 
