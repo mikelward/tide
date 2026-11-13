@@ -198,6 +198,32 @@ check "tide-session tidewm runs uwsm, through systemd-cat, with tidewm's desktop
 check "and logs what it ran" \
     grep -qxF "starting the tide (tidewm) session: uwsm start -e -D tidewm:tide -N 'tide (tidewm)' -- tide-tidewm" "$tmp/session-log"
 check "and that it ended" grep -qxF "the tide (tidewm) session ended" "$tmp/session-log"
+# Under greetd, stderr is the text console the desktop starts on, so a
+# session that starts and ends as it should says nothing there.
+check "and says nothing on stderr" test ! -s "$tmp/session-err"
+# On a text console, it clears it and hides the cursor until the desktop
+# draws, and shows the cursor again once the session ends. script(1) gives
+# it a terminal.
+if script -qec true /dev/null >/dev/null 2>&1; then
+    PATH="$tmp/session-bin:/usr/bin:/bin" script -qec "sh bin/tide-session tidewm" "$tmp/session-tty" >/dev/null 2>&1
+    tty_out=$(cat "$tmp/session-tty")
+    check "on a text console, it hides the cursor and clears the screen first" \
+        test "$(printf '%s' "$tty_out" | od -An -c | tr -d ' \n' | grep -c '033\[?25l033\[H033\[2J')" -eq 1
+    check "shows the cursor again once the session ends" \
+        test "$(printf '%s' "$tty_out" | od -An -c | tr -d ' \n' | grep -c '033\[?25h')" -eq 1
+    check "and writes no message there" not grep -q "tide-session:" "$tmp/session-tty"
+    # Without uwsm it can't start, so the console keeps its cursor and the
+    # reason why.
+    mkdir -p "$tmp/no-uwsm-bin"
+    cp "$tmp/session-bin/logger" "$tmp/session-bin/systemctl" "$tmp/no-uwsm-bin/"
+    # Only the stubs on PATH, so a uwsm installed here isn't found.
+    PATH="$tmp/no-uwsm-bin" "$(command -v script)" -qec "/bin/sh bin/tide-session tidewm" "$tmp/session-tty" >/dev/null 2>&1
+    tty_out=$(od -An -c "$tmp/session-tty" | tr -d ' \n')
+    check "without uwsm, the cursor isn't hidden" test "$(printf '%s' "$tty_out" | grep -c '033\[?25l')" -eq 0
+    check "and it says why on the console" grep -q "uwsm isn't installed" "$tmp/session-tty"
+else
+    check "script(1) is installed, to give tide-session a terminal" false
+fi
 out=$(run_session hyprland)
 check "tide-session hyprland runs uwsm with Hyprland's desktops, name and wrapper" \
     test "$out" = "$(printf '%s\n' "systemd-cat:" "[start]" "[-e]" "[-D]" "[tide:Hyprland]" "[-N]" "[tide (Hyprland)]" "[--]" "[tide-hyprland]")"

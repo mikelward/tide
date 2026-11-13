@@ -17,7 +17,9 @@
 # hit its start limit there is refused its start here, so the new session
 # would go straight to the fallback terminal.
 
-# say MESSAGE: to stderr, which the login screen keeps, and to the journal.
+# say MESSAGE: to stderr, which the login screen keeps, and to the journal,
+# for what went wrong. Under greetd, stderr is the text console the session
+# starts on, so only a problem is said there.
 say() {
     echo "tide-session: $*" >&2
     # The journal is the log: a logger that fails has nowhere to say so.
@@ -37,6 +39,13 @@ esac
 note() {
     logger -t tide-session -p user.debug -- "$*" 2>/dev/null || :
 }
+
+# log MESSAGE: to the journal only, for what happened as it should: the
+# session starting and ending.
+log() {
+    logger -t tide-session -p user.info -- "$*" 2>/dev/null || :
+}
+
 
 # tide's units, and hypridle, which tide's drop-in gives a start limit:
 # the ones in systemd/user, and the fallback bar tide-shell-fallback runs.
@@ -81,8 +90,17 @@ if ! command -v uwsm >/dev/null 2>&1; then
     exit 1
 fi
 
+# A text console, as greetd gives a session, shows what it last held, and
+# a cursor, until the compositor draws. Once the session can start, it's
+# cleared, with the cursor hidden, so the login goes from the greeter to
+# black to the desktop; the cursor comes back however this ends.
+if test -t 2; then
+    trap 'printf "\033[?25h" >&2' EXIT
+    printf '\033[?25l\033[H\033[2J' >&2
+fi
+
 forget_failures
-say "starting the tide ($1) session: uwsm start -e -D $desktops -N '$name' -- $compositor"
+log "starting the tide ($1) session: uwsm start -e -D $desktops -N '$name' -- $compositor"
 # uwsm's own output goes to the journal under this name as well, through
 # systemd-cat where there is one, and the session ends when uwsm returns.
 if command -v systemd-cat >/dev/null 2>&1; then
@@ -92,7 +110,7 @@ else
 fi
 status=$?
 if test "$status" -eq 0; then
-    say "the tide ($1) session ended"
+    log "the tide ($1) session ended"
 else
     say "the tide ($1) session ended with uwsm exiting $status: the lines above say why"
 fi
