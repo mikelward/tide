@@ -56,10 +56,12 @@ if test "$2" = show && test "$4" = MainPID; then
     echo "${FAKE_MAIN_PID:-100}"
     exit 0
 fi
-# show -p Wants --value wayland-session@tide-X.target: the units the
+# show -p Wants --value wayland-session@tide\x2dX.target: the units the
 # session's target starts, all of tide's unless $FAKE_WANTS says which, or
-# it fails with $FAKE_WANTS_FAILS.
+# it fails with $FAKE_WANTS_FAILS. The target asked about goes in
+# $FAKE_TMP/wants-target.
 if test "$2" = show && test "$4" = Wants; then
+    printf '%s\n' "$6" >"$FAKE_TMP/wants-target"
     if test -n "$FAKE_WANTS_FAILS"; then
         echo "$FAKE_WANTS_FAILS" >&2
         exit 1
@@ -439,11 +441,13 @@ healthy
 run XDG_CURRENT_DESKTOP=tidewm:tide FAKE_WANTS="tide-fcitx5.service"
 check "a shell the session doesn't start is a problem" test "$status" -eq 1
 check "and says what that costs and how to fix it" contains "$out" \
-    "tide.service doesn't start with the tide (tidewm) session (wayland-session@tide-tidewm.target doesn't want it), so the shell starts only when an app key asks for it, after nm-applet and the other autostart apps: \`systemctl --user reenable tide.service\`, as \`setup\` does"
+    "tide.service doesn't start with the tide (tidewm) session (wayland-session@tide\\x2dtidewm.target doesn't want it), so the shell starts only when an app key asks for it, after nm-applet and the other autostart apps: \`systemctl --user reenable tide.service\`, as \`setup\` does"
 check "and the clipboard's too" contains "$out" \
-    "tide-clipboard.service doesn't start with the tide (tidewm) session (wayland-session@tide-tidewm.target doesn't want it), so Super+V keeps no history"
+    "tide-clipboard.service doesn't start with the tide (tidewm) session (wayland-session@tide\\x2dtidewm.target doesn't want it), so Super+V keeps no history"
+check "and asks about the target uwsm starts, its name's - escaped as systemd does" \
+    test "$(cat "$tmp/wants-target" 2>/dev/null)" = 'wayland-session@tide\x2dtidewm.target'
 run FAKE_WANTS_FAILS="Failed to connect to bus"
-check "a manager that won't say is a problem too" contains "$out" "couldn't ask which units wayland-session@tide-hyprland.target starts (Failed to connect to bus)"
+check "a manager that won't say is a problem too" contains "$out" "couldn't ask which units wayland-session@tide\\x2dhyprland.target starts (Failed to connect to bus)"
 
 healthy
 run FAKE_PORTAL_FAILS="Failed to get property version: Connection timed out"

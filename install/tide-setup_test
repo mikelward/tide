@@ -54,8 +54,8 @@ check "installs Go itself" has "$calls" "golang"
 
 check "tells make install which Go to build with" has "$calls" "make -C $T/src/tide install GO=go"
 check "installs the session under /usr with sudo" has "$calls" "sudo make -C $T/src/tide install-session PREFIX=/usr"
-check "enables tide.service" has "$calls" "systemctl --user enable tide.service"
-check "enables the clipboard history" has "$calls" "systemctl --user enable tide-clipboard.service"
+check "enables tide.service" has "$calls" "systemctl --user reenable tide.service"
+check "enables the clipboard history" has "$calls" "systemctl --user reenable tide-clipboard.service"
 check "enables tide's launcher on Plasma, starting it now there" has "$calls" "systemctl --user enable --now tide-kde.service"
 check "reloads units before enabling" has "$calls" "systemctl --user daemon-reload"
 check "masks the distro's waybar and swaync units, stopping them now" \
@@ -635,7 +635,7 @@ teardown
 setup; ARGS=(); run SETUP_OS=arch FAKE_MISSING=libsecret
 check "a missing secret-tool isn't fatal" test "$status" -eq 0
 check "a missing secret-tool is said, with what it costs" has "$output" "couldn't install libsecret and openssl, so Super+V's picker keeps no clipboard history"
-check "a missing secret-tool still enables the rest" has "$calls" "systemctl --user enable tide.service"
+check "a missing secret-tool still enables the rest" has "$calls" "systemctl --user reenable tide.service"
 teardown
 
 # Arch, like Fedora, refuses the lot over one unknown name, so pacman is
@@ -727,7 +727,7 @@ teardown
 
 setup; ARGS=(--no-sudo); run
 check "--no-sudo runs no sudo" lacks "$calls" "sudo "
-check "--no-sudo still enables the user unit" has "$calls" "systemctl --user enable tide.service"
+check "--no-sudo still enables the user unit" has "$calls" "systemctl --user reenable tide.service"
 teardown
 
 # The session's Hyprland, on the login screen's PATH, is the one checked.
@@ -741,7 +741,7 @@ teardown
 
 setup; ARGS=(); run FAKE_NO_USER_MANAGER=1
 check "no user manager is a warning, not a failure" test "$status" -eq 0
-check "no user manager says how to enable it" has "$output" "systemctl --user enable tide.service tide-clipboard.service"
+check "no user manager says how to enable it" has "$output" "systemctl --user reenable tide.service tide-clipboard.service"
 check "no user manager enables nothing" lacks "$calls" "--user enable"
 check "no user manager still masks, just not --now" \
     has "$calls" "systemctl --user mask waybar.service swaync.service"
@@ -794,7 +794,7 @@ check "session: no uwsm says the session won't be listed" \
     has "$output" "the tide session won't show at the login screen: it's listed only where uwsm is installed, and it isn't; install uwsm"
 check "session: no uwsm says how to carry on" has "$output" "pass --ignore-errors to carry on"
 check "session: no uwsm doesn't say to pick the session" lacks "$output" "the \"tide\" session"
-check "session: no uwsm still installs the rest" has "$calls" "systemctl --user enable tide.service"
+check "session: no uwsm still installs the rest" has "$calls" "systemctl --user reenable tide.service"
 check "session: no uwsm still sets up the greeter" has "$calls" "systemctl show --property=LoadState --value display-manager.service"
 teardown
 
@@ -1145,7 +1145,7 @@ check "quiet: make's lines aren't shown" lacks "$output" "install -m 644"
 check "quiet: they're in the log" has "$(log)" "+ make -C $T/src/tide install GO=go
 install -m 644"
 check "quiet: nor systemctl's" lacks "$output" "Created symlink"
-check "quiet: they're in the log" has "$(log)" "+ systemctl --user enable tide.service
+check "quiet: they're in the log" has "$(log)" "+ systemctl --user reenable tide.service
 Created symlink"
 check "quiet: nor git's" lacks "$output" "Cloning into"
 # A rerun with everything installed says only which step it's on.
@@ -1255,22 +1255,22 @@ teardown
 # which warns and carries on.
 setup; ARGS=(); run FAKE_USER_ENABLE_FAILS=tide.service
 check "units: a failed enable of tide.service ends the run" test "$status" -ne 0
-check "units: it shows what systemctl said" has "$output" "'systemctl --user enable tide.service' exited with status 1; the end of what it said (all of it is in $T/home/.local/state/setup/setup.log):
+check "units: it shows what systemctl said" has "$output" "'systemctl --user reenable tide.service' exited with status 1; the end of what it said (all of it is in $T/home/.local/state/setup/setup.log):
     Failed to enable unit: Unit tide.service does not exist"
 check "units: and names what's lost" has "$output" "Error: couldn't enable tide.service, so the tide session won't start its shell"
-check "units: and stops there" lacks "$calls" "systemctl --user enable tide-clipboard.service"
+check "units: and stops there" lacks "$calls" "systemctl --user reenable tide-clipboard.service"
 teardown
 
 setup; ARGS=(--ignore-errors); run FAKE_USER_ENABLE_FAILS=tide.service
 check "units: --ignore-errors carries on past it" test "$status" -eq 0
 check "units: it still shows what systemctl said" has "$output" "    Failed to enable unit: Unit tide.service does not exist"
 check "units: and warns" has "$output" "Warning: couldn't enable tide.service, so the tide session won't start its shell"
-check "units: and enables the rest" has "$calls" "systemctl --user enable tide-clipboard.service"
+check "units: and enables the rest" has "$calls" "systemctl --user reenable tide-clipboard.service"
 teardown
 
 setup; ARGS=(); run FAKE_USER_ENABLE_FAILS=tide-clipboard.service
 check "units: a failed enable of tide-clipboard.service isn't fatal" test "$status" -eq 0
-check "units: it shows what systemctl said" has "$output" "'systemctl --user enable tide-clipboard.service' exited with status 1; the end of what it said"
+check "units: it shows what systemctl said" has "$output" "'systemctl --user reenable tide-clipboard.service' exited with status 1; the end of what it said"
 check "units: and warns" has "$output" "Warning: couldn't enable tide-clipboard.service, so Super+V's picker keeps no clipboard history"
 check "units: and doesn't start what it couldn't enable" lacks "$calls" "restart tide-clipboard.service"
 teardown
@@ -1280,7 +1280,7 @@ setup; ARGS=(); run
 check "units: outside a tide session, leaves the clipboard history to the next login" lacks "$calls" "restart tide-clipboard.service"
 teardown
 setup; ARGS=(); run FAKE_TIDE_SESSION=1
-check "units: in a tide session, asks whether one runs" has "$calls" "systemctl --user is-active --quiet wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target"
+check "units: in a tide session, asks whether one runs" has "$calls" "systemctl --user is-active --quiet wayland-session@tide\x2dhyprland.target wayland-session@tide\x2dtidewm.target"
 check "units: in a tide session, (re)starts the clipboard history now" has "$calls" "systemctl --user restart tide-clipboard.service"
 check "units: after enabling it" test "$(printf '%s\n' "$calls" | grep -n 'enable tide-clipboard' | cut -d: -f1)" -lt "$(printf '%s\n' "$calls" | grep -n 'restart tide-clipboard' | cut -d: -f1)"
 teardown

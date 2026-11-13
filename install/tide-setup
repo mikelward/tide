@@ -3227,19 +3227,23 @@ EOF2
 # tide_session_running: whether this user is in a tide session now, either
 # compositor's.
 tide_session_running() {
-    systemctl --user is-active --quiet wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target
+    systemctl --user is-active --quiet 'wayland-session@tide\x2dhyprland.target' 'wayland-session@tide\x2dtidewm.target'
 }
 
 enable_unit() {
     if ! is_command systemctl || ! systemctl --user show-environment >/dev/null 2>&1; then
-        warn "no systemd user manager; run 'systemctl --user enable tide.service tide-clipboard.service tide-fcitx5.service tide-kde.service' and 'systemctl --user start tide-clipboard.service' in your session"
+        warn "no systemd user manager; run 'systemctl --user reenable tide.service tide-clipboard.service tide-fcitx5.service', 'systemctl --user enable tide-kde.service' and 'systemctl --user start tide-clipboard.service' in your session"
         return 0
     fi
     run_logged systemctl --user daemon-reload
     # A failure, which shows what systemctl said, ends the run by name, as
     # it ends without one under set -e; --ignore-errors carries on past it,
     # as past any other.
-    if ! run_logged systemctl --user enable tide.service; then
+    # reenable, not enable, for tide's session units: it also drops the
+    # links an older tide made to wayland-session@tide-hyprland.target and
+    # -tidewm, plain-dash names uwsm never starts (its targets escape the -
+    # as \x2d), which enable would leave beside the right ones.
+    if ! run_logged systemctl --user reenable tide.service; then
         if test "$IGNORE_ERRORS" = yes; then
             warn "couldn't enable tide.service, so the tide session won't start its shell"
         else
@@ -3252,7 +3256,7 @@ enable_unit() {
     # In a tide session already, it's started now, or restarted, so an
     # update's unit applies and a failed one comes back; otherwise the next
     # tide login starts it.
-    if run_logged systemctl --user enable tide-clipboard.service; then
+    if run_logged systemctl --user reenable tide-clipboard.service; then
         if tide_session_running; then
             run_logged systemctl --user restart tide-clipboard.service \
                 || warn "couldn't start tide-clipboard.service, so Super+V's picker keeps no clipboard history until you log in again; 'systemctl --user status tide-clipboard.service' says why"
@@ -3264,7 +3268,7 @@ enable_unit() {
     # tide sessions only; its unit skips a machine without fcitx5. Apart
     # from tide.service, so a tide checkout too old to ship it costs only
     # the accents.
-    run_logged systemctl --user enable tide-fcitx5.service \
+    run_logged systemctl --user reenable tide-fcitx5.service \
         || warn "couldn't enable tide-fcitx5.service, so a held letter types no accents in tide; update tide and run $SETUP_COMMAND again"
     # tide's launcher on KDE Plasma's Meta+Space (tide SPEC.md §8.5),
     # started now if this is Plasma; its unit skips any other session.

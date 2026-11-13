@@ -57,7 +57,7 @@ check "fcitx5: the build's output stays in its log" has "$(cat "$T/home/.local/s
 check "fcitx5: the stamp records the tide commit" has "$(cat "$(ta_stamp)")" "tide 7e57000000000000000000000000000000000000"
 check "fcitx5: a checkout's commit is git's" has "$calls" "git -C $T/src/tide rev-parse HEAD"
 check "fcitx5: and the fcitx5 it was built for" has "$(cat "$(ta_stamp)")" "fcitx5 5.1.12"
-check "fcitx5: enables tide's fcitx5 unit" has "$calls" "systemctl --user enable tide-fcitx5.service"
+check "fcitx5: enables tide's fcitx5 unit" has "$calls" "systemctl --user reenable tide-fcitx5.service"
 check "fcitx5: makes tide's accents the input method, over the session's layout" \
     test "$(cat "$(fx_dir)/profile")" = "$(profile us-dvorak tide-accents)"
 check "fcitx5: by its name" grep -qx 'DefaultIM=tide-accents' "$(fx_dir)/profile"
@@ -130,7 +130,7 @@ check "fcitx5: says what's lost" has "$output" "tide's accents weren't built, so
 check "fcitx5: nothing is installed" lacks "$calls" "sudo cmake --install"
 check "fcitx5: no stamp" test ! -e "$(ta_stamp)"
 check "fcitx5: the config is still written" test -f "$(fx_dir)/profile"
-check "fcitx5: the rest of the run goes on" has "$calls" "systemctl --user enable tide-fcitx5.service"
+check "fcitx5: the rest of the run goes on" has "$calls" "systemctl --user reenable tide-fcitx5.service"
 : > "$CALLS"
 run
 check "fcitx5: the next run builds again" has "$calls" "sudo cmake --install $(ta_build)"
@@ -197,7 +197,7 @@ check "fcitx5: without fcitx5, no build dependencies" lacks "$calls" "libfcitx5c
 check "fcitx5: without fcitx5, no profile" test ! -e "$(fx_dir)/profile"
 check "fcitx5: without fcitx5, no config" test ! -e "$(fx_dir)/config"
 check "fcitx5: without fcitx5, no autostart entry" test ! -e "$(fx_autostart)"
-check "fcitx5: without fcitx5, the unit is still enabled" has "$calls" "systemctl --user enable tide-fcitx5.service"
+check "fcitx5: without fcitx5, the unit is still enabled" has "$calls" "systemctl --user reenable tide-fcitx5.service"
 teardown
 
 # --no-install leaves the packages and the build, but sets fcitx5 up.

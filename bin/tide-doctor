@@ -90,11 +90,13 @@ esac
 # Units.
 # The session's target starts the shell and the clipboard history, through
 # the links `systemctl --user enable` makes from their [Install] sections.
-# An install enabled before tidewm's session was added has Hyprland's links
-# only, so in tidewm's session the shell waits for an app key to start it,
-# after the autostart apps it's meant to precede: nm-applet then runs, and
-# the shell's network agent stands aside.
-target=wayland-session@tide-$compositor.target
+# uwsm names the target after the compositor's ID escaped for a unit
+# name, so tide-tidewm's is wayland-session@tide\x2dtidewm.target; a name
+# with a plain - is another unit, which systemctl loads and nothing starts.
+# Units an older tide linked there (or none) leave the shell to wait for an
+# app key to start it, after the autostart apps it's meant to precede:
+# nm-applet then runs, and the shell's network agent stands aside.
+target='wayland-session@tide\x2d'"$compositor"'.target'
 if test "$compositor" = tidewm; then
     session_name="the tide (tidewm) session"
 else

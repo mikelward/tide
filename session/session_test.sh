@@ -433,8 +433,10 @@ if command -v shellcheck >/dev/null 2>&1; then
 fi
 
 # --- tide.service ---------------------------------------------------------
-target="wayland-session@$session_id.target"
-tidewm_target="wayland-session@$tidewm_id.target"
+# uwsm escapes the compositor's ID for the unit name, as systemd-escape
+# does, so tide-hyprland's target is wayland-session@tide\x2dhyprland.
+target="wayland-session@$(printf '%s' "$session_id" | sed 's/-/\\x2d/g').target"
+tidewm_target="wayland-session@$(printf '%s' "$tidewm_id" | sed 's/-/\\x2d/g').target"
 check "the unit is wanted by each tide session's target, Hyprland's and tidewm's" \
     has_line "$unit" "WantedBy=$target $tidewm_target"
 # Plasma reaches graphical-session.target too; that's how swaync leaked in.
@@ -442,10 +444,12 @@ check "the unit is never WantedBy= graphical-session.target" \
     lacks_line_matching "$unit" '^WantedBy=.*graphical-session\.target'
 check "the unit is WantedBy= nothing else" \
     test "$(grep -c '^WantedBy=' "$unit")" -eq 1
+# after_has UNIT TARGET: UNIT's After= names TARGET.
+after_has() { grep "^After=" "$1" | grep -qF "$2"; }
 check "the unit is ordered after its session target" \
-    grep -qE "^After=.*$target" "$unit"
+    after_has "$unit" "$target"
 check "the unit is ordered after the tidewm session's target" \
-    grep -qE "^After=.*$tidewm_target" "$unit"
+    after_has "$unit" "$tidewm_target"
 check "the unit stops with the graphical session" \
     has_line "$unit" "PartOf=graphical-session.target"
 check "ready means the shell said so" has_line "$unit" "Type=notify"
@@ -796,9 +800,25 @@ check "the history watches the clipboard through tide clipboard store" \
 check "the history's database is private" has_line "$clipboard" "UMask=0077"
 check "the history stops with the session" has_line "$clipboard" "PartOf=graphical-session.target"
 check "the history runs only in the tide sessions" \
-    has_line "$clipboard" "WantedBy=wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target"
+    has_line "$clipboard" 'WantedBy=wayland-session@tide\x2dhyprland.target wayland-session@tide\x2dtidewm.target'
 check "and is ordered after either one's target" \
-    grep -qE "^After=wayland-session@tide-hyprland\.target wayland-session@tide-tidewm\.target " "$clipboard"
+    grep -qF 'After=wayland-session@tide\x2dhyprland.target wayland-session@tide\x2dtidewm.target ' "$clipboard"
+# uwsm starts wayland-session@ID.target with the compositor's ID escaped
+# for a unit name, as systemd-escape does: tide-tidewm is tide\x2dtidewm.
+# A target named with a plain - is another unit, which nothing starts, so
+# a unit wanted by it never starts with the session.
+for id in tide-hyprland tide-tidewm; do
+    escaped=$(systemd-escape "$id" 2>/dev/null || printf '%s' "$id" | sed 's/-/\\x2d/g')
+    for unit in systemd/user/tide.service systemd/user/tide-clipboard.service systemd/user/tide-fcitx5.service; do
+        check "${unit##*/} is wanted by uwsm's own name for $id's target" \
+            grep -qF "wayland-session@$escaped.target" "$unit"
+    done
+done
+for unit in systemd/user/*.service; do
+    check "${unit##*/} names no session target with a plain -, which uwsm never starts" \
+        test -z "$(grep -E 'wayland-session(-pre|-xdg-autostart)?@tide-' "$unit")"
+done
+
 check "make install installs the history's unit" \
     grep -q 'systemd/user/tide-clipboard.service' Makefile
 
@@ -821,7 +841,7 @@ check "and each autostarted app's service waits for it, not only their target" \
     has_line "$autostart" "After=tide-fcitx5.service"
 check "it stops with the session" has_line "$fcitx5" "PartOf=graphical-session.target"
 check "it runs only in the tide sessions, not Plasma's" \
-    has_line "$fcitx5" "WantedBy=wayland-session@tide-hyprland.target wayland-session@tide-tidewm.target"
+    has_line "$fcitx5" 'WantedBy=wayland-session@tide\x2dhyprland.target wayland-session@tide\x2dtidewm.target'
 check "make install installs the input method's unit" \
     grep -q 'systemd/user/tide-fcitx5.service' Makefile
 
