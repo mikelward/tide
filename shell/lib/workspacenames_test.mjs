@@ -157,7 +157,9 @@ test("a window is pinned on the workspace it's on when its app is pinned there",
     assert.equal(pinnedOn("org.mozilla.Thunderbird", "in", settings), "in", "a bare name matches a qualified class");
     assert.equal(pinnedOn("chrome-mail.google.com__-Default", "re", settings), null, "pinned on in, not on re");
     assert.equal(pinnedOn("kitty", "in", settings), null, "an app that isn't pinned");
-    assert.equal(pinnedOn("chrome-mail.google.com__-Default", "special:minimized:in", settings), null, "minimized");
+    assert.equal(pinnedOn("chrome-mail.google.com__-Default", "special:minimized:in", settings), "in", "minimized from it");
+    assert.equal(pinnedOn("chrome-mail.google.com__-Default", "special:minimized:in@DP-2", settings), "in", "minimized from another monitor's part");
+    assert.equal(pinnedOn("chrome-mail.google.com__-Default", "special:scratch", settings), null, "another special workspace");
     assert.equal(pinnedOn("chrome-calendar.google.com__-Default", "in", settings), null, "not before the launcher is looked up");
 });
 

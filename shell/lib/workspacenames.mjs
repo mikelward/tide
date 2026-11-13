@@ -241,12 +241,16 @@ export function listedApps(settings) {
     return (settings?.inApps ?? []).concat(...Object.keys(all).map((k) => all[k].pinnedApps ?? []));
 }
 
+// A minimized window's workspace, special:minimized:NAME (minimized.mjs,
+// which imports this, so it's spelled out here): it's pinned on NAME still.
+const MINIMIZED = /^special:minimized:(?=.)/;
+
 // The workspace a window of class `cls` on the Hyprland workspace named
 // `workspace` is pinned on, or null: it is when its app is one of that
 // workspace's pinnedApps, matched as home's apps are (isHomeApp, with
 // `resolved` as there). tide's close actions leave such a window open.
 export function pinnedOn(cls, workspace, settings, resolved = {}) {
-    const ws = workspaceOf(workspace);
+    const ws = workspaceOf(String(workspace ?? "").replace(MINIMIZED, ""));
     if (ws === "" || ws.startsWith("special:")) {
         return null;
     }
