@@ -496,6 +496,13 @@ flowchart TD
   logged in and straight back out, with nothing in the journal.
   `tide-session` runs the `uwsm start` below, and logs what it ran, uwsm's
   output and how it ended, to the journal as `tide-session`.
+- **The login goes straight from the greeter to the desktop**
+  (maintainer, 2026-11-13). Under greetd, the session starts on a text
+  console, which showed `tide-session`'s first line and a cursor until
+  Hyprland drew. Now only a problem goes to stderr; the rest goes to the
+  journal alone. On a text console, `tide-session` clears it and hides the
+  cursor first, and shows the cursor again when the session ends. The
+  login goes greeter, black, then the session's splash (below).
 - **A login starts clean.** The user manager can outlive a logout
   (lingering, or a login straight after), and with it the last session's
   failed units. A shell that hit its start limit there is refused its
