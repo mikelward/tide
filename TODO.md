@@ -2020,6 +2020,19 @@ thumbnails and xdph itself are unchecked. Still to do:
   which should open on the first choice. Count the prompts one share
   makes, and check whether Chrome asks for a restore token.
 
+## File chooser
+
+Portals' file chooser is xdg-desktop-portal-gtk's GTK 3 dialog, the one
+backend in both sessions' portal configs besides screen sharing (SPEC.md
+§5.2), which also publishes light and dark to apps. Look into the
+options for the dialog alone, keeping GTK for the rest: KDE's portal
+(Qt; most of KDE Frameworks, and its own light/dark from kdeglobals),
+LXQt's (Qt, a file chooser and little else), GNOME's (GTK 4, built for
+GNOME Shell), or a tide-drawn one in the shell. Weigh each one's
+look beside the shell, its size on disk, and what it needs to keep
+working outside its own desktop. The portal configs can pick a backend
+per interface (`org.freedesktop.impl.portal.FileChooser=...`).
+
 ## The rest of `tide doctor`
 
 M2's `tide doctor` (`bin/tide-doctor`) checks units, D-Bus
