@@ -1801,6 +1801,7 @@ with new keys in **bold**:
 | **`Ctrl+W`** / **`Ctrl+Shift+W`** / **`Ctrl+Q`** / **`Alt+F4`** | the app's own, passed on to every window but one pinned on its workspace, which never sees them (§6.5) |
 | **`Super+Z`** | minimize the focused window; its icon goes to the corner tray, and a click there restores it (§6.7) |
 | `Super+L` | lock |
+| **`Super+Ctrl+R`** | reload the config, and start tide's shell if it isn't running (below) |
 | **`Super+S`** | toggle keep awake (§10), as the bar's icon does; the OSD says which |
 | **`Super+P`** | toggle presenter mode: Do not disturb and keep awake together (§10) |
 | **`Super+Home`** | go to home (§6.5) |
@@ -1833,6 +1834,23 @@ with new keys in **bold**:
 | `Print` / **`Alt+Print`** / `Shift+Print`, `Super+Print` | screenshot screen / window / region |
 | **`XF86AudioMicMute`**, **`Super+Shift+M`** | toggle microphone mute (system-wide) |
 | media, brightness, volume keys | as today, with OSD |
+
+**Reload.** `Super+Ctrl+R` runs `tide reload`, for after editing a
+config or when the bar is gone. `Super+Shift+R` is resize mode, so i3's
+and sway's `Super+Shift+C` is their preset's (§16).
+- It reloads the compositor's config: `hyprctl reload`, or in tidewm's
+  session (§5.3) `tide-msg reload`. tidewm keeps what it had when the file
+  has errors, and says them.
+- It starts the shell (`systemctl --user start tide.service`) only if it
+  isn't running. A running shell is never restarted, which would close
+  its popovers and the launcher. One that has failed is reset first, so a
+  shell fixed since starts again.
+- In tidewm's session it tells a running shell, which reads the config's
+  errors again (§7.4).
+- A config that didn't reload, or a shell that didn't start, is said in
+  a notification and the journal.
+- A plain Hyprland login, outside the tide session, binds it to
+  `hyprctl reload` alone.
 
 Left and right use one rule, tide for macOS's, in the layout's `direction.lua`
 (§20). Of the windows or monitors whose center is on that side, it takes
@@ -2384,8 +2402,10 @@ anyway, so a key or a setting is missing with nothing to say why (its
 
 - The shell asks tidewm for its `GET_CONFIG`, whose `errors` lists them,
   with `tide-msg --type get_config`. It asks as it connects, when a key
-  bound to `reload` runs (tidewm's `binding` event), and after each
-  `tide-msg reload` of its own (§16).
+  bound to `reload` runs (tidewm's `binding` event), after each
+  `tide-msg reload` of its own (§16), and when `tide reload`
+  (`Super+Ctrl+R`, §6.6) says it has reloaded (`qs -c tide ipc call
+  configerrors reloaded`).
 - tidewm has no event for a reload. So one from a terminal isn't seen
   until the next of those.
 - While there are errors, a warning triangle is the first status icon. A

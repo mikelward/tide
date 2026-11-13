@@ -2235,6 +2235,14 @@ test("Super+L locks with tide lock in the tide session, with hyprlock outside it
     eq("hyprlock", bind("SUPER + L").target.args)
 end)
 
+test("Super+Ctrl+R reloads with tide reload in the tide session, with hyprctl reload outside it", function()
+    load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
+    eq("tide reload", unlogged(bind("SUPER + CTRL + R").target.args))
+    eq("Reload the config", bind("SUPER + CTRL + R").opts.description)
+    load()
+    eq("hyprctl reload", bind("SUPER + CTRL + R").target.args)
+end)
+
 test("the tide session's autostart is the splash and uwsm finalize alone", function()
     load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
     fire("hyprland.start")
@@ -3345,6 +3353,7 @@ test("the named bindings are listed for tide, in order, with what each does and 
     same({ "SUPER + T" }, keys.terminal.keys)
     same({ "SUPER + grave", "SUPER + O" }, keys.monocle.keys, "both of monocle's")
     same({ "SHIFT + Print", "SUPER + Print" }, keys.screenshot_region.keys)
+    same({ "SUPER + CTRL + R" }, keys.reload.defaults, "reload is named, so it can take other keys")
     eq(nil, keys["Workspace 1 on the bar"], "Super+1…9 aren't named")
     for name, k in pairs(keys) do
         truthy(k.does ~= "", name .. " says what it does")

@@ -897,6 +897,17 @@ tidewm_loaded() {
     # fixtures keep focused (Quickshell asks for the workspaces again after
     # a workspace event), and focusing it: Super+Z minimizes it, by its
     # container, so the shell followed the window events.
+    # `tide reload` (Super+Ctrl+R) tells the shell it reloaded tidewm's
+    # config, which tidewm has no event for, and the shell asks for its
+    # errors again (SPEC.md §7.4).
+    _asked=$(grep -cxF 'tide-msg --type get_config' "$tmp/helpers.log")
+    ipc call configerrors reloaded >/dev/null || exit 1
+    settle
+    if test "$(grep -cxF 'tide-msg --type get_config' "$tmp/helpers.log")" -le "$_asked"; then
+        echo "FAIL: \`configerrors reloaded\` should ask tide-msg for tidewm's config errors again; the shell ran:" >&2
+        cat "$tmp/helpers.log" >&2
+        exit 1
+    fi
     _minimized=$(ipc call windows minimize) || exit 1
     if test "$_minimized" != minimized; then
         echo "FAIL: Super+Z should minimize the window tidewm's events focused; it answered: $_minimized" >&2

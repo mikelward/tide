@@ -207,6 +207,21 @@
 #     which keeps the windows where they are. Exits 1 if the compositor
 #     refused, and 2 if there's no compositor to ask.
 #
+#   tide reload
+#
+#     Reloads the compositor's config, and starts the shell if it isn't
+#     running: Super+Ctrl+R runs it (SPEC.md §6.6). The config is
+#     Hyprland's (`hyprctl reload`), or in tidewm's session (§5.3)
+#     tidewm's (`tide-msg reload`), which keeps what it had when the file
+#     has errors, and says them. A running shell is left alone, as a
+#     restart would close its popovers and the launcher; in tidewm's
+#     session it's told of the reload, so the bar's warning shows the
+#     errors as they are now. A shell that isn't running is started, and
+#     one that has failed is reset first, so one fixed since starts
+#     again. A config that didn't reload, or a shell that didn't start, is
+#     said on stderr and in a notification, and exits 1. Outside a tide
+#     session it does nothing, and exits 2.
+#
 #   tide prompt-focus
 #
 #     Asks the focus guard whether a polkit prompt opening now may take
@@ -269,6 +284,7 @@ usage() {
     echo "       $prog idle-lock" >&2
     echo "       $prog idle-suspend [--unplugged | --cancel]" >&2
     echo "       $prog displays off | on" >&2
+    echo "       $prog reload" >&2
     echo "       $prog prompt-focus" >&2
     echo "       $prog keyboards" >&2
     echo "       $prog clipboard store | list | copy ID | put TEXT | delete ID | wipe" >&2
@@ -1494,6 +1510,68 @@ displays() {
     exit 1
 }
 
+# The compositor's config, then the shell, which is started only if it
+# isn't running (SPEC.md §6.6). Returns 1 if either failed, having said
+# why.
+reload() {
+    test $# -eq 0 || usage
+    if ! in_tide; then
+        echo "$prog reload: not in a tide session, so there's no shell to start; reload your compositor with its own command" >&2
+        exit 2
+    fi
+    failed=no
+    if in_tidewm; then
+        if ! command -v tide-msg >/dev/null 2>&1; then
+            echo "$prog reload: no tide-msg, so tidewm's config wasn't reloaded (make install builds it)" >&2
+            tell "Config not reloaded" "tide-msg isn't installed. Run make install in tide."
+            failed=yes
+        else
+            # tide-msg says tidewm's errors: it keeps what it had.
+            status=0
+            err=$(tide-msg reload 2>&1) || status=$?
+            if test "$status" -ne 0; then
+                echo "$prog reload: tidewm didn't reload its config: ${err:-tide-msg exited $status}" >&2
+                tell "Config not reloaded" "${err:-tide-msg exited $status}"
+                failed=yes
+            fi
+        fi
+    elif ! command -v hyprctl >/dev/null 2>&1; then
+        echo "$prog reload: no hyprctl, so Hyprland's config wasn't reloaded" >&2
+        tell "Config not reloaded" "hyprctl isn't installed."
+        failed=yes
+    else
+        reply=$(hyprctl reload 2>&1)
+        if test "$reply" != ok; then
+            echo "$prog reload: Hyprland didn't reload its config: ${reply:-no answer from Hyprland}" >&2
+            tell "Config not reloaded" "${reply:-No answer from Hyprland.}"
+            failed=yes
+        fi
+    fi
+    # A running shell is never restarted: that would close its popovers
+    # and the launcher.
+    state=$(systemctl --user is-active tide.service 2>&1)
+    if test "$state" = active; then
+        # tidewm has no event for a reload, so the shell is told, to read
+        # the config's errors again. Without it, only the bar's warning is
+        # out of date.
+        if in_tidewm && ! err=$(qs -c tide ipc call configerrors reloaded 2>&1); then
+            echo "$prog reload: couldn't tell the shell the config was reloaded, so the bar may show old errors: ${err:-qs failed}" >&2
+        fi
+        test "$failed" = no
+        return
+    fi
+    # A shell that has failed at its start limit starts only once reset.
+    if test "$state" = failed && ! err=$(systemctl --user reset-failed tide.service 2>&1); then
+        echo "$prog reload: couldn't reset the failed shell: ${err:-systemctl failed}" >&2
+    fi
+    if ! err=$(systemctl --user start tide.service 2>&1); then
+        echo "$prog reload: the shell was ${state:-not running}, and couldn't start: ${err:-systemctl failed}" >&2
+        tell "The shell didn't start" "Run tide doctor to see why."
+        failed=yes
+    fi
+    test "$failed" = no
+}
+
 prompt_focus() {
     test $# -eq 0 || usage
     if ! in_tide; then
@@ -1569,6 +1647,7 @@ case "${1:-}" in
     idle-lock) shift; idle_lock "$@" ;;
     idle-suspend) shift; idle_suspend "$@" ;;
     displays) shift; displays "$@" ;;
+    reload) shift; reload "$@" ;;
     prompt-focus) shift; prompt_focus "$@" ;;
     keyboards) shift; keyboards "$@" ;;
     # Installed beside this script.

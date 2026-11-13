@@ -57,6 +57,7 @@ export const PRESETS = Object.freeze({
             monocle: [S("W")],
             next_layout: [S("E")],
             resize_mode: [S("R")],
+            reload: [SS("C")],
             quit: [SS("E")],
         }),
     }),
@@ -79,6 +80,7 @@ export const PRESETS = Object.freeze({
             monocle: [S("W")],
             next_layout: [S("E")],
             resize_mode: [S("R")],
+            reload: [SS("C")],
             quit: [SS("E")],
         }),
     }),
@@ -99,6 +101,8 @@ export const PRESETS = Object.freeze({
             float: [S("T")],
             add_master: [S("comma")],
             remove_master: [S("period")],
+            // Restart, which reads xmonad.hs again.
+            reload: [S("Q")],
             quit: [SS("Q")],
         }),
     }),
@@ -109,6 +113,8 @@ export const PRESETS = Object.freeze({
             launcher: [S("Space")],
             close: [S("W")],
             quit: [`SUPER + ALT + Q`],
+            // Restart, which runs bspwmrc again.
+            reload: [`SUPER + ALT + R`],
             monocle: [S("M")],
             float: [S("S")],
             fullscreen: [S("F")],
