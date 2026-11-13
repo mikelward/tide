@@ -649,8 +649,9 @@ flowchart TD
   keep there, as tidewm's config can't know its name: `tide-tidewm`
   starts tidewm on it and keeps it, by the name the shell last wrote to
   `tide-workspaces.lua`, and the shell keeps it from then on, with
-  `persist workspace`. tidewm has no window rules, so the shell is home's
-  apps' rule there: a window of one of them that opens elsewhere is sent
+  `persist workspace`. tidewm's window rules (`for_window`) name a
+  workspace, but its config can't know home's name, which the shell can
+  change, so the shell is home's apps' rule there: a window of one of them that opens elsewhere is sent
   home as it opens, unfollowed, as Hyprland's rule sends it, and one that
   opened before the shell knew its app is sent once it does. The bar
   warns of tidewm's config errors (§7.4). `tide doctor` counts bars, reports config errors
@@ -1458,7 +1459,7 @@ in how long they last and what stays visible:
   - On tidewm (§5.3), which reads no such file, the shell keeps home with
     `persist workspace`, and lets an old home go with `unpersist
     workspace` when home is renamed. A `tide-msg` that fails is a
-    notification too. Home's apps' rules are Hyprland's only, for now.
+    notification too. The shell sends home's apps there itself (§5.3).
 - It can't be renamed. tide offers no way to, and a rename from elsewhere
   (`hyprctl`) is undone by the shell when it hears `renameworkspace`.
 - A list of apps lives there, set in `workspaces.json` (`inApps`, §16).
