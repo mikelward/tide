@@ -826,8 +826,8 @@ check "make install installs the history's unit" \
 # Accents on a held letter (SPEC.md §8.6): fcitx5 in either tide session,
 # never Plasma's, skipped where it isn't installed or TIDE_IME=0, and its
 # variables in the manager's environment only while it runs.
-check "the input method is fcitx5, replacing any already running" \
-    has_line "$fcitx5" "ExecStart=fcitx5 --replace"
+check "the input method is fcitx5, replacing any already running, with no tray icon" \
+    has_line "$fcitx5" "ExecStart=fcitx5 --replace --disable=notificationitem"
 check "it's ready once it owns its bus name" has_line "$fcitx5" "BusName=org.fcitx.Fcitx5"
 check "and is skipped where fcitx5 isn't installed" \
     has_line "$fcitx5" "ExecCondition=/bin/sh -c 'command -v fcitx5 >/dev/null'"
