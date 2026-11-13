@@ -772,8 +772,9 @@ hl.config({
     cursor = { no_warps = true },
     -- Hyprland's own log is a file under $XDG_RUNTIME_DIR, gone at logout;
     -- on stdout it's also in the journal (uwsm's wayland-wm@ unit), which
-    -- keeps it.
-    debug = { enable_stdout_logs = true, colored_stdout_logs = false },
+    -- keeps it. In the tide session, the shell's bar shows the config's
+    -- errors (tide SPEC.md §7.4), so Hyprland's own banner is hidden.
+    debug = { enable_stdout_logs = true, colored_stdout_logs = false, suppress_errors = tide_session },
 })
 
 --------------------------------------------------------------------------------

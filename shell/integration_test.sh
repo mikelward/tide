@@ -2294,6 +2294,7 @@ systemctl --user try-restart hypridle.service
 hyprctl eval conf_input.reload()
 hyprctl devices -j
 hyprctl binds -j
+hyprctl configerrors
 hyprctl eval tide_layout.reload()
 hyprctl eval tide_layout.set_popups_open(false)
 hyprctl monitors all -j

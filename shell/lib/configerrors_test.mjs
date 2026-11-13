@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
     NOTHING, SHOWN, ICON, replyErrors, keyOf, loaded, unreadable, sent, pending, retry,
-    summary, body, notifyCommand, parts, listed, advice, asksForErrors,
+    summary, body, notifyCommand, parts, listed, advice, asksForErrors, hyprlandErrors, compositorName,
 } from "./configerrors.mjs";
 
 const A = "/home/me/.config/tidewm/config:12: no setting is called bindcode";
@@ -148,4 +148,21 @@ test("the errors are asked for as the listener connects and when a key reloads t
     assert.equal(asksForErrors("window", { change: "new" }), false);
     assert.equal(asksForErrors("binding", "not json"), false);
     assert.equal(asksForErrors("tick", undefined), false);
+    // tidewm's reload event, from any reload, as i3 and sway send it.
+    assert.equal(asksForErrors("workspace", { change: "reload", current: null, old: null }), true);
+    assert.equal(asksForErrors("workspace", JSON.stringify({ change: "focus" })), false);
+});
+
+test("Hyprland's errors are hyprctl configerrors' lines, and its words name Hyprland", () => {
+    assert.deepEqual(hyprlandErrors(""), { errors: [] });
+    assert.deepEqual(hyprlandErrors("\n"), { errors: [] });
+    assert.deepEqual(hyprlandErrors("Config error in file /c/hyprland.lua at line 3: x\n  second  \n"),
+        { errors: ["Config error in file /c/hyprland.lua at line 3: x", "second"] });
+    // hyprctl that failed, as with no Hyprland to ask, says nothing is known.
+    assert.equal(hyprlandErrors("", false).errors, undefined);
+    assert.equal(compositorName(false), "Hyprland");
+    assert.equal(compositorName(true), "tidewm");
+    assert.equal(summary(["x"], "Hyprland"), "Hyprland's config has 1 error");
+    assert.equal(advice(["x", "y"], "Hyprland"), "Fix them, then reload Hyprland's config.");
+    assert.equal(notifyCommand(["x"], "Hyprland")[4], "Hyprland's config has 1 error");
 });

@@ -2,8 +2,8 @@ import QtQuick
 import Quickshell
 import "lib/configerrors.mjs" as Errors
 
-// The config errors' popover (SPEC.md §7.4): how many errors tidewm's
-// config has, then each as tidewm reported it, the file and line over
+// The config errors' popover (SPEC.md §7.4): how many errors the
+// compositor's config has, then each as it reported it, the file and line over
 // what's wrong, and what to do about them. A long list is cut short
 // (Errors.listed). Plain text, since an error quotes the config file.
 PopupWindow {
@@ -58,7 +58,7 @@ PopupWindow {
                 bottomPadding: 6
                 wrapMode: Text.WordWrap
                 textFormat: Text.PlainText
-                text: Errors.summary(root.errors)
+                text: Errors.summary(root.errors, ConfigErrorsData.compositorName)
                 color: Theme.fg
                 font.family: Theme.font
                 font.pixelSize: 14
@@ -125,7 +125,7 @@ PopupWindow {
                 bottomPadding: 6
                 wrapMode: Text.WordWrap
                 textFormat: Text.PlainText
-                text: Errors.advice(root.errors)
+                text: Errors.advice(root.errors, ConfigErrorsData.compositorName)
                 color: Theme.fgDim
                 font.family: Theme.font
                 font.pixelSize: 12

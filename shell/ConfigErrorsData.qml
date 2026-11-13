@@ -2,22 +2,25 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.I3
 import Quickshell.Io
 import "lib/configerrors.mjs" as Errors
 
-// tidewm's config errors (SPEC.md §7.4): GET_CONFIG's `errors`, asked of
-// `tide-msg` each time the listener connects, when a key reloads the
-// config, and after each reload the shell asks for itself (reloaded());
-// the bar's warning shows them, and one notification says they're there
-// (lib/configerrors.mjs). `tide reload` says when it has reloaded (the
-// `configerrors` IPC target); a reload from anywhere else, as `tide-msg
-// reload` in a terminal, isn't heard: tidewm has no event for it. In
-// Hyprland's session it listens to nothing and asks nothing.
+// The compositor's config errors (SPEC.md §7.4); the bar's warning shows
+// them, and one notification says they're there (lib/configerrors.mjs).
+// - tidewm: GET_CONFIG's `errors`, asked of `tide-msg` each time the
+//   listener connects, when a key reloads the config, on tidewm's reload
+//   event (a `workspace` event, `reload`, from any reload), and after each
+//   reload the shell asks for itself (reloaded()).
+// - Hyprland: `hyprctl configerrors`, asked as the shell starts and on
+//   each `configreloaded` event. tide's Hyprland config hides Hyprland's
+//   own banner in the tide session, so this is where they show.
 Singleton {
     id: root
 
-    readonly property bool listening: Compositor.tidewm
+    readonly property bool listening: true
+    readonly property string compositorName: Errors.compositorName(Compositor.tidewm)
     // The last load's errors, and what's been said of them (Errors.loaded).
     property var state: Errors.NOTHING
     // The errors, as tidewm worded them: none in Hyprland's session.
@@ -54,7 +57,7 @@ Singleton {
             root.again = true;
             return;
         }
-        config.replied = false;
+        config.started = false;
         config.running = true;
     }
 
@@ -86,7 +89,7 @@ Singleton {
     function notify() {
         const errors = root.state.errors;
         const key = Errors.keyOf(errors);
-        Launcher.run(Errors.notifyCommand(errors), ok => {
+        Launcher.run(Errors.notifyCommand(errors, root.compositorName), ok => {
             if (!ok) {
                 console.warn("tide: couldn't say that tidewm's config has errors; trying again in 30 s");
             }
@@ -100,10 +103,10 @@ Singleton {
         });
     }
 
-    function read(text) {
-        const reply = Errors.replyErrors(text);
+    function read(text, ok) {
+        const reply = Compositor.tidewm ? Errors.replyErrors(text) : Errors.hyprlandErrors(text, ok);
         if (reply.errors === undefined) {
-            console.warn(`tide: couldn't read tidewm's config errors (${reply.why}); the bar shows none`);
+            console.warn(`tide: couldn't read ${root.compositorName}'s config errors (${reply.why}); the bar shows none`);
             root.state = Errors.unreadable(root.state);
             return;
         }
@@ -117,7 +120,7 @@ Singleton {
         // Subscribing sends a tick at once, so a tick with `first` is the
         // listener connected, again or for the first time. A binding says
         // a key's commands are about to run (Errors.asksForErrors).
-        subscriptions: root.listening ? ["tick", "binding"] : []
+        subscriptions: Compositor.tidewm ? ["tick", "binding", "workspace"] : []
 
         onIpcEvent: event => {
             if (Errors.asksForErrors(event.type, event.data)) {
@@ -126,32 +129,59 @@ Singleton {
         }
     }
 
+    // Hyprland: each reload, from anywhere, and the errors as the shell
+    // starts.
+    Connections {
+        target: Compositor.tidewm ? null : Hyprland
+
+        function onRawEvent(event) {
+            if (event.name === "configreloaded") {
+                root.ask();
+            }
+        }
+    }
+
+    Component.onCompleted: {
+        if (!Compositor.tidewm) {
+            root.ask();
+        }
+    }
+
     Process {
         id: config
 
-        // Whether this run's reply has been read.
-        property bool replied: false
+        // This run's output and exit status, read together once it has
+        // ended: Quickshell finishes stdout before it says how the run
+        // exited, so the output alone can't say whether it failed.
+        property bool started: false
+        property string out: ""
         property string errors: ""
+        property int code: 0
 
-        function reply(text) {
-            config.replied = true;
+        function reply(text, ok) {
             // With a reload since it was asked, what it says may be older
             // than the reload, and it's asked again below.
             if (!root.again) {
-                root.read(text);
+                root.read(text, ok);
             }
         }
 
-        command: ["tide-msg", "--type", "get_config"]
+        command: Compositor.tidewm ? ["tide-msg", "--type", "get_config"] : ["hyprctl", "configerrors"]
         stdout: StdioCollector {
-            onStreamFinished: config.reply(text)
+            onStreamFinished: config.out = text
         }
         stderr: StdioCollector {
             onStreamFinished: config.errors = text
         }
+        onStarted: {
+            config.started = true;
+            config.out = "";
+            config.code = 0;
+        }
         onExited: (code, status) => {
+            config.code = code;
             if (code !== 0) {
-                console.warn(`tide: tide-msg --type get_config exited ${code}: ${config.errors.trim()}`);
+                console.warn(`tide: ${config.command.join(" ")} exited ${code}: ${config.errors.trim()}`);
             }
         }
         onRunningChanged: {
@@ -162,11 +192,9 @@ Singleton {
                 if (config.running) {
                     return;
                 }
-                // A tide-msg that couldn't start leaves no reply to read,
-                // which read() says.
-                if (!config.replied) {
-                    config.reply("");
-                }
+                // One that couldn't start has no reply to read, which
+                // read() says, as it does for one that failed.
+                config.reply(config.started ? config.out : "", config.started && config.code === 0);
                 if (root.again) {
                     root.again = false;
                     root.ask();
