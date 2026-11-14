@@ -7,6 +7,12 @@
 
 # shellcheck disable=SC2034  # what it sets, the tests that source it read
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Quickshell's pin, which the fakes build and report: its tag, its commit,
+# and the version its qs prints.
+QS_PIN_TAG=$("$SCRIPT_DIR/pins" --env quickshell | sed -n 's/^PIN_TAG=//p')
+QS_PIN_COMMIT=$("$SCRIPT_DIR/pins" --env quickshell | sed -n 's/^PIN_COMMIT=//p')
+QS_PIN_VERSION=${QS_PIN_TAG#v}
+QS_PIN_SHORT=$(printf '%.7s' "$QS_PIN_COMMIT")
 SCRIPT="$SCRIPT_DIR/tide-setup"
 TESTS_RUN=0
 TESTS_PASSED=0
@@ -373,7 +379,7 @@ MOCK
     # apt-cache policy knows every package but those in \$FAKE_MISSING,
     # offering Hyprland \$FAKE_APT_HYPRLAND (or a new enough one), g++-16
     # \$FAKE_APT_GXX and libxkbcommon-dev \$FAKE_APT_XKB (or Ubuntu 26.04's),
-    # Quickshell \$FAKE_APT_QS (or 0.3.0, new enough), and 1.0 of the rest.
+    # Quickshell \$FAKE_APT_QS (or the pin's version, new enough), and 1.0 of the rest.
     # \$FAKE_APT_INSTALLED lists the package=version pairs installed already,
     # and \$FAKE_APT_CANDIDATES package=version pairs apt offers instead.
     # \$FAKE_APT_CACHE_FAILS makes it fail.
@@ -388,7 +394,7 @@ for pkg; do
         g++-16) version="\${FAKE_APT_GXX:-16-20260322-1ubuntu1}" ;;
         libxkbcommon-dev) version="\${FAKE_APT_XKB:-1.13.1-1}" ;;
         qt6-base-dev) version="\${FAKE_APT_QT:-6.10.2+dfsg-7}" ;;
-        quickshell) version="\${FAKE_APT_QS:-0.3.0-1build1}" ;;
+        quickshell) version="\${FAKE_APT_QS:-$QS_PIN_VERSION-1build1}" ;;
         *) version=1.0-1 ;;
     esac
     for pair in \$FAKE_APT_CANDIDATES; do
@@ -423,7 +429,7 @@ for arg; do
             done
             # The Quickshell build says which it is, as the real one does.
             for cmd in qs quickshell; do
-                printf "#!/bin/sh\\necho 'Quickshell 0.3.1 (revision 1a4716c, distributed by setup-tide (source build))'\\n" > "\$prefix/bin/\$cmd"
+                printf "#!/bin/sh\\necho 'Quickshell $QS_PIN_VERSION (revision $QS_PIN_SHORT, distributed by setup-tide (source build))'\\n" > "\$prefix/bin/\$cmd"
             done
             ;;
     esac
@@ -574,7 +580,7 @@ elif test "\$3" = rev-parse; then
     elif test "\$name" = tide; then
         echo "\${FAKE_TIDE_COMMIT:-7e57000000000000000000000000000000000000}"
     else
-        echo "\${FAKE_QS_COMMIT:-1a4716cde794a59928d9d9fc15f2afc7a95de360}"
+        echo "\${FAKE_QS_COMMIT:-$QS_PIN_COMMIT}"
     fi
 fi
 MOCK
