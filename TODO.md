@@ -1210,11 +1210,14 @@ it (maintainer, 2026-11-14).
 
 - [x] The session: `tide-tidesway.desktop`, `tide-session tidesway`, and
       `tide-tidewm --tidesway`, installed where a `tidesway` command is.
-- [ ] tidesway installs that command: tidewm's `-s` and `-c` over its
-      sway (mikelward/tidesway's `TODO.md`, "A tide session").
-- [ ] Rounded corners there: the Appearance page shows the row on
+- [x] tidesway installs that command: tidewm's `-s` and `-c` over its
+      sway (mikelward/tidesway#21).
+- [x] Rounded corners there: the Appearance page shows the row on
       tidesway and writes `corner_radius`, in a file tidewm never reads,
       as tidewm fails on a line it doesn't know.
+- [ ] A dim strength set on tidewm and then unset on tidesway stays, from
+      tidewm's own `tide-appearance.conf`, which the config both read
+      still includes, until the next tidewm session writes it again.
 - [ ] `install/tide-setup` builds tidesway, as it builds tidewm.
 - [ ] A login on a real machine: nothing has run there yet.
 

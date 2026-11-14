@@ -2368,12 +2368,12 @@ PanelWindow {
                         }
 
                         // Rounded corners (§6.2), which a click turns on
-                        // or off. Hyprland's alone: tidewm's windows are
-                        // square.
+                        // or off. Hyprland's and tidesway's: tidewm's windows
+                        // are square.
                         Item {
                             width: appearance.width
                             implicitHeight: 32
-                            visible: !Compositor.tidewm
+                            visible: !Compositor.tidewm || Compositor.tidesway
 
                             Text {
                                 anchors.left: parent.left

@@ -22,6 +22,8 @@ Singleton {
     id: root
 
     readonly property bool tidewm: Comp.isTidewm(Quickshell.env("XDG_CURRENT_DESKTOP"))
+    // Whether tidewm's session runs tidesway, which rounds corners.
+    readonly property bool tidesway: Comp.isTidesway(Quickshell.env("XDG_CURRENT_DESKTOP"))
     // The focused monitor's name, its Wayland output's, or "" before one
     // has focus. tidewm says when focus moves to another monitor in an
     // output event, which has the I3 module ask for the outputs again.

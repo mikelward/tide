@@ -10,6 +10,13 @@ export function isTidewm(desktop) {
     return String(desktop ?? "").split(":").indexOf("tidewm") >= 0;
 }
 
+// Whether it's tidesway's session (SPEC.md §5.3), which is tidewm's too:
+// tidesway is one of the names as well. tidesway reads tidewm's config and
+// speaks its IPC, and has what tidewm lacks, rounded corners among them.
+export function isTidesway(desktop) {
+    return String(desktop ?? "").split(":").indexOf("tidesway") >= 0;
+}
+
 // The screen in `screens` named `name`, or null. A monitor's name is its
 // Wayland output's, on Hyprland and tidewm alike, and so is a screen's.
 export function screenNamed(screens, name) {
