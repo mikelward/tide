@@ -60,6 +60,20 @@ assert_contains "esac" "$_idle_off_step"
 assert_contains "esac" "$_idle_off_resume"
 assert_contains "esac" "$_idle_after_sleep"
 
+# You wake to the lock (SPEC.md §10, Before sleep): hypridle's default,
+# inhibit_sleep = 2, holds the suspend until the session has locked only
+# when before_sleep_cmd runs lock-session and lock_cmd names hyprlock
+# (hypridle's Hypridle.cpp). inhibit_sleep = 3 waits too, but without
+# hyprland-lock-notify-v1, as on tidewm, it leaves hypridle's mode unset.
+_idle_before_sleep=$(sed -n 's/^ *before_sleep_cmd = //p' "$_idle")
+_idle_inhibit=$(sed -n 's/^ *inhibit_sleep = *//p' "$_idle")
+start_test "hypridle locks through logind before sleep"
+assert_equal "loginctl lock-session" "$_idle_before_sleep"
+start_test "hypridle's lock command names hyprlock, so sleep waits for the lock"
+assert_contains "hyprlock" "$_idle_lock_cmd"
+start_test "hypridle keeps its default sleep inhibit, which waits for the lock"
+assert_equal "default" "$(case "$_idle_inhibit" in '' | 2) echo default ;; *) echo "$_idle_inhibit" ;; esac)"
+
 _ifake=$(mktemp -d)
 for _t in hyprlock hyprctl tide loginctl notify-send; do
     printf '#!/bin/sh\necho "%s $*" >> "%s/log"\n' "$_t" "$_ifake" > "$_ifake/$_t"
