@@ -1299,6 +1299,8 @@ See [`layouts.png`](docs/mocks/layouts.png).
 - The dim fades as focus moves, over 300 ms, as a new window fades in. On
   tidewm, these are `fade_duration 300`, and floating windows cast a soft
   shadow with `shadows enable`, as Hyprland's do (maintainer, 2026-11-13).
+- Tiled windows cast no shadow, on either compositor: with no gaps, it
+  would fall over the window beside (maintainer, 2026-11-14).
 
 ### 6.3 One window big: monocle, maximize, fullscreen
 
