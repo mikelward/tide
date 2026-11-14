@@ -203,3 +203,14 @@ func TestTypeRefusesTooMuch(t *testing.T) {
 		t.Errorf("exit %d, %q; want 1 and the limit", code, stderr.String())
 	}
 }
+
+func TestTypeKeepsTheReplacementCharacter(t *testing.T) {
+	// A snippet may hold U+FFFD itself; only bytes that aren't UTF-8,
+	// which also read as U+FFFD, are left out.
+	got := typeStrokes("a�b\xffc")
+	want := []stroke{{'a', pressed}, {'a', released}, {0x0100fffd, pressed}, {0x0100fffd, released},
+		{'b', pressed}, {'b', released}, {'c', pressed}, {'c', released}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("strokes %v, want %v", got, want)
+	}
+}
