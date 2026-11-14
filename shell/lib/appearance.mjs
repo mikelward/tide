@@ -675,6 +675,10 @@ export function formatDim(value) {
 
 // Whether windows' corners are rounded (SPEC.md §6.2): they are when
 // nothing says, as conf's hyprland.lua has them.
+// How far, in pixels: hypr/hyprland.lua's ROUNDING, which
+// appearance_test.mjs holds it to.
+export const ROUNDING = 6;
+
 export function roundedCorners(settings) {
     return settings.roundedCorners ?? true;
 }
@@ -705,7 +709,11 @@ export function appearanceLua(settings) {
 // the config's own stands for the rest. tidewm's dim_inactive takes the
 // strength as Hyprland's dim_strength does, from 0 to 1. tidewm's windows
 // are square, so roundedCorners has no line.
-export function appearanceConf(settings) {
+// On tidesway (`tidesway` true) it's the file tidesway alone reads, after
+// the config, ~/.config/tidewm/tidesway.d/tide-appearance.conf, which has
+// its corner_radius too, a line tidewm would fail on: ROUNDING, as
+// Hyprland's, or 0. It's always there, as tidesway's own default is square.
+export function appearanceConf(settings, tidesway = false) {
     const lines = [
         "# Written by tide from appearance.json and appearance.local.json (tide SPEC.md §16).",
         "# Change those, or the Appearance page of tide's settings, not this file. Only",
@@ -713,6 +721,9 @@ export function appearanceConf(settings) {
     ];
     if (settings.dimStrength !== undefined) {
         lines.push(`dim_inactive ${settings.dimStrength}`);
+    }
+    if (tidesway) {
+        lines.push(`corner_radius ${roundedCorners(settings) ? ROUNDING : 0}`);
     }
     return lines.join("\n") + "\n";
 }

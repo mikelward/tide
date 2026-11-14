@@ -21,7 +21,9 @@ import "lib/writes.mjs" as Writes
 // conf_appearance.reload()`, tried again until it is (shell/lib/writes.mjs).
 // On tidewm (§5.3) it's ~/.config/tidewm/tide-appearance.conf, its
 // dim_inactive, which conf's tidewm config includes, and `tide-msg
-// reload` has tidewm read it, as InputData's.
+// reload` has tidewm read it, as InputData's. On tidesway it's
+// ~/.config/tidewm/tidesway.d/tide-appearance.conf, which tidesway reads
+// after the config and tidewm never does, with its corner_radius too.
 Singleton {
     id: root
 
@@ -55,7 +57,7 @@ Singleton {
     property var fileErrors: []
     // The inactive dim's strength in effect, for the page.
     readonly property real dimStrength: Appearance.dimStrength(root.settings)
-    // Whether windows' corners are rounded (§6.2), on Hyprland.
+    // Whether windows' corners are rounded (§6.2), on Hyprland and tidesway.
     readonly property bool roundedCorners: Appearance.roundedCorners(root.settings)
     // Whether the bar runs along the bottom edge (SPEC.md §7.1), which the
     // Bar page's Position row changes live.
@@ -211,7 +213,7 @@ Singleton {
         root.target = Compositor.tidewm
             ? Writes.readTarget(root.target, writtenText, root.target.known ? writtenText : applied.firstApplied(writtenText, root.target.failure)).state
             : Writes.readTarget(root.target, writtenText, null).state;
-        root.stepped(Writes.wantTarget(root.target, Compositor.tidewm ? Appearance.appearanceConf(root.settings) : Appearance.appearanceLua(root.settings)));
+        root.stepped(Writes.wantTarget(root.target, Compositor.tidewm ? Appearance.appearanceConf(root.settings, Compositor.tidesway) : Appearance.appearanceLua(root.settings)));
     }
 
     function stepped(r) {
@@ -360,7 +362,10 @@ Singleton {
     SettingsFile {
         id: written
 
-        path: Compositor.tidewm ? `${root.configHome}/tidewm/tide-appearance.conf` : `${root.configHome}/hypr/tide-appearance.lua`
+        // tidesway's is the one it alone reads, after the config, as it
+        // holds a line tidewm would fail on.
+        path: Compositor.tidesway ? `${root.configHome}/tidewm/tidesway.d/tide-appearance.conf`
+            : Compositor.tidewm ? `${root.configHome}/tidewm/tide-appearance.conf` : `${root.configHome}/hypr/tide-appearance.lua`
     }
 
     // This session's record of what tidewm last read.

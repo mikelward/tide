@@ -1,8 +1,17 @@
 // Tests for compositor.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isTidewm, screenNamed, tidewmWorkspaces, tidewmCurrent, tidewmMonitors, tidewmWorkspaceEvent, tidewmGoTo, tidewmRename, tidewmKeepHome, tidewmRelease, startedHome } from "./compositor.mjs";
+import { isTidewm, isTidesway, screenNamed, tidewmWorkspaces, tidewmCurrent, tidewmMonitors, tidewmWorkspaceEvent, tidewmGoTo, tidewmRename, tidewmKeepHome, tidewmRelease, startedHome } from "./compositor.mjs";
 import { workspaceOrder } from "./workspaces.mjs";
+
+test("tidesway's session is the one that names tidesway, beside tidewm", () => {
+    assert.equal(isTidesway("tidewm:tidesway:tide"), true);
+    assert.equal(isTidewm("tidewm:tidesway:tide"), true, "it's tidewm's session too");
+    assert.equal(isTidesway("tidewm:tide"), false);
+    assert.equal(isTidesway("tide:Hyprland"), false);
+    assert.equal(isTidesway(undefined), false, "unset");
+    assert.equal(isTidesway("tideswayx:tide"), false, "a name that only starts with it");
+});
 
 test("tidewm's session is the one naming tidewm", () => {
     assert.equal(isTidewm("tidewm:tide"), true);

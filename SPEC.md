@@ -1305,10 +1305,14 @@ See [`layouts.png`](docs/mocks/layouts.png).
 - Video, picture-in-picture and screen-share preview windows get a `nodim`
   window rule, so a call on the other monitor doesn't look washed out.
 - Strength is a setting, on the Appearance page (§16), a point at a time.
-- Windows' corners are rounded, by 6 px, on Hyprland. The Appearance page's
-  **Rounded corners** turns that off, for square ones, and back on
-  (maintainer, 2026-11-14). tidewm's windows are square, so the page has
-  no such row there.
+- Windows' corners are rounded, by 6 px, on Hyprland and tidesway. The
+  Appearance page's **Rounded corners** turns that off, for square ones,
+  and back on (maintainer, 2026-11-14). tidewm's windows are square, so
+  the page has no such row there. On tidesway the shell writes
+  `corner_radius 6`, or `0`, with the dim strength, to
+  `~/.config/tidewm/tidesway.d/tide-appearance.conf`, which tidesway reads
+  after the config and tidewm never does: tidewm fails on a line it
+  doesn't know, and the two share a config.
 - The dim fades as focus moves, over 300 ms, as a new window fades in. On
   tidewm, these are `fade_duration 300`, and floating windows cast a soft
   shadow with `shadows enable`, as Hyprland's do (maintainer, 2026-11-13).

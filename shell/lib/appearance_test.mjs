@@ -12,7 +12,7 @@ import {
     expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
-    POSITIONS, POSITION_CHOICES, BAR_POSITIONS, BAR_CHOICES, barAtBottom, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf,
+    POSITIONS, POSITION_CHOICES, BAR_POSITIONS, BAR_CHOICES, barAtBottom, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf, ROUNDING,
     LOOK_ROOT, lookDir, lookCommand, lookWriteCommand, lookCopied, lookJson, parseLook, lookAt
 } from "./appearance.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -614,6 +614,20 @@ test("rounded corners are on until a setting turns them off, and only one that's
         "return {\n    dim_strength = 0.1,\n    rounded_corners = true,\n}\n");
     // tidewm's windows are square: its file has no line for it
     assert.ok(appearanceConf({ roundedCorners: false }).split("\n").every(line => line === "" || line.startsWith("#")));
+});
+
+test("tidesway's file rounds the corners as Hyprland does, or squares them", () => {
+    const lines = text => text.split("\n").filter(line => line !== "" && !line.startsWith("#"));
+    assert.deepEqual(lines(appearanceConf({}, true)), [`corner_radius ${ROUNDING}`], "rounded unless turned off");
+    assert.deepEqual(lines(appearanceConf({ roundedCorners: true }, true)), [`corner_radius ${ROUNDING}`]);
+    assert.deepEqual(lines(appearanceConf({ roundedCorners: false }, true)), ["corner_radius 0"]);
+    assert.deepEqual(lines(appearanceConf({ dimStrength: 0.1, roundedCorners: false }, true)),
+        ["dim_inactive 0.1", "corner_radius 0"]);
+    // tidewm fails on a line it doesn't know, so its own file never has it
+    assert.deepEqual(lines(appearanceConf({ roundedCorners: true })), []);
+    // The radius is Hyprland's
+    const lua = readFileSync(new URL("../../hypr/hyprland.lua", import.meta.url), "utf8");
+    assert.match(lua, new RegExp(`^local ROUNDING = ${ROUNDING}$`, "m"));
 });
 
 test("only a dim that's set reaches Hyprland", () => {
