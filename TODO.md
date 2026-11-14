@@ -7,6 +7,12 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **§6.6's key table has a column per platform** (2026-11-14): Hyprland
+  and tidewm, KDE, chromeOS and macOS, a row per binding name. "none" is
+  a binding with no key by default and "—" no binding there. The rows
+  carry no binding-less peer keys but the overview's, which every port
+  has; the long descriptions moved to a list under the table. Reversible:
+  SPEC.md §6.6.
 - **The spec review's calls** (2026-11-14), from fixing SPEC.md:
   - §6.1 keeps the setting names `modes` and `defaultMode`, which the code
     and settings use for a layout; prose says "layout".
