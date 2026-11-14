@@ -1,0 +1,35 @@
+name: hyprland-spike
+
+# A spike, not a check: can Arch's packaged Hyprland and Quickshell run on a
+# GitHub runner, with no Hyprland build? See ci/hyprland-spike/probe.sh.
+on:
+  push:
+    branches: ["claude/hyprland-ci-spike"]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: The runner
+        run: |
+          uname -a
+          ls -l /dev/dri || echo "no /dev/dri"
+          nproc; free -m
+      - name: A virtual display device (vkms)
+        run: |
+          if ! sudo modprobe vkms; then
+            sudo apt-get update -q
+            sudo apt-get install -y -q "linux-modules-extra-$(uname -r)"
+            sudo modprobe vkms
+          fi
+          ls -l /dev/dri
+      - name: Hyprland and Quickshell from Arch
+        run: |
+          docker run --rm --device /dev/dri -v "$PWD:/tide:ro" archlinux:base /tide/ci/hyprland-spike/probe.sh
