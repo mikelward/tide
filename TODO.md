@@ -7,6 +7,36 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **The spec review's calls** (2026-11-14), from fixing SPEC.md:
+  - §6.1 keeps the setting names `modes` and `defaultMode`, which the code
+    and settings use for a layout; prose says "layout".
+  - On tidewm a removed monitor's windows move to the focused monitor and
+    stay (`closemon`); SPEC.md §6.7 states it as a difference, not a bug.
+  - Remembering a float's size per app is stated as tidewm's only; it isn't
+    marked planned on Hyprland.
+  - The glossary is an unnumbered section before §1, so nothing is
+    renumbered, and the setting-name map lives there, not in §16.
+  - §5.2's table gives today's owner as a *Today (M2)* note in each cell,
+    not a new column.
+  - tidewm's status is a new §3.6.
+  - Polkit is out of §5.4's ready check and marked planned, as
+    `tide.service` has it.
+  - §8 is renamed "Switcher, launcher and text input" rather than moving
+    §8.6 out, so every "§8.6" still holds.
+  - The config errors' right-click opens the settings panel's first page
+    (`barsettings.mjs` maps it to ""); the Bar page might fit better.
+  - The notification center has no Settings… row, and the Apps tab's
+    "Actions" heading shares the Actions tab's name; both are documented,
+    not changed.
+  - hypridle keeps its default `inhibit_sleep` (2), not 3: with tide's
+    `before_sleep_cmd` and `lock_cmd` it already waits for the lock on
+    Hyprland, and 3 leaves its mode undefined on tidewm, which lacks
+    `hyprland-lock-notify-v1`. `hypr/hypridle_test.sh` keeps the
+    conditions true.
+  - "Decided in review" sits at §21's top level; Network and Bluetooth
+    share one §16 bullet; a page with no IPC call says "Over IPC: none";
+    §17's suspend row points to §10.
+
 - **Only the focused window casts a shadow** (2026-11-14), tiled or
   floating, where only floating ones did. The maintainer asked for the
   choice (None, Floating windows, Focused window, All windows) and
@@ -1037,7 +1067,10 @@ once you have agreed with it or reversed it.
       it does manual Do not disturb, wherever popups go, relying on the
       `no_screen_share` layer rule to black it out of the stream. The
       alternative holds every popup during a share. It's `quiet` in
-      `shell/NotificationData.qml`.
+      `shell/NotificationData.qml`. When the shared output isn't known
+      (a share that couldn't be paired, or one restored from a token),
+      hold it. On tidewm nothing blacks it out of the stream: tidewm has
+      no `no_screen_share`.
 - [ ] **Do not disturb lasts until the shell restarts.** It survives a
       config reload (`PersistentProperties` in `shell/NotificationData.qml`),
       but a new shell starts with it off, so it can't be left on by
@@ -1948,8 +1981,8 @@ Hyprland yet. Still to do:
 - [ ] **The idle fallback's sleep doesn't wait for the lock.** swayidle's
       `before-sleep` starts `tide-lock.service` and returns once systemd
       has forked it (`Type=simple`), so a suspend can freeze the lock
-      before it covers the screen; hypridle waits for the lock
-      (`inhibit_sleep = 3`). Have the hook wait for the session lock,
+      before it covers the screen; hypridle waits for the lock on
+      Hyprland, through its default `inhibit_sleep` (SPEC.md §10). Have the hook wait for the session lock,
       tide-lock's or its fallback's, before it returns (Codex on #439).
 - On a real session, check the lock's fallback (SPEC.md §10): with `qs`
   hidden from the user manager's `PATH`, Super+L locks with hyprlock at
@@ -2315,9 +2348,9 @@ or workspace goes there.
   config reload; home's apps open there without switching. Shell sessions
   named from `TIDE_WORKSPACE` (conf#435): a terminal launched on a named
   workspace attaches to `NAME:1`.
-- **The tap of `Super`** opens the switcher on Workspaces (its `tide:launcher`
-  global shortcut does), once the pinned Hyprland passes SPEC.md §8.2's
-  three tap checks; until then `conf` binds no tap.
+- **The tap of `Super`** opens the switcher on Apps. tide binds it on
+  Hyprland 0.57 and on tidewm (`--release Super_L`); check SPEC.md §8.2's
+  three tap checks on a real session.
 - **Browser tabs (M9).** tide for Chrome on Linux lists tabs with `chrome.tabs`,
   and `tide-tabs` hands them to the shell (SPEC.md §8.3).
   - [x] An open native-messaging port keeps a Manifest V3 service worker
@@ -2669,3 +2702,46 @@ To work out:
 - **Where the row shows.** Under the text cursor needs the app's caret
   through text-input-v3, which not every app gives; under the window's
   middle otherwise.
+
+## The spec review's follow-ups (2026-11-14)
+
+Work the review of every tide spec found but didn't do; SPEC.md marks each
+one planned.
+
+- [ ] **Decide tidewm's dimming strength.** `tidewm/tide.conf` ships 0.07
+      and `hypr/hyprland.lua` 0.12 (SPEC.md §6.2). Test both on tidewm's
+      black layer, then make them one number or say why they differ.
+- [ ] **Where focus goes after a minimize.** tidewm goes back to the window
+      you were in before; SPEC.md §6.7 says the window that was under it.
+      Pick one.
+- [ ] **Hold popups during fullscreen video,** as a screen share does
+      (SPEC.md §6.3, §9).
+- [ ] **"Show in folder."** A user-level
+      `org.freedesktop.FileManager1.service` activation file and
+      `tide-filemanager.service` (`PartOf=graphical-session.target`;
+      Nautilus in tide, Dolphin under Plasma), and a `tide doctor` check of
+      who owns FileManager1 (SPEC.md §5.2, §16.2).
+- [ ] **`xdg-terminals.list`.** Write it with `kitty.desktop` first
+      (SPEC.md §16.2), unless scripts' `setup` already does.
+- [ ] **Load the Hyprland config under the pinned Hyprland in CI,** not
+      only the `hl` stub (SPEC.md §3.1).
+- [ ] **`Super+Alt+F` on tidewm.** Bind it to `qs -c tide ipc call floating
+      remember` in `tidewm/tide.conf`, with a `config_test.sh` case
+      (SPEC.md §5.3).
+- [ ] **A critical battery.** Notify at 7%, and hibernate at 3% where
+      hibernation is set up, else suspend (SPEC.md §7.4). Today only
+      UPower's own critical action applies.
+- [ ] **Dim outputs with no backlight.** A 40% black overlay at the dimming
+      step, removed on any input (SPEC.md §10); hypridle's dimming step
+      only runs `brightnessctl` today.
+- [ ] **Sleep waits for the lock on tidewm.** hypridle waits only with
+      `hyprland-lock-notify-v1`, which tidewm lacks, so a quick suspend can
+      beat the lock there (SPEC.md §10). Add the protocol to tidewm; don't
+      set `inhibit_sleep = 3`.
+- [ ] **`bin/tide-shell_test.sh` failed once** ("the agent's exit is
+      reported") under heavy load, and passed when rerun. Find what it
+      races.
+- [ ] **Stale comments.** `shell/kde.qml` says `qs -c tide-kde ipc call`,
+      but the service runs `qs -p …/kde.qml`; `shell/PickerWindow.qml` and
+      `shell/LauncherWindow.qml` say "conf's Super+V" and "conf's
+      Super+A"; shell comments and tests say "hover text" for a tooltip.
