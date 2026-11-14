@@ -140,7 +140,7 @@ export const PAGES = Object.freeze([
         group: "general",
         label: "Appearance",
         icon: "night-light-symbolic",
-        keywords: ["wallpaper", "background", "sunset", "sunrise"],
+        keywords: ["wallpaper", "background", "sunset", "sunrise", "rounded", "corners"],
         about: "Light or dark, for the bar and apps. Switching by hand lasts until the next scheduled change.",
         advanced: null,
     },

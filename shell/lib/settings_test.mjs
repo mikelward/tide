@@ -129,7 +129,7 @@ test("searching keeps the pages found, under their headings, and drops headings 
 
 test("Up and Down move among the pages a search keeps, stopping at either end", () => {
     const kept = keptPages(searchedSidebar("c"));
-    assert.deepEqual(kept.map(i => PAGES[i].id), ["touchpad", "clipboard", "clocks"]);
+    assert.deepEqual(kept.map(i => PAGES[i].id), ["touchpad", "appearance", "clipboard", "clocks"]);
     assert.equal(movedPage(kept[0], 1, kept), kept[1]);
     assert.equal(movedPage(kept[1], -1, kept), kept[0]);
     assert.equal(movedPage(kept[0], -1, kept), kept[0]);

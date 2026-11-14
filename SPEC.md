@@ -1292,6 +1292,10 @@ See [`layouts.png`](docs/mocks/layouts.png).
 - Video, picture-in-picture and screen-share preview windows get a `nodim`
   window rule, so a call on the other monitor doesn't look washed out.
 - Strength is a setting, on the Appearance page (§16), a point at a time.
+- Windows' corners are rounded, by 6 px, on Hyprland. The Appearance page's
+  **Rounded corners** turns that off, for square ones, and back on
+  (maintainer, 2026-11-14). tidewm's windows are square, so the page has
+  no such row there.
 - The dim fades as focus moves, over 300 ms, as a new window fades in. On
   tidewm, these are `fade_duration 300`, and floating windows cast a soft
   shadow with `shadows enable`, as Hyprland's do (maintainer, 2026-11-13).
@@ -4859,7 +4863,7 @@ tide's own, and links out for the rest:
 | Workspaces | the standing workspaces, home first; the apps that live on home; and the patterns that name a workspace from a window's title (§6.5) |
 | Floating | the rules that float a window by its class and title, and the floating windows no rule covers yet (§6.4) |
 | **General** | |
-| Appearance | dark / light / automatic, schedule, dim strength, wallpaper image or color, and its position, with a preview |
+| Appearance | dark / light / automatic, schedule, dim strength, rounded corners, wallpaper image or color, and its position, with a preview |
 | Bar | where the bar runs: the top edge or the bottom (§7.1) |
 | Notifications | Do not disturb on a schedule, whether critical alerts break through, and the muted apps and sites (§9) |
 | Clipboard | the history on or off, how many copies it keeps, and Clear history (§8.4) |

@@ -290,7 +290,8 @@ PanelWindow {
         }
         // Sets one of the Appearance page's settings, as it does: `qs -c
         // tide ipc call settings setAppearance mode dark`, a time
-        // ("07:15"), a latitude or longitude, a dimStrength (0.1), or a
+        // ("07:15"), a latitude or longitude, a dimStrength (0.1),
+        // roundedCorners (true or false), or a
         // lightWallpaper or darkWallpaper, a file or a color such as
         // "#1a1d2e" ("" for the default), or a lightWallpaperPosition or
         // darkWallpaperPosition (fill, fill-top, fill-bottom, fit or
@@ -301,6 +302,10 @@ PanelWindow {
             if (key === "latitude" || key === "longitude") {
                 const c = Appearance.parseCoordinate(key, value);
                 return c.error ? `${c.error}; not changing ${key}` : AppearanceData.set(key, c.value);
+            }
+            if (key === "roundedCorners") {
+                // Anything else is passed on as it is, to be refused
+                return AppearanceData.set(key, value === "true" ? true : value === "false" ? false : value);
             }
             return AppearanceData.set(key, key === "dimStrength" ? Number(value) : value);
         }
@@ -2358,6 +2363,51 @@ PanelWindow {
                                     value: AppearanceData.dimStrength
                                     next: Appearance.steppedDim(AppearanceData.dimStrength, 1)
                                     onActivated: appearance.set("dimStrength", next)
+                                }
+                            }
+                        }
+
+                        // Rounded corners (§6.2), which a click turns on
+                        // or off. Hyprland's alone: tidewm's windows are
+                        // square.
+                        Item {
+                            width: appearance.width
+                            implicitHeight: 32
+                            visible: !Compositor.tidewm
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Rounded corners"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            // On or off, in the accent color while on, as
+                            // the Idle page's switches.
+                            Rectangle {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 56
+                                height: 26
+                                radius: 13
+                                color: AppearanceData.roundedCorners ? Theme.accentBg : Theme.surface2
+                                Accessible.name: "Rounded corners"
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: AppearanceData.roundedCorners ? "On" : "Off"
+                                    color: AppearanceData.roundedCorners ? Theme.accentFg : Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                }
+
+                                TapHandler {
+                                    onTapped: appearance.set("roundedCorners", !AppearanceData.roundedCorners)
                                 }
                             }
                         }

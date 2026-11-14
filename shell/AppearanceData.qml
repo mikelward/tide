@@ -55,6 +55,8 @@ Singleton {
     property var fileErrors: []
     // The inactive dim's strength in effect, for the page.
     readonly property real dimStrength: Appearance.dimStrength(root.settings)
+    // Whether windows' corners are rounded (§6.2), on Hyprland.
+    readonly property bool roundedCorners: Appearance.roundedCorners(root.settings)
     // Whether the bar runs along the bottom edge (SPEC.md §7.1), which the
     // Bar page's Position row changes live.
     readonly property bool barAtBottom: Appearance.barAtBottom(root.settings)

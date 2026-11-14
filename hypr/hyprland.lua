@@ -722,10 +722,13 @@ hl.config({
 -- The inactive dim's strength, unless tide's Appearance page sets one
 -- (apply_tide_appearance below).
 local DIM_STRENGTH = 0.12
+-- How far windows' corners are rounded, unless the Appearance page turns
+-- rounded corners off.
+local ROUNDING = 6
 
 hl.config({
     decoration = {
-        rounding = 6,
+        rounding = ROUNDING,
         blur = {
             enabled = true,
             size = 4,
@@ -1005,12 +1008,15 @@ end
 apply_tide_input()
 
 -- tide's Appearance settings that reach Hyprland (tide SPEC.md §16): the
--- inactive dim's strength, which tide writes to tide-appearance.lua beside
--- this file as { dim_strength = 0.1 }. With no file, or no setting,
--- DIM_STRENGTH stands. It's read as data, as tide-input.lua is, and
--- hyprland.local.lua's own dim_strength still wins (local_dim).
--- conf_appearance.reload() is how tide applies a change.
+-- inactive dim's strength and whether windows' corners are rounded, which
+-- tide writes to tide-appearance.lua beside this file as
+-- { dim_strength = 0.1, rounded_corners = false }. With no file, or no
+-- setting, DIM_STRENGTH and ROUNDING stand. It's read as data, as
+-- tide-input.lua is, and hyprland.local.lua's own dim_strength and rounding
+-- still win (local_dim, local_rounding). conf_appearance.reload() is how
+-- tide applies a change.
 local local_dim = nil
+local local_rounding = nil
 
 local function read_tide_appearance()
     local path = config_home .. "/hypr/tide-appearance.lua"
@@ -1034,7 +1040,13 @@ local function read_tide_appearance()
     end
     local out = {}
     for k, v in pairs(value) do
-        if k ~= "dim_strength" then
+        if k == "rounded_corners" then
+            if type(v) ~= "boolean" then
+                notify_error("tide-appearance.lua: rounded_corners should be true or false, not " .. tostring(v))
+            else
+                out.rounded_corners = v
+            end
+        elseif k ~= "dim_strength" then
             notify_error("tide-appearance.lua: unknown setting " .. tostring(k))
         elseif type(v) ~= "number" or v ~= v or v < 0 or v > 1 then
             notify_error("tide-appearance.lua: dim_strength should be a number from 0 to 1, not " .. tostring(v))
@@ -1045,12 +1057,16 @@ local function read_tide_appearance()
     return out
 end
 
--- The dim is applied each time, tide's or the default, so a setting tide
--- stops making goes back to DIM_STRENGTH rather than staying put.
+-- Each is applied each time, tide's or the default, so a setting tide
+-- stops making goes back to DIM_STRENGTH or ROUNDING rather than staying
+-- put.
 local function apply_tide_appearance()
     local tide = read_tide_appearance()
     if local_dim == nil then
         hl.config({ decoration = { dim_strength = tide.dim_strength or DIM_STRENGTH } })
+    end
+    if local_rounding == nil then
+        hl.config({ decoration = { rounding = tide.rounded_corners == false and 0 or ROUNDING } })
     end
 end
 apply_tide_appearance()
@@ -2949,6 +2965,9 @@ do
                 local decoration = type(t) == "table" and t.decoration
                 if type(decoration) == "table" and decoration.dim_strength ~= nil then
                     local_dim = decoration.dim_strength
+                end
+                if type(decoration) == "table" and decoration.rounding ~= nil then
+                    local_rounding = decoration.rounding
                 end
                 local input = type(t) == "table" and t.input
                 if type(input) == "table" then

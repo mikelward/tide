@@ -8,7 +8,7 @@ import {
     DEFAULTS, LOCAL, parseTime, parseAppearance, loadAppearance, sunDown,
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, placed, locationRow, resetLocation, withLocation, steppedTime, steppedTimePast, parseCoordinate, withSetting,
-    DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua,
+    DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua, roundedCorners,
     expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
@@ -597,6 +597,23 @@ test("− and + step the dim a point at a time, from none to half", () => {
     assert.equal(steppedDim(0.8, 1), 0.8, "and + stays");
     assert.equal(formatDim(0.07), "7%");
     assert.equal(formatDim(0.125), "13%");
+});
+
+test("rounded corners are on until a setting turns them off, and only one that's set reaches Hyprland", () => {
+    assert.equal(roundedCorners(DEFAULTS), true);
+    assert.equal(roundedCorners(loadAppearance(null, '{"roundedCorners": false}').settings), false);
+    assert.equal(roundedCorners(loadAppearance('{"roundedCorners": false}', '{"roundedCorners": true}').settings), true, "the local file's wins");
+    assert.deepEqual(parseAppearance('{"roundedCorners": false}'), { settings: { roundedCorners: false } });
+    assert.equal(parseAppearance('{"roundedCorners": "no"}').error, "roundedCorners must be true or false");
+    assert.equal(parseAppearance('{"roundedCorners": 0}').error, "roundedCorners must be true or false");
+    assert.deepEqual(JSON.parse(withSetting('{"dark": "20:00"}', "roundedCorners", false).text), { dark: "20:00", roundedCorners: false });
+    assert.match(withSetting(null, "roundedCorners", "false").error, /^roundedCorners must be/);
+    const body = lua => lua.split("\n").slice(3).join("\n");
+    assert.equal(body(appearanceLua({ roundedCorners: false })), "return {\n    rounded_corners = false,\n}\n");
+    assert.equal(body(appearanceLua({ dimStrength: 0.1, roundedCorners: true })),
+        "return {\n    dim_strength = 0.1,\n    rounded_corners = true,\n}\n");
+    // tidewm's windows are square: its file has no line for it
+    assert.ok(appearanceConf({ roundedCorners: false }).split("\n").every(line => line === "" || line.startsWith("#")));
 });
 
 test("only a dim that's set reaches Hyprland", () => {

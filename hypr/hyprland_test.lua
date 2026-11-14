@@ -3032,6 +3032,41 @@ test("hyprland.local.lua's dim strength wins over tide's, at load and on a reloa
     eq(0.25, S.config.decoration.dim_strength)
 end)
 
+test("tide-appearance.lua turns rounded corners off, and back on", function()
+    load({})
+    eq(6, S.config.decoration.rounding, "rounded with nothing set")
+    load({ appearance = "return { rounded_corners = false }" })
+    eq(0, S.config.decoration.rounding)
+    eq(0.12, S.config.decoration.dim_strength, "the dim stays the config's")
+    write(TIDE_APPEARANCE, "return { rounded_corners = true, dim_strength = 0.2 }")
+    conf_appearance.reload()
+    eq(6, S.config.decoration.rounding)
+    eq(0.2, S.config.decoration.dim_strength)
+    write(TIDE_APPEARANCE, "return { rounded_corners = false }")
+    conf_appearance.reload()
+    eq(0, S.config.decoration.rounding)
+    write(TIDE_APPEARANCE, "return {}")
+    conf_appearance.reload()
+    eq(6, S.config.decoration.rounding, "a setting tide stops making")
+end)
+
+test("hyprland.local.lua's own rounding wins over tide's rounded corners", function()
+    load({ appearance = "return { rounded_corners = false }", ["local"] = "hl.config({ decoration = { rounding = 11 } })" })
+    eq(11, S.config.decoration.rounding)
+    write(TIDE_APPEARANCE, "return { rounded_corners = true }")
+    conf_appearance.reload()
+    eq(11, S.config.decoration.rounding)
+end)
+
+test("a rounded_corners that isn't true or false is reported and leaves corners rounded", function()
+    for _, text in ipairs({ "return { rounded_corners = 0 }", 'return { rounded_corners = "off" }' }) do
+        load({ appearance = text })
+        eq(1, #S.notifications, text)
+        truthy(S.notifications[1].text:find("rounded_corners should be true or false", 1, true), S.notifications[1].text)
+        eq(6, S.config.decoration.rounding, text)
+    end
+end)
+
 test("a broken or wrong tide-appearance.lua is reported and leaves the config's dim", function()
     for _, text in ipairs({
         "return {",
