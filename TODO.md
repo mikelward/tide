@@ -1203,6 +1203,21 @@ once you have agreed with it or reversed it.
   whose monitor is gone isn't noted, and goes to the main monitor.
   Reversible: `span.note`.
 
+## A tidesway session (SPEC.md §5.3)
+
+tide's shell on tidesway, so the Appearance page's rounded corners reach
+it (maintainer, 2026-11-14).
+
+- [x] The session: `tide-tidesway.desktop`, `tide-session tidesway`, and
+      `tide-tidewm --tidesway`, installed where a `tidesway` command is.
+- [ ] tidesway installs that command: tidewm's `-s` and `-c` over its
+      sway (mikelward/tidesway's `TODO.md`, "A tide session").
+- [ ] Rounded corners there: the Appearance page shows the row on
+      tidesway and writes `corner_radius`, in a file tidewm never reads,
+      as tidewm fails on a line it doesn't know.
+- [ ] `install/tide-setup` builds tidesway, as it builds tidewm.
+- [ ] A login on a real machine: nothing has run there yet.
+
 ## One default dim on both compositors (SPEC.md §6.2)
 
 Hyprland's default dim is 0.12 (`hypr/hyprland.lua`, `appearance.mjs`'s

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=tide (tidesway)
+Comment=tidesway with the tide shell, managed by uwsm: still being built
+Exec=tide-session tidesway
+TryExec=tidesway
+Type=Application
+DesktopNames=tidewm;tidesway;tide

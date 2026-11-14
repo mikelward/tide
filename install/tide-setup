@@ -2895,8 +2895,9 @@ hyprland_build_kept() {
 }
 
 # check_compositors sets SESSIONS to the login screen's tide sessions whose
-# compositors run here: tide (Hyprland, new enough for tide's config) and
-# tide-tidewm (a tidewm that runs). install_tide installs only those, and takes away
+# compositors run here: tide (Hyprland, new enough for tide's config),
+# tide-tidewm (a tidewm that runs) and tide-tidesway (a tidesway that's
+# installed). install_tide installs only those, and takes away
 # one whose compositor is gone. Each missing one is a warning; with none,
 # tide has no session, which stops setup unless errors are ignored.
 check_compositors() {
@@ -2923,6 +2924,11 @@ check_compositors() {
     elif test "$BUILD_TIDEWM" = yes; then
         warn "tidewm isn't installed, so the tide (tidewm) session won't show at the login screen"
     fi
+    # tide (tidesway) where a tidesway is installed: setup builds none yet,
+    # so one that's missing isn't said.
+    if session_command tidesway; then
+        SESSIONS="${SESSIONS:+$SESSIONS }tide-tidesway"
+    fi
     remove_unrunnable_entries
     if test -z "$SESSIONS"; then
         # Only where setup installs the sessions: --no-install and --no-sudo
@@ -2944,7 +2950,7 @@ check_compositors() {
 # to nothing. First, so a run that then stops leaves none behind.
 remove_unrunnable_entries() {
     test "$INSTALL" = yes && test "$SUDO" = yes || return 0
-    for _session in tide tide-tidewm; do
+    for _session in tide tide-tidewm tide-tidesway; do
         case " $SESSIONS " in *" $_session "*) continue ;; esac
         _entry="${SESSION_ENTRY%/*}/$_session.desktop"
         test -e "$_entry" || continue
@@ -7072,7 +7078,13 @@ check_session() {
     case " ${SESSIONS-tide} " in
         *" tide-tidewm "*) _tidewm_session=yes ;;
     esac
-    test "$_hyprland_session" = yes || _tidewm_session=yes
+    # tide (tidesway)'s, where a tidesway is installed, is a session to log
+    # in to as well, so with it alone tidewm's isn't asked for.
+    _tidesway_session=no
+    case " ${SESSIONS-tide} " in
+        *" tide-tidesway "*) _tidesway_session=yes ;;
+    esac
+    test "$_hyprland_session" = yes || test "$_tidesway_session" = yes || _tidewm_session=yes
     # Whether a missing uwsm is already among the problems.
     _uwsm_said=no
     if test "$_hyprland_session" = yes; then
@@ -7112,6 +7124,18 @@ check_session() {
         if test "$_uwsm_said" = no && ! session_command uwsm; then
             _problems="${_problems:+$_problems
 }the tide (tidewm) session won't start: it starts through uwsm, which isn't installed; install uwsm"
+            _uwsm_said=yes
+        fi
+    fi
+    if test "$_tidesway_session" = yes; then
+        _tidesway_entry="${SESSION_ENTRY%/*}/tide-tidesway.desktop"
+        if ! test -f "$_tidesway_entry"; then
+            _problems="${_problems:+$_problems
+}the tide (tidesway) session won't show at the login screen: there's no $_tidesway_entry; run 'sudo make -C $TIDE_DIR install-session PREFIX=/usr SESSIONS=${SESSIONS:-tide-tidesway}'"
+        fi
+        if test "$_uwsm_said" = no && ! session_command uwsm; then
+            _problems="${_problems:+$_problems
+}the tide (tidesway) session won't start: it starts through uwsm, which isn't installed; install uwsm"
         fi
     fi
     # Without a new enough Quickshell, tide's own bar and lock don't run:

@@ -57,9 +57,10 @@
 # distributions package today.
 LUA ?= $(shell command -v lua5.5 || command -v lua5.4 || command -v lua)
 HYPR_DIR ?= $(HOME)/.config/hypr/tide
-# The login screen's sessions install-session installs: tide (Hyprland's)
-# and tide-tidewm. install/tide-setup gives only those whose compositor runs.
-SESSIONS ?= tide tide-tidewm
+# The login screen's sessions install-session installs: tide (Hyprland's),
+# tide-tidewm and tide-tidesway. install/tide-setup gives only those whose
+# compositor runs.
+SESSIONS ?= tide tide-tidewm tide-tidesway
 # tidewm's own directory, where tide-tidewm looks for tide.conf and tide's
 # shell writes the tide-*.conf it includes: $XDG_CONFIG_HOME's, as both have it.
 TIDEWM_DIR ?= $(or $(XDG_CONFIG_HOME),$(HOME)/.config)/tidewm

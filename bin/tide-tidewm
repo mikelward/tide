@@ -35,12 +35,23 @@
 # Each step says what it does, to stderr and to the journal (`journalctl
 # -b -t tide-tidewm`), so a login that never shows a desktop says how far
 # it got: started, tidewm up, then uwsm told.
+# With --tidesway first, it runs tidesway in tidewm's place, for tide's
+# tidesway session: tidesway takes tidewm's -s and -c, reads tidewm's
+# config and speaks its IPC, so everything else here is the same, the
+# session's name and target too.
 say() {
     echo "tide-tidewm: $*" >&2
     # The journal is the log: a logger that fails has nowhere to say so.
     logger -t tide-tidewm -- "$*" 2>/dev/null || :
 }
-say "starting the tide (tidewm) session"
+wm=tidewm
+case ${1:-} in
+    --tidesway)
+        wm=tidesway
+        shift
+        ;;
+esac
+say "starting the tide ($wm) session"
 stale=
 for var in WAYLAND_DISPLAY DISPLAY SWAYSOCK I3SOCK HYPRLAND_INSTANCE_SIGNATURE; do
     eval "test -z \"\${$var+set}\"" || stale="$stale $var"
@@ -89,7 +100,7 @@ if test "$given" = no && ! test -e "$config_dir/config" && ! test -e "$HOME/.con
     set -- -c "$config_dir/tide.conf" "$@"
 fi
 # The startup command logs first, as that's the first sign tidewm is up.
-start="logger -t tide-tidewm -- 'tidewm is up; going home and telling uwsm the session is ready' 2>/dev/null; $start"
+start="logger -t tide-tidewm -- '$wm is up; going home and telling uwsm the session is ready' 2>/dev/null; $start"
 # Before anything, the splash (shell/splash.qml), in the background, as
 # Hyprland's session starts it: your wallpaper, the hostname and "Starting
 # tide" over tidewm's empty background until the shell is ready. It goes
@@ -97,9 +108,9 @@ start="logger -t tide-tidewm -- 'tidewm is up; going home and telling uwsm the s
 # start leaves the background as it was, which is said here.
 splash=$HOME/.config/quickshell/tide/splash.qml
 if ! test -f "$splash"; then
-    say "no splash at $splash, so tidewm's background shows until the shell is ready"
+    say "no splash at $splash, so $wm's background shows until the shell is ready"
 elif ! command -v qs >/dev/null 2>&1; then
-    say "no qs on PATH for the splash, so tidewm's background shows until the shell is ready"
+    say "no qs on PATH for the splash, so $wm's background shows until the shell is ready"
 else
     case $splash in
         *\'*) say "not starting the splash, as its path $splash holds a quote" ;;
@@ -112,5 +123,5 @@ else
             ;;
     esac
 fi
-say "starting tidewm, home $home: $*"
-exec tidewm -s "$start" "$@"
+say "starting $wm, home $home: $*"
+exec "$wm" -s "$start" "$@"
