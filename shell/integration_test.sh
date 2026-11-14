@@ -900,7 +900,7 @@ tidewm_loaded() {
     # fixtures keep focused (Quickshell asks for the workspaces again after
     # a workspace event), and focusing it: Super+Z minimizes it, by its
     # container, so the shell followed the window events.
-    # `tide reload` (Super+Ctrl+R) tells the shell it reloaded tidewm's
+    # `tide reload` (Super+Shift+R) tells the shell it reloaded tidewm's
     # config, which tidewm has no event for, and the shell asks for its
     # errors again (SPEC.md §7.4).
     _asked=$(grep -cxF 'tide-msg --type get_config' "$tmp/helpers.log")

@@ -238,7 +238,7 @@ if test "\$1" = ipc; then
         # Super+Z in tidewm's session: the window tidewm's events focused,
         # minimized by its container on Quickshell's own connection
         # (tidewm_client.py), once that has sent it.
-        # Super+Ctrl+R's tide reload in tidewm's session: the shell asks
+        # Super+Shift+R's tide reload in tidewm's session: the shell asks
         # tidewm for its config errors again, as ConfigErrorsData.qml does.
         # The shell's own tide-msg is the test's logging one, beside the
         # run directory; this IPC call's environment has neither it nor

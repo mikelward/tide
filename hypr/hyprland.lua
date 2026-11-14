@@ -1243,10 +1243,10 @@ end
 bind("minimize", key("Z"), exec("qs -c tide ipc call windows minimize || notify-send -a tide 'No minimize' "
     .. "'Super+Z minimizes a window in the tide shell, which is not running.'"), does("Minimize the window"))
 bind("lock", key("L"), exec(lock), does("Lock"))
--- Super+Ctrl+R: reload the config (tide SPEC.md §6.6). In the tide session
+-- Super+Shift+R: reload the config (tide SPEC.md §6.6). In the tide session
 -- `tide reload` also starts tide's shell if it isn't running, never
 -- restarting one that is, and says what failed.
-bind("reload", key("CTRL + R"), exec(tide_session and "tide reload" or "hyprctl reload"), does("Reload the config"))
+bind("reload", key("SHIFT + R"), exec(tide_session and "tide reload" or "hyprctl reload"), does("Reload the config"))
 -- Super+S: keep awake, Super+P: presenter mode, Do not disturb and keep
 -- awake together (tide SPEC.md §10). tide's shell holds both and shows
 -- the OSD; without it nothing could, so a notification says why.
@@ -1328,21 +1328,6 @@ end
 -- the focused window, which focus-follows-mouse makes the one under the
 -- pointer.
 fixed(key("mouse:274"), hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }), does("Maximize"))
-
--- Resize mode, for floating windows: h/j/k/l or arrows, Esc or Return to leave.
-bind("resize_mode", key("SHIFT + R"), hl.dsp.submap("resize"), does("Resize mode"))
-hl.define_submap("resize", function()
-    local steps = {
-        H = { -40, 0 }, L = { 40, 0 }, K = { 0, -40 }, J = { 0, 40 },
-        left = { -40, 0 }, right = { 40, 0 }, up = { 0, -40 }, down = { 0, 40 },
-    }
-    for k, d in pairs(steps) do
-        local what = d[1] < 0 and "Narrower" or d[1] > 0 and "Wider" or d[2] < 0 and "Shorter" or "Taller"
-        hl.bind(k, hl.dsp.window.resize({ x = d[1], y = d[2], relative = true }), does(what, { repeating = true }))
-    end
-    hl.bind("escape", hl.dsp.submap("reset"), does("Leave resize mode"))
-    hl.bind("Return", hl.dsp.submap("reset"), does("Leave resize mode"))
-end)
 
 -- tide's Keyboard shortcuts record a binding's new keys in this submap,
 -- where no other binding takes them (tide SPEC.md §16). Esc leaves it,
