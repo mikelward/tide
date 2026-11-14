@@ -1,7 +1,7 @@
 // Tests for wallclock.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CHECK_MS, jumped, woke } from "./wallclock.mjs";
+import { CHECK_MS, jumped, lidMoved, woke } from "./wallclock.mjs";
 
 const t = Date.UTC(2026, 10, 7, 9, 30, 0);
 
@@ -29,4 +29,15 @@ test("logind's signal before a sleep, and its other lines, aren't", () => {
     assert.equal(woke("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForShutdown (false,)"), false);
     assert.equal(woke("The name org.freedesktop.login1 is owned by :1.3"), false);
     assert.equal(woke(""), false);
+});
+
+test("logind's LidClosed changing says the lid opened or closed", () => {
+    const changed = (props) => `/org/freedesktop/login1: org.freedesktop.DBus.Properties.PropertiesChanged ('org.freedesktop.login1.Manager', ${props}, @as [])`;
+    assert.equal(lidMoved(changed("{'LidClosed': <true>}")), true, "closed");
+    assert.equal(lidMoved(changed("{'LidClosed': <false>}")), true, "opened");
+    assert.equal(lidMoved(changed("{'Docked': <true>, 'LidClosed': <true>}")), true, "among others");
+    assert.equal(lidMoved(changed("{'Docked': <true>}")), false, "another property");
+    assert.equal(lidMoved("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (false,)"), false);
+    assert.equal(lidMoved("The name org.freedesktop.login1 is owned by :1.3"), false);
+    assert.equal(woke(changed("{'LidClosed': <false>}")), false, "and isn't a wake");
 });

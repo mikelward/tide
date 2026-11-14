@@ -1393,6 +1393,57 @@ run TIDE_KEYBOARDS_SYS="$input" TIDE_KEYBOARDS_UDEV="$tmp/no-udev" "$qs" keyboar
 check "without udev's data, keyboards exits 1" test $? -eq 1
 check "and says where it looked" contains "$(cat "$tmp/err")" "can't read udev's data in $tmp/no-udev"
 
+# A laptop used with its lid closed: its built-in keyboard, on the i8042
+# bus, can't be typed on, so only one plugged in counts.
+rm -r "$input" "$udev"
+mkdir -p "$input" "$udev"
+# bus EVENT BUSTYPE: the device's bus, as /sys/class/input/EVENT/device/id has it.
+bus() {
+    mkdir -p "$input/$1/device/id"
+    printf '%s\n' "$2" > "$input/$1/device/id/bustype"
+}
+input_device "AT Translated Set 2 keyboard" 13:70 event0 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
+bus event0 0011
+input_device "Keychron K2" 13:71 event1 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
+bus event1 0003
+lid=$tmp/lid
+mkdir -p "$lid/LID0"
+lid_keyboards() {
+    run TIDE_KEYBOARDS_SYS="$input" TIDE_KEYBOARDS_UDEV="$udev" TIDE_KEYBOARDS_LID="$lid" "$qs" keyboards
+}
+printf 'state:      open\n' > "$lid/LID0/state"
+lid_keyboards
+check "with the lid open, the built-in keyboard and the one plugged in both count" \
+    test "$(cat "$tmp/out")" = "AT Translated Set 2 keyboard
+Keychron K2"
+printf 'state:      closed\n' > "$lid/LID0/state"
+lid_keyboards
+check "with the lid closed, only the one plugged in does" test "$(cat "$tmp/out")" = "Keychron K2"
+# The monitor's KVM switches the plugged-in keyboard away.
+rm -r "$input/event1"
+lid_keyboards
+status=$?
+check "with the lid closed and none plugged in, there's no keyboard" test ! -s "$tmp/out"
+check "and keyboards exits 0" test "$status" -eq 0
+check "and says nothing" test ! -s "$tmp/err"
+printf 'state:      open\n' > "$lid/LID0/state"
+lid_keyboards
+check "which the lid opening brings back" test "$(cat "$tmp/out")" = "AT Translated Set 2 keyboard"
+# A built-in keyboard on I2C, SPI or the host bus is one too; Bluetooth's isn't.
+printf 'state:      closed\n' > "$lid/LID0/state"
+for b in 0018 0019 001c; do
+    bus event0 "$b"
+    lid_keyboards
+    check "behind a closed lid, a keyboard on bus $b doesn't count" test ! -s "$tmp/out"
+done
+bus event0 0005
+lid_keyboards
+check "and a Bluetooth one does" test "$(cat "$tmp/out")" = "AT Translated Set 2 keyboard"
+# A machine with no lid, or a lid that can't be read, has none closed.
+bus event0 0011
+run TIDE_KEYBOARDS_SYS="$input" TIDE_KEYBOARDS_UDEV="$udev" TIDE_KEYBOARDS_LID="$tmp/no-lid" "$qs" keyboards
+check "with no lid, a keyboard on the i8042 bus counts" test "$(cat "$tmp/out")" = "AT Translated Set 2 keyboard"
+
 # tide caps-lock: the keyboards' Caps Lock lights, as /sys/class/leds lays
 # them out, beside another light that isn't one.
 leds=$tmp/leds

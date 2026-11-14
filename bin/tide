@@ -252,8 +252,13 @@
 #     to D, so not a power button or a mouse's side buttons, though a USB
 #     receiver's keyboard part counts whether or not a keyboard is paired.
 #     One behind a monitor's USB hub comes and goes as the monitor's KVM
-#     switches to this machine and away. Exits 1, saying why, if it can't
-#     read the input devices from /sys or udev's data from /run/udev.
+#     switches to this machine and away. While the laptop's lid is closed,
+#     as when it's used with an external monitor alone, its built-in
+#     keyboard can't be typed on and isn't one: a keyboard on the i8042,
+#     I2C, SPI or host bus, where a USB or Bluetooth one is plugged in. A
+#     built-in keyboard that's on USB, as some laptops' is, still counts.
+#     Exits 1, saying why, if it can't read the input devices from /sys or
+#     udev's data from /run/udev.
 #
 #   tide caps-lock
 #
@@ -1688,6 +1693,31 @@ prompt_focus() {
 # The input devices' and udev's directories, overridable for the tests.
 keyboards_sys=${TIDE_KEYBOARDS_SYS:-/sys/class/input}
 keyboards_udev=${TIDE_KEYBOARDS_UDEV:-/run/udev/data}
+# The lid switches' directory: each has a state file, "state:      closed".
+keyboards_lid=${TIDE_KEYBOARDS_LID:-/proc/acpi/button/lid}
+
+# Whether a lid is closed. A machine with no lid, or one whose state can't
+# be read, has none closed.
+lid_is_closed() {
+    for _lid in "$keyboards_lid"/*/state; do
+        IFS= read -r _lid_state 2>/dev/null <"$_lid" || continue
+        case "$_lid_state" in
+            *closed*) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+# Whether the input device $1 is built into the machine, by its bus
+# (linux/input.h's BUS_*): i8042, I2C, host and SPI are, and USB and
+# Bluetooth are plugged in. One whose bus can't be read isn't.
+built_in() {
+    IFS= read -r _bus 2>/dev/null <"$1/device/id/bustype" || return 1
+    case "$_bus" in
+        0011|0018|0019|001[cC]) return 0 ;;
+    esac
+    return 1
+}
 
 keyboards() {
     test $# -eq 0 || usage
@@ -1699,11 +1729,19 @@ keyboards() {
         echo "$prog keyboards: can't read udev's data in $keyboards_udev" >&2
         exit 1
     fi
+    lid=open
+    if lid_is_closed; then
+        lid=closed
+    fi
     # udev keeps an event device's properties in c<major>:<minor>, its
     # dev file's numbers. A device that goes while this reads is skipped.
     for node in "$keyboards_sys"/event*; do
         IFS= read -r numbers 2>/dev/null <"$node/dev" || continue
         grep -qx 'E:ID_INPUT_KEYBOARD=1' "$keyboards_udev/c$numbers" 2>/dev/null || continue
+        # Behind a closed lid, the built-in one can't be typed on.
+        if test "$lid" = closed && built_in "$node"; then
+            continue
+        fi
         name=
         IFS= read -r name 2>/dev/null <"$node/device/name" || :
         printf '%s\n' "${name:-${node##*/}}"

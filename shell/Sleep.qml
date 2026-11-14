@@ -6,7 +6,8 @@ import Quickshell.Io
 import "lib/wallclock.mjs" as Wall
 
 // Says when the machine wakes from sleep, as logind does (SPEC.md §7.3),
-// for WallClock. One listener for every clock. A listener that stops is
+// for WallClock, and when the laptop's lid opens or closes, for
+// LockKeyboards (§10). One listener for every clock. A listener that stops is
 // started again; meanwhile WallClock's own check still catches a wake
 // within a few seconds.
 Singleton {
@@ -14,6 +15,8 @@ Singleton {
 
     // After a wake, once the wall clock has moved on.
     signal woke
+    // The laptop's lid opened or closed.
+    signal lidMoved
 
     Process {
         id: monitor
@@ -25,6 +28,10 @@ Singleton {
                 if (Wall.woke(data)) {
                     console.log("tide: woke from sleep");
                     root.woke();
+                }
+                if (Wall.lidMoved(data)) {
+                    console.log("tide: the lid opened or closed");
+                    root.lidMoved();
                 }
             }
         }

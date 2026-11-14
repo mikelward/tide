@@ -7,8 +7,10 @@ import "lib/lock.mjs" as Lock
 // on the login and lock faces (Lock.keyboardsNext): `tide keyboards` at
 // start, and again on each input device udev adds or removes, which
 // `udevadm monitor` reports. A monitor's KVM switching its USB keyboard
-// to this machine or away is one. While it can't be told, there counts as
-// one, so the field shows its focus as it did before.
+// to this machine or away is one. It's counted again when the laptop's
+// lid opens or closes too, as logind says (Sleep.qml): behind a closed lid
+// the built-in keyboard isn't one. While it can't be told, there counts
+// as one, so the field shows its focus as it did before.
 Scope {
     id: root
 
@@ -31,6 +33,14 @@ Scope {
         root.current = r.state;
         if (r.query) {
             names.lookUp();
+        }
+    }
+
+    Connections {
+        target: Sleep
+
+        function onLidMoved() {
+            root.refresh();
         }
     }
 

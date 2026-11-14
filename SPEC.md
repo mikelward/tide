@@ -3887,9 +3887,15 @@ talk, a demo, or a meeting room's screen.
   - A keyboard is an input device udev tags `ID_INPUT_KEYBOARD`: one with
     every key from Esc to D. A power button isn't one. A USB receiver's
     keyboard part is, paired or not.
+  - While the laptop's lid is closed, its built-in keyboard isn't one
+    (maintainer, 2026-11-14): with an external monitor alone, only a
+    keyboard plugged in can be typed on. Built-in is by the device's
+    bus: i8042, I2C, SPI or host. A built-in keyboard on USB, as some
+    laptops', still counts. The lid is `/proc/acpi/button/lid`'s.
   - `tide keyboards` names them. The lock and the greeter run it at start
     and again on each input event `udevadm monitor` reports, so the
-    border follows a KVM switch within moments.
+    border follows a KVM switch within moments, and when logind says the
+    lid opened or closed (`LidClosed`, on the listener §7.3 has).
   - If either command can't run, the field shows its focus as it did
     before, and says why in the journal.
 - **A prompt PAM wants answered visibly** (a one-time code it echoes, a
