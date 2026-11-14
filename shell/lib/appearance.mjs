@@ -25,7 +25,7 @@ export const DEFAULTS = Object.freeze({ mode: "schedule", light: "07:00", dark: 
 const MODES = ["schedule", "sun", "light", "dark"];
 // The settings that decide light or dark, and every one there is.
 const THEME_KEYS = ["mode", "light", "dark", "latitude", "longitude"];
-const KEYS = THEME_KEYS.concat(["city", "dimStrength", "lightWallpaper", "darkWallpaper", "lightWallpaperPosition",
+const KEYS = THEME_KEYS.concat(["city", "dimStrength", "roundedCorners", "lightWallpaper", "darkWallpaper", "lightWallpaperPosition",
     "darkWallpaperPosition", "wallpaperPosition", "barPosition", "barIcons"]);
 // How a picture is placed on a monitor (SPEC.md §15): each mode's own,
 // lightWallpaperPosition or darkWallpaperPosition, else wallpaperPosition,
@@ -90,6 +90,11 @@ export function parseAppearance(text) {
             // Hyprland's decoration:dim_strength, as conf takes it.
             if (typeof v !== "number" || !(v >= 0 && v <= 1)) {
                 return { error: "dimStrength must be a number from 0 to 1" };
+            }
+            break;
+        case "roundedCorners":
+            if (typeof v !== "boolean") {
+                return { error: "roundedCorners must be true or false" };
             }
             break;
         case "lightWallpaper":
@@ -668,9 +673,16 @@ export function formatDim(value) {
     return `${Math.round(value * 100)}%`;
 }
 
+// Whether windows' corners are rounded (SPEC.md §6.2): they are when
+// nothing says, as conf's hyprland.lua has them.
+export function roundedCorners(settings) {
+    return settings.roundedCorners ?? true;
+}
+
 // What reaches Hyprland, as the Lua table conf's hyprland.lua reads from
 // ~/.config/hypr/tide-appearance.lua: only what's set, so the config's own
-// stands for the rest. A number is all it holds, so it needs no escapes.
+// stands for the rest. A number and a boolean are all it holds, so it needs
+// no escapes.
 export function appearanceLua(settings) {
     const lines = [
         "-- Written by tide from appearance.json and appearance.local.json (tide SPEC.md §16).",
@@ -681,6 +693,9 @@ export function appearanceLua(settings) {
     if (settings.dimStrength !== undefined) {
         lines.push(`    dim_strength = ${settings.dimStrength},`);
     }
+    if (settings.roundedCorners !== undefined) {
+        lines.push(`    rounded_corners = ${settings.roundedCorners},`);
+    }
     lines.push("}");
     return lines.join("\n") + "\n";
 }
@@ -688,7 +703,8 @@ export function appearanceLua(settings) {
 // What reaches tidewm (SPEC.md §5.3), as the lines conf's tidewm config
 // includes from ~/.config/tidewm/tide-appearance.conf: only what's set, so
 // the config's own stands for the rest. tidewm's dim_inactive takes the
-// strength as Hyprland's dim_strength does, from 0 to 1.
+// strength as Hyprland's dim_strength does, from 0 to 1. tidewm's windows
+// are square, so roundedCorners has no line.
 export function appearanceConf(settings) {
     const lines = [
         "# Written by tide from appearance.json and appearance.local.json (tide SPEC.md §16).",
