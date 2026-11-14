@@ -22,14 +22,14 @@ import "lib/writes.mjs" as Writes
 // which conf's hyprland.lua reads, and applied with `hyprctl eval
 // conf_appearance.reload()`, tried again until it is (shell/lib/writes.mjs).
 // On tidewm (§5.3) it's ~/.config/tidewm/tide-appearance.conf, its
-// dim_inactive, default_border, shadows and shadow_blur_radius, which conf's
-// tidewm config includes, and
+// dim_inactive, default_border, the border's color (client.focused and the
+// rest), shadows and shadow_blur_radius, which conf's tidewm config
+// includes, and
 // `tide-msg reload` has tidewm read it, as InputData's. On tidesway it's
 // ~/.config/tidewm/tidesway.d/tide-appearance.conf, which tidesway reads
-// after the config and tidewm never does, with its corner_radius, its
-// floating windows' border and the border's color too. A border's color is
-// light's or dark's, so while there's one the file is written again as
-// that changes, on Hyprland and tidesway.
+// after the config and tidewm never does, with its corner_radius and its
+// floating windows' border too. A border's color is light's or dark's, so
+// while there's one the file is written again as that changes.
 Singleton {
     id: root
 

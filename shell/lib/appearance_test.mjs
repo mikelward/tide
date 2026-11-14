@@ -729,16 +729,15 @@ test("only a border or shadow setting that's set reaches Hyprland, and a border'
 });
 
 test("tidewm's file has what's set of the border's width, which windows cast a shadow and how far", () => {
-    assert.deepEqual(confLines(appearanceConf({ borderWidth: 6 })), ["default_border pixel 6"]);
+    assert.deepEqual(confLines(appearanceConf({ borderWidth: 6 })).slice(0, 1), ["default_border pixel 6"]);
     assert.deepEqual(confLines(appearanceConf({ borderWidth: 0 })), ["default_border pixel 0"]);
     assert.deepEqual(confLines(appearanceConf({ shadows: "none" })), ["shadows disable"]);
     assert.deepEqual(confLines(appearanceConf({ shadows: "floating" })), ["shadows floating"]);
     assert.deepEqual(confLines(appearanceConf({ shadows: "focused" })), ["shadows active"]);
     assert.deepEqual(confLines(appearanceConf({ shadows: "all" })), ["shadows all"]);
     assert.deepEqual(confLines(appearanceConf({ shadowSize: 20 })), ["shadow_blur_radius 20"]);
-    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, borderWidth: 2, shadows: "all", shadowSize: 0 }, false, false)),
-        ["dim_inactive 0.1", "default_border pixel 2", "shadows all", "shadow_blur_radius 0"]);
-    assert.equal(appearanceConf({ borderWidth: 6 }, false, true), appearanceConf({ borderWidth: 6 }, false, false), "light or dark, the same file: its colors are built in");
+    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, borderWidth: 0, shadows: "all", shadowSize: 0 }, false, false)),
+        ["dim_inactive 0.1", "default_border pixel 0", "shadows all", "shadow_blur_radius 0"]);
     // The defaults are tide.conf's
     const conf = readFileSync(new URL("../../tidewm/tide.conf", import.meta.url), "utf8");
     assert.match(conf, /^default_border none$/m);
@@ -746,7 +745,37 @@ test("tidewm's file has what's set of the border's width, which windows cast a s
     assert.doesNotMatch(conf, /^shadow_blur_radius/m, "tidewm's own is 8");
 });
 
-test("tidesway's file has tidewm's lines, and a border's on floating windows and its color too", () => {
+test("tidewm's file has a border's color, light or dark, while there's a border", () => {
+    const dark = `#${borderColor(true)}`;
+    const light = `#${borderColor(false)}`;
+    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, borderWidth: 2, shadows: "all" }, false, true)), [
+        "dim_inactive 0.1",
+        "default_border pixel 2",
+        `client.focused ${dark} ${dark} #ededf1 ${dark} ${dark}`,
+        `client.focused_inactive ${dark} ${dark} #ededf1 ${dark} ${dark}`,
+        `client.unfocused ${dark} ${dark} #ededf1 ${dark} ${dark}`,
+        "shadows all",
+    ]);
+    assert.deepEqual(confLines(appearanceConf({ borderWidth: 6 }, false, false)), [
+        "default_border pixel 6",
+        `client.focused ${light} ${light} #1f1f24 ${light} ${light}`,
+        `client.focused_inactive ${light} ${light} #1f1f24 ${light} ${light}`,
+        `client.unfocused ${light} ${light} #1f1f24 ${light} ${light}`,
+    ]);
+    // Each is a line tidewm takes: three to five colors, #RRGGBB or #RRGGBBAA
+    for (const line of confLines(appearanceConf({ borderWidth: 6 }, false, true)).slice(1)) {
+        assert.match(line, /^client\.(focused|focused_inactive|unfocused)( #[0-9a-f]{6}([0-9a-f]{2})?){5}$/);
+    }
+    // No border, no color, so light and dark are the same file
+    for (const settings of [{}, { borderWidth: 0 }, { shadows: "focused", dimStrength: 0.2 }]) {
+        assert.doesNotMatch(appearanceConf(settings, false, true), /client\./);
+        assert.equal(appearanceConf(settings, false, true), appearanceConf(settings, false, false));
+    }
+    assert.notEqual(appearanceConf({ borderWidth: 1 }, false, true), appearanceConf({ borderWidth: 1 }, false, false),
+        "with a border, the theme changes the file, so a flip writes it again");
+});
+
+test("tidesway's file has tidewm's lines, and a border's on floating windows too", () => {
     const dark = `#${borderColor(true)}`;
     const light = `#${borderColor(false)}`;
     assert.deepEqual(confLines(appearanceConf({ shadows: "focused", shadowSize: 12 }, true, true)),

@@ -4807,21 +4807,6 @@ PanelWindow {
                             }
                         }
 
-                        // tidewm's border colors are built in (its
-                        // config.h), so a border there isn't tide's one
-                        // quiet color.
-                        Text {
-                            visible: Compositor.tidewm && !Compositor.tidesway && AppearanceData.borderWidth > 0
-                            x: 10
-                            width: borders.width - 20
-                            wrapMode: Text.Wrap
-                            textFormat: Text.PlainText
-                            text: "On tidewm, the focused window's border is blue."
-                            color: Theme.fgDim
-                            font.family: Theme.font
-                            font.pixelSize: 12
-                        }
-
                         // Rounded corners (§6.2), which a click turns on
                         // or off. Hyprland's and tidesway's: tidewm's windows
                         // are square.

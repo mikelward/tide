@@ -1360,16 +1360,20 @@ See [`layouts.png`](docs/mocks/layouts.png).
 - **Borders.** None by default. The Borders page's **Border width** gives
   every window one, 0 to 16 px, in one quiet color, the palette's
   `surface-3`, the same on the focused window and the rest, as dimming is
-  the focus cue (the color is a guess, in `TODO.md`).
+  the focus cue.
   - Hyprland puts a tile inside its box by the border's width, so tiles
     get smaller and two borders meet at a seam; the tide layout's edge
     drag (§6.6) counts the border as the tile's. A floating window's
     border is outside it, and joins its resize zone (§6.4).
   - The shell writes the color for light or dark with the width, and
     again as the theme changes, while there is a border.
-  - tidewm's border colors are built into it (`config.h`): the focused
-    window's is blue. The page says so there. tidesway takes tide's color
-    (`client.focused` and the rest), and a floating window's border is its
+  - tidewm and tidesway take the color as sway's `client.focused`,
+    `client.focused_inactive` and `client.unfocused` lines, beside the
+    width. tidewm colors a border by the last of a line's five colors,
+    sway's `child_border`. A tidewm from before it had those lines
+    fails a reload over them, keeping the settings it had, and leaves
+    them out as it starts. An urgent window's stays the compositor's
+    own red. On tidesway a floating window's border is its
     own line, `default_floating_border`, in the file tidesway alone reads.
     sway gives a new default width to windows opened later, not those
     already open *(unverified on tidesway)*.

@@ -122,7 +122,7 @@ const OPTIONS = [
     cap: 'Where the tiles meet it looks as Focused window does: the focused tile is drawn last, so its shadow falls on its neighbor and the neighbor\'s is under it. Two tiles that both lack the focus are shaded on one side, by which opened first. The floating window keeps its shadow without the focus.' },
   { name: 'Border width: 4 px (0 by default), with Shadows: Focused window', b: 4, tile: 0, focused: 8, float: 0, grab: 8, seam: 4, zones: true,
     what: 'A border on every window, in one quiet color (the palette\'s surface-3), so 8 px where two tiles meet.',
-    cap: '<b>Resizing:</b> a floating window from its border and the 8 px outside it; the tiles from the 8 px of border between them. Each tile is 8 px narrower and shorter; a floating window keeps its size, its border outside it. The shadow starts outside the border. On tidewm the focused window\'s border is blue: its colors are built in.' },
+    cap: '<b>Resizing:</b> a floating window from its border and the 8 px outside it; the tiles from the 8 px of border between them. Each tile is 8 px narrower and shorter; a floating window keeps its size, its border outside it. The shadow starts outside the border.' },
 ];
 const root = document.getElementById('options');
 for (const o of OPTIONS) {
