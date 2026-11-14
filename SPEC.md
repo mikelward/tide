@@ -505,6 +505,13 @@ flowchart TD
   journal alone. On a text console, `tide-session` clears it and hides the
   cursor first, and shows the cursor again when the session ends. The
   login goes greeter, black, then the session's splash (below).
+- **The greeter leaves nothing on the console** (maintainer, 2026-11-14).
+  greetd runs it on the same text console. Its compositor's log and its
+  own lines went there, and showed for a moment as the greeter ended,
+  before the session cleared it. On a console, `tide-greeter` now clears
+  it with the cursor hidden, then runs under `systemd-cat`, so all of it
+  goes to the journal as `tide-greeter`. A greeter that fails brings the
+  console back, with its cursor, for agreety's text login.
 - **A login starts clean.** The user manager can outlive a logout
   (lingering, or a login straight after), and with it the last session's
   failed units. A shell that hit its start limit there is refused its
