@@ -5197,8 +5197,8 @@ tide's own, and links out for the rest:
 | Page | Contents |
 |---|---|
 | **Hardware** | |
-| Displays | per-output scale, position, and the single-window width and threshold; *advanced* opens `nwg-displays` |
-| Sound | output and input devices; *advanced* opens `pavucontrol` |
+| Displays | per-output scale and position; *advanced* opens `nwg-displays` |
+| Sound | output and input devices, with the level and mute of each in use; *advanced* opens `pavucontrol` |
 | Network | *advanced* opens `nm-connection-editor` |
 | Bluetooth | *advanced* opens `blueman-manager` |
 | Mouse | for every mouse, or one by name: speed, acceleration, scroll speed, natural scrolling, left-handed |
@@ -5206,43 +5206,137 @@ tide's own, and links out for the rest:
 | Keyboard | for every keyboard, or one by name: layouts and their variants, repeat delay and rate; below them, its shortcuts: the current bindings, generated from the config, where a click on one's keys records new ones |
 | Power | the battery, the power profile, and what closing the lid does |
 | **Windows** | |
-| Layouts | default layout per aspect ratio, `mfact`, master count, the rule for new windows |
-| Workspaces | the standing workspaces, home first; the apps that live on home; and the patterns that name a workspace from a window's title (§6.5) |
+| Layouts | where ultrawide begins, the default layout for it and for other monitors, `mfact`, master count, the width of a lone window for each aspect, and where new windows go (§6.1) |
+| Workspaces | the standing workspaces, home first; the apps that live on home; the patterns that name a workspace from a window's title; and each standing workspace's ask-for-a-name switch and pinned apps (§6.5) |
 | Floating | the rules that float a window by its class and title, and the floating windows no rule covers yet (§6.4) |
 | Borders | which windows cast a shadow and how far, the border's width, and rounded corners (§6.2) |
 | **General** | |
-| Appearance | dark / light / automatic, schedule, dim strength, wallpaper image or color, and its position, with a preview |
-| Bar | where the bar runs: the top edge or the bottom (§7.1) |
+| Appearance | light or dark: by the clock, by sunrise and sunset, or always one; the times and the location; dimming strength; each mode's wallpaper, an image or a color, and its position, with a preview (§15) |
+| Bar | where the bar runs, the top edge or the bottom, and which status icons it shows, in what order (§7.1) |
 | Notifications | Do not disturb on a schedule, whether critical alerts break through, and the muted apps and sites (§9) |
-| Clipboard | the history on or off, how many copies it keeps, and Clear history (§8.4) |
-| Clocks | the system's time zone; zones, order, labels, 24 h, dedupe-local |
-| Idle | the four timings, suspend on AC (off by default) |
+| Clipboard | the history on or off, how many copies it keeps and for how many days, and Clear history (§8.4) |
+| Clocks | the system's time zone; the bar's zones, their order and labels; 24-hour time; Hide a zone that's the local one (§7.3) |
+| Idle | the four timings, and Sleep when plugged in, off by default (§10) |
 | Start at login | the commands the session runs once as it starts |
 
-Hyprland-side settings are applied live through `hyprctl eval` and
-persisted in a generated Lua include, so the hand-written Hyprland config
-stays hand-written.
+Settings that reach the compositor are applied live, and kept in a
+generated file the hand-written config includes, so that config stays
+hand-written (§16.1).
 
-- **Mouse, Touchpad and Keyboard** are the first of these.
-  - The shell writes what's set to `~/.config/hypr/tide-input.lua`, as a
-    table in Hyprland's option names, and runs `hyprctl eval
-    'conf_input.reload()'`.
-  - `conf`'s `hyprland.lua` reads that file as data. It applies the
-    touchpad's `input.touchpad` options itself, then `apply-input.sh`
-    gives each mouse the mouse settings and each touchpad its own, one
-    device at a time (`hl.device`). So a left-handed mouse and a
-    right-handed touchpad can each have their own speed.
-  - `conf` applies the keyboard's options itself. Then `apply-input.sh`
-    gives each keyboard them, or its own.
+**The panel.**
+
+- **It opens like the launcher:** centered on the focused monitor over a
+  dimmed backdrop, from the launcher's Tide Settings action or
+  `qs -c tide ipc call settings toggle`. A page's own action in the
+  launcher, or `qs -c tide ipc call settings openPage mouse`, opens it on
+  that page, or moves an open one there. Over IPC, `open` and `close` do
+  what they say, and `shownPage` names the page showing.
+- Escape or a click on the backdrop closes it.
+- The pages run down its side in this table's order, under its groups'
+  headings: Hardware, Windows and General (the maintainer's grouping,
+  2026-11-01).
+  - Hardware is the machine and what's plugged into it, Windows is how
+    windows are placed, and General is the rest.
+  - A heading can't be chosen. Up and Down change the page, passing over
+    the headings, and stop at the first and last pages.
+  - The groups and each page's group are data in `settings.mjs`, so a new
+    page names its group. Floating's joins Windows, after Workspaces.
+  - The card is tall enough for every page and heading, and stays that
+    tall while a search drops some.
+- A page's link out sits at its foot, and Enter opens it. A page with
+  nothing of its own yet is only that link, with a line saying what the
+  bar already does.
+- **Search:** a field tops the sidebar, saying *Search settings*. It has
+  the keyboard as the panel opens, and starts empty each time, from
+  `openPage` too.
+  - The sidebar keeps the pages the query finds, under their headings. A
+    heading left with no page hides.
+  - A page is found by its label and keywords, and its sections' (so
+    *shortcuts* finds Keyboard). Each word typed must start a word of
+    them, in any order. `settingssearch.mjs` matches, the same file tide
+    for macOS and tide for Chrome use, so a query finds the same pages on
+    each.
+  - If the page showing is dropped, the first page kept shows. A page
+    found only by a section opens scrolled to it.
+  - Up and Down move among the kept pages. A click on a page keeps the
+    keyboard in the field.
+  - Escape empties the field, then closes the panel.
+  - Enter opens the page's app only with the field empty: mid-search it
+    would run an app the query never named.
+  - Finding nothing, the sidebar says *No settings match*, and the page
+    showing stays. Emptying the field shows every page, and the page
+    showing stays.
+
+**The pages,** in the table's order. What §16.1 says of every page, how
+a change is kept, checked and applied, isn't said again here; a page names
+only where it differs. Each page's IPC calls are `qs -c tide ipc call
+settings NAME ARGS...`; most answer why not, or an empty string.
+
+- **Displays** sets each monitor's scale and where it goes beside the
+  others, in `outputs.json` and `outputs.local.json`.
+  - A monitor is named by its description as `hyprctl monitors` gives it,
+    not its port, so its settings follow it from port to port.
+  - The page lists the monitors `hyprctl monitors all -j` gives, a closed
+    lid's panel included, then any with settings that isn't connected. It
+    lists them again as it shows and once a change applies, so a scale
+    Reset hands back to Hyprland shows as Hyprland's. On tidewm (§5.3) the
+    list is `GET_OUTPUTS`', each described from its make, model and
+    serial as Hyprland describes it, so a monitor's settings are the same
+    under either.
+  - − and + step a scale a quarter, from 0.5 to 3. Hyprland may round it to
+    one that divides the screen evenly; a scale between quarters goes to
+    the nearest one that way first. A scale set past either end by hand
+    stays put on a press that would move it back across.
+  - ‹ and › step its place: automatic, to the right, to the left, above or
+    below the others. An exact position is nwg-displays' (*advanced*). On
+    tidewm it runs as on sway, saving to `~/.config/sway/outputs`, which
+    tide's tidewm config (`tidewm/tide.conf`) and conf's include after
+    tide's own outputs file.
+  - Reset clears what `outputs.local.json` sets for a monitor. It shows
+    only when there's something there to clear. A setting in
+    `outputs.json` still applies.
+  - It writes `tide-outputs.lua` (§16.1), each monitor as `desc:` and its
+    description. tide's Hyprland config applies each with `hl.monitor`,
+    leaves a closed lid's panel off, and lets `hyprland.local.lua` win for
+    a monitor it sets. Hyprland 0.56 leaves a monitor whose rule hasn't
+    changed alone, so applying the file at start costs nothing.
+  - The width of a lone window isn't per monitor here: the Layouts page
+    sets it by aspect.
+  - Over IPC, `setDisplay DESCRIPTION scale SCALE` and `setDisplay
+    DESCRIPTION position PLACE` set one. A scale of `auto` clears this
+    machine's, leaving `outputs.json`'s or else Hyprland's own. A place is
+    `auto`, `auto-right`, `auto-left`, `auto-up` or `auto-down`.
+    `resetDisplay DESCRIPTION` does what Reset does.
+
+- **Sound** lists the output and input devices as the volume popover does
+  (§7.4), with the level and mute of the one in use of each. A click on a
+  device makes it the one in use, through Quickshell's PipeWire module;
+  tide keeps no file of its own for it. Over IPC: none.
+
+- **Network** and **Bluetooth** are each only a line and their link out:
+  Wi-Fi and VPNs, and connecting a paired device, are in the bar's menus
+  (§7.4). Over IPC: none.
+
+- **Mouse, Touchpad and Keyboard** set input devices, in `input.json` and
+  `input.local.json`.
+  - They write `tide-input.lua` (§16.1), a table in Hyprland's option
+    names. tide's Hyprland config applies the touchpad's `input.touchpad`
+    options itself, then `apply-input.sh` gives each mouse the mouse
+    settings and each touchpad its own, one device at a time
+    (`hl.device`). So a left-handed mouse and a right-handed touchpad can
+    each have their own speed.
+  - It applies the keyboard's options itself. Then `apply-input.sh` gives
+    each keyboard them, or its own.
   - **What isn't set shows tide's own default:** a US layout, right-handed,
-    and Hyprland's scrolling, as anyone gets them. Your own choices go in
-    `input.json`, as conf's do, so the page shows them as set.
+    and Hyprland's scrolling, as anyone gets them. Shared choices go in
+    `input.json`, as conf's do, so the page shows them as set; the pages
+    write `input.local.json`.
   - A Mouse, Touchpad or Keyboard page sets every device of its kind, or
     one by name. ‹ and › step through the ones connected and the ones with
     settings of their own of that kind, and Reset clears them.
   - One device's settings apply over its kind's. They go in the file's
     `devices` table, keyed by the name `hyprctl devices` gives it, and
-    `conf` applies them with `hl.device`, so two mice can differ.
+    the config applies them with `hl.device`, so two mice can differ.
   - One name can be a mouse and a keyboard both, as a wireless receiver
     is. It can have a mouse's settings and a keyboard's, since none share a
     name, and Reset on one page leaves the other's.
@@ -5279,11 +5373,12 @@ stays hand-written.
   - Hyprland 0.56.2 leaves a keyboard whose options haven't changed alone
     (`applyConfigToKeyboard`). So applying the settings again doesn't put
     a keyboard back on its first layout.
-  - Only what's set reaches Hyprland. The rest stays as `conf`'s config
-    has it, and the pages show those values until they're changed.
+  - Only what's set reaches Hyprland. The rest stays as the Hyprland
+    config has it, yours or tide's (§6.8), and the pages show those values
+    until they're changed.
   - A mouse's **acceleration** is an amount from 0 to 4, stepped 0, ¼, ½,
-    ¾, 1, 1½, 2, 2½, 3, 4. 1 is libinput's adaptive curve, which `conf`
-    sets; 0, Off, is libinput's `flat` profile, the same gain at every
+    ¾, 1, 1½, 2, 2½, 3, 4. 1 is libinput's adaptive curve, which tide's
+    config sets; 0, Off, is libinput's `flat` profile, the same gain at every
     speed, with the speed as sensitivity; 2 doubles how fast a fast move speeds up, and how
     far.
     - Hyprland takes it as a curve, `accel_profile = "custom <step>
@@ -5301,7 +5396,7 @@ stays hand-written.
       and within libinput's 64.
     - A curve ignores sensitivity, so the speed is built into it. A mouse
       with its own speed, or its own acceleration, gets its own curve.
-      With no acceleration set, the speed is sensitivity on `conf`'s
+      With no acceleration set, the speed is sensitivity on the config's
       adaptive curve, as before.
     - libinput's adaptive curve works in units normalized to 1000 dpi
       and a curve in the device's own. They match for a mouse libinput
@@ -5311,15 +5406,15 @@ stays hand-written.
   - A keyboard layout and its variant are typed, as XKB's names (`us`, or
     `us,de` for two; `dvorak`, or none), and set with Enter. There's one
     variant, or one for each layout, a keyboard's own paired with every
-    keyboard's where it sets only one. Anything else is refused, and the
-    page says why; in the files, it's an error at load.
+    keyboard's where it sets only one. Anything else is refused
+    (§16.1).
   - `Super+Alt+Space` moves every keyboard to the layout after the main
     keyboard's (§6.6), on the lock screen too. Setting one layout on all
     of them keeps them in step. Hyprland 0.57.1's own `switchxkblayout all
     next` moves each on from its own layout, so a keyboard plugged in after
     a switch would stay out of step.
   - Hyprland 0.56.2's Lua has no dispatcher or query for layouts, so
-    `conf`'s `next-layout.sh` reads `hyprctl devices -j` and runs
+    tide's `next-layout.sh` (§6.8) reads `hyprctl devices -j` and runs
     `hyprctl switchxkblayout all` with the layout's index. A click on the
     bar's layout label (§7.4) does the same from the shell: it reads the
     main keyboard afresh first, since Hyprland can make another keyboard
@@ -5327,50 +5422,15 @@ stays hand-written.
   - On tidewm (§5.3), the label, and the lock's and the greeter's layout names, read
     the first keyboard tidewm's `GET_INPUTS` lists, again on each of its
     input events, and the click switches with tidewm's `input
-    type:keyboard xkb_switch_layout N`, as conf's key there does with
-    `next`.
+    type:keyboard xkb_switch_layout N`, as `tidewm/tide.conf`'s key does
+    with `next`.
   - `Super+Space` would be GNOME's key, but it's the launcher.
   - `hyprland.local.lua` still wins, for a single device or an input
     option it sets.
-  - A change the shell can't save is reported, as an idle time's is. One
-    it can't write or apply is reported once, and tried again every 30
-    seconds while the shell runs.
-  - The shell applies the file as it starts, too, even unchanged. Hyprland
-    outlives the shell, so a shell restarted before its retry would
-    otherwise leave a change unapplied, and a reload costs nothing.
-
-- **Clocks** sets the bar's zones, their order and their labels (§7.3).
-  It also sets the system's time zone, which is local's.
-  - The time zone row shows the local zone's ID. One typed and set with
-    Enter runs `timedatectl set-timezone`, for systemd-timedated to set.
-  - It's checked first as a zone the bar would take is: a canonical ID
-    (§7.3). Anything else is refused, and the page says why.
-  - systemd v258's polkit policy makes setting it `auth_admin_keep`
-    (`org.freedesktop.timedate1.set-timezone`), so it asks for a password
-    through the session's polkit agent. A failure, a cancel included, is
-    shown on the page and logged.
-  - Once it's set, the clocks are looked up again: `tide-tz` reads the
-    local zone as it starts, so the bar's local clock follows at once.
-  - With `$TZ` set in the session, local stays `$TZ`'s zone (§7.3), and the
-    page says so: the system's zone changes, the bar's local clock doesn't.
-  - It shows the list the bar takes: `clocks.local.json`'s, else
-    `clocks.json`'s, else the defaults. The first change copies that list
-    into `clocks.local.json`, since a local list replaces the shared one
-    whole (§16.1).
-  - A zone is typed as its ID and added with Enter, just before local,
-    labeled with its city. One that isn't a canonical ID (§7.3), or is
-    listed already, is refused, and the page says why.
-  - A label is typed and set with Enter. The arrows move a clock, and the
-    bin takes it out; with none left, hovering the clock shows nothing.
-  - The local zone is marked as local in the list, and as hidden while
-    dedupe-local hides it from the hover line.
-  - A change names the clock it was made on by its place and zone, so a
-    hand edit that has moved the clocks since is refused, not built on.
-  - While either file can't be read or doesn't parse, the bar keeps its
-    last good list, and the page refuses changes, naming the file.
-  - Two switches turn 24-hour time and hiding the local zone's clock on
-    or off (§7.3). A click writes it to `clocks.local.json`, keeping the
-    file's list, and the bar changes at once, with no lookup.
+  - Over IPC, `setInput SECTION KEY VALUE` sets one of a page's settings
+    (`setInput mouse leftHanded false`), `setDevice NAME KEY VALUE` one
+    device's own, and `clearDevice NAME` clears all of a device's own, as
+    Reset on each of its pages would.
 
 - **Keyboard's shortcuts** list the bindings Hyprland has now, from
   `hyprctl binds -j`, as the shell starts and again as the Keyboard page
@@ -5390,23 +5450,26 @@ stays hand-written.
   - A Lua binding's dispatcher says nothing of what it does: `__lua` on
     0.56.2, and on 0.57.1 `HL.Dispatcher(NAME)` or `function: ADDRESS`,
     with a registry number as its argument. So what one does is only its
-    `description`, which `conf` gives in `hl.bind`'s options. One without
-    says so.
+    `description`, which tide's Hyprland config gives in `hl.bind`'s
+    options. One without says so.
   - Each shows its keys as they're printed on the keyboard (`Super+\`,
     `Super+PgUp`), in the config's order, with its submap if it has one.
   - A binding turned off with `set_enabled(false)` still shows. 0.57.1's
-    listing includes it and says nothing of it, and `conf` turns none off.
+    listing includes it and says nothing of it, and tide's config turns
+    none off.
   - A Lua binding by keycode (`SUPER + code:28`) shows its code. 0.56.2's
     listing gave neither its key nor its code, so there it shows only that
     it is one.
-  - On Hyprland, `conf` names most bindings, and those come first and can
-    change. `conf` lists each one's name, what it does, its default keys
-    and its keys now in `tide-keys.json`, in its instance's runtime
+  - On Hyprland, tide's config names most bindings, and those come first
+    and can change. It lists each one's name, what it does, its default
+    keys and its keys now in `tide-keys.json`, in its instance's runtime
     directory. The rest, which can't change, follow: the mouse, the media
     and brightness keys, `Super+0…9`, the Super tap, a pinned window's app
-    keys, and the resize submap's. With a `conf` from before named
-    bindings, the whole list stays read-only.
-  - On tidewm, `conf` names them with `bindsym --name`, by the same names,
+    keys, and Esc in the `tide-keys` submap (below). tide has no resize
+    submap. With a config from before named bindings, the whole list stays
+    read-only.
+  - On tidewm, `tidewm/tide.conf` names them with `bindsym --name`, by the
+    same names,
     and tidewm's `GET_NAMED_BINDINGS`, through `tide-msg --type
     get_named_bindings`, lists each one's default keys and its keys now.
     The page says what each does by its name (`next_keyboard_layout` is
@@ -5414,7 +5477,7 @@ stays hand-written.
     stay fixed. With a tidewm from before named bindings, the list stays
     read-only.
   - A click on a binding's keys records new ones. The page puts Hyprland
-    in `conf`'s `tide-keys` submap, or tidewm in its `tide-keys` mode,
+    in tide's `tide-keys` submap, or tidewm in its `tide-keys` mode,
     where no binding but Esc takes a key,
     so the keys pressed reach the page, not the bindings. The next key
     pressed with Super, Ctrl or Alt replaces the binding's keys; a
@@ -5429,7 +5492,7 @@ stays hand-written.
     2026-11-10), so a session can always be fixed from and left. Off
     refuses them, as does a swap that would leave one with none: "Terminal
     needs a shortcut". A file edited by hand to turn one off is read as
-    leaving it alone, and `conf` keeps its defaults, saying so.
+    leaving it alone, and the config keeps its defaults, saying so.
   - Start from sets every key to another tiling window manager's defaults:
     tide's own, dwm, i3, sway, xmonad or bspwm (`shell/lib/keymaps.mjs`).
     Each maps that window manager's default keys onto the binding that does
@@ -5442,46 +5505,312 @@ stays hand-written.
   - Your keys are in `keys.json` and `keys.local.json` (§16.1), as
     `{ "preset": "dwm", "keys": { "terminal": ["SUPER + D"], "lock": [] } }`:
     the preset, and a binding's keys in place of the preset's, an empty
-    list for off. A binding back at its preset's keys leaves the file. The shell writes them to
-    `~/.config/hypr/tide-keys.lua`, the preset's with yours over them, and
-    runs `hyprctl eval 'conf_keys.reload()'`, which binds them, then lists the bindings again.
-    With no keys of yours and no file, it writes nothing, so an older
-    `conf` is left alone.
+    list for off. A binding back at its preset's keys leaves the file.
+  - The shell writes them to `tide-keys.lua` (§16.1), the preset's with
+    yours over them, and lists the bindings again once they're bound. With
+    no keys of yours and no file, it writes nothing, so an older config is
+    left alone.
   - On tidewm, they're written to `~/.config/tidewm/tide-keys.conf`, a
     `rebind NAME KEYS...` line each, `rebind NAME none` for off, which
-    `conf`'s tidewm config includes last, and `tide-msg --if-current
-    reload` applies them (§7.4). Keys are kept as Hyprland writes them, so the same files serve
-    both; a key tidewm can't bind, as a keycode, is left out and logged.
-    tidewm skips a name its config doesn't have. The file is written only
-    once tidewm has answered `GET_NAMED_BINDINGS`, as a tidewm from before
-    named bindings would reject its config over a `rebind` line. As with the other files
-    tidewm reads, a shell start reloads it only if this session's record
-    says tidewm hasn't read the file as it is.
+    `tidewm/tide.conf` includes last (§16.1). Keys are kept as Hyprland
+    writes them, so the same files serve both; a key tidewm can't bind, as
+    a keycode, is left out and logged. tidewm skips a name its config
+    doesn't have. The file is written only once tidewm has answered
+    `GET_NAMED_BINDINGS`, as a tidewm from before named bindings would
+    reject its config over a `rebind` line.
   - Keys are recorded by what the keyboard layout says the key is, as
     Hyprland binds them. With Shift, Qt reports the shifted symbol, which
     is turned back into its key on a US layout's symbols (`!` is `1`).
+  - Over IPC, only `openPage keys`: no call changes a binding.
 
-- **Layouts** sets §6's: where ultrawide begins, the mode a new workspace
-  starts in on an ultrawide and on any other monitor, each mode's `mfact`
-  and master count, and the width of a lone window for each aspect.
+- **Power** shows the battery and sets the power profile and what closing
+  the lid does.
+  - The battery's charge and time left are UPower's, as the bar's
+    battery popover shows them (§7.4).
+  - The power profiles are power-profiles-daemon's, chosen as in that
+    popover; it keeps the choice for the whole machine. As the page shows,
+    the shell lists the system bus's names (`busctl --system list
+    --acquired --activatable`). Without `net.hadess.PowerProfiles` or
+    `org.freedesktop.UPower.PowerProfiles` among them, running or
+    activatable, the page says power-profiles-daemon isn't there and
+    offers none.
+  - **Closing the lid** with no other monitor suspends, locks or does
+    nothing: `lidClose` in `power.json` and `power.local.json`, `suspend`
+    by default. ‹ and › step through them.
+  - Suspend is logind's own (`HandleLidSwitch=suspend`), so it needs nothing
+    from tide. For Lock and Do nothing, the shell starts
+    `tide-lid-inhibit.service`, which holds logind's `handle-lid-switch`
+    inhibitor (`systemd-inhibit --mode=block`), so logind leaves the lid
+    alone. For Suspend it stops it. It's `PartOf=graphical-session.target`,
+    so it goes at logout.
+  - The unit counts as started only once logind has granted the inhibitor:
+    `systemd-inhibit` runs its command only then, and that command is
+    `systemd-notify --ready --exec`, which then becomes the `sleep` that
+    keeps it (`Type=notify`; `--exec` needs systemd 254). A refusal exits
+    before it, so `systemctl start` fails, and the shell reports it and
+    tries again, rather than taking a lid logind still suspends on for
+    held.
+  - The shell writes the choice to `~/.config/hypr/tide-power.lua`. tide's
+    Hyprland config reads it as the lid closes, so it needs no reload. With
+    no other monitor, Lock runs `loginctl lock-session`, and Do nothing
+    leaves the panel as it is. With another monitor, the lid turns the
+    panel off, as it always has, whichever is chosen.
+  - In tidewm's session (§5.3), `tidewm/tide.conf` runs `tide lid-closed`
+    as the lid closes, and `tide lid-opened` as it opens, even locked. Each
+    finds the laptop's panel as `hyprland.lua` does: `$HYPR_INTERNAL_OUTPUT`,
+    or the first output named `eDP`, `LVDS` or `DSI`. With another monitor
+    on, `lid-closed` turns the panel off, and tidewm moves its windows to
+    the others. With none, it reads the same file, and Lock locks, as
+    `tide lock` does. If it can't tell whether another monitor is on, it
+    locks for Lock. `lid-opened` turns the panel back on if it's off.
+  - The shell puts the unit right as it starts, too, since the unit
+    outlives a shell that died with it the other way. A `systemctl` that
+    fails is retried as a file is (§16.1).
+  - polkit lets an active local session take the inhibitor
+    (`org.freedesktop.login1.inhibit-handle-lid-switch`, `allow_active`).
+    The unit runs in the user's manager, outside the session, as GNOME's
+    power daemon does; whether polkit grants it there is for a live session
+    to check (TODO.md).
+  - Over IPC, `setPower lidClose suspend`, `lock` or `nothing` sets it.
+  - **Cost and reliability:** nothing to pay. `systemd-inhibit` and
+    `busctl` ship with systemd; power-profiles-daemon is optional, and
+    without it the page says so. The busctl listing runs only as the page
+    shows.
+
+- **Layouts** sets §6's: where ultrawide begins, the layout a new
+  workspace starts in on an ultrawide and on any other monitor, each
+  layout's `mfact` and master count, and the width of a lone window for
+  each aspect.
   - They're in `layouts.json` and `layouts.local.json`, in `setup()`'s
     names camelCased (`ultrawideAspect`, `defaultMode`, `modes`,
-    `single`). The shell writes what's set to
-    `~/.config/hypr/tide-layouts.lua` and runs `hyprctl eval
+    `single`). The files call a layout a mode. The shell writes what's
+    set to `~/.config/hypr/tide-layouts.lua` and runs `hyprctl eval
     'tide_layout.reload()'`, and the layout reads the file again.
-  - A change reaches every workspace. Each keeps its mode, takes the new
+  - A change reaches every workspace. Each keeps its layout, takes the new
     `mfact` and master count, and loses any it was given with the keys.
     The active one is laid out at once, and the rest as they're shown.
   - Since a reload resets those, the shell applies the file as it starts
-    only when it would change: the layout read it as the config loaded.
+    only when it would change, unlike the other pages (§16.1): the layout
+    read it as the config loaded.
   - − and + step to the next mark. A value set by hand between marks goes
     to the nearest one that way first, and one past an end stays put on a
     press that would move it back across.
-  - The bar's guess at a workspace's mode before its first announcement
+  - The bar's guess at a workspace's layout before its first announcement
     follows the settings too.
   - ‹ and › step through where a new window goes (§6.1): the end of the
     stack, its top, after the focused window, or in as the master. It's
     `newWindow` in the files, and takes effect from the next new window.
+  - Over IPC, `setLayout PATH VALUE` sets one by its path in the files:
+    `setLayout modes.tile.mfact 0.6`, a layout for `defaultMode.normal` or
+    `defaultMode.ultrawide`, or `end`, `top`, `next` or `master` for
+    `newWindow`.
+
+- **Workspaces** sets §6.5's, in `workspaces.json` and
+  `workspaces.local.json`.
+  - `standing` is the list of standing workspaces, the first being home.
+    It's `in`, `re`, `oc` and `me` by default. An empty one, or one that
+    names a workspace twice, is an error at load naming it.
+  - `inApps` is the list of apps that live on home: programs and web
+    addresses, which start there at login, and window classes (§6.5).
+    `conf`'s shared file lists `scripts`' launchers for mail, chat,
+    calendar and music. The page's field asks for a program or web
+    address, such as `gmail`.
+  - `namePatterns` is the list of title patterns, tried in order.
+  - `muted` is the list of muted apps and sites (§9, *Muted apps*): app
+    IDs, or `site:HOST`, empty by default. A bad entry is an error at load
+    naming it, and the rest of the list still applies, unlike the other
+    settings here. tide for macOS reads the same key.
+  - `workspaceSettings` is each workspace's `askForName` and `pinnedApps`
+    (§6.5). With neither file setting it, home asks for a name and nothing
+    is pinned. `conf`'s shared file pins mail, chat and calendar on `in`,
+    which asks.
+  - The lists are lists, so a `.local` file's replaces the shared one whole
+    (§16.1). So does a `.local` file's `workspaceSettings`, an object, so a
+    machine's is exactly what it says.
+  - A pattern that doesn't compile or has no capture group is refused
+    (§16.1).
+  - The page lists `standing`, `inApps` and `namePatterns`, as the files
+    in effect have them; `muted` is on the Notifications page.
+  - Below them, each standing workspace has a section of its own, home's
+    marked: a "New windows ask for a workspace" switch, its
+    `askForName`, and its pinned apps, a list with a bin per entry and a
+    field that asks for a program or web address, such as `gmail`.
+    - The first change copies the `workspaceSettings` in effect into the
+      `.local` file, as a list's first change does. With neither file
+      setting it, that's home asking, so turning on another workspace's
+      switch leaves home's on.
+  - Each entry has a bin that takes it out, and the standing workspaces and
+    the patterns, whose order counts, have arrows that move one. The first
+    standing workspace is marked as home, so moving another first makes it
+    home.
+  - An entry typed at a list's foot is added with Enter. One listed already,
+    ignoring case, or one the files wouldn't take is refused, and the page
+    says why: a name with quotes, a pattern that doesn't compile or has no
+    capture group. So is taking out the last standing workspace.
+  - It writes `tide-workspaces.lua` (§16.1), whose home and rules tide's
+    Hyprland config applies.
+  - Over IPC, `addWorkspaceItem KEY ITEM`, `moveWorkspaceItem KEY ITEM
+    STEP` and `removeWorkspaceItem KEY ITEM` do what the page does, and so
+    do `setWorkspaceAskForName NAME true|false`, `addPinnedApp NAME ITEM`
+    and `removePinnedApp NAME ITEM`.
+
+- **Floating** lists the rules that float a window (§6.4), in
+  `floating.json` and `floating.local.json` (`rules`).
+  - A rule is `{"class": "org.gnome.Calculator"}`, with an optional
+    `title`. The class is the window's, ignoring case, as text, not a
+    pattern. The title is a regular expression found anywhere in the title.
+  - `conf` installs no `floating.json`, so a machine's rules are its own,
+    in `floating.local.json`. A list replaces the shared one whole (§16.1).
+  - A rule with no class, a key other than these two, a title that
+    doesn't compile, or one listed already is refused, naming `rules` and
+    the entry (§16.1). So is a list of more than 64.
+  - A title pattern runs in two engines: JavaScript's on the page, with
+    the `u` flag, and RE2's in Hyprland. The shell translates it once into
+    each one's spelling of the same meaning, writes RE2's to the file, and
+    matches with JavaScript's.
+  - `\w` is Unicode's letters, marks and numbers, and `_`. `\d` is its
+    decimal digits, so `٣` is one and `²` isn't. `\s` is JavaScript's
+    whitespace, the no-break and wide spaces and the BOM included. Their
+    capitals are the rest.
+    - RE2 spells them `\p{L}\p{M}\p{N}_` and `\p{Nd}`. Qt's JavaScript
+      parses `\p{…}` but has no tables for it (Qt 6.10's
+      `stubs/yarr/YarrUnicodeProperties.cpp`), so the shell lists them as
+      ranges in `shell/lib/unicode.mjs`.
+    - Those ranges come from Unicode 16.0.0's `UnicodeData.txt`, pinned by
+      its SHA-256 (`make unicode UNICODE_DATA=…`), so every host makes the
+      same module. The tests check the module, not the host's tables.
+    - RE2 has its own Unicode version, so the two can differ on
+      characters added since the older one.
+  - `\b` and `\B` are an ASCII word boundary in both, unlike `\w`. So in
+    `café`, `caf\b` matches, since `é` isn't an ASCII word character, and
+    `café\b` doesn't. `^caf\w$` matches it.
+  - `.` is anything but a newline in both. JavaScript's would also stop
+    at `\r` and the line separators, so it's written `[^\n]`.
+  - Also taken: literals, `^`, `$`, `|`, groups and `(?:…)`, the repeats
+    and their lazy forms with counts up to 1,000 (RE2's limit), and
+    classes. So are the syntax characters' escapes, `\n \t \r \f \v`
+    and `\xHH`.
+  - Anything else is refused, naming it. That covers a lookaround, a named
+    group, a backreference, `[:alpha:]`, `\W` inside a class, and an
+    escape the `u` flag refuses, such as `\q` or `\!`.
+  - So is a class range from or to `\w`, `\d` or `\s`, such as `[\w-.]`
+    or `[+-\d]`, which the `u` flag refuses too. Spelled out, RE2 would
+    refuse it or read it as another range. `\-` is a hyphen anywhere in a
+    class, and so is `-` first or last: `[\w.-]`.
+  - It writes the rules to `tide-floating.lua` (§16.1).
+  - Each rule is Hyprland's whole-text match: the class as `(?i)` and the
+    class quoted, the title as `[^\n]*(?:PATTERN)[^\n]*`, or `.*` for
+    none.
+  - tide's Hyprland config makes a window rule for each, `float = true`,
+    named `tide-float-N`. Hyprland 0.56.2 can't drop a rule. Adding one by a
+    name it has merges into that one (`hlWindowRule`): each match given
+    replaces the old, a match not given stays, and each effect is added
+    again. So it gives both matches every time and `float` only the first
+    time, and turns off the names a shorter list no longer needs.
+  - A new rule applies to every matching window, the ones already open
+    included. That's the design, chosen over rules for new windows only.
+  - Hyprland floats a window by a rule only as it opens: `float` is a
+    static effect. So once a change applies, the shell floats the tiled
+    windows open now that the new rules cover and nothing covered before,
+    with `hl.dsp.window.float({ action = "enable" })`.
+    - "Before" counts the config's own dialog rules as well as the old list.
+      A window tiled by hand under any rule stays tiled, so a broader rule
+      doesn't re-float a tiled Save As.
+    - Windows on every workspace and monitor are floated, minimized ones
+      included.
+    - A fullscreen or maximized window is left as it is, as is a pinned
+      one, which floats already.
+    - A list only reordered, the same rules applied again, or a rule taken
+      out floats nothing. Taking one out tiles nothing either.
+  - The shell records the rules it last swept in
+    `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/tide-floating-swept.json`.
+    A shell that restarts after applying a change, but before sweeping it,
+    sweeps from the record. A new Hyprland, at the next login, has no
+    record: every window then met the rules in effect as it opened.
+  - The page shows the rules, with arrows that move one and a bin that
+    takes it out. A class and a title typed at the foot are added with
+    Enter. A change names a rule by its place, class and title (§16.1).
+  - *Floating now* lists the floating windows no rule covers, one per
+    class: `floating` and `class` from Hyprland's client list, the title
+    from Quickshell's toplevel, which follows `windowtitlev2` as the
+    client list Quickshell keeps doesn't. Applying a rule and Super+Alt+F
+    read a window the same way.
+    The config's own dialog rules count. A window with no class can't be
+    named, so it isn't listed.
+  - *Also floating* lists every other floating window, one each: those a
+    rule covers already, the config's dialog rules among them, so a portal's
+    file chooser or an app's own Open dialog is there. Each says whose
+    rule floats it, *Built in* or *Your rule*.
+    - *Details* fills the fields as *Always float* does, and opens *More
+      about this window*. That shows a window's class and title, and what
+      else the compositor says of it, to look up or copy: a dialog that
+      misbehaves can be named in a bug report, or matched by a rule.
+  - *Always float* adds nothing yet. It fills the fields at the foot with
+    the window's class and a pattern for its exact title: the title with
+    its syntax characters escaped (`.` as `\.`), between `^` and `$`.
+    - The title field takes the keys with its text selected, to trim, or
+      clear for the whole class.
+    - Enter or *Add* adds the rule. Esc clears the fields.
+    - When a rule covers the window already, the page names it under the
+      fields.
+    - *More about this window*, under the fields, lists what else
+      Hyprland 0.56.2's client list says of it, read-only. That's its
+      initial class and title, XWayland, content type, XDG tag and
+      description, and tags, each only when it says something.
+      - Nothing matches on these yet. They show when a window would need
+        one (TODO.md, *More matchers for float rules*).
+      - The section starts closed, and stays as you leave it for as long
+        as the shell runs.
+  - `Super+Alt+F` runs `qs -c tide ipc call floating remember`. It opens
+    the panel on the Floating page with the fields filled for the focused
+    window, as *Always float* fills them.
+    - A focused window with no class, or none at all, is a notification
+      saying so, since a key has nowhere else to show it.
+    - Once you add the rule, a tiled window it covers floats, as any new
+      rule's does.
+  - The question after floating by the keys (§6.4) comes from tide's
+    Hyprland config. Its float keys run a Lua function that toggles
+    floating. When that leaves the window floating, it posts
+    `custom>>tide-floated>>ADDRESS` (`hl.dsp.event`).
+    - Hyprland 0.56.2's own `changefloatingmode` can't stand in. A
+      `Super`+drag floats a tiled window as it starts and tiles it again as
+      it ends (`DragController`), and the shell's own sweep sends it too.
+    - The shell asks through `notify-send --wait` with two actions, as the
+      network prompt does (§5.6). *Always float* goes through the page's
+      add, *Edit rule…* through `Super+Alt+F`'s fill-in.
+    - The classes not to ask about are kept in
+      `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/tide-floating-declined.json`,
+      so a restarted shell doesn't ask again, and the next login starts
+      with none.
+    - In tidewm's session (§5.3), `tidewm/tide.conf`'s float keys bind
+      tidewm's `floating toggle`, and tidewm sends a `binding` event before
+      it runs a binding's command. The shell listens for those. After one
+      whose command toggles or enables floating on the focused window, the
+      next window event decides: the focused window's `floating` event, with
+      it floating, is the keys'. Any other means the keys floated nothing,
+      so no later event is taken for theirs.
+    - A `Super`+drag runs no binding, so it never asks there either. The
+      declined classes are kept in
+      `$XDG_RUNTIME_DIR/tide-floating-declined-SOCKET.json`, `SOCKET` the
+      name of tidewm's IPC socket (`SWAYSOCK`).
+  - Over IPC, `addFloating CLASS TITLE`, `moveFloating CLASS TITLE STEP`
+    and `removeFloating CLASS TITLE` do what the page does, a TITLE of ""
+    for none.
+  - **Cost and reliability:** nothing to pay, and nothing new to run. The
+    page reads the client list Quickshell already keeps; an apply is one
+    `hyprctl eval` per change.
+
+- **Borders** sets §6.2's shadows, border width and rounded corners, in
+  `appearance.json` and `appearance.local.json`, beside the Appearance
+  page's settings. They reach the compositor in `tide-appearance.lua`, as
+  dimming strength does.
+  - They're `shadows` (`"none"`, `"floating"`, `"focused"` or `"all"`),
+    `shadowSize` (0 to 32), `borderWidth` (0 to 16) and `roundedCorners`,
+    which was the Appearance page's.
+  - ‹ and › step through the shadows, and − and + a pixel at a time.
+    Shadow size shows only while a window casts one.
+  - Over IPC, `setAppearance shadows`, `shadowSize`, `borderWidth` or
+    `roundedCorners`, then the value, sets one.
 
 - **Appearance** sets §15's settings, in `appearance.local.json`.
   - It shows light or dark now, and until when, with a button to switch
@@ -5540,24 +5869,14 @@ stays hand-written.
     and Kiruna. That's about 8,500 cities in 440 KB. `make cities`
     rebuilds it from download.geonames.org with
     `shell/cities/generate.mjs`; tide for macOS copies it.
-  - A setting that wouldn't work with the rest, such as the same time for light and dark, is refused, and
-    the page says why. So is a file that doesn't parse, which is left as
-    it is.
-  - − and + step the inactive dim's strength (§6.2) a point at a time,
-    from none to 50%. It's `dimStrength` in the files, 0 to 1, and shows
-    `conf`'s 0.12 until it's set.
-  - The shell writes a dim that's set to `~/.config/hypr/tide-appearance.lua`,
-    as Hyprland's `dim_strength`, and runs `hyprctl eval
-    'conf_appearance.reload()'`, as the Layouts page does. With none set,
-    `conf`'s own stands. One `hyprland.local.lua` sets still wins.
-  - The Borders page's settings (§6.2) are in the same files and reach
-    the compositor the same way: `shadows` (`"none"`, `"floating"`,
-    `"focused"` or `"all"`), `shadowSize` (0 to 32), `borderWidth` (0 to
-    16) and `roundedCorners`, which was the Appearance page's. ‹ and ›
-    step through the shadows, and − and + a pixel at a time. Shadow size
-    shows only while a window casts one.
-  - The shell applies it as it starts, too, even unchanged, as it does the
-    input settings: setting the same strength again changes nothing.
+  - A setting that wouldn't work with the rest, such as the same time for
+    light and dark, is refused (§16.1).
+  - − and + step the strength of dimming inactive windows (§6.2) a point
+    at a time, from none to 50%. It's `dimStrength` in the files, 0 to 1,
+    and shows the config's 0.12 until it's set.
+  - A dimming strength that's set is written to `tide-appearance.lua`
+    (§16.1), as Hyprland's `dim_strength`. With none set, the config's own
+    stands. Setting the same strength again changes nothing.
   - The light and dark wallpapers (§15) are a file's path or a color
     each, typed and set with Enter as the location is. A path is
     absolute, or from `~/`; a color is `#rrggbb` or `#rgb`. Empty is the
@@ -5669,7 +5988,8 @@ stays hand-written.
       typed, chosen, from the grid or a swatch, or by `setAppearance`.
     - Setting the same one again keeps its position.
     - The panel takes the mode's position out of `appearance.local.json`.
-      Where `appearance.json` sets another, it writes `fill` there instead.
+      Where `appearance.json` sets another, it writes `fill` to
+      `appearance.local.json` instead.
   - **Each picture has a preview** under its row, so a crop is no
     surprise. A color, or no picture, has none. It shows that picture's
     position.
@@ -5690,104 +6010,115 @@ stays hand-written.
       only while the page shows.
     - `Appearance.wallpaperFrame` does the geometry, as pure functions the
       tests check; the QML only draws.
+  - Over IPC, `setAppearance KEY VALUE` sets one: `mode`; `light` or
+    `dark`, a time (`07:15`); `latitude` or `longitude`; `dimStrength`
+    (0.1); `lightWallpaper` or `darkWallpaper`, a file, a color such as
+    `#1a1d2e`, or "" for the default; or `lightWallpaperPosition` or
+    `darkWallpaperPosition` (`fill`, `fill-top`, `fill-bottom`, `fit` or
+    `stretch`). A new wallpaper goes back to `fill`, so set its position
+    after it.
 
-- **Displays** sets each monitor's scale and where it goes beside the
-  others, in `outputs.json` and `outputs.local.json`.
-  - A monitor is named by its description as `hyprctl monitors` gives it,
-    not its port, so its settings follow it from port to port.
-  - The page lists the monitors `hyprctl monitors all -j` gives, a closed
-    lid's panel included, then any with settings that isn't connected. It
-    lists them again as it shows and once a change applies, so a scale
-    Reset hands back to Hyprland shows as Hyprland's. On tidewm (§5.3) the
-    list is `GET_OUTPUTS`', each described from its make, model and
-    serial as Hyprland describes it, so a monitor's settings are the same
-    under either.
-  - − and + step a scale a quarter, from 0.5 to 3. Hyprland may round it to
-    one that divides the screen evenly; a scale between quarters goes to
-    the nearest one that way first. A scale set past either end by hand
-    stays put on a press that would move it back across.
-  - ‹ and › step its place: automatic, to the right, to the left, above or
-    below the others. An exact position is nwg-displays' (*advanced*). On
-    tidewm it runs as on sway, saving to `~/.config/sway/outputs`, which
-    tide's tidewm config (`tidewm/tide.conf`) and conf's include after
-    tide's own outputs file.
-  - Reset clears what `outputs.local.json` sets for a monitor. It shows
-    only when there's something there to clear. A setting in
-    `outputs.json` still applies, as the panel never writes that file.
-  - Over IPC, `setDisplay DESCRIPTION scale auto` clears this machine's
-    scale, leaving `outputs.json`'s or else Hyprland's own. `position auto`
-    sets the automatic place, and `resetDisplay DESCRIPTION` does what
-    Reset does.
-  - The shell writes what's set to `~/.config/hypr/tide-outputs.lua`, each
-    monitor as `desc:` and its description, and runs `hyprctl eval
-    conf_outputs.reload()`. `conf` applies each with `hl.monitor`, leaves a
-    closed lid's panel off, and lets `hyprland.local.lua` win for a monitor
-    it sets.
-  - The shell applies the file as it starts, even unchanged, in case the
-    shell before it died with an apply still to retry. Hyprland 0.56 leaves
-    a monitor whose rule hasn't changed alone, so this costs nothing.
-  - The single-window width and threshold aren't per monitor here: the
-    Layouts page sets them by aspect.
+- **Bar** sets where the bar runs and which status icons it shows (§7.1).
+  A right-click on the bar opens it, off any item or on one no other page
+  fits (§7.1's table).
+  - **Position**, which ‹ and › step between Top and Bottom, is
+    `barPosition` in `appearance.local.json` (§15). Every bar moves at
+    once, and what opens from it with it.
+  - **Icons** lists the status icons in the bar's order (§7.1). Each has
+    ↑ and ↓, which move it, and an On or Off switch. It's `barIcons` in
+    `appearance.local.json`, and the bar follows at once.
+  - Over IPC, `setAppearance barPosition top` or `bottom` sets the
+    position. No call changes the icons.
 
-- **Workspaces** sets §6.5's, in `workspaces.json` and
-  `workspaces.local.json`.
-  - `standing` is the list of standing workspaces, the first being home.
-    It's `in`, `re`, `oc` and `me` by default. An empty one, or one that
-    names a workspace twice, is an error at load naming it.
-  - `inApps` is the list of apps that live on home: programs and web
-    addresses, which start there at login, and window classes (§6.5).
-    `conf`'s shared file lists `scripts`' launchers for mail, chat,
-    calendar and music. The page's field asks for a program or web
-    address, such as `gmail`.
-  - `namePatterns` is the list of title patterns, tried in order.
-  - `muted` is the list of muted apps and sites (§9, *Muted apps*): app
-    IDs, or `site:HOST`, empty by default. A bad entry is an error at load
-    naming it, and the rest of the list still applies, unlike the other
-    settings here. tide for macOS reads the same key.
-  - `workspaceSettings` is each workspace's `askForName` and `pinnedApps`
-    (§6.5). With neither file setting it, home asks for a name and nothing
-    is pinned. `conf`'s shared file pins mail, chat and calendar on `in`,
-    which asks.
-  - The lists are lists, so a `.local` file's replaces the shared one whole
-    (§16.1). So does a `.local` file's `workspaceSettings`, an object, so a
-    machine's is exactly what it says.
-  - A pattern that doesn't compile or has no capture group is an error at
-    load naming it, and the last good list stays. The page refuses one the
-    same way, and says why.
-  - The page lists `standing`, `inApps` and `namePatterns`, as the files
-    in effect have them; `muted` is on the Notifications page.
-  - Below them, each standing workspace has a section of its own, home's
-    marked: a "New windows ask for a workspace" switch, its
-    `askForName`, and its pinned apps, a list with a bin per entry and a
-    field that asks for a program or web address, such as `gmail`.
-    - The first change copies the `workspaceSettings` in effect into the
-      `.local` file, as a list's first change does. With neither file
-      setting it, that's home asking, so turning on another workspace's
-      switch leaves home's on.
-  - Each entry has a bin that takes it out, and the standing workspaces and
-    the patterns, whose order counts, have arrows that move one. The first
-    standing workspace is marked as home, so moving another first makes it
-    home.
-  - An entry typed at a list's foot is added with Enter. One listed already,
-    ignoring case, or one the files wouldn't take is refused, and the page
-    says why: a name with quotes, a pattern that doesn't compile or has no
-    capture group. So is taking out the last standing workspace.
-  - The first change to a list copies it into `workspaces.local.json`,
-    keeping the file's other settings, since a local list replaces the
-    shared one whole. A change names an entry by its place and text, so a
-    hand edit that has moved it since is refused, not built on.
-  - It applies as a hand edit does: the shell writes `tide-workspaces.lua`
-    and has `conf` read it again.
-  - Over IPC, `addWorkspaceItem KEY ITEM`, `moveWorkspaceItem KEY ITEM
-    STEP` and `removeWorkspaceItem KEY ITEM` do what the page does, and so
-    do `setWorkspaceAskForName NAME true|false`, `addPinnedApp NAME ITEM`
-    and `removePinnedApp NAME ITEM`.
+- **Notifications** sets §9's, in `notifications.json` and
+  `notifications.local.json`, and lists `muted` from `workspaces.json`.
+  - A switch turns Do not disturb on or off now, as the bell does.
+  - *On a schedule* is `dndScheduled`, off by default. `dndFrom` and
+    `dndTo` are its times, `22:00` and `07:00` by default; − and + step
+    each a quarter hour, past the other, as the Appearance page's times do.
+  - `dndDays` is the days a window starts on, every day by default, in the
+    files as `mon` to `sun`. A click on a day turns it on or off.
+  - *Critical alerts break through* is `criticalsBreakThrough`, on by
+    default.
+  - A time that isn't one, a day that isn't one or is named twice, a
+    switch that isn't true or false, or a schedule from and to the same
+    time is refused (§16.1). `dndDays` is a list, so a `.local` one
+    replaces the shared one whole.
+  - The schedule and the criticals setting reach only the shell's own
+    notification server (§9); under the transitional swaync they do
+    nothing.
+  - *Muted* lists `muted` (§9, *Muted apps*), the list in effect, each
+    entry with a bin that unmutes it. An app ID or `site:HOST` typed at the
+    foot is muted with Enter. One the list wouldn't take back on loading,
+    or one already muted, is refused, and the page says why.
+  - They write `workspaces.local.json` as the mute actions do, keeping its
+    other settings.
+  - Over IPC, `setNotifications KEY VALUE` sets one (a day list as
+    `mon,tue`), and `addMuted ENTRY` and `removeMuted ENTRY` change the
+    muted list.
+
+- **Clipboard** sets §8.4's history, in `clipboard.json` and
+  `clipboard.local.json`.
+  - `history` turns keeping new copies on or off, on by default. A click
+    on its switch turns it.
+  - `maxItems` is how many it keeps, 100 by default, from 1 to 10,000. − and
+    + step through 25, 50, 100, 200, 500, 750 and 1,000; one set between
+    marks by hand goes to the nearest one that way first.
+  - `maxAgeDays` is how many days an entry stays after it was last
+    copied, 7 by default, from 1 to 3,650. − and + step through 1, 2, 3,
+    7, 14, 30, 90 and 365, the same way.
+  - **Clear history** runs `tide clipboard wipe`, as the launcher's Clear
+    clipboard history does, and the page says how it went.
+  - Over IPC, `setClipboard KEY VALUE` sets one, and `clearClipboard`
+    clears the history.
+
+- **Clocks** sets the bar's zones, their order and their labels (§7.3).
+  It also sets the system's time zone, which is local's.
+  - The time zone row shows the local zone's ID. One typed and set with
+    Enter runs `timedatectl set-timezone`, for systemd-timedated to set.
+  - It's checked first as a zone the bar would take is: a canonical ID
+    (§7.3). Anything else is refused, and the page says why.
+  - systemd v258's polkit policy makes setting it `auth_admin_keep`
+    (`org.freedesktop.timedate1.set-timezone`), so it asks for a password
+    through the session's polkit agent. A failure, a cancel included, is
+    shown on the page and logged.
+  - Once it's set, the clocks are looked up again: `tide-tz` reads the
+    local zone as it starts, so the bar's local clock follows at once.
+  - With `$TZ` set in the session, local stays `$TZ`'s zone (§7.3), and the
+    page says so: the system's zone changes, the bar's local clock doesn't.
+  - It shows the list the bar takes: `clocks.local.json`'s, else
+    `clocks.json`'s, else the defaults. The first change copies that list
+    into `clocks.local.json` (§16.1).
+  - A zone is typed as its ID and added with Enter, just before local,
+    labeled with its city. One that isn't a canonical ID (§7.3), or is
+    listed already, is refused, and the page says why.
+  - A label is typed and set with Enter. The arrows move a clock, and the
+    bin takes it out; with none left, the clock has no tooltip.
+  - The local zone is marked as local in the list, and as hidden while
+    Hide a zone that's the local one is on.
+  - A change names the clock it was made on by its place and zone
+    (§16.1).
+  - While either file can't be read or doesn't parse, the bar keeps its
+    last good list.
+  - Two switches, 24-hour time and Hide a zone that's the local one, are
+    `hour24` and `dedupeLocal` (§7.3). A click writes it to
+    `clocks.local.json`, keeping the file's list, and the bar changes at
+    once, with no lookup.
+  - Over IPC, `addClock ZONE`, `moveClock ZONE STEP`, `setClockLabel ZONE
+    LABEL` and `removeClock ZONE` change the list, a step being one place
+    to the right on the bar. `setSystemZone ZONE` sets the system's zone,
+    and `setClockSwitch hour24` or `dedupeLocal`, then `true` or `false`,
+    turns a switch.
+
+- **Idle** sets §10's four timings and Sleep when plugged in, in
+  `idle.json` and `idle.local.json`; §10 says how they reach hypridle.
+  Over IPC, `setIdle KEY SECONDS` sets a timing (`setIdle lock 600`), and
+  `setSuspendOnAC true` or `false` turns Sleep when plugged in.
 
 - **Start at login** lists the commands the shell runs once as the session
   starts, in `startup.json` and `startup.local.json` (`commands`).
   - It's empty by default, and `conf` installs no `startup.json`, so a
-    machine's list is its own, in `startup.local.json`. A list replaces
-    the shared one whole (§16.1).
+    machine's list is its own, in `startup.local.json`.
   - A command is a program and its arguments, separated by spaces, such as
     `google-calendar` or `chrome --app=https://chat.google.com`. It runs as
     those words, with no shell, so a quote, a backslash or a `$` would
@@ -5842,331 +6173,28 @@ stays hand-written.
     command. The shell runs each as the launcher runs an app, so a command
     that keeps running, as Chrome does, is reported only if it fails later.
   - The page shows the list the shell takes: `startup.local.json`'s, else
-    `startup.json`'s. The first change copies it into `startup.local.json`,
-    as the Clocks page's does.
+    `startup.json`'s.
   - A command is typed and added with Enter, at the end. The arrows move
-    one, and the bin takes it out. A change names the command by its place
-    and its text, so a hand edit that has moved them since is refused, not
-    built on.
-  - While either file can't be read or doesn't parse, the page refuses
-    changes, naming the file, and nothing runs, since which list is meant
-    can't be told. Once it loads, the list runs, if it hasn't this session.
+    one, and the bin takes it out.
+  - While either file can't be read or doesn't parse, nothing runs, since
+    which list is meant can't be told. Once it loads, the list runs, if it
+    hasn't this session.
   - A change takes effect at the next login. Nothing runs from the page.
   - Over IPC, `addStartup COMMAND`, `moveStartup COMMAND STEP` and
     `removeStartup COMMAND` do what the page does.
-- **Bar** sets where the bar runs (§7.1). A right-click on the bar opens
-  it, off any item or on one no other page fits (§7.1's table).
-  - **Position**, which ‹ and › step between Top and Bottom, is
-    `barPosition` in `appearance.local.json` (§15). Every bar moves at
-    once, and what opens from it with it.
-  - **Icons** lists the status icons in the bar's order (§7.1). Each has
-    ↑ and ↓, which move it, and an On or Off switch. It's `barIcons` in
-    `appearance.local.json`, and the bar follows at once.
-- **Notifications** sets §9's, in `notifications.json` and
-  `notifications.local.json`, and lists `muted` from `workspaces.json`.
-  - A switch turns Do not disturb on or off now, as the bell does.
-  - *On a schedule* is `dndScheduled`, off by default. `dndFrom` and
-    `dndTo` are its times, `22:00` and `07:00` by default; − and + step
-    each a quarter hour, past the other, as the Appearance page's times do.
-  - `dndDays` is the days a window starts on, every day by default, in the
-    files as `mon` to `sun`. A click on a day turns it on or off.
-  - *Critical alerts break through* is `criticalsBreakThrough`, on by
-    default.
-  - A time that isn't one, a day that isn't one or is named twice, a
-    switch that isn't true or false, or a schedule from and to the same
-    time is refused, and the page says why. In the files, it's an error at
-    load naming the setting, and the last good settings stay.
-  - These are objects, so `.local` keys override the shared ones one by
-    one; `dndDays` is a list, replaced whole (§16.1).
-  - The schedule and the criticals setting reach only the shell's own
-    notification server (§9); under the transitional swaync they do
-    nothing.
-  - *Muted* lists `muted` (§9, *Muted apps*), the list in effect, each
-    entry with a bin that unmutes it. An app ID or `site:HOST` typed at the
-    foot is muted with Enter. One the list wouldn't take back on loading,
-    or one already muted, is refused, and the page says why.
-  - They write `workspaces.local.json` as the mute actions do, keeping its
-    other settings. A change names an entry by its place and text, so a
-    hand edit that has moved it since is refused, not built on.
-  - Over IPC, `setNotifications KEY VALUE` sets one (a day list as
-    `mon,tue`), and `addMuted ENTRY` and `removeMuted ENTRY` change the
-    muted list.
-
-- **Clipboard** sets §8.4's history, in `clipboard.json` and
-  `clipboard.local.json`.
-  - `history` turns keeping new copies on or off, on by default. A click
-    on its switch turns it.
-  - `maxItems` is how many it keeps, 100 by default, from 1 to 10,000. − and
-    + step through 25, 50, 100, 200, 500, 750 and 1,000; one set between
-    marks by hand goes to the nearest one that way first.
-  - `maxAgeDays` is how many days an entry stays after it was last
-    copied, 7 by default, from 1 to 3,650. − and + step through 1, 2, 3,
-    7, 14, 30, 90 and 365, the same way.
-  - A value that isn't one is refused, and the page says why. In the
-    files, it's an error at load naming the setting, and the last good
-    settings stay.
-  - **Clear history** runs `tide clipboard wipe`, as the launcher's Clear
-    clipboard history does, and the page says how it went.
-  - Over IPC, `setClipboard KEY VALUE` sets one, and `clearClipboard`
-    clears the history.
-
-- **Power** shows the battery and sets the power profile and what closing
-  the lid does.
-  - The battery's charge and time left are UPower's, as the bar's
-    battery popover shows them (§7.4).
-  - The power profiles are power-profiles-daemon's, chosen as in that
-    popover; it keeps the choice for the whole machine. As the page shows,
-    the shell lists the system bus's names (`busctl --system list
-    --acquired --activatable`). Without `net.hadess.PowerProfiles` or
-    `org.freedesktop.UPower.PowerProfiles` among them, running or
-    activatable, the page says power-profiles-daemon isn't there and
-    offers none.
-  - **Closing the lid** with no other monitor suspends, locks or does
-    nothing: `lidClose` in `power.json` and `power.local.json`, `suspend`
-    by default. ‹ and › step through them. Anything else is refused, and
-    the page says why; in the files, it's an error at load naming the
-    setting.
-  - Suspend is logind's own (`HandleLidSwitch=suspend`), so it needs nothing
-    from tide. For Lock and Do nothing, the shell starts
-    `tide-lid-inhibit.service`, which holds logind's `handle-lid-switch`
-    inhibitor (`systemd-inhibit --mode=block`), so logind leaves the lid
-    alone. For Suspend it stops it. It's `PartOf=graphical-session.target`,
-    so it goes at logout.
-  - The unit counts as started only once logind has granted the inhibitor:
-    `systemd-inhibit` runs its command only then, and that command is
-    `systemd-notify --ready --exec`, which then becomes the `sleep` that
-    keeps it (`Type=notify`; `--exec` needs systemd 254). A refusal exits
-    before it, so `systemctl start` fails, and the shell reports it and
-    tries again, rather than taking a lid logind still suspends on for
-    held.
-  - The shell writes the choice to `~/.config/hypr/tide-power.lua`, and
-    `conf`'s `hyprland.lua` reads it as the lid closes: with no other
-    monitor, Lock runs `loginctl lock-session`, and Do nothing leaves the
-    panel as it is. With another monitor, the lid turns the panel off, as it
-    always has, whichever is chosen.
-  - In tidewm's session (§5.3), `tidewm/tide.conf` runs `tide lid-closed`
-    as the lid closes, and `tide lid-opened` as it opens, even locked. Each
-    finds the laptop's panel as `hyprland.lua` does: `$HYPR_INTERNAL_OUTPUT`,
-    or the first output named `eDP`, `LVDS` or `DSI`. With another monitor
-    on, `lid-closed` turns the panel off, and tidewm moves its windows to
-    the others. With none, it reads the same file, and Lock locks, as
-    `tide lock` does. If it can't tell whether another monitor is on, it
-    locks for Lock. `lid-opened` turns the panel back on if it's off.
-  - The shell puts the unit right as it starts, too, since the unit
-    outlives a shell that died with it the other way. A file it can't
-    write, or a `systemctl` that fails, is a notification once and tried
-    again every 30 s.
-  - polkit lets an active local session take the inhibitor
-    (`org.freedesktop.login1.inhibit-handle-lid-switch`, `allow_active`).
-    The unit runs in the user's manager, outside the session, as GNOME's
-    power daemon does; whether polkit grants it there is for a live session
-    to check (TODO.md).
-  - Over IPC, `setPower lidClose VALUE` sets it.
-  - **Cost and reliability:** nothing to pay. `systemd-inhibit` and
-    `busctl` ship with systemd; power-profiles-daemon is optional, and
-    without it the page says so. The busctl listing runs only as the page
-    shows.
-
-- **Floating** lists the rules that float a window (§6.4), in
-  `floating.json` and `floating.local.json` (`rules`).
-  - A rule is `{"class": "org.gnome.Calculator"}`, with an optional
-    `title`. The class is the window's, ignoring case, as text, not a
-    pattern. The title is a regular expression found anywhere in the title.
-  - `conf` installs no `floating.json`, so a machine's rules are its own,
-    in `floating.local.json`. A list replaces the shared one whole (§16.1).
-  - A rule with no class, a key other than these two, a title that
-    doesn't compile, or one listed already is an error at load naming
-    `rules` and the entry. So is a list of more than 64. The last good
-    rules stay.
-  - A title pattern runs in two engines: JavaScript's on the page, with
-    the `u` flag, and RE2's in Hyprland. The shell translates it once into
-    each one's spelling of the same meaning, writes RE2's to the file, and
-    matches with JavaScript's.
-  - `\w` is Unicode's letters, marks and numbers, and `_`. `\d` is its
-    decimal digits, so `٣` is one and `²` isn't. `\s` is JavaScript's
-    whitespace, the no-break and wide spaces and the BOM included. Their
-    capitals are the rest.
-    - RE2 spells them `\p{L}\p{M}\p{N}_` and `\p{Nd}`. Qt's JavaScript
-      parses `\p{…}` but has no tables for it (Qt 6.10's
-      `stubs/yarr/YarrUnicodeProperties.cpp`), so the shell lists them as
-      ranges in `shell/lib/unicode.mjs`.
-    - Those ranges come from Unicode 16.0.0's `UnicodeData.txt`, pinned by
-      its SHA-256 (`make unicode UNICODE_DATA=…`), so every host makes the
-      same module. The tests check the module, not the host's tables.
-    - RE2 has its own Unicode version, so the two can differ on
-      characters added since the older one.
-  - `\b` and `\B` are an ASCII word boundary in both, unlike `\w`. So in
-    `café`, `caf\b` matches, since `é` isn't an ASCII word character, and
-    `café\b` doesn't. `^caf\w$` matches it.
-  - `.` is anything but a newline in both. JavaScript's would also stop
-    at `\r` and the line separators, so it's written `[^\n]`.
-  - Also taken: literals, `^`, `$`, `|`, groups and `(?:…)`, the repeats
-    and their lazy forms with counts up to 1,000 (RE2's limit), and
-    classes. So are the syntax characters' escapes, `\n \t \r \f \v`
-    and `\xHH`.
-  - Anything else is refused, naming it. That covers a lookaround, a named
-    group, a backreference, `[:alpha:]`, `\W` inside a class, and an
-    escape the `u` flag refuses, such as `\q` or `\!`.
-  - So is a class range from or to `\w`, `\d` or `\s`, such as `[\w-.]`
-    or `[+-\d]`, which the `u` flag refuses too. Spelled out, RE2 would
-    refuse it or read it as another range. `\-` is a hyphen anywhere in a
-    class, and so is `-` first or last: `[\w.-]`.
-  - The shell writes them to `~/.config/hypr/tide-floating.lua` and runs
-    `hyprctl eval 'conf_floating.reload()'`, as it starts too.
-  - Each rule is Hyprland's whole-text match: the class as `(?i)` and the
-    class quoted, the title as `[^\n]*(?:PATTERN)[^\n]*`, or `.*` for
-    none.
-  - `conf` makes a window rule for each, `float = true`, named
-    `tide-float-N`. Hyprland 0.56.2 can't drop a rule. Adding one by a name
-    it has merges into that one (`hlWindowRule`): each match given replaces
-    the old, a match not given stays, and each effect is added again. So
-    `conf` gives both matches every time and `float` only the first time,
-    and turns off the names a shorter list no longer needs.
-  - A new rule applies to every matching window, the ones already open
-    included. That's the design, chosen over rules for new windows only.
-  - Hyprland floats a window by a rule only as it opens: `float` is a
-    static effect. So once a change applies, the shell floats the tiled
-    windows open now that the new rules cover and nothing covered before,
-    with `hl.dsp.window.float({ action = "enable" })`.
-    - "Before" counts `conf`'s own dialog rules as well as the old list. A
-      window tiled by hand under any rule stays tiled, so a broader rule
-      doesn't re-float a tiled Save As.
-    - Windows on every workspace and monitor are floated, minimized ones
-      included.
-    - A fullscreen or maximized window is left as it is, as is a pinned
-      one, which floats already.
-    - A list only reordered, the same rules applied again, or a rule taken
-      out floats nothing. Taking one out tiles nothing either.
-  - The shell records the rules it last swept in
-    `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/tide-floating-swept.json`.
-    A shell that restarts after applying a change, but before sweeping it,
-    sweeps from the record. A new Hyprland, at the next login, has no
-    record: every window then met the rules in effect as it opened.
-  - The page shows the rules, with arrows that move one and a bin that
-    takes it out. A class and a title typed at the foot are added with
-    Enter. A change names a rule by its place, class and title, so a hand
-    edit that has moved it since is refused, not built on.
-  - *Floating now* lists the floating windows no rule covers, one per
-    class: `floating` and `class` from Hyprland's client list, the title
-    from Quickshell's toplevel, which follows `windowtitlev2` as the
-    client list Quickshell keeps doesn't. Applying a rule and Super+Alt+F
-    read a window the same way.
-    `conf`'s own dialog rules count. A window with no class can't be
-    named, so it isn't listed.
-  - *Also floating* lists every other floating window, one each: those a
-    rule covers already, `conf`'s dialog rules among them, so a portal's
-    file chooser or an app's own Open dialog is there. Each says whose
-    rule floats it, *Built in* or *Your rule*.
-    - *Details* fills the fields as *Always float* does, and opens *More
-      about this window*. That shows a window's class and title, and what
-      else the compositor says of it, to look up or copy: a dialog that
-      misbehaves can be named in a bug report, or matched by a rule.
-  - *Always float* adds nothing yet. It fills the fields at the foot with
-    the window's class and a pattern for its exact title: the title with
-    its syntax characters escaped (`.` as `\.`), between `^` and `$`.
-    - The title field takes the keys with its text selected, to trim, or
-      clear for the whole class.
-    - Enter or *Add* adds the rule. Esc clears the fields.
-    - When a rule covers the window already, the page names it under the
-      fields.
-    - *More about this window*, under the fields, lists what else
-      Hyprland 0.56.2's client list says of it, read-only. That's its
-      initial class and title, XWayland, content type, XDG tag and
-      description, and tags, each only when it says something.
-      - Nothing matches on these yet. They show when a window would need
-        one (TODO.md, *More matchers for float rules*).
-      - The section starts closed, and stays as you leave it for as long
-        as the shell runs.
-  - `Super+Alt+F` runs `qs -c tide ipc call floating remember`. It opens
-    the panel on the Floating page with the fields filled for the focused
-    window, as *Always float* fills them.
-    - A focused window with no class, or none at all, is a notification
-      saying so, since a key has nowhere else to show it.
-    - Once you add the rule, a tiled window it covers floats, as any new
-      rule's does.
-  - The question after floating by the keys (§6.4) comes from `conf`.
-    Its float keys run a Lua function that toggles floating. When that
-    leaves the window floating, it posts `custom>>tide-floated>>ADDRESS`
-    (`hl.dsp.event`).
-    - Hyprland 0.56.2's own `changefloatingmode` can't stand in. A
-      `Super`+drag floats a tiled window as it starts and tiles it again as
-      it ends (`DragController`), and the shell's own sweep sends it too.
-    - The shell asks through `notify-send --wait` with two actions, as the
-      network prompt does (§5.6). *Always float* goes through the page's
-      add, *Edit rule…* through `Super+Alt+F`'s fill-in.
-    - The classes not to ask about are kept in
-      `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/tide-floating-declined.json`,
-      so a restarted shell doesn't ask again, and the next login starts
-      with none.
-    - In tidewm's session (§5.3), conf's float keys bind tidewm's
-      `floating toggle`, and tidewm sends a `binding` event before it runs
-      a binding's command. The shell listens for those. After one whose
-      command toggles or enables floating on the focused window, the
-      next window event decides: the focused window's `floating` event,
-      with it floating, is the keys'. Any other means the keys floated
-      nothing, so no later event is taken for theirs.
-    - A `Super`+drag runs no binding, so it never asks there either. The
-      declined classes are kept in
-      `$XDG_RUNTIME_DIR/tide-floating-declined-SOCKET.json`, `SOCKET` the
-      name of tidewm's IPC socket (`SWAYSOCK`).
-  - Over IPC, `addFloating CLASS TITLE`, `moveFloating CLASS TITLE STEP`
-    and `removeFloating CLASS TITLE` do what the page does, a TITLE of ""
-    for none.
-  - **Cost and reliability:** nothing to pay, and nothing new to run. The
-    page reads the client list Quickshell already keeps; an apply is one
-    `hyprctl eval` per change.
-
-- **It opens like the launcher:** centered on the focused monitor over a
-  dimmed backdrop, from the launcher's Settings action or
-  `qs -c tide ipc call settings toggle`. A page's own action in the
-  launcher, or `qs -c tide ipc call settings openPage mouse`, opens it on
-  that page, or moves an open one there.
-- Escape or a click on the backdrop closes it.
-- The pages run down its side in this table's order, under its groups'
-  headings: Hardware, Windows and General (the maintainer's grouping,
-  2026-11-01).
-  - Hardware is the machine and what's plugged into it, Windows is how
-    windows are placed, and General is the rest.
-  - A heading can't be chosen. Up and Down change the page, passing over
-    the headings, and stop at the first and last pages.
-  - The groups and each page's group are data in `settings.mjs`, so a new
-    page names its group. Floating's joins Windows, after Workspaces.
-  - The card is tall enough for every page and heading, and stays that
-    tall while a search drops some.
-- A page's link out sits at its foot, and Enter opens it. A page with
-  nothing of its own yet is only that link, with a line saying what the
-  bar already does.
-- **Search:** a field tops the sidebar, saying *Search settings*. It has
-  the keyboard as the panel opens, and starts empty each time, from
-  `openPage` too.
-  - The sidebar keeps the pages the query finds, under their headings. A
-    heading left with no page hides.
-  - A page is found by its label and keywords, and its sections' (so
-    *shortcuts* finds Keyboard). Each word typed must start a word of
-    them, in any order. `settingssearch.mjs` matches, the same file tide
-    for macOS and tide for Chrome use, so a query finds the same pages on
-    each.
-  - If the page showing is dropped, the first page kept shows. A page
-    found only by a section opens scrolled to it.
-  - Up and Down move among the kept pages. A click on a page keeps the
-    keyboard in the field.
-  - Escape empties the field, then closes the panel.
-  - Enter opens the page's app only with the field empty: mid-search it
-    would run an app the query never named.
-  - Finding nothing, the sidebar says *No settings match*, and the page
-    showing stays. Emptying the field shows every page, and the page
-    showing stays.
 
 ### 16.1 Shared config and per-machine `.local` overrides
 
 The same `.local` convention as `.shrc.local`, `hyprland.conf.local` and
-sway's `config.local`:
+sway's `config.local`. What this section says holds for every page, so
+the pages in §16 name only where they differ.
 
-- **Shared defaults.** Every tide config file
-  `~/.config/tide/<name>.json` (`clocks`, `idle`, `layouts`,
-  `appearance`, `outputs`, `workspaces`, `startup`, `notifications`,
-  `clipboard`, `power`, `floating`)
-  holds the shared defaults and is installed from `conf`.
+- **Shared defaults.** Each tide config file is
+  `~/.config/tide/<name>.json`: `input`, `keys`, `outputs`, `power`,
+  `layouts`, `workspaces`, `floating`, `appearance`, `notifications`,
+  `clipboard`, `clocks`, `idle`, `startup` and `snippets` (§8.4). Each
+  holds shared defaults, for every machine. `conf` ships two, `input.json`
+  and `workspaces.json`. Where there's none, tide's own defaults apply.
 - **Per-machine overrides.** An optional **`<name>.local.json`** beside it
   is read last. It is machine-specific and never committed.
   - Objects merge key by key, so a machine can change one setting and
@@ -6175,16 +6203,47 @@ sway's `config.local`:
     list is exactly what it says.
 - **Hyprland** follows the same rule: the Lua config ends by loading an
   optional `hyprland.local.lua`, the successor to today's
-  `hyprland.conf.local`.
-- **The settings panel writes only `.local` files.** It never edits a file
-  that `conf` manages, so a `conf` update can't clobber a setting, and a
-  setting can't dirty the `conf` checkout.
-  - The shell reads the file just before each change and writes it at
-    once, so a change builds on the one before it, and on a hand edit
-    made a moment earlier.
+  `hyprland.conf.local`. A setting it makes still wins over a page's.
 - **Reloads are live.** Either file changing on disk triggers a live reload.
   A file that fails to parse is reported once, as a notification naming the
-  file and line, and the last good settings stay in effect.
+  file and line, and the last good settings stay in effect. While either
+  file can't be read or doesn't parse, its pages refuse changes, naming
+  the file.
+- **A bad setting fails at load.** In the files, a value tide wouldn't
+  take is an error at load naming the setting, and the last good settings
+  stay. On a page, it's refused, and the page says why. Two lists differ,
+  `muted` and Start at login's `commands`: a bad entry is an error naming
+  the list and the entry, and the rest still applies.
+
+**How a page changes a setting:**
+
+- **It writes only `.local` files.** It never edits a file that `conf`
+  manages, so a `conf` update can't clobber a setting, and a setting
+  can't dirty the `conf` checkout.
+  - The shell reads the file just before each change and writes it at
+    once, so a change builds on the one before it, and on a hand edit
+    made a moment earlier. It keeps the file's other settings.
+  - A list's first change copies the list in effect into the `.local`
+    file, since a `.local` list replaces the shared one whole.
+  - A change names an entry by its place and text, so a hand edit that
+    has moved it since is refused, not built on.
+- **What the compositor uses reaches it through a generated file.** On
+  Hyprland, the shell writes `~/.config/hypr/tide-<name>.lua`, a Lua table
+  that tide's Hyprland config (§6.8) reads as data, and runs `hyprctl eval
+  'conf_<name>.reload()'`. Layouts, Power and Idle differ, as their pages
+  say. On tidewm, it writes `~/.config/tidewm/tide-<name>.conf`, in
+  tidewm's own syntax, which `tidewm/tide.conf` includes last, and runs
+  `tide-msg --if-current reload` (§5.3, §7.4).
+- **It's applied as the shell starts, even unchanged.** Hyprland outlives
+  the shell, so a shell restarted before its retry would otherwise leave a
+  change unapplied, and applying the same settings again changes nothing.
+  tidewm's reload starts every output and device over, so there the shell
+  reloads only if this session's record says tidewm hasn't read the file
+  as it is. Layouts is the exception: a reload resets each workspace's
+  `mfact`.
+- **A failure is retried.** A change the shell can't save is reported,
+  and the page keeps the old value. One it can't write or apply is
+  reported once, and tried again every 30 seconds while the shell runs.
 
 ### 16.2 Apps around the shell
 
