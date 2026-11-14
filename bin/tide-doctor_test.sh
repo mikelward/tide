@@ -328,8 +328,9 @@ FAKE
 # tidewm's tide-msg answers --type get_outputs with $FAKE_TIDEWM_OUTPUTS
 # (a 1920x1080 monitor with tide's 30 px bar by default), get_config
 # with $FAKE_TIDEWM_CONFIG (no errors by default) and get_workspaces with
-# $FAKE_TIDEWM_WORKSPACES (home, `in`, kept, by default); with
-# $FAKE_TIDEMSG_FAILS it says that and fails.
+# $FAKE_TIDEWM_WORKSPACES (home, `in`, kept, by default); --outdated
+# exits $FAKE_TIDEWM_OUTDATED (1, the one installed, by default), saying
+# $FAKE_TIDEWM_VERSIONS; with $FAKE_TIDEMSG_FAILS it says that and fails.
 cat > "$fake/tide-msg" <<'FAKE'
 #!/bin/sh
 if test -n "$FAKE_TIDEMSG_FAILS"; then
@@ -346,6 +347,10 @@ case "$*" in
     "--type get_outputs") printf '%s\n' "$outputs" ;;
     "--type get_config") printf '%s\n' "$config" ;;
     "--type get_workspaces") printf '%s\n' "$workspaces" ;;
+    --outdated)
+        test -z "$FAKE_TIDEWM_VERSIONS" || printf '%s\n' "$FAKE_TIDEWM_VERSIONS"
+        exit "${FAKE_TIDEWM_OUTDATED:-1}"
+        ;;
     *) echo "tide-msg: unexpected $*" >&2; exit 2 ;;
 esac
 FAKE
@@ -1262,6 +1267,18 @@ run "$tw" FAKE_TIDEWM_CONFIG='{"config": "x", "errors": ["/c:3: no setting is ca
 check "each tidewm config error is a problem" test "$(grep -c '^tidewm config error: /c:' "$tmp/out")" -eq 2
 check "naming the file and line" \
     contains "$out" "tidewm config error: /c:3: no setting is called bindcode: fix it, then reload tidewm's config"
+check "a tidewm that's the one installed isn't a problem" lacks "$out" "tidewm was updated"
+run "$tw" FAKE_TIDEWM_OUTDATED=0 FAKE_TIDEWM_VERSIONS="tidewm v0.3.100 is running, and v0.3.108 is installed" \
+    FAKE_TIDEWM_CONFIG='{"config": "x", "errors": ["/c:3: bindsym has no flag --desc"]}'
+check "a tidewm older than the one installed is a problem" \
+    contains "$out" "tidewm was updated (tidewm v0.3.100 is running, and v0.3.108 is installed): log out and back in to use it"
+check "which fails the check" test "$status" -eq 1
+check "and its config errors say to log out, not to fix them and reload" \
+    contains "$out" "tidewm config error: /c:3: bindsym has no flag --desc: log out and back in, which may fix it"
+check "not to reload" lacks "$out" "reload tidewm's config"
+run "$tw" FAKE_TIDEWM_OUTDATED=2 FAKE_TIDEWM_VERSIONS="tide-msg: couldn't tell whether tidewm was updated: /usr/local/bin/tidewm -v said nothing"
+check "a tidewm that can't be compared is said" \
+    contains "$out" "couldn't tell whether tidewm was updated since login (tide-msg: couldn't tell whether tidewm was updated: /usr/local/bin/tidewm -v said nothing)"
 run "$tw" FAKE_TIDEMSG_FAILS="SWAYSOCK isn't set, so there's no tidewm to ask"
 check "tidewm not answering leaves the bar check incomplete" \
     contains "$out" "tide-msg: SWAYSOCK isn't set, so there's no tidewm to ask, so the one-bar-per-monitor check is incomplete: is tidewm running?"

@@ -7038,6 +7038,27 @@ tidewm_ready() {
     return 1
 }
 
+# say_tidewm_updated says, last, that the tidewm setup was run under is
+# older than the one now installed, as when this run built a newer one:
+# `tide-msg --outdated`, on the session's PATH, exits 0 then. The session
+# keeps the old one until it ends, and the config installed is the new
+# one's, which the old one may not read, so tide reloads nothing into it
+# (tide-msg's --if-current). Outside tidewm (no SWAYSOCK) there's no
+# tidewm running to compare.
+say_tidewm_updated() {
+    test -n "${SWAYSOCK:-}" || return 0
+    session_command tide-msg || return 0
+    _tu_status=0
+    _tu_out=$(PATH=$SESSION_PATH tide-msg --outdated 2>&1) || _tu_status=$?
+    case "$_tu_status" in
+        0) info "tidewm was updated: the new one runs after you log out and back in." ;;
+        1) ;;
+        # Another compositor's SWAYSOCK, as sway's, or a tide-msg from
+        # before --outdated that couldn't be replaced.
+        *) detail "couldn't tell whether the tidewm running is the one installed: $(printf '%s\n' "$_tu_out" | head -n 1)" ;;
+    esac
+}
+
 # remove_session_entry takes the tide (Hyprland) session off the login
 # screen, as a session that can't run, setting _removed to how that went
 # for check_session's message. tide (tidewm) has an entry of its own and
@@ -7417,3 +7438,4 @@ else
         say_news "tide installed. $_pick the \"tide\" session; KDE Plasma stays available."
     fi
 fi
+say_tidewm_updated

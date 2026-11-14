@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -118,9 +120,104 @@ func TestPromptMayFocusIsTheExitStatus(t *testing.T) {
 	}
 }
 
+// installed puts a tidewm that says `says` for -v, as dwl does, to stderr
+// and exiting 1, in a directory of its own, and returns PATH naming it.
+func installed(t *testing.T, says string) string {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\ntest \"$1\" = -v || exit 64\necho '" + says + "' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "tidewm"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return "PATH=" + dir
+}
+
+const version = `{"human_readable":"tidewm v0.3.100","variant":"tidewm","major":0,"minor":3,"patch":100}`
+
+func TestOutdatedIsWhetherTheTidewmRunningIsTheOneInstalled(t *testing.T) {
+	tidewm := swayipctest.New(t, version)
+	sock := "SWAYSOCK=" + tidewm.Socket
+	status, out, errOut := tideMsg([]string{sock, installed(t, "dwl v0.3.108")}, "--outdated")
+	if status != 0 || out != "tidewm v0.3.100 is running, and v0.3.108 is installed\n" || errOut != "" {
+		t.Errorf("a newer one installed: status %d, out %q, err %q", status, out, errOut)
+	}
+	for _, same := range []string{"dwl v0.3.100", "tidewm v0.3.100"} {
+		if status, out, errOut := tideMsg([]string{sock, installed(t, same)}, "--outdated"); status != 1 || out != "" || errOut != "" {
+			t.Errorf("%s installed: status %d, out %q, err %q", same, status, out, errOut)
+		}
+	}
+	// With no tidewm on PATH, there's none newer to log in to.
+	if status, out, errOut := tideMsg([]string{sock, "PATH=" + t.TempDir()}, "--outdated"); status != 1 || out != "" || errOut != "" {
+		t.Errorf("none installed: status %d, out %q, err %q", status, out, errOut)
+	}
+	status, _, errOut = tideMsg([]string{sock, installed(t, "error while loading shared libraries")}, "--outdated")
+	if status != 2 || !strings.Contains(errOut, "couldn't tell whether tidewm was updated") {
+		t.Errorf("an installed one that can't say: status %d, err %q", status, errOut)
+	}
+	old := swayipctest.New(t, `{"variant":"tidewm"}`)
+	status, _, errOut = tideMsg([]string{"SWAYSOCK=" + old.Socket, installed(t, "dwl v0.3.108")}, "--outdated")
+	if status != 2 || !strings.Contains(errOut, "couldn't tell whether tidewm was updated") {
+		t.Errorf("a running one that doesn't say: status %d, err %q", status, errOut)
+	}
+}
+
+func TestIfCurrentLeavesAnOutdatedTidewmUnasked(t *testing.T) {
+	tidewm := swayipctest.New(t, version, `[{"success":true}]`)
+	status, out, errOut := tideMsg([]string{"SWAYSOCK=" + tidewm.Socket, installed(t, "dwl v0.3.108")}, "--if-current", "reload")
+	if status != 3 || out != "" || !strings.Contains(errOut, "reload wasn't sent: tidewm was updated (v0.3.100 is running, and v0.3.108 is installed)") ||
+		!strings.Contains(errOut, "Log out and back in.") {
+		t.Fatalf("status %d, out %q, err %q", status, out, errOut)
+	}
+	if got := tidewm.Payloads(); slices.Contains(got, "reload") {
+		t.Fatalf("an outdated tidewm was sent %q", got)
+	}
+}
+
+func TestIfCurrentRunsTheCommandOnTheTidewmInstalled(t *testing.T) {
+	for what, c := range map[string]struct {
+		path    string
+		replies []string
+	}{
+		"the same one installed": {installed(t, "dwl v0.3.100"), []string{version, `[{"success":true}]`}},
+		// With none on PATH, the one running isn't asked its version.
+		"none installed": {"PATH=" + t.TempDir(), []string{`[{"success":true}]`}},
+	} {
+		tidewm := swayipctest.New(t, c.replies...)
+		status, out, errOut := tideMsg([]string{"SWAYSOCK=" + tidewm.Socket, c.path}, "--if-current", "reload")
+		if status != 0 || out != "" || errOut != "" {
+			t.Errorf("%s: status %d, out %q, err %q", what, status, out, errOut)
+		}
+		if got := tidewm.Payloads(); !slices.Contains(got, "reload") {
+			t.Errorf("%s: sent %q, no reload", what, got)
+		}
+	}
+}
+
+func TestIfCurrentRunsTheCommandWhenItCantTell(t *testing.T) {
+	tidewm := swayipctest.New(t, `{"variant":"tidewm"}`, `[{"success":true}]`)
+	status, _, errOut := tideMsg([]string{"SWAYSOCK=" + tidewm.Socket, installed(t, "dwl v0.3.108")}, "--if-current", "reload")
+	if status != 0 || !strings.Contains(errOut, "couldn't tell whether tidewm was updated, so reload is sent anyway") {
+		t.Fatalf("status %d, err %q", status, errOut)
+	}
+	if got := tidewm.Payloads(); !slices.Contains(got, "reload") {
+		t.Fatalf("sent %q, no reload", got)
+	}
+}
+
+func TestAPlainReloadIsSentWhateverIsInstalled(t *testing.T) {
+	tidewm := swayipctest.New(t, `[{"success":true}]`)
+	if status, _, errOut := tideMsg([]string{"SWAYSOCK=" + tidewm.Socket, installed(t, "dwl v0.3.108")}, "reload"); status != 0 {
+		t.Fatalf("status %d, err %q", status, errOut)
+	}
+	if got := tidewm.Payloads(); !reflect.DeepEqual(got, []string{"reload"}) {
+		t.Fatalf("sent %q", got)
+	}
+}
+
 func TestUsage(t *testing.T) {
 	for _, args := range [][]string{nil, {"--focused-workspace", "nop"}, {"--nope"}, {"--prompt-may-focus", "--focused-workspace"},
 		{"--type", "get_marks"}, {"--type", "get_config", "nop"}, {"--type", "get_config", "--focused-workspace"},
+		{"--outdated", "nop"}, {"--if-current"}, {"--if-current", "--outdated"}, {"--if-current", "--type", "get_config"},
 		{"--subscribe", "input", "nop"}, {"--subscribe", "input", "--type", "get_inputs"}, {"--subscribe", "input,"}} {
 		if status, _, _ := tideMsg([]string{"SWAYSOCK=/x"}, args...); status != 2 {
 			t.Errorf("%q: status %d", args, status)

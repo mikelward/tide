@@ -2378,13 +2378,15 @@ fi
 # check what they write and apply, since it leaves its files and this
 # session's records of what it applied, and before the lock, which keeps
 # the screen. Without these calls, the run says nothing about the mice and
-# touchpads, the key bindings, the monitors, the settings pages' reloads
-# or home kept, there.
+# touchpads, the key bindings, the monitors, the settings pages' reloads,
+# which go only to the tidewm installed (tide-msg's --if-current, after
+# the bar asks whether it is, --outdated), or home kept, there.
 load_compositor=tidewm
 load_runs='tide-msg --type get_inputs
 tide-msg --type get_bindings
 tide-msg --type get_outputs
-tide-msg reload
+tide-msg --outdated
+tide-msg --if-current reload
 tide-msg persist workspace'
 tidewm_conf=$tmp/home/.config/tidewm
 after_load=tidewm_loaded

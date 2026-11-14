@@ -441,9 +441,15 @@ Singleton {
                     return;
                 }
                 let error = "";
+                let deferred = false;
                 if (!state.started) {
                     console.warn(state.report.message);
                     error = state.report.message.replace(/^tide: /, "");
+                } else if (Writes.applyDeferred(Compositor.tidewm, state.code)) {
+                    // tide-msg left an older tidewm as it is (--if-current):
+                    // the file is for the tidewm the next login runs.
+                    deferred = true;
+                    console.log(`tide: the floating rules wait for the next login: ${state.errors.trim()}`);
                 } else if (state.code !== 0 || (!Compositor.tidewm && reply.trim() !== "ok")) {
                     // A conf from before floating rules has no
                     // conf_floating.
@@ -453,16 +459,17 @@ Singleton {
                     console.log(state.report.message);
                 }
                 const text = root.target.onDisk;
-                // tidewm read its config again: its errors may have changed.
+                // tidewm read its config again, or is older than the one installed:
+                // its errors, or the bar's warning, may have changed.
                 ConfigErrorsData.reloaded();
                 root.stepped(Writes.targetApplied(root.target, error));
-                if (error === "") {
+                if (error === "" && !deferred) {
                     root.rulesApplied(text);
                 }
                 destroy();
             }
 
-            command: Compositor.tidewm ? ["tide-msg", "reload"] : ["hyprctl", "eval", "conf_floating.reload()"]
+            command: Compositor.tidewm ? ["tide-msg", "--if-current", "reload"] : ["hyprctl", "eval", "conf_floating.reload()"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     run.reply = text;

@@ -619,6 +619,7 @@ elif test -n "\$SWAYSOCK"; then
         tide-msg --type get_inputs >/dev/null 2>&1 &
         tide-msg --type get_bindings >/dev/null 2>&1 &
         tide-msg --type get_outputs >/dev/null 2>&1 &
+        tide-msg --outdated >/dev/null 2>&1 &
         tide-msg persist workspace in >/dev/null 2>&1 &
         if test -e "\$(dirname "\$0")/tidewm-asks-hyprland"; then
             hyprctl activewindow -j >/dev/null 2>&1 &
@@ -630,7 +631,7 @@ elif test -n "\$SWAYSOCK"; then
                         printf '# Written by tide from %s.json and %s.local.json\n' "\$page" "\$page" >"\$HOME/.config/tidewm/tide-\$page.conf"
                     done
             fi
-            tide-msg reload >/dev/null 2>&1
+            tide-msg --if-current reload >/dev/null 2>&1
         } &
     fi
 fi
@@ -808,6 +809,11 @@ queries = {"get_workspaces": 1, "get_outputs": 3, "get_tree": 4, "get_version": 
            "get_inputs": 100, "get_seats": 101, "get_bindings": 200,
            "get_named_bindings": 201}
 args = sys.argv[1:]
+# No tidewm is installed here, so the one running isn't older than it.
+if args == ["--outdated"]:
+    sys.exit(1)
+if args[:1] == ["--if-current"]:
+    args = args[1:]
 if args[:1] == ["--type"] and len(args) == 2 and args[1] in queries:
     kind, payload = queries[args[1]], ""
 else:

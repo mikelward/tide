@@ -12,7 +12,10 @@ import "lib/configerrors.mjs" as Errors
 // - tidewm: GET_CONFIG's `errors`, asked of `tide-msg` each time the
 //   listener connects, when a key reloads the config, on tidewm's reload
 //   event (a `workspace` event, `reload`, from any reload), and after each
-//   reload the shell asks for itself (reloaded()).
+//   reload the shell asks for itself (reloaded()). Each time it asks
+//   `tide-msg --outdated` too, whether the tidewm running is the one
+//   installed: after a setup run that built a newer one, the warning says
+//   to log out and back in, and nothing of tide's reloads the config.
 // - Hyprland: `hyprctl configerrors`, asked as the shell starts and on
 //   each `configreloaded` event. tide's Hyprland config hides Hyprland's
 //   own banner in the tide session, so this is where they show.
@@ -25,6 +28,10 @@ Singleton {
     property var state: Errors.NOTHING
     // The errors, as tidewm worded them: none in Hyprland's session.
     readonly property var errors: state.errors
+    // The tidewm running isn't the one installed: it was updated.
+    readonly property bool outdated: state.outdated
+    // Whether the bar's warning shows: errors, or an update.
+    readonly property bool warns: Errors.warns(state)
     readonly property string home: Quickshell.env("HOME") ?? ""
     // Asked again while asking: the config was reloaded meanwhile.
     property bool again: false
@@ -53,6 +60,10 @@ Singleton {
     }
 
     function ask() {
+        // One in flight answers for now too: what's installed rarely changes.
+        if (Compositor.tidewm && !version.running) {
+            version.running = true;
+        }
         if (config.running) {
             root.again = true;
             return;
@@ -88,10 +99,11 @@ Singleton {
 
     function notify() {
         const errors = root.state.errors;
-        const key = Errors.keyOf(errors);
-        Launcher.run(Errors.notifyCommand(errors, root.compositorName), ok => {
+        const outdated = root.state.outdated;
+        const key = Errors.newsOf(root.state);
+        Launcher.run(Errors.notifyCommand(errors, root.compositorName, outdated), ok => {
             if (!ok) {
-                console.warn("tide: couldn't say that tidewm's config has errors; trying again in 30 s");
+                console.warn(`tide: couldn't say that ${Errors.summary(errors, root.compositorName, outdated)}; trying again in 30 s`);
             }
             root.state = Errors.sent(root.state, key, ok);
             if (ok) {
@@ -110,7 +122,8 @@ Singleton {
             root.state = Errors.unreadable(root.state);
             return;
         }
-        if (reply.errors.length === 0) {
+        // A load with none forgets the errors told of, not an update.
+        if (reply.errors.length === 0 && kept.told !== Errors.OUTDATED) {
             kept.told = "";
         }
         root.took(Errors.loaded(root.state, reply.errors));
@@ -200,6 +213,36 @@ Singleton {
                     root.ask();
                 }
             });
+        }
+    }
+
+    // Whether the tidewm running is the one installed, by its exit status
+    // (Errors.outdatedOf). One that doesn't say, as a tide-msg from before
+    // --outdated while a setup run is still installing, leaves what was
+    // known. One that can't start says nothing here: `config` reports the
+    // same tide-msg.
+    Process {
+        id: version
+
+        property string errors: ""
+
+        command: ["tide-msg", "--outdated"]
+        stderr: StdioCollector {
+            onStreamFinished: version.errors = text
+        }
+        onExited: (code, status) => {
+            const outdated = Errors.outdatedOf(code);
+            if (outdated === undefined) {
+                // stderr may end after the exit.
+                Qt.callLater(() => console.warn(`tide: tide-msg --outdated exited ${code}, so the bar doesn't say whether tidewm was updated: ${version.errors.trim()}`));
+                root.took(Errors.unversioned(root.state));
+                return;
+            }
+            // One that's over is forgotten, as fixed errors are.
+            if (!outdated && kept.told === Errors.OUTDATED) {
+                kept.told = "";
+            }
+            root.took(Errors.versioned(root.state, outdated));
         }
     }
 

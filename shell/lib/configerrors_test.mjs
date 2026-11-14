@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    NOTHING, SHOWN, ICON, replyErrors, keyOf, loaded, unreadable, sent, pending, retry,
+    NOTHING, SHOWN, ICON, OUTDATED, replyErrors, keyOf, newsOf, warns, outdatedOf, loaded, versioned, unversioned, unreadable, sent, pending, retry,
     summary, body, notifyCommand, parts, listed, advice, asksForErrors, hyprlandErrors, compositorName,
 } from "./configerrors.mjs";
 
@@ -165,4 +165,115 @@ test("Hyprland's errors are hyprctl configerrors' lines, and its words name Hypr
     assert.equal(summary(["x"], "Hyprland"), "Hyprland's config has 1 error");
     assert.equal(advice(["x", "y"], "Hyprland"), "Fix them, then reload Hyprland's config.");
     assert.equal(notifyCommand(["x"], "Hyprland")[4], "Hyprland's config has 1 error");
+});
+
+test("tide-msg --outdated's exit status says whether tidewm was updated, or nothing", () => {
+    assert.equal(outdatedOf(0), true);
+    assert.equal(outdatedOf(1), false);
+    // An older tide-msg's usage error, or no tidewm to ask.
+    assert.equal(outdatedOf(2), undefined);
+    assert.equal(outdatedOf(127), undefined);
+});
+
+test("a tidewm that was updated warns with no errors, and is notified once", () => {
+    assert.equal(warns(NOTHING), false);
+    let r = versioned(NOTHING, true);
+    assert.equal(r.notify, true);
+    assert.equal(warns(r.state), true);
+    assert.deepEqual(r.state.errors, []);
+    // Asked again on a reconnect, while the notification is on its way.
+    assert.equal(versioned(r.state, true).notify, false);
+    const told = sent(r.state, newsOf(r.state), true);
+    assert.equal(pending(told), false);
+    assert.equal(versioned(told, true).notify, false);
+});
+
+test("after an update, errors coming and going aren't more news", () => {
+    const told = sent(versioned(NOTHING, true).state, OUTDATED, true);
+    let r = loaded(told, [A, B]);
+    assert.equal(r.notify, false, "the old tidewm's errors");
+    assert.deepEqual(r.state.errors, [A, B]);
+    assert.equal(r.state.outdated, true);
+    r = loaded(r.state, []);
+    assert.equal(r.notify, false);
+    assert.equal(warns(r.state), true, "still to log out");
+    assert.equal(unreadable(r.state).outdated, true);
+});
+
+test("an update found after its errors were notified is said once more", () => {
+    const told = sent(loaded(NOTHING, [A]).state, keyOf([A]), true);
+    const r = versioned(told, true);
+    assert.equal(r.notify, true);
+    assert.equal(retry(sent(r.state, OUTDATED, false)).notify, true, "and again if it didn't arrive");
+});
+
+test("a tidewm that's the one installed warns only of errors", () => {
+    assert.equal(versioned(NOTHING, false).notify, false);
+    assert.equal(warns(versioned(NOTHING, false).state), false);
+    const r = versioned(loaded(NOTHING, [A]).state, false);
+    assert.equal(warns(r.state), true);
+    assert.equal(newsOf(r.state), keyOf([A]));
+});
+
+test("an update says to log out and back in, not to fix errors and reload", () => {
+    assert.equal(summary([], "tidewm", true), "tidewm was updated");
+    assert.equal(summary([A, B], "tidewm", true), "tidewm was updated");
+    assert.equal(body([A, B], true), "Log out and back in to use it.");
+    assert.equal(advice([], "tidewm", true), "Log out and back in to use it.");
+    assert.match(advice([A, B], "tidewm", true), /^Log out and back in/);
+    assert.doesNotMatch(advice([A, B], "tidewm", true), /reload/);
+    const command = notifyCommand([A, B], "tidewm", true);
+    assert.deepEqual(command.slice(-2), ["tidewm was updated", "Log out and back in to use it."]);
+});
+
+test("an update already told of isn't news again, whichever answers first after a shell reload", () => {
+    // The shell starts over with what it told of kept, and the errors and
+    // the version are asked side by side.
+    const kept = sent(NOTHING, OUTDATED, true);
+    let r = loaded(kept, []);
+    assert.equal(r.state.told, OUTDATED);
+    assert.equal(versioned(r.state, true).notify, false, "the errors first");
+    r = versioned(kept, true);
+    assert.equal(r.notify, false);
+    assert.equal(loaded(r.state, [A]).notify, false, "the version first");
+    // And errors told of aren't forgotten by a version that says nothing new.
+    const errors = sent(NOTHING, keyOf([A]), true);
+    assert.equal(loaded(versioned(errors, false).state, [A]).notify, false);
+});
+
+test("an update that's over is forgotten, so the next one is news", () => {
+    const told = sent(versioned(NOTHING, true).state, OUTDATED, true);
+    const over = versioned(told, false);
+    assert.equal(over.state.told, "");
+    assert.equal(warns(over.state), false);
+    assert.equal(versioned(over.state, true).notify, true);
+});
+
+// A shell that reloads remembers it told of the update, and asks for the
+// errors and the version again. The errors answering first, unchanged,
+// aren't news, and nor is the update after them.
+test("a reloaded shell says neither the update nor its errors again", () => {
+    const remembered = sent(NOTHING, OUTDATED, true);
+    const errors = ["tide.conf:177: bindsym has no flag --desc"];
+    const first = loaded(remembered, errors);
+    assert.equal(first.notify, false, "the errors, before the version is in");
+    assert.equal(pending(first.state), false, "and none is owed meanwhile");
+    assert.deepEqual(first.state.errors, errors, "though the bar lists them");
+    const second = versioned(first.state, true);
+    assert.equal(second.notify, false, "nor the update, told of already");
+    assert.equal(second.state.told, OUTDATED);
+    assert.equal(loaded(second.state, errors).notify, false, "nor the errors at a later load");
+});
+
+test("errors that waited on the version are said once it's not an update, or can't be told", () => {
+    const remembered = sent(NOTHING, OUTDATED, true);
+    const errors = ["tide.conf:3: unknown command"];
+    const waiting = loaded(remembered, errors).state;
+    const current = versioned(waiting, false);
+    assert.equal(current.notify, true, "tidewm is the one installed after all");
+    assert.equal(current.state.sending, keyOf(errors));
+    const unknown = unversioned(waiting);
+    assert.equal(unknown.notify, true, "it couldn't be told");
+    assert.equal(unknown.state.sending, keyOf(errors));
+    assert.equal(unversioned(loaded(remembered, []).state).notify, false, "with no errors there's nothing to say");
 });

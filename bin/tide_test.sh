@@ -1490,7 +1490,7 @@ run FAKE_IS_ACTIVE=inactive FAKE_HYPRCTL_REPLY='error' "$qs" reload
 check "a failed reload still starts the shell" contains "$(cat "$log")" "systemctl --user start tide.service"
 run FAKE_IS_ACTIVE=active "$tw" "$qs" reload
 check "on tidewm, reload is tide-msg reload, then tells the running shell, and asks Hyprland nothing" \
-    test "$?:$(cat "$log")" = "0:tide-msg reload${nl}systemctl --user is-active tide.service${nl}qs -c tide ipc call configerrors reloaded"
+    test "$?:$(cat "$log")" = "0:tide-msg --if-current reload${nl}systemctl --user is-active tide.service${nl}qs -c tide ipc call configerrors reloaded"
 run FAKE_IS_ACTIVE=inactive "$tw" "$qs" reload
 check "on tidewm, a shell that's started isn't told: it reads the errors as it starts" \
     lacks "$(cat "$log")" "qs "
@@ -1501,6 +1501,14 @@ check "and says tidewm's errors" \
 check "in a notification too" \
     contains "$(cat "$log")" "notify-send -a tide Config not reloaded tide-msg: reload: /c:3: no setting is called bindcode"
 check "and the shell is told, so the bar shows the errors" contains "$(cat "$log")" "qs -c tide ipc call configerrors reloaded"
+run FAKE_IS_ACTIVE=active FAKE_TIDEMSG_STATUS=3 FAKE_TIDEMSG_ERROR="reload wasn't sent: tidewm was updated (v0.3.100 is running, and v0.3.108 is installed)" "$tw" "$qs" reload
+check "on tidewm, reload exits 1 when the tidewm running isn't the one installed" test $? -eq 1
+check "and says tidewm was updated" \
+    contains "$(cat "$tmp/err")" "tide reload: tide-msg: reload wasn't sent: tidewm was updated (v0.3.100 is running, and v0.3.108 is installed)"
+check "and to log out and back in, in a notification" \
+    contains "$(cat "$log")" "notify-send -a tide tidewm was updated Log out and back in to reload its config."
+check "not that tidewm refused its config" lacks "$(cat "$log")" "Config not reloaded"
+check "and the shell is told, so the bar says so too" contains "$(cat "$log")" "qs -c tide ipc call configerrors reloaded"
 run FAKE_IS_ACTIVE=active FAKE_QS_STATUS=255 FAKE_QS_SAYS="Target not found" "$tw" "$qs" reload
 check "a shell that can't be told isn't a failed reload" test $? -eq 0
 check "but is reported" \

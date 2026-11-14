@@ -86,13 +86,14 @@ Item {
     }
 
     // The compositor's config errors: a warning triangle, only while its config
-    // has errors, which hovering counts and a click lists (lib/configerrors.mjs).
+    // has errors, which hovering counts and a click lists, or while a tidewm
+    // that was updated waits for a new login (lib/configerrors.mjs).
     SymbolicIcon {
         id: config
 
         x: root.geometry.x.config
         anchors.verticalCenter: parent.verticalCenter
-        visible: ConfigErrorsData.errors.length > 0
+        visible: ConfigErrorsData.warns
         name: Errors.ICON
         color: Theme.warn
 
@@ -116,7 +117,7 @@ Item {
         BarTip {
             item: config
             shown: configHit.hovered
-            text: Errors.summary(ConfigErrorsData.errors, ConfigErrorsData.compositorName)
+            text: Errors.summary(ConfigErrorsData.errors, ConfigErrorsData.compositorName, ConfigErrorsData.outdated)
         }
     }
 

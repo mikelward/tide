@@ -394,6 +394,46 @@ check "a tidewm that fails with status 1 and no version can't run" has "$output"
 check "and its session isn't installed" lacks "$calls" "SESSIONS=tide tide-tidewm"
 teardown
 
+# Run in a tidewm session whose tidewm is older than the one now installed,
+# the run ends by saying to log out and back in. The session's tide-msg
+# says whether it is, by its exit status.
+updated="tidewm was updated: the new one runs after you log out and back in."
+fake_tide_msg() {
+    cat > "$T/usr-bin/tide-msg" <<'MOCK'
+#!/bin/sh
+test "$*" = --outdated || exit 64
+echo "$FAKE_OUTDATED_SAYS"
+exit "$FAKE_OUTDATED"
+MOCK
+    chmod +x "$T/usr-bin/tide-msg"
+}
+setup; ARGS=(--tidewm); fake_tide_msg
+run SWAYSOCK="$T/sway.sock" FAKE_OUTDATED=0 FAKE_OUTDATED_SAYS="tidewm v0.3.100 is running, and v0.3.108 is installed"
+check "under a tidewm older than the one installed, setup succeeds" test "$status" -eq 0
+check "and says to log out and back in, after everything it did" \
+    test "$(printf '%s\n' "$output" | grep -v '^tide-setup finished' | tail -n 1)" = "$updated"
+teardown
+setup; ARGS=(--tidewm); fake_tide_msg
+run SWAYSOCK="$T/sway.sock" FAKE_OUTDATED=1
+check "under the tidewm installed, nothing is said of an update" lacks "$output" "tidewm was updated"
+teardown
+# Outside tidewm there's none running to be older.
+setup; ARGS=(--tidewm); fake_tide_msg
+run SWAYSOCK= FAKE_OUTDATED=0
+check "outside a tidewm session, nothing is said of an update" lacks "$output" "tidewm was updated"
+teardown
+# A tide-msg that can't tell, as under sway, says nothing either, unless
+# asked for the details.
+setup; ARGS=(--tidewm); fake_tide_msg
+run SWAYSOCK="$T/sway.sock" FAKE_OUTDATED=2 FAKE_OUTDATED_SAYS="tide-msg: couldn't tell whether tidewm was updated"
+check "a tide-msg that can't tell doesn't claim an update" lacks "$output" "tidewm was updated: the new one"
+check "nor fail the run" test "$status" -eq 0
+teardown
+setup; ARGS=(--tidewm --verbose); fake_tide_msg
+run SWAYSOCK="$T/sway.sock" FAKE_OUTDATED=2 FAKE_OUTDATED_SAYS="tide-msg: couldn't tell whether tidewm was updated"
+check "but --verbose says why" has "$output" "couldn't tell whether the tidewm running is the one installed: tide-msg: couldn't tell whether tidewm was updated"
+teardown
+
 # With both sessions, both entries are checked: tidewm's too, not only
 # when Hyprland's session is absent.
 setup; ARGS=(--tidewm); run FAKE_NO_TIDEWM_ENTRY=yes

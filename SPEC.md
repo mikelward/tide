@@ -1936,8 +1936,10 @@ with new keys in **bold**:
 config or when the bar is gone. i3's and sway's `Super+Shift+C` is their
 preset's (§16).
 - It reloads the compositor's config: `hyprctl reload`, or in tidewm's
-  session (§5.3) `tide-msg reload`. tidewm keeps what it had when the file
-  has errors, and says them.
+  session (§5.3) `tide-msg --if-current reload`. tidewm keeps what it had
+  when the file has errors, and says them. A tidewm that was updated
+  since login isn't reloaded (§7.4): the notification says to log out
+  and back in.
 - It starts the shell (`systemctl --user start tide.service`) only if it
   isn't running. A running shell is never restarted, which would close
   its popovers and the launcher. One that has failed is reset first, so a
@@ -2528,6 +2530,34 @@ way, in the bar (maintainer, 2026-11-13).
 - A reply that can't be read, as an older tidewm's without `errors`,
   shows nothing, and the log says why.
 - `tide doctor` lists every error (§5.4).
+
+**tidewm updated.** `setup` builds tidewm's latest `main` and installs
+tide's config for it. Run from a tidewm session, it leaves the old
+tidewm running until logout, beside a config that may use what only the
+new one reads. An older tidewm drops each line it doesn't know, so one
+reload could take most key bindings with it (maintainer, 2026-11-14).
+
+- `tide-msg --outdated` says whether the tidewm running is the one
+  installed. It compares `GET_VERSION`'s `human_readable` with what
+  `tidewm -v`, on `PATH`, prints: both are the `git describe` the binary
+  was built with. It exits 0 when they differ, 1 when they match or no
+  tidewm is installed, and 2 when it can't tell.
+- `tide-msg --if-current COMMAND` sends the command only when they
+  match, or it can't tell, and exits 3 otherwise. Everything of tide's
+  that reloads tidewm's config goes through it: the settings pages
+  (§16), `tide reload` and `apply-input.sh`. A plain `tide-msg reload`,
+  typed by hand, is still sent.
+- A settings page whose reload wasn't sent keeps its file written, for
+  the next login, and doesn't try again. The log says why.
+- The shell asks `tide-msg --outdated` whenever it asks for the config's
+  errors: two local commands, never on a timer. While tidewm is
+  outdated the bar's warning shows, saying "tidewm was updated", and the
+  popover says "Log out and back in to use it." over any errors, which
+  may be the old tidewm's alone. One notification says the same.
+- `setup` ends with "tidewm was updated: the new one runs after you log
+  out and back in." `tide doctor` reports it too.
+- The config can't wait for the login instead: the new tidewm reads the
+  same file as it starts.
 
 **Wired.** A cable wins over Wi-Fi on the icon. With nothing else up, the
 icon shows a wired connection on its way up, and a cable that's in with
@@ -5119,8 +5149,8 @@ stays hand-written.
     `conf` is left alone.
   - On tidewm, they're written to `~/.config/tidewm/tide-keys.conf`, a
     `rebind NAME KEYS...` line each, `rebind NAME none` for off, which
-    `conf`'s tidewm config includes last, and `tide-msg reload` applies
-    them. Keys are kept as Hyprland writes them, so the same files serve
+    `conf`'s tidewm config includes last, and `tide-msg --if-current
+    reload` applies them (§7.4). Keys are kept as Hyprland writes them, so the same files serve
     both; a key tidewm can't bind, as a keycode, is left out and logged.
     tidewm skips a name its config doesn't have. The file is written only
     once tidewm has answered `GET_NAMED_BINDINGS`, as a tidewm from before
