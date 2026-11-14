@@ -245,7 +245,10 @@ else in this spec changes.
   name, and no ID, and 0.3.2 is the first Quickshell to follow workspaces by
   address (`HyprlandWorkspace.address`). So `setup` builds the pinned 0.3.2
   where apt's Quickshell is older; the greeter and the session checks still
-  take 0.3.0, which loads the shell.
+  take 0.3.0, which loads the shell. 0.3.2's `WlSessionLock` doesn't report
+  its own unlock (`lockStateChanged` is checked after the lock is released;
+  fixed after 0.3.2, in `18c95fa`), so tide's lock exits once the password
+  is accepted rather than waiting to hear it.
 - **Memory** is unmeasured; M2 measures it and sets a budget.
 
 ### 3.3 Session: uwsm and systemd user units
