@@ -45,7 +45,29 @@ ShellRoot {
         }
         if (root.face.unlocked && lock.locked) {
             lock.locked = false;
+            // Quickshell 0.3.2 doesn't report its own unlock: its
+            // WlSessionLock.unlock() releases the lock before it checks
+            // whether to emit lockStateChanged, so onLockedChanged never
+            // runs (fixed upstream in 18c95fa, after 0.3.2). So the lock
+            // exits here too, as onLockedChanged does; 0.3.1 emitted it
+            // inside the line above, so the timing is the same.
+            root.finish();
         }
+    }
+
+    // Exits once, with Lock.exitCode's code: 0 after the password, else 1,
+    // as when the compositor dropped the lock first.
+    property bool finished: false
+    function finish() {
+        if (root.finished) {
+            return;
+        }
+        root.finished = true;
+        const code = Lock.exitCode(root.face);
+        if (code !== 0) {
+            console.warn("tide-lock: the compositor dropped the lock before a password was accepted");
+        }
+        Qt.exit(code);
     }
 
     // Suspend, Restart and Shut down (LockPower.qml).
@@ -281,11 +303,7 @@ ShellRoot {
         // a failure: the unit starts it again, or its fallback.
         onLockedChanged: {
             if (!locked) {
-                const code = Lock.exitCode(root.face);
-                if (code !== 0) {
-                    console.warn("tide-lock: the compositor dropped the lock before a password was accepted");
-                }
-                Qt.exit(code);
+                root.finish();
             }
         }
 
