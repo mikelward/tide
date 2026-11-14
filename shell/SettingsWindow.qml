@@ -547,6 +547,61 @@ PanelWindow {
         }
     }
 
+    // The grid's thumbnails (galleryThumbnailCommand), a line a picture as
+    // each is found or made, tracked as every command the shell runs is,
+    // waiting for the end of stdout too, so no line comes after it's done.
+    // A run the grid has stopped, as it closed, is no failure.
+    Component {
+        id: thumbnailer
+
+        Process {
+            id: thumbProcess
+
+            property var tracker: null
+            property bool stopped: false
+            // How much of stdout's text has been taken as lines.
+            property int taken: 0
+
+            function handle(event) {
+                if (tracker.on(event)) {
+                    destroy();
+                }
+            }
+
+            function take(text) {
+                const got = Appearance.newLines(text, taken);
+                taken = got.taken;
+                for (const line of got.lines) {
+                    wallpaperGrid.thumbMade(thumbProcess, line);
+                }
+            }
+
+            Component.onCompleted: tracker = Run.track(command, (ok, errors) => wallpaperGrid.thumbsMade(thumbProcess, ok), {
+                warn: m => thumbProcess.stopped ? console.log(`${m} (stopped as the grid closed)`) : console.warn(m),
+                log: m => console.log(m)
+            }, true)
+            // Streamed, as SplitParser is, but with an end to wait for.
+            stdout: StdioCollector {
+                waitForEnd: false
+                onDataChanged: thumbProcess.take(text)
+                onStreamFinished: {
+                    thumbProcess.take(text);
+                    thumbProcess.handle({ type: "stdout", text: "" });
+                }
+            }
+            stderr: StdioCollector {
+                onStreamFinished: thumbProcess.handle({ type: "stderr", text: text })
+            }
+            onStarted: handle({ type: "started" })
+            onRunningChanged: {
+                if (!running) {
+                    handle({ type: "stopped" });
+                }
+            }
+            onExited: (exitCode, status) => handle({ type: "exited", code: exitCode })
+        }
+    }
+
     // tide-pick, tracked as every command the shell runs is
     // (shell/lib/launch.mjs), waiting for its stdout too.
     Component {
@@ -5440,6 +5495,14 @@ PanelWindow {
             readonly property var rows: Appearance.galleryRows(shown, screens, columns)
             property bool listing: false
             property string failed: ""
+            // Each picture's thumbnail so far, by path (galleryThumbnail),
+            // the run making them, and whether it's done; and those come in
+            // since the cells last looked, taken in together, so a few
+            // hundred lines don't redraw the grid a few hundred times.
+            property var thumbnails: ({})
+            property var thumbRun: null
+            property bool thumbsDone: false
+            property var thumbsIn: ({})
             // The picture under the pointer, by its name.
             property string hovered: ""
             readonly property string current: Appearance.expandHome(AppearanceData.settings[key] ?? "", Quickshell.env("HOME") ?? "")
@@ -5453,6 +5516,7 @@ PanelWindow {
                 modeMenu.visible = false;
                 images = [];
                 failed = "";
+                stopThumbs();
                 if (!listing) {
                     listing = true;
                     const run = gallery.createObject(root, { command: Appearance.galleryCommand(Appearance.galleryFolders(Quickshell.env("HOME") ?? "")) });
@@ -5472,6 +5536,63 @@ PanelWindow {
                 if (!ok) {
                     failed = `couldn't list every wallpaper: ${errors.trim().split("\n")[0] || "find didn't start"}`;
                 }
+                if (images.length === 0) {
+                    thumbsDone = true;
+                    return;
+                }
+                thumbRun = thumbnailer.createObject(root, { command: Appearance.galleryThumbnailCommand(Appearance.galleryRows(images, screens, columns)) });
+                thumbRun.running = true;
+            }
+
+            function thumbMade(run, line) {
+                const t = Appearance.galleryThumbnail(line);
+                if (run !== thumbRun || t === null) {
+                    return;
+                }
+                thumbsIn[t.path] = t.thumb;
+                if (!thumbsTimer.running) {
+                    thumbsTimer.start();
+                }
+            }
+
+            // The rest of the cells draw their pictures themselves, whether
+            // or not every thumbnail was made (Run.track has logged why).
+            function thumbsMade(run, ok) {
+                if (run !== thumbRun) {
+                    return;
+                }
+                takeThumbs();
+                thumbRun = null;
+                thumbsDone = true;
+            }
+
+            function takeThumbs() {
+                thumbsTimer.stop();
+                if (Object.keys(thumbsIn).length > 0) {
+                    wallpaperGrid.thumbnails = Object.assign({}, wallpaperGrid.thumbnails, thumbsIn);
+                    thumbsIn = ({});
+                }
+            }
+
+            // Thumbnails made after the grid closes aren't wanted till it
+            // opens again, which makes its own.
+            function stopThumbs() {
+                thumbsTimer.stop();
+                if (thumbRun !== null) {
+                    thumbRun.stopped = true;
+                    thumbRun.running = false;
+                    thumbRun = null;
+                }
+                wallpaperGrid.thumbnails = ({});
+                thumbsIn = ({});
+                thumbsDone = false;
+            }
+
+            Timer {
+                id: thumbsTimer
+
+                interval: 50
+                onTriggered: wallpaperGrid.takeThumbs()
             }
 
             function close() {
@@ -5479,6 +5600,7 @@ PanelWindow {
                 modeMenu.visible = false;
                 hovered = "";
                 images = [];
+                stopThumbs();
             }
 
             function choose(path) {
@@ -5758,14 +5880,14 @@ PanelWindow {
                                     color: Theme.surface2
                                     clip: true
 
-                                    // Decoded small and off the UI thread, so a
-                                    // few hundred 4K pictures don't stall the
-                                    // panel.
+                                    // Its thumbnail, decoded off the UI thread,
+                                    // so a page shows at once and a few hundred
+                                    // 4K pictures don't stall the panel.
                                     Image {
                                         id: thumbImage
 
                                         anchors.fill: parent
-                                        source: Appearance.fileUrl(thumb.modelData.path)
+                                        source: Appearance.gallerySource(thumb.modelData.path, wallpaperGrid.thumbnails, wallpaperGrid.thumbsDone)
                                         sourceSize.width: 320
                                         sourceSize.height: 200
                                         fillMode: row.modelData.section === "fits" ? Image.PreserveAspectCrop : Image.PreserveAspectFit

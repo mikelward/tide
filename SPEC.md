@@ -5420,9 +5420,22 @@ stays hand-written.
     - A Plasma wallpaper is a folder of one picture at several sizes. It
       shows once, named for its folder, and sets its largest size; its
       dark version, if it has one, shows too.
-    - The thumbnails are decoded small and in the background, so a few
-      hundred pictures don't stall the panel. One Qt can't decode, such as
-      JPEG XL without kimageformats, shows its name instead.
+    - Each picture is drawn from its thumbnail, so a page shows at once:
+      Qt decodes the grid's pictures one at a time, and a 4K one takes a
+      good part of a second.
+      - `tide-pick --thumbnails` gives them, in the grid's order, so the
+        first page comes first. Each comes from the freedesktop.org
+        thumbnail cache, `~/.cache/thumbnails/x-large`, 512 pixels at most,
+        which file managers share, when its `Thumb::MTime` is the picture's.
+      - It makes the rest four at once, JPEG and PNG itself, any other type
+        with a thumbnailer installed for it (a `.thumbnailer` file, such as
+        libjxl's for JPEG XL). A cell shows each as it's made.
+      - A picture with no thumbnail is decoded small and in the background,
+        as before, so a few hundred don't stall the panel. One Qt can't
+        decode, such as JPEG XL without kimageformats, shows its name
+        instead.
+      - **Cost:** some 100 to 300 KB of cache a picture, kept until
+        something clears the cache; nothing new to install.
     - It lists the folders afresh each time it opens, so a picture you've
       just downloaded shows.
     - A folder it can't read all of, a subfolder it may not open say,

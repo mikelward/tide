@@ -6,10 +6,12 @@
 //
 //	tide-pick [--title TITLE] [--folder DIR] [--images]
 //	tide-pick --list DIR...
+//	tide-pick --thumbnails PATH...
 //
 // It exits 0 having printed the path, or nothing when the chooser is
 // cancelled, which is no failure; and 2 with what went wrong on stderr.
-// With --list, it lists the wallpapers under each DIR instead (list.go).
+// With --list, it lists the wallpapers under each DIR instead (list.go);
+// with --thumbnails, it gives each picture a thumbnail (thumbs.go).
 package main
 
 import (
@@ -148,11 +150,15 @@ func run(args []string, stdout, stderr io.Writer, connect func() (*dbus.Conn, er
 	folder := flags.String("folder", "", "the folder it opens in")
 	images := flags.Bool("images", false, "offer only images")
 	listing := flags.Bool("list", false, "list the pictures under each folder named, with their sizes")
+	thumbing := flags.Bool("thumbnails", false, "print each picture named with its thumbnail, making those missing")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 	if *listing {
 		return list(flags.Args(), stdout, stderr)
+	}
+	if *thumbing {
+		return thumbnails(flags.Args(), stdout, stderr)
 	}
 	if flags.NArg() > 0 {
 		fmt.Fprintf(stderr, "tide-pick: takes no arguments, only flags: %s\n", strings.Join(flags.Args(), " "))

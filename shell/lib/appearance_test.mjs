@@ -9,7 +9,7 @@ import {
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, placed, locationRow, resetLocation, withLocation, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua, roundedCorners,
-    expandHome, pickCommand, galleryFolders, galleryCommand, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
+    expandHome, pickCommand, galleryFolders, galleryCommand, galleryThumbnailCommand, galleryThumbnail, gallerySource, newLines, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
     POSITIONS, POSITION_CHOICES, BAR_POSITIONS, BAR_CHOICES, barAtBottom, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf, ROUNDING,
@@ -1635,4 +1635,38 @@ test("the Bar page's icon list is written to the local file, beside the rest", (
     const r = withSetting('{"barPosition": "bottom"}', "barIcons", icons);
     assert.deepEqual(JSON.parse(r.text), { barPosition: "bottom", barIcons: icons });
     assert.match(withSetting(null, "barIcons", [{ id: "network" }]).error, /^barIcons must be/);
+});
+
+test("the grid asks for thumbnails in its own order, so the first page comes first", () => {
+    const rows = [
+        { section: "fits", heading: "Fits your screen", images: [{ path: "/w/b.jpg" }, { path: "/w/a b.png" }] },
+        { section: "others", heading: "Other shapes", images: [{ path: "/w/c.jxl" }] },
+    ];
+    assert.deepEqual(galleryThumbnailCommand(rows), ["tide-pick", "--thumbnails", "/w/b.jpg", "/w/a b.png", "/w/c.jxl"]);
+    assert.deepEqual(galleryThumbnailCommand([]), ["tide-pick", "--thumbnails"]);
+});
+
+test("a thumbnail line is a picture and its thumbnail, or none", () => {
+    assert.deepEqual(galleryThumbnail("/w/a b.png\t/c/thumbnails/x-large/0a.png"), { path: "/w/a b.png", thumb: "/c/thumbnails/x-large/0a.png" });
+    assert.deepEqual(galleryThumbnail("/w/c.jxl\t"), { path: "/w/c.jxl", thumb: "" });
+    for (const line of ["", "tide-pick: oops", "\t/c/x.png", "relative.png\t/c/x.png", undefined]) {
+        assert.equal(galleryThumbnail(line), null, String(line));
+    }
+});
+
+test("a cell draws its thumbnail, else the picture, and nothing while it waits", () => {
+    const thumbs = { "/w/a b.png": "/c/thumbnails/x-large/0a.png", "/w/c.jxl": "" };
+    assert.equal(gallerySource("/w/a b.png", thumbs, false), "file:///c/thumbnails/x-large/0a.png");
+    assert.equal(gallerySource("/w/c.jxl", thumbs, false), "file:///w/c.jxl", "none made: the grid draws the picture");
+    assert.equal(gallerySource("/w/d.jpg", thumbs, false), "", "still being made: nothing decoded whole meanwhile");
+    assert.equal(gallerySource("/w/d.jpg", thumbs, true), "file:///w/d.jpg", "tide-pick done without it, or gone");
+    assert.equal(gallerySource("/w/d.jpg", undefined, true), "file:///w/d.jpg");
+});
+
+test("stdout's lines are taken whole, as they come", () => {
+    assert.deepEqual(newLines("", 0), { lines: [], taken: 0 });
+    assert.deepEqual(newLines("/a\t/t/a", 0), { lines: [], taken: 0 }, "a line cut short waits");
+    assert.deepEqual(newLines("/a\t/t/a\n/b\t", 0), { lines: ["/a\t/t/a"], taken: 8 });
+    assert.deepEqual(newLines("/a\t/t/a\n/b\t\n/c\t/t/c\n", 8), { lines: ["/b\t", "/c\t/t/c"], taken: 20 });
+    assert.deepEqual(newLines("/a\t/t/a\n", 8), { lines: [], taken: 8 }, "nothing new");
 });

@@ -1024,6 +1024,49 @@ export function galleryCommand(folders) {
     return ["tide-pick", "--list"].concat(folders);
 }
 
+// The command that prints each of the grid's pictures with its thumbnail,
+// making those missing (tide-pick --thumbnails), in the grid's order,
+// `rows` galleryRows's, so the first page comes first.
+export function galleryThumbnailCommand(rows) {
+    const paths = [];
+    for (const row of rows) {
+        for (const image of row.images) {
+            paths.push(image.path);
+        }
+    }
+    return ["tide-pick", "--thumbnails"].concat(paths);
+}
+
+// A line galleryThumbnailCommand printed: { path, thumb }, thumb "" for a
+// picture the grid draws itself; null for anything else.
+export function galleryThumbnail(line) {
+    const text = String(line ?? "");
+    const tab = text.indexOf("\t");
+    return tab > 0 && text.startsWith("/") ? { path: text.slice(0, tab), thumb: text.slice(tab + 1) } : null;
+}
+
+// The whole lines in `text`, stdout so far, past `from`, the length
+// already taken: { lines, taken }, taken the length through the last
+// newline, so a line cut short waits for the rest of it.
+export function newLines(text, from) {
+    const end = String(text ?? "").lastIndexOf("\n") + 1;
+    if (end <= from) {
+        return { lines: [], taken: from };
+    }
+    return { lines: text.slice(from, end - 1).split("\n"), taken: end };
+}
+
+// The URL a grid cell draws for the picture at `path`, by `thumbs`, each
+// picture's galleryThumbnail so far: its thumbnail, or the picture itself
+// when it has none, or when tide-pick is `done` without saying; until
+// then "", so no picture is decoded whole while its thumbnail is made.
+export function gallerySource(path, thumbs, done) {
+    if (Object.prototype.hasOwnProperty.call(thumbs ?? {}, path)) {
+        return fileUrl(thumbs[path] || path);
+    }
+    return done ? fileUrl(path) : "";
+}
+
 // The grid's pictures from what galleryCommand printed, `text`, a line
 // each of width, height and path, tab-separated, as `{ path, name, width,
 // height, collection, mode }` sorted by name; a size unknown is 0.
