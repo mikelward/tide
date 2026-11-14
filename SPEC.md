@@ -4377,9 +4377,9 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
   - the bar shows the red **Sharing** pill;
   - popups are held while a screen is shared, and not during a window
     share, which can't show them (§9);
-  - popups, the notification center and the launcher carry
-    `no_screen_share`, so if one does appear, the stream shows black there
-    instead of its content;
+  - popups, the notification center, the launcher, the picker (§8.4) and
+    the share picker carry `no_screen_share`, so if one does appear, the
+    stream shows black there instead of its content;
   - the bar itself is shared normally, so viewers see an ordinary desktop.
 
 ## 13. Screenshots

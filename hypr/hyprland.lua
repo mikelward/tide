@@ -2638,6 +2638,14 @@ hl.layer_rule({
     no_screen_share = true,
 })
 
+-- And the picker (SPEC.md §8.4), whose clipboard history and passwords
+-- are as much yours as the launcher's results.
+hl.layer_rule({
+    name = "no-share-picker",
+    match = { namespace = "^tide-picker$" },
+    no_screen_share = true,
+})
+
 --------------------------------------------------------------------------------
 -- PER-MACHINE OVERRIDES
 --------------------------------------------------------------------------------

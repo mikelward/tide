@@ -1690,6 +1690,14 @@ test("tide's launcher is blacked out of screen shares", function()
     eq(true, r.no_screen_share)
 end)
 
+test("tide's picker is blacked out of screen shares", function()
+    load()
+    local r = S.layer_rules["no-share-picker"]
+    truthy(r, "the rule")
+    eq("^tide-picker$", r.match.namespace)
+    eq(true, r.no_screen_share)
+end)
+
 test("the brightness keys show the OSD through tide, else plain brightnessctl", function()
     load()
     for keys, step in pairs({ XF86MonBrightnessUp = "5%+", XF86MonBrightnessDown = "5%-" }) do
