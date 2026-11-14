@@ -38,6 +38,20 @@ if test $# -gt 0; then
     exit 2
 fi
 
+# On the text console, as greetd runs it, the console is cleared, with the
+# cursor hidden, and the greeter's messages and its compositor's go to the
+# journal instead (systemd-cat), so nothing is left on screen between the
+# greeter and the session's splash. The console is kept as fd 3 for the
+# text login. $TIDE_GREETER_ON_CONSOLE stands in for the console in the
+# tests.
+if test -z "${TIDE_GREETER_JOURNALED-}" && { test -t 2 || test -n "${TIDE_GREETER_ON_CONSOLE-}"; } \
+    && command -v systemd-cat >/dev/null 2>&1; then
+    printf '\033[?25l\033[H\033[2J' >&2
+    export TIDE_GREETER_JOURNALED=1
+    exec 3>&2
+    exec systemd-cat --identifier="$prog" -- "$0" "$@"
+fi
+
 # text_login WHY: says why the greeter can't run, then runs agreety, greetd's
 # own text login, so the machine can still be logged in to and fixed. It's
 # looked for on the PATH and where the distros put it. Without it, fails,
@@ -52,6 +66,12 @@ text_login() {
         _agreety=$_dir/agreety
         if test -n "$_dir" && test -f "$_agreety" && test -x "$_agreety"; then
             echo "$prog: logging in on the console instead (agreety)" >&2
+            # Back on the console, where the messages went to the journal,
+            # cleared and with its cursor, for the text login.
+            if (: >&3) 2>/dev/null; then
+                printf '\033[?25h\033[H\033[2J' >&3
+                exec >&3 2>&3 3>&-
+            fi
             # On the console too, which is all there is to read here.
             printf "\ntide's greeter could not start: %s\n\n" "$1"
             exec "$_agreety" --cmd /bin/sh
@@ -250,9 +270,9 @@ if test "$compositor" = tidewm; then
     # qs reads which compositor it's on from here (shell/lib/compositor.mjs).
     # And which tide-msg to ask tidewm with: the one beside this, which setup
     # checked, not whichever is first on the PATH.
-    XDG_CURRENT_DESKTOP=tidewm TIDE_GREETER_MSG=$tide_msg tidewm -c "$tw_config" -s "$(tidewm_command)"
+    XDG_CURRENT_DESKTOP=tidewm TIDE_GREETER_MSG=$tide_msg tidewm -c "$tw_config" -s "$(tidewm_command)" 3>&-
 else
-    Hyprland --config "$config"
+    Hyprland --config "$config" 3>&-
 fi
 status=$?
 if test "$status" -ne 0; then

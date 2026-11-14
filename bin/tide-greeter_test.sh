@@ -125,17 +125,19 @@ mkdir "$run" || exit 1
 greeter() {
     _want=$1
     shift
-    rm -f "$tmp/log" "$tmp/log.busctl" "$tmp/log.sleep" "$tmp/log.msg"
+    rm -f "$tmp/log" "$tmp/log.busctl" "$tmp/log.sleep" "$tmp/log.msg" "$tmp/log.journal"
     out=$(env -i PATH="${GREETER_PATH:-$tmp/stubs:$tmp/sys}" STUB_LOG="$tmp/log" \
         BUSCTL_OUT="${BUSCTL_OUT-}" BUSCTL_EXIT="${BUSCTL_EXIT:-0}" HYPRLAND_EXIT="${HYPRLAND_EXIT:-0}" \
         QS_EXIT="${QS_EXIT:-0}" XDG_RUNTIME_DIR="${RUNTIME_DIR-$run}" \
         TIDEWM_V_FAILS="${TIDEWM_V_FAILS-}" TIDEWM_EXIT="${TIDEWM_EXIT:-0}" TIDE_MSG_FAILS="${TIDE_MSG_FAILS-}" \
         TIDE_GREETER_AGREETY_DIRS="${AGREETY_DIRS-}" TIDE_GREETER_ICON_DIRS="${ICON_DIRS-$tmp/icons}" \
+        ${ON_CONSOLE:+TIDE_GREETER_ON_CONSOLE=1} \
         "$prefix/bin/tide-greeter" "$@" 2>&1)
     _code=$?
     ran=$(cat "$tmp/log" 2>/dev/null)
     slept=$(cat "$tmp/log.sleep" 2>/dev/null)
     msg=$(cat "$tmp/log.msg" 2>/dev/null)
+    journal=$(cat "$tmp/log.journal" 2>/dev/null)
     if test "$_code" -eq "$_want"; then
         pass
     else
@@ -387,6 +389,30 @@ GREETER_PATH=
 if command -v shellcheck >/dev/null 2>&1; then
     check "shellcheck passes" shellcheck -s sh bin/tide-greeter bin/tide-greeter_test.sh
 fi
+
+# On the console, as greetd runs it, nothing is left there for the gap
+# before the session: the console is cleared, with the cursor hidden, and
+# the messages go to the journal. systemd-cat runs the command with its
+# output in $STUB_LOG.journal, after a line naming its identifier.
+mkdir "$tmp/cat" || exit 1
+cat >"$tmp/cat/systemd-cat" <<'EOF'
+#!/bin/sh
+printf 'identifier %s\n' "${1#--identifier=}" >>"$STUB_LOG.journal"
+shift 2
+exec "$@" >>"$STUB_LOG.journal" 2>&1
+EOF
+chmod +x "$tmp/cat/systemd-cat" || exit 1
+GREETER_PATH="$tmp/cat:$tmp/stubs:$tmp/sys" ON_CONSOLE=1 greeter 0
+check "on the console, it's cleared with the cursor hidden" contains "$out" "$(printf '\033[?25l\033[H\033[2J')"
+check "and the greeter says nothing there" lacks "$out" "tide-greeter:"
+check "its messages go to the journal as tide-greeter" contains "$journal" "identifier tide-greeter"
+check "all of them" contains "$journal" "tide-greeter: the greeter is done; greetd starts the session"
+check "and the cursor stays hidden for the session" lacks "$out" "$(printf '\033[?25h')"
+GREETER_PATH="$tmp/cat:$with_agreety" ON_CONSOLE=1 HYPRLAND_EXIT=1 greeter 0
+check "a greeter that fails on the console brings its cursor back" contains "$out" "$(printf '\033[?25h')"
+check "and says why there" contains "$out" "tide's greeter could not start: Hyprland exited 1"
+check "with the text login there" contains "$out" "agreety --cmd /bin/sh"
+check "while the details go to the journal" contains "$journal" "tide-greeter: Hyprland exited 1"
 
 printf 'tide-greeter_test.sh: %d passed, %d failed\n' "$passes" "$failures"
 test "$failures" -eq 0
