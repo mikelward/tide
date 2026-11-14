@@ -6395,6 +6395,20 @@ are what "done" means.
 
 ## 20. Testing
 
+`make test` runs three targets, each of which CI also runs:
+
+- `test-fast`: the Lua (`test-lua`), the shell scripts' `*_test.sh`, the
+  integration test, the accents test, `qmllint` and the Node tests over
+  `shell/lib`, the theme, connector, character and city generators, and
+  `go vet` and `go test`.
+- `test-selftest`: `shell/integration_test_test.sh`, which runs the whole
+  integration test against stand-ins for each of its cases. It takes
+  minutes, so CI runs it as a job of its own.
+- `test-install`: the installer's eleven `install/tide-setup_*_test`
+  scripts, one target each, so `-j` runs them side by side.
+
+What each covers:
+
 - **Pure logic in plain JavaScript** modules, run by `node --test` in CI:
   clock labels, day offsets and hiding the zone that is local, workspace
   states, icons and attention marks, the DST-change finder, fuzzy scoring,
@@ -6411,7 +6425,8 @@ are what "done" means.
   fcitx5 in it. `make test-accents` builds `accents_core_test.cpp` with
   the C++ compiler alone and runs it, from `make test` (§8.6).
 - **Qt's JavaScript, not Node's.** Quickshell runs those modules in Qt's
-  QML engine, which (checked on Qt 6.11) has no object spread and none of
+  QML engine, which (checked on Qt 6.11; CI runs Ubuntu 26.04's Qt 6.10)
+  has no object spread and none of
   the built-ins newer than ECMAScript 2016, such as `flatMap`, `at` or
   `Object.fromEntries`. Its regular expressions have no Unicode property
   escapes, lookbehind or named groups; those match nothing there rather
@@ -6572,10 +6587,28 @@ are what "done" means.
   on made-up monitors: the parts' names both ways, a switch's order, a
   display unplugged and plugged back, the lid closed and opened, and a
   window moved to another monitor on purpose.
-- **Session.** A `conf` test asserts the Hyprland config's only `exec-once`
-  is `uwsm finalize`. `doctor` has its own tests over recorded `busctl` and
-  `systemctl` output, and `tide-sysmon` runs over a fake `/proc` and
-  `/sys`.
+- **Session.** `hypr/hyprland_test.lua` runs tide's Hyprland config against
+  a stub of the `hl` API, and asserts it starts only the splash and `uwsm
+  finalize` (§5.4). `greeter/hyprland_test.lua` runs the greeter's config on
+  the same kind of stub. `session/session_test.sh` checks what each session
+  entry runs. `doctor` has its own tests over recorded `busctl` and
+  `systemctl` output, and `tide-sysmon` runs over a fake `/proc` and `/sys`.
+- **The focus guard and pinned apps.** `focus_test.lua` and
+  `pinned_test.lua` run `hypr/tide/focus.lua` (§14.3) and
+  `hypr/tide/pinned.lua` against a stub `hl`.
+- **Configs and inputs.** `tidewm/config_test.sh` checks tidewm's config
+  binds the names `hyprland.lua` does (§6.8), as tidewm reads the file.
+  `hypr/tide/input_test.sh` runs `apply-input.sh`, `next-layout.sh` and
+  `watch-input.sh` (§16) against fakes of `hyprctl`, `tide-msg` and
+  `udevadm`. `hypr/hypridle_test.sh` checks `hypridle.conf`'s listeners,
+  timeouts and commands (§10).
+- **The installer.** The `install/tide-setup_*_test` scripts run the
+  installer against mocks, one part each: packages, Quickshell, the
+  checkout and units; Hyprland; tidewm; fcitx5; the greeter, its PAM stack
+  and modules; greetd and its unit; and the splash. One reads greetd's PAM
+  stack against the machine's own libpam. `install/pins_test.sh` checks
+  `install/pins` and `deps.lock`, and `plymouth/theme_test.sh` the boot
+  splash's theme as Plymouth reads it.
 - **Scripts.** `screenshot_test` covers the Wayland argument parsing with
   stubbed `grim`/`slurp`/`wl-copy`, in the repo's existing `*_test` style,
   plus two captures in the same second getting distinct names.
@@ -6587,7 +6620,7 @@ are what "done" means.
   nm-applet's name is owned, and nothing logged that held a secret. The
   shell's routing (popover, prompt, notification, locked, missed) is
   plain JavaScript under `node --test`. Neither NetworkManager nor BlueZ
-  runs in CI, so the live check is step 5's.
+  runs in CI, so the live check is §5.6's step 5.
 - **Mocks.** `make mocks` fails on any resource that doesn't load, so CI
   can run it to catch broken pages. The PNGs aren't compared pixel for
   pixel.
