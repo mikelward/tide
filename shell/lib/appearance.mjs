@@ -31,6 +31,8 @@ const KEYS = THEME_KEYS.concat(["city", "dimStrength", "lightWallpaper", "darkWa
 // lightWallpaperPosition or darkWallpaperPosition, else wallpaperPosition,
 // for both.
 export const POSITIONS = Object.freeze(["fill", "fill-top", "fill-bottom", "fit", "stretch"]);
+// Each wallpaper's setting with its position's.
+const WALLPAPER_POSITION_KEYS = [["lightWallpaper", "lightWallpaperPosition"], ["darkWallpaper", "darkWallpaperPosition"]];
 // Which edge the bar runs along (SPEC.md §7.1), top unless set.
 export const BAR_POSITIONS = Object.freeze(["top", "bottom"]);
 const DAY = 24 * 60 * 60 * 1000;
@@ -566,6 +568,11 @@ export function parseCoordinate(key, text) {
 // hand edit gone wrong isn't lost), or settings that wouldn't work
 // together with the shared file's (`mode` "sun" with no latitude and
 // longitude, and no time zone `place` to fall back on, say) is an {error}.
+//
+// A new lightWallpaper or darkWallpaper takes the position set for the one
+// before with it, back to fill, centered, which suits any picture: it
+// covers the monitor and trims both sides alike. Setting the same one again
+// keeps its position.
 export function withSetting(localText, key, value, sharedText = null, place = null) {
     return withSettings(localText, { [key]: value }, sharedText, place);
 }
@@ -604,10 +611,21 @@ function withSettings(localText, changes, sharedText, place) {
         }
         files[name] = parsed.settings;
     }
+    const before = Object.assign({}, files["appearance.json"], files["appearance.local.json"]);
     const local = Object.assign({}, files["appearance.local.json"], set);
     for (const key of Object.keys(changes)) {
         if (changes[key] === null) {
             delete local[key];
+        }
+    }
+    for (const [key, position] of WALLPAPER_POSITION_KEYS) {
+        if (set[key] === undefined || set[key] === (before[key] ?? "") || changes[position] !== undefined) {
+            continue;
+        }
+        delete local[position];
+        // The shared file's position, which this one can't take out.
+        if (wallpaperPosition(Object.assign({}, files["appearance.json"], local), key === "darkWallpaper") !== "fill") {
+            local[position] = "fill";
         }
     }
     // A latitude or longitude set by hand is no longer the city's.

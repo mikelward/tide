@@ -1146,6 +1146,31 @@ test("each mode's position is one of the positions, and wallpaperPosition is bot
     assert.match(withSetting(null, "lightWallpaperPosition", "left").error, /lightWallpaperPosition must be one of/);
 });
 
+test("a new wallpaper goes back to fill, centered; the same one keeps its position", () => {
+    const set = (local, key, value, shared = null) => JSON.parse(withSetting(local, key, value, shared).text);
+    const tall = '{"lightWallpaper": "~/day.jpg", "lightWallpaperPosition": "fill-top", "darkWallpaperPosition": "fit"}';
+    assert.deepEqual(set(tall, "lightWallpaper", "~/beach.jpg"), { lightWallpaper: "~/beach.jpg", darkWallpaperPosition: "fit" },
+        "light's position goes, dark's stays");
+    assert.equal(wallpaperPosition(set(tall, "lightWallpaper", "~/beach.jpg"), false), "fill");
+    assert.deepEqual(set(tall, "lightWallpaper", "~/day.jpg"), JSON.parse(tall), "the same picture again");
+    assert.deepEqual(set(tall, "darkWallpaper", "#1a1d2e"), { lightWallpaper: "~/day.jpg", lightWallpaperPosition: "fill-top", darkWallpaper: "#1a1d2e" },
+        "dark's, for a color too");
+    assert.equal(set(tall, "dimStrength", 0.2).lightWallpaperPosition, "fill-top", "any other setting leaves it");
+    assert.equal(set('{"lightWallpaperPosition": "fit"}', "lightWallpaper", "").lightWallpaperPosition, "fit", "the default again is no change");
+    assert.equal(set('{"lightWallpaperPosition": "fit"}', "lightWallpaper", "~/day.jpg").lightWallpaperPosition, undefined, "the first one set");
+    // The shared file's position can't be taken out from here, so the
+    // local one says fill over it.
+    for (const shared of ['{"lightWallpaperPosition": "fit"}', '{"wallpaperPosition": "stretch"}']) {
+        const next = set(null, "lightWallpaper", "~/beach.jpg", shared);
+        assert.deepEqual(next, { lightWallpaper: "~/beach.jpg", lightWallpaperPosition: "fill" }, shared);
+        assert.equal(wallpaperPosition(loadAppearance(shared, JSON.stringify(next)).settings, false), "fill", shared);
+    }
+    assert.deepEqual(set('{"wallpaperPosition": "fit"}', "darkWallpaper", "~/night.jpg"),
+        { darkWallpaper: "~/night.jpg", darkWallpaperPosition: "fill", wallpaperPosition: "fit" }, "both modes' stays, for light");
+    assert.deepEqual(set(null, "lightWallpaper", "~/day.jpg", '{"lightWallpaper": "~/day.jpg", "lightWallpaperPosition": "fit"}'),
+        { lightWallpaper: "~/day.jpg" }, "the shared file's picture, set here too, keeps its position");
+});
+
 test("stretch fills the monitor with the whole picture, out of its shape", () => {
     const f = wallpaperFrame(PICTURE, ULTRAWIDE, "stretch");
     assert.deepEqual(f.frame, { x: 0, y: 0, width: 3840, height: 2400 }, "the monitor shows all of it");
