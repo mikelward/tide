@@ -6,11 +6,28 @@
 // sends one notification per distinct set (SPEC.md §7.4). Pure functions
 // over plain data, so they're tested here.
 //
-// The state is { errors, told, sending }: the last load's errors, as
-// tidewm worded them; the set (key) a notification last reached the user
-// for, or ""; and the set whose notification is on its way, or "".
+// The state is { errors, told, sending, outdated }: the last load's
+// errors, as tidewm worded them; the news (newsOf) a notification last
+// reached the user for, or ""; the news whose notification is on its way,
+// or ""; and whether the tidewm running isn't the one installed.
+//
+// A setup run that builds a newer tidewm leaves the old one running until
+// the session ends, beside a config written for the new one. Nothing of
+// tide's reloads the config into it (`tide-msg --if-current`), and the
+// warning says to log out and back in rather than to fix errors that may
+// only be the old tidewm's.
 
-export const NOTHING = Object.freeze({ errors: Object.freeze([]), told: "", sending: "" });
+export const NOTHING = Object.freeze({ errors: Object.freeze([]), told: "", sending: "", outdated: false, checked: false });
+
+// The news of a tidewm that was updated, as keyOf's of a set of errors.
+export const OUTDATED = "outdated";
+
+// `tide-msg --outdated`'s exit status as whether the tidewm running isn't
+// the one installed: 0 it isn't, 1 it is, and anything else, as an older
+// tide-msg's usage error, doesn't say (undefined).
+export function outdatedOf(code) {
+    return code === 0 ? true : code === 1 ? false : undefined;
+}
 
 // How many errors the bar's list shows before it says how many more.
 export const SHOWN = 8;
@@ -50,9 +67,33 @@ export function keyOf(errors) {
     return errors.length === 0 ? "" : JSON.stringify([...new Set(errors)].sort());
 }
 
+// What there is to say of the state, as one string: that tidewm was
+// updated, whatever its errors, which logging in again may end; else its
+// errors (keyOf); or "" for nothing.
+export function newsOf(state) {
+    return state.outdated ? OUTDATED : keyOf(state.errors);
+}
+
+// Whether the bar's warning shows.
+export function warns(state) {
+    return newsOf(state) !== "";
+}
+
+// An update already told of, as a shell that reloads remembers, waits for
+// this shell's first answer on the version (versioned, unversioned): until
+// then its errors aren't known to be news, and saying them would have the
+// update said again after them.
 function toSend(state) {
-    const key = keyOf(state.errors);
+    const key = newsOf(state);
+    if (state.told === OUTDATED && !state.checked) {
+        return false;
+    }
     return key !== "" && key !== state.told && key !== state.sending;
+}
+
+function taken(next) {
+    const notify = toSend(next);
+    return { state: notify ? Object.assign(next, { sending: newsOf(next) }) : next, notify };
 }
 
 // A load's errors are in. Returns the state and whether to notify now:
@@ -61,25 +102,38 @@ function toSend(state) {
 // load with none forgets the last set, so the same mistake made again
 // later is reported again.
 export function loaded(state, errors) {
-    const next = { errors, told: errors.length === 0 ? "" : state.told, sending: state.sending };
-    const notify = toSend(next);
-    return { state: notify ? Object.assign({}, next, { sending: keyOf(errors) }) : next, notify };
+    const forget = errors.length === 0 && state.told !== OUTDATED;
+    return taken(Object.assign({}, state, { errors }, forget ? { told: "" } : {}));
+}
+
+// Whether the tidewm running isn't the one installed is in (outdatedOf).
+// Returns the state and whether to notify now, as loaded: once for an
+// update, however its errors change meanwhile, and whichever of the two
+// answers first. One that's over is forgotten, as a set of errors is.
+export function versioned(state, outdated) {
+    const forget = !outdated && state.told === OUTDATED;
+    return taken(Object.assign({}, state, { outdated, checked: true }, forget ? { told: "" } : {}));
+}
+
+// Whether it was updated couldn't be told (outdatedOf's undefined): what
+// was known is kept, and errors that waited on the answer are said.
+export function unversioned(state) {
+    return taken(Object.assign({}, state, { checked: true }));
 }
 
 // The errors couldn't be read: nothing is shown, since nothing is known,
 // and what was delivered is kept, so tidewm answering again with the same
 // errors isn't news.
 export function unreadable(state) {
-    return { errors: [], told: state.told, sending: state.sending };
+    return Object.assign({}, state, { errors: [] });
 }
 
 // The notification for the set `key` finished, delivered (`ok`) or not.
 export function sent(state, key, ok) {
-    return {
-        errors: state.errors,
+    return Object.assign({}, state, {
         told: ok ? key : state.told,
         sending: state.sending === key ? "" : state.sending,
-    };
+    });
 }
 
 // Whether the current errors' notification is still owed, as when
@@ -90,7 +144,7 @@ export function pending(state) {
 
 // Sends it again: the state and whether to notify now, as loaded.
 export function retry(state) {
-    return loaded(state, state.errors);
+    return taken(Object.assign({}, state));
 }
 
 // The compositor whose config it is, as the words below name it.
@@ -100,24 +154,32 @@ export function compositorName(tidewm) {
 
 // "tidewm's config has 2 errors", the notification's summary, the bar
 // icon's hover text and the list's heading; "" for none. `name` is the
-// compositor's (compositorName).
-export function summary(errors, name = "tidewm") {
+// compositor's (compositorName). A tidewm that was updated says that
+// instead, whatever its errors.
+export function summary(errors, name = "tidewm", outdated = false) {
+    if (outdated) {
+        return "tidewm was updated";
+    }
     if (errors.length === 0) {
         return "";
     }
     return `${name}'s config has ${errors.length} ${errors.length === 1 ? "error" : "errors"}`;
 }
 
-// The notification's second line: where to see them.
-export function body(errors) {
+// The notification's second line: where to see them, or what to do about
+// an update.
+export function body(errors, outdated = false) {
+    if (outdated) {
+        return "Log out and back in to use it.";
+    }
     return `Click the warning in the bar to see ${errors.length === 1 ? "it" : "them"}, or run tide doctor.`;
 }
 
 // The notify-send command for `errors`. Critical, so it stays until it's
 // dismissed. notify-send hands it to whichever server owns the
 // notifications name: swaync, or the shell itself (§9).
-export function notifyCommand(errors, name = "tidewm") {
-    return ["notify-send", "--app-name=tide", "--urgency=critical", `--icon=${ICON}`, summary(errors, name), body(errors)];
+export function notifyCommand(errors, name = "tidewm", outdated = false) {
+    return ["notify-send", "--app-name=tide", "--urgency=critical", `--icon=${ICON}`, summary(errors, name, outdated), body(errors, outdated)];
 }
 
 // `hyprctl configerrors`' output, one error a line and nothing when there
@@ -155,8 +217,13 @@ export function listed(errors, home = "") {
     };
 }
 
-// The list's last line: what to do about them.
-export function advice(errors, name = "tidewm") {
+// The list's last line: what to do about them. After an update the
+// errors may be the old tidewm's, at lines only the new one reads, so
+// there's nothing to fix until it runs.
+export function advice(errors, name = "tidewm", outdated = false) {
+    if (outdated) {
+        return `Log out and back in to use it.${errors.length === 0 ? "" : " That may fix these errors too."}`;
+    }
     return `Fix ${errors.length === 1 ? "it" : "them"}, then reload ${name}'s config.`;
 }
 

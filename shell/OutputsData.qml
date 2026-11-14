@@ -238,9 +238,15 @@ Singleton {
                 // Why the monitors don't have the settings, for the
                 // notification, which needs no "tide: ".
                 let error = "";
+                let deferred = false;
                 if (!state.started) {
                     console.warn(state.report.message);
                     error = state.report.message.replace(/^tide: /, "");
+                } else if (Writes.applyDeferred(Compositor.tidewm, state.code)) {
+                    // tide-msg left an older tidewm as it is (--if-current):
+                    // the file is for the tidewm the next login runs.
+                    deferred = true;
+                    console.log(`tide: the display settings wait for the next login: ${state.errors.trim()}`);
                 } else if (state.code !== 0 || (!Compositor.tidewm && reply.trim() !== "ok")) {
                     // A conf without conf_outputs.reload, say.
                     error = `couldn't apply the display settings: ${(reply + state.errors).trim()}`;
@@ -249,10 +255,11 @@ Singleton {
                     // It worked, but said something on the way, as MarkData's.
                     console.log(state.report.message);
                 }
-                // tidewm read its config again: its errors may have changed.
+                // tidewm read its config again, or is older than the one installed:
+                // its errors, or the bar's warning, may have changed.
                 ConfigErrorsData.reloaded();
                 const done = Writes.targetApplied(root.target, error);
-                if (Compositor.tidewm && error === "") {
+                if (Compositor.tidewm && error === "" && !deferred) {
                     applied.record(Writes.recordOf(done.state.applied));
                 }
                 root.stepped(done);
@@ -264,7 +271,7 @@ Singleton {
                 destroy();
             }
 
-            command: Compositor.tidewm ? ["tide-msg", "reload"] : ["hyprctl", "eval", "conf_outputs.reload()"]
+            command: Compositor.tidewm ? ["tide-msg", "--if-current", "reload"] : ["hyprctl", "eval", "conf_outputs.reload()"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     run.reply = text;

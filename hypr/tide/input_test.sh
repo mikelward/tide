@@ -149,7 +149,9 @@ case "$*" in
         test -z "$FAKE_INPUTS_FAIL" || { echo "tide-msg: couldn't ask tidewm" >&2; exit 2; }
         printf '%s\n' "$FAKE_INPUTS"
         ;;
-    reload)
+    "--if-current reload")
+        # An older tidewm than the one installed isn't sent it.
+        test -z "$FAKE_OUTDATED" || { echo "tide-msg: reload wasn't sent: tidewm was updated" >&2; exit 3; }
         echo reload >> "$FAKE_LOG"
         test -z "$FAKE_RELOAD_FAIL" || { echo "tide-msg: reload: $FAKE_RELOAD_FAIL" >&2; exit 1; }
         ;;
@@ -282,6 +284,19 @@ assert_equal "$_before" "$(cat "$_devices")"
 FAKE_INPUTS=$_tw_laptop _tw_run
 assert_equal 0 "$?"
 assert_equal reload "$(cat "$_fake/log")"
+
+start_test "apply-input on tidewm leaves a tidewm older than the one installed as it is, until the next login"
+_before=$(cat "$_devices")
+FAKE_INPUTS="[$_tw_kb, $_tw_pad, $_tw_stick]" FAKE_OUTDATED=1 _tw_run
+assert_equal 0 "$?"
+assert_equal "" "$(cat "$_fake/log")"
+assert_contains "tidewm keeps its devices' settings until the next login: tide-msg: reload wasn't sent: tidewm was updated" "$(cat "$_fake/err")"
+assert_equal "$_before" "$(cat "$_devices")"
+# The one it's been replaced by is sent it.
+FAKE_INPUTS="[$_tw_kb, $_tw_pad, $_tw_stick]" _tw_run
+assert_equal 0 "$?"
+assert_equal reload "$(cat "$_fake/log")"
+assert_true test ! -e "$_devices.old"
 
 start_test "apply-input on tidewm removes a new file tidewm couldn't reload with"
 rm -rf "$_fake/config"

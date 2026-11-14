@@ -1,7 +1,7 @@
 // Tests for writes.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { TARGET, afterRecord, firstApplied, readTarget, recordOf, targetApplied, targetUnreadable, targetWritten, wantTarget } from "./writes.mjs";
+import { NOT_CURRENT, TARGET, afterRecord, applyDeferred, firstApplied, readTarget, recordOf, targetApplied, targetUnreadable, targetWritten, wantTarget } from "./writes.mjs";
 
 // The file read as `text`, then `wanted`.
 function started(text, wanted) {
@@ -134,6 +134,21 @@ test("a file that becomes readable already saying what's wanted is applied, sinc
     r = wantTarget(readTarget(r.state, "y").state, "y");
     assert.deepEqual(r.action, { apply: true });
     assert.equal(r.state.failure, "permission denied", "not over until it's applied");
+    r = targetApplied(r.state, "");
+    assert.equal(r.action, null);
+    assert.equal(r.state.failure, "");
+});
+
+test("a reload tide-msg left unsent to an older tidewm is deferred, not failed, and only on tidewm", () => {
+    assert.equal(applyDeferred(true, NOT_CURRENT), true);
+    assert.equal(applyDeferred(true, 0), false);
+    assert.equal(applyDeferred(true, 1), false, "a reload tidewm refused failed");
+    assert.equal(applyDeferred(true, 2), false, "as did one with no tidewm to ask");
+    assert.equal(applyDeferred(false, NOT_CURRENT), false, "hyprctl's statuses are its own");
+    // Deferred, the file counts as read: nothing is retried.
+    let r = wantTarget(readTarget(TARGET, "x").state, "y");
+    r = targetWritten(r.state, "");
+    assert.deepEqual(r.action, { apply: true });
     r = targetApplied(r.state, "");
     assert.equal(r.action, null);
     assert.equal(r.state.failure, "");

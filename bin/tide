@@ -219,8 +219,11 @@
 #     Reloads the compositor's config, and starts the shell if it isn't
 #     running: Super+Shift+R runs it (SPEC.md §6.6). The config is
 #     Hyprland's (`hyprctl reload`), or in tidewm's session (§5.3)
-#     tidewm's (`tide-msg reload`), which keeps what it had when the file
-#     has errors, and says them. A running shell is left alone, as a
+#     tidewm's (`tide-msg --if-current reload`), which keeps what it had
+#     when the file has errors, and says them. A tidewm older than the one
+#     installed, as after a setup run that built a newer one, isn't
+#     reloaded: it may not read the new one's config, and would drop its
+#     key bindings. A running shell is left alone, as a
 #     restart would close its popovers and the launcher; in tidewm's
 #     session it's told of the reload, so the bar's warning shows the
 #     errors as they are now. A shell that isn't running is started, and
@@ -1597,10 +1600,16 @@ reload() {
             tell "Config not reloaded" "tide-msg isn't installed. Run make install in tide."
             failed=yes
         else
-            # tide-msg says tidewm's errors: it keeps what it had.
+            # tide-msg says tidewm's errors: it keeps what it had. It
+            # exits 3, sending nothing, if the tidewm running isn't the
+            # one installed (--if-current).
             status=0
-            err=$(tide-msg reload 2>&1) || status=$?
-            if test "$status" -ne 0; then
+            err=$(tide-msg --if-current reload 2>&1) || status=$?
+            if test "$status" -eq 3; then
+                echo "$prog reload: ${err:-tide-msg exited 3, as for a tidewm that was updated: log out and back in}" >&2
+                tell "tidewm was updated" "Log out and back in to reload its config."
+                failed=yes
+            elif test "$status" -ne 0; then
                 echo "$prog reload: tidewm didn't reload its config: ${err:-tide-msg exited $status}" >&2
                 tell "Config not reloaded" "${err:-tide-msg exited $status}"
                 failed=yes

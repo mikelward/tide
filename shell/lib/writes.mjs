@@ -102,3 +102,15 @@ export function targetApplied(state, error) {
     }
     return nextStep(Object.assign({}, state, { step: "", applied: state.onDisk }));
 }
+
+// `tide-msg --if-current`'s exit status when it didn't send the command:
+// the tidewm running isn't the one installed, as after a setup run that
+// built a newer one, and may not read the config the new one does.
+export const NOT_CURRENT = 3;
+
+// Whether an apply that exited `code` was left undone for that, on tidewm
+// (`tidewm`): the file stays written, for the tidewm the next login runs,
+// and the apply isn't tried again, since the one running stays as it is.
+export function applyDeferred(tidewm, code) {
+    return tidewm && code === NOT_CURRENT;
+}

@@ -1184,9 +1184,21 @@ bars_on_tidewm() {
 }
 
 # tidewm's config errors (GET_CONFIG's errors), one problem each, each
-# naming the file and line.
+# naming the file and line. A tidewm older than the one installed, as
+# after a setup run that built a newer one (`tide-msg --outdated`, which
+# exits 0 then, saying both versions), is a problem of its own, and its
+# errors may be only its own: the config is the new one's.
 tidewm_config_errors() {
     command -v tide-msg >/dev/null 2>&1 || return 0
+    fix="fix it, then reload tidewm's config"
+    updated=0
+    versions=$(tide-msg --outdated 2>&1) || updated=$?
+    if test "$updated" -eq 0; then
+        problem "tidewm was updated (${versions:-an older one is running}): log out and back in to use it"
+        fix="log out and back in, which may fix it"
+    elif test "$updated" -ne 1; then
+        problem "couldn't tell whether tidewm was updated since login ($versions)"
+    fi
     if ! command -v jq >/dev/null 2>&1; then
         problem "jq isn't installed, so tidewm's config errors aren't checked: install jq (scripts' setup does)"
     elif ! config=$(tide-msg --type get_config 2>&1); then
@@ -1195,7 +1207,7 @@ tidewm_config_errors() {
         problem "couldn't read tidewm's config errors from its reply ($errors)"
     else
         while IFS= read -r line; do
-            test -n "$line" && problem "tidewm config error: $line: fix it, then reload tidewm's config"
+            test -n "$line" && problem "tidewm config error: $line: $fix"
         done <<EOF
 $errors
 EOF

@@ -179,14 +179,25 @@ input \"$name\" {
         rm -f "$file.new" "$file.old"
         return 1
     fi
-    if ! result=$(tide-msg reload 2>&1); then
-        echo "apply-input.sh: tidewm couldn't reload with $file, so it's as it was: $result" >&2
+    # Only into the tidewm installed (tide-msg's --if-current, which exits
+    # 3 otherwise): one a setup run has since replaced may not read the
+    # new one's config, and would drop those lines, key bindings among
+    # them. The login that starts the new one runs this again.
+    reload=0
+    result=$(tide-msg --if-current reload 2>&1) || reload=$?
+    if test "$reload" -ne 0; then
+        if test "$reload" -eq 3; then
+            echo "apply-input.sh: tidewm keeps its devices' settings until the next login: $result" >&2
+        else
+            echo "apply-input.sh: tidewm couldn't reload with $file, so it's as it was: $result" >&2
+            status=1
+        fi
         if test -f "$file.old"; then
             mv "$file.old" "$file" || echo "apply-input.sh: couldn't put back $file.old" >&2
         else
             rm -f "$file" || echo "apply-input.sh: couldn't remove $file" >&2
         fi
-        return 1
+        return $status
     fi
     rm -f "$file.old"
     return $status

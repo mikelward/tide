@@ -4,13 +4,16 @@ import "lib/configerrors.mjs" as Errors
 
 // The config errors' popover (SPEC.md §7.4): how many errors the
 // compositor's config has, then each as it reported it, the file and line over
-// what's wrong, and what to do about them. A long list is cut short
+// what's wrong, and what to do about them. After a tidewm update it says
+// that instead, and to log out and back in. A long list is cut short
 // (Errors.listed). Plain text, since an error quotes the config file.
 PopupWindow {
     id: root
 
     required property Item icon
     readonly property var errors: ConfigErrorsData.errors
+    readonly property bool outdated: ConfigErrorsData.outdated
+    readonly property bool warns: ConfigErrorsData.warns
     readonly property var view: Errors.listed(errors, ConfigErrorsData.home)
 
     function toggle(opener) {
@@ -28,8 +31,8 @@ PopupWindow {
     implicitHeight: card.implicitHeight
 
     // Fixed, the errors have nothing left to show.
-    onErrorsChanged: {
-        if (errors.length === 0) {
+    onWarnsChanged: {
+        if (!warns) {
             visible = false;
         }
     }
@@ -58,7 +61,7 @@ PopupWindow {
                 bottomPadding: 6
                 wrapMode: Text.WordWrap
                 textFormat: Text.PlainText
-                text: Errors.summary(root.errors, ConfigErrorsData.compositorName)
+                text: Errors.summary(root.errors, ConfigErrorsData.compositorName, root.outdated)
                 color: Theme.fg
                 font.family: Theme.font
                 font.pixelSize: 14
@@ -125,7 +128,7 @@ PopupWindow {
                 bottomPadding: 6
                 wrapMode: Text.WordWrap
                 textFormat: Text.PlainText
-                text: Errors.advice(root.errors, ConfigErrorsData.compositorName)
+                text: Errors.advice(root.errors, ConfigErrorsData.compositorName, root.outdated)
                 color: Theme.fgDim
                 font.family: Theme.font
                 font.pixelSize: 12
