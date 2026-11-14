@@ -217,7 +217,7 @@
 #   tide reload
 #
 #     Reloads the compositor's config, and starts the shell if it isn't
-#     running: Super+Ctrl+R runs it (SPEC.md §6.6). The config is
+#     running: Super+Shift+R runs it (SPEC.md §6.6). The config is
 #     Hyprland's (`hyprctl reload`), or in tidewm's session (§5.3)
 #     tidewm's (`tide-msg reload`), which keeps what it had when the file
 #     has errors, and says them. A running shell is left alone, as a

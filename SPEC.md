@@ -1881,7 +1881,7 @@ with new keys in **bold**:
 | **`Ctrl+W`** / **`Ctrl+Shift+W`** / **`Ctrl+Q`** / **`Alt+F4`** | the app's own, passed on to every window but one pinned on its workspace, which never sees them (§6.5) |
 | **`Super+Z`** | minimize the focused window; its icon goes to the corner tray, and a click there restores it (§6.7) |
 | `Super+L` | lock |
-| **`Super+Ctrl+R`** | reload the config, and start tide's shell if it isn't running (below) |
+| **`Super+Shift+R`** | reload the config, and start tide's shell if it isn't running (below) |
 | **`Super+S`** | toggle keep awake (§10), as the bar's icon does; the OSD says which |
 | **`Super+P`** | toggle presenter mode: Do not disturb and keep awake together (§10) |
 | **`Super+Home`** | go to home (§6.5) |
@@ -1910,15 +1910,14 @@ with new keys in **bold**:
 | **drag the master/stack edge** | resize the master (`mfact`), as `Super+\` / `Super+/` do, following the pointer; no key held (below) |
 | **drag a floating window's edge or corner** | resize it, no key held (§6.4) |
 | `Super`+left-drag / `Super`+right-drag | move / resize a floating window |
-| `Super+Shift+R` | resize mode (floating windows) |
 | **`Super+Shift+N`** | notification center |
 | `Print` / **`Alt+Print`** / `Shift+Print`, `Super+Print` | screenshot screen / window / region |
 | **`XF86AudioMicMute`**, **`Super+Shift+M`** | toggle microphone mute (system-wide) |
 | media, brightness, volume keys | as today, with OSD |
 
-**Reload.** `Super+Ctrl+R` runs `tide reload`, for after editing a
-config or when the bar is gone. `Super+Shift+R` is resize mode, so i3's
-and sway's `Super+Shift+C` is their preset's (§16).
+**Reload.** `Super+Shift+R` runs `tide reload`, for after editing a
+config or when the bar is gone. i3's and sway's `Super+Shift+C` is their
+preset's (§16).
 - It reloads the compositor's config: `hyprctl reload`, or in tidewm's
   session (§5.3) `tide-msg reload`. tidewm keeps what it had when the file
   has errors, and says them.
@@ -2492,7 +2491,7 @@ way, in the bar (maintainer, 2026-11-13).
   with `tide-msg --type get_config`. It asks as it connects, when a key
   bound to `reload` runs (tidewm's `binding` event), after each
   `tide-msg reload` of its own (§16), and when `tide reload`
-  (`Super+Ctrl+R`, §6.6) says it has reloaded (`qs -c tide ipc call
+  (`Super+Shift+R`, §6.6) says it has reloaded (`qs -c tide ipc call
   configerrors reloaded`).
 - tidewm also sends i3's and sway's `workspace` event, `reload`, after
   each reload, from anywhere, as `tide-msg reload` in a terminal, and the

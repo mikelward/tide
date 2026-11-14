@@ -1463,7 +1463,7 @@ web mail.google.com
 check "web-app refuses what isn't a web address" test "$?:$(cat "$log")" = "2:"
 check "and says why" contains "$(cat "$tmp/err")" "mail.google.com isn't a web address"
 
-# reload: Super+Ctrl+R (SPEC.md §6.6). The compositor's config, then the
+# reload: Super+Shift+R (SPEC.md §6.6). The compositor's config, then the
 # shell, started only when it isn't running.
 run FAKE_IS_ACTIVE=active "$qs" reload
 check "reload exits 0 when Hyprland reloads and the shell runs" test $? -eq 0

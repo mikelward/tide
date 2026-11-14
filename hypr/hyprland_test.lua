@@ -1582,18 +1582,6 @@ test("Super+middle-click toggles maximize, so a second click restores the tile",
     eq(nil, b.opts.mouse, "a click, not a drag")
 end)
 
-test("the resize submap resizes and has a way out", function()
-    load()
-    eq("resize", bind("SUPER + SHIFT + R").target.args)
-    local h = bind("H", "resize")
-    truthy(is_dsp(h.target, "window.resize"))
-    eq(-40, h.target.args.x)
-    eq(true, h.target.args.relative)
-    eq(true, h.opts.repeating)
-    eq("reset", bind("escape", "resize").target.args)
-    eq("reset", bind("Return", "resize").target.args)
-end)
-
 -- tide's Keys page lists `hyprctl binds -j`, where a Lua binding's
 -- dispatcher is only "__lua": its description is all that says what it does.
 test("every binding says what it does, for tide's Keys page", function()
@@ -1604,7 +1592,6 @@ test("every binding says what it does, for tide's Keys page", function()
         truthy(type(d) == "string" and d ~= "", id .. " has a description")
     end
     eq("Terminal", bind("SUPER + T").opts.description)
-    eq("Taller", bind("J", "resize").opts.description)
     eq("Home workspace", bind("SUPER + Home").opts.description)
     -- Bindings that share an options table each keep their own description,
     -- and the table's options.
@@ -2262,12 +2249,13 @@ test("Super+L locks with tide lock in the tide session, with hyprlock outside it
     eq("hyprlock", bind("SUPER + L").target.args)
 end)
 
-test("Super+Ctrl+R reloads with tide reload in the tide session, with hyprctl reload outside it", function()
+test("Super+Shift+R reloads with tide reload in the tide session, with hyprctl reload outside it", function()
     load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
-    eq("tide reload", unlogged(bind("SUPER + CTRL + R").target.args))
-    eq("Reload the config", bind("SUPER + CTRL + R").opts.description)
+    eq("tide reload", unlogged(bind("SUPER + SHIFT + R").target.args))
+    eq("Reload the config", bind("SUPER + SHIFT + R").opts.description)
     load()
-    eq("hyprctl reload", bind("SUPER + CTRL + R").target.args)
+    eq("hyprctl reload", bind("SUPER + SHIFT + R").target.args)
+    eq(nil, S.binds["|SUPER + CTRL + R"], "its old key is free")
 end)
 
 test("the tide session's autostart is the splash and uwsm finalize alone", function()
@@ -3422,7 +3410,7 @@ test("the named bindings are listed for tide, in order, with what each does and 
     same({ "SUPER + T" }, keys.terminal.keys)
     same({ "SUPER + grave", "SUPER + O" }, keys.monocle.keys, "both of monocle's")
     same({ "SHIFT + Print", "SUPER + Print" }, keys.screenshot_region.keys)
-    same({ "SUPER + CTRL + R" }, keys.reload.defaults, "reload is named, so it can take other keys")
+    same({ "SUPER + SHIFT + R" }, keys.reload.defaults, "reload is named, so it can take other keys")
     eq(nil, keys["Workspace 1 on the bar"], "Super+1…9 aren't named")
     for name, k in pairs(keys) do
         truthy(k.does ~= "", name .. " says what it does")

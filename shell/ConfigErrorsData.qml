@@ -42,7 +42,7 @@ Singleton {
     }
 
     // `qs -c tide ipc call configerrors reloaded`, from `tide reload`
-    // (Super+Ctrl+R), which reloads tidewm's config with tide-msg, a reload
+    // (Super+Shift+R), which reloads tidewm's config with tide-msg, a reload
     // the listener doesn't hear.
     IpcHandler {
         target: "configerrors"

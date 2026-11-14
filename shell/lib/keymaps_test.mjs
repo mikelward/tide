@@ -12,7 +12,7 @@ const NAMES = new Set([
     "files", "launcher", "next_keyboard_layout", "notifications", "clipboard", "fill", "characters", "close",
     "minimize", "lock", "keep_awake", "presenter", "quit", "next_layout", "previous_layout", "monocle",
     "grow_master", "shrink_master", "add_master", "remove_master", "swap_master", "focus_down", "focus_up",
-    "move_down", "move_up", "maximize", "fullscreen", "restore", "float", "floating_rule", "resize_mode",
+    "move_down", "move_up", "maximize", "fullscreen", "restore", "float", "floating_rule",
     "previous_workspace", "next_workspace", "move_to_previous_workspace", "move_to_next_workspace",
     "focus_left", "focus_right", "move_left", "move_right", "focus_above", "focus_below", "move_above", "move_below", "home_or_back", "home", "last_other_workspace", "last_layout",
     "go_to_workspace", "move_to_workspace", "attention", "screenshot", "screenshot_window", "screenshot_region",
