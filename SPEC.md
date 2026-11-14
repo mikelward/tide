@@ -2126,64 +2126,169 @@ monitor has its own part of it, with its own windows and layout.
 ### 6.6 Keys
 
 Carried over from the current Hyprland and KDE setups (same muscle memory),
-with new keys in **bold**. These are tide's own keys, the same on Hyprland
-and tidewm except where a row says. `conf`'s app keys follow.
+with tide for Linux's new keys in **bold**. This is the one table of tide's keys, on every
+platform tide runs on:
+- **Hyprland/tidewm**: tide for Linux, the same on both except where the
+  cell says. `hypr/hyprland.lua` and `tidewm/tide.conf` bind them.
+- **KDE**: tide on KDE (mikelward/tide-kde), with `Meta` for `Super`.
+- **chromeOS**: tide for Chrome (mikelward/tideco), with `Search`.
+- **macOS**: tide for macOS (mikelward/tidemo), whose `Super` is left
+  Option or the Win key.
 
-| Keys | Action |
-|---|---|
-| **tap `Super`** | the switcher, on its Apps tab: the launcher, as `Super+Space` (§8). From Hyprland 0.57, before which a release binding fired after every `Super` chord, and on tidewm (`--release Super_L`) |
-| `Super+Space` | the switcher, on its Apps tab: the launcher |
-| **`Super+Tab`** | flip between home and the workspace you last used: from any other workspace it goes to home, and from home back to the last other one still there, so presses toggle |
-| **`Super+A`** | the switcher, on its Attention tab: every window wanting attention, on any workspace, most recent first; Enter goes there |
-| **`Super+Alt+Space`** | next keyboard layout, once there are two, on every keyboard (§16), as a click on the bar's layout label does |
-| `Super+T` | a terminal: `xdg-terminal-exec`, or the `terminal` option (§6.8) |
-| `Super+E` | your home folder: `xdg-open`, or the `files` option (§6.8) |
-| **`Super+V`** | the picker, on its Clipboard tab: what you've copied, and emoji and symbols by name; Enter pastes (§8.4). V as in paste, as on Windows |
-| **`Super+Shift+V`** | the picker, on its Fill tab: your snippets and each Bitwarden login's username, password and 2FA code; Enter types it (§8.4) |
-| **`Super+;`** | the picker, on its Characters tab: emoji and symbols by name; Enter pastes (§8.4). Not Windows's `Super+.`, which is the next layout here |
-| `Super+Backspace` | close window, unless it's pinned on its workspace (§6.5) |
-| **`Ctrl+W`**, **`Ctrl+Shift+W`**, **`Ctrl+Q`**, **`Alt+F4`** | the app's own, passed on to every window but one pinned on its workspace, which never sees them (§6.5) |
-| **`Super+Z`** | minimize the focused window; its icon goes to the corner tray, and a click there restores it (§6.7) |
-| `Super+L` | lock |
-| **`Super+Shift+R`** | reload the config, and start tide's shell if it isn't running (below) |
-| `Super+Shift+E` | quit the compositor, which ends the session; also a rescue key (§6.8) |
-| **`Super+S`** | toggle keep awake (§10), as the bar's icon does; the OSD says which |
-| **`Super+P`** | toggle presenter mode: Do not disturb and keep awake together (§10) |
-| **`Super+Home`** | go to home (§6.5) |
-| **`Super+1…9`** | go to the Nth workspace in the bar's order, so `Super+1` is home, as `Super+Home` is; past the last workspace, nothing |
-| **`Super+Shift+1…9`** | send the focused window to the Nth workspace in the bar's order, staying where you are |
-| **`Super+0`**, **`Super+Shift+0`** | go to the last workspace in the bar's order, and send the focused window there, as `Super+1…9` and `Super+Shift+1…9` do |
-| **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
-| **`Super` and an arrow** | focus the window that way from the focused one; at a monitor's edge, the nearest window on the next monitor that way, or that monitor itself if it shows none; past the last monitor, nothing (as in tide for macOS; the rule is below) |
-| **`Super+Shift` and an arrow** | move the focused window the same way: on its monitor it swaps with the window that way; at the edge it goes onto the next monitor, joining the workspace showing there at the edge it came in by, and keeps focus. A floating window goes straight onto the next monitor that way, still floating, at the same relative spot and its size (the rule is below), and keeps focus. Past the last monitor, nothing |
-| `Super+PgUp`, `Super+PgDn` | the previous and the next workspace in the bar's order that has a window, wrapping from the last to home and back. An empty one, standing or made, is passed over, and so is one whose only windows are minimized (§6.7): Hyprland has none on it. With no other that has a window, nothing |
-| **`Super+Shift+PgUp`**, **`Super+Shift+PgDn`** | move the window to the previous and the next workspace in the bar's order, empty or not, wrapping as `Super+PgUp` does, and follow it |
-| `Super+J`, `Super+K` | focus down and up the stack |
-| `Super+Shift+J`, `Super+Shift+K` | move the window down and up the stack |
-| `Super+Return` | go to a workspace: the name prompt (§6.5), listing the existing names; type to filter them or to name a new one, and Enter goes there, making the workspace if it's new. It moves no window, so it works with none focused |
-| **`Super+Shift+Return`** | move the focused window to a workspace: the same prompt, and Enter moves it there, making the workspace if it's new; with no window focused, nothing |
-| **`Alt+Tab`** | make the focused window the master; on the master, swap it with the window that was master before it |
-| `Super+\`, `Super+/` | grow and shrink the master (`mfact`, by §6.1's step) |
-| `Super+=`, `Super+-` | add and remove a master |
-| `Super+.`, `Super+,` | the next and the previous layout in the cycle (§6.1) |
-| none by default | **the layout used last**: the workspace's layout before this one, so two presses come back, as dwm's `Super+Space` does; dwm's preset (§16) puts it there, and Keyboard's shortcuts can give it any key. Not on tidewm yet |
-| ``Super+` `` or **`Super+O`** | toggle monocle (`O` as in one window, and the key tide for Chrome uses on ChromeOS, where Chrome can't bind a backtick) |
-| **`Super+X`** | toggle maximize on the current window (§6.3) |
-| **`Super+Shift+X`** | toggle fullscreen on the current window (§6.3) |
-| none by default | **restore**: the current window back in its tile from maximize or fullscreen. Not on tidewm |
-| `Super+Shift+F` or `Super+Insert` | toggle floating |
-| **`Super+Alt+F`** | open the Floating settings (§16) with a rule filled in for the focused window, its class and exact title, the title selected to trim; Enter adds it, Esc doesn't. Not on tidewm yet |
-| **`Super`+middle-click** | toggle maximize on the window under the pointer |
-| **drag the edge between the masters and the stack** | resize the master (`mfact`), as `Super+\` and `Super+/` do, following the pointer; no key held (below) |
-| **drag a floating window's edge or corner** | resize it, no key held (§6.4) |
-| `Super`+left-drag | move a floating window |
-| `Super`+right-drag | resize a floating window |
-| **`Super+Shift+N`** | notification center |
-| `Print` | screenshot of the screen |
-| **`Alt+Print`** | screenshot of the window |
-| `Shift+Print` or `Super+Print` | screenshot of a region |
-| **`XF86AudioMicMute`** or **`Super+Shift+M`** | toggle microphone mute (system-wide) |
-| media, brightness, volume keys | as today, with OSD |
+Each row is named by its binding name, which tide's Keyboard shortcuts
+(§16), `conf`, tidewm's `--name`, the presets (`keymaps.mjs`) and tide
+for macOS use. A row without one keeps its keys. In a cell, "none" is a
+binding with no key by default, "—" is no binding there, and "differs"
+is a platform's other key, with why. The notes under the table say more.
+`conf`'s app keys follow.
+
+| Action | Hyprland/tidewm | KDE | chromeOS | macOS |
+|---|---|---|---|---|
+| the launcher, on a tap | **tap `Super`**: from Hyprland 0.57, and on tidewm | — | differs: chromeOS's launcher | tap `Super` |
+| the launcher: the switcher's Apps tab (§8); `launcher` | `Super+Space` | `Meta+Space` | `Search+Space`: the dashboard | `Super+Space` |
+| home, or back to the last workspace; `home_or_back` | **`Super+Tab`** | `Meta+Tab` | — | `Super+Tab` |
+| the switcher's Attention tab (§8.1); `attention` | **`Super+A`** | — | `Search+A` | `Super+A` |
+| the overview of every workspace's windows (§8.7) | — | — | none | differs: `Ctrl+Up`, Mission Control's key |
+| next keyboard layout (§16); `next_keyboard_layout` | **`Super+Alt+Space`** | — | — | differs: macOS's own *(unverified)* |
+| a terminal; `terminal` | `Super+T` | — | — | `Super+T` |
+| your home folder; `files` | `Super+E` | — | — | `Super+E` |
+| the picker's Clipboard tab (§8.4); `clipboard` | **`Super+V`** | differs: Plasma's Klipper | differs: chromeOS's clipboard history | `Super+V` |
+| the picker's Fill tab (§8.4); `fill` | **`Super+Shift+V`** | — | — | `Super+Shift+V` |
+| the picker's Characters tab (§8.4); `characters` | **`Super+;`** | — | — | `Super+;` |
+| close the window, unless it's pinned (§6.5); `close` | `Super+Backspace` | `Meta+Backspace` | differs: Chrome's `Ctrl+Shift+W` | `Super+Backspace` |
+| the app's own close and quit, kept from a pinned window | **`Ctrl+W`**, **`Ctrl+Shift+W`**, **`Ctrl+Q`**, **`Alt+F4`** | — | — | differs: `Cmd+W`, `Cmd+Shift+W`, `Cmd+Q` |
+| minimize (§6.7); `minimize` | **`Super+Z`** | `Meta+Z` | — | `Super+Z` |
+| lock; `lock` | `Super+L` | — | chromeOS's `Search+L` | `Super+L` |
+| reload the config (below); `reload` | **`Super+Shift+R`** | — | — | `Super+Shift+R`: reloads tide |
+| quit, ending the session; `quit` | `Super+Shift+E` | — | — | `Super+Shift+E`: logs out |
+| keep awake (§10); `keep_awake` | **`Super+S`** | — | `Search+S` | `Super+S` |
+| presenter mode (§10); `presenter` | **`Super+P`** | — | — | `Super+P` |
+| go home (§6.5); `home` | **`Super+Home`** | `Meta+Home` | `Search+Home` | `Super+Home` |
+| go to the Nth workspace on the bar | **`Super+1…9`** | `Meta+1…9` | `Search+1…9` | `Super+1…9` |
+| send the window to the Nth | **`Super+Shift+1…9`** | `Meta+Shift+1…9` | `Search+Shift+1…9` | `Super+Shift+1…9` |
+| go to the last workspace on the bar, send the window there | **`Super+0`**, **`Super+Shift+0`** | `Meta+0`, `Meta+Shift+0` | `Search+0`, `Search+Shift+0` | `Super+0`, `Super+Shift+0` |
+| the last workspace other than home; `last_other_workspace` | **`Super+End`** | `Meta+End` | `Search+End` | `Super+End` |
+| focus the window that way; `focus_left`, `focus_right`, `focus_above`, `focus_below` | **`Super` and an arrow** | `Meta` and an arrow | — | `Super` and an arrow |
+| move the window that way; `move_left`, `move_right`, `move_above`, `move_below` | **`Super+Shift` and an arrow** | `Meta+Shift` and an arrow | — | `Super+Shift` and an arrow |
+| previous, next workspace with a window; `previous_workspace`, `next_workspace` | `Super+PgUp`, `Super+PgDn` | `Meta+PgUp`, `Meta+PgDown` | `Search+PageUp`, `Search+PageDown` | `Super+PgUp`, `Super+PgDn` |
+| move the window to the previous, next workspace; `move_to_previous_workspace`, `move_to_next_workspace` | **`Super+Shift+PgUp`**, **`Super+Shift+PgDn`** | `Meta+Shift+PgUp`, `Meta+Shift+PgDown` | `Search+Shift+PageUp`, `Search+Shift+PageDown` | `Super+Shift+PgUp`, `Super+Shift+PgDn` |
+| focus down, up the stack; `focus_down`, `focus_up` | `Super+J`, `Super+K` | `Meta+J`, `Meta+K` | `Search+J`, `Search+K` | `Super+J`, `Super+K` |
+| move the window down, up the stack; `move_down`, `move_up` | `Super+Shift+J`, `Super+Shift+K` | `Meta+Shift+J`, `Meta+Shift+K` | `Search+Shift+J`, `Search+Shift+K` | `Super+Shift+J`, `Super+Shift+K` |
+| go to a workspace, by name (§6.5); `go_to_workspace` | `Super+Return` | — | differs: `Search+W`, as Chrome can't bind Return | `Super+Return` |
+| move the window to a workspace, by name; `move_to_workspace` | **`Super+Shift+Return`** | — | differs: `Search+Shift+W` | `Super+Shift+Return` |
+| make the window the master; `swap_master` | **`Alt+Tab`** | `Alt+Tab` | differs: `Search+Shift+M`, as chromeOS keeps `Alt+Tab` | `Alt+Tab`, with Karabiner |
+| grow, shrink the master (`mfact`, by §6.1's step); `grow_master`, `shrink_master` | `Super+\`, `Super+/` | `Meta+\`, `Meta+/` | differs: `Search+N`, `Search+H` | `Super+\`, `Super+/` |
+| add, remove a master; `add_master`, `remove_master` | `Super+=`, `Super+-` | `Meta+=`, `Meta+-` | differs: `Search+I`, `Search+D` | `Super+=`, `Super+-` |
+| next, previous layout in the cycle (§6.1); `next_layout`, `previous_layout` | `Super+.`, `Super+,` | `Meta+.`, `Meta+,` | `Search+.`, `Search+,` | `Super+.`, `Super+,` |
+| **the layout used last**; `last_layout` | none; not on tidewm yet | none | — | none |
+| monocle; `monocle` | ``Super+` `` or **`Super+O`** | `Meta+O`, ``Meta+` `` | differs: `Search+O`, as Chrome can't bind a backtick | ``Super+` ``, `Super+O` |
+| maximize (§6.3); `maximize` | **`Super+X`** | `Meta+X` | differs: chromeOS's `Alt+=` | `Super+X` |
+| fullscreen (§6.3); `fullscreen` | **`Super+Shift+X`** | `Meta+Shift+X` | differs: chromeOS's fullscreen key | `Super+Shift+X` |
+| **restore**, from maximize or fullscreen; `restore` | none; not on tidewm | none | — | none |
+| float or tile; `float` | `Super+Shift+F` or `Super+Insert` | `Meta+Shift+F`, `Meta+Ins` | `Search+Shift+F` | `Super+Shift+F`, `Super+Insert` |
+| a floating rule for the window (§6.4); `floating_rule` | **`Super+Alt+F`**: not on tidewm yet | — | — | differs: `Super+Shift+I`, as Super can't take Alt |
+| maximize the window under the pointer | **`Super`+middle-click** | — | — | `Super`+middle-click |
+| resize the master | **drag the edge between the masters and the stack** | the same | differs: a tile's own edge, when let go | differs: a tile's own edge |
+| resize a floating window | **drag its edge or corner** (§6.4) | the same | the same | the same |
+| move, resize a floating window | `Super`+left-drag, `Super`+right-drag | — | — | `Super`+drag, `Super`+right-drag |
+| notification center; `notifications` | **`Super+Shift+N`** | — | chromeOS's `Search+Shift+N` *(unverified)* | — |
+| screenshot of the screen; `screenshot` | `Print` | — | differs: chromeOS's screen capture | `Print` |
+| screenshot of the window; `screenshot_window` | **`Alt+Print`** | — | differs: chromeOS's screen capture | `Alt+Print` |
+| screenshot of a region; `screenshot_region` | `Shift+Print` or `Super+Print` | — | differs: chromeOS's screen capture | `Shift+Print`, `Super+Print` |
+| mute the microphone, system-wide; `mute_microphone` | **`XF86AudioMicMute`** or **`Super+Shift+M`** | — | — | the mic-mute key, `Super+Shift+M` |
+| media, brightness, volume and calculator keys | as today, with OSD | Plasma's | chromeOS's | macOS's |
+
+**Per platform:**
+- **Hyprland and tidewm.** Every key is in both configs but where a cell
+  says otherwise. Hyprland's `screenshot` option (§6.8) takes the
+  `Print` keys, and its `terminal` and `files` options `Super+T` and
+  `Super+E`: `xdg-terminal-exec` and `xdg-open` without them. Hyprland
+  binds the tap from 0.57: before it, a release binding fired after every
+  `Super` chord. tidewm binds it with `--release Super_L`.
+- **KDE.** KWin global shortcuts, each starting `tide:` in System
+  Settings' Shortcuts, where you can change them. "—" there leaves the key to Plasma's
+  own shortcut, if it has one. `Meta+Space` is tide's launcher, from
+  `tide-kde.service` and scripts' `setup-kde` (§8.5). A pinned window
+  closes as any other: a KWin script can't take an app's keys.
+- **chromeOS.** tide for Chrome's commands work only while a Chrome window
+  has focus. "chromeOS's" marks a key the system binds, not tide for
+  Chrome. Chrome can't bind `\`, `/`, `=`, `-`, a backtick, Return or
+  Backspace to an extension, so those moved; `Search` and an arrow is
+  Home, End, Page Up or Page Down there, so the arrows have no key, and
+  workspaces step with Page Up and Down. `Search+Shift+M`, swap with the
+  master, leaves the microphone no key. A pinned app closes as any window
+  does, then reopens.
+- **macOS.** Karabiner turns `Super` into Ctrl+Option+Command; without
+  it, `Super` is plain Option and `Alt+Tab` has no key. `Super` already
+  holds Option, so `Super+Alt+F` moved. The `Print` keys are F13 there
+  *(unverified)*. Resize mode has no key, since tide has none.
+- **Keys of one platform alone**, such as tide for macOS's dashboard and
+  trackpad swipe, tide for Chrome's app keys, and the keys each frees from its
+  system, are in that platform's own spec: tide on KDE's README, tide for
+  Chrome's §7 and tide for macOS's §7.
+
+**What they do**, beyond the table:
+- **`Super+A`** lists every window wanting attention, on any workspace,
+  most recent first; Enter goes there.
+- **`Super+Alt+Space`** works once there are two layouts, on every
+  keyboard (§16), as a click on the bar's layout label does.
+- **The picker.** `Super+V` opens what you've copied, and emoji and
+  symbols by name; Enter pastes. V as in paste, as on Windows.
+  `Super+Shift+V` opens your snippets and each Bitwarden login's
+  username, password and 2FA code; Enter types it. `Super+;` opens emoji
+  and symbols by name; Enter pastes. It isn't Windows's `Super+.`, which
+  is the next layout here.
+- **The app's own close and quit keys** pass on to every window but one
+  pinned on its workspace, which never sees them (§6.5).
+- **`Super+Z`** puts the window's icon in the corner tray, and a click
+  there restores it (§6.7).
+- **`Super+Shift+R`** also starts tide's shell if it isn't running
+  (Reload, below). **`Super+Shift+E`** quits the compositor, and is a
+  rescue key too (§6.8).
+- **`Super+S`** turns keep awake on or off, as the bar's icon does; the
+  OSD says which. **`Super+P`** is Do not disturb and keep awake
+  together.
+- **`Super+1…9`** count along the bar, so `Super+1` is home, as
+  `Super+Home` is; past the last workspace, nothing. `Super+Shift+1…9`
+  send the window there and stay where you are. `Super+0` and
+  `Super+Shift+0` do the same for the last.
+- **`Super+End`** goes from home where `Super+Tab` goes, and from any
+  other workspace to the one before it, so presses toggle between two.
+  `Super+Tab` goes home from any other workspace, and from home back to
+  the last other one still there, so presses toggle.
+- **`Super` and an arrow** focuses the window that way. At a monitor's
+  edge it takes the nearest window on the next monitor that way, or that
+  monitor itself if it shows none; past the last monitor, nothing. The
+  rule is below.
+- **`Super+Shift` and an arrow** moves the window the same way. On its
+  monitor it swaps with the window that way. At the edge it goes onto the
+  next monitor, joining the workspace showing there at the edge it came
+  in by. A floating window goes straight onto the next monitor, still
+  floating, at the same relative spot and its size (below). Either way it
+  keeps focus; past the last monitor, nothing.
+- **`Super+PgUp` and `Super+PgDn`** step through the bar's order,
+  wrapping from the last to home and back. They pass over an empty
+  workspace, standing or made, and one whose only windows are minimized
+  (§6.7): Hyprland has none on it. With no other that has a window,
+  nothing. With `Shift`, they move the window to the very next
+  workspace, empty or not, and follow it.
+- **`Super+Return`** opens the name prompt (§6.5), listing the existing
+  names. Type to filter them or to name a new one; Enter goes there,
+  making the workspace if it's new. It moves no window, so it works with
+  none focused. **`Super+Shift+Return`** opens the same prompt, and Enter
+  moves the focused window there, making the workspace if it's new; with
+  no window focused, nothing.
+- **The layout used last** is the workspace's layout before this one, so
+  two presses come back, as dwm's `Super+Space` does. dwm's preset (§16)
+  puts it there, and Keyboard's shortcuts can give it any key.
+- **`Super+O`**: O as in one window. It's tide for Chrome's key too.
+- **Restore** puts the window back in its tile from maximize or
+  fullscreen.
+- **`Super+Alt+F`** opens the Floating settings (§16) with a rule filled
+  in for the focused window, its class and exact title, the title
+  selected to trim; Enter adds it, Esc doesn't.
+- **Dragging the master's edge** resizes it, as `Super+\` and `Super+/`
+  do, following the pointer, with no key held (below).
 
 **`conf`'s keys.** `conf` loads tide's configs and adds its owner's app
 keys: the `terminal`, `files` and `apps` options on Hyprland (§6.8), and
@@ -2206,6 +2311,10 @@ launchers through `runenv`. They're `conf`'s, not tide's:
 
 `conf`'s Terminal on the VM, which had `Super+V`, has no key now; the
 launcher finds it.
+
+tide for macOS binds the same app keys but `Super+B` and `Super+Shift+B`.
+tide for Chrome binds `Search+G` for the browser and four web apps of
+its own (tide for Chrome §9).
 
 **Reload.** `Super+Shift+R` runs `tide reload`, for after editing a
 config or when the bar is gone. i3's and sway's `Super+Shift+C` is their
