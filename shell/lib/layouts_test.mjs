@@ -32,13 +32,18 @@ test("a monitor with no size yet starts in tile", () => {
 });
 
 test("announcements name a workspace and a known mode", () => {
-    assert.deepEqual(parseAnnouncement("tide-layout>>3,monocle"), { workspace: 3, mode: "monocle" });
-    assert.deepEqual(parseAnnouncement("tide-layout>>-98,tile"), { workspace: -98, mode: "tile" });
+    assert.deepEqual(parseAnnouncement("tide-layout>>3,monocle"), { workspace: "3", mode: "monocle" });
+    assert.deepEqual(parseAnnouncement("tide-layout>>-98,tile"), { workspace: "-98", mode: "tile" });
     assert.equal(parseAnnouncement("tide-layout>>3,spiral"), null);
-    assert.equal(parseAnnouncement("tide-layout>>three,tile"), null);
+    assert.equal(parseAnnouncement("tide-layout>>,tile"), null);
     assert.equal(parseAnnouncement("tide-layout>>3"), null);
     assert.equal(parseAnnouncement("something-else>>3,tile"), null);
     assert.equal(parseAnnouncement(undefined), null);
+});
+
+test("on Hyprland 0.57 a named workspace is announced by its address, its name", () => {
+    assert.deepEqual(parseAnnouncement("tide-layout>>docs,monocle"), { workspace: "docs", mode: "monocle" });
+    assert.deepEqual(parseAnnouncement("tide-layout>>PR-12, login,tile"), { workspace: "PR-12, login", mode: "tile" });
 });
 
 test("each mode shows its symbol, and monocle its hidden count", () => {

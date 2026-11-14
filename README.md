@@ -56,7 +56,8 @@ lines list them (SPEC.md §6.8).
 By hand, also install what the session runs: Hyprland 0.56.2 or later,
 Quickshell 0.3 (`qs`, which draws the bar; without it `tide-shell`
 falls back to waybar, and with an older one it says so in a
-notification), hypridle, hyprlock
+notification; with Hyprland 0.57 or later, 0.3.2, or the bar can't follow
+named workspaces), hypridle, hyprlock
 (the lock's fallback, when tide's lock can't run), uwsm, waybar, swaync, a polkit agent, swww
 or swaybg (for waybar's bar; the Quickshell shell draws its own wallpaper),
 notify-send (libnotify), which the shell reports a bad settings

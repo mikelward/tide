@@ -66,19 +66,34 @@ export function isUltrawide(screen) {
 }
 
 // The windows in the dialog's order: the current workspace's first, then by
-// workspace number, keeping xdph's order within one. A window Hyprland
-// doesn't place (`workspaceOf` gives null) goes last.
+// workspace number, then named workspaces by name (Hyprland 0.57's
+// addresses, from workspaces.mjs's workspaceKey), keeping xdph's order
+// within one. A window Hyprland doesn't place (`workspaceOf` gives null)
+// goes last.
 export function orderWindows(windows, workspaceOf, current) {
     const rank = w => {
         const ws = workspaceOf(w.address);
         if (ws === null || ws === undefined) {
-            return Infinity;
+            return { group: 3, ws: null };
         }
-        return ws === current ? -Infinity : ws;
+        if (ws === current) {
+            return { group: 0, ws };
+        }
+        const number = typeof ws === "number" ? ws : (/^-?\d+$/.test(String(ws)) ? Number(ws) : null);
+        return number !== null ? { group: 1, ws: number } : { group: 2, ws: String(ws) };
+    };
+    const compare = (a, b) => {
+        if (a.group !== b.group) {
+            return a.group - b.group;
+        }
+        if (a.ws === b.ws) {
+            return 0;
+        }
+        return a.ws < b.ws ? -1 : 1;
     };
     return windows
         .map((w, i) => ({ w: w, i: i, r: rank(w) }))
-        .sort((a, b) => (a.r === b.r ? a.i - b.i : (a.r < b.r ? -1 : 1)))
+        .sort((a, b) => compare(a.r, b.r) || a.i - b.i)
         .map(e => e.w);
 }
 

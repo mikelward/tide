@@ -629,6 +629,27 @@ test("helpers dispatch the layoutmsg, then announce the mode", function()
     eq(hl.dispatched[3].arg, "mfact +0.025", "grow step")
 end)
 
+test("on Hyprland 0.57, named workspaces without IDs keep a mode each", function()
+    local qs, layout = fresh()
+    -- From 0.57 a named workspace has an address, its name, and no ID.
+    local function on(name, n)
+        local t = targets(nil, n)
+        for _, target in ipairs(t) do
+            target.window.workspace = { addressable_name = name, name = name }
+        end
+        layout.recalculate({ area = UW, targets = t })
+    end
+    on("docs", 2)
+    on("PR-12", 2)
+    hl.active_ws = nil
+    hl.get_active_workspace = function() return { addressable_name = "docs", name = "docs" } end
+    eq(layout.layout_msg({ area = UW, targets = {} }, "mode monocle"), true, "accepted")
+    eq(qs.mode("docs"), "monocle", "docs changed")
+    eq(qs.mode("PR-12"), "threecol", "PR-12 kept its own")
+    qs.cycle_next()
+    eq(hl.dispatched[#hl.dispatched].arg, "tide-layout>>docs," .. qs.mode("docs"), "announced by its name")
+end)
+
 test("a workspace becoming active announces its mode", function()
     local _, layout = fresh()
     relayout(layout, UW, 4, 2)

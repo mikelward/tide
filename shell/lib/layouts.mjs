@@ -53,16 +53,19 @@ export function defaultMode({ width, height, scale = 1, transform = 0 }, reserve
 }
 
 // The {workspace, mode} a custom event's data announces, or null when it's
-// another custom event or names a mode this bar doesn't know.
+// another custom event or names a mode this bar doesn't know. `workspace`
+// is the workspace's key as a string: its ID before Hyprland 0.57, its
+// address from 0.57, which for a named workspace is its name and may hold
+// a comma, so the mode is after the last one.
 export function parseAnnouncement(data) {
     if (typeof data !== "string" || !data.startsWith(PREFIX)) {
         return null;
     }
-    const m = /^(-?\d+),([a-z]+)$/.exec(data.slice(PREFIX.length));
+    const m = /^(.+),([a-z]+)$/.exec(data.slice(PREFIX.length));
     if (!m || !Object.prototype.hasOwnProperty.call(SYMBOLS, m[2])) {
         return null;
     }
-    return { workspace: Number(m[1]), mode: m[2] };
+    return { workspace: m[1], mode: m[2] };
 }
 
 // What the bar shows for `mode` with `tiled` tiled windows on the workspace.

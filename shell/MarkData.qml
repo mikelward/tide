@@ -63,8 +63,8 @@ Singleton {
     readonly property var visible: Ws.visibleWorkspaces(Compositor.tidewm
         ? Compositor.monitors.map(m => ({ workspace: m.workspace, special: 0 }))
         : Hyprland.monitors.values.map(m => ({
-            workspace: m.activeWorkspace ? m.activeWorkspace.id : null,
-            special: m.lastIpcObject?.specialWorkspace?.id ?? 0,
+            workspace: m.activeWorkspace ? Ws.workspaceKey(m.activeWorkspace) : null,
+            special: Ws.workspaceKey(m.lastIpcObject?.specialWorkspace) ?? 0,
         })))
 
     // A notification arrived, or was updated in place: it marks its app's

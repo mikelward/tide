@@ -387,14 +387,65 @@ function icons(windows, marked) {
     return { icons: shown, more: wanting.length - shown.length };
 }
 
+// A Hyprland workspace's key, as a string, or null: its address, which
+// Hyprland 0.57 gives every workspace (a named one's is its name, and a
+// rename keeps it), and Quickshell 0.3.2 copies; before 0.57 its ID. `w` is
+// Quickshell's workspace or one from `hyprctl -j`, {address, id}. An ID of
+// 0 is none, as a monitor's specialWorkspace says when none is open.
+export function workspaceKey(w) {
+    if (typeof w?.address === "string" && w.address !== "") {
+        return w.address;
+    }
+    return Number.isInteger(w?.id) && w.id !== 0 ? String(w.id) : null;
+}
+
+// The keys (workspaceKey) of `hyprctl workspaces -j`'s workspaces, in the
+// order it lists them, which is the order they were made: Hyprland adds
+// each one it makes to the end of its list.
+export function madeOrder(listed) {
+    return (Array.isArray(listed) ? listed : []).map(workspaceKey).filter((k) => k !== null);
+}
+
+// Hyprland's workspaces as workspaceOrder takes them, [{id, order, name}],
+// from Quickshell's, [{address, id, name}], and `made`, their keys in the
+// order they were made (madeOrder). `id` is the workspace's key
+// (workspaceKey). `order` places it as Hyprland's IDs did before 0.57: a
+// numbered workspace's number, or a named one's ID, which fell with each
+// one made. From 0.57 a named workspace has no ID, so its order is minus
+// its place in `made`; one `made` doesn't have yet, just made, comes after
+// those it has. Which has an ID is what Hyprland says, never guessed from
+// the address, as hyprland.lua's made_order does.
+export function hyprlandWorkspaces(listed, made) {
+    const place = new Map(made.map((k, i) => [k, i]));
+    let later = made.length;
+    const out = [];
+    for (const w of listed) {
+        const key = workspaceKey(w);
+        if (key === null) {
+            continue;
+        }
+        // Quickshell 0.3.2 gives -1 for a workspace with no ID; Hyprland
+        // gives no workspace that ID.
+        let order;
+        if (Number.isInteger(w.id) && w.id !== -1) {
+            order = w.id;
+        } else {
+            order = -1 - (place.has(key) ? place.get(key) : later++);
+        }
+        out.push({ id: key, order, name: String(w.name ?? "") });
+    }
+    return out;
+}
+
 // The bar's workspaces in its order (§6.5, §7.1): the standing ones as
 // `standing` lists them, the first being home, whether Hyprland has them
 // yet or not; then the rest, named ones in the order they were made, which
-// is their falling IDs, and any numbered one (a second monitor's, before
+// is their falling order, and any numbered one (a second monitor's, before
 // anything names it) after them by number. `workspaces` is Hyprland's,
-// [{id, name}], or tidewm's, [{id, order, name}], whose IDs don't fall,
-// so `order` places each as Hyprland's ID would (compositor.mjs's
-// tidewmWorkspaces); special workspaces aren't on the bar. Each is
+// [{id, order, name}] (hyprlandWorkspaces), or tidewm's, [{id, order,
+// name}] (compositor.mjs's tidewmWorkspaces); one with no `order` is
+// ordered by its ID. An ID is any key that tells workspaces apart: a
+// number, or Hyprland's address. Special workspaces aren't on the bar. Each is
 // {id, ids, name, standing, home}, id being null for a standing one that
 // isn't made yet. A standing name matches a workspace's without case, as
 // one typed at the prompt does, so `In` made by hand is still home's place.
@@ -402,10 +453,10 @@ function icons(windows, marked) {
 // A workspace spanning several monitors has a Hyprland workspace for each
 // monitor's part, NAME@OUT on all but the main one (span.mjs, SPEC.md
 // §6.5, Monitors). The bar lists it once: `ids` are all its parts' IDs,
-// and `id` is the main part's, or the part made first (the highest ID)
+// and `id` is the main part's, or the part made first (the highest order)
 // while it has none. It takes its place in the order from its oldest part
-// (the highest ID), so a main part made again when you go back, with a
-// newer ID, doesn't move it.
+// (the highest order), so a main part made again when you go back, with a
+// newer one, doesn't move it.
 export function workspaceOrder(workspaces, standing) {
     const byName = new Map();
     // Workspaces Hyprland destroyed once all their windows were minimized
@@ -418,21 +469,22 @@ export function workspaceOrder(workspaces, standing) {
             waiting.push({ name: workspaceOf(from) });
             continue;
         }
-        if (!Number.isInteger(w.id) || raw.startsWith("special:")) {
+        const order = Number.isInteger(w.order) ? w.order : w.id;
+        if (w.id === null || w.id === undefined || !Number.isInteger(order) || raw.startsWith("special:")) {
             continue;
         }
         const name = workspaceOf(raw);
         const main = raw === name;
-        const order = Number.isInteger(w.order) ? w.order : w.id;
         const ws = byName.get(name);
         if (!ws) {
-            byName.set(name, { id: w.id, ids: [w.id], name, main, order });
+            byName.set(name, { id: w.id, ids: [w.id], name, main, order, idOrder: order });
             continue;
         }
         ws.ids.push(w.id);
         ws.order = Math.max(ws.order, order);
-        if ((main && !ws.main) || (main === ws.main && w.id > ws.id)) {
+        if ((main && !ws.main) || (main === ws.main && order > ws.idOrder)) {
             ws.id = w.id;
+            ws.idOrder = order;
             ws.main = main;
         }
     }
@@ -555,22 +607,78 @@ export function scrollTarget(list, current, notches) {
     return target === i ? null : list[target].name;
 }
 
+// Each workspace's layout mode, as the layout announces it (LayoutData),
+// kept by workspace key (workspaceKey). From Hyprland 0.57 a key is a
+// workspace's name, which may be any name, `__proto__` or `toString`
+// included, so each is stored under a prefix no object property has.
+export const NO_MODES = Object.freeze({});
+
+export function withMode(modes, key, mode) {
+    return Object.assign({}, modes, { [`ws:${key}`]: mode });
+}
+
+// The mode heard for workspace `key`, or undefined.
+export function modeOf(modes, key) {
+    const k = `ws:${key}`;
+    return Object.prototype.hasOwnProperty.call(modes, k) ? modes[k] : undefined;
+}
+
 // What a workspace event on Hyprland's socket says, or null for any other
-// event: {type: "created" | "destroyed" | "renamed", id, name}. A name
-// may hold a comma, so the ID runs to the first one and the name is the
-// rest (§6.5).
-export function workspaceEvent(name, data) {
+// event: {type: "created" | "destroyed" | "renamed", id, name}, `id` being
+// the workspace's key (workspaceKey). The data is KEY,NAME, KEY an ID
+// before Hyprland 0.57 and an address from 0.57, which for a named
+// workspace is its name. Either may hold a comma (§6.5), so the split is
+// the one whose key is in `keys`, the keys the shell knows; else the one
+// whose halves match, as a new named workspace's do; else the first comma.
+// Where more than one known key fits, as `in` and `in,docs` both do
+// `in,docs,archive`, the event is {type, ambiguous: true, data, ids} with
+// the keys that fit, for resolvedEvent to settle against Hyprland's list.
+export function workspaceEvent(name, data, keys = []) {
     const types = { createworkspacev2: "created", destroyworkspacev2: "destroyed", renameworkspace: "renamed" };
     const type = types[name];
     if (type === undefined) {
         return null;
     }
     const text = String(data ?? "");
-    const comma = text.indexOf(",");
-    if (comma < 0 || !/^-?\d+$/.test(text.slice(0, comma))) {
+    const commas = [];
+    for (let i = text.indexOf(","); i >= 0; i = text.indexOf(",", i + 1)) {
+        commas.push(i);
+    }
+    const known = commas.filter((i) => i > 0 && keys.includes(text.slice(0, i)));
+    if (known.length > 1) {
+        return { type, ambiguous: true, data: text, ids: known.map((i) => text.slice(0, i)) };
+    }
+    const at = known[0]
+        ?? commas.find((i) => text.slice(0, i) === text.slice(i + 1))
+        ?? commas[0];
+    if (at === undefined || at === 0) {
         return null;
     }
-    return { type, id: Number(text.slice(0, comma)), name: text.slice(comma + 1) };
+    return { type, id: text.slice(0, at), name: text.slice(at + 1) };
+}
+
+// An ambiguous event (workspaceEvent) settled against `listed`, Hyprland's
+// workspaces as `hyprctl workspaces -j` lists them after it: a workspace
+// made or renamed is the one whose KEY,NAME is the event's data; one
+// destroyed is the one of its keys no longer listed. Null when the list
+// doesn't settle it, as when another event changed it first.
+export function resolvedEvent(event, listed) {
+    const list = Array.isArray(listed) ? listed : [];
+    const fits = (id) => event.data.length > id.length && event.data[id.length] === ",";
+    if (event.type === "destroyed") {
+        const keys = new Set(list.map(workspaceKey));
+        const gone = event.ids.filter((id) => fits(id) && !keys.has(id));
+        return gone.length === 1 ? { type: event.type, id: gone[0], name: event.data.slice(gone[0].length + 1) } : null;
+    }
+    const matches = list.filter((w) => {
+        const key = workspaceKey(w);
+        return key !== null && event.ids.includes(key) && `${key},${w.name}` === event.data;
+    });
+    if (matches.length !== 1) {
+        return null;
+    }
+    const id = workspaceKey(matches[0]);
+    return { type: event.type, id, name: event.data.slice(id.length + 1) };
 }
 
 // The home workspace's ID after `event` (workspaceEvent), from `id`, the

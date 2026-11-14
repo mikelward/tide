@@ -604,6 +604,23 @@ test("going from one empty workspace to another still cancels", function()
     eq(#m.grants(), 0, "grants")
 end)
 
+test("on Hyprland 0.57, named workspaces without IDs are told apart", function()
+    -- From 0.57 a named workspace has an address, its name, and no ID.
+    local function on_named()
+        hl.get_active_workspace = function() return { addressable_name = S.workspace, name = S.workspace } end
+    end
+    local m = load()
+    on_named()
+    S.workspace = "docs"
+    focused(nil, WORKSPACE)
+    m.grant("firefox")
+    focused(nil, CLICK)
+    eq(#m.grants(), 1, "the launcher closing on the same empty workspace keeps the grant")
+    S.workspace = "PR-12"
+    focused(nil, CLICK)
+    eq(#m.grants(), 0, "another empty workspace cancels it")
+end)
+
 test("leaving a window for an empty workspace still cancels", function()
     local m = load()
     focused(window("kitty"), FFM)

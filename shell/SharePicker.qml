@@ -53,7 +53,7 @@ PanelWindow {
             return Compositor.windows.find(w => w.address === address)?.workspace ?? null;
         }
         const t = Hyprland.toplevels.values.find(w => Ws.normalizeAddress(w.address) === address);
-        return t?.workspace?.id ?? null;
+        return t?.workspace ? Ws.workspaceKey(t.workspace) : null;
     }
 
     function show(replyPath, allowToken, list, offered) {
@@ -70,7 +70,7 @@ PanelWindow {
         // own name them (Picker.namedWindows).
         const windows = Compositor.tidewm ? Picker.namedWindows(Picker.parseWindows(list), Compositor.windows) : Picker.parseWindows(list);
         const current = Compositor.tidewm ? (Compositor.tidewmListed.find(w => w?.focused === true)?.id ?? null)
-            : (Hyprland.focusedMonitor?.activeWorkspace?.id ?? null);
+            : (Hyprland.focusedMonitor?.activeWorkspace ? Ws.workspaceKey(Hyprland.focusedMonitor.activeWorkspace) : null);
         const opts = Picker.options(screens, windows, workspaceOf, current);
         root.opts = opts;
         root.reuse = allowToken;

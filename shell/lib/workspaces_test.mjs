@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { noteOf } from "./mute.mjs";
 import {
     MAX_ICONS, BAR_NAME, NO_MARKS, updateMarks, markedWindows, barWorkspaces, scrollTarget,
-    workspaceOrder, barName, workspaceEvent, homeIdAfter, homeRenamed,
+    workspaceOrder, barName, workspaceEvent, homeIdAfter, homeRenamed, workspaceKey, madeOrder, hyprlandWorkspaces, resolvedEvent, NO_MODES, withMode, modeOf,
     normalizeAddress, markEvent, sameApp, visibleWorkspaces, activatedEvent, attentionOrder,
     withFocus, withoutWindow, focusRank, HOME_LAUNCH_SECONDS, NO_HOME_LAUNCHES, homeLaunched, homeLaunchWindow, windowPrompt,
 } from "./workspaces.mjs";
@@ -109,24 +109,50 @@ test("scrolling steps through the bar's order and stops at either end", () => {
     assert.equal(scrollTarget(list, undefined, 1), null);
 });
 
-test("workspace events give the ID up to the first comma and the name after it", () => {
-    assert.deepEqual(workspaceEvent("createworkspacev2", "-1339,PR-12, login"), { type: "created", id: -1339, name: "PR-12, login" });
-    assert.deepEqual(workspaceEvent("destroyworkspacev2", "-1339,a,b"), { type: "destroyed", id: -1339, name: "a,b" });
-    assert.deepEqual(workspaceEvent("renameworkspace", "3,x"), { type: "renamed", id: 3, name: "x" });
-    assert.equal(workspaceEvent("renameworkspace", "x,y"), null);
+test("workspace events give the key up to the first comma and the name after it", () => {
+    assert.deepEqual(workspaceEvent("createworkspacev2", "-1339,PR-12, login"), { type: "created", id: "-1339", name: "PR-12, login" });
+    assert.deepEqual(workspaceEvent("destroyworkspacev2", "-1339,a,b"), { type: "destroyed", id: "-1339", name: "a,b" });
+    assert.deepEqual(workspaceEvent("renameworkspace", "3,x"), { type: "renamed", id: "3", name: "x" });
     assert.equal(workspaceEvent("renameworkspace", "3"), null);
+    assert.equal(workspaceEvent("renameworkspace", ",x"), null);
     assert.equal(workspaceEvent("workspacev2", "3,3"), null);
 });
 
-test("home is followed by ID, and a rename of it is undone", () => {
+test("on Hyprland 0.57 workspace events give a named workspace's address, which may hold a comma", () => {
+    assert.deepEqual(workspaceEvent("createworkspacev2", "docs,docs"), { type: "created", id: "docs", name: "docs" });
+    assert.deepEqual(workspaceEvent("createworkspacev2", "PR-12, login,PR-12, login"), { type: "created", id: "PR-12, login", name: "PR-12, login" },
+        "a new one's halves match");
+    assert.deepEqual(workspaceEvent("renameworkspace", "a,b,c,d", ["x", "a,b"]), { type: "renamed", id: "a,b", name: "c,d" },
+        "a known address");
+    assert.deepEqual(workspaceEvent("renameworkspace", "in,mail"), { type: "renamed", id: "in", name: "mail" });
+});
+
+test("on Hyprland 0.57 an event two known addresses fit is settled by Hyprland's list", () => {
+    const keys = ["in", "in,docs"];
+    const rename = workspaceEvent("renameworkspace", "in,docs,archive", keys);
+    assert.deepEqual(rename, { type: "renamed", ambiguous: true, data: "in,docs,archive", ids: ["in", "in,docs"] });
+    // After it, `in,docs` is named archive, and `in` is still in.
+    const after = [{ address: "in", name: "in" }, { address: "in,docs", name: "archive" }];
+    assert.deepEqual(resolvedEvent(rename, after), { type: "renamed", id: "in,docs", name: "archive" });
+    // `in` renamed to `docs,archive` instead.
+    assert.deepEqual(resolvedEvent(rename, [{ address: "in", name: "docs,archive" }, { address: "in,docs", name: "in,docs" }]),
+        { type: "renamed", id: "in", name: "docs,archive" });
+    const gone = workspaceEvent("destroyworkspacev2", "in,docs,in,docs", keys);
+    assert.equal(gone.ambiguous, true);
+    assert.deepEqual(resolvedEvent(gone, [{ address: "in", name: "in" }]), { type: "destroyed", id: "in,docs", name: "in,docs" });
+    assert.equal(resolvedEvent(rename, []), null, "a list that doesn't settle it");
+    assert.equal(resolvedEvent(gone, after), null, "both still listed");
+});
+
+test("home is followed by its key, and a rename of it is undone", () => {
     let id = null;
     id = homeIdAfter(id, workspaceEvent("createworkspacev2", "-1339,other"), "in");
     assert.equal(id, null);
     id = homeIdAfter(id, workspaceEvent("createworkspacev2", "-1338,in"), "in");
-    assert.equal(id, -1338);
+    assert.equal(id, "-1338");
     const rename = workspaceEvent("renameworkspace", "-1338,mail");
     assert.equal(homeRenamed(id, rename, "in"), true);
-    assert.equal(homeIdAfter(id, rename, "in"), -1338);
+    assert.equal(homeIdAfter(id, rename, "in"), "-1338");
     // Its own name back, or another workspace's rename, is left alone.
     assert.equal(homeRenamed(id, workspaceEvent("renameworkspace", "-1338,in"), "in"), false);
     assert.equal(homeRenamed(id, workspaceEvent("renameworkspace", "-1339,in2"), "in"), false);
@@ -134,6 +160,72 @@ test("home is followed by ID, and a rename of it is undone", () => {
     id = homeIdAfter(id, workspaceEvent("destroyworkspacev2", "-1338,in"), "in");
     assert.equal(id, null);
     assert.equal(homeIdAfter(5, null, "in"), 5);
+});
+
+test("on Hyprland 0.57 home is followed by its address", () => {
+    let id = homeIdAfter(null, workspaceEvent("createworkspacev2", "in,in"), "in");
+    assert.equal(id, "in");
+    const rename = workspaceEvent("renameworkspace", "in,mail", ["in"]);
+    assert.equal(homeRenamed(id, rename, "in"), true);
+    assert.equal(homeIdAfter(id, rename, "in"), "in", "a rename keeps the address");
+    id = homeIdAfter(id, workspaceEvent("destroyworkspacev2", "in,in"), "in");
+    assert.equal(id, null);
+});
+
+test("a workspace's key is its address, or before Hyprland 0.57 its ID", () => {
+    assert.equal(workspaceKey({ address: "docs", id: -1 }), "docs", "Quickshell 0.3.2's -1 for no ID");
+    assert.equal(workspaceKey({ address: "2", id: 2 }), "2");
+    assert.equal(workspaceKey({ id: -1338, name: "in" }), "-1338", "hyprctl before 0.57");
+    assert.equal(workspaceKey({ address: "", type: "", name: "" }), null, "no special workspace on 0.57");
+    assert.equal(workspaceKey({ id: 0, name: "" }), null, "no special workspace before");
+    assert.equal(workspaceKey(null), null);
+});
+
+test("on Hyprland 0.57 named workspaces keep the order they were made, numbered ones their numbers", () => {
+    // hyprctl lists them in the order they were made.
+    const made = madeOrder([{ address: "in", name: "in" }, { address: "docs", name: "docs" }, { address: "2", id: 2, name: "2" },
+        { address: "PR-12", name: "PR-12" }, { address: "special:minimized:in", name: "special:minimized:in" }]);
+    assert.deepEqual(made, ["in", "docs", "2", "PR-12", "special:minimized:in"]);
+    // Quickshell sorts its own list another way, and has one just made that
+    // hyprctl hasn't listed yet.
+    const listed = [{ address: "PR-12", id: -1, name: "PR-12" }, { address: "2", id: 2, name: "2" }, { address: "new", id: -1, name: "new" },
+        { address: "docs", id: -1, name: "docs" }, { address: "in", id: -1, name: "in" }];
+    const workspaces = hyprlandWorkspaces(listed, made);
+    assert.deepEqual(workspaces.find((w) => w.name === "docs"), { id: "docs", order: -2, name: "docs" });
+    assert.deepEqual(workspaces.find((w) => w.name === "2"), { id: "2", order: 2, name: "2" });
+    assert.equal(workspaces.find((w) => w.name === "new").order, -6, "after those made before it");
+    assert.deepEqual(workspaceOrder(workspaces, ["in", "re"]).map((w) => [w.id, w.name]),
+        [["in", "in"], [null, "re"], ["docs", "docs"], ["PR-12", "PR-12"], ["new", "new"], ["2", "2"]]);
+    const bar = barWorkspaces({
+        monitor: "DP-1",
+        monitors: [{ name: "DP-1", workspace: "docs" }, { name: "HDMI-A-1", workspace: "PR-12" }],
+        workspaces,
+        windows: [win("a", "in", "kitty"), win("b", "docs", "firefox")],
+        standing: ["in"],
+    });
+    assert.deepEqual(bar.map((w) => [w.name, w.state]),
+        [["in", "occupied"], ["docs", "current"], ["PR-12", "elsewhere"], ["new", "empty"], ["2", "empty"]]);
+    assert.equal(scrollTarget(bar, "docs", 1), "PR-12");
+});
+
+test("on Hyprland 0.57 a workspace with no ID orders by when it was made, whatever its address looks like", () => {
+    const listed = [{ address: "2026", id: -1, name: "2026" }, { address: "docs", id: -1, name: "docs" }, { address: "3", id: 3, name: "3" }];
+    const order = workspaceOrder(hyprlandWorkspaces(listed, ["2026", "docs", "3"]), []).map((w) => w.name);
+    assert.deepEqual(order, ["2026", "docs", "3"]);
+});
+
+test("before Hyprland 0.57 the keys from Quickshell 0.3.2 order as the IDs did", () => {
+    const listed = [{ address: "-1338", id: -1338, name: "in" }, { address: "-1339", id: -1339, name: "docs" }, { address: "2", id: 2, name: "2" }];
+    assert.deepEqual(workspaceOrder(hyprlandWorkspaces(listed, []), []).map((w) => w.name), ["in", "docs", "2"]);
+});
+
+test("a spanning workspace's parts on Hyprland 0.57 are one on the bar, keyed by its main part", () => {
+    const made = ["docs@HDMI-A-1", "docs"];
+    const listed = made.map((a) => ({ address: a, id: -1, name: a }));
+    const order = workspaceOrder(hyprlandWorkspaces(listed, made), []);
+    assert.equal(order.length, 1);
+    assert.equal(order[0].id, "docs");
+    assert.deepEqual(order[0].ids.slice().sort(), ["docs", "docs@HDMI-A-1"]);
 });
 
 test("each workspace is current, elsewhere, occupied or empty", () => {
@@ -822,4 +914,15 @@ test("a launch from home answered home opens there, and its window doesn't ask a
     // And a second kitty window afterwards asks too.
     const again = { address: "0xa2", class: "kitty", title: "kitty", workspace: { name: "in" }, floating: false };
     assert.equal(windowPrompt(again, Object.assign({}, opts, { launches: judged.launches })).ask, true);
+});
+
+test("on Hyprland 0.57 a workspace's mode is kept by its name, whatever the name", () => {
+    let modes = withMode(NO_MODES, "docs", "monocle");
+    modes = withMode(modes, "__proto__", "threecol");
+    modes = withMode(modes, "toString", "tile");
+    assert.equal(modeOf(modes, "docs"), "monocle");
+    assert.equal(modeOf(modes, "__proto__"), "threecol");
+    assert.equal(modeOf(modes, "toString"), "tile");
+    assert.equal(modeOf(modes, "constructor"), undefined, "one not heard from");
+    assert.equal(modeOf(NO_MODES, "docs"), undefined);
 });

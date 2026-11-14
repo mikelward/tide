@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.I3
+import Quickshell.Io
 import "lib/compositor.mjs" as Comp
 import "lib/dispatch.mjs" as Dispatch
 import "lib/tidewm.mjs" as Tw
@@ -36,17 +37,24 @@ Singleton {
     readonly property var tidewmListed: root.tidewm ? I3.workspaces.values.map(w => w.lastIpcObject) : []
     // tidewm's outputs as its GET_OUTPUTS gives them, or [] on Hyprland.
     readonly property var tidewmOutputs: root.tidewm ? I3.monitors.values.map(m => m.lastIpcObject) : []
+    // Hyprland's workspaces' keys (Ws.workspaceKey) in the order they were
+    // made, as `hyprctl workspaces -j` lists them (Ws.madeOrder), for the
+    // order of named workspaces, which have no ID from Hyprland 0.57. It's
+    // read as the shell starts and each time a workspace is made or goes.
+    property var made: []
     // The workspaces, as workspaces.mjs's workspaceOrder takes them:
-    // [{id, name}] from Hyprland, a part of a spanning one apiece, or
-    // [{id, order, name}] from tidewm, where one spans every monitor.
+    // [{id, order, name}] from Hyprland, a part of a spanning one apiece,
+    // `id` being its key (Ws.hyprlandWorkspaces), or from tidewm, where one
+    // spans every monitor.
     readonly property var workspaces: root.tidewm
         ? Comp.tidewmWorkspaces(root.tidewmListed)
-        : Hyprland.workspaces.values.map(w => ({ id: w.id, name: w.name }))
+        : Ws.hyprlandWorkspaces(Hyprland.workspaces.values.map(w => ({ address: w.address, id: w.id, name: w.name })), root.made)
     // Each monitor, [{name, workspace}], with the ID of the workspace it
-    // shows: on tidewm, the current one, which every monitor shows.
+    // shows (Hyprland's key): on tidewm, the current one, which every
+    // monitor shows.
     readonly property var monitors: root.tidewm
         ? Comp.tidewmMonitors(I3.monitors.values.map(m => m.name), Comp.tidewmCurrent(root.tidewmListed))
-        : Hyprland.monitors.values.map(m => ({ name: m.name, workspace: m.activeWorkspace ? m.activeWorkspace.id : null }))
+        : Hyprland.monitors.values.map(m => ({ name: m.name, workspace: m.activeWorkspace ? Ws.workspaceKey(m.activeWorkspace) : null }))
 
     // The current workspace's name on tidewm, which every monitor shows.
     readonly property string tidewmCurrentName: root.tidewm ? (root.tidewmListed.find(w => w?.focused === true)?.name ?? "") : ""
@@ -65,7 +73,7 @@ Singleton {
         }))
         : Hyprland.toplevels.values.map(t => ({
             address: Ws.normalizeAddress(t.address),
-            workspace: t.workspace ? t.workspace.id : null,
+            workspace: t.workspace ? Ws.workspaceKey(t.workspace) : null,
             workspaceName: t.workspace?.name ?? "",
             app: t.lastIpcObject?.class || t.wayland?.appId || "",
             urgent: t.urgent,
@@ -80,7 +88,7 @@ Singleton {
             address: Ws.normalizeAddress(t.address),
             title: t.title ?? "",
             app: t.lastIpcObject?.class || t.wayland?.appId || "",
-            workspace: t.workspace ? t.workspace.id : null,
+            workspace: t.workspace ? Ws.workspaceKey(t.workspace) : null,
             workspaceName: t.workspace?.name ?? "",
             monitor: t.monitor?.name ?? "",
             urgent: t.urgent,
@@ -224,9 +232,109 @@ Singleton {
         target: root.tidewm ? null : Hyprland
 
         function onRawEvent(event) {
-            const ws = Ws.workspaceEvent(event.name, event.data);
-            if (ws !== null) {
-                root.workspaceEvent(ws);
+            const ws = Ws.workspaceEvent(event.name, event.data, root.workspaces.map(w => w.id).concat(root.made));
+            if (ws === null) {
+                return;
+            }
+            if (ws.ambiguous) {
+                // Settled by the next list Hyprland gives (Ws.resolvedEvent).
+                root.unsettled = root.unsettled.concat([ws]);
+                root.readMade();
+                return;
+            }
+            if (ws.type !== "renamed") {
+                root.readMade();
+            }
+            root.workspaceEvent(ws);
+        }
+    }
+
+    // Workspace events more than one known workspace fits, waiting for a
+    // read of the list that starts after them (Ws.workspaceEvent).
+    property var unsettled: []
+
+    // Reads `made` again, and settles the unsettled events with the list. A
+    // read that fails keeps the last `made`, which orders the workspaces
+    // made since after the rest (Ws.hyprlandWorkspaces).
+    function readMade() {
+        if (root.tidewm) {
+            return;
+        }
+        if (madeReader.running) {
+            madeReader.again = true;
+            return;
+        }
+        madeReader.settling = root.unsettled;
+        root.unsettled = [];
+        madeReader.started = false;
+        madeReader.running = true;
+    }
+
+    // The events a read settles, the list it gave, or null for none.
+    function settle(events, listed) {
+        for (const e of events) {
+            const ws = listed === null ? null : Ws.resolvedEvent(e, listed);
+            if (ws === null) {
+                console.warn(`tide: couldn't tell which workspace a ${e.type} event was for: more than one workspace's name begins the event's text, and Hyprland's list didn't settle it`);
+                continue;
+            }
+            root.workspaceEvent(ws);
+        }
+    }
+
+    Component.onCompleted: root.readMade()
+
+    Process {
+        id: madeReader
+
+        // Another read was asked for while this one ran.
+        property bool again: false
+        // Quickshell reports a command that can't start (no hyprctl on
+        // PATH) only by stopping without `started` (shell/lib/launch.mjs).
+        property bool started: false
+        // The unsettled events this read settles: by its list once its
+        // output ends, or by none if it fails, whichever comes first.
+        property var settling: []
+
+        function settleWith(listed) {
+            const events = madeReader.settling;
+            madeReader.settling = [];
+            root.settle(events, listed);
+        }
+
+        command: ["hyprctl", "workspaces", "-j"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let listed = null;
+                try {
+                    listed = JSON.parse(text);
+                    root.made = Ws.madeOrder(listed);
+                } catch (e) {
+                    console.warn(`tide: couldn't run hyprctl workspaces: its list isn't JSON (${e.message}), so new named workspaces may be out of order on the bar`);
+                }
+                madeReader.settleWith(listed);
+            }
+        }
+        onStarted: madeReader.started = true
+        onExited: (code, status) => {
+            if (code !== 0) {
+                console.warn(`tide: couldn't run hyprctl workspaces: it exited ${code}, so new named workspaces may be out of order on the bar`);
+                madeReader.settleWith(null);
+            }
+            if (madeReader.again) {
+                madeReader.again = false;
+                root.readMade();
+            }
+        }
+        onRunningChanged: {
+            if (madeReader.running || madeReader.started) {
+                return;
+            }
+            console.warn("tide: couldn't start hyprctl workspaces, so new named workspaces may be out of order on the bar");
+            madeReader.settleWith(null);
+            if (madeReader.again) {
+                madeReader.again = false;
+                root.readMade();
             }
         }
     }

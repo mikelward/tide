@@ -55,6 +55,13 @@ test("windows on the current workspace come first, then by workspace", () => {
     assert.deepEqual(order, ["b", "d", "c", "a", "e"]);
 });
 
+test("on Hyprland 0.57 windows on named workspaces come after numbered ones, by name", () => {
+    const ws = { a: "docs", b: "2", c: "in", d: "PR-12", e: "1" };
+    const windows = ["a", "b", "c", "d", "e", "f"].map(x => ({ id: x, address: x }));
+    const order = orderWindows(windows, addr => ws[addr] ?? null, "in").map(w => w.id);
+    assert.deepEqual(order, ["c", "e", "b", "d", "a", "f"]);
+});
+
 test("options run screens, then windows, with xdph's keys, and no area of a wide monitor", () => {
     const windows = parseWindows("11[HC>]kitty[HT>]~/src[HE>]255[HA>]22[HC>]chrome[HT>][HE>]0[HA>]");
     const opts = options([wide, laptop], windows, addr => (addr === "ff" ? 1 : null), 1);
