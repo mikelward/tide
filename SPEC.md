@@ -489,6 +489,14 @@ flowchart TD
   - It warns when the kernel command line has no `splash` (or Fedora's
     `rhgb`), and on Arch when mkinitcpio's `HOOKS` has no `plymouth`:
     either way the boot shows text.
+  - It stays up until the login screen draws (maintainer, 2026-11-14).
+    Plymouth quitting at the end of the boot showed the text console
+    until greetd's greeter drew. With greetd the display manager, setup
+    gives `plymouth-quit.service` a drop-in, `tide-retain-splash.conf`,
+    that quits with `--retain-splash`, as GDM does. The splash's last
+    frame stays until the greeter's compositor draws over it. With any
+    other display manager, or none, nothing may draw over it, so the
+    drop-in goes.
 - **The session entry** is `tide.desktop` in `wayland-sessions`, so
   the current display manager lists it too (M2).
 - **Each entry's `Exec` is `tide-session hyprland` or `tide-session

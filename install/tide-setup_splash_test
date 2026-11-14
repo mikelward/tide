@@ -174,4 +174,49 @@ setup; splash_setup; ARGS=(--splash --no-sudo); splash_run
 check "--no-sudo leaves the boot splash alone" lacks "$calls" "install-splash"
 teardown
 
+# With greetd the display manager, Plymouth quits leaving the splash on
+# screen, for the greeter to draw over: no text console between them.
+setup; splash_setup; echo greetd.service > "$T/dm"; ARGS=(--splash); splash_run
+handoff=$T/etc/systemd/system/plymouth-quit.service.d/tide-retain-splash.conf
+check "with greetd, Plymouth quits leaving the splash for the greeter" \
+    has "$(cat "$handoff" 2>/dev/null)" "ExecStart=-$T/bin/plymouth quit --retain-splash"
+check "in place of its own quit" has "$(cat "$handoff" 2>/dev/null)" "ExecStart=
+ExecStart=-"
+check "and systemd reloads to see it" has "$calls" "sudo systemctl daemon-reload"
+teardown
+setup; splash_setup; splash_installed_already; echo greetd.service > "$T/dm"
+ARGS=(--splash); splash_run FAKE_ALTERNATIVE="$T/plymouth-themes/tide/tide.plymouth"
+calls_before=$calls
+splash_run FAKE_ALTERNATIVE="$T/plymouth-themes/tide/tide.plymouth"
+check "a rerun with it in place reloads nothing" lacks "${calls#"$calls_before"}" "sudo systemctl daemon-reload"
+teardown
+# Any other display manager, or none, has nothing to draw over a splash
+# left there, so the drop-in goes.
+setup; splash_setup; echo gdm.service > "$T/dm"; ARGS=(--splash); splash_run
+check "with another display manager, the splash isn't left up" \
+    test ! -e "$T/etc/systemd/system/plymouth-quit.service.d/tide-retain-splash.conf"
+teardown
+setup; splash_setup; mkdir -p "$T/etc/systemd/system/plymouth-quit.service.d"
+echo "[Service]" > "$T/etc/systemd/system/plymouth-quit.service.d/tide-retain-splash.conf"
+ARGS=(--splash); splash_run
+check "with no display manager, an earlier handoff is removed" \
+    test ! -e "$T/etc/systemd/system/plymouth-quit.service.d/tide-retain-splash.conf"
+check "and systemd reloads without it" has "$calls" "sudo systemctl daemon-reload"
+teardown
+# A run without --splash after greetd stops being the display manager, as
+# --no-greeter has it, takes the handoff away too.
+setup; splash_setup; mkdir -p "$T/etc/systemd/system/plymouth-quit.service.d"
+echo "[Service]" > "$T/etc/systemd/system/plymouth-quit.service.d/tide-retain-splash.conf"
+echo gdm.service > "$T/dm"; ARGS=(); splash_run
+check "without --splash, a handoff greetd no longer draws over goes" \
+    test ! -e "$T/etc/systemd/system/plymouth-quit.service.d/tide-retain-splash.conf"
+teardown
+setup; splash_setup; mkdir -p "$T/etc/systemd/system/plymouth-quit.service.d"
+echo "[Service]" > "$T/etc/systemd/system/plymouth-quit.service.d/tide-retain-splash.conf"
+echo greetd.service > "$T/dm"; ARGS=(); splash_run
+check "while greetd still is, it stays" \
+    test -e "$T/etc/systemd/system/plymouth-quit.service.d/tide-retain-splash.conf"
+check "and nothing of Plymouth's is installed for it" lacks "$calls" "install-splash"
+teardown
+
 finish

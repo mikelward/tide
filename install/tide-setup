@@ -7204,6 +7204,7 @@ PLYMOUTH_THEMES="${SETUP_PLYMOUTH_THEMES:-/usr/share/plymouth/themes}"
 KERNEL_CMDLINE="${SETUP_KERNEL_CMDLINE:-/proc/cmdline}"
 PLYMOUTHD_CONF="${SETUP_ETC:-/etc}/plymouth/plymouthd.conf"
 MKINITCPIO_CONF="${SETUP_ETC:-/etc}/mkinitcpio.conf"
+SPLASH_HANDOFF_DROPIN="${SETUP_ETC:-/etc}/systemd/system/plymouth-quit.service.d/tide-retain-splash.conf"
 
 # splash_installed: whether the installed theme is this checkout's, file
 # for file, and its keymap-render.png the distro's spinner theme's.
@@ -7330,6 +7331,50 @@ setup_splash() {
     if test -r "$KERNEL_CMDLINE" && ! grep -Eq '(^| )(splash|rhgb)( |$)' "$KERNEL_CMDLINE"; then
         warn "the kernel command line has no 'splash', so the boot shows text, not tide's splash; add 'quiet splash' to it in the boot loader's settings (GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub, then update-grub)"
     fi
+    splash_handoff
+}
+
+# splash_handoff: with greetd the display manager, Plymouth quits leaving
+# the boot splash on screen, and the greeter draws over it, so no text
+# console shows between them (tide SPEC.md §5.3), as GDM does. A drop-in
+# for plymouth-quit.service gives its quit --retain-splash. With any other
+# display manager, or none, nothing may draw over a splash left there, so
+# the drop-in goes.
+splash_handoff() {
+    if ! _sh_dm=$(display_manager); then
+        warn "couldn't tell which display manager there is, so the boot splash's handoff to the login screen is left as it was"
+        return 0
+    fi
+    if test "$_sh_dm" != greetd.service; then
+        if test -e "$SPLASH_HANDOFF_DROPIN"; then
+            if sudo_logged rm -f "$SPLASH_HANDOFF_DROPIN" && sudo_logged systemctl daemon-reload; then
+                detail "the boot splash no longer stays up for the login screen, as greetd isn't the display manager"
+            else
+                warn "couldn't remove $SPLASH_HANDOFF_DROPIN, so the boot splash may stay on screen with no login screen to draw over it"
+            fi
+        fi
+        return 0
+    fi
+    _sh_was=${changed-}
+    changed=no
+    if ! install_text "$SPLASH_HANDOFF_DROPIN" "# Written by tide's setup (--splash): Plymouth quits leaving the boot
+# splash on screen, for greetd's greeter to draw over (tide SPEC.md §5.3).
+[Service]
+ExecStart=
+ExecStart=-$(command -v plymouth) quit --retain-splash"; then
+        changed=$_sh_was
+        warn "couldn't write $SPLASH_HANDOFF_DROPIN, so the text console shows between the boot splash and the login screen"
+        return 0
+    fi
+    _sh_changed=$changed
+    test "$_sh_changed" = yes || changed=$_sh_was
+    if test "$_sh_changed" = yes; then
+        if sudo_logged systemctl daemon-reload; then
+            detail "the boot splash stays up until the login screen draws"
+        else
+            warn "couldn't reload systemd, so the boot splash stays up for the login screen only from the next boot after a reload"
+        fi
+    fi
 }
 
 # --- Main ---
@@ -7419,6 +7464,10 @@ else
     setup_greeter
     if test "$SPLASH" = yes; then
         setup_splash
+    elif test -e "$SPLASH_HANDOFF_DROPIN"; then
+        # An earlier --splash's handoff, for a display manager that may
+        # have changed since, as --no-greeter does.
+        splash_handoff
     fi
 fi
 
