@@ -3778,6 +3778,11 @@ compositors can't run here. It's tide for macOS's overview (tidemo SPEC.md
 
 See [`notifications.png`](docs/mocks/notifications.png).
 
+Until swaync retires, the shell is the notification server only with
+`TIDE_NOTIFICATIONS=1` and the Quickshell bar (§5.2). Without it, swaync
+shows notifications its own way, and of this section only the OSD (*Not a
+notification*) is the shell's.
+
 ### Popups
 
 - **Where.** Popups appear top-right of the focused monitor, under the bar,
@@ -3820,7 +3825,6 @@ See [`notifications.png`](docs/mocks/notifications.png).
   - A web notification from a site with an `--app` window open grants that
     window's class instead of Chrome's (§14.4), so Chat's notification
     brings up the Chat window, not whichever Chrome window was last used.
-    With the site open in two profiles, one grant covers both classes.
   - If nothing arrives and the app already has windows, it focuses the app's
     most recently focused window. Anything you do meanwhile (a key, moving
     the pointer into another window) cancels that, like any grant, so it
@@ -3880,11 +3884,15 @@ See [`notifications.png`](docs/mocks/notifications.png).
 - **Automatic while sharing a screen:** popups are held and counted
   in the "held while you were sharing" banner.
   - A **window** share holds nothing, since popups aren't in that stream.
-  - Popup surfaces also carry Hyprland's `no_screen_share` layer rule, so
-    even a popup that does show (a critical one) is blacked out of the
-    stream.
-- **Critical during a full-screen share:** shown on a monitor that isn't
-  being shared if there is one; otherwise held, with the bar's bell flashing.
+  - A share whose source isn't known, one §12 couldn't pair or one
+    restored from a token, counts as a screen share.
+  - A system sender's critical gets through a screen share as it gets
+    through manual Do not disturb (below), wherever popups go. On
+    Hyprland, `no_screen_share` blacks it out of the stream (§12). tidewm
+    has no such rule, so there the stream shows it.
+- **Critical during a screen share** (planned, TODO.md): shown on a monitor
+  that isn't being shared, if there is one. Otherwise, or when the shared
+  output isn't known (above), it's held, with the bar's bell flashing.
 - **Which "critical" gets through manual DND.** Only criticals from system
   senders (battery, the shell, polkit) do, and only while the Notifications
   page's *Critical alerts break through* is on, as it is by default. Off,
@@ -3973,7 +3981,7 @@ today's `hypridle.conf`:
 
 | After | What happens |
 |---|---|
-| 2 min 30 s | dim: backlight to 10% (saving the level first), and a 40% black overlay on outputs with no backlight; any input undoes both |
+| 2 min 30 s | dim: backlight to 10% (saving the level first); any input undoes it. Planned (TODO.md): a 40% black overlay on outputs with no backlight |
 | 5 min | lock (`tide idle-lock`, which runs `loginctl lock-session`); the lock opens in its **screensaver face** |
 | 5 min 30 s | displays off (DPMS); back on at any input |
 | 30 min | suspend, on battery only. On AC it doesn't suspend, by default; the displays just stay off. Decided in review of this spec. |
@@ -3994,7 +4002,7 @@ today's `hypridle.conf`:
     hypridle keeps the last good timings.
   - A change the shell can't save is reported, and the page keeps the old
     time. One it can't write to hypridle's file or restart hypridle for is
-    reported once, and tried again every 30 seconds, for as long as the
+    reported once, and tried again every 30 s, for as long as the
     shell runs, until it's in.
   - A shell restarted before then still gets it in. Each restart's
     timings are recorded in `$XDG_RUNTIME_DIR/tide-idle-applied`, and so
@@ -4015,8 +4023,8 @@ today's `hypridle.conf`:
     there would restart hypridle for nothing, and drop the apps' D-Bus
     inhibits with it.
   - A file it can't read is reported, and it suspends on battery only.
-- **Unplugging while idle.** If you unplug after the 30 minutes have
-  passed, the machine suspends then. The 30-minute step runs
+- **Unplugging while idle.** If you unplug after the 30 min have
+  passed, the machine suspends then. The suspend step runs
   `tide idle-suspend`, which suspends on battery and otherwise leaves
   a flag, `$XDG_RUNTIME_DIR/tide-idle-suspend`. The first input after the
   step clears it: the step's `on-resume` runs `tide idle-suspend
@@ -4024,10 +4032,10 @@ today's `hypridle.conf`:
   `tide idle-suspend --unplugged`, which suspends if the flag is still
   there.
 
-- **Undoing the dim.** The dim listener's `on-resume` restores the saved
-  backlight level (`brightnessctl -r` after `brightnessctl -s set 10%`)
-  and tells the shell to remove its overlay. Input after the lock or DPMS
-  steps undoes the dim the same way, as well as turning displays back on.
+- **Undoing the dimming.** The dimming step's `on-resume` restores the
+  saved backlight level (`brightnessctl -r` after `brightnessctl -s set
+  10%`). Input after the lock or DPMS steps undoes it the same way, as well
+  as turning displays back on.
 
 **The screensaver** is the lock's idle face, not a separate program:
 
@@ -4052,8 +4060,8 @@ today's `hypridle.conf`:
   - Wayland inhibitors (fullscreen video, the shell's own *keep awake*);
   - D-Bus inhibits;
   - logind idle inhibitors.
-- Its listeners run the timeline above: `loginctl lock-session`,
-  `hyprctl dispatch dpms`, and `tide idle-suspend`.
+- Its listeners run the commands in the timeline above: `brightnessctl`,
+  `tide idle-lock`, `tide displays off` and `on`, and `tide idle-suspend`.
 
 Quickshell's `IdleMonitor` sees Wayland inhibitors only, and Quickshell has no
 D-Bus server module to own the ScreenSaver name. A shell-only idle timer
@@ -4089,8 +4097,9 @@ one of them:
 **Keep awake.**
 
 - A bar and launcher toggle holds an `IdleInhibitor` on each bar's surface.
-  The toggle is always in the bar, and it stays on until you click it off:
-  it never times out (decided 2026-10-04, replacing a two-hour limit). It
+  The toggle is in the bar unless the Bar page hides it (`barIcons`,
+  §7.1). It stays on until you turn it off: it never times out (decided
+  2026-10-04, replacing a two-hour limit). It
   survives a config reload, but a new shell starts with it off, so it's
   never left on by accident across a login.
 - It also switches on automatically **while the microphone is live**, so an
@@ -4131,7 +4140,7 @@ talk, a demo, or a meeting room's screen.
   says (§9). A window share holds nothing, so presenting with one wants
   presenter mode.
 - **Without the shell as the notification server** (`TIDE_NOTIFICATIONS`
-  until swaync retires, §9) there's no Do not disturb to hold. Presenter
+  until swaync retires, §5.2) there's no Do not disturb to hold. Presenter
   mode holds keep awake alone, and the OSD says "Presenting, keep awake
   only".
 - **Lifetime:** like keep awake. It survives a config reload, and a new
@@ -4160,8 +4169,8 @@ talk, a demo, or a meeting room's screen.
     session locked can't depend on another repo's file.
   - A unit that isn't there never fails, so `OnFailure=` can't cover it.
     That happens when `make install` hasn't run since the unit was added,
-    or the unit is masked. So `conf`'s `lock_cmd` starts the unit only when
-    its `LoadState` is `loaded`. Otherwise it runs hyprlock itself, unless
+    or the unit is masked. So tide's `lock_cmd`, in `hypr/hypridle.conf`,
+    starts the unit only when its `LoadState` is `loaded`. Otherwise it runs hyprlock itself, unless
     one is running, and sends the same notification.
   - `tide-lock` fails at once when the lock can't start: no `qs`, a `qs`
     older than 0.3 (§3.2), no `lock.qml`, or no readable
@@ -4190,10 +4199,7 @@ talk, a demo, or a meeting room's screen.
     failed", waiting under the lock. `tide doctor` names the failed unit
     and why.
   - hyprlock has its own face and PAM config, not tide's. It's a way to
-    stay locked, not a second lock to design. It reads `conf`'s
-    `hyprlock.conf`, or else the one its package installs under
-    `/etc/xdg/hypr`. With neither, it exits 1 (hyprlock's `main.cpp`), and
-    `tide doctor` names the failed fallback.
+    stay locked, not a second lock to design.
 - **Every keystroke shows at once** (maintainer, 2026-10-05). Each key
   changes the field on the next frame, with no animation: a dot per
   character, and past 20 a count, so the next key is still visible. Keys
@@ -4217,8 +4223,8 @@ talk, a demo, or a meeting room's screen.
   red border wins over both.
   - With no keyboard, "No keyboard" sits beside the layout under the
     field, on every face, where "Caps Lock is on" goes (maintainer,
-    2026-11-13). Hyprland names no layout with no keyboard, so the last
-    one named stays. The line under the row keeps PAM's message or the
+    2026-11-13). The compositor names no layout with no keyboard, so the
+    last one named stays. The line under the row keeps PAM's message or the
     failure.
   - A keyboard is an input device udev tags `ID_INPUT_KEYBOARD`: one with
     every key from Esc to D. A power button isn't one. A USB receiver's
@@ -4243,26 +4249,30 @@ talk, a demo, or a meeting room's screen.
   field.
 - **Editing the field:** Backspace drops a character; Escape and Ctrl+U
   erase it all. No other Control chord types into it.
+- **Where things sit.** The field is 240 px wide. Top right, in the bar's
+  order, where the bar keeps its status: the battery, then the
+  notification count. Power is along the bottom (below).
 - **Notification count:** how many arrived since the notification center
-  was last open, from the history the bar saves (§9). It sits top right
-  after the battery, in the bar's order, where the bar keeps its status. A
-  count, never what they say; none when there are none, and none while
-  the shell isn't the notification server (`TIDE_NOTIFICATIONS` until
-  swaync retires), since nothing could then mark a leftover history seen.
+  was last open, from the history the bar saves (§9). A count, never what
+  they say; none when there are none, and none while the shell isn't the
+  notification server (`TIDE_NOTIFICATIONS` until swaync retires, §5.2),
+  since nothing could then mark a leftover history seen.
 - **Keyboard layout:** the main keyboard's layout is named under the
   field, in dim text after a keyboard icon ("Dvorak"), following a switch,
   so a failed password isn't a layout mystery. It sits where the boot
   splash names it, so the two look alike (maintainer, 2026-11-13).
-  The field is 240 px wide.
+  - On Hyprland, main is Hyprland's word: the keyboard last typed on. On
+    tidewm, which marks none main and gives its keyboards one layout, it's
+    the first keyboard `GET_INPUTS` lists with a layout.
+  - It's read again on each switch, after each failed password, and when
+    a keyboard comes or goes, so an unplugged keyboard's layout doesn't
+    linger.
 - **Caps Lock:** "Caps Lock is on", in the bar's urgent yellow, sits beside
   the layout while it's on, as on the boot splash. `tide caps-lock` reads
   the keyboards' Caps Lock lights, which Hyprland and tidewm both set. The
   lock and the greeter run it at start, when a keyboard comes or goes, and
   each time Caps Lock is released. A keyboard with no light can't say, so
-  nothing shows for it. "No keyboard" wins over it. Main is
-  Hyprland's word: the keyboard last typed on. It's read again on each
-  switch, after each failed password, and when a keyboard comes or goes,
-  so an unplugged keyboard's layout doesn't linger.
+  nothing shows for it. "No keyboard" wins over it.
 - **Either mouse button clicks** on the lock and the greeter, so a
   left-handed mouse needs no setting there.
 - **Power from the lock:** Suspend at the bottom left, Restart and Shut down
@@ -4271,32 +4281,48 @@ talk, a demo, or a meeting room's screen.
   logged-in session, as a console login is, is named too, and pressing the
   same button again goes ahead (maintainer, 2026-11-13): logind allows the
   active session that (`reboot-multiple-sessions`) and still refuses past
-  an inhibitor. The battery sits
-  at the top right, before the notification count.
-- **Triggers:** `Super+L`, idle, suspend, and lid-close without an external
-  display.
+  an inhibitor.
+- **Triggers:** `Super+L`, idle, suspend, and closing the lid with no
+  other monitor, as the Power page's *Closing the lid* says (§16): Lock
+  locks, Suspend locks as the machine sleeps, and Do nothing doesn't lock.
 - **All of them go through logind.** `loginctl lock-session` raises logind's
   `Lock` signal; hypridle's `lock_cmd` then starts `tide-lock.service`.
-  There is one path to test.
-- **Except without hypridle** (maintainer, 2026-11-05). Then nothing
-  answers logind's `Lock`. A leftover drop-in once skipped hypridle at
-  every login, and `Super+L` did nothing.
-  - So `Super+L` and the shell's Lock run `tide lock`. With hypridle
-    running, that's `loginctl lock-session`. Without it, it starts
-    `tide-lock.service` itself, or hyprlock where that isn't installed or
-    won't start, as `lock_cmd` does.
+  With hypridle running, there is one path to test.
+- **If hypridle fails for good, swayidle takes over locking only** (§5.4).
+  It answers logind's `Lock`, and locks after 5 min and before sleep, each
+  through `tide lock --now`, which starts `tide-lock.service` without
+  going back through logind.
+- **Except with neither** (maintainer, 2026-11-05). Then nothing answers
+  logind's `Lock`. A leftover drop-in once skipped hypridle at every
+  login, and `Super+L` did nothing.
+  - So `Super+L` and the shell's Lock run `tide lock`. With hypridle or
+    swayidle running, that's `loginctl lock-session`. With neither, it
+    starts `tide-lock.service` itself, or hyprlock where that isn't
+    installed or won't start, as `lock_cmd` does.
   - A critical notification, "Idle and suspend won't lock", waits under the
-    lock, since only hypridle locks for those. `tide doctor` says why
-    hypridle isn't running.
+    lock, since only hypridle or swayidle locks for those. `tide doctor`
+    says why hypridle isn't running.
   - The same notification comes at login, so it's not news only at the
     first lock that doesn't come. `tide.service` runs `tide lock-check`
     once the shell is up to show it, and after each restart of the shell.
     It never fails the shell.
-  - `conf`'s binding falls back to `loginctl lock-session` where `tide lock`
-    fails, as it does in a tide from before it.
-- **Before sleep.** hypridle runs `before_sleep_cmd` on `PrepareForSleep`.
-  `inhibit_sleep = 3` holds the suspend until an ext-session-lock client has
-  actually locked, so you always wake to the lock.
+  - tide's `Super+L` binding, in `hypr/hyprland.lua` and
+    `tidewm/tide.conf`, falls back to `loginctl lock-session` where `tide
+    lock` fails, as it does in a tide from before it.
+- **Before sleep.** hypridle runs `before_sleep_cmd`, `loginctl
+  lock-session`, on `PrepareForSleep`, and holds the suspend until the
+  session has locked, so you wake to the lock. That's hypridle's default,
+  `inhibit_sleep = 2`, which waits for the lock when `before_sleep_cmd`
+  runs `lock-session` and `lock_cmd` names hyprlock, as tide's fallback
+  branch does (hypridle's `Hypridle.cpp`, checked on `main` on
+  2026-11-14). `hypr/hypridle_test.sh` keeps both true.
+  - The wait needs the compositor's `hyprland-lock-notify-v1`. Hyprland
+    has it. tidewm doesn't, so there hypridle lets the suspend go once it
+    has started `before_sleep_cmd`, and a quick suspend can come before
+    the lock. Waiting there too is planned (TODO.md).
+  - `inhibit_sleep = 3`, which waits whatever `lock_cmd` says, isn't set.
+    On Hyprland it does the same, and without the protocol it leaves
+    hypridle's mode undefined.
 - **Crash safety.**
   - If the lock process dies, Hyprland keeps the session locked (the
     "lockscreen dead" screen). tidewm does too, with the screen covered.
@@ -4361,7 +4387,7 @@ talk, a demo, or a meeting room's screen.
     and the journal says which.
   - A status that's missing or unreadable counts as a normal end, and is
     logged.
-  - Without `agreety`, `tide-greeter` waits 5 seconds and fails, and
+  - Without `agreety`, `tide-greeter` waits 5 s and fails, and
     greetd starts it again. The wait keeps a greeter that fails at once
     from flickering, and leaves time to switch VT.
 
@@ -4423,7 +4449,7 @@ talk, a demo, or a meeting room's screen.
       along with any entry of the same name further down;
     - a tide entry whose compositor can't run isn't there to offer or
       preselect. `install/tide-setup` takes it off: for a Hyprland too
-      old (§5), or a tidewm that can't run. It asks `tidewm -v`, and warns
+      old (§5.3), or a tidewm that can't run. It asks `tidewm -v`, and warns
       with the last line of what that said;
     - tide comes first, then the rest by name;
     - **Shell** comes last: the user's login shell on greetd's VT, the way
@@ -4461,9 +4487,9 @@ talk, a demo, or a meeting room's screen.
   A prompt greetd marks visible shows what's typed, as on the lock (§10).
 - **Idle.** With no one there, the greeter idles as an idle lock does
   (§10), at the lock's default times:
-  - after 5 minutes, the screensaver face;
-  - after 5 minutes 30 seconds, the displays off, through Hyprland's
-    `dpms`;
+  - after 5 min, the screensaver face;
+  - after 5 min 30 s, the displays off, through the compositor: Hyprland's
+    `dpms`, or tidewm's `output * power` (above);
   - any input turns them back on, and the face wakes as the lock's does.
 
   It has no dim, and no one's Idle settings to read. Quickshell's
@@ -4500,7 +4526,9 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
 - **The stack.**
   - PipeWire and WirePlumber.
   - `xdg-desktop-portal`, with `-hyprland` for ScreenCast/Screenshot and
-    `-gtk` for everything else, named in `tide-portals.conf`.
+    `-gtk` for everything else, named in `tide-portals.conf`. In tidewm's
+    session (§5.3) it's `-wlr` (xdpw) and `-gtk`, named in
+    `tidewm-portals.conf`.
   - Chrome's native Wayland PipeWire capture; no flags needed on current
     Chrome.
 - **The picker.** xdph's `screencopy:custom_picker_binary` runs
@@ -4511,7 +4539,7 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
     itself.
   - It asks the running shell (`qs ipc`) to show the dialog, and waits on a
     pipe in `$XDG_RUNTIME_DIR` for the answer, since the IPC call returns
-    first. After 5 minutes with no answer it closes the dialog and cancels.
+    first. After 5 min with no answer it closes the dialog and cancels.
   - It prints one line: `[SELECTION]<flags>/screen:<output>` or
     `…/window:<id>`. No `[SELECTION]` means cancel.
   - With no tide shell running, as in a plain Hyprland login with the same
@@ -4549,7 +4577,7 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
   - The picker still **shows the dialog for every request**, because it isn't
     told which app is asking and so can't prove that two requests belong to
     the same share. A silent reuse could hand a different app your screen.
-  - Instead, a request within 10 seconds of the last one opens with that
+  - Instead, a request within 10 s of the last one opens with that
     choice preselected and focused, so confirming it is one `Enter`.
   - M6 measures how many prompts a Meet share really produces before
     anything cleverer is considered.
@@ -4619,22 +4647,30 @@ See [`share-picker.png`](docs/mocks/share-picker.png).
   - **Camera:** no indicator. Chrome opens V4L2 devices directly, not through
     PipeWire, so there is nothing reliable to watch.
 - **While sharing:**
-  - the bar shows the red **Sharing** pill;
-  - popups are held while a screen is shared, and not during a window
-    share, which can't show them (§9);
+  - the bar shows the red **Sharing** pill, and popups are held as §9
+    says;
   - popups, the notification center, the launcher, the picker (§8.4) and
     the share picker carry `no_screen_share`, so if one does appear, the
     stream shows black there instead of its content;
+  - `no_screen_share` is Hyprland's. tidewm has nothing like it yet
+    (deferred in tidewm's `TODO.md`), so there a critical that gets
+    through, the launcher or the picker shows in the stream;
   - the bar itself is shared normally, so viewers see an ordinary desktop.
 
 ## 13. Screenshots
 
 See [`screenshot.png`](docs/mocks/screenshot.png).
 
+tide's own keys, without the `screenshot` option (§6.8), copy to the
+clipboard only: `grim -` of every output, `grim -g` of the focused window's
+place, or `grim -g` of a `slurp` region. There's no file, and a
+notification only when it fails. What follows is the scripts'
+`screenshot`, which the option names, as `conf` does.
+
 | Action | Key | Launcher | How |
 |---|---|---|---|
 | Screen | `Print` | Screenshot screen | `grim -o <focused output>` |
-| Window | `Alt+Print` | Screenshot window | `grim -T <id>`, where `<id>` is Hyprland's `stableId` (from `hyprctl activewindow -j`) for the window focused before the launcher opened. This captures the window's own contents, even where a popup covers it. It needs grim ≥ 1.5 and is what hyprwm's grimblast does. If `grim -T` fails for any reason (an older grim, or a build without toplevel capture), the script falls back to `grim -g <window geometry>`, which captures whatever is on screen there; M4 checks `-T` against the pinned grim. |
+| Window | `Alt+Print` | Screenshot window | `grim -T <id>`, where `<id>` is Hyprland's `stableId` (from `hyprctl activewindow -j`) for the window focused before the launcher opened. This captures the window's own contents, even where a popup covers it. It needs grim ≥ 1.5 and is what hyprwm's grimblast does. If `grim -T` fails for any reason (an older grim, or a build without toplevel capture), the script falls back to `grim -g <window geometry>`, which captures whatever is on screen there; M4 checks `-T` against the pinned grim. On tidewm the launcher passes the window's place instead (§8.2). |
 | Region | `Shift+Print`, `Super+Print` | Screenshot region | one `grim` capture of the output when the overlay opens, shown frozen → drag → crop that capture. After the MVP; until then, a live `slurp` selection → `grim -g` |
 
 - **Output.** Every capture goes to the clipboard (`wl-copy`, `image/png`)
@@ -4704,7 +4740,7 @@ this spec.
 | An existing window asks to be activated (xdg-activation, or `_NET_ACTIVE_WINDOW` from XWayland) | **No.** It's marked urgent, unless a launch you just made asked for it (above). |
 | You click a notification | The shell focuses that window itself, because the click was yours (§9). |
 | A network password or pairing prompt (§5.6) | Only when it follows your action: a Wi-Fi network you clicked in the popover (asked in place), a connection the shell brought up in the last 10 s (a VPN row), or one NetworkManager marks as user-requested within 2 s of your key press (`nmcli connection up`). Otherwise a notification offers **Enter password**, and every request NetworkManager makes on its own takes that path. |
-| A polkit prompt | Only when it follows your action in the app that asks: the requesting process descends from the focused window's, and your last input went to that window within the last 2 s (a click on its "Unlock" button, or Enter on a `pkexec` line). A `sleep 30; pkexec …` left running while you're idle doesn't qualify. Otherwise a notification offers **Authenticate** and the prompt opens from it, so a password field never appears under typing meant for something else. Until Lua sees pointer buttons (§14.3), a click reads as no input, so a prompt after a click takes the notification path. |
+| A polkit prompt | Only when it follows your action in the app that asks: the requesting process descends from the focused window's, and your last input went to that window within the last 2 s (a click on its "Unlock" button, or Enter on a `pkexec` line). A `sleep 30; pkexec …` left running while you're idle doesn't qualify. Otherwise a notification offers **Authenticate** and the prompt opens from it, so a password field never appears under typing meant for something else. On Hyprland a click doesn't count yet (§14.3, *Not yet pointer buttons*). |
 
 ### 14.2 Edge cases
 
@@ -4756,8 +4792,8 @@ this spec.
   - M3 tries two fixes: an upstream patch that honors a token whose serial
     is your latest input, and, in the meantime, allowing an activation that
     arrives within a second of a key press in the focused window. That
-    covers kitty's keyboard link hints, but not a click, because Lua sees
-    key presses and not clicks.
+    covers kitty's keyboard link hints, but not a click (§14.3, *Not yet
+    pointer buttons*).
 
 ### 14.3 How: a focus guard in the Lua config
 
@@ -4765,13 +4801,20 @@ this spec.
   source):
   - `window.open_early`, which fires before a new window's focus is decided;
   - `input.keyboard.key`, for when you last typed;
-  - not yet pointer buttons: Hyprland's internal event bus has
-    `input.mouse.button`, but Lua doesn't expose it. M2 adds it upstream,
-    mirroring the keyboard binding (a few lines).
   - a window's `pid` and `class`;
   - the `no_initial_focus` window rule.
+- **Not yet pointer buttons.** Hyprland's internal event bus has
+  `input.mouse.button`, but Lua doesn't expose it. M2 adds it upstream,
+  mirroring the keyboard binding (a few lines). Until then a click reads
+  as no input, so:
+  - a click inside the window you're already in doesn't cancel a grant,
+    and a late app can still take focus after one;
+  - a polkit prompt after a click in the app that asks takes the
+    notification path (§14.1);
+  - a link clicked in kitty can't count as your input, so Chrome's window
+    is only marked (§14.2).
 - **Where it lives.** `hypr/tide/focus.lua`, beside the layout, which
-  `conf`'s `hyprland.lua` loads in the tide session only. Nothing outside
+  tide's `hypr/hyprland.lua` loads in the tide session only. Nothing outside
   that session grants focus, so there the guard would keep every new
   window unfocused, even an app just launched from a key. It publishes
   itself as the Lua global
@@ -4783,6 +4826,14 @@ this spec.
   calls `tide_focus.announce_waiting()`, which announces each
   waiting window again, when it starts and after a config reload, since
   either may have lost or reset what it knew.
+- **In tidewm's session** (§5.3) the guard is tidewm's own, in C, with
+  the same rules (`focus_guard`, tidewm's `docs/config.md`). `tide
+  launch`, `tide grant`, `tide focus` and `tide-grant` send its IPC's
+  `grant`, `grant --or-recent`, `focus recent` and `grant extend` through
+  `tide-msg`, in place of `hyprctl eval`. A window it holds is marked
+  urgent (§14.4). It sees clicks (`GET_SEATS`' `last_input`), so a click
+  cancels a grant there. What this section says of Lua, `tide_focus` and
+  `custom>>` events is Hyprland's alone.
 - **The attention list.** Lua can't set Hyprland's urgent flag, so the
   guard keeps its own list of waiting windows: the ones it kept from focus,
   and activations without a grant. The shell, which sees those, Hyprland's
@@ -4804,7 +4855,7 @@ this spec.
   keyboard half of the §14.1 rule: a known agent's window takes focus when
   you pressed a key in the last 2 s, and otherwise waits for `Super+A`,
   marked on the bar (or, with no shell to mark it, with a Hyprland
-  notification). The shell's own agent (`TIDE_POLKIT=1`, below) applies
+  notification). The shell's own agent (`TIDE_POLKIT=1`, §5.2) applies
   the same half: its prompt takes the keyboard after a key press, asking
   the guard through `tide prompt-focus`, and otherwise a notification
   offers **Authenticate**. The requester half waits on Quickshell, whose
@@ -4859,9 +4910,8 @@ this spec.
     switch, or the pointer crossing into another window). A passing pointer
     and a deliberate move look the same as focus changes, so both count as
     moving on. Focus returning from the closing launcher doesn't count.
-  - Until the pointer-button hook lands, a click inside the window you're
-    already in goes unseen, so a late app can still take focus after one.
-    That is the one known gap, and the upstream patch closes it.
+  - On Hyprland, a click inside the window you're already in doesn't
+    cancel yet (*Not yet pointer buttons*, above).
   - A canceled or expired grant leaves the window unfocused and marked,
     which is the safe way to be wrong.
   - Matching on the app rather than the process covers a request handed to
@@ -4892,9 +4942,10 @@ this spec.
       `eval`, `env -S` and other shells' blocks the way each shell does
       kept turning up misses; ancestry covers them without parsing.
     - It costs one short process per command, about 3 ms, plus one
-      `hyprctl eval`; reading desktop entries adds about 4 ms over 300,
-      and a second `hyprctl eval` when they name a class. An `xdg-open` or
-      `gio open` line adds two `xdg-mime` calls, some tens of ms.
+      `hyprctl eval` (`tide-msg` on tidewm); reading desktop entries adds
+      about 4 ms over 300, and a second call when they name a class. An
+      `xdg-open` or `gio open` line adds two `xdg-mime` calls, some tens of
+      ms.
   - The guard resolves a program name to an app the way the launcher does,
     through desktop entries' `Exec` and `StartupWMClass`. `xdg-open` and
     `gio open` resolve through the default handler for the file's type.
@@ -4909,9 +4960,8 @@ this spec.
     program past it is looked up as it is.
   - A launcher script, a file on `PATH` starting `#!` whose text passes
     `--app=URL`, as `scripts`' `google-calendar` does, adds the class
-    Chrome gives that `--app` window on Wayland in its default profile:
-    `chrome-` and the host, then the path with each `/` a `_`, then
-    `-Default` (`chrome-calendar.google.com__-Default`). So does a
+    Chrome gives that `--app` window in its default profile (§14.4):
+    `chrome-calendar.google.com__-Default`. So does a
     Chrome or Chromium command's own `--app=URL`. The first 64 KiB are
     read. Entries that
     run one program with different arguments (`libreoffice --writer`,
@@ -4979,17 +5029,25 @@ to be focused.
   - Hyprland marks an unfocused window urgent on any activation request made
     with a token it issued, and emits `urgent>>ADDRESS`.
   - Quickshell exposes this as `urgent` on the toplevel and on its workspace.
-  - `misc:focus_on_activate false` (Hyprland's default; today's config sets
-    `true`) keeps it at marking.
+  - `misc:focus_on_activate false`, Hyprland's default, which tide's
+    `hypr/hyprland.lua` also sets, keeps it at marking.
   - Hyprland doesn't tell a fresh, user-initiated token from any other token
     it issued, so the setting is global: always focus, or always just mark.
 - **A new window the guard kept from focus** gets the same mark. The guard
   announces it on the event socket, and the shell shows it the way it shows
   attention derived from notifications (below).
+- **In tidewm's session** (§5.3), tidewm marks a window urgent itself, on
+  an activation without a grant or when its guard holds it, and sends an
+  `urgent` window event (tidewm's `docs/ipc.md`). It has no
+  `focus_on_activate`: an activation only marks. The shell reads each
+  mark as the guard's, lasting until the window is focused. Marks from
+  notifications stay the shell's own; nothing is sent to tidewm.
 - **An unread count isn't attention.** A title's count, such as Gmail's
   "(3) Inbox", rises with every message, wanted or not. A window wants
   attention when it notifies, rings the bell or activates itself.
-  tide for macOS and tide for Chrome follow the same rules.
+  tide for macOS follows the same rule. tide for Chrome marks a window
+  when its title's unread count rises, on purpose: it can't see other
+  sites' notifications, so the count is all it has (its SPEC §10.3).
 - **Who actually asks**, checked in each project's source:
 
   | Client | Raises urgency on Wayland? |
@@ -5079,7 +5137,7 @@ to be focused.
   coordinates set with it. A file that sets a `latitude` or `longitude`
   and no `city` drops the shared file's. An unknown setting,
   a bad value, or `sun` with no location and no time zone city is an error
-  at load (§16.1). The shell waits up to five seconds for `tide-tz` before
+  at load (§16.1). The shell waits up to 5 s for `tide-tz` before
   calling it one. Both times are wall
   clock times, so a daylight saving change doesn't move them. Where the sun
   doesn't rise or set that day, `sun` stays dark or light all day.
@@ -5092,8 +5150,8 @@ to be focused.
   - Reloading the shell keeps a flip; logging out ends it.
 
   A machine can use its own mode or times in `appearance.local.json`
-  (§16.1). The greeter runs before any user config is read, so it follows
-  the default 07:00–19:00 schedule.
+  (§16.1). The greeter follows the schedule of the user it has picked
+  (§11).
 
   Switching:
   - sets `org.gnome.desktop.interface color-scheme` (`prefer-dark` /
@@ -5181,24 +5239,26 @@ to be focused.
     to dark shows the dark one at once.
   - So `tide-shell` runs no wallpaper daemon beside the Quickshell shell.
   - The lock shows the same one behind its password face, blurred and
-    darkened so the face's light text reads on a light picture. It frames
-    a picture at the same position; a fit's bars show the lock's
-    gradient. A color isn't blurred, only darkened as a picture is. The
-    screensaver face stays black.
+    darkened, or lightened on the light face (§11), so the face's text
+    reads on any picture. It frames a picture at the same position; a
+    fit's bars show the lock's gradient. A color isn't blurred, only
+    darkened or lightened as a picture is. The screensaver face stays
+    black.
   - The shell records what it draws in the session's runtime directory
     (`tide-wallpaper`), and the lock follows that. So the two agree
     without the lock working out the mode or the settings itself.
-    - The record is two lines. The first is the file's path, the color as
-      `#rrggbb`, or empty for none. The second is the position.
+    - The record is up to three lines. The first is the file's path, the
+      color as `#rrggbb`, or empty for none. The second is the position.
+      The third is `light` or `dark`, the shell's mode, which the lock's
+      face follows.
     - A record from before positions, the first line alone, reads as
-      `fill`. One from before colors reads as it did.
+      `fill`. One from before colors reads as it did. One without the
+      third line is dark.
     - A record whose position isn't one is refused as a bad path is: the
       lock logs it and shows none.
     - With no record, or none in it, the lock keeps its own gradient.
-  - The greeter shows the last user's wallpaper, light or dark by their
-    schedule, from the copy their shell keeps for it (§11). The record also
-    says light or dark, on a third line, which the lock's face follows; an
-    older record without it is dark.
+  - The greeter shows the picked user's wallpaper, light or dark by that
+    user's schedule, from the copy their shell keeps for it (§11).
 - **The bar's edge.** `barPosition` in `appearance.json` is `top`, the
   default, or `bottom` (§7.1). Anything else fails at load, naming the
   setting. A machine can set its own in `appearance.local.json`, which the
@@ -6385,7 +6445,7 @@ light/dark switch.
 | Wrong portal backend | screen sharing shows a black stream or nothing | `tide-portals.conf` + `XDG_CURRENT_DESKTOP=tide:Hyprland` |
 | Keyring not unlocked | Chrome asks for the keyring password after login | `pam_gnome_keyring` in greetd's PAM stack |
 | Lock screen crashes | red screen, locked out | the lock is its own process with no file watcher; `allow_session_lock_restore` + systemd restart (§10) |
-| Suspend without lock | wake to an open desktop | hypridle `before_sleep_cmd` locks via logind; holding the suspend until the lock is up is §10's |
+| Suspend without lock | wake to an open desktop | hypridle `before_sleep_cmd` locks via logind, and hypridle's default `inhibit_sleep` waits for the lock on Hyprland (§10) |
 | Idle during a Meet call | screen blanks mid-call | hypridle owns `org.freedesktop.ScreenSaver` and honors Chrome's inhibits; keep awake while the mic is live |
 | Screen never blanks | Chrome holds an inhibitor on ordinary pages (reported in 146), through both Wayland and D-Bus | if the pinned Chrome still does it: a per-window `idle_inhibit` rule for the Wayland side, plus a D-Bus filter or hypridle's global switch, chosen in M5 (§10) |
 | Picker shows up 2–4 times per share | Chrome opens several portal sessions | each repeat opens with the last choice preselected, so it's one `Enter`; never a silent reuse (§12) |
