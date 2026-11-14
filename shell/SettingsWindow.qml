@@ -294,7 +294,8 @@ PanelWindow {
         // lightWallpaper or darkWallpaper, a file or a color such as
         // "#1a1d2e" ("" for the default), or a lightWallpaperPosition or
         // darkWallpaperPosition (fill, fill-top, fill-bottom, fit or
-        // stretch), or barPosition (top or bottom). Answers why not, or
+        // stretch), or barPosition (top or bottom). A new wallpaper goes
+        // back to fill, so set its position after it. Answers why not, or
         // "".
         function setAppearance(key: string, value: string): string {
             if (key === "latitude" || key === "longitude") {

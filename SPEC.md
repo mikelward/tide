@@ -5292,6 +5292,13 @@ stays hand-written.
     bottom; Fit whole picture; and Stretch to fill. They're
     `lightWallpaperPosition` and `darkWallpaperPosition` (§15). A color has
     no position, so its row is hidden.
+    - **A new wallpaper goes back to Fill, centered,** since the position
+      was chosen for the picture before. It suits any picture: it covers
+      the monitor and trims both sides alike. This holds however it's set:
+      typed, chosen, from the grid or a swatch, or by `setAppearance`.
+    - Setting the same one again keeps its position.
+    - The panel takes the mode's position out of `appearance.local.json`.
+      Where `appearance.json` sets another, it writes `fill` there instead.
   - **Each picture has a preview** under its row, so a crop is no
     surprise. A color, or no picture, has none. It shows that picture's
     position.
