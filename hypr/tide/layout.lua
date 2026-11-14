@@ -834,17 +834,21 @@ end
 -- The boxes of workspace `id`'s tiles as `windows` has them now: its
 -- mapped, tiled windows, less those hidden behind another in a group. `at`
 -- and `size` are where Hyprland is putting each, not where an animation
--- has got to, and with no gaps or borders they're the boxes the layout
--- placed. Reading them on every press, rather than keeping what the last
--- recalculate placed, leaves nothing to go stale: Hyprland calls no
--- recalculate for a workspace its last tiled windows leave.
+-- has got to. With no gaps, each with its border around it is the box the
+-- layout placed: Hyprland 0.57.1 puts a tiled window inside its box by its
+-- border's width on every side (CWindowTarget::updatePos takes the reserved
+-- area off, and CHyprBorderDecoration reserves general:border_size), so
+-- that much is put back. Reading them on every press, rather than keeping
+-- what the last recalculate placed, leaves nothing to go stale: Hyprland
+-- calls no recalculate for a workspace its last tiled windows leave.
 local function tiles(windows, id)
     local boxes = {}
+    local border = math.max(0, tonumber(config_value("general:border_size")) or 0)
     for _, w in ipairs(windows) do
         local at, size = field(w, "at"), field(w, "size")
         if field(w, "mapped") and not field(w, "hidden") and not field(w, "floating")
             and field(field(w, "workspace"), "id") == id and at and size then
-            boxes[#boxes + 1] = { x = at.x, y = at.y, w = size.x, h = size.y }
+            boxes[#boxes + 1] = { x = at.x - border, y = at.y - border, w = size.x + 2 * border, h = size.y + 2 * border }
         end
     end
     return boxes

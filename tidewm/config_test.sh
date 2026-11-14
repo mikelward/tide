@@ -48,11 +48,11 @@ check "every line is a directive tidewm takes${bad:+: $bad}" empty "$bad"
 border=$(printf '%s\n' "$lines" | awk '$1 == "default_border"' | tail -n 1)
 check "windows have no border (default_border none, not '$border')" test "$border" = "default_border none"
 
-# As tide on Hyprland: fades over 300 ms, and floating windows' shadows.
+# As tide on Hyprland: fades over 300 ms, and the focused window's shadow.
 fade=$(printf '%s\n' "$lines" | awk '$1 == "fade_duration"' | tail -n 1)
 check "windows fade over 300 ms, as on Hyprland (not '$fade')" test "$fade" = "fade_duration 300"
 shadows=$(printf '%s\n' "$lines" | awk '$1 == "shadows"' | tail -n 1)
-check "floating windows cast shadows (not '$shadows')" test "$shadows" = "shadows enable"
+check "the focused window casts a shadow (shadows active, not '$shadows')" test "$shadows" = "shadows active"
 
 blocks=$(grep -E '{[[:space:]]*$' "$cfg" | grep -vE '^(input|mode) ' || true)
 check "the file's blocks are input blocks and modes" empty "$blocks"

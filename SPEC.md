@@ -51,7 +51,7 @@ Contents:
 - A lone window is centered at **80%** width on an ultrawide and fills
   **100%** on a 16:9 or 16:10 monitor.
 - Inactive windows are **darkened**. That is the focus cue: no borders, no
-  gaps.
+  gaps. The focused window also casts a soft shadow.
 - **Named workspaces**, not numbered ones. The home workspace, **in** by
   default, holds mail, chat, calendar and music; a few standing ones are
   always listed; every other workspace is named for its work, and a window
@@ -273,7 +273,8 @@ the lock.
 - **Type:** Inter for UI, Ubuntu Mono for code (decided; the pairings
   compared are in [`fonts.png`](docs/mocks/fonts.png)).
 - **Radii:** 10–16 px.
-- **Windows:** no gaps, no borders, inactive dim 0.12.
+- **Windows:** no gaps, no borders, inactive dim 0.12, a shadow under the
+  focused one.
 - **Bar:** 36 px.
 
 ## 4. Requirements and how each is met
@@ -1309,7 +1310,7 @@ See [`layouts.png`](docs/mocks/layouts.png).
     another monitor the default for its `GET_OUTPUTS` `rect`, which is
     already rotated, as tidewm picks a new part's layout.
 
-### 6.2 Focus cue: dim, nothing else
+### 6.2 Focus cue: dim, and the focused window's shadow
 
 - `dim_inactive` at **0.12**, with no borders and no gaps. Hyprland's dim
   looks stronger than KDE's dim-inactive effect at the same number: 0.15,
@@ -1321,7 +1322,7 @@ See [`layouts.png`](docs/mocks/layouts.png).
   window rule, so a call on the other monitor doesn't look washed out.
 - Strength is a setting, on the Appearance page (§16), a point at a time.
 - Windows' corners are rounded, by 6 px, on Hyprland and tidesway. The
-  Appearance page's **Rounded corners** turns that off, for square ones,
+  Borders page's **Rounded corners** turns that off, for square ones,
   and back on (maintainer, 2026-11-14). tidewm's windows are square, so
   the page has no such row there. On tidesway the shell writes
   `corner_radius 6`, or `0`, with the dim strength, to
@@ -1329,10 +1330,48 @@ See [`layouts.png`](docs/mocks/layouts.png).
   after the config and tidewm never does: tidewm fails on a line it
   doesn't know, and the two share a config.
 - The dim fades as focus moves, over 300 ms, as a new window fades in. On
-  tidewm, these are `fade_duration 300`, and floating windows cast a soft
-  shadow with `shadows enable`, as Hyprland's do (maintainer, 2026-11-13).
-- Tiled windows cast no shadow, on either compositor: with no gaps, it
-  would fall over the window beside (maintainer, 2026-11-14).
+  tidewm, these are `fade_duration 300`.
+- **Shadows.** The focused window casts a soft shadow, tiled or floating:
+  black at 27% by its edge, gone 8 px out. The Borders page's **Shadows**
+  says which windows cast one: None, Floating windows, Focused window or
+  All windows (maintainer, 2026-11-14; Focused window as the default is a
+  guess, in `TODO.md`). **Shadow size** is how far it reaches, 0 to 32 px.
+  On tidewm and tidesway a fullscreen or maximized window casts none.
+  - With no gaps, a tile's shadow falls on the tile beside it. Hyprland
+    0.57.1 draws the focused tile last of the tiles, so the focused
+    tile's shadow shows on its neighbors and theirs is under it
+    (`IHyprRenderer::renderWorkspaceWindows`). The bar is above the
+    windows, so no shadow shows on it. `docs/mocks/borders.png` draws each
+    choice.
+  - On Hyprland each choice is a window rule. Floating windows is
+    `no-shadow-tiled`: `no_shadow` for `float = false`. Focused window is
+    `no-shadow-unfocused`: `no_shadow` for `focus = false`. All windows is
+    neither, and None is `decoration:shadow:enabled` off. Hyprland 0.57.1
+    matches `focus` against the focused window (`CWindowRule::matches`)
+    and applies its rules again to the window losing focus and the one
+    gaining it (`CFocusState`, `propertiesChanged(RULE_PROP_FOCUS)`), so
+    the shadow follows focus with no Lua of tide's. The size is
+    `decoration:shadow:range`.
+  - On tidewm and tidesway it is `shadows disable`, `floating`, `active`
+    or `all`, and `shadow_blur_radius`. `tide.conf` has `shadows active`.
+- **Borders.** None by default. The Borders page's **Border width** gives
+  every window one, 0 to 16 px, in one quiet color, the palette's
+  `surface-3`, the same on the focused window and the rest, as dimming is
+  the focus cue (the color is a guess, in `TODO.md`).
+  - Hyprland puts a tile inside its box by the border's width, so tiles
+    get smaller and two borders meet at a seam; the tide layout's edge
+    drag (§6.6) counts the border as the tile's. A floating window's
+    border is outside it, and joins its resize zone (§6.4).
+  - The shell writes the color for light or dark with the width, and
+    again as the theme changes, while there is a border.
+  - tidewm's border colors are built into it (`config.h`): the focused
+    window's is blue. The page says so there. tidesway takes tide's color
+    (`client.focused` and the rest), and a floating window's border is its
+    own line, `default_floating_border`, in the file tidesway alone reads.
+    sway gives a new default width to windows opened later, not those
+    already open *(unverified on tidesway)*.
+- `hyprland.local.lua`'s own `dim_strength`, `rounding`, `border_size`,
+  border colors and shadow `range` and `enabled` win over the pages'.
 
 ### 6.3 One window big: monocle, maximize, fullscreen
 
@@ -1391,7 +1430,8 @@ in how long they last and what stays visible:
   held. The grab zone is the 8 px just outside the window, with a resize
   cursor there; a click inside the window always reaches the app.
   - That's Hyprland's own `resize_on_border`, with
-    `extend_border_grab_area = 8` and no border.
+    `extend_border_grab_area = 8`. A border the Borders page turns on
+    (§6.2) is part of the zone, inside those 8 px.
   - Hyprland 0.56.2 grows a floating window's hit box by that zone
     (`CViewHitTester::windowAt`), and starts a resize on a press there
     that's outside the window (`CInputManager::processMouseDownNormal`).
@@ -4931,8 +4971,9 @@ tide's own, and links out for the rest:
 | Layouts | default layout per aspect ratio, `mfact`, master count, the rule for new windows |
 | Workspaces | the standing workspaces, home first; the apps that live on home; and the patterns that name a workspace from a window's title (§6.5) |
 | Floating | the rules that float a window by its class and title, and the floating windows no rule covers yet (§6.4) |
+| Borders | which windows cast a shadow and how far, the border's width, and rounded corners (§6.2) |
 | **General** | |
-| Appearance | dark / light / automatic, schedule, dim strength, rounded corners, wallpaper image or color, and its position, with a preview |
+| Appearance | dark / light / automatic, schedule, dim strength, wallpaper image or color, and its position, with a preview |
 | Bar | where the bar runs: the top edge or the bottom (§7.1) |
 | Notifications | Do not disturb on a schedule, whether critical alerts break through, and the muted apps and sites (§9) |
 | Clipboard | the history on or off, how many copies it keeps, and Clear history (§8.4) |
@@ -5271,6 +5312,12 @@ stays hand-written.
     as Hyprland's `dim_strength`, and runs `hyprctl eval
     'conf_appearance.reload()'`, as the Layouts page does. With none set,
     `conf`'s own stands. One `hyprland.local.lua` sets still wins.
+  - The Borders page's settings (§6.2) are in the same files and reach
+    the compositor the same way: `shadows` (`"none"`, `"floating"`,
+    `"focused"` or `"all"`), `shadowSize` (0 to 32), `borderWidth` (0 to
+    16) and `roundedCorners`, which was the Appearance page's. ‹ and ›
+    step through the shadows, and − and + a pixel at a time. Shadow size
+    shows only while a window casts one.
   - The shell applies it as it starts, too, even unchanged, as it does the
     input settings: setting the same strength again changes nothing.
   - The light and dark wallpapers (§15) are a file's path or a color
@@ -6297,7 +6344,7 @@ such as `centeredmaster`, scenefx, and what niri, sway and KWin can do beyond
   in their own file, included from `config.h`, without touching `dwl.c`.
 - **Dimming** (§6.2) is a translucent rectangle over each unfocused window in
   the wlroots scene graph, about 30 lines. No effects library is needed.
-  Nor is one for fades and floating windows' shadows, tidewm's own
+  Nor is one for fades and windows' shadows, tidewm's own
   `effects.h` (maintainer, 2026-11-13). Blur and rounded corners would need
   scenefx.
 - **Tap Super** (R14) and the focus guard (§14.3) become our own C, instead

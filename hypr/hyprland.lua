@@ -686,6 +686,14 @@ else
     side.move_below = move_side("down")
 end
 
+-- How wide a window's border is: none, unless tide's Borders page sets a
+-- width (apply_tide_appearance below).
+local BORDER_SIZE = 0
+-- A border's color, the same on the focused window and the rest, as dimming shows
+-- which is focused: tide's palette's surface-3 (theme/palette.json), dark's
+-- until tide's shell writes the one for light or dark.
+local BORDER_COLOR = "rgba(46464dff)"
+
 hl.config({
     general = {
         layout = qs and "lua:tide" or "master",
@@ -693,14 +701,20 @@ hl.config({
         -- the far side of this one, as the tide layout's Super+Left and
         -- Right do.
         no_focus_fallback = true,
-        -- The focus cue is the dim alone: no gaps, no borders.
+        -- No gaps and no borders: dimming is the focus cue. A border the
+        -- Borders page turns on is one color on every window.
         gaps_in = 0,
         gaps_out = 0,
-        border_size = 0,
+        border_size = BORDER_SIZE,
+        col = {
+            active_border = BORDER_COLOR,
+            inactive_border = BORDER_COLOR,
+        },
         -- Drag a floating window's edge or corner to resize it, with a
-        -- resize cursor there: the 8 px just outside it, smaller than
-        -- Hyprland's 15 so less of what's below is taken (tide SPEC.md
-        -- §6.4). The tide layout drags the tiled edges itself (below).
+        -- resize cursor there: the 8 px just outside it and its border, if
+        -- it has one, smaller than Hyprland's 15 so less of what's below is
+        -- taken (tide SPEC.md §6.4). The tide layout drags the tiled edges
+        -- itself (below).
         resize_on_border = true,
         extend_border_grab_area = 8,
         hover_icon_on_border = true,
@@ -725,6 +739,12 @@ local DIM_STRENGTH = 0.12
 -- How far windows' corners are rounded, unless the Appearance page turns
 -- rounded corners off.
 local ROUNDING = 6
+-- How far a shadow reaches, unless the Borders page sets a size.
+local SHADOW_RANGE = 8
+-- Which windows cast one, unless the Borders page says: none, floating
+-- ones, the focused one, tiled or floating, or all of them.
+local SHADOWS = "focused"
+local SHADOW_MODES = { none = true, floating = true, focused = true, all = true }
 
 hl.config({
     decoration = {
@@ -739,7 +759,7 @@ hl.config({
         },
         shadow = {
             enabled = true,
-            range = 8,
+            range = SHADOW_RANGE,
             render_power = 2,
             color = "rgba(00000044)",
         },
@@ -1007,16 +1027,34 @@ local function apply_tide_input()
 end
 apply_tide_input()
 
--- tide's Appearance settings that reach Hyprland (tide SPEC.md §16): the
--- inactive dim's strength and whether windows' corners are rounded, which
--- tide writes to tide-appearance.lua beside this file as
--- { dim_strength = 0.1, rounded_corners = false }. With no file, or no
--- setting, DIM_STRENGTH and ROUNDING stand. It's read as data, as
--- tide-input.lua is, and hyprland.local.lua's own dim_strength and rounding
--- still win (local_dim, local_rounding). conf_appearance.reload() is how
--- tide applies a change.
+-- tide's Appearance and Borders settings that reach Hyprland (tide SPEC.md
+-- §16): the inactive dim's strength, whether windows' corners are rounded,
+-- how wide their borders are and in what color, which of them cast a
+-- shadow and how far it reaches, which tide writes to tide-appearance.lua
+-- beside this file as { dim_strength = 0.1, rounded_corners = false,
+-- border_width = 2, border_color = "rgba(dcdce2ff)", shadows = "all",
+-- shadow_size = 12 }. With no file, or no setting, DIM_STRENGTH, ROUNDING,
+-- BORDER_SIZE, BORDER_COLOR, SHADOWS and SHADOW_RANGE stand. It's read as
+-- data, as tide-input.lua is, and hyprland.local.lua's own dim_strength,
+-- rounding, border_size, border colors and shadow range and enabled still
+-- win (the local_ values below). conf_appearance.reload() is how tide
+-- applies a change.
 local local_dim = nil
 local local_rounding = nil
+local local_border = nil
+local local_border_active = nil
+local local_border_inactive = nil
+local local_shadow_range = nil
+local local_shadow_enabled = nil
+
+-- The most the Borders page and appearance.json allow (the shell's
+-- appearance.mjs).
+local BORDER_WIDTH_MAX = 16
+local SHADOW_SIZE_MAX = 32
+
+local function whole(v, max)
+    return type(v) == "number" and v == v and v % 1 == 0 and v >= 0 and v <= max
+end
 
 local function read_tide_appearance()
     local path = config_home .. "/hypr/tide-appearance.lua"
@@ -1046,6 +1084,30 @@ local function read_tide_appearance()
             else
                 out.rounded_corners = v
             end
+        elseif k == "border_width" then
+            if not whole(v, BORDER_WIDTH_MAX) then
+                notify_error("tide-appearance.lua: border_width should be a whole number from 0 to " .. BORDER_WIDTH_MAX .. ", not " .. tostring(v))
+            else
+                out.border_width = math.tointeger(v)
+            end
+        elseif k == "shadow_size" then
+            if not whole(v, SHADOW_SIZE_MAX) then
+                notify_error("tide-appearance.lua: shadow_size should be a whole number from 0 to " .. SHADOW_SIZE_MAX .. ", not " .. tostring(v))
+            else
+                out.shadow_size = math.tointeger(v)
+            end
+        elseif k == "shadows" then
+            if type(v) ~= "string" or not SHADOW_MODES[v] then
+                notify_error("tide-appearance.lua: shadows should be none, floating, focused or all, not " .. tostring(v))
+            else
+                out.shadows = v
+            end
+        elseif k == "border_color" then
+            if type(v) ~= "string" or not v:match("^rgba%(%x%x%x%x%x%x%x%x%)$") then
+                notify_error("tide-appearance.lua: border_color should be a color like rgba(46464dff), not " .. tostring(v))
+            else
+                out.border_color = v
+            end
         elseif k ~= "dim_strength" then
             notify_error("tide-appearance.lua: unknown setting " .. tostring(k))
         elseif type(v) ~= "number" or v ~= v or v < 0 or v > 1 then
@@ -1058,8 +1120,18 @@ local function read_tide_appearance()
 end
 
 -- Each is applied each time, tide's or the default, so a setting tide
--- stops making goes back to DIM_STRENGTH or ROUNDING rather than staying
--- put.
+-- stops making goes back to DIM_STRENGTH, ROUNDING, BORDER_SIZE,
+-- BORDER_COLOR, SHADOWS or SHADOW_RANGE rather than staying put.
+--
+-- Which windows cast a shadow is two window rules, each on in one mode:
+-- no-shadow-tiled takes it off tiled windows, for floating ones only, and
+-- no-shadow-unfocused off every window but the focused one. Hyprland
+-- 0.57.1 matches `focus` against the focused window (CWindowRule::matches,
+-- RULE_PROP_FOCUS) and applies its rules again to the window that loses
+-- focus and the one that gains it (CFocusState, propertiesChanged), so the
+-- shadow follows focus with nothing here to move it. With neither rule,
+-- every window casts one; none is decoration.shadow.enabled off, as is a
+-- shadow of no size.
 local function apply_tide_appearance()
     local tide = read_tide_appearance()
     if local_dim == nil then
@@ -1068,6 +1140,29 @@ local function apply_tide_appearance()
     if local_rounding == nil then
         hl.config({ decoration = { rounding = tide.rounded_corners == false and 0 or ROUNDING } })
     end
+    if local_border == nil then
+        hl.config({ general = { border_size = tide.border_width or BORDER_SIZE } })
+    end
+    local col = {}
+    if local_border_active == nil then
+        col.active_border = tide.border_color or BORDER_COLOR
+    end
+    if local_border_inactive == nil then
+        col.inactive_border = tide.border_color or BORDER_COLOR
+    end
+    if next(col) then
+        hl.config({ general = { col = col } })
+    end
+    local mode = tide.shadows or SHADOWS
+    local range = tide.shadow_size or SHADOW_RANGE
+    if local_shadow_range == nil then
+        hl.config({ decoration = { shadow = { range = range } } })
+    end
+    if local_shadow_enabled == nil then
+        hl.config({ decoration = { shadow = { enabled = mode ~= "none" and range > 0 } } })
+    end
+    hl.window_rule({ name = "no-shadow-tiled", enabled = mode == "floating", match = { float = false }, no_shadow = true })
+    hl.window_rule({ name = "no-shadow-unfocused", enabled = mode == "focused", match = { focus = false }, no_shadow = true })
 end
 apply_tide_appearance()
 _G.conf_appearance = { reload = apply_tide_appearance }
@@ -2501,9 +2596,7 @@ hl.window_rule({
 hl.window_rule({ name = "no-dim-lone-window", match = { workspace = "w[tv1]" }, no_dim = true })
 hl.window_rule({ name = "no-dim-video", match = { content = "video" }, no_dim = true })
 
--- Tiled windows touch, with no gaps, so a shadow would fall over the one
--- beside: only a floating window casts one, as on tidewm.
-hl.window_rule({ name = "no-shadow-tiled", match = { float = false }, no_shadow = true })
+-- Which windows cast a shadow is apply_tide_appearance's rules, above.
 
 -- tide's notification popups (SPEC.md §9) show black in a screen
 -- share, so one that appears while sharing doesn't show its text.
@@ -2957,6 +3050,24 @@ do
                 end
                 if type(decoration) == "table" and decoration.rounding ~= nil then
                     local_rounding = decoration.rounding
+                end
+                local shadow = type(decoration) == "table" and decoration.shadow
+                if type(shadow) == "table" and shadow.range ~= nil then
+                    local_shadow_range = shadow.range
+                end
+                if type(shadow) == "table" and shadow.enabled ~= nil then
+                    local_shadow_enabled = shadow.enabled
+                end
+                local general = type(t) == "table" and t.general
+                if type(general) == "table" and general.border_size ~= nil then
+                    local_border = general.border_size
+                end
+                local col = type(general) == "table" and general.col
+                if type(col) == "table" and col.active_border ~= nil then
+                    local_border_active = col.active_border
+                end
+                if type(col) == "table" and col.inactive_border ~= nil then
+                    local_border_inactive = col.inactive_border
                 end
                 local input = type(t) == "table" and t.input
                 if type(input) == "table" then

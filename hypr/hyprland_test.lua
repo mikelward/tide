@@ -643,12 +643,14 @@ end)
 --------------------------------------------------------------------------------
 -- Spec settings (tide SPEC.md §6.2, §14)
 --------------------------------------------------------------------------------
-test("focus cue is the dim alone: no gaps, no borders, dim 0.12", function()
+test("focus cue is the dim: no gaps, no borders, dim 0.12", function()
     load()
     local c = S.config
     eq(0, c.general.gaps_in, "gaps_in")
     eq(0, c.general.gaps_out, "gaps_out")
     eq(0, c.general.border_size, "border_size")
+    eq("rgba(46464dff)", c.general.col.active_border, "a border turned on is one quiet color")
+    eq(c.general.col.active_border, c.general.col.inactive_border, "the focused window's is the others'")
     eq(true, c.decoration.dim_inactive, "dim_inactive")
     eq(0.12, c.decoration.dim_strength, "dim_strength")
 end)
@@ -2233,10 +2235,56 @@ test("a lone window and video never dim", function()
     eq("video", S.rules["no-dim-video"].match.content)
 end)
 
-test("only floating windows cast shadows, so tiled ones don't overlap", function()
+-- Which of tide's two shadow rules are on.
+local function shadow_rules()
+    return { tiled = S.rules["no-shadow-tiled"].enabled, unfocused = S.rules["no-shadow-unfocused"].enabled }
+end
+
+test("only the focused window casts a shadow, by a rule Hyprland applies again as focus moves", function()
     load()
-    eq(false, S.rules["no-shadow-tiled"].match.float)
+    eq(true, S.config.decoration.shadow.enabled)
+    eq(false, S.rules["no-shadow-unfocused"].match.focus, "every window but the focused one")
+    eq(true, S.rules["no-shadow-unfocused"].no_shadow)
+    eq(true, shadow_rules().unfocused)
+    eq(false, shadow_rules().tiled, "a focused tile casts one too")
+end)
+
+test("tide-appearance.lua says which windows cast a shadow: none, floating, focused or all", function()
+    load({ appearance = 'return { shadows = "floating" }' })
+    eq(0, #S.notifications)
+    eq(true, S.config.decoration.shadow.enabled)
+    eq(false, S.rules["no-shadow-tiled"].match.float, "tiled windows cast none")
     eq(true, S.rules["no-shadow-tiled"].no_shadow)
+    eq(true, shadow_rules().tiled)
+    eq(false, shadow_rules().unfocused)
+    write(TIDE_APPEARANCE, 'return { shadows = "all" }')
+    conf_appearance.reload()
+    eq(true, S.config.decoration.shadow.enabled)
+    eq(false, shadow_rules().tiled, "all: neither rule")
+    eq(false, shadow_rules().unfocused)
+    write(TIDE_APPEARANCE, 'return { shadows = "none" }')
+    conf_appearance.reload()
+    eq(false, S.config.decoration.shadow.enabled)
+    write(TIDE_APPEARANCE, 'return { shadows = "focused" }')
+    conf_appearance.reload()
+    eq(true, S.config.decoration.shadow.enabled)
+    eq(true, shadow_rules().unfocused)
+    eq(false, shadow_rules().tiled)
+    write(TIDE_APPEARANCE, 'return { shadows = "all" }')
+    conf_appearance.reload()
+    write(TIDE_APPEARANCE, "return {}")
+    conf_appearance.reload()
+    eq(true, shadow_rules().unfocused, "a setting tide stops making: the focused window's again")
+end)
+
+test("a shadows that isn't one of the four is reported and leaves the focused window's", function()
+    for _, text in ipairs({ 'return { shadows = "active" }', "return { shadows = true }" }) do
+        load({ appearance = text })
+        eq(1, #S.notifications, text)
+        truthy(S.notifications[1].text:find("tide-appearance.lua: shadows should be none, floating, focused or all", 1, true), S.notifications[1].text)
+        eq(true, shadow_rules().unfocused, text)
+        eq(true, S.config.decoration.shadow.enabled, text)
+    end
 end)
 
 --------------------------------------------------------------------------------
@@ -3050,6 +3098,89 @@ test("hyprland.local.lua's own rounding wins over tide's rounded corners", funct
     write(TIDE_APPEARANCE, "return { rounded_corners = true }")
     conf_appearance.reload()
     eq(11, S.config.decoration.rounding)
+end)
+
+test("tide-appearance.lua sets the border's width, and there's none without it", function()
+    load()
+    eq(0, S.config.general.border_size, "none with nothing set")
+    load({ appearance = "return { border_width = 2 }" })
+    eq(2, S.config.general.border_size)
+    eq(0, #S.notifications)
+    eq(6, S.config.decoration.rounding, "the corners stay the config's")
+    write(TIDE_APPEARANCE, "return { border_width = 5 }")
+    conf_appearance.reload()
+    eq(5, S.config.general.border_size)
+    write(TIDE_APPEARANCE, "return {}")
+    conf_appearance.reload()
+    eq(0, S.config.general.border_size, "a setting tide stops making")
+end)
+
+test("tide-appearance.lua sets the border's color, the same on every window", function()
+    load({ appearance = 'return { border_color = "rgba(dcdce2ff)" }' })
+    eq("rgba(dcdce2ff)", S.config.general.col.active_border)
+    eq("rgba(dcdce2ff)", S.config.general.col.inactive_border)
+    eq(0, #S.notifications)
+    write(TIDE_APPEARANCE, "return {}")
+    conf_appearance.reload()
+    eq("rgba(46464dff)", S.config.general.col.active_border, "a setting tide stops making")
+    eq("rgba(46464dff)", S.config.general.col.inactive_border)
+end)
+
+test("tide-appearance.lua sets the shadow's size, and turns it off at 0", function()
+    load()
+    eq(8, S.config.decoration.shadow.range, "8 with nothing set")
+    eq(true, S.config.decoration.shadow.enabled)
+    load({ appearance = "return { shadow_size = 20 }" })
+    eq(20, S.config.decoration.shadow.range)
+    eq(true, S.config.decoration.shadow.enabled)
+    write(TIDE_APPEARANCE, "return { shadow_size = 0 }")
+    conf_appearance.reload()
+    eq(false, S.config.decoration.shadow.enabled)
+    write(TIDE_APPEARANCE, 'return { shadow_size = 12, shadows = "none" }')
+    conf_appearance.reload()
+    eq(false, S.config.decoration.shadow.enabled, "none, whatever the size")
+    write(TIDE_APPEARANCE, "return {}")
+    conf_appearance.reload()
+    eq(8, S.config.decoration.shadow.range, "a setting tide stops making")
+    eq(true, S.config.decoration.shadow.enabled)
+end)
+
+test("hyprland.local.lua's own border and shadow win over tide's", function()
+    load({
+        appearance = 'return { border_width = 2, shadow_size = 20, border_color = "rgba(dcdce2ff)" }',
+        ["local"] = 'hl.config({ general = { border_size = 1, col = { active_border = "rgba(ff0000ff)" } }, decoration = { shadow = { range = 3, enabled = true } } })',
+    })
+    eq(1, S.config.general.border_size)
+    eq(3, S.config.decoration.shadow.range)
+    eq("rgba(ff0000ff)", S.config.general.col.active_border)
+    eq("rgba(dcdce2ff)", S.config.general.col.inactive_border, "the one it leaves alone is tide's")
+    write(TIDE_APPEARANCE, 'return { border_width = 8, shadow_size = 0, shadows = "none", border_color = "rgba(46464dff)" }')
+    conf_appearance.reload()
+    eq(1, S.config.general.border_size)
+    eq(3, S.config.decoration.shadow.range)
+    eq(true, S.config.decoration.shadow.enabled)
+    eq("rgba(ff0000ff)", S.config.general.col.active_border)
+    eq("rgba(46464dff)", S.config.general.col.inactive_border)
+end)
+
+test("a border or shadow tide-appearance.lua gets wrong is reported, naming it, and leaves the config's", function()
+    local cases = {
+        { "return { border_width = 17 }", "border_width should be a whole number from 0 to 16" },
+        { "return { border_width = 2.5 }", "border_width should be a whole number from 0 to 16" },
+        { 'return { border_width = "4" }', "border_width should be a whole number from 0 to 16" },
+        { "return { shadow_size = -1 }", "shadow_size should be a whole number from 0 to 32" },
+        { "return { shadow_size = 0 / 0 }", "shadow_size should be a whole number from 0 to 32" },
+        { 'return { border_color = "red" }', "border_color should be a color like rgba(46464dff)" },
+        { "return { border_color = 5 }", "border_color should be a color like rgba(46464dff)" },
+    }
+    for _, case in ipairs(cases) do
+        load({ appearance = case[1] })
+        eq(1, #S.notifications, case[1])
+        truthy(S.notifications[1].text:find("tide-appearance.lua: " .. case[2], 1, true), S.notifications[1].text)
+        eq(0, S.config.general.border_size, case[1])
+        eq(8, S.config.decoration.shadow.range, case[1])
+        eq("rgba(46464dff)", S.config.general.col.active_border, case[1])
+    end
 end)
 
 test("a rounded_corners that isn't true or false is reported and leaves corners rounded", function()

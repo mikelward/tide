@@ -430,6 +430,7 @@ test("each settings page, and each section that opens on its own, is found by it
         layouts: ["layouts", "tiling"],
         workspaces: ["workspaces settings", "home workspace", "name patterns"],
         floating: ["floating", "window rules", "dialogs"],
+        borders: ["borders", "shadows", "rounded corners"],
         appearance: ["appearance", "wallpaper"],
         bar: ["bar settings", "taskbar"],
         notifications: ["notifications", "quiet hours", "muted apps"],

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tide mock: borders and shadows</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .opt { margin-top: 26px; }
+  .opt h2 { margin: 0 0 4px; }
+  .opt .what { color: #e6e6ec; font-size: 13.5px; margin: 0 0 10px; }
+  .pair { display: flex; gap: 14px; align-items: flex-start; }
+  .scene, .zoom { position: relative; overflow: hidden; border-radius: 4px; box-shadow: 0 0 0 1px #2e2e36; flex: none; }
+  .scene { width: 420px; height: 260px; }
+  .zoom { width: 120px; height: 260px; }
+  .zoom .scene { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 0; box-shadow: none; }
+  .zoom .tag { position: absolute; left: 6px; bottom: 6px; z-index: 9; font: 600 10px/1 var(--font-mono); color: #fff; background: rgba(0, 0, 0, .6); padding: 3px 5px; border-radius: 3px; }
+  .wall { position: absolute; inset: 0; background:
+    radial-gradient(300px 200px at 15% 30%, var(--wall-c), transparent 70%),
+    radial-gradient(340px 220px at 90% 85%, var(--wall-b), transparent 70%),
+    var(--wall-a); }
+  .bar { position: absolute; left: 0; right: 0; top: 0; height: 36px; z-index: 6; background: var(--bar-bg); display: flex; align-items: center; gap: 6px; padding: 0 10px; color: var(--fg-dim); font-size: 12px; }
+  .bar i { display: block; width: 26px; height: 18px; border-radius: 5px; background: var(--surface-2); }
+  .bar i.on { background: var(--accent-bg); }
+  .bar b { margin-left: auto; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .win { position: absolute; border-radius: 6px; background: var(--surface); }
+  .win.alt { background: var(--app-alt); }
+  .win .body { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; padding: 12px 12px; }
+  .win .body u { display: block; height: 6px; border-radius: 3px; background: var(--fg-faint); opacity: .45; margin-bottom: 8px; }
+  .win .body u.h { width: 46%; height: 8px; background: var(--fg-dim); opacity: .7; margin-bottom: 12px; }
+  .win.dim .body::after { content: ''; position: absolute; inset: 0; background: rgba(0, 0, 0, var(--dim)); }
+  .win.float { z-index: 3; }
+  .theme-dark { --app-alt: #1e1f26; }
+  .theme-light { --app-alt: #f3f4f7; }
+  /* Where a plain left press starts a resize: drawn in the close-up only. */
+  .zone { position: absolute; z-index: 5; pointer-events: none; background: repeating-linear-gradient(45deg, rgba(246, 211, 45, .55) 0 1px, transparent 1px 3px); }
+  .scene:not(.zones) .zone { display: none; }
+  .legend { display: flex; gap: 18px; align-items: center; color: #9a9aa6; font-size: 12px; margin: 10px 0 0; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .sw { width: 22px; height: 12px; border-radius: 2px; box-shadow: 0 0 0 1px #2e2e36; }
+  .legend .sw.z { background: repeating-linear-gradient(45deg, rgba(246, 211, 45, .8) 0 1px, #1b1b20 1px 3px); }
+  .legend .sw.d { background: #2a2a2f; position: relative; }
+  .legend .sw.d::after { content: ''; position: absolute; inset: 0; background: rgba(0, 0, 0, .12); }
+</style>
+</head>
+<body class="sheet theme-dark" data-width="1200" data-scale="2">
+
+<h1>Borders and shadows</h1>
+<p class="lede">The Borders page's Shadows choices, and a border, each on the same desktop at its real size: two tiles side by side and one floating window over them, corners rounded by 6 px. The left tile has the focus; the other two windows are dimmed by 12%. Beside each, a 4× close-up of where the two tiles meet the floating window's top edge.</p>
+<div class="legend">
+  <span><i class="sw d"></i>dimmed: not focused</span>
+  <span><i class="sw z"></i>a press here starts a resize (the last close-ups only; nothing on screen shows it)</span>
+</div>
+
+<div id="options"></div>
+
+<p class="note"><b>How they're drawn.</b> As Hyprland 0.57.1 draws them. Colors are <code>theme/palette.json</code>'s. A shadow is black at 27% (<code>rgba(00000044)</code>) at the window's edge, falling to nothing over its 8 px with <code>render_power = 2</code>, around the rounded corner. Hyprland draws the tiles in the order they opened with the focused one last, then the floating windows, and the bar above them all: so the focused tile's shadow falls on the tile beside it, a tile's shadow is hidden where a later tile covers it, and no shadow shows on the bar. Where a resize starts is the same whatever the shadows: the 8 px outside a floating window, and 4 px either side of where the tiles meet.</p>
+
+<script>
+// Hyprland's shadow (src/render/shaders/glsl/shadow.glsl): at `d` pixels
+// past the window's edge, the color's alpha times ((range - d) / range) ^
+// power. As rings of box-shadow a pixel apart, each one's alpha worked out
+// so that with the rings outside it, it adds up to that.
+function shadow(range, from = 0, alpha = 0x44 / 255, power = 2) {
+  const want = [];
+  for (let k = 1; k <= range; k++) want.push(alpha * Math.pow((range - (k - 0.5)) / range, power));
+  const rings = [];
+  let outside = 0;
+  for (let k = range; k >= 1; k--) {
+    const a = 1 - (1 - want[k - 1]) / (1 - outside);
+    outside = want[k - 1];
+    rings.unshift(`0 0 0 ${from + k}px rgba(0, 0, 0, ${a.toFixed(4)})`);
+  }
+  return rings;
+}
+const border = (px) => `0 0 0 ${px}px var(--surface-3)`;
+
+// The scene, in layout pixels: the bar's 36, then the tiles' boxes and the
+// floating window's.
+const W = 420, H = 260, BAR = 36, SEAM = 231;
+const FLOAT = { x: 186, y: 112, w: 170, h: 104 };
+const lines = (n) => '<u class="h"></u>' + Array.from({ length: n }, (_, i) => `<u style="width:${[88, 72, 80, 60, 84, 66][i % 6]}%"></u>`).join('');
+
+// One option's scene. `b` is the border's width, `tile` and `float` each
+// window's shadow range (the left tile has the focus), `grab` the floating
+// window's zone outside its border, and `seam` the tiles' zone either side
+// of where they meet.
+function scene(o, zones) {
+  const box = (x, y, w, h) => `left:${x + o.b}px;top:${y + o.b}px;width:${w - 2 * o.b}px;height:${h - 2 * o.b}px;`;
+  const deco = (range) => [o.b ? border(o.b) : null, ...(range ? shadow(range, o.b) : [])].filter(Boolean).join(', ');
+  const win = (cls, style, range, n) => `<div class="win ${cls}" style="${style}box-shadow:${deco(range) || 'none'}"><div class="body">${lines(n)}</div></div>`;
+  // A floating window sits where it's put, its border outside it.
+  const f = FLOAT;
+  const ring = o.b + o.grab;
+  return `<div class="scene${zones ? ' zones' : ''}">
+    <div class="wall"></div>
+    ${win('alt dim', box(SEAM, BAR, W - SEAM, H - BAR), o.tile, 9) /* opened first, so drawn first */}
+    ${win('', box(0, BAR, SEAM, H - BAR), o.focused, 9) /* focused: drawn last of the tiles */}
+    <div class="win float dim" style="left:${f.x}px;top:${f.y}px;width:${f.w}px;height:${f.h}px;box-shadow:${deco(o.float) || 'none'}"><div class="body">${lines(3)}</div></div>
+    <div class="zone" style="left:${SEAM - o.seam}px;top:${BAR}px;width:${2 * o.seam}px;height:${f.y - ring - BAR}px"></div>
+    <div class="zone" style="left:${f.x - ring}px;top:${f.y - ring}px;width:${f.w + 2 * ring}px;height:${ring}px"></div>
+    <div class="zone" style="left:${f.x - ring}px;top:${f.y}px;width:${ring}px;height:${f.h}px"></div>
+    <div class="bar"><i class="on"></i><i></i><i></i><b>Sat 14 Nov 10:42</b></div>
+  </div>`;
+}
+// The close-up: the same scene, 4×, around where the seam meets the
+// floating window's top edge.
+const ZOOM = 4, AT = { x: SEAM - 15, y: FLOAT.y - 40 };
+const zoom = (o) => `<div class="zoom">${scene(o, !!o.zones).replace(/<div class="scene( zones)?">/, `<div class="scene$1" style="transform:scale(${ZOOM}) translate(${-AT.x}px, ${-AT.y}px)">`)}<span class="tag">4×</span></div>`;
+
+const OPTIONS = [
+  { name: 'Shadows: None', b: 0, tile: 0, focused: 0, float: 0, grab: 8, seam: 4,
+    what: 'No window casts a shadow. Only the dimming tells the windows apart.',
+    cap: 'A floating window over a tile of the same color has no edge.' },
+  { name: 'Shadows: Floating windows', b: 0, tile: 0, focused: 0, float: 8, grab: 8, seam: 4,
+    what: 'Each floating window casts one, focused or not; tiles cast none. As tide was before this setting.',
+    cap: 'The shadow lifts the floating window off the tiles. Nothing marks where the tiles meet but the dimming.' },
+  { name: 'Shadows: Focused window (the default)', b: 0, tile: 0, focused: 8, float: 0, grab: 8, seam: 4,
+    what: 'Only the focused window casts one, tiled or floating. Here that is the left tile.',
+    cap: 'The focused tile\'s shadow darkens 8 px of the tile beside it, and moves with the focus. The floating window, not focused, has none; focused, it would have the one in the panel above. Against the bar and the screen\'s edges nothing shows.' },
+  { name: 'Shadows: All windows', b: 0, tile: 8, focused: 8, float: 8, grab: 8, seam: 4,
+    what: 'Every window casts one, tiles too.',
+    cap: 'Where the tiles meet it looks as Focused window does: the focused tile is drawn last, so its shadow falls on its neighbor and the neighbor\'s is under it. Two tiles that both lack the focus are shaded on one side, by which opened first. The floating window keeps its shadow without the focus.' },
+  { name: 'Border width: 4 px (0 by default), with Shadows: Focused window', b: 4, tile: 0, focused: 8, float: 0, grab: 8, seam: 4, zones: true,
+    what: 'A border on every window, in one quiet color (the palette\'s surface-3), so 8 px where two tiles meet.',
+    cap: '<b>Resizing:</b> a floating window from its border and the 8 px outside it; the tiles from the 8 px of border between them. Each tile is 8 px narrower and shorter; a floating window keeps its size, its border outside it. The shadow starts outside the border. On tidewm the focused window\'s border is blue: its colors are built in.' },
+];
+const root = document.getElementById('options');
+for (const o of OPTIONS) {
+  const themed = (t) => `<div class="pair theme-${t}">${scene(o, false)}${zoom(o)}</div>`;
+  root.insertAdjacentHTML('beforeend', `<div class="opt"><h2>${o.name}</h2><p class="what">${o.what}</p>
+    <div class="row">${themed('dark')}${themed('light')}</div><div class="cap">${o.cap}</div></div>`);
+}
+</script>
+</body>
+</html>

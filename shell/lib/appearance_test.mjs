@@ -13,6 +13,8 @@ import {
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
     POSITIONS, POSITION_CHOICES, BAR_POSITIONS, BAR_CHOICES, barAtBottom, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf, ROUNDING,
+    BORDER_WIDTH, BORDER_WIDTH_MAX, borderWidth, steppedBorder, SHADOW_SIZE, SHADOW_SIZE_MAX, shadowSize, steppedShadow, formatPixels, borderColor,
+    SHADOWS, SHADOWS_DEFAULT, shadows, SHADOW_CHOICES, shadowsAt, steppedShadowsAt,
     LOOK_ROOT, lookDir, lookCommand, lookWriteCommand, lookCopied, lookJson, parseLook, lookAt
 } from "./appearance.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -616,18 +618,155 @@ test("rounded corners are on until a setting turns them off, and only one that's
     assert.ok(appearanceConf({ roundedCorners: false }).split("\n").every(line => line === "" || line.startsWith("#")));
 });
 
+// A generated file's lines, less its comments.
+const confLines = text => text.split("\n").filter(line => line !== "" && !line.startsWith("#"));
+
 test("tidesway's file rounds the corners as Hyprland does, or squares them", () => {
-    const lines = text => text.split("\n").filter(line => line !== "" && !line.startsWith("#"));
-    assert.deepEqual(lines(appearanceConf({}, true)), [`corner_radius ${ROUNDING}`], "rounded unless turned off");
-    assert.deepEqual(lines(appearanceConf({ roundedCorners: true }, true)), [`corner_radius ${ROUNDING}`]);
-    assert.deepEqual(lines(appearanceConf({ roundedCorners: false }, true)), ["corner_radius 0"]);
-    assert.deepEqual(lines(appearanceConf({ dimStrength: 0.1, roundedCorners: false }, true)),
+    assert.deepEqual(confLines(appearanceConf({}, true)), [`corner_radius ${ROUNDING}`], "rounded unless turned off");
+    assert.deepEqual(confLines(appearanceConf({ roundedCorners: true }, true)), [`corner_radius ${ROUNDING}`]);
+    assert.deepEqual(confLines(appearanceConf({ roundedCorners: false }, true)), ["corner_radius 0"]);
+    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, roundedCorners: false }, true)),
         ["dim_inactive 0.1", "corner_radius 0"]);
     // tidewm fails on a line it doesn't know, so its own file never has it
-    assert.deepEqual(lines(appearanceConf({ roundedCorners: true })), []);
+    assert.deepEqual(confLines(appearanceConf({ roundedCorners: true })), []);
     // The radius is Hyprland's
     const lua = readFileSync(new URL("../../hypr/hyprland.lua", import.meta.url), "utf8");
     assert.match(lua, new RegExp(`^local ROUNDING = ${ROUNDING}$`, "m"));
+});
+
+test("there's no border, and a shadow is 8 pixels, until a setting says, each a whole number in range", () => {
+    assert.equal(BORDER_WIDTH, 0);
+    assert.equal(borderWidth(DEFAULTS), 0);
+    assert.equal(shadowSize(DEFAULTS), 8);
+    assert.equal(borderWidth(loadAppearance('{"borderWidth": 2}', '{"borderWidth": 4}').settings), 4, "the local file's wins");
+    assert.equal(shadowSize(loadAppearance(null, '{"shadowSize": 0}').settings), 0);
+    assert.deepEqual(parseAppearance(`{"borderWidth": ${BORDER_WIDTH_MAX}, "shadowSize": ${SHADOW_SIZE_MAX}}`),
+        { settings: { borderWidth: 16, shadowSize: 32 } });
+    for (const bad of [-1, 17, 2.5, "4", true, null]) {
+        assert.equal(parseAppearance(JSON.stringify({ borderWidth: bad })).error, "borderWidth must be a whole number from 0 to 16", JSON.stringify(bad));
+    }
+    for (const bad of [-1, 33, 0.5, "8", false, null]) {
+        assert.equal(parseAppearance(JSON.stringify({ shadowSize: bad })).error, "shadowSize must be a whole number from 0 to 32", JSON.stringify(bad));
+    }
+    // A bad one names its file and setting, and keeps the last good settings
+    const loaded = loadAppearance(null, '{"borderWidth": 40}');
+    assert.deepEqual(loaded.errors, ["appearance.local.json: borderWidth must be a whole number from 0 to 16"]);
+    assert.equal(borderWidth(loaded.settings), 0);
+    assert.deepEqual(JSON.parse(withSetting('{"roundedCorners": false}', "borderWidth", 6).text), { roundedCorners: false, borderWidth: 6 });
+    assert.deepEqual(JSON.parse(withSetting('{"borderWidth": 6}', "shadowSize", 0).text), { borderWidth: 6, shadowSize: 0 });
+    assert.match(withSetting(null, "borderWidth", 99).error, /^borderWidth must be/);
+    assert.match(withSetting(null, "shadowSize", "8").error, /^shadowSize must be/);
+});
+
+test("the focused window casts a shadow until a setting says which do: none, floating, focused or all", () => {
+    assert.equal(SHADOWS_DEFAULT, "focused");
+    assert.equal(shadows(DEFAULTS), "focused");
+    assert.deepEqual(SHADOWS, ["none", "floating", "focused", "all"]);
+    for (const which of SHADOWS) {
+        assert.equal(shadows(loadAppearance(null, JSON.stringify({ shadows: which })).settings), which);
+    }
+    assert.equal(shadows(loadAppearance('{"shadows": "all"}', '{"shadows": "none"}').settings), "none", "the local file's wins");
+    for (const bad of ["active", "enable", "", true, 1, null]) {
+        assert.equal(parseAppearance(JSON.stringify({ shadows: bad })).error,
+            'shadows must be one of "none", "floating", "focused", "all"', JSON.stringify(bad));
+    }
+    assert.deepEqual(loadAppearance(null, '{"shadows": "tiled"}').errors,
+        ['appearance.local.json: shadows must be one of "none", "floating", "focused", "all"']);
+    assert.deepEqual(JSON.parse(withSetting('{"shadowSize": 4}', "shadows", "all").text), { shadows: "all", shadowSize: 4 });
+    assert.match(withSetting(null, "shadows", "some").error, /^shadows must be/);
+});
+
+test("the Borders page steps through the shadow choices in order, stopping at either end", () => {
+    assert.deepEqual(SHADOW_CHOICES.map(c => c.shadows), SHADOWS);
+    assert.deepEqual(SHADOW_CHOICES.map(c => c.label), ["None", "Floating windows", "Focused window", "All windows"]);
+    assert.equal(shadowsAt({}), 2, "Focused window, with nothing set");
+    assert.equal(shadowsAt({ shadows: "none" }), 0);
+    assert.equal(shadowsAt({ shadows: "all" }), 3);
+    assert.equal(steppedShadowsAt(2, 1), 3);
+    assert.equal(steppedShadowsAt(2, -1), 1);
+    assert.equal(steppedShadowsAt(0, -1), 0);
+    assert.equal(steppedShadowsAt(3, 1), 3);
+});
+
+test("− and + move a border or a shadow a pixel, between none and the most", () => {
+    assert.equal(steppedBorder(4, 1), 5);
+    assert.equal(steppedBorder(4, -1), 3);
+    assert.equal(steppedBorder(0, -1), 0);
+    assert.equal(steppedBorder(BORDER_WIDTH_MAX, 1), BORDER_WIDTH_MAX);
+    assert.equal(steppedShadow(8, -1), 7);
+    assert.equal(steppedShadow(0, -1), 0);
+    assert.equal(steppedShadow(SHADOW_SIZE_MAX, 1), SHADOW_SIZE_MAX);
+    assert.equal(formatPixels(4), "4 px");
+    assert.equal(formatPixels(0), "0 px");
+});
+
+test("a border is the palette's surface-3, light or dark", () => {
+    const palette = JSON.parse(readFileSync(new URL("../../theme/palette.json", import.meta.url), "utf8"));
+    assert.equal(`#${borderColor(true)}`, `${palette.dark["surface-3"]}ff`);
+    assert.equal(`#${borderColor(false)}`, `${palette.light["surface-3"]}ff`);
+    assert.notEqual(borderColor(true), borderColor(false));
+});
+
+test("only a border or shadow setting that's set reaches Hyprland, and a border's color for the theme", () => {
+    const body = lua => lua.split("\n").slice(3).join("\n");
+    assert.equal(body(appearanceLua({ borderWidth: 0 }, true)), "return {\n    border_width = 0,\n}\n", "no border, no color");
+    assert.equal(body(appearanceLua({ shadowSize: 12, shadows: "all", roundedCorners: true })),
+        'return {\n    rounded_corners = true,\n    shadows = "all",\n    shadow_size = 12,\n}\n');
+    for (const which of SHADOWS) {
+        assert.equal(body(appearanceLua({ shadows: which })), `return {\n    shadows = "${which}",\n}\n`);
+    }
+    assert.equal(body(appearanceLua({}, true)), "return {\n}\n", "nothing set: light or dark, the same file");
+    assert.equal(body(appearanceLua({ borderWidth: 1 }, false)),
+        `return {\n    border_width = 1,\n    border_color = "rgba(${borderColor(false)})",\n}\n`);
+    assert.equal(body(appearanceLua({ borderWidth: 1 }, true)),
+        `return {\n    border_width = 1,\n    border_color = "rgba(${borderColor(true)})",\n}\n`);
+    // The defaults are Hyprland's own config's
+    const lua = readFileSync(new URL("../../hypr/hyprland.lua", import.meta.url), "utf8");
+    assert.match(lua, new RegExp(`^local BORDER_SIZE = ${BORDER_WIDTH}$`, "m"));
+    assert.match(lua, new RegExp(`^local SHADOW_RANGE = ${SHADOW_SIZE}$`, "m"));
+    assert.match(lua, new RegExp(`^local SHADOWS = "${SHADOWS_DEFAULT}"$`, "m"));
+    assert.match(lua, new RegExp(`^local BORDER_COLOR = "rgba\\(${borderColor(true)}\\)"$`, "m"), "dark's, before the shell says");
+});
+
+test("tidewm's file has what's set of the border's width, which windows cast a shadow and how far", () => {
+    assert.deepEqual(confLines(appearanceConf({ borderWidth: 6 })), ["default_border pixel 6"]);
+    assert.deepEqual(confLines(appearanceConf({ borderWidth: 0 })), ["default_border pixel 0"]);
+    assert.deepEqual(confLines(appearanceConf({ shadows: "none" })), ["shadows disable"]);
+    assert.deepEqual(confLines(appearanceConf({ shadows: "floating" })), ["shadows floating"]);
+    assert.deepEqual(confLines(appearanceConf({ shadows: "focused" })), ["shadows active"]);
+    assert.deepEqual(confLines(appearanceConf({ shadows: "all" })), ["shadows all"]);
+    assert.deepEqual(confLines(appearanceConf({ shadowSize: 20 })), ["shadow_blur_radius 20"]);
+    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, borderWidth: 2, shadows: "all", shadowSize: 0 }, false, false)),
+        ["dim_inactive 0.1", "default_border pixel 2", "shadows all", "shadow_blur_radius 0"]);
+    assert.equal(appearanceConf({ borderWidth: 6 }, false, true), appearanceConf({ borderWidth: 6 }, false, false), "light or dark, the same file: its colors are built in");
+    // The defaults are tide.conf's
+    const conf = readFileSync(new URL("../../tidewm/tide.conf", import.meta.url), "utf8");
+    assert.match(conf, /^default_border none$/m);
+    assert.match(conf, /^shadows active$/m);
+    assert.doesNotMatch(conf, /^shadow_blur_radius/m, "tidewm's own is 8");
+});
+
+test("tidesway's file has tidewm's lines, and a border's on floating windows and its color too", () => {
+    const dark = `#${borderColor(true)}`;
+    const light = `#${borderColor(false)}`;
+    assert.deepEqual(confLines(appearanceConf({ shadows: "focused", shadowSize: 12 }, true, true)),
+        ["shadows active", "shadow_blur_radius 12", `corner_radius ${ROUNDING}`]);
+    assert.deepEqual(confLines(appearanceConf({ borderWidth: 0 }, true, true)),
+        ["default_border pixel 0", "default_floating_border pixel 0", `corner_radius ${ROUNDING}`], "no border, no color");
+    assert.deepEqual(confLines(appearanceConf({ borderWidth: 4, shadows: "none" }, true, true)), [
+        "default_border pixel 4",
+        "default_floating_border pixel 4",
+        `client.focused ${dark} ${dark} #ededf1 ${dark} ${dark}`,
+        `client.focused_inactive ${dark} ${dark} #ededf1 ${dark} ${dark}`,
+        `client.unfocused ${dark} ${dark} #ededf1 ${dark} ${dark}`,
+        "shadows disable",
+        `corner_radius ${ROUNDING}`,
+    ]);
+    assert.deepEqual(confLines(appearanceConf({ borderWidth: 2 }, true, false)).slice(2, 5), [
+        `client.focused ${light} ${light} #1f1f24 ${light} ${light}`,
+        `client.focused_inactive ${light} ${light} #1f1f24 ${light} ${light}`,
+        `client.unfocused ${light} ${light} #1f1f24 ${light} ${light}`,
+    ]);
 });
 
 test("only a dim that's set reaches Hyprland", () => {

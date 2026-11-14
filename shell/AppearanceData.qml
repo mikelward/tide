@@ -13,17 +13,23 @@ import "lib/writes.mjs" as Writes
 // each minute, and when that changes tells apps through gsettings and the
 // shell's own palette (Theme) in place. The launcher's flip
 // (`flip`) lasts until the schedule's next change. The settings panel's
-// Appearance page (§16) changes the settings through `set`, in
+// Appearance and Borders pages (§16) change the settings through `set`, in
 // appearance.local.json, read and written synchronously
-// (SettingsFile.qml). The inactive dim's strength reaches Hyprland as LayoutsData's
-// settings do: written to ~/.config/hypr/tide-appearance.lua, which conf's
-// hyprland.lua reads, and applied with `hyprctl eval
+// (SettingsFile.qml). The inactive dim's strength, the corners, the
+// border's width and color, which windows cast a shadow and its size reach
+// Hyprland as
+// LayoutsData's settings do: written to ~/.config/hypr/tide-appearance.lua,
+// which conf's hyprland.lua reads, and applied with `hyprctl eval
 // conf_appearance.reload()`, tried again until it is (shell/lib/writes.mjs).
 // On tidewm (§5.3) it's ~/.config/tidewm/tide-appearance.conf, its
-// dim_inactive, which conf's tidewm config includes, and `tide-msg
-// reload` has tidewm read it, as InputData's. On tidesway it's
+// dim_inactive, default_border, shadows and shadow_blur_radius, which conf's
+// tidewm config includes, and
+// `tide-msg reload` has tidewm read it, as InputData's. On tidesway it's
 // ~/.config/tidewm/tidesway.d/tide-appearance.conf, which tidesway reads
-// after the config and tidewm never does, with its corner_radius too.
+// after the config and tidewm never does, with its corner_radius, its
+// floating windows' border and the border's color too. A border's color is
+// light's or dark's, so while there's one the file is written again as
+// that changes, on Hyprland and tidesway.
 Singleton {
     id: root
 
@@ -59,6 +65,12 @@ Singleton {
     readonly property real dimStrength: Appearance.dimStrength(root.settings)
     // Whether windows' corners are rounded (§6.2), on Hyprland and tidesway.
     readonly property bool roundedCorners: Appearance.roundedCorners(root.settings)
+    // How wide a window's border is, in pixels (§6.2); 0 is none.
+    readonly property int borderWidth: Appearance.borderWidth(root.settings)
+    // Which windows cast a shadow (Appearance.SHADOWS), and how far it
+    // reaches, in pixels.
+    readonly property string shadows: Appearance.shadows(root.settings)
+    readonly property int shadowSize: Appearance.shadowSize(root.settings)
     // Whether the bar runs along the bottom edge (SPEC.md §7.1), which the
     // Bar page's Position row changes live.
     readonly property bool barAtBottom: Appearance.barAtBottom(root.settings)
@@ -97,6 +109,11 @@ Singleton {
     onDarkChanged: {
         console.log(`tide: switching to ${root.dark ? "dark" : "light"}`);
         root.tell();
+        // A border's color follows. Only settings every file agrees on
+        // reach the compositor, as in load.
+        if (root.loaded && root.fileErrors.length === 0) {
+            root.writeDim();
+        }
     }
     onLoadedChanged: root.tell()
 
@@ -213,7 +230,7 @@ Singleton {
         root.target = Compositor.tidewm
             ? Writes.readTarget(root.target, writtenText, root.target.known ? writtenText : applied.firstApplied(writtenText, root.target.failure)).state
             : Writes.readTarget(root.target, writtenText, null).state;
-        root.stepped(Writes.wantTarget(root.target, Compositor.tidewm ? Appearance.appearanceConf(root.settings, Compositor.tidesway) : Appearance.appearanceLua(root.settings)));
+        root.stepped(Writes.wantTarget(root.target, Compositor.tidewm ? Appearance.appearanceConf(root.settings, Compositor.tidesway, root.dark) : Appearance.appearanceLua(root.settings, root.dark)));
     }
 
     function stepped(r) {

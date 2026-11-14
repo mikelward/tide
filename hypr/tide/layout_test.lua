@@ -1295,6 +1295,42 @@ test("a press finds the edge where the windows are now, not where they were laid
     eq(layout_msgs(from), "mfact 0.6000", "the pointer maps to mfact across where the windows are")
 end)
 
+-- Hyprland puts each tiled window inside its box by its border's width.
+local function inset_tiles(ws, border)
+    hl.config["general:border_size"] = border
+    for _, w in ipairs(hl.tiled[ws]) do
+        w.at = { x = w.at.x + border, y = w.at.y + border }
+        w.size = { x = w.size.x - 2 * border, y = w.size.y - 2 * border }
+    end
+end
+
+test("with borders, an edge is where the tiles' borders meet, and drags as without", function()
+    local qs = drag_setup()
+    inset_tiles(1, 4)
+    hl.cursor = { x = 1056, y = 500 }
+    eq(qs.drag_press(), nil, "the press on the seam is taken")
+    local from = #hl.dispatched
+    hl.cursor.x = 1152
+    qs.drag_release()
+    eq(layout_msgs(from), "mfact 0.6000", "the pointer maps to mfact across the tiles' boxes, borders and all")
+end)
+
+test("with borders, a lone window's edge is its border's, and drags its width as without", function()
+    local qs, layout = fresh()
+    hl.area = UW
+    relayout(layout, UW, 1, 1)
+    inset_tiles(1, 4)
+    hl.cursor = { x = 3096, y = 500 }
+    local from = #hl.dispatched
+    qs.drag_press()
+    qs.drag_release()
+    eq(layout_msgs(from), "", "no width of its own from a click")
+    eq(qs.drag_press(), nil, "a press on its right edge is taken")
+    hl.cursor.x = 2752
+    qs.drag_release()
+    eq(layout_msgs(from), "single 0.6000", "the right edge in to 2752: 60%, centered")
+end)
+
 test("a press finds the edge of windows resized since they were laid out", function()
     local qs = drag_setup()
     -- Half the width, under a taller bar.
