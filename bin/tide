@@ -157,14 +157,20 @@
 #
 #   tide lid-closed
 #
-#     What closing the lid does in tidewm's session (SPEC.md §16): conf's
-#     tidewm config runs it once the lid has turned the panel off. With no
-#     other monitor on, it locks, as `tide lock` does, when the Power page
-#     says Lock (the shell's ~/.config/hypr/tide-power.lua, which conf's
-#     hyprland.lua reads on Hyprland). The laptop's own panel (eDP, LVDS or
-#     DSI) doesn't count, on or off. Otherwise it does nothing: logind
-#     suspends for Suspend, and the shell holds the lid for Do nothing.
-#     When it can't tell whether another monitor is on, it locks.
+#     What closing the lid does in tidewm's session (SPEC.md §16), which
+#     tidewm/tide.conf runs as it closes. With another monitor on, it turns
+#     the laptop's panel off: $HYPR_INTERNAL_OUTPUT, or the first output
+#     named eDP, LVDS or DSI, as conf's hyprland.lua finds it on Hyprland.
+#     With none, it locks, as `tide lock` does, when the Power page says
+#     Lock (the shell's ~/.config/hypr/tide-power.lua, which hyprland.lua
+#     reads on Hyprland), and otherwise does nothing: logind suspends for
+#     Suspend, and the shell holds the lid for Do nothing. When it can't
+#     tell whether another monitor is on, it locks for Lock.
+#
+#   tide lid-opened
+#
+#     Turns the laptop's panel, found as lid-closed finds it, back on as the
+#     lid opens, if it's off.
 #
 #   tide lock-check
 #
@@ -291,6 +297,7 @@ usage() {
     echo "       $prog brightness STEP" >&2
     echo "       $prog lock [--now]" >&2
     echo "       $prog lid-closed" >&2
+    echo "       $prog lid-opened" >&2
     echo "       $prog lock-check" >&2
     echo "       $prog idle-lock" >&2
     echo "       $prog idle-suspend [--unplugged | --cancel]" >&2
@@ -1306,6 +1313,17 @@ lock() {
     exec "$hyprlock"
 }
 
+# The laptop's own panel among tidewm's outputs, $1, its get_outputs reply:
+# $HYPR_INTERNAL_OUTPUT, or the first named eDP, LVDS or DSI, as
+# hyprland.lua's internal_panel takes it on Hyprland. Nothing for none.
+lid_panel() {
+    if test -n "${HYPR_INTERNAL_OUTPUT:-}"; then
+        printf '%s\n' "$HYPR_INTERNAL_OUTPUT"
+        return 0
+    fi
+    printf '%s' "$1" | jq -r 'first(.[] | select(.name | test("^(eDP|LVDS|DSI)")) | .name) // empty'
+}
+
 lid_closed() {
     test $# -eq 0 || usage
     file=${XDG_CONFIG_HOME:-$HOME/.config}/hypr/tide-power.lua
@@ -1314,21 +1332,59 @@ lid_closed() {
         line=${line#    lid_close = \"}
         action=${line%\",}
     fi
-    test "$action" = lock || return 0
-    # With another monitor still on, the lid only turned the panel off, as
-    # it does on Hyprland. Unsure, it locks, the safe way to be wrong. The
-    # laptop's own panel isn't another monitor, whatever it's named: the
-    # config turns off only eDP-1, so an LVDS-1, DSI-1 or eDP-2 is still on
-    # here. They're the names hyprland.lua's internal_panel takes for one.
-    on=
+    # With another monitor on, the lid turns the panel off, whatever the
+    # Power page says, as it does on Hyprland. With none, Lock locks, and
+    # the panel stays as it is for logind or the lock. Unsure, it locks for
+    # Lock, the safe way to be wrong.
+    panel=
+    others=
     if outputs=$(tide-msg --type get_outputs 2>&1) &&
-        on=$(printf '%s' "$outputs" | jq -r '[.[] | select(.active == true and (.name | test("^(eDP|LVDS|DSI)") | not))] | length' 2>&1) &&
-        test "$on" -ge 0 2>/dev/null; then
-        test "$on" -gt 0 && return 0
+        panel=$(lid_panel "$outputs" 2>&1) &&
+        others=$(printf '%s' "$outputs" |
+            jq -r --arg panel "$panel" '[.[] | select(.active == true and .name != $panel)] | length' 2>&1) &&
+        test "$others" -ge 0 2>/dev/null; then
+        if test "$others" -gt 0; then
+            panel_on=$(printf '%s' "$outputs" |
+                jq -r --arg panel "$panel" 'any(.[]; .name == $panel and .active == true)')
+            if test "$panel_on" = true && ! err=$(tide-msg output "$panel" disable 2>&1); then
+                echo "$prog lid-closed: couldn't turn the laptop's panel, $panel, off: ${err:-tide-msg failed}" >&2
+                return 1
+            fi
+            return 0
+        fi
     else
-        echo "$prog lid-closed: couldn't tell whether another monitor is on (${on:-$outputs}), so it locks" >&2
+        reason=${others:-${panel:-$outputs}}
+        if test "$action" != lock; then
+            echo "$prog lid-closed: couldn't tell whether another monitor is on ($reason), so the panel stays on" >&2
+            return 0
+        fi
+        echo "$prog lid-closed: couldn't tell whether another monitor is on ($reason), so it locks" >&2
     fi
+    test "$action" = lock || return 0
     lock
+}
+
+# The laptop's panel back on as the lid opens, if it's off: the one
+# lid-closed turned off, found the same way.
+lid_opened() {
+    test $# -eq 0 || usage
+    if ! outputs=$(tide-msg --type get_outputs 2>&1); then
+        echo "$prog lid-opened: couldn't ask tidewm for its outputs, so the laptop's panel may stay off: $outputs" >&2
+        return 1
+    fi
+    if ! panel=$(lid_panel "$outputs" 2>&1); then
+        echo "$prog lid-opened: couldn't read tidewm's outputs, so the laptop's panel may stay off: $panel" >&2
+        return 1
+    fi
+    test -n "$panel" || return 0
+    state=$(printf '%s' "$outputs" | jq -r --arg panel "$panel" '[.[] | select(.name == $panel) | .active == true] | if length == 0 then "missing" else (first | tostring) end')
+    test "$state" = true && return 0
+    # One named by $HYPR_INTERNAL_OUTPUT is turned on even unlisted.
+    test "$state" = false || test -n "${HYPR_INTERNAL_OUTPUT:-}" || return 0
+    if ! err=$(tide-msg output "$panel" enable 2>&1); then
+        echo "$prog lid-opened: couldn't turn the laptop's panel, $panel, on: ${err:-tide-msg failed}" >&2
+        return 1
+    fi
 }
 
 lock_check() {
@@ -1681,6 +1737,7 @@ case "${1:-}" in
     brightness) shift; brightness "$@" ;;
     lock) shift; lock "$@" ;;
     lid-closed) shift; lid_closed "$@" ;;
+    lid-opened) shift; lid_opened "$@" ;;
     lock-check) shift; lock_check "$@" ;;
     idle-lock) shift; idle_lock "$@" ;;
     idle-suspend) shift; idle_suspend "$@" ;;
