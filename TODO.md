@@ -13,13 +13,6 @@ once you have agreed with it or reversed it.
   wondered about focused; the default is the guess. Reversible: `SHADOWS`
   in `hypr/hyprland.lua`, `shadows` in `tidewm/tide.conf` and
   `SHADOWS_DEFAULT` in `shell/lib/appearance.mjs`.
-- **A border is the palette's `surface-3`** (2026-11-14), the same on the
-  focused window and the rest, light or dark, when the Borders page
-  turns one on; none by default. `edge` and `line` are 7 to 9% opaque,
-  too faint for a 4 px border. tidewm's colors are built in, so there the
-  focused window's is blue and the page says so, rather than hiding
-  Border width. Reversible: `borderColor` in `shell/lib/appearance.mjs`
-  and `BORDER_COLOR` in `hypr/hyprland.lua`.
 - **A border joins a floating window's resize zone, the shadow doesn't**
   (2026-11-14): `extend_border_grab_area` stays 8 px whatever the shadow's
   size.

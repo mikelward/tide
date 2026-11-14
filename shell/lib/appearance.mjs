@@ -820,14 +820,15 @@ export function appearanceLua(settings, dark = undefined) {
 // the config's own stands for the rest. tidewm's dim_inactive takes the
 // strength as Hyprland's dim_strength does, from 0 to 1, its
 // default_border the width, its shadows which windows cast one, and its
-// shadow_blur_radius how far. tidewm's windows are square and its border's
-// colors are built in, so roundedCorners and the border's color have no
-// line.
+// shadow_blur_radius how far. While there's a border, sway's client.CLASS
+// lines give it its color for the theme in effect (`dark`), on the
+// focused window and the rest: tidewm colors a border by the last of the
+// five, sway's child_border. tidewm's windows are square, so
+// roundedCorners has no line.
 // On tidesway (`tidesway` true) it's the file tidesway alone reads, after
 // the config, ~/.config/tidewm/tidesway.d/tide-appearance.conf, with the
 // lines tidewm would fail on as well: a floating window's border, which
-// sway sets apart from a tiled one's; while there's a border, its color
-// for the theme in effect (`dark`); and its corner_radius, ROUNDING, as
+// sway sets apart from a tiled one's, and its corner_radius, ROUNDING, as
 // Hyprland's, or 0, always there, as tidesway's own default is square.
 export function appearanceConf(settings, tidesway = false, dark = true) {
     const lines = [
@@ -844,7 +845,7 @@ export function appearanceConf(settings, tidesway = false, dark = true) {
             lines.push(`default_floating_border pixel ${settings.borderWidth}`);
         }
     }
-    if (tidesway && borderWidth(settings) > 0) {
+    if (borderWidth(settings) > 0) {
         const color = `#${borderColor(dark)}`;
         const text = (dark ? PALETTE.dark : PALETTE.light).fg;
         // sway's border, background, text, indicator and child_border.
