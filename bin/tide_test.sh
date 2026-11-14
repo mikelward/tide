@@ -1080,6 +1080,15 @@ check "having asked tidewm which monitors are on" contains "$(cat "$log")" "tide
 run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$docked" "$qs" lid-closed
 check "lid-closed with Lock and another monitor on exits 0" test $? -eq 0
 check "and doesn't lock: the lid only turned the panel off" lacks "$(cat "$log")" "loginctl"
+# A panel the config's `output eDP-1 disable` doesn't name (LVDS-1, DSI-1,
+# eDP-2) is still on as the lid closes; it's the laptop's own, not another
+# monitor, so Lock still locks.
+for panel in LVDS-1 DSI-1 eDP-2; do
+    run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="[{\"name\": \"$panel\", \"active\": true}]" "$qs" lid-closed
+    check "lid-closed with Lock and only the laptop's $panel still on locks" contains "$(cat "$log")" "loginctl lock-session"
+    run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="[{\"name\": \"$panel\", \"active\": true}, {\"name\": \"DP-1\", \"active\": true}]" "$qs" lid-closed
+    check "but not with $panel and another monitor on" lacks "$(cat "$log")" "loginctl"
+done
 run FAKE_IS_ACTIVE=active FAKE_TIDEMSG_STATUS=2 FAKE_TIDEMSG_ERROR="SWAYSOCK isn't set" "$qs" lid-closed
 check "lid-closed that can't ask tidewm locks" contains "$(cat "$log")" "loginctl lock-session"
 check "and says why" contains "$(cat "$tmp/err")" "tide lid-closed: couldn't tell whether another monitor is on (tide-msg: SWAYSOCK isn't set), so it locks"

@@ -161,7 +161,8 @@
 #     tidewm config runs it once the lid has turned the panel off. With no
 #     other monitor on, it locks, as `tide lock` does, when the Power page
 #     says Lock (the shell's ~/.config/hypr/tide-power.lua, which conf's
-#     hyprland.lua reads on Hyprland). Otherwise it does nothing: logind
+#     hyprland.lua reads on Hyprland). The laptop's own panel (eDP, LVDS or
+#     DSI) doesn't count, on or off. Otherwise it does nothing: logind
 #     suspends for Suspend, and the shell holds the lid for Do nothing.
 #     When it can't tell whether another monitor is on, it locks.
 #
@@ -1315,10 +1316,13 @@ lid_closed() {
     fi
     test "$action" = lock || return 0
     # With another monitor still on, the lid only turned the panel off, as
-    # it does on Hyprland. Unsure, it locks, the safe way to be wrong.
+    # it does on Hyprland. Unsure, it locks, the safe way to be wrong. The
+    # laptop's own panel isn't another monitor, whatever it's named: the
+    # config turns off only eDP-1, so an LVDS-1, DSI-1 or eDP-2 is still on
+    # here. They're the names hyprland.lua's internal_panel takes for one.
     on=
     if outputs=$(tide-msg --type get_outputs 2>&1) &&
-        on=$(printf '%s' "$outputs" | jq -r '[.[] | select(.active == true)] | length' 2>&1) &&
+        on=$(printf '%s' "$outputs" | jq -r '[.[] | select(.active == true and (.name | test("^(eDP|LVDS|DSI)") | not))] | length' 2>&1) &&
         test "$on" -ge 0 2>/dev/null; then
         test "$on" -gt 0 && return 0
     else
