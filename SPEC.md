@@ -6277,26 +6277,28 @@ light/dark switch.
   COSMIC Files' `FileManager1` works only inside COSMIC.
 
 **Integration, whichever file manager wins:**
-- **`FileManager1` has one owner in each session.**
+- **`FileManager1` has one owner in each session.** *Planned* (TODO.md):
+  none of the files below exists yet, in tide or `conf`.
   - Plasma's Dolphin and Nautilus both ship an activation file for that
     name, and dbus-daemon picks arbitrarily between equals. So once both are
     installed, even Plasma's "Show in folder" is a coin flip.
-  - tide installs a user-level
+  - tide is to install a user-level
     `~/.local/share/dbus-1/services/org.freedesktop.FileManager1.service`,
     which is searched first.
-  - It doesn't run a file manager directly. It names a user unit
+  - It won't run a file manager directly. It names a user unit
     (`SystemdService=tide-filemanager.service`), and that unit's
     launcher starts Nautilus when the session's `XDG_CURRENT_DESKTOP` is
     tide's, and Dolphin otherwise.
-  - The unit is `PartOf=graphical-session.target`, so the file manager it
-    started stops when the session ends. A later Plasma login can't find
-    tide's Nautilus still owning the name, or the other way around.
+  - The unit is to be `PartOf=graphical-session.target`, so the file
+    manager it started stops when the session ends. A later Plasma login
+    can't find tide's Nautilus still owning the name, or the other way
+    around.
   - **Scope:** this holds for one graphical session at a time, the normal
     case on one seat. Two concurrent sessions for the same user share one
     user bus and one activation environment, so the last session to start
     decides. tide doesn't support that setup.
   - So each session gets its own file manager deterministically, and Plasma
-    keeps Dolphin, as §5.5 promises. `doctor` checks who answers.
+    keeps Dolphin, as §5.5 promises. `doctor` is to check who answers.
   - Chrome's "Show in folder" goes through the portal's
     `OpenURI.OpenDirectory`, which calls `ShowItems` and falls back to the
     `inode/directory` default.
@@ -6305,7 +6307,9 @@ light/dark switch.
     Plasma) would win.
   - `xdg-terminal-exec` with `kitty.desktop` in
     `~/.config/xdg-terminals.list` fixes it. This covers `yazi.desktop` in
-    "Open With".
+    "Open With". *Planned* (TODO.md): the installer installs
+    `xdg-terminal-exec`, but nothing in tide or `conf` writes that list
+    yet.
 - **File chooser.** The file chooser stays xdg-desktop-portal-gtk's GTK 3
   dialog, not Nautilus. It is themed by adw-gtk3.
 - **yazi to GUI.** yazi's `reveal` opens the parent folder. A yazi opener
@@ -6328,7 +6332,7 @@ light/dark switch.
 
 | Problem | How it shows up | Here |
 |---|---|---|
-| Two bars | a second bar stacked above or below the first | exactly one owner; no `bar {}` block, no waybar; `doctor` counts top-layer bars (§5) |
+| Two bars | a second bar stacked above or below the first | exactly one owner; no `bar {}` block, and no second bar beside the shell: waybar runs only as the fallback bar, in the shell's place (§5.2, §5.3); `doctor` counts top-layer bars (§5) |
 | A floating, rounded bar | gaps at the screen edges | the bar is a flush rectangle by spec (§7.1) |
 | Two notification daemons | notifications vanish, or appear twice in two styles | the shell owns the name and starts before apps; no others installed; `doctor` checks (§5) |
 | Units leaking across sessions | KDE shows swaync popups | units scoped to the uwsm Hyprland target (§5.4) |
@@ -6338,7 +6342,7 @@ light/dark switch.
 | Wrong portal backend | screen sharing shows a black stream or nothing | `tide-portals.conf` + `XDG_CURRENT_DESKTOP=tide:Hyprland` |
 | Keyring not unlocked | Chrome asks for the keyring password after login | `pam_gnome_keyring` in greetd's PAM stack |
 | Lock screen crashes | red screen, locked out | the lock is its own process with no file watcher; `allow_session_lock_restore` + systemd restart (§10) |
-| Suspend without lock | wake to an open desktop | hypridle `before_sleep_cmd` locks via logind; `inhibit_sleep = 3` waits for the lock |
+| Suspend without lock | wake to an open desktop | hypridle `before_sleep_cmd` locks via logind; holding the suspend until the lock is up is §10's |
 | Idle during a Meet call | screen blanks mid-call | hypridle owns `org.freedesktop.ScreenSaver` and honors Chrome's inhibits; keep awake while the mic is live |
 | Screen never blanks | Chrome holds an inhibitor on ordinary pages (reported in 146), through both Wayland and D-Bus | if the pinned Chrome still does it: a per-window `idle_inhibit` rule for the Wayland side, plus a D-Bus filter or hypridle's global switch, chosen in M5 (§10) |
 | Picker shows up 2–4 times per share | Chrome opens several portal sessions | each repeat opens with the last choice preselected, so it's one `Enter`; never a silent reuse (§12) |
@@ -6349,13 +6353,13 @@ light/dark switch.
 | XWayland apps blurry at fractional scale | fuzzy Electron/X11 apps | `xwayland:force_zero_scaling`, and Electron on native Wayland (`ELECTRON_OZONE_PLATFORM_HINT=auto`) |
 | Cursor size differs per app | big cursor in GTK, small in Qt | one `XCURSOR_*`/`HYPRCURSOR_*` in the uwsm env |
 | Dvorak missing at login | the password "doesn't work" | the greeter uses the session layout and names it |
-| Hyprland config breaks on upgrade | red config-error banner | pinned version, Lua config, CI loads it, upgrades as their own PRs |
+| Hyprland config breaks on upgrade | red config-error banner | pinned version, Lua config, CI runs it against a stub of Hyprland's Lua API (`hypr/hyprland_test.lua`), upgrades as their own PRs |
 | Tray icon missing | an app started before the tray watcher | the shell (the watcher) is ordered before autostart |
-| `Super` tap misfires | the launcher opens after every `Super+<key>` on Hyprland 0.56.x | `conf` binds the tap only from Hyprland 0.57, which has the keybind fix; `Super+Space` before (§8) |
-| Dark-on-dark focus hard to see | can't tell which terminal is focused | dim strength is a setting; 0.1 is the next step |
+| `Super` tap misfires | the launcher opens after every `Super+<key>` on Hyprland 0.56.x | tide's Hyprland config binds the tap only from Hyprland 0.57, which has the keybind fix; `Super+Space` before (§8) |
+| Dark-on-dark focus hard to see | can't tell which terminal is focused | dimming strength is an Appearance setting (§6.2, §16) |
 | Sharing an ultrawide | viewers get a letterboxed strip | the window-first default in the picker |
-| "Show in folder" opens the wrong file manager | Dolphin and Nautilus both claim `FileManager1` | a user-level activation file → a session-bound unit with a desktop-aware launcher: Nautilus in tide, Dolphin in Plasma, one session at a time; `doctor` checks (§16.2) |
-| `Terminal=true` apps open in Konsole | GLib's terminal list lacks kitty | `xdg-terminal-exec` with kitty listed first (§16.2) |
+| "Show in folder" opens the wrong file manager | Dolphin and Nautilus both claim `FileManager1` | planned: a user-level activation file → a session-bound unit with a desktop-aware launcher: Nautilus in tide, Dolphin in Plasma, one session at a time; `doctor` to check (§16.2) |
+| `Terminal=true` apps open in Konsole | GLib's terminal list lacks kitty | planned: `xdg-terminal-exec` with kitty listed first (§16.2) |
 | CLDR zone names | `GMT+1` instead of `BST` | place labels on the bar; tzdata abbreviations wherever an abbreviation shows (§7.3) |
 
 ## 18. Where things live
