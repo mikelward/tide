@@ -6627,28 +6627,67 @@ What each covers:
 
 ## 21. Open questions
 
-Named workspaces (§6.5) leave these open. Deferred work, with its notes, is
+Named workspaces (§6.5) leave this open. Deferred work, with its notes, is
 in `TODO.md`.
 
-- **Workspaces across several monitors.** **Decided** (2026-11-01): a
-  workspace spans every monitor, each with its own part, and a part with
-  nothing on it shows the wallpaper and the bar (§6.5). Moving between
-  monitors uses tide for macOS's keys (§6.6, mikelward/tidemo#90). Until it's
-  built, extra monitors keep Hyprland's model: each shows one workspace
-  from a shared pool, and a second monitor gets a numbered one.
 - **More workspaces than the bar's left side holds.** The bar cuts names at
   16 characters, but has no rule yet for when they still don't fit.
 
-§21.1 and §21.2 record deferred explorations, not open M1 questions:
-Hyprland stays the baseline M1 accepted.
+**Decided in review of this spec:**
+
+- **Monitors:** a workspace spans every monitor, each with its own part,
+  and a part with nothing on it shows the wallpaper and the bar
+  (2026-11-01, §6.5). Moving between monitors uses tide for macOS's keys
+  (§6.6, mikelward/tidemo#90).
+- **Named workspaces:** the standing ones first, home (`in`) first of
+  them, holding mail, chat, calendar and music; a window opened on home
+  asks for a workspace, and Esc closes it;
+  an empty workspace is removed once you leave it (§6.5).
+- **One switcher:** a tap of `Super` or `Super+Space` opens it on the
+  launcher, `Super+A` on Attention, and `Tab` reaches the rest. `Super+Tab` flips
+  between home and the last other workspace, `Super+Home` goes to home,
+  and `Super+End` to the last workspace other than home (§6.6, §8).
+- **Nothing steals focus:** only what you asked for takes the keyboard (the
+  app you're in, what you just launched, the launcher). Everything else is
+  marked urgent, and `Super+A` lists it (§14).
+- **Clock labels:** `SF` / `NYC` / `LON`, with abbreviations in the popover
+  (§7.3). Local is always last, and a listed zone that is the local zone is
+  hidden, unless Hide a zone that's the local one is off.
+- **Per-machine settings** live in `.local` overrides (§16.1).
+- **Light and dark** switch automatically, light 07:00–19:00 by default
+  (§15).
+- **Fonts:** Inter for UI and Ubuntu Mono for code (§15).
+- **Suspend on AC:** off by default. After idle the displays just turn
+  off; on battery it suspends after 30 minutes (§10). The Idle page's
+  "Sleep when plugged in" turns it on.
+- **File manager:** Nautilus, with yazi kept for keyboard use (§16.2).
+- **The old stack:** once M5 lands, the sway config and the
+  waybar/swaync/fuzzel/hyprlock configs are deleted from `conf`. KDE Plasma
+  is the fallback if tide breaks (§5.5).
+
+§21.1 records how tidewm came about, and what's left before it could
+replace Hyprland. §21.2 records a later option. Neither is an open M1
+question: Hyprland stays the baseline M1 accepted.
 
 ### 21.1 Deferred exploration: a dwl fork instead of Hyprland
+
+**Status** (2026-11-14): the fork exists, as
+[mikelward/tidewm](https://github.com/mikelward/tidewm), and runs tide's
+login screen and its tidewm session beside Hyprland's (§3.6). tide ships that session, its
+config (`tidewm/tide.conf`), the settings pages' tidewm files (§16.1) and
+`tide-msg`, and the installer builds tidewm. tidewm already has runtime
+config in sway's syntax, sway's IPC, tide's workspaces and layouts in C,
+which answer **Layouts in C**, **An IPC of our own** and **Reloading config
+without a restart** below. Hyprland stays the default. What's still open
+is whether tidewm replaces it. The rest of this section is the case as it
+was made before tidewm was built.
 
 Hyprland 0.57 stays the plan (§3.1). Getting it onto Ubuntu 26.04,
 though, means building it from source, since Ubuntu ships 0.53.3. That takes
 GCC 16 (0.57.1 is C++26, and uses libstdc++ 16's `std::ranges::starts_with`)
-and ten pinned projects: `wayland-protocols`, seven hyprwm libraries and
-tools, re2 and Hyprland itself. re2 joined on 2026-11-02, when Debian
+and the pinned projects in `deps.lock`'s `hyprland` group, twelve as of
+2026-11-14: `wayland-protocols`, eight hyprwm libraries and tools, re2,
+glaze and Hyprland itself. re2 joined on 2026-11-02, when Debian
 testing's libre2, built against an older abseil than its headers, stopped
 Hyprland linking. Debian 13 can't build it at all (GCC 14, xkbcommon 1.7 and
 no Lua 5.5, against 0.57.1's GCC 16, xkbcommon 1.11 and Lua 5.5). Debian
@@ -7032,35 +7071,6 @@ input activity, capture exclusion),** before any switch:
 3. The list of what tide needs from the compositor
    ([`docs/compositor.md`](docs/compositor.md)), each item with river's
    replacement and its check passing.
-
-Decided in review of this spec:
-
-- **Monitors:** a workspace spans every monitor (§6.5).
-- **Named workspaces:** the standing ones first, home (`in`) first of
-  them, holding mail, chat, calendar and music; a window opened on home
-  asks for a workspace, and Esc closes it;
-  an empty workspace is removed once you leave it (§6.5).
-- **One switcher:** a tap of `Super` or `Super+Space` opens it on the
-  launcher, `Super+A` on Attention, and `Tab` reaches the rest. `Super+Tab` flips
-  between home and the last other workspace, `Super+Home` goes to home,
-  and `Super+End` to the last workspace other than home (§6.6, §8).
-- **Nothing steals focus:** only what you asked for takes the keyboard (the
-  app you're in, what you just launched, the launcher). Everything else is
-  marked urgent, and `Super+A` lists it (§14).
-- **Clock labels:** `SF` / `NYC` / `LON`, with abbreviations in the popover
-  (§7.3). Local is always last, and a listed zone that is the local zone is
-  hidden, unless dedupe-local is turned off.
-- **Per-machine settings** live in `.local` overrides (§16.1).
-- **Light and dark** switch automatically, light 07:00–19:00 by default
-  (§15).
-- **Fonts:** Inter for UI and Ubuntu Mono for code (§15).
-- **Suspend on AC:** off by default. After idle the displays just turn
-  off; on battery it suspends after 30 minutes (§10). The Idle page's
-  "Sleep when plugged in" turns it on.
-- **File manager:** Nautilus, with yazi kept for keyboard use (§16.2).
-- **The old stack:** once M5 lands, the sway config and the
-  waybar/swaync/fuzzel/hyprlock configs are deleted from `conf`. KDE Plasma
-  is the fallback if tide breaks (§5.5).
 
 ## Sources
 
