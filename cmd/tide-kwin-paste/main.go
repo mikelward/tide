@@ -209,11 +209,17 @@ func keysym(r rune) uint32 {
 }
 
 // typeStrokes presses and lets go of each character of text in turn,
-// control characters but newline and tab left out.
+// control characters but newline and tab left out, and bytes that aren't
+// UTF-8. A U+FFFD written as such is a character like any other.
 func typeStrokes(text string) []stroke {
 	var out []stroke
-	for _, r := range text {
-		if (r < 0x20 && r != '\n' && r != '\t') || r == 0x7f || r == utf8.RuneError {
+	for i, r := range text {
+		if r == utf8.RuneError {
+			if _, size := utf8.DecodeRuneInString(text[i:]); size == 1 {
+				continue
+			}
+		}
+		if (r < 0x20 && r != '\n' && r != '\t') || r == 0x7f {
 			continue
 		}
 		k := keysym(r)
