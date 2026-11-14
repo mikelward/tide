@@ -16,6 +16,7 @@ the release it was checked against, and [Sources](#sources) lists the
 checks by date. §21.1 and §21.2 say which of their claims were checked.
 
 Contents:
+[Glossary](#glossary) ·
 [Goals](#1-goals) ·
 [Mocks](#2-mocks) ·
 [Decisions](#3-decisions) ·
@@ -39,6 +40,47 @@ Contents:
 [Open questions](#21-open-questions)
 
 ---
+
+## Glossary
+
+tide for Linux is this desktop. tide for Chrome (tideco), tide for macOS
+(tidemo) and tide on KDE Plasma (tide-kde) bring its tiling, workspaces and
+keys to other platforms, and tidewm is its own compositor (§3.6). This spec
+uses these words for all of them.
+
+| Term | Meaning |
+|---|---|
+| **Workspace** | A named set of windows, shown on every monitor at once (§6.5). Workspaces have names, not numbers. |
+| **Home** | The first standing workspace, `in` by default. Home's apps, such as mail and chat, open there, and a new window that opens there asks which workspace it's for (§6.5). |
+| **Standing workspace** | One of the names in the `standing` list, `in`, `re`, `oc` and `me` by default. They're always listed on the bar and the switcher, even before they're made (§6.5). |
+| **Part** | One monitor's share of a workspace, with its own windows, layout, `mfact` and master count (§6.5, Monitors). |
+| **Monitor** | A screen. tide for Chrome and tide for macOS say "display", as chromeOS and macOS do. |
+| **Layout** | How a part arranges its tiled windows: tile, three-column, two columns + stack, or monocle (§6.1). tide for Linux's settings files and Lua code call it a "mode" (`defaultMode`, `modes`); the word means layout. |
+| **Master, stack** | The master is the main tiled window, or windows: the master count, `nmaster`, says how many. The stack is the rest, in a column of smaller tiles (§6.1). |
+| **mfact** | The masters' share of the part's width, from 0.1 to 0.9 (§6.1). |
+| **Single-window rule** | How wide a part's only tiled window is: 80% from an aspect of 2.1, 60% from 3.2, and the whole width below 2.1 (§6.1). |
+| **Pinned apps** | The apps whose windows a workspace keeps open: tide's close keys leave them open there (`pinnedApps`, §6.5). On Hyprland it's `hypr/tide/pinned.lua`. On tidewm the shell sets each window's `keep_open`, tidewm's IPC command for it. |
+| **Dimming inactive windows** | Darkening every window but the focused one, which is the focus cue. How dark is the dimming strength (§6.2). |
+| **Focus guard** | What keeps a new window from taking the keyboard unless you just asked for it, by a launch, a key or a click. A window it holds back opens unfocused and is marked urgent (§14). On Hyprland it's `hypr/tide/focus.lua`; tidewm has its own (`focus_guard`). |
+| **Super** | The modifier for tide's keys: the Windows-logo key on a PC keyboard. It's **Meta** on KDE Plasma, **Search** (the launcher key) on a Chromebook, and left **Option**, or the PC keyboard's **Win** key, on a Mac (tide for macOS's Keyboard page picks). tidewm's and sway's config say `Mod4`, `Super` or `Logo`. |
+
+**Setting names.** The platforms share settings but don't always spell
+them alike. Stored names aren't renamed; this table maps them. tide for
+Linux's are keys in `~/.config/tide/workspaces.json` and `layouts.json`
+(§16). tidewm's are config lines or IPC commands, tide-kde's are its keys
+in KWin's config, and tide for Chrome's are its storage keys. tide for
+macOS reads tide for Linux's own files, and its `start()` options use the
+names in brackets.
+
+| Setting | tide for Linux | tidewm | tide-kde | tide for Chrome | tide for macOS |
+|---|---|---|---|---|---|
+| Standing workspaces | `standing` | none: the shell keeps home (§5.3) | `standing` | `standing` | `standing` (`workspaces`) |
+| Home's apps | `inApps` | none: the shell sends them home (§5.3) | none | `homeApps` | `inApps` (`home_apps`) |
+| Pinned apps | `workspaceSettings`' `pinnedApps` | `keep_open`, per window | none: a KWin script can't take an app's keys | `workspaceSettings`' `pinnedApps` | `workspaceSettings`' `pinnedApps` (`workspace_settings`) |
+| Single-window rule | `single`, a list of `{minAspect, width}` | `single_window MIN_ASPECT WIDTH` lines | `single`, as `2.1:0.8, 3.2:0.6` | `singleRules`, a list of `{minAspect, width}` | `single` |
+| Layout a part starts in | `defaultMode` | `default_layout` | `normalMode`, `ultrawideMode` | `defaultMode` | `defaultMode` |
+| Each layout's `mfact` and master count | `modes` | `layout_defaults` | `tileMfact`, `tileNmaster` and so on | `modes` | `modes` |
+| Where a new window goes | `newWindow` | `new_window` | `newWindow` | none | `newWindow` |
 
 ## 1. Goals
 
