@@ -24,7 +24,7 @@ Contents:
 [Session](#5-session-one-owner-per-job) ·
 [Windows](#6-windows-and-layouts) ·
 [Bar](#7-bar) ·
-[Switcher](#8-switcher-and-launcher) ·
+[Switcher and input](#8-switcher-launcher-and-text-input) ·
 [Notifications](#9-notifications) ·
 [Idle and lock](#10-idle-screensaver-and-lock) ·
 [Login](#11-login) ·
@@ -2516,7 +2516,7 @@ See [`bar.png`](docs/mocks/bar.png).
   the fallback, stays at the top. See
   [`bottom-bar.png`](docs/mocks/bottom-bar.png).
 - **Everything that opens from it opens away from its edge:** popovers,
-  menus and hover tips drop down from a top bar and rise from a bottom
+  menus and tooltips drop down from a top bar and rise from a bottom
   one, the same distance from the item. `Theme.hangEdge` and
   `Theme.hang` give the edge and gap (`shell/lib/barside.mjs`).
 - **It is a plain rectangle flush with its edge and both sides:** no
@@ -2532,9 +2532,9 @@ See [`bar.png`](docs/mocks/bar.png).
   Apps. Its click
   target runs out to the bar's left edge, so the corner opens it.
 - **Right:** the Presenting pill while presenter mode is on (§10), privacy
-  pills (screen shared, mic live), and tidewm's config errors while it has
-  any. Then, by default, third-party tray icons and the built-in status
-  icons: the keyboard layout (once there are two), keep-awake, Bluetooth
+  pills (screen shared, mic live), and the compositor's config errors
+  while it has any (§7.4). Then, by default, third-party tray icons and
+  the built-in status icons: the keyboard layout (once there are two), keep-awake, Bluetooth
   and its audio devices, network, volume %, battery %, CPU %,
   notifications, session. Local's clock comes last.
 - **The Bar page chooses which of those show, and their order** (§16).
@@ -2566,13 +2566,15 @@ See [`bar.png`](docs/mocks/bar.png).
   character.
   Titles do show up in screenshots and screen shares of the bar; having
   the title where waybar had it is worth that.
-- **Hovering the title** shows it in full, uncut, in a small popup
-  below it (above it on a bottom bar), drawn as the minimized tray's titles are (§6.7). A long one
-  wraps at about 100 characters. With no title there's no popup.
+- **Hovering the title** shows it in full, uncut, in a tooltip below it
+  (above it on a bottom bar), drawn as the minimized tray's titles are
+  (§6.7). A long one wraps at about 100 characters. With no title there's
+  no tooltip.
 - **Double-clicking the title** toggles maximize on the window it names, as
   a title bar's double-click would (§6.3). That's always the focused
   window; a blank title does nothing.
-- **Every click on the bar counts, the first one too.** Each target is
+- **Every click on the bar counts, the first one too,** except while a
+  popover is open (below). Each target is
   clicked anywhere in its span (icon, text and the room between them), the
   bar's full height, and out to halfway to its neighbor, so no gap is
   dead. That's the logo, each workspace, the window title, each pill, tray icon and
@@ -2590,6 +2592,7 @@ See [`bar.png`](docs/mocks/bar.png).
   | window title | Floating |
   | clocks | Clocks |
   | volume, mic pill | Sound |
+  | config errors | the panel's first page, since no page fixes a config |
   | network | Network |
   | Bluetooth and its audio devices | Bluetooth |
   | battery | Power |
@@ -2608,9 +2611,12 @@ See [`bar.png`](docs/mocks/bar.png).
 - **Each dropdown ends in Settings…**, under a line, which closes it and
   opens the page its item's right-click opens (`shell/SettingsRow.qml`):
   the clocks, volume, mic, network, Bluetooth, battery and session
-  dropdowns. The system monitor's and the sharing pill's have none: their
-  right-click opens Bar, which isn't about them, nor does the session menu while it asks about a blocked
-  action.
+  dropdowns.
+  - The system monitor's and the sharing pill's have none: their
+    right-click opens Bar, which isn't about them.
+  - The config errors' list has none either, since no page fixes a config,
+    and nor does the notification center (§9).
+  - The session menu hides its row while it asks about a blocked action.
 - **Hovered, a target shows its whole span** as a rounded rect, the text
   color at 8% over whatever fill it has, and 15% while pressed
   (`Theme.hover`, `Theme.pressed`). So it reads on both palettes, on the
@@ -2621,13 +2627,14 @@ See [`bar.png`](docs/mocks/bar.png).
   makes the popup a `Qt::ToolTip` window (0.3.1,
   `src/window/popupwindow.cpp`, `completeWindow`), which takes no hover
   or clicks.
-- **So the first click on another bar icon only closes the open popover.**
+- **So on Hyprland, the first click on another bar icon only closes the
+  open popover.**
   `grabFocus` is an `xdg_popup` grab, and Hyprland adds only the popup and
   an `xdg` parent to it, never a layer-shell parent such as the bar
   (Hyprland 0.56.2, `protocols/XDGShell.cpp`, `addOrStartGrab`). A press on
   the bar goes to the popup and only ends the grab (`InputManager.cpp`,
   `mouseMoveUnified`). A `HyprlandFocusGrab` with every bar in it was tried
-  instead, and it left every popover dead, as that tooltip.
+  instead, and it left every popover as dead as a `Qt::ToolTip` window.
 - **The notification center's grab takes in every bar.** It's a layer
   surface, not a popup, so a click on another monitor's bar closes it and
   acts there.
@@ -2666,16 +2673,23 @@ See [`bar.png`](docs/mocks/bar.png).
 
 ### 7.3 Clocks
 
-- **The bar shows each zone set to be in it, then local's clock,** as
-  `MMM d HH:MM`. Every zone is in the bar unless its entry says
-  `"bar": false` (below), and the popover lists them all, so a machine can
-  keep several zones a click away and two or three on the bar. tide,
-  tide for macOS and tide for Chrome read the same setting and show it the same way. It
-  used to show local's clock alone, by the maintainer's choice after using
-  it on a laptop; untick the zones there to get that back.
-- **Zones:** America/Los_Angeles, America/New_York, Europe/London. They show as
-  **`SF HH:MM`**, **`NYC HH:MM`** and **`LON HH:MM`** in 24-hour time with
-  tabular figures.
+- **The bar shows each zone set to be in it, then local's clock.** Every
+  zone is in the bar unless its entry says `"bar": false` (below), and the
+  popover lists them all, so a machine can keep several zones a click away
+  and two or three on the bar. tide for Linux, macOS and Chrome read the
+  same setting and show it the same way. The bar used to show local's
+  clock alone, by the maintainer's choice after using it on a laptop; turn
+  off each zone's **Bar** button on the Clocks page to get that back.
+- **Zones:** America/Los_Angeles, America/New_York, Europe/London, shown
+  as **`SF HH:MM`**, **`NYC HH:MM`** and **`LON HH:MM`**. Local's clock
+  is `MMM d HH:MM`. Times have tabular figures, and are 24-hour unless
+  `hour24` is off (below).
+- **The bar and its tooltip draw a zone the same way.** Hovering the
+  clocks shows each zone that isn't in the bar, in order, on one line of
+  the bar's tooltip (§7.4), such as `SF 09:41 · NYC 12:41 · LON 17:41`.
+  With every zone in the bar, there's no tooltip. Each rule below for a
+  zone's label, its day, hiding the local zone and scrubbing holds in the
+  bar and the tooltip alike (`shell/lib/clocks.mjs`'s `barClocks`).
 - **The time is right within a second of waking from sleep,** on the
   bar, the popover and the lock, and after the time is set. Quickshell's
   `SystemClock` waits for the next minute on a timer that stops while the
@@ -2684,16 +2698,13 @@ See [`bar.png`](docs/mocks/bar.png).
   woke (`PrepareForSleep`, heard through `gdbus monitor`, from `Sleep.qml`).
   It also checks the wall clock each second and redraws when it has jumped,
   which catches a time change and a wake logind didn't report.
-- **Hovering the clocks** shows each zone that isn't in the bar on one
-  line, in order, such as `SF 09:41 · NYC 12:41 · LON 17:41`, in the bar's
-  hover text (§7.4). With every zone in the bar, there's no hover text.
 - **Place labels don't change at DST**, so the bar looks the same all year.
   A label can be switched per zone to `"abbr"`, tzdata's current abbreviation
   (PDT↔PST, EDT↔EST, BST↔GMT), or to any fixed text.
-- **Abbreviations come from tzdata**, the same source as `date +%Z`. They
-  appear in the popover, and in the hover line for any zone set to `"abbr"`.
-  CLDR/ICU, which QML's `Intl` and most JS libraries use, can't produce the
-  three in any single locale:
+- **Abbreviations come from tzdata**, the same source as `date +%Z`. The
+  popover shows every zone's, and the bar and tooltip show one for any
+  zone set to `"abbr"`. CLDR/ICU, which QML's `Intl` and most JS libraries
+  use, can't produce the three in any single locale:
   - **en-US** gives `PDT`, `EDT`, but **`GMT+1`** for London in summer.
   - **en-GB** gives `BST`, but `GMT-7` for Los Angeles.
 
@@ -2704,10 +2715,10 @@ See [`bar.png`](docs/mocks/bar.png).
   each transition. Tests pin both sides of every DST change (§20).
   For local, it also gives the zone's main city and its coordinates from
   tzdata's zone tables, for sunrise and sunset (§15).
-- **Local is the bar's last item, on the far right.** Any listed zone that
-  is the same zone as local is left out of the hover line, whichever zone
-  that is, while `dedupeLocal` is on, as it is by default (below): in
-  London it shows SF and NYC, and in New York SF and LON.
+- **Local is the bar's last item, on the far right.** A listed zone that
+  is the same zone as local is left out of the bar and the tooltip,
+  whichever zone that is, while `dedupeLocal` is on, as it is by default
+  (below). In London the bar shows SF and NYC, and in New York SF and LON.
   Decided in review of this spec.
   - "Same zone" compares zone IDs. When `$TZ` is set, local's ID is the
     zone it names (`UTC` when it's empty); otherwise it's the target of
@@ -2715,14 +2726,15 @@ See [`bar.png`](docs/mocks/bar.png).
     (a `$TZ` that names no zone, a copied file) hides nothing.
   - **Hiding is best effort.** It must work for a zone named by `$TZ` or by
     `/etc/localtime`'s link. Any other setup (a malformed or custom
-    `/etc/localtime`, `$ZONEINFO` overrides, link names) may list the local
-    zone in the hover line too; that's accepted, not a bug to chase.
+    `/etc/localtime`, `$ZONEINFO` overrides, link names) may show the local
+    zone too; that's accepted, not a bug to chase.
   - A zone that only shares the current offset (Arizona against Los Angeles
     in summer) stays, so no zone appears and disappears at a DST change.
   - The popover still lists the hidden zone, marked as local.
-- **Different day.** A zone whose date differs from local shows
-  `−1` or `+1` after its time in the hover line (`−2` or `+2` only between zones either side of the date
-  line, such as UTC−12 and UTC+14).
+- **Different day.** A zone whose date differs from local's shows `−1` or
+  `+1` after its time: small and raised in the bar, after a space in the
+  tooltip. `−2` and `+2` happen only between zones either side of the
+  date line, such as UTC−12 and UTC+14.
 - **Popover** ([`clocks.png`](docs/mocks/clocks.png)): opened by a click on
   the clock. It shows:
   - each zone with its city, current abbreviation and offset from local;
@@ -2731,10 +2743,10 @@ See [`bar.png`](docs/mocks/bar.png).
     a week before SF and NYC" — the week when the usual gap to London is off
     by an hour;
   - a month calendar with ISO week numbers.
-- **Scroll** over the clock to scrub time in 15-minute steps, local's and
-  the hover line's together, so they answer "what's 3 pm in SF here?". The
-  first step lands on the next quarter hour. A scrubbed time shows in the
-  accent color, and it snaps back when the pointer leaves.
+- **Scroll** over the clock to scrub time in 15-minute steps, every clock
+  in the bar and the tooltip together, so they answer "what's 3 pm in SF
+  here?". The first step lands on the next quarter hour. A scrubbed time
+  shows in the accent color, and it snaps back when the pointer leaves.
 - **Config:** a list of `{zone, label}` in `~/.config/tide/clocks.json`,
   defaulting to the three above. A machine that needs other zones sets its
   own list in **`clocks.local.json`**, which replaces the shared list
@@ -2747,11 +2759,18 @@ See [`bar.png`](docs/mocks/bar.png).
   - **Not supported:** the old link names (`US/Pacific`, `GB`);
     abbreviations (`PST`); offsets (`+05:30`); POSIX rules; and file
     paths.
-  - **An unsupported zone is an error at load** that names the entry and
-    points at `timedatectl list-timezones`. The last good list stays in
-    effect. The check is by form, not against tzdata's full list, so an
-    old link name under a city area (`Asia/Calcutta`) still loads. It
-    shows the right time, but never counts as the local zone.
+  - **A zone `tide-tz` refuses is an error at load** that names the entry.
+    The last good list stays in effect. `tide-tz` checks each zone in two
+    steps:
+    - **By form.** One that isn't `UTC` or under a tzdata area
+      (`America/`, `Europe/` and the rest) gets "unknown time zone", and
+      points at `timedatectl list-timezones`. The check isn't against
+      tzdata's full list, so an old link name under a city area
+      (`Asia/Calcutta`) passes. It shows the right time, but never counts
+      as the local zone.
+    - **Against the system's tzdata.** One of the right form that tzdata
+      doesn't have (`Europe/Atlantis`) fails to load, with Go's own
+      error.
   - `label` is any one line of text, `""` for just the time, or `"abbr"`
     (above). A line break is an error, since the bar is one line.
   - `bar`, `true` or `false`, says whether the zone shows in the bar. It's
@@ -2761,9 +2780,9 @@ See [`bar.png`](docs/mocks/bar.png).
   - The file can instead be an object: the list as `clocks`, beside two
     switches, `hour24` and `dedupeLocal`, each `true` or `false`. Any of
     the three can be left out.
-  - `hour24` off shows the bar's, the popover's and the lock's times as
-    `4:30 PM` rather than `16:30`. The greeter stays 24-hour: it runs
-    before anyone logs in, with no one's settings to read.
+  - `hour24` off shows the bar's, the tooltip's, the popover's and the
+    lock's times as `4:30 PM` rather than `16:30`. The greeter stays
+    24-hour: it runs before anyone logs in, with no one's settings to read.
   - `dedupeLocal` off shows a listed zone that is the local one, beside
     local, rather than hiding it.
   - Both default to on. A switch `clocks.local.json` sets wins over the
@@ -2772,27 +2791,46 @@ See [`bar.png`](docs/mocks/bar.png).
     for the list's zones to load, so a list refused for an unknown zone
     keeps the last good switches as well.
   - The lock reads the two files itself. It runs no `tide-tz`, so it
-    refuses a list only for a zone's form, as `tide-tz` does first.
+    refuses a list only for a zone's form, `tide-tz`'s first step.
 
 ### 7.4 Status icons
 
-| Icon | Shows | Click | Scroll / other |
+| Icon | Shows | Click | Tooltip, scroll and other |
 |---|---|---|---|
-| **Presenting** (accent) | presenter mode is on (§10) | turns presenter mode off | hover: "Presenting: Do not disturb and keep awake", as tide for macOS's |
+| **Presenting** (accent) | presenter mode is on (§10) | turns presenter mode off | tooltip: "Presenting: Do not disturb and keep awake", as tide for macOS's |
 | Privacy: **Sharing** (red) | an xdph PipeWire screencast stream has a consumer (§12) | what is being shared (screen or window), and the app reading it; stop it from the app | — |
-| Privacy: mic (orange) | any app is capturing the microphone; the mic slashed while every mic being recorded from is muted (`Super+Shift+M` mutes them all), so a headset an app picked still shows live | per-app list with mute | hover: "Mic on" or "Mic off", as the OSD says, and how many apps are recording |
+| Privacy: mic (orange) | any app is capturing the microphone; the mic slashed while every mic being recorded from is muted (`Super+Shift+M` mutes them all), so a headset an app picked still shows live | per-app list with mute | tooltip: "Mic on" or "Mic off", as the OSD says, and how many apps are recording |
+| Config errors: a warning triangle, amber | only while the compositor's config has errors, or while an updated tidewm waits for the next login (below) | each error, as the compositor reported it (tidewm gives the file and line, then what's wrong) | tooltip: "tidewm's config has 2 errors", or Hyprland's |
 | Tray items | SNI icons from apps | the app's menu (DBusMenu) | as the app defines |
-| Config errors (tidewm's session): a warning triangle, amber | only while tidewm's config has errors | each error, as tidewm reported it: the file and line, then what's wrong | hover: "tidewm's config has 2 errors" |
-| Keyboard layout | up to three letters of the main keyboard's layout (US, DVO, GER), as tide for macOS's; only once there are two layouts | the next layout, as `Super+Alt+Space` (§16) | hover: the layout's full name |
-| Keep awake: a cup of coffee | always there: faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off; the OSD says which | hover: what it's doing, in the OSD's words |
-| Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | hover: "Bluetooth off", or "Bluetooth on" with what's connected: one or two by name, else how many, or "nothing connected" |
-| Bluetooth audio | one icon per connected headphones, headset or speakers, beside Bluetooth | the Bluetooth popover | hover: its name and battery |
-| Network | wired / Wi-Fi strength / wired connecting or not connected / VPN lock / offline | wired devices, with a choice of saved profiles; network list, with a network's password asked for in place; VPNs; *connections* opens `nm-connection-editor` | hover: the Wi-Fi network's name and signal %, or a cable's speed, then no internet and the VPN |
-| Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5%; hover: the level ("Sound 64%") or "Muted", then the output's name |
-| Battery | % and charging, red at 20% and below | power profile (performance / balanced / saver), time left | hover: %, then charged, charging and when it's full, or the time left |
-| System monitor | CPU %; amber when the CPU is hot or memory is 90% full, red while it throttles or is critically hot | a readout of CPU, memory and temperature, then tabs: **CPU** (the default: temperature, clock, thermal throttling, the five processes using the most CPU) and **Memory** (memory, swap, the five using the most) | hover: CPU %, then throttling, hot or memory nearly full |
-| Notifications | dot when unread; a slashed bell for DND, Adwaita's `notifications-disabled-symbolic` | notification center | middle-click toggles DND; hover: how many arrived since the center was last open, after "Do not disturb" while it's on |
-| Session | — | lock, log out, suspend, restart, shut down | hover: what it's for |
+| Keyboard layout | up to three letters of the main keyboard's layout (US, DVO, GER), as tide for macOS's; only once there are two layouts | the next layout, as `Super+Alt+Space` (§6.6) | tooltip: the layout's full name |
+| Keep awake: a cup of coffee | there unless the Bar page hides it (§7.1): faint while off, in the accent color while on (you asked for it, presenter mode is on, or the mic is live) | turn on, or off; the OSD says which | tooltip: what it's doing, in the OSD's words |
+| Bluetooth | one glyph: faint while off, in the text color while on; hidden with no adapter | device list, connect/disconnect; *pair* opens `blueman-manager` | tooltip: "Bluetooth off", or "Bluetooth on" with what's connected: one or two by name, else how many, or "nothing connected" |
+| Bluetooth audio | one icon per connected headphones, headset or speakers, beside Bluetooth | the Bluetooth popover | tooltip: its name and battery |
+| Network | wired / Wi-Fi strength / wired connecting or not connected / VPN lock / offline | wired devices, with a choice of saved profiles; network list, with a network's password asked for in place; VPNs; *connections* opens `nm-connection-editor` | tooltip: the Wi-Fi network's name and signal %, or a cable's speed, then no internet and the VPN |
+| Volume | an icon for mute and level, then the level as a %, dimmed while muted | output and input devices, per-app levels, mute | scroll changes by 5%; tooltip: the level ("Sound 64%") or "Muted", then the output's name |
+| Battery | % and charging, red at 20% and below | power profile (performance / balanced / saver), time left | tooltip: %, then charged, charging and when it's full, or the time left |
+| System monitor | CPU %; amber when the CPU is hot or memory is 90% full, red while it throttles or is critically hot | a readout of CPU, memory and temperature, then tabs: **CPU** (the default: temperature, clock, thermal throttling, the five processes using the most CPU) and **Memory** (memory, swap, the five using the most) | tooltip: CPU %, then throttling, hot or memory nearly full |
+| Notifications | dot when unread; a slashed bell for DND, Adwaita's `notifications-disabled-symbolic` | notification center | middle-click toggles DND; tooltip: how many arrived since the center was last open, after "Do not disturb" while it's on |
+| Session | — | lock, log out, suspend, restart, shut down | tooltip: what it's for |
+
+**Tooltips.** Every status icon says what it shows, % included, in a
+tooltip while the pointer is over its click target: one line, below a top
+bar and above a bottom one, as tide for macOS's bar does, and in tide for
+macOS's words where it has the same icon. It stays away while a popover or
+the notification center is open, so it never covers one. It's one
+component, `BarTip`, so they all look alike.
+
+**Spacing.**
+
+- The status icons sit 10 px apart, and the icon before the clocks sits
+  as far from the first clock's text. The tray sits 14 px from its
+  neighbors. Whatever the order, the last item's text or icon ends 11 px
+  from the bar's edge (`shell/lib/baricons.mjs`'s `arranged`).
+- The clocks sit 12 px apart: 5 px inside each, either side of its text,
+  and 2 px between them.
+- The volume's % and the CPU's are held as wide as two digits, so the
+  icons around them don't move as the level changes, except at 100%. Room
+  for three would leave a blank after every reading below 100%.
 
 **Config errors.** tidewm leaves a bad config line out and starts
 anyway, so a key or a setting is missing with nothing to say why (its
@@ -2852,37 +2890,6 @@ reload could take most key bindings with it (maintainer, 2026-11-14).
 - The config can't wait for the login instead: the new tidewm reads the
   same file as it starts.
 
-**Wired.** A cable wins over Wi-Fi on the icon. With nothing else up, the
-icon shows a wired connection on its way up, and a cable that's in with
-nothing up on it. The popover lists each wired device above Wi-Fi: "Wired"
-(or "Wired (enp3s0)" when there are several), then what it's doing:
-connected with its speed, connecting, or unplugged. A click disconnects
-one that's up and connects one with a cable in. A device with two or more
-saved profiles lists them under it, the one that's up checked, and a click
-on another switches to it with `nmcli connection up uuid … ifname …`,
-which takes down the one that's up in the same step. Quickshell 0.3 gives
-the devices, cables, speeds and profiles, but not which profile is up, so
-that comes from the same `nmcli connection show` as the VPNs. Its own
-`connectWithSettings` does nothing on a network that's already connected.
-
-**Hover text.** Every status icon says what it shows when the pointer
-is over its click target, % included, in one line under it, as tide for macOS's
-bar does and in tide for macOS's words where it has the same icon. It stays away
-while a popover or the notification center is open, so it never covers
-one. It's one component, `BarTip`, so they all look alike.
-
-**Spacing.**
-
-- The status icons sit 10 px apart, and the icon before the clocks sits
-  as far from the first clock's text. The tray sits 14 px from its
-  neighbors. Whatever the order, the last item's text or icon ends 11 px
-  from the bar's edge (`shell/lib/baricons.mjs`'s `arranged`).
-- The clocks sit 12 px apart: 5 px inside each, either side of its text,
-  and 2 px between them.
-- The volume's % and the CPU's are held as wide as two digits, so the
-  icons around them don't move as the level changes, except at 100%. Room
-  for three would leave a blank after every reading below 100%.
-
 **Tray menus.**
 
 - The shell draws an app's menu itself, like its other menus, from the
@@ -2894,6 +2901,41 @@ one. It's one component, `BarTip`, so they all look alike.
 - A click on an entry sends it to the app and closes the menu.
 - A submenu opens in the menu's place, under a row that goes back.
 - A checked entry shows a check mark, as the battery's power profile does.
+
+**Bluetooth** ([`bar.png`](docs/mocks/bar.png)).
+
+- The icon is one glyph with two states, off and on. Off draws it faint,
+  as keep awake is while off; blocked (rfkill) and turning off count as
+  off.
+- Connecting a device doesn't change it. A line through it, or an *x*,
+  read as three states where people expect two.
+- With no adapter it's hidden: there's nothing to turn on.
+- Each connected audio device gets its own icon beside it, by the kind
+  BlueZ gives it (`class_to_icon`, BlueZ 5.x): headset, headphones, or any
+  other audio device, drawn as speakers. Mice, keyboards and the rest get
+  none.
+- Its tooltip shows the device's name, and its battery where it reports
+  one (Quickshell 0.3's `batteryAvailable` and `battery`). The bar shows
+  no battery text.
+
+**Network: wired.** A cable wins over Wi-Fi on the icon. With nothing
+else up, the icon shows a wired connection on its way up, and a cable
+that's in with nothing up on it. The popover lists each wired device above Wi-Fi: "Wired"
+(or "Wired (enp3s0)" when there are several), then what it's doing:
+connected with its speed, connecting, or unplugged. A click disconnects
+one that's up and connects one with a cable in. A device with two or more
+saved profiles lists them under it, the one that's up checked, and a click
+on another switches to it with `nmcli connection up uuid … ifname …`,
+which takes down the one that's up in the same step. Quickshell 0.3 gives
+the devices, cables, speeds and profiles, but not which profile is up, so
+that comes from the same `nmcli connection show` as the VPNs. Its own
+`connectWithSettings` does nothing on a network that's already connected.
+
+**Battery.** The icon turns red at 20% and below. A critical
+notification at 7%, and hibernating at 3% where hibernation is set up
+(suspending otherwise), are planned (`TODO.md`). Until then only
+UPower's own critical action acts on a dying battery *(unverified)*: the
+Power page sets no thresholds (§16).
 
 **System monitor** ([`sysmon.png`](docs/mocks/sysmon.png)).
 
@@ -2924,27 +2966,11 @@ one. It's one component, `BarTip`, so they all look alike.
 - `tide-sysmon` reads `/proc` and `/sys` for it, so the parsing is tested
   against a fake tree and needs no privileges.
 
-**Bluetooth** ([`bar.png`](docs/mocks/bar.png)).
+## 8. Switcher, launcher and text input
 
-- The icon is one glyph with two states, off and on. Off draws it faint,
-  as keep awake is while off; blocked (rfkill) and turning off count as
-  off.
-- Connecting a device doesn't change it. A line through it, or an *x*,
-  read as three states where people expect two.
-- With no adapter it's hidden: there's nothing to turn on.
-- Each connected audio device gets its own icon beside it, by the kind
-  BlueZ gives it (`class_to_icon`, BlueZ 5.x): headset, headphones, or any
-  other audio device, drawn as speakers. Mice, keyboards and the rest get
-  none.
-- Hovering one shows the device's name, and its battery where it reports
-  one (Quickshell 0.3's `batteryAvailable` and `battery`). The bar shows
-  no battery text.
-
-Critical battery (7%) is a critical notification. At 3% the machine
-hibernates if hibernation is set up, and otherwise suspends.
-
-## 8. Switcher and launcher
-
+The switcher, whose Apps tab is the launcher (§8.1–§8.3), and the
+launcher on Plasma (§8.5); the picker for copied text, characters and
+snippets (§8.4); accents on a held letter (§8.6); and the overview (§8.7).
 See [`switcher.png`](docs/mocks/switcher.png).
 
 ### 8.1 One switcher with tabs
@@ -2953,63 +2979,67 @@ See [`switcher.png`](docs/mocks/switcher.png).
   - **Apps:** the launcher (§8.2).
   - **Workspaces:** every workspace in the bar's order, each with its
     name and app icons, the current one marked. Enter goes there. The
-    standing ones are always listed, made or not, and Enter on one that
-    isn't made yet makes it (§6.5).
-  - **Windows:** every window on any workspace, each with its icon,
-    title and workspace. Enter goes to it, switching workspace. A
-    minimized window is listed under the workspace it came from, marked
-    minimized, and Enter restores it (§6.7). Each browser window's tabs
-    are listed under it (§8.3).
+    standing ones are always listed, made or not: one that isn't made yet
+    says so, and Enter on it makes it (§6.5).
+  - **Windows:** every window on any workspace, the one used last first,
+    each with its icon, title and workspace. Enter goes to it, switching
+    workspace. A minimized window is listed under the workspace it came
+    from, marked minimized, and Enter restores it (§6.7). Each browser
+    window's tabs are listed under it (§8.3).
   - **Attention:** every window wanting attention (§14.4), on any
     workspace, most recent first. Enter goes there, which clears its
     mark. With none, the tab says so.
   - **Actions:** every quick action (§8.2) but the settings rows, in
-    their own order: screenshots, lock, log out, suspend, restart, shut
-    down, do not disturb, dark style, keep awake, presenter mode, clear
-    clipboard history, reload shell. Enter runs one, as on Apps; a power
-    action asks there when something blocks it. It has no key of its own:
-    `Tab` and `Shift+Tab` reach it.
-- **Each key opens it on its own tab:** a tap of `Super` and `Super+Space` on Apps, `Super+A` on Attention (§6.6). Workspaces has no key of its own: `Tab` reaches it.
-  The same key again, or `Esc`, closes it; another tab's key moves to
-  that tab.
-  - `conf`'s keys run `qs -c tide ipc call switcher toggle TAB`, and
-    `launcher toggle` for Apps. The tap of `Super` is the `tide:launcher`
-    global shortcut (§8.2).
-  - The Windows tab lists the window used last first. A workspace that
-    isn't made yet says so on the Workspaces tab.
-- **`Tab` / `Shift+Tab`** move to the next or previous tab, and wrap.
-- Typing filters the tab you're on with the launcher's fuzzy scorer:
-  names on Workspaces, titles and app names on Windows and Attention.
-- `↑`/`↓` or `Ctrl+N`/`Ctrl+P` move the selection, on every tab.
+    their own order. Enter runs one, as on Apps; a power action asks there
+    when something blocks it.
+- **Where.** Centered near the top of the focused monitor, over a dimmed
+  backdrop. It takes the keyboard while it's open (§14.2).
+- **Keys that open it.** Each opens it on its own tab: a tap of `Super`
+  and `Super+Space` on Apps, and `Super+A` on Attention (§6.6). The same
+  key again, or `Esc`, closes it; another tab's key moves to that tab.
+  Workspaces, Windows and Actions have no key of their own: `Tab` reaches
+  them.
+  - tide's Hyprland and tidewm configs bind them (`hypr/hyprland.lua`,
+    `tidewm/tide.conf`) to `qs -c tide ipc call switcher toggle TAB`, and
+    `launcher toggle` for Apps. On Hyprland, the tap of `Super` is the
+    `tide:launcher` global shortcut instead (§8.2).
+- **Keys inside it,** on every tab:
+  - `Tab` and `Shift+Tab` move to the next or previous tab, and wrap.
+  - `↑`/`↓` or `Ctrl+N`/`Ctrl+P` move the selection.
+  - `Enter` runs or goes to the selection; `Esc` closes.
+  - Typing filters the tab you're on with the launcher's fuzzy scorer
+    (§8.2): names on Workspaces, titles and app names on Windows and
+    Attention, and the actions' names on Actions.
 - `Ctrl+M` on the Windows and Attention tabs mutes or unmutes the
   selected row's app (§9, *Muted apps*): M for mute, decided by the
-  maintainer. The footer shows it there. tide for macOS's is `Cmd+M`, the same
-  physical key on a Mac.
+  maintainer. tide for macOS's is `Cmd+M`, the same physical key on a Mac.
 - **The footer** names only the keys that work on the tab you're on:
   `Ctrl+↵` and `PgDn` on Apps, `Ctrl+M` on Windows and Attention, and
   `Tab` for the next tab on all five. Hints that don't fit on one line
   wrap onto a second.
-- It's drawn like the launcher was, and takes the keyboard the same way
-  (below, and §14.2).
 - **The name prompt** (§6.5) is not one of its tabs. It names a
   workspace, rather than choosing where to go, and opens on its own.
 
 ### 8.2 Apps: the launcher
 
-- **Open.** `Super+Space`, or `Tab` from another tab.
-  - The tap of `Super` is a release bind on `SUPER_L` that fires a Hyprland
-    global shortcut, `tide:launcher`, handled by Quickshell's
-    `GlobalShortcut`; it opens the switcher on Apps, as on tide for macOS and
-    tide for Chrome. That is faster than spawning `qs ipc` per keypress.
+- **Open.** `Super+Space`, a tap of `Super`, or `Tab` from another tab.
+  The tap needs Hyprland 0.57 or later, or tidewm.
+  - **Hyprland.** The tap is a release bind on `SUPER_L` that fires a
+    Hyprland global shortcut, `tide:launcher`, handled by Quickshell's
+    `GlobalShortcut`; it opens the switcher on Apps, as on tide for macOS
+    and tide for Chrome. That is faster than spawning `qs ipc` per keypress.
   - **Caveat:** on Hyprland 0.56.x a release bind on `SUPER_L` fires on
     *every* Super release, including after `Super+T`. The keybind refactor
     that fixes this (hyprwm/Hyprland#15568, then #15904) is in 0.57.0.
-  - So `conf` binds the tap only when `hl.version()` is 0.57 or later. On
-    0.56 the tap does nothing, and `Super+Space` opens the launcher. Still
-    to check on a real session: `Super+T`, `Super`+drag and `Super`+click
-    must not open it.
-- **Where.** Centered near the top of the focused monitor, over a dimmed
-  backdrop. Keyboard focus is exclusive while it's open.
+  - So tide's Hyprland config (`hypr/hyprland.lua`) binds the tap only
+    when `hl.version()` is 0.57 or later. On 0.56 the tap does nothing, and
+    `Super+Space` opens the launcher. Still to check on a real session:
+    `Super+T`, `Super`+drag and `Super`+click must not open it.
+  - **tidewm.** `tidewm/tide.conf` binds `--release Super_L` to `qs -c
+    tide ipc call launcher toggle`. tidewm runs a `--release` binding only
+    when no other key, button, scroll or gesture came while the key was
+    down, so `Super+T`, `Super`+click and `Super`+drag don't open it
+    (tidewm's `docs/config.md`).
 - **What it searches.**
   - Every `.desktop` entry on `XDG_DATA_DIRS`, including its desktop actions
     (such as "New Incognito Window").
@@ -3036,7 +3066,8 @@ See [`switcher.png`](docs/mocks/switcher.png).
     COSMIC's settings and their panels: every one says `OnlyShowIn`.
   - KDE's System Settings doesn't, for other desktops: its
     `kdesystemsettings.desktop` says `NotShowIn=KDE`. So a `Settings`
-    entry is also left out when it runs a desktop's settings app:
+    entry is also left out when it runs a desktop's settings app, one of
+    `SETTINGS_APPS` (`shell/lib/launcher.mjs`):
     `systemsettings`, `systemsettings5`, `kcmshell6`, `kcmshell5`,
     `gnome-control-center`, `xfce4-settings-manager`, `mate-control-center`,
     `cinnamon-settings`, `lxqt-config`, `budgie-control-center` or
@@ -3057,12 +3088,10 @@ See [`switcher.png`](docs/mocks/switcher.png).
     lifts a row over a better match, nor an app over a quick action.
   - An empty query lists the apps, most used first, then by name, Tide
     Settings among them. The other quick actions are the Actions tab's
-    (§8.1); a query still finds them here.
+    (§8.1); a query still finds them here, under the Actions heading.
   - The top hit is preselected, so `Super`, `s c r`, `Enter` is a window
     screenshot.
-- **Keys.**
-  - `↑`/`↓` or `Ctrl+N`/`Ctrl+P` move the selection.
-  - `Enter` runs the selection.
+- **Keys,** beside the switcher's (§8.1):
   - `Ctrl+Enter` runs it on a new workspace: it opens the name prompt
     (§6.5) first, and the app's first window goes to the workspace named
     there. It asks for one of home's apps too, which may then name home. A quick action opens no window, so there `Ctrl+Enter` does what
@@ -3078,29 +3107,34 @@ See [`switcher.png`](docs/mocks/switcher.png).
       is rather than moved.
   - `PgDn` jumps to the next section, `PgUp` back. `Tab` and `Shift+Tab`
     did, before they moved between the switcher's tabs.
-- **Sections.**
-  - Empty query: the apps you've used (Recent), then the other apps.
-  - A query: the top hit (Best match), then the other quick actions, then
-    the apps and their desktop actions, each in rank order.
-- **Quick actions:**
-  - Screenshot window / screen / region.
-  - Lock, log out, suspend, restart, shut down.
+- **Sections,** each under its heading:
+  - Empty query: the apps you've used (Recent), then the other apps
+    (Apps).
+  - A query: the top hit (Best match), then the other quick actions
+    (Actions), then the apps and their desktop actions (Apps), each in rank
+    order. The Actions heading names the rows the Actions tab lists, plus
+    any settings rows.
+- **Quick actions,** in their own order, which the Actions tab keeps:
+  - Screenshot window, screen and region.
+  - Lock, log out, suspend, restart and shut down.
   - Tide Settings, and one for each of its pages ("Mouse settings"),
-    which opens the panel on that page (§16). They're listed as apps, not
-    on the Actions tab. Tide Settings is one of the empty query's apps; a
-    page's row is found by its name and what it covers ("left-handed",
-    "wifi", "time zone"), so it's listed only for a query.
-  - Do not disturb, keep awake, presenter mode, and dark style. Dark style shows whether
-    it's on and until when, and flips light and dark until the schedule's
-    next change (§15).
+    which opens the panel on that page (§16). They're not on the Actions
+    tab. Tide Settings is one of the empty query's apps; a page's row is
+    found by its name and what it covers ("left-handed", "wifi", "time
+    zone"), so it's listed only for a query.
+  - Do not disturb, dark style, keep awake and presenter mode. Do not
+    disturb is there only while the shell is the notification server
+    (§9), as the bell is. Dark style shows whether it's on and until when,
+    and flips light and dark until the schedule's next change (§15).
   - Clear clipboard history (§8.4).
   - Reload shell.
 
   Power actions check logind inhibitors and ask only when something is
   blocking them.
 - **Remembering the previous window.** Opening the launcher records the
-  focused window's Hyprland `stableId`, so "Screenshot window" means the
-  window you were in, not the launcher.
+  focused window's Hyprland address, so "Screenshot window" means the
+  window you were in, not the launcher. The shot looks up its `stableId`
+  when it runs, or its rectangle when Hyprland reports none.
   - On tidewm it records the window's container ID, and finds it in
     `GET_TREE` when the shot runs. The scripts' `screenshot` reads only
     Hyprland's `stableId`, so the launcher passes the window's `rect` as
@@ -3112,7 +3146,7 @@ See [`switcher.png`](docs/mocks/switcher.png).
 
 ### 8.3 Browser tabs in the Windows tab
 
-- The Windows tab lists every browser tab too, after windows ship (§19).
+- The Windows tab lists every browser tab too: milestone M9 (§19).
 - **Nothing on Linux lists a browser's tabs from outside it.** Chrome's
   windows are toplevels; its tabs aren't, and no Wayland or D-Bus
   interface names them.
@@ -3124,8 +3158,9 @@ See [`switcher.png`](docs/mocks/switcher.png).
   then the shell focuses its window.
   - The connector is an extension of its own, for a store listing with one
     purpose. tide for Chrome tiles on chromeOS and lists tabs on Linux, two purposes
-    on a listing about tiling; the connector only lists tabs. Which one
-    Linux uses is still open.
+    on a listing about tiling; the connector only lists tabs. Linux takes
+    either, so the connector is the fallback in case the store won't list
+    tide for Chrome with both (`TODO.md`).
   - Chrome's remote debugging port would list tabs with no extension, but
     lets any local process drive the browser, so it isn't used.
   - Firefox has the same extension and native-messaging shape, later.
@@ -3225,34 +3260,35 @@ See [`switcher.png`](docs/mocks/switcher.png).
     windows only and says the browser's tabs aren't listed. No network
     call, so no hang.
 
-### 8.4 The picker: clipboard history and characters
+### 8.4 The picker: clipboard history, characters and snippets
 
 See [`picker.png`](docs/mocks/picker.png).
 
-- **One overlay, three tabs**, on `Super+V`, on `Super+;` on Characters,
-  and on `Super+Shift+V` on Fill:
-  - **Clipboard:** what you've copied, newest first, one line each. An
-    image shows as its format, size and dimensions.
-  - **Characters:** emoji and symbols, found by name: `arrow`,
+- **One overlay, three tabs**, each on its own key:
+  - **Clipboard** (`Super+V`): what you've copied, newest first, one
+    line each. An image shows as its format, size and dimensions.
+  - **Characters** (`Super+;`): emoji and symbols, found by name: `arrow`,
     `e acute`, `shrug`.
-  - **Fill:** your snippets (an address, a phone number) and Bitwarden's
-    logins, one row per field (below).
-- **It's its own overlay, not two more switcher tabs.** The switcher
-  takes you somewhere; the picker puts something on the clipboard. Kept
+  - **Fill** (`Super+Shift+V`): your snippets (an address, a phone
+    number) and Bitwarden's logins, one row per field (below).
+- **It's its own overlay, not three more switcher tabs.** The switcher
+  takes you somewhere; the picker puts text where you're typing. Kept
   apart, the switcher's `Tab` cycles only its own tabs.
-- It's drawn like the switcher (§8.1), on the focused monitor, and takes
-  the keyboard the same way (§14.2).
-- **Keys.** All single-modifier, like the rest of tide's.
-  - `Super+V` opens it on Clipboard. `Super+V` again, `Esc`, or a click
-    on the backdrop closes it.
-  - `Tab` / `Shift+Tab` move between the two tabs.
-  - `↑`/`↓` or `Ctrl+N`/`Ctrl+P` move the selection.
-  - `Enter` copies the selection to the clipboard, closes, and pastes
-    it into the window the picker opened over (below).
+- It's drawn and placed like the switcher, and takes the keyboard the
+  same way (§8.1).
+- **Keys.**
+  - A tab's key opens it on that tab. The same key again, `Esc`, or a
+    click on the backdrop closes it; another tab's key moves to that tab.
+  - `Tab`, `Shift+Tab`, the arrows and `Ctrl+N`/`Ctrl+P` work as in the
+    switcher (§8.1), across all three tabs.
+  - `Enter` on Clipboard or Characters copies the selection to the
+    clipboard, closes, and pastes it into the window the picker opened
+    over (below). On Fill it types the value instead (*The Fill tab*,
+    below).
   - `Shift+Delete` removes the selected entry from the history, as it
     removes a suggestion in a browser's address bar.
-  - `conf`'s key runs `qs -c tide ipc call picker toggle clipboard`.
-    `toggle characters` opens the other tab.
+  - tide's Hyprland and tidewm configs bind each key to `qs -c tide ipc
+    call picker toggle TAB`, with `clipboard`, `characters` or `fill`.
 - **Search.**
   - Clipboard: each entry's one-line preview, whitespace folded: its
     first 1,000 bytes.
@@ -3267,9 +3303,10 @@ See [`picker.png`](docs/mocks/picker.png).
     symbols, then emoji, each in Unicode's order. So `e acute` offers é and É, but
     not á.
   - With no query, the Characters tab lists the whole list in its order.
-- **Enter pastes.** It copies with `tide clipboard copy ID`, or `tide
-  clipboard put TEXT` for a character. Each exits once the clipboard holds
-  it, though wl-copy's child stays to serve it: its stderr goes to a file,
+- **Enter pastes,** on Clipboard and Characters. It copies with `tide
+  clipboard copy ID`, or `tide clipboard put TEXT` for a character. Each
+  exits once the clipboard holds it, though wl-copy's child stays to
+  serve it: its stderr goes to a file,
   since the child keeps it open (wl-copy.c, 2.2.1), and a pipe would wait
   until the clipboard is replaced.
 - Once the copy has worked, the shell sends the window
@@ -3328,7 +3365,7 @@ See [`picker.png`](docs/mocks/picker.png).
     in no command's arguments.
   - The plain text is only ever in memory and on the runtime directory's
     tmpfs, readable by you alone, and gone when each command exits.
-  - PAM unlocks the keyring at login (§14), so nothing asks. With it
+  - PAM unlocks the keyring at login (§11), so nothing asks. With it
     locked or not running, a copy isn't kept and the history can't be
     listed, each saying why, and `tide doctor` says the keyring is locked
     (§5.4).
@@ -3361,11 +3398,13 @@ See [`picker.png`](docs/mocks/picker.png).
   so nothing's left unencrypted. It's done once.
 - **The Clipboard page** can also turn the history off: then `tide
   clipboard store` keeps no new copy, and what's kept stays until it's
-  cleared or ages out. The shell writes them to
-  `~/.config/hypr/tide-clipboard.conf` (`history=on` or `off`,
-  `max_items=N`, `max_age_days=N`), which `store` reads at each copy, so
-  nothing restarts. A line it can't read is said on its stderr, in the
-  unit's journal, and passed over, so a bad file never stops the history.
+  cleared or ages out. The page saves its settings in
+  `clipboard.local.json` (§16.1). The shell copies them, from that and
+  `clipboard.json`, to `~/.config/hypr/tide-clipboard.conf`
+  (`history=on` or `off`, `max_items=N`, `max_age_days=N`), which
+  `store` reads at each copy, so nothing restarts. A line it can't read
+  is said on its stderr, in the unit's journal, and passed over, so a bad
+  file never stops the history.
   A smaller cap trims the history at the next copy.
 - **Wiping it.**
   - The launcher's **Clear clipboard history** action, and `tide
@@ -3486,8 +3525,9 @@ instead, for the Fill tab's values (scripts' `fill-menu` on KDE).
 ### 8.5 The launcher on KDE Plasma
 
 Plasma stays the fallback session (§5.5), and it gets tide's launcher
-on `Super+Space`: the same overlay, search and keys, listing Plasma's
-apps and its System Settings pages. Kickoff stays on the tap of `Super`.
+on `Meta+Space` (Plasma's name for `Super`): the same overlay, search and
+keys, listing Plasma's apps and its System Settings pages. Kickoff stays
+on the tap of `Meta`.
 
 - **Resident.** It's a second Quickshell config, `shell/kde.qml`, holding
   only the launcher. `tide-kde.service` runs it, `WantedBy=` and
@@ -3503,7 +3543,9 @@ apps and its System Settings pages. Kickoff stays on the tap of `Super`.
   Hyprland's.
 - **Tabs.** Apps, Workspaces, Windows and Actions. Attention is the focus
   guard's (§14), which Plasma doesn't run, and so is muting an app's
-  windows (Ctrl+M).
+  windows (`Ctrl+M`).
+  - `Ctrl+Enter` does what `Enter` does, and the footer leaves it out:
+    there are no tide workspaces to open an app on.
   - **Workspaces** are KWin's virtual desktops, in its order, and **Windows**
     every window KWin's own window search lists. Both come from KWin's
     D-Bus as the launcher opens, through `busctl --user --json=short`
@@ -3520,19 +3562,20 @@ apps and its System Settings pages. Kickoff stays on the tap of `Super`.
   - tide on KDE (mikelward/tide-kde), a KWin script, tiles those windows
     and names those desktops; the tabs need none of it.
 - **Apps.** Every entry `XDG_CURRENT_DESKTOP=KDE` shows, so Plasma's own
-  apps and System Settings, which the `SETTINGS_APPS` list (§8.2) drops
-  only under tide.
+  apps and System Settings, which `SETTINGS_APPS` (§8.2) drops only under
+  tide.
 - **System Settings pages.** Each page ships a desktop entry with
   `NoDisplay=true`, `X-KDE-AliasFor=systemsettings`, and an `Exec` of
   `systemsettings` or `kcmshell6` and the page's ID (kcmutils'
   `tools/kcmmetadatagenerator.cpp`).
   The launcher lists those, under their names with System Settings beside
   them, despite `NoDisplay`.
-- **Actions.** Lock (`loginctl lock-session`), log out
-  (`org.kde.LogoutPrompt`'s `promptLogout`, Plasma's own confirmation),
-  suspend, restart and shut down (`systemctl`), and screenshots
-  (Spectacle, onto the clipboard). The rest are tide's own: its settings, presenter mode,
-  keep awake and do not disturb, so they're left out.
+- **Quick actions.** Screenshots (Spectacle, onto the clipboard), lock
+  (`loginctl lock-session`), log out (`org.kde.LogoutPrompt`'s
+  `promptLogout`, Plasma's own confirmation), and suspend, restart and
+  shut down (`systemctl`), in that order. The rest are tide's own, so
+  they're left out: its settings, do not disturb, dark style, keep awake,
+  presenter mode, clear clipboard history and reload shell.
 - **Launching.** Through KDE's `kstart`, as Kickoff does, not `tide
   launch`, which places windows on tide's workspaces: an app by its
   desktop ID (`--application`), which reads its terminal and working
@@ -3642,7 +3685,7 @@ plain long press.
 | Letting go | the strip stays | the overlay stays | the accent stays | the list stays |
 | Table | built in | `base.json`, per locale | its own presets | `accents.json`, Plasma's format |
 
-**Either add-on:**
+**Running it:**
 
 - **Compositor-neutral.** fcitx5 reaches apps through the input-method
   and text-input protocols, which Hyprland and tidewm (its `ime.h`) both
@@ -3720,7 +3763,7 @@ compositors can't run here. It's tide for macOS's overview (tidemo SPEC.md
     starts on the focused window.
   - A click on a group's name goes to that workspace.
   - Typing filters the cards by title and app name, with the launcher's
-    fuzzy matcher.
+    fuzzy scorer (§8.2).
 - **Closing:** Esc, a click on empty space, or `overview toggle` again.
 - **No key yet.** `qs -c tide ipc call overview toggle` opens it, and a
   key of your own can run that. `Super+W`, as planned, is "Terminal on
