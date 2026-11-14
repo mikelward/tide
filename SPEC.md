@@ -1251,36 +1251,59 @@ See [`layouts.png`](docs/mocks/layouts.png).
 
 ### 6.1 Layouts
 
-| Symbol | Layout | Shape | Default for |
-|---|---|---|---|
-| `[]=` | Tile | master left (55%), stack right | 16:9, 16:10 |
-| `\|M\|` | Three-column | master centered (50%), stacks either side; 2 windows are 50/50, 3+ center the master | ultrawide (aspect ≥ 2.1) |
-| `\|\|=` | Two columns + stack | two full-height masters side by side, rest stacked on the right | — |
-| `[M]` | Monocle | one window fills the area; the bar shows `[n]`, the hidden count | — |
+| Symbol | Layout | Shape |
+|---|---|---|
+| `[]=` | Tile | the masters on the left, the stack on the right |
+| `\|M\|` | Three-column | the master centered, a stack either side; with one stack window, the master on the left as in tile |
+| `\|\|=` | Two columns + stack | the masters side by side at full height, the rest stacked on the right |
+| `[M]` | Monocle | every window fills the area; the bar shows `[n]`, the hidden count |
 
-- **New windows** join the stack at the end, and the master stays put,
-  unless the Layouts page says otherwise (§16).
-  - It can put them at the top of the stack, just after the masters; just
-    after the window that was focused; or in as the master. The others keep
-    their order.
+**Defaults.** These are tide for Linux's numbers, from `hypr/tide/layout.lua`
+and `geometry.lua`; other ports cite this table. tidewm has the same
+defaults. `setup()` takes the same settings, snake-cased
+(`ultrawide_aspect`). The code and the settings call a layout a *mode*.
+
+| What | Default | Limits | Setting in `layouts.json` (§16) |
+|---|---|---|---|
+| Tile | `mfact` 0.55, 1 master | 0 masters or more | `modes.tile` |
+| Three-column | `mfact` 0.5, 1 master | 1 master or more | `modes.threecol` |
+| Two columns + stack | `mfact` 0.72, 2 masters | 1 master or more | `modes.twocol` |
+| Monocle | no `mfact` or masters | — | — |
+| `mfact`, the masters' share of the width | as above | 0.1 to 0.9; each press of `Super+\` or `Super+/` moves it 0.025 (0.05 on tidewm) | each mode's `mfact`; the step is `setup()`'s `mfact_step` |
+| Ultrawide | a work-area aspect of 2.1 or more | | `ultrawideAspect` |
+| The layout a new part starts in | three-column on an ultrawide, tile on any other monitor | any of the four | `defaultMode` |
+| The layout cycle (`Super+.` and `Super+,`) | tile, three-column, two columns + stack, and round again. Monocle isn't in it: it has its own key, and from monocle the cycle goes on from the layout before it | | none; `setup()`'s `cycle` |
+| A lone window's width | 80% from an aspect of 2.1, 60% from 3.2, otherwise 100% | 10% to 100% | `single` |
+| Where a new window goes | `end`: the end of the stack | `end`; `top`, just after the masters; `next`, just after the focused window; `master` | `newWindow` |
+
+The work area is the monitor less the bar. A 3440×1440 monitor's has an
+aspect of about 2.45, so it's an ultrawide, and a 16:9 one's about 1.84.
+
+- **New windows** go where the table's last row says, `end` unless the
+  Layouts page says otherwise (§16). The master stays put, and the others
+  keep their order.
   - A window moved here from another workspace, or tiled again after
     floating, counts as new.
-- **Per workspace.** Each workspace remembers its layout. The default comes
-  from its monitor's aspect ratio. `mfact` and master count are per
-  workspace too, and per mode.
-  - A workspace that's removed (§6.5) takes them with it. One made again
+- **Per part.** Each part of a workspace, a monitor's share of it (§6.5),
+  keeps its own layout, and each layout there its own `mfact` and master
+  count. A new part starts in the layout its monitor's work area calls
+  for.
+  - A part that's removed (§6.5) takes them with it. One made again
     under the same name starts from the defaults.
-- **The single-window rule.** A workspace with one tiled window centers it at
-  **80%** width when the monitor's aspect is ≥ 2.1 (21:9 and wider).
-  Otherwise it is 100%.
-  - Both numbers are per-output settings.
-  - A 32:9 monitor probably wants 60%.
+- **The single-window rule.** A part with one tiled window centers it, at
+  the width the table gives for its work area's aspect: 80% on a 21:9
+  monitor, 60% on a 32:9 one. Where several rules match, the one with the
+  largest aspect wins.
+  - The rules go by aspect, not by monitor (§16).
   - Floating and fullscreen windows don't count toward "one window".
+  - Dragging the lone window's edge sets that part's own width (§6.6).
+- **Turning back from monocle.** Its key goes back to the layout before
+  it, or to the cycle's first, tile, for a part that started in monocle.
 - **Implementation.** One Lua layout, `lua:tide`, owns all four
-  modes, so the single-window rule lives in one place. It keeps each
-  workspace's mode, `mfact` and master count, and checks its settings when
+  layouts, so the single-window rule lives in one place. It keeps each
+  part's layout, `mfact` and master count, and checks its settings when
   the config loads, so a typo is an error rather than silently ignored.
-  - It keeps each workspace's window order too. Hyprland 0.56.2 adds each
+  - It keeps each part's window order too. Hyprland 0.56.2 adds each
     new window at the end of its own order, and a Lua layout can't change
     that order (`CLuaTiledAlgorithm::newTarget`).
   - Each of Hyprland's swaps exchanges two windows in its order, so the
@@ -1291,25 +1314,26 @@ See [`layouts.png`](docs/mocks/layouts.png).
     pointer to it, or with `no_warps`, focus its monitor
     (`CPointerController::warpTo`). A window opening on the other monitor
     would take its focus.
-  - A config load starts the layout afresh, so each workspace takes
-    Hyprland's order again, as it takes its default mode.
-- **Settings.** The mode a new workspace starts in, for an ultrawide and
-  for any other monitor, and where ultrawide begins, are settings, as are
-  each mode's `mfact` and master count and the single-window rule.
+  - A config load starts the layout afresh, so each part takes
+    Hyprland's order again, as it takes its default layout.
+- **Settings.** The table's rows that name a `layouts.json` key are
+  settings, on the Layouts page.
   - `setup()` takes them as options, and the Layouts page's go over those,
     from `~/.config/hypr/tide-layouts.lua`, which the shell writes (§16).
   - The page and the bar see only the defaults and `layouts.json`, not
-    `setup()`'s options. So `conf` passes none, and its settings go in
-    `layouts.json`.
+    `setup()`'s options. So tide's Hyprland config passes none, and a
+    setting belongs in `layouts.json`.
   - A settings file that can't be used is a notification, and the layout
     goes on without it, so a bad one never stops the config loading.
 - **The bar learns the layout** from Hyprland's event socket. The layout
   keys are Lua bindings in the Hyprland config, so they work even while the
-  shell restarts, and each one announces the new mode as
-  `custom>>tide-layout>>WORKSPACE,MODE`. The layout also announces a
-  workspace's mode whenever that workspace becomes active, so a restarted
-  shell catches up on the next switch. Until then, a monitor's current
-  workspace shows its default mode.
+  shell restarts, and each one announces the new layout as
+  `custom>>tide-layout>>WORKSPACE,MODE`, `WORKSPACE` being the part. The
+  layout also announces a part's layout whenever that part becomes
+  active, so a restarted shell catches up on the next switch. Until then,
+  a monitor's bar shows the default layout for its part.
+  - Each monitor's bar shows the layout of the part on that monitor, so
+    two bars can show different layouts.
   - On tidewm, the bar hears tidewm's own `layout` event, which names a
     monitor and its layout as either changes and on each switch. It
     counts monocle's hidden windows itself, since the event's `[n]` goes
@@ -1318,13 +1342,16 @@ See [`layouts.png`](docs/mocks/layouts.png).
     another monitor the default for its `GET_OUTPUTS` `rect`, which is
     already rotated, as tidewm picks a new part's layout.
 
-### 6.2 Focus cue: dim, and the focused window's shadow
+### 6.2 Focus cue: dimming inactive windows, shadows and borders
 
-- `dim_inactive` at **0.12**, with no borders and no gaps. Hyprland's dim
-  looks stronger than KDE's dim-inactive effect at the same number: 0.15,
-  the KDE setup's strength, looked too heavy in the first real session,
-  and 0.07 too faint to tell which window had the focus.
-- A workspace with one visible window never dims. With nothing to tell
+- Inactive windows are dimmed, with no borders and no gaps: Hyprland's
+  `dim_inactive` on, at a `dim_strength` of **0.12**. Hyprland's
+  dimming looks stronger than KDE's Dim Inactive effect at the same
+  number: 0.15, the KDE setup's strength, looked too heavy in the first
+  real session, and 0.07 too faint to tell which window had the focus.
+  - tidewm's `tide.conf` has `dim_inactive 0.07`. Whether its black layer
+    needs a lower number than Hyprland's dimming hasn't been tested.
+- A monitor showing one window never dims it. With nothing to tell
   apart, a dimmed lone window just looks wrong.
 - Video, picture-in-picture and screen-share preview windows get a `nodim`
   window rule, so a call on the other monitor doesn't look washed out.
@@ -1333,11 +1360,11 @@ See [`layouts.png`](docs/mocks/layouts.png).
   Borders page's **Rounded corners** turns that off, for square ones,
   and back on (maintainer, 2026-11-14). tidewm's windows are square, so
   the page has no such row there. On tidesway the shell writes
-  `corner_radius 6`, or `0`, with the dim strength, to
+  `corner_radius 6`, or `0`, with the dimming strength, to
   `~/.config/tidewm/tidesway.d/tide-appearance.conf`, which tidesway reads
   after the config and tidewm never does: tidewm fails on a line it
   doesn't know, and the two share a config.
-- The dim fades as focus moves, over 300 ms, as a new window fades in. On
+- Dimming fades as focus moves, over 300 ms, as a new window fades in. On
   tidewm, these are `fade_duration 300`.
 - **Shadows.** The focused window casts a soft shadow, tiled or floating:
   black at 27% by its edge, gone 8 px out. The Borders page's **Shadows**
@@ -1392,7 +1419,7 @@ in how long they last and what stays visible:
 
 | | Keys | What happens | Bar |
 |---|---|---|---|
-| **Monocle** (a layout) | ``Super+` ``, `Super+O` | Every window on the workspace fills the tiling area. `Super+J` / `K` flip between them, and new windows open full-size too. The same key goes back to the workspace's previous layout. | visible, showing `[n]` |
+| **Monocle** (a layout) | ``Super+` `` or `Super+O` | Every window on the workspace fills the tiling area. `Super+J` and `Super+K` flip between them, and new windows open full-size too. The same key goes back to the workspace's previous layout. | visible, showing `[n]` |
 | **Maximize** (this window) | `Super+X` | Just the current window covers the tiling area; the others stay tiled behind it. It lasts until you toggle it, close the window, or focus another window on the workspace. | visible |
 | **Fullscreen** (this window) | `Super+Shift+X`, or the app's own `F11` | The window covers the whole monitor, bar included. | hidden |
 
@@ -1401,13 +1428,13 @@ in how long they last and what stays visible:
   default; Keyboard's shortcuts can give it one (§16). tidewm's session
   has no restore.
 - **Hyprland pieces.** Maximize and fullscreen are Hyprland's own `fullscreen`
-  states: 1 is maximized, 0 is fullscreen. Monocle is a mode of the
-  tide layout.
+  states: 1 is maximized, 0 is fullscreen. Monocle is one of the tide
+  layout's own (§6.1).
 - **The bar** marks a workspace with a maximized or fullscreen window with a
   small corner glyph, so a hidden stack of windows is never a surprise.
-- **Popups over fullscreen.** Popups still appear over a fullscreen window,
-  except while it's playing video fullscreen. Then they're held, as during a
-  screen share (§9).
+- **Popups over fullscreen.** Popups appear over a fullscreen window.
+  Holding them while it plays video, as a screen share holds them (§9),
+  is planned (`TODO.md`).
 
 ### 6.4 Dialogs and other floating windows
 
@@ -1421,8 +1448,8 @@ in how long they last and what stays visible:
 
   Hyprland floats most of these on its own. Window rules catch the rest by
   class or title: `pavucontrol`, `nm-connection-editor`, `blueman-manager`,
-  portal file choosers, "Open File" / "Save File" / "Save As" titles, and an
-  empty class with an empty title.
+  portal file choosers, the titles "Open File", "Save File" and "Save As",
+  and an empty class with an empty title.
 - **Chrome's own notification popups.** Chrome checks for a notification
   server once, as it starts. If none answers, it draws its own popups until
   it restarts. On Wayland each popup is a toplevel with no parent, app ID or
@@ -1448,8 +1475,9 @@ in how long they last and what stays visible:
     (`CViewHitTester::windowAt`), and starts a resize on a press there
     that's outside the window (`CInputManager::processMouseDownNormal`).
   - So those 8 px take clicks from whatever is below them.
-- **Any window can be floated** with `Super+Shift+F` / `Super+Insert`.
-  Floating windows remember their size and position per app for the session.
+- **Any window can be floated** with `Super+Shift+F` or `Super+Insert`.
+  On tidewm, a floating window's size and place are remembered per app,
+  for the session. tide's Hyprland config sets nothing for that.
 - **Your own rules** float more: the Floating settings page (§16), in
   `floating.json` and `floating.local.json`. Each rule names a window class
   and, optionally, a pattern for its title.
@@ -1457,10 +1485,11 @@ in how long they last and what stays visible:
   - A new rule floats every matching window, the ones already open too,
     but not one you tiled by hand under a rule that already covered it.
   - A window floated by hand can become a rule. The page's *Floating now*
-    lists it, and `Super+Alt+F` opens the page for the focused window.
-    Either fills in a rule for you to trim and add.
-  - Floating a window with `Super+Shift+F` or `Super+Insert`, when no rule
-    covers it (`conf`'s own included), asks once: a notification, *Always
+    lists it, and `Super+Alt+F` opens the page for the focused window
+    (not on tidewm yet, §6.6). Either fills in a rule for you to trim and
+    add.
+  - Floating a window with `Super+Shift+F` or `Super+Insert`, when none
+    of these rules covers it, asks once: a notification, *Always
     float CLASS?*, with **Always float**, which adds the class's rule at
     once, and **Edit rule…**, which opens the page filled in for it.
     - Closing it, or letting it expire, is Not now. Its class isn't asked
@@ -1558,27 +1587,27 @@ in how long they last and what stays visible:
     destroyed, the one no longer listed.
   - `name:ADDRESS` selects a workspace by its address (`CWorkspaceResolver`,
     `Resolver.cpp`), so home renamed elsewhere is renamed back through it.
-  - A numbered workspace, such as the one a second monitor gets (below),
-    is listed after the named ones, by number.
+  - A numbered workspace is listed after the named ones, by number.
 
 **The home workspace.** The first standing workspace, `in` by default.
 
-- It's made at login and is never removed: `conf`'s Hyprland config gives
-  it a `persistent` workspace rule, and makes it the first monitor's
-  `default`.
-  - `conf` takes its name from `~/.config/hypr/tide-workspaces.lua`,
+- It's made at login and is never removed: tide's Hyprland config
+  (`hypr/hyprland.lua`, §6.8) gives it a `persistent` workspace rule, and
+  makes it the first monitor's `default`.
+  - The config takes its name from `~/.config/hypr/tide-workspaces.lua`,
     which the shell writes from `workspaces.json` and has Hyprland read
     again (`hyprctl eval 'conf_workspaces.reload()'`). Until the shell
     has written one, at a first login, it's `in`. The file lists the
-    standing workspaces too, so `conf`'s workspace keys step through the
+    standing workspaces too, so the workspace keys step through the
     bar's order (§6.6).
   - `tide doctor` names what's wrong when home doesn't exist or isn't
-    persistent (`conf`'s rule is missing), or the shell hasn't written the
-    file. A `conf_workspaces.reload()` that fails is a notification.
+    persistent (the config's rule is missing), or the shell hasn't written
+    the file. A `conf_workspaces.reload()` that fails is a notification.
   - On tidewm (§5.3), which reads no such file, the shell keeps home with
     `persist workspace`, and lets an old home go with `unpersist
-    workspace` when home is renamed. A `tide-msg` that fails is a
-    notification too. The shell sends home's apps there itself (§5.3).
+    workspace` when `standing` names a new home. A `tide-msg` that fails
+    is a notification too. The shell sends home's apps there itself
+    (§5.3).
 - It can't be renamed. tide offers no way to, and a rename from elsewhere
   (`hyprctl`) is undone by the shell when it hears `renameworkspace`.
 - A list of apps lives there, set in `workspaces.json` (`inApps`, §16).
@@ -1639,14 +1668,6 @@ in how long they last and what stays visible:
 - A window of a home app can be moved out with `Super+Shift+Return`.
 - `Super+Home` goes to home, and `Super+Tab` flips between home and the
   last other workspace you used (§6.6).
-  - It's a Lua binding in `conf` that keeps the workspaces other than
-    home in the order you last used them. `Super+End` reads the same
-    history (§6.6).
-  - On tidewm the shell keeps that history, from its start, and does both
-    keys: conf binds them to `qs -c tide ipc call workspaces homeOrBack`
-    and `... lastOther`, and `Super+Home` to `... home`.
-  - If that workspace has been removed since, a press from home does
-    nothing.
 
 **Each workspace's own settings.** `workspaces.json`'s
 `workspaceSettings` (§16) sets two things per workspace, by name:
@@ -1688,8 +1709,8 @@ in how long they last and what stays visible:
     you launched, or a new window from the app you're in. The prompt holds
     the keyboard, so a background app's window must not open one under
     your typing.
-  - Any other such window opens on home unfocused and marked, as today.
-    The prompt opens when it's first focused.
+  - Any other such window opens there, unfocused and marked
+    (§14.1). The prompt opens when it's first focused.
   - A dialog or other floating window (§6.4) never asks. It stays with
     its parent, and so does a status popup.
   - How: the shell notes each window that opens (`openwindow`), and when
@@ -1750,8 +1771,8 @@ in how long they last and what stays visible:
     grant's 10 s (§14.3), from `tide launch` making it after the answer,
     with time to start. A launch granting `*` covers any window. One
     that opens later asks, as any other would.
-  - `tide launch` reads the focused workspace. On one that asks, it asks
-    the shell (`qs -c tide ipc call prompt launch`), naming the classes the app's
+  - `tide launch` reads the focused workspace (below). On one that asks,
+    it asks the shell (`qs -c tide ipc call prompt launch`), naming the classes the app's
     window may have, found as its grant finds them (§14.3), and a FIFO in
     `$XDG_RUNTIME_DIR` to answer on. Then it waits.
   - It learns which workspaces ask from `tide-workspaces.lua`'s
@@ -1770,8 +1791,8 @@ in how long they last and what stays visible:
     environment.
   - The prompt's text starts empty, since there's no window to name it
     from.
-  - With no shell to ask, the app launches on home, and a notification
-    says the prompt couldn't be asked.
+  - With no shell to ask, the app launches on the focused workspace, and
+    a notification says the prompt couldn't be asked.
 
 **Pinned apps.** A window whose app is one of the `pinnedApps` of the
 workspace it's on stays open there.
@@ -1794,9 +1815,9 @@ workspace it's on stays open there.
   a shell's delete word. Pin only what's never typed in that way.
 - The shell's own UI closes no other window, so the prompt's Esc is its
   only close.
-- **How, on Hyprland.** It's `hypr/tide/pinned.lua`, which `conf` loads
-  as it loads the layout, and hands `tide-workspaces.lua`'s `pinned` list
-  at each load and `conf_workspaces.reload()`. The shell writes that list
+- **How, on Hyprland.** It's `hypr/tide/pinned.lua`, which tide's Hyprland
+  config loads as it loads the layout, and hands `tide-workspaces.lua`'s
+  `pinned` list at each load and `conf_workspaces.reload()`. The shell writes that list
   from `pinnedApps`: per workspace, the classes and sites its apps match
   (`appMatchers`, `inAppPatterns`' own), so Lua matches them as the shell
   does, with no regular expressions.
@@ -1814,8 +1835,8 @@ workspace it's on stays open there.
     `sendshortcut` would make.
   - A window that can't be read, as one going away, is reported, and the
     key does what it would with nothing pinned.
-  - Without tide's `pinned.lua`, `conf` binds `Super+Backspace` to
-    Hyprland's own close and leaves the app's keys unbound, as before.
+  - Without `pinned.lua`, the config binds `Super+Backspace` to
+    Hyprland's own close and leaves the app's keys unbound.
   - A workspace's name matches ignoring ASCII case there, which is all
     Lua's `lower()` knows.
   - The name prompt's Esc asks the shell's own check, `pinnedOn`, which
@@ -1827,8 +1848,8 @@ workspace it's on stays open there.
     tidewm ends it when a window moves to another workspace, and the shell
     sets it again if the window's pinned there too.
   - tidewm's `kill` leaves a window kept open, and its `close_refused`
-    event is the shell's notification. conf's tidewm config binds
-    `Super+Backspace` to `kill`.
+    event is the shell's notification. tide's tidewm config
+    (`tidewm/tide.conf`, §6.8) binds `Super+Backspace` to `kill`.
   - It binds the app's close and quit keys with `--kept-open`, a binding
     that counts only while you're typing in a window kept open, so every
     other window still gets them.
@@ -1878,9 +1899,10 @@ workspace it's on stays open there.
   so they'd share a session. That's accepted.
 - `tide launch` sets it for the process it starts: the workspace the
   prompt chose (`--workspace NAME`), else the focused workspace.
-  - It reads the focused workspace with `hyprctl -j activeworkspace`. If
-    that fails, the app still starts, with an empty value, and the launch
-    says why, in a notification too.
+  - It reads the focused workspace with `hyprctl -j activeworkspace`, or
+    on tidewm with `tide-msg --focused-workspace`. If that fails, the app
+    still starts, with an empty value, and the launch says why, in a
+    notification too.
   - `uwsm app` keeps it: uwsm 0.27.1 starts an app as a scope by default,
     with `systemd-run --scope`, which runs the command in the caller's
     environment. A service unit (`-t service`) would pass only uwsm's
@@ -1906,14 +1928,13 @@ monitor has its own part of it, with its own windows and layout.
 - **There is one bar per monitor**, and each shows the same workspaces in
   the same order, with the current one marked on all of them. No
   workspace is shown elsewhere, so the bar has no accent outline for one.
-- **A new window** opens in the focused monitor's part, as now.
-  `Super+Shift+Left`/`Right` (§6.6) moves it into the next monitor's part
-  of the same workspace. Moving it to another workspace keeps its monitor.
+- **A new window** opens in the focused monitor's part.
+  `Super+Shift+Left` or `Super+Shift+Right` (§6.6) moves it into the next
+  monitor's part of the same workspace. Moving it to another workspace
+  keeps its monitor.
 - **The name prompt and the switcher** list each workspace once.
   `TIDE_WORKSPACE` and `tide workspace` give its name, never a part's.
-- **Minimizing** (§6.7) is per part: each monitor's tray shows what was
-  minimized from the part it shows, and a restore puts the window back on
-  its monitor.
+- **Minimizing** is per part (§6.7).
 - **How, on Hyprland.** A Hyprland workspace is on one monitor, so each
   part is a Hyprland workspace of its own (checked in 0.56.2's source).
   - The main monitor's part has the workspace's own name, so one monitor
@@ -1921,7 +1942,7 @@ monitor has its own part of it, with its own windows and layout.
     where `OUT` is that monitor's connector, such as `DP-2`. That's why a
     name can't hold `@` (above).
   - The main monitor is the one showing the parts with plain names. At
-    login it's the first monitor, which `conf` gives home.
+    login it's the first monitor, which tide's Hyprland config gives home.
   - Each part, the main one's included, has a workspace rule binding it
     to its monitor, added before it's first used, so Hyprland makes it
     there whichever monitor has focus and whatever dispatch makes it
@@ -1930,8 +1951,8 @@ monitor has its own part of it, with its own windows and layout.
     shows the main part.
   - A switch shows each other monitor's part first, then the focused
     monitor's. Showing a workspace on another monitor focuses that monitor,
-    so the last one shown keeps focus where it was. `conf` sets
-    `cursor:no_warps`, so the pointer stays put.
+    so the last one shown keeps focus where it was. tide's Hyprland config
+    sets `cursor:no_warps`, so the pointer stays put.
   - A part that's empty and not shown is destroyed as any empty workspace
     is, so empty parts cost nothing.
   - The model is `hypr/tide/span.lua`, plain Lua with tests: the parts'
@@ -1939,15 +1960,19 @@ monitor has its own part of it, with its own windows and layout.
     a monitor change.
   - The bar, the switcher, the prompt, minimizing, `TIDE_WORKSPACE` and
     `tide workspace` read a part as its workspace: `NAME@OUT` is `NAME`
-    (`shell/lib/span.mjs`, `bin/tide`). Each monitor's tray shows what was
-    minimized from its own part, and the bar counts it toward the
-    workspace.
-  - The bar, the switcher and the prompt switch through `conf`'s
+    (`shell/lib/span.mjs`, `bin/tide`).
+  - The bar, the switcher and the prompt switch through the config's
     `conf_workspaces.go(name)`, as the keys do. The prompt's move and a
     launch on a named workspace (a grant, §14.3) go through
     `conf_workspaces.move(address, name, follow)`, which puts the window
-    in the workspace's part on its own monitor. Without them, under an
-    older `conf`, each is Hyprland's own `name:` dispatch.
+    in the workspace's part on its own monitor. Without them, as under a
+    Hyprland config that doesn't load tide's, each is Hyprland's own
+    `name:` dispatch.
+- **How, on tidewm.** tidewm's own workspaces span every monitor, with a
+  part on each (tidewm's `docs/ipc.md`), so tide needs no `span.lua`
+  there. `GET_WORKSPACES` lists each workspace once, and `move window to
+  workspace NAME` puts a window in that workspace's part on its own
+  monitor.
 - **A monitor going away**, as when the lid closes with a display
   attached or a cable is pulled: Hyprland moves its workspaces to another
   monitor, where only one can show. So tide moves the windows of each of
@@ -1960,10 +1985,13 @@ monitor has its own part of it, with its own windows and layout.
     workspace, from the part it's in, by connector, for the session. The
     handoff's own moves don't count, and Hyprland moving whole workspaces
     moves no window.
-  - It's `conf`'s, on Hyprland's `monitor.removed` and `monitor.added`,
-    which fire after Hyprland has moved the workspaces, and after the
-    lid's own handler has moved the panel's back. `span.handoff` says
-    which window goes where.
+  - It's in tide's Hyprland config, on Hyprland's `monitor.removed` and
+    `monitor.added`, which fire after Hyprland has moved the workspaces,
+    and after the lid's own handler has moved the panel's back.
+    `span.handoff` says which window goes where.
+  - On tidewm, a monitor going away moves its windows to the focused
+    monitor, each keeping its workspace, and they stay there when it comes
+    back (tidewm's `closemon`).
 - Closing the laptop lid with an external display attached disables the
   internal panel and moves its workspaces over. With no external display,
   logind suspends.
@@ -1971,57 +1999,86 @@ monitor has its own part of it, with its own windows and layout.
 ### 6.6 Keys
 
 Carried over from the current Hyprland and KDE setups (same muscle memory),
-with new keys in **bold**:
+with new keys in **bold**. These are tide's own keys, the same on Hyprland
+and tidewm except where a row says. `conf`'s app keys follow.
 
 | Keys | Action |
 |---|---|
-| **tap `Super`** | the switcher, on its Apps tab: the launcher, as `Super+Space` (§8) |
+| **tap `Super`** | the switcher, on its Apps tab: the launcher, as `Super+Space` (§8). From Hyprland 0.57, before which a release binding fired after every `Super` chord, and on tidewm (`--release Super_L`) |
 | `Super+Space` | the switcher, on its Apps tab: the launcher |
-| **`Super+Tab`** | flip between home and the workspace you last used: from any other workspace it goes to home, and from home back to the last other one, so presses toggle |
+| **`Super+Tab`** | flip between home and the workspace you last used: from any other workspace it goes to home, and from home back to the last other one still there, so presses toggle |
 | **`Super+A`** | the switcher, on its Attention tab: every window wanting attention, on any workspace, most recent first; Enter goes there |
 | **`Super+Alt+Space`** | next keyboard layout, once there are two, on every keyboard (§16), as a click on the bar's layout label does |
-| `Super+T` / `W` / `G` / `F` / `Shift+G` / `E` / `B` / `H` / `I` / `M` / `N` / `R` / `Y` | the existing app launchers (`runenv` helpers) |
-| **`Super+V`** | the picker, on its Clipboard tab: what you've copied, and emoji and symbols by name; Enter pastes (§8.4). V as in paste, as on Windows. Terminal on the VM, which it was, has no key now; the launcher finds it |
+| `Super+T` | a terminal: `xdg-terminal-exec`, or the `terminal` option (§6.8) |
+| `Super+E` | your home folder: `xdg-open`, or the `files` option (§6.8) |
+| **`Super+V`** | the picker, on its Clipboard tab: what you've copied, and emoji and symbols by name; Enter pastes (§8.4). V as in paste, as on Windows |
 | **`Super+Shift+V`** | the picker, on its Fill tab: your snippets and each Bitwarden login's username, password and 2FA code; Enter types it (§8.4) |
 | **`Super+;`** | the picker, on its Characters tab: emoji and symbols by name; Enter pastes (§8.4). Not Windows's `Super+.`, which is the next layout here |
-| **`Super+C`** / **`Super+Shift+C`** | Google Chat / Google Calendar (`runenv google-chat`, `runenv google-calendar`) |
 | `Super+Backspace` | close window, unless it's pinned on its workspace (§6.5) |
-| **`Ctrl+W`** / **`Ctrl+Shift+W`** / **`Ctrl+Q`** / **`Alt+F4`** | the app's own, passed on to every window but one pinned on its workspace, which never sees them (§6.5) |
+| **`Ctrl+W`**, **`Ctrl+Shift+W`**, **`Ctrl+Q`**, **`Alt+F4`** | the app's own, passed on to every window but one pinned on its workspace, which never sees them (§6.5) |
 | **`Super+Z`** | minimize the focused window; its icon goes to the corner tray, and a click there restores it (§6.7) |
 | `Super+L` | lock |
 | **`Super+Shift+R`** | reload the config, and start tide's shell if it isn't running (below) |
+| `Super+Shift+E` | quit the compositor, which ends the session; also a rescue key (§6.8) |
 | **`Super+S`** | toggle keep awake (§10), as the bar's icon does; the OSD says which |
 | **`Super+P`** | toggle presenter mode: Do not disturb and keep awake together (§10) |
 | **`Super+Home`** | go to home (§6.5) |
 | **`Super+1…9`** | go to the Nth workspace in the bar's order, so `Super+1` is home, as `Super+Home` is; past the last workspace, nothing |
 | **`Super+Shift+1…9`** | send the focused window to the Nth workspace in the bar's order, staying where you are |
-| **`Super+0`** / **`Super+Shift+0`** | go to / send the focused window to the last workspace in the bar's order, as `Super+1…9` and `Super+Shift+1…9` do |
+| **`Super+0`**, **`Super+Shift+0`** | go to the last workspace in the bar's order, and send the focused window there, as `Super+1…9` and `Super+Shift+1…9` do |
 | **`Super+End`** | go to the workspace other than home you last used: from home, where `Super+Tab` goes; from any other, the one before it, so presses toggle between two |
-| **`Super+Left`** / **`Right`** / **`Up`** / **`Down`** | focus the window to the left / right / above / below the focused one; at a monitor's edge, the nearest window on the next monitor that way, or that monitor itself if it shows none; past the last monitor, nothing (as in tide for macOS; the rule is below) |
-| **`Super+Shift+Left`** / **`Right`** / **`Up`** / **`Down`** | move the focused window the same way: on its monitor it swaps with the window that way; at the edge it goes onto the next monitor, joining the workspace showing there at the edge it came in by, and keeps focus. A floating window goes straight onto the next monitor that way, still floating, at the same relative spot and its size (the rule is below), and keeps focus. Past the last monitor, nothing |
-| `Super+PgUp` / `PgDn` | previous / next workspace in the bar's order that has a window, wrapping from the last to home and back. An empty one, standing or made, is passed over, and so is one whose only windows are minimized (§6.7): Hyprland has none on it. With no other that has a window, nothing |
-| **`Super+Shift+PgUp`** / **`PgDn`** | move the window to the previous / next workspace in the bar's order, empty or not, wrapping as `Super+PgUp` does, and follow it |
-| `Super+J` / `K`, `Super+Shift+J` / `K` | focus / move down and up the stack |
+| **`Super` and an arrow** | focus the window that way from the focused one; at a monitor's edge, the nearest window on the next monitor that way, or that monitor itself if it shows none; past the last monitor, nothing (as in tide for macOS; the rule is below) |
+| **`Super+Shift` and an arrow** | move the focused window the same way: on its monitor it swaps with the window that way; at the edge it goes onto the next monitor, joining the workspace showing there at the edge it came in by, and keeps focus. A floating window goes straight onto the next monitor that way, still floating, at the same relative spot and its size (the rule is below), and keeps focus. Past the last monitor, nothing |
+| `Super+PgUp`, `Super+PgDn` | the previous and the next workspace in the bar's order that has a window, wrapping from the last to home and back. An empty one, standing or made, is passed over, and so is one whose only windows are minimized (§6.7): Hyprland has none on it. With no other that has a window, nothing |
+| **`Super+Shift+PgUp`**, **`Super+Shift+PgDn`** | move the window to the previous and the next workspace in the bar's order, empty or not, wrapping as `Super+PgUp` does, and follow it |
+| `Super+J`, `Super+K` | focus down and up the stack |
+| `Super+Shift+J`, `Super+Shift+K` | move the window down and up the stack |
 | `Super+Return` | go to a workspace: the name prompt (§6.5), listing the existing names; type to filter them or to name a new one, and Enter goes there, making the workspace if it's new. It moves no window, so it works with none focused |
 | **`Super+Shift+Return`** | move the focused window to a workspace: the same prompt, and Enter moves it there, making the workspace if it's new; with no window focused, nothing |
 | **`Alt+Tab`** | make the focused window the master; on the master, swap it with the window that was master before it |
-| `Super+\` / `Super+/` | grow / shrink master (`mfact` ±0.025) |
-| `Super+=` / `Super+-` | add / remove a master |
-| `Super+.` / `Super+,` | next / previous layout |
-| none by default | **the layout used last**: the workspace's mode before this one, so two presses come back, as dwm's `Super+Space` does; dwm's preset (§16) puts it there, and Keyboard's shortcuts can give it any key |
-| ``Super+` ``, **`Super+O`** | toggle monocle (`O` as in one window, and the key tide for Chrome uses on ChromeOS, where Chrome can't bind a backtick) |
-| **`Super+X`** / **`Super+Shift+X`** | toggle maximize / fullscreen on the current window (§6.3) |
-| none by default | **restore**: the current window back in its tile from maximize or fullscreen |
-| `Super+Shift+F`, `Super+Insert` | toggle floating |
-| **`Super+Alt+F`** | open the Floating settings (§16) with a rule filled in for the focused window, its class and exact title, the title selected to trim; Enter adds it, Esc doesn't |
+| `Super+\`, `Super+/` | grow and shrink the master (`mfact`, by §6.1's step) |
+| `Super+=`, `Super+-` | add and remove a master |
+| `Super+.`, `Super+,` | the next and the previous layout in the cycle (§6.1) |
+| none by default | **the layout used last**: the workspace's layout before this one, so two presses come back, as dwm's `Super+Space` does; dwm's preset (§16) puts it there, and Keyboard's shortcuts can give it any key. Not on tidewm yet |
+| ``Super+` `` or **`Super+O`** | toggle monocle (`O` as in one window, and the key tide for Chrome uses on ChromeOS, where Chrome can't bind a backtick) |
+| **`Super+X`** | toggle maximize on the current window (§6.3) |
+| **`Super+Shift+X`** | toggle fullscreen on the current window (§6.3) |
+| none by default | **restore**: the current window back in its tile from maximize or fullscreen. Not on tidewm |
+| `Super+Shift+F` or `Super+Insert` | toggle floating |
+| **`Super+Alt+F`** | open the Floating settings (§16) with a rule filled in for the focused window, its class and exact title, the title selected to trim; Enter adds it, Esc doesn't. Not on tidewm yet |
 | **`Super`+middle-click** | toggle maximize on the window under the pointer |
-| **drag the master/stack edge** | resize the master (`mfact`), as `Super+\` / `Super+/` do, following the pointer; no key held (below) |
+| **drag the edge between the masters and the stack** | resize the master (`mfact`), as `Super+\` and `Super+/` do, following the pointer; no key held (below) |
 | **drag a floating window's edge or corner** | resize it, no key held (§6.4) |
-| `Super`+left-drag / `Super`+right-drag | move / resize a floating window |
+| `Super`+left-drag | move a floating window |
+| `Super`+right-drag | resize a floating window |
 | **`Super+Shift+N`** | notification center |
-| `Print` / **`Alt+Print`** / `Shift+Print`, `Super+Print` | screenshot screen / window / region |
-| **`XF86AudioMicMute`**, **`Super+Shift+M`** | toggle microphone mute (system-wide) |
+| `Print` | screenshot of the screen |
+| **`Alt+Print`** | screenshot of the window |
+| `Shift+Print` or `Super+Print` | screenshot of a region |
+| **`XF86AudioMicMute`** or **`Super+Shift+M`** | toggle microphone mute (system-wide) |
 | media, brightness, volume keys | as today, with OSD |
+
+**`conf`'s keys.** `conf` loads tide's configs and adds its owner's app
+keys: the `terminal`, `files` and `apps` options on Hyprland (§6.8), and
+`bindsym` lines after `include tide.conf` on tidewm. Most run `scripts`'
+launchers through `runenv`. They're `conf`'s, not tide's:
+
+| Keys | Action |
+|---|---|
+| `Super+T`, `Super+E` | kitty, and yazi in kitty, in place of tide's terminal and files |
+| `Super+W` | a terminal on the workstation |
+| `Super+G`, `Super+F`, `Super+Shift+G` | the browser, in its first, second and third profiles |
+| **`Super+C`**, **`Super+Shift+C`** | Google Chat and Google Calendar (`runenv google-chat`, `runenv google-calendar`) |
+| `Super+M` | Google Meet |
+| `Super+Y` | YouTube Music |
+| `Super+H` | the home folder |
+| `Super+I` | IRC |
+| `Super+N` | a notepad |
+| `Super+R` | a remote desktop |
+| `Super+B`, `Super+Shift+B` | connect the headphones, and switch to the next audio profile |
+
+`conf`'s Terminal on the VM, which had `Super+V`, has no key now; the
+launcher finds it.
 
 **Reload.** `Super+Shift+R` runs `tide reload`, for after editing a
 config or when the bar is gone. i3's and sway's `Super+Shift+C` is their
@@ -2041,6 +2098,9 @@ preset's (§16).
   a notification and the journal.
 - A plain Hyprland login, outside the tide session, binds it to
   `hyprctl reload` alone.
+- It isn't a resize mode, as `Super+Shift+R` is in some setups: tide has
+  none. A floating window resizes by its edge or `Super`+right-drag, and
+  the master by its edge or `Super+\` and `Super+/`.
 
 The arrows use one rule, tide for macOS's, in the layout's `direction.lua`
 (§20). Of the windows or monitors whose center is on that side, it takes
@@ -2079,21 +2139,22 @@ window order, which isn't the layout's, and never leaves the monitor
 pushes it against the edge of its own monitor's work area
 (`CDefaultFloatingAlgorithm::moveTargetInDirection`). So the keys call the
 layout's `focus_side` and `move_side`, and `focus_vertical` and
-`move_vertical` for up and down; without the tide layout, conf binds
-the built-in dispatchers instead, with a monitor move for a floating window.
+`move_vertical` for up and down; without the tide layout, tide's Hyprland
+config binds the built-in dispatchers instead, with a monitor move for a
+floating window.
 
-- **Dragging the master/stack edge.** A plain left-press within 4 px
-  either side of the edge between the masters and the stack starts a
-  drag, and the edge follows the pointer until the button is released.
+- **Dragging the edge between the masters and the stack.** A plain
+  left-press within 4 px either side of that edge starts a drag, and the
+  edge follows the pointer until the button is released.
   - The edges are tile's, twocol's and threecol's with one stack window.
     In threecol with stacks either side, either side of the centered
     master drags it, and it grows or shrinks both ways.
   - **A lone window's** left and right edges drag its width, and it stays
     centered, so both sides move: the edge's distance from the work area's
     center is half the width, from 10% to the whole width. That width is
-    the workspace's own (`layoutmsg single <value>`, or `single reset` for
+    the part's own (`layoutmsg single <value>`, or `single reset` for
     the rule again) in place of the single-window rule. A second window
-    tiles as ever, and the width comes back whenever the workspace is down
+    tiles as ever, and the width comes back whenever the part is down
     to one. The layout must have placed the window alone: one left alone
     without a recalculate is still where its old tile was.
   - The rows of a stack are always equal, so there's no edge to drag
@@ -2133,31 +2194,39 @@ the built-in dispatchers instead, with a monitor move for a floating window.
     `resize_on_border`, and its Lua can't set one.
   - The grab is `resize_grab`, a `setup()` option, in pixels either side;
     0 turns edge dragging off.
-- **`Super+End`** never goes to home, so it isn't Hyprland's
-  `workspace previous`. It uses the same Lua history as `Super+Tab`
-  (§6.5), skipping any workspace removed since.
-- **On tidewm**, which knows neither the bar's order nor home, the shell
-  does `Super+1…9`, `Super+0`, `Super+Home`, `Super+Tab` and `Super+End`.
-  `conf`'s tidewm config runs `qs -c tide ipc call workspaces go N`,
-  `... send N`, `... home`, `... homeOrBack` and `... lastOther`. Without
-  the shell, a notification says the key needs it.
+- **The workspace history.** `Super+Tab` and `Super+End` read one
+  history: the workspaces other than home, the last used first. On
+  Hyprland it's a Lua binding's in tide's Hyprland config, kept from the
+  config's load; on tidewm the shell keeps it, from its start. Both keys
+  skip a workspace removed since, so from home with none left,
+  `Super+Tab` does nothing. `Super+End` never goes to home, so it isn't
+  Hyprland's `workspace previous`.
+- **Keys the shell does.** These keys call tide's shell, with `qs -c tide
+  ipc call`: `Super+Space`, `Super+A`, `Super+V`, `Super+Shift+V`,
+  `Super+;`, `Super+Shift+N`, `Super+Z`, `Super+S`, `Super+P`,
+  `Super+Alt+F`, `Super+Return` and `Super+Shift+Return`.
+  - On tidewm, which knows neither the bar's order nor home, so do
+    `Super+1…9`, `Super+0`, their `Shift` forms, `Super+Home`,
+    `Super+Tab` and `Super+End`: tide's tidewm config runs `workspaces go
+    N`, `workspaces send N`, `workspaces home`, `workspaces homeOrBack`
+    and `workspaces lastOther`.
+  - Without the shell, a notification says the key needs it, on Hyprland
+    and for tidewm's workspace keys; tidewm's others do nothing. On
+    Hyprland, `Super+Space` runs the `launcher` option instead where one
+    is set (§6.8), `Super+Shift+N` opens swaync's center instead, and
+    `Super+A` also focuses the urgent window, or the last one.
 - **`Alt+Tab`** was `Super+Return`. It's dwm's zoom, except on the master:
   plain dwm's `zoom` swaps the master with the top of the stack, and this
   swaps it with the window that was master before. The layout remembers
-  that window per workspace, and takes the top of the stack once it's
+  that window per part, and takes the top of the stack once it's
   gone.
   - Hyprland takes a bound key from every app, so `Alt+Tab` no longer
     reaches one, such as a remote desktop or a VM viewer.
 - **`Super+Return`** used to move the focused window. It goes to a
   workspace now, so it works with no window to move. Moving is
   `Super+Shift+Return`, which nothing else used.
-  - Both call the shell (`qs -c tide ipc call prompt go`, `... prompt
-    move`). Without the shell, a notification says the key needs it.
 - **`Super+S`** was left unbound for a per-machine `secureshell` launcher.
   It's keep awake now; `Super+D` stays free for one.
-- **`Super+S`** and **`Super+P`** call the shell
-  (`qs -c tide ipc call keepawake toggle`, `... presenter toggle`).
-  Without the shell, a notification says the key needs it.
 
 Two keys are dropped: `Super+Shift+\` (toggle to BSP) and `Super+P`
 (pseudo-tile). Both exist only for dwindle, which tide doesn't use, and
@@ -2178,14 +2247,14 @@ not taken.
   - `Super+Delete` was the other candidate. It's ambiguous with
     `Super+Backspace`, which closes the window: a Mac keyboard labels
     Backspace "delete".
-  - `conf`'s key asks the shell to do it (`qs -c tide ipc call windows
-    minimize`), since only the shell can bring a window back. With no
-    shell, a notification says so and the window stays.
+  - The key asks the shell to do it (Keys the shell does, §6.6), since
+    only the shell can bring a window back. With no shell, the window
+    stays.
 - **Which windows are minimized:** only the ones `Super+Z` minimized.
   - An app's own minimize button does nothing, as before. Hyprland
     doesn't act on an app's minimize request, and turns another client's
     (a taskbar's) into a `minimized` event, which tide ignores.
-- **The tray.** While the workspace a monitor shows has minimized windows,
+- **The tray.** While the part a monitor shows has minimized windows,
   a small tray floats in that monitor's bottom-right corner, with one app
   icon per minimized window.
   - It's drawn like a popover, 12 px in from both edges, and 12 px over
@@ -2196,10 +2265,10 @@ not taken.
     that's the order they were minimized in.
   - It grows to the left, one icon per window.
   - A workspace with no minimized windows shows no tray.
-- **Hovering an icon** shows its window's title above it.
-- **Clicking an icon restores its window:** the window goes back to its
-  workspace and takes focus. The layout places it as it places any window
-  that arrives.
+- **An icon's tooltip** is its window's title, above it.
+- **Clicking an icon restores its window:** the window goes back to the
+  part it came from and takes focus. The layout places it as it places
+  any window that arrives.
 - **The switcher** (§8.1). The Windows tab lists minimized windows with the
   rest, each under the workspace it came from, marked minimized, and Enter
   restores one. So does Enter on the Attention tab, for a minimized window
@@ -2211,11 +2280,11 @@ not taken.
 - **Attention** (§14.4). A minimized window can still want attention. Its
   icon shows on its workspace's chip on the bar, as any marked window's
   does, and a click on it there restores it.
-- **Several monitors.** Each monitor's tray shows only the minimized
-  windows of the workspace on that monitor (decided by the maintainer),
-  under today's model of one workspace per monitor (§6.5). A restored window goes back to its workspace on
-  whichever monitor shows it. This is to be revisited with that model
-  (§21).
+- **Several monitors.** Minimizing is per part (§6.5, Monitors). Each
+  monitor's tray shows only the windows minimized from the part it shows
+  (decided by the maintainer), and a restored window goes back to that
+  part, on its own monitor. The bar counts them all toward the
+  workspace.
 - **A workspace whose windows are all minimized** stays on the bar, with
   no icons (maintainer, 2026-11-13), as on tidewm. Going there shows the
   tray, and the switcher's Workspaces tab says it's minimized.
@@ -2226,18 +2295,19 @@ not taken.
     one not made yet is listed. Going there makes it again.
 - **Hyprland pieces** (checked in 0.56.2's source):
   - Hyprland has no minimize. A minimized window moves to a special
-    workspace named after the one it came from,
-    `special:minimized:NAME`. Nothing shows that workspace, so the window
+    workspace named after the part it came from,
+    `special:minimized:PART`, where `PART` is the workspace's name on the
+    main monitor and `NAME@OUT` on another (§6.5). Nothing shows that workspace, so the window
     is hidden. Only tide puts windows there, so being on one is what
     minimized means, and a restarted shell reads it all back from the
     workspace names, with no state of its own.
   - Minimizing is `hl.dsp.window.move({ workspace =
-    "special:minimized:NAME", follow = false, window = "address:0x…" })`.
+    "special:minimized:PART", follow = false, window = "address:0x…" })`.
     With `follow` false the move is silent, and focus goes to the window
     under the moved one's middle, else wherever Hyprland refocuses
     (`Actions::moveToWorkspace`, `ConfigActions.cpp`).
-  - Restoring is the same dispatch to `name:NAME` with `follow` true,
-    which shows that workspace and focuses the window.
+  - Restoring is the same dispatch to `name:PART` with `follow` true,
+    which shows that part and focuses the window.
   - An app's minimize request only sets `requestsMinimize` on its
     surface, which nothing reads (`XDGShell.cpp`, and `XWM.cpp` for
     XWayland apps). A
@@ -2296,7 +2366,12 @@ reads the settings files the shell writes (`tide-*.lua`).
   again, since tidewm's later binding of the same keys replaces the
   earlier one, then end with `include tide-*.conf` so the settings pages
   still win. `tidewm/config_test.sh` checks that it binds every name
-  `hyprland.lua` does, so `keys.json` serves both.
+  `hyprland.lua` does, so `keys.json` serves both. It leaves out three:
+  `floating_rule` and `last_layout`, which tidewm has no command for yet,
+  and `restore`, which has no key by default (§6.6).
+- **Names.** The Lua calls the shell makes, such as
+  `conf_workspaces.reload()`, keep the `conf_` names from when this code
+  was `conf`'s.
 ## 7. Bar
 
 See [`bar.png`](docs/mocks/bar.png).
