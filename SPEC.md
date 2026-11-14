@@ -243,7 +243,9 @@ else in this spec changes.
   there, as it does where there's no package. On Hyprland 0.57 or newer the
   bar needs Quickshell 0.3.2: 0.57 gives a named workspace an address, its
   name, and no ID, and 0.3.2 is the first Quickshell to follow workspaces by
-  address (`HyprlandWorkspace.address`).
+  address (`HyprlandWorkspace.address`). So `setup` builds the pinned 0.3.2
+  where apt's Quickshell is older; the greeter and the session checks still
+  take 0.3.0, which loads the shell.
 - **Memory** is unmeasured; M2 measures it and sets a budget.
 
 ### 3.3 Session: uwsm and systemd user units

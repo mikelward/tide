@@ -213,6 +213,11 @@ QUICKSHELL_CMAKE_FLAGS="-DCMAKE_BUILD_TYPE=Release -DCRASH_HANDLER=OFF -DCMAKE_C
 # that names one. tide's tide-shell and tide doctor check the same. All
 # three parts, so a 0.3.0 pre-release (0.3.0~rc1) is older.
 MIN_QUICKSHELL=0.3.0
+# The oldest Quickshell setup takes from apt rather than building the pin:
+# 0.3.2 follows Hyprland 0.57's workspaces, which name a named workspace by
+# its address, not an ID. With an older one the shell runs, but the bar
+# can't follow named workspaces on 0.57.
+MIN_QUICKSHELL_APT=0.3.2
 # Quickshell's CMakeLists.txt requires at least this Qt.
 MIN_QUICKSHELL_QT=6.6
 # The Qt packages whose private API Quickshell builds against. Each is
@@ -1276,7 +1281,7 @@ version_at_least() {
 # these installed below it, with or without --upgrade, where the distro has
 # one that isn't. One table, so a new minimum can't be missed somewhere.
 min_versions() {
-    echo "hyprland=$MIN_HYPRLAND quickshell=$MIN_QUICKSHELL golang=$MIN_GO" \
+    echo "hyprland=$MIN_HYPRLAND quickshell=$MIN_QUICKSHELL_APT golang=$MIN_GO" \
         "libxkbcommon-dev=1.11 libxkbcommon-devel=1.11" \
         "qt6-base-dev=$MIN_QUICKSHELL_QT qt6-qtbase-devel=$MIN_QUICKSHELL_QT"
 }
@@ -1720,14 +1725,14 @@ install_or_build_quickshell() {
         *) return 0 ;;
     esac
     # apt refuses to install a package it doesn't know, so it's asked first:
-    # where it has no Quickshell, or one too old to load tide's shell, it's
+    # where it has no Quickshell, or one older than MIN_QUICKSHELL_APT, it's
     # built instead, given a Qt it builds with.
     if test "$(detect_os)" = debian && known=$(apt_candidates quickshell qt6-base-dev); then
         apt_qs=$(upstream_version "$(printf '%s\n' "$known" | awk '$1 == "quickshell" { print $2 }')")
         if test -z "$apt_qs"; then
             why="apt has no Quickshell"
-        elif ! version_at_least "$apt_qs" "$MIN_QUICKSHELL"; then
-            why="apt's Quickshell is $apt_qs, and tide's shell needs $MIN_QUICKSHELL"
+        elif ! version_at_least "$apt_qs" "$MIN_QUICKSHELL_APT"; then
+            why="apt's Quickshell is $apt_qs, and tide's shell needs $MIN_QUICKSHELL_APT"
         else
             why=
         fi

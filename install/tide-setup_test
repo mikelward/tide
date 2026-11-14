@@ -299,12 +299,12 @@ check "and leaves a new enough Hyprland be" lacks "$calls" "dnf upgrade -y hyprl
 teardown
 
 # One new enough is left as it is.
-setup; ARGS=(); run FAKE_APT_INSTALLED="quickshell=0.3.0-1"
+setup; ARGS=(); run FAKE_APT_INSTALLED="quickshell=0.3.2-1"
 check "an installed Quickshell new enough isn't upgraded" lacks "$calls" "--only-upgrade"
 teardown
 
 # The directory this run's Quickshell build installs into.
-qs_inst() { printf '%s\n' "$T"/opt/quickshell/v0.3.1-*; }
+qs_inst() { printf '%s\n' "$T"/opt/quickshell/$QS_PIN_TAG-*; }
 
 # apt without Quickshell (Ubuntu 26.04): build the pinned release.
 setup; ARGS=(); run FAKE_MISSING=quickshell
@@ -314,11 +314,11 @@ check "the Quickshell build installs Qt's private headers" has "$calls" "qt6-dec
 check "the Quickshell build installs the effects module the bar needs" has "$calls" "qml6-module-qtquick-effects"
 check "the Quickshell build installs the GLES headers Qt's GUI module needs" has "$calls" " libgles-dev "
 check "the Quickshell build clones the pinned tag" \
-    has "$calls" "git clone -c advice.detachedHead=false --quiet --depth 1 --branch v0.3.1 https://github.com/quickshell-mirror/quickshell.git $T/src/quickshell-build/quickshell"
+    has "$calls" "git clone -c advice.detachedHead=false --quiet --depth 1 --branch $QS_PIN_TAG https://github.com/quickshell-mirror/quickshell.git $T/src/quickshell-build/quickshell"
 # Real git, given the Quickshell clone's own options, checks out the tag
 # without a word about detached HEADs.
 g init -q "$T/git/quickshell" && g -C "$T/git/quickshell" commit -q --allow-empty -m quickshell
-replay_clone quickshell v0.3.1
+replay_clone quickshell $QS_PIN_TAG
 # Without its own option the same clone shows the advice, even for a caller
 # whose config turns it off, so the quiet check above can fail.
 printf '[advice]\n\tdetachedHead = false\n' > "$T/quiet.gitconfig"
@@ -344,7 +344,7 @@ check "the Quickshell build is current" test "$(readlink -f "$T/opt/quickshell/c
 check "the Quickshell build links qs onto PATH, through current" \
     test "$(readlink "$T/usr-local-bin/qs")" = "$T/opt/quickshell/current/bin/qs"
 check "the Quickshell build doesn't warn" lacks "$output" "waybar stays the bar"
-check "the Quickshell build says why" has "$output" "apt has no Quickshell; building v0.3.1 from source"
+check "the Quickshell build says why" has "$output" "apt has no Quickshell; building $QS_PIN_TAG from source"
 : > "$CALLS"
 run FAKE_MISSING=quickshell
 check "the same Quickshell and Qt don't rebuild" lacks "$calls" "cmake -S"
@@ -374,7 +374,7 @@ check "quiet build: Quickshell's build output isn't shown" lacks "$output" "CMak
 check "quiet build: it's in the log" has "$(cat "$T/home/.local/state/setup-tide/quickshell-build.log")" "CMake Warning: the link target"
 check "quiet build: the log names each command" has "$(cat "$T/home/.local/state/setup-tide/quickshell-build.log")" "+ cmake --build $T/src/quickshell-build/quickshell/build"
 check "quiet build: the run says it built, and where its output is" \
-    has "$output" "Built Quickshell v0.3.1; the build's output is in $T/home/.local/state/setup-tide/quickshell-build.log"
+    has "$output" "Built Quickshell $QS_PIN_TAG; the build's output is in $T/home/.local/state/setup-tide/quickshell-build.log"
 check "quiet build: its build dependencies are a package step" has "$output" "Installing Quickshell's build dependencies
 Installed: build-essential cmake ninja-build"
 check "quiet build: Quickshell builds without assuming strict aliasing" has "$calls" "-DCMAKE_CXX_FLAGS=-fno-strict-aliasing"
@@ -399,7 +399,7 @@ check "--verbose: there's no setup log" test ! -e "$T/home/.local/state/setup/se
 check "--verbose build: Quickshell's build output is shown" has "$output" "CMake Warning: the link target"
 check "--verbose build: and it's in the log" has "$(cat "$T/home/.local/state/setup-tide/quickshell-build.log")" "CMake Warning: the link target"
 check "--verbose build: the run says it built, and where its output is" \
-    has "$output" "Built Quickshell v0.3.1; the build's output is in $T/home/.local/state/setup-tide/quickshell-build.log"
+    has "$output" "Built Quickshell $QS_PIN_TAG; the build's output is in $T/home/.local/state/setup-tide/quickshell-build.log"
 check "--verbose: the steps still say what changed" has "$output" "Installing Quickshell's build dependencies"
 teardown
 
@@ -415,34 +415,34 @@ teardown
 setup; ARGS=(); run FAKE_APT_QS=0.2.1-3
 check "apt's old Quickshell isn't fatal" test "$status" -eq 0
 check "apt's old Quickshell isn't installed" lacks "$calls" "apt-get install -y --no-upgrade quickshell"
-check "apt's old Quickshell is named" has "$output" "apt's Quickshell is 0.2.1, and tide's shell needs 0.3.0; building v0.3.1 from source"
+check "apt's old Quickshell is named" has "$output" "apt's Quickshell is 0.2.1, and tide's shell needs 0.3.2; building $QS_PIN_TAG from source"
 check "apt's old Quickshell is replaced by the build" has "$calls" "cmake -S $T/src/quickshell-build/quickshell "
 check "the build replacing it is linked onto PATH" \
     test "$(readlink "$T/usr-local-bin/qs")" = "$T/opt/quickshell/current/bin/qs"
 teardown
 
-# 0.3.0 is new enough, with an epoch too...
-setup; ARGS=(); run FAKE_APT_QS=1:0.3.0-1build1
-check "apt's Quickshell 0.3.0 is installed" has "$calls" "apt-get install -y --no-upgrade quickshell"
-check "apt's Quickshell 0.3.0 isn't built" lacks "$calls" "quickshell-mirror"
+# 0.3.2 is new enough, the first to follow Hyprland 0.57's workspaces, with an epoch too...
+setup; ARGS=(); run FAKE_APT_QS=1:0.3.2-1build1
+check "apt's Quickshell 0.3.2 is installed" has "$calls" "apt-get install -y --no-upgrade quickshell"
+check "apt's Quickshell 0.3.2 isn't built" lacks "$calls" "quickshell-mirror"
 teardown
 
-# ...but a pre-release of it isn't: Debian orders 0.3.0~rc1 before 0.3.0.
-setup; ARGS=(); run FAKE_APT_QS=0.3.0~rc1-1
-check "apt's Quickshell 0.3.0~rc1 isn't installed" lacks "$calls" "apt-get install -y --no-upgrade quickshell"
-check "apt's Quickshell 0.3.0~rc1 is named" has "$output" "apt's Quickshell is 0.3.0~rc1, and tide's shell needs 0.3.0"
+# ...but a pre-release of it isn't: Debian orders 0.3.2~rc1 before 0.3.2.
+setup; ARGS=(); run FAKE_APT_QS=0.3.2~rc1-1
+check "apt's Quickshell 0.3.2~rc1 isn't installed" lacks "$calls" "apt-get install -y --no-upgrade quickshell"
+check "apt's Quickshell 0.3.2~rc1 is named" has "$output" "apt's Quickshell is 0.3.2~rc1, and tide's shell needs 0.3.2"
 teardown
 
 # A pre-release of a later one is new enough.
-setup; ARGS=(); run FAKE_APT_QS=0.3.1~rc1-1
-check "apt's Quickshell 0.3.1~rc1 is installed" has "$calls" "apt-get install -y --no-upgrade quickshell"
+setup; ARGS=(); run FAKE_APT_QS=0.3.3~rc1-1
+check "apt's Quickshell 0.3.3~rc1 is installed" has "$calls" "apt-get install -y --no-upgrade quickshell"
 teardown
 
 # With apt's Quickshell too old and its Qt too old to build one, there's
 # none, and the warning says both.
 setup; ARGS=(); run FAKE_APT_QS=0.2.1-3 FAKE_APT_QT=6.4.2+dfsg-21.1build5
 check "an old Quickshell and Qt isn't fatal" test "$status" -eq 0
-check "an old Quickshell and Qt says why" has "$output" "apt's Quickshell is 0.2.1, and tide's shell needs 0.3.0, and building it needs Qt 6.6"
+check "an old Quickshell and Qt says why" has "$output" "apt's Quickshell is 0.2.1, and tide's shell needs 0.3.2, and building it needs Qt 6.6"
 check "an old Quickshell and Qt installs no Quickshell" lacks "$calls" "apt-get install -y --no-upgrade quickshell"
 check "an old Quickshell and Qt clones nothing" lacks "$calls" "quickshell-mirror"
 teardown
@@ -466,7 +466,7 @@ teardown
 # A tag moved to another commit isn't built: its build files never run.
 setup; ARGS=(); run FAKE_MISSING=quickshell FAKE_QS_COMMIT=0000000000000000000000000000000000000000
 check "a moved Quickshell tag isn't fatal" test "$status" -eq 0
-check "a moved Quickshell tag is named" has "$output" "not the pinned 1a4716cde794a59928d9d9fc15f2afc7a95de360; not building it"
+check "a moved Quickshell tag is named" has "$output" "not the pinned $QS_PIN_COMMIT; not building it"
 check "a moved Quickshell tag runs no cmake" lacks "$calls" "cmake -S $T/src/quickshell-build/quickshell"
 check "a moved Quickshell tag's clone is removed" test ! -e "$T/src/quickshell-build/quickshell"
 teardown
