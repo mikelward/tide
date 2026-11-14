@@ -3,17 +3,17 @@
 tide is a small Wayland desktop: **Hyprland** tiles the windows, one
 **Quickshell** process draws everything else (bar, launcher, notifications,
 OSDs, share picker), the same QML draws the lock and login screens, and
-**greetd** logs you in. It is
+**greetd** logs you in. **tidewm**, tide's own compositor, runs the login
+screen, and can stand in for Hyprland in a session of its own (§3.6). It is
 built for one workflow, dwm/Krohnkite-style tiling on an ultrawide plus a
 laptop, rather than as a general-purpose desktop. It aims to be lighter than
 KDE and not to fight itself.
 
 This document is milestone 1: the options, the decisions, and what
 "done" looks like for each later milestone. Mocks are in
-[`docs/mocks/`](docs/mocks/); every claim about an upstream project was
-checked against its current release on 2026-09-28 (see
-[Sources](#sources)), except in §21.1 and §21.2, deferred explorations that
-say which of their claims were checked.
+[`docs/mocks/`](docs/mocks/). Each claim about an upstream project names
+the release it was checked against, and [Sources](#sources) lists the
+checks by date. §21.1 and §21.2 say which of their claims were checked.
 
 Contents:
 [Goals](#1-goals) ·
@@ -46,10 +46,11 @@ Contents:
 
 - Tiling in the dwm/Krohnkite style, never binary-space partitioning:
   master + stack, three columns, two columns + a stack, monocle. Layout is
-  per workspace. Any window can be maximized or made fullscreen on its own,
-  and dialogs always float.
-- A lone window is centered at **80%** width on an ultrawide and fills
-  **100%** on a 16:9 or 16:10 monitor.
+  per workspace, and per monitor within it (§6.5). Any window can be
+  maximized or made fullscreen on its own, and dialogs always float.
+- A lone window is centered at **80%** width on an ultrawide (an aspect of
+  2.1 or more), at **60%** from 3.2, and fills **100%** on a 16:9 or 16:10
+  monitor.
 - Inactive windows are **darkened**. That is the focus cue: no borders, no
   gaps. The focused window also casts a soft shadow.
 - **Named workspaces**, not numbered ones. The home workspace, **in** by
@@ -58,13 +59,15 @@ Contents:
   that opens on home asks which (§6.5). Home's mail, chat and calendar are
   pinned there, so a close key leaves them open.
 - One full-width bar: every workspace on the left, by name, with
-  **urgency** shown on the workspace that wants attention. The tray, network, volume, Bluetooth,
-  power and notifications sit on the right, then local's clock, its date in
-  place of a label. Hovering it shows **America/Los_Angeles**,
-  **America/New_York** and **Europe/London**, labeled `SF`, `NYC` and `LON`.
-- A **switcher** on a tap of Super: one overlay whose tabs are the
-  launcher (fuzzy search over `.desktop` entries plus quick actions), the
-  workspaces, every window, and the windows wanting attention (§8).
+  **urgency** shown on the workspace that wants attention. The tray,
+  network, volume, Bluetooth, power and notifications sit on the right.
+  Then come clocks for **America/Los_Angeles**, **America/New_York** and
+  **Europe/London**, labeled `SF`, `NYC` and `LON`, and last local's
+  clock, with its date in place of a label (§7.3).
+- A **switcher** on a tap of Super: one overlay with five tabs (§8). They
+  are Apps, the launcher (fuzzy search over `.desktop` entries plus quick
+  actions); Workspaces; Windows, every window; Attention, the windows
+  wanting it; and Actions, every quick action.
 - Desktop notifications with history and do-not-disturb.
 - **Automatic light and dark modes**: light from 07:00 to 19:00 by default.
   The shell, GTK apps and kitty switch live with no restarts; Qt apps switch
@@ -78,7 +81,8 @@ Contents:
 
 **Non-goals**
 
-- Writing a compositor, or reimplementing tiling in the shell.
+- Writing a compositor from scratch, or reimplementing tiling in the
+  shell. tidewm, tide's own compositor, is a fork of dwl (§3.6).
 - A settings suite, file manager, widget system or app store. tide
   links to existing GTK tools where a GUI is needed (§16).
 - An X11 session. XWayland apps work, but nothing is designed for X11.
@@ -91,10 +95,12 @@ Contents:
    named component, and everything else that could do it is kept out (§5).
 2. **One process for everything you see.** The bar, launcher, notifications,
    OSD, polkit prompt, tray host and share picker are all in the shell. With
-   nothing to fight over, there is one theme and one place to debug. The one
-   deliberate exception is the **lock**. It uses the same QML, but runs as its
-   own short-lived process, so a bar crash or a hot reload can never break a
-   locked screen.
+   nothing to fight over, there is one theme and one place to debug. There
+   are two deliberate exceptions, both short-lived processes:
+   - The **lock**. It uses the same QML, but runs as its own process, so a
+     bar crash or a hot reload can never break a locked screen.
+   - The session's **splash** (§5.3). It covers the seconds before the
+     shell is ready, so it can't be part of the shell.
 3. **The compositor does windows.** The shell reads compositor state and sends
    commands; it never computes window geometry.
 4. **Nothing restarts to change theme or reload config.**
@@ -104,8 +110,9 @@ Contents:
    something a feature depends on is missing or out of date, tide says so
    where you'll see it: a notification, and a `tide doctor` line (§5.4),
    each naming what's missing and what stops working. That covers a rule
-   `conf` should have, a Hyprland feature or version, a helper program, a
-   settings file, and later the browser-tabs extension (§8.3).
+   the Hyprland config should have, a Hyprland feature or version, a
+   helper program, a settings file, and later the browser-tabs extension
+   (§8.3).
 
 ## 2. Mocks
 
@@ -121,7 +128,9 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Desktop**: 3440×1440, three-column layout, focused master in the middle, the rest dimmed. The bar shows the workspaces by name, and `me` is urgent. [`desktop.png`](docs/mocks/desktop.png) | ![desktop](docs/mocks/desktop.png) |
 | **Bar**: dark and light, every workspace and status state, the clock rules. [`bar.png`](docs/mocks/bar.png) | ![bar](docs/mocks/bar.png) |
 | **Bar at the bottom**: a popover rising from it, popups top right, the minimized tray over it, and the notification center over the bell (§7.1). [`bottom-bar.png`](docs/mocks/bottom-bar.png) | ![bar at the bottom](docs/mocks/bottom-bar.png) |
+| **Bar on a narrow screen**: the bar at a laptop's 1536 px with every status icon, and four ways to give the title room. C, local's clock alone, was chosen, and is now what unticking the zones gives (§7.3). [`narrow.png`](docs/mocks/narrow.png) | ![bar on a narrow screen](docs/mocks/narrow.png) |
 | **Layouts**: tile, three-column, two columns + stack, monocle, the single-window rule, and how three-column fills up. [`layouts.png`](docs/mocks/layouts.png) | ![layouts](docs/mocks/layouts.png) |
+| **Borders and shadows**: each of the Borders page's Shadows choices, and a border, on two tiles and a floating window, with close-ups of where they meet (§6.2). [`borders.png`](docs/mocks/borders.png) | ![borders and shadows](docs/mocks/borders.png) |
 | **Switcher**: its five tabs, Apps (the launcher), Workspaces, Windows, Attention and Actions. [`switcher.png`](docs/mocks/switcher.png) | ![switcher](docs/mocks/switcher.png) |
 | **Name prompt**: a new window on home, moving a window, going to a workspace, and a window kept on home (§6.5). [`prompt.png`](docs/mocks/prompt.png) | ![name prompt](docs/mocks/prompt.png) |
 | **Notifications**: popups, OSD, the notification center while sharing. [`notifications.png`](docs/mocks/notifications.png) | ![notifications](docs/mocks/notifications.png) |
@@ -129,6 +138,8 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 | **Settings**: the sidebar grouped under Hardware, Windows and General, Keyboard with its shortcuts, and the newer pages: Start at login, Notifications, Clipboard, Power and Workspaces. [`settings.png`](docs/mocks/settings.png) | ![settings](docs/mocks/settings.png) |
 | **System monitor popover**: the CPU and Memory tabs, and throttling. [`sysmon.png`](docs/mocks/sysmon.png) | ![system monitor](docs/mocks/sysmon.png) |
 | **Login and lock**: greeter, lock, failure, screensaver. [`lock.png`](docs/mocks/lock.png) | ![lock](docs/mocks/lock.png) |
+| **Startup**: every screen from power on to the screensaver, in order: the boot splash, the login screen, the session's splash, the desktop, the lock and the screensaver (§5.3). [`startup.png`](docs/mocks/startup.png) | ![startup](docs/mocks/startup.png) |
+| **Boot splash**: Plymouth's screens, booting, unlocking the disk, a boot message, and restarting or shutting down (§5.3). [`splash.png`](docs/mocks/splash.png) | ![boot splash](docs/mocks/splash.png) |
 | **Screen-share picker**: screens and windows. [`share-picker.png`](docs/mocks/share-picker.png) | ![share picker](docs/mocks/share-picker.png) |
 | **Picker**: `Super+V`'s Clipboard tab, and its Characters tab searched by name. [`picker.png`](docs/mocks/picker.png) | ![picker](docs/mocks/picker.png) |
 | **Screenshots**: region and window modes. [`screenshot.png`](docs/mocks/screenshot.png) | ![screenshot](docs/mocks/screenshot.png) |
@@ -137,7 +148,7 @@ mock's half-pixel size is rounded up: 12.5px is 13.
 
 ## 3. Decisions
 
-### 3.1 Compositor: Hyprland 0.56.2+, configured in Lua
+### 3.1 Compositor: Hyprland, configured in Lua
 
 | | tile | three-col | two cols + stack | lone window 80% / 100% | per-workspace layout | urgency | fit |
 |---|---|---|---|---|---|---|---|
@@ -171,8 +182,9 @@ deprecated in 0.56.1 and removed in 0.57. The mitigations are:
   uses: 0.56.2, Debian testing's from August to November 2026. A machine
   that can't upgrade keeps a working session, with only what needs 0.57
   (the `Super` tap) gated on `hl.version()`.
-- Make CI load the config under the pinned Hyprland (`hypr_test.sh` already
-  exists in `conf`).
+- Test the config in CI. `hypr/hyprland_test.lua` loads it against a stub
+  of Hyprland's Lua API, since no compositor runs in CI. Loading it under
+  the pinned Hyprland itself is still to do.
 - Treat each Hyprland upgrade as its own PR.
 
 The Lua layout API is two releases old, so it is the riskiest dependency.
@@ -203,8 +215,8 @@ Quickshell's built-ins cover every job:
 - **UPower**, with power profiles.
 - **Bluetooth**.
 - **Networking** (NetworkManager).
-- **Pam**, and **Greetd**, which the greeter uses a client of tide's own
-  in place of (§11).
+- **Pam**, and **Greetd**. The greeter uses `tide-greetd`, a client of
+  tide's own, in its place (§11).
 - **Polkit** agent (0.3).
 - **WlSessionLock**.
 - **IdleMonitor** / **IdleInhibitor**.
@@ -253,15 +265,15 @@ else in this spec changes.
 
 ### 3.3 Session: uwsm and systemd user units
 
-Every long-running piece is a systemd user unit under a
-[uwsm](https://github.com/Vladimir-csp/uwsm) session. It is ordered, restarted
-on failure, scoped to this session only, and visible in one
-`systemctl --user status`. §5 is the detail.
+Every long-running piece is a systemd user unit, or a child process of
+one, under a [uwsm](https://github.com/Vladimir-csp/uwsm) session. It is
+ordered, restarted on failure, scoped to this session only, and visible in
+one `systemctl --user status`. §5 is the detail.
 
 ### 3.4 Login: greetd plus the tide greeter
 
 greetd runs the tide greeter, the same QML screen as the lock (§11), on
-tidewm where it runs, else on a stripped Hyprland (maintainer,
+tidewm (§3.6) where it runs, else on a stripped Hyprland (maintainer,
 2026-11-11). tidewm is tide's own: its defaults are ours to set, it logs
 to stderr, and setup builds it on every distro tide supports. cage was
 the other candidate, and multiple monitors rule it out (checked on cage
@@ -271,19 +283,40 @@ the other candidate, and multiple monitors rule it out (checked on cage
 - its `-m extend` stretches one window across every output, and `-m last`
   uses only the last one connected.
 
-Both are installed for the sessions anyway, and `tide-msg --type
-get_inputs` or `hyprctl devices` gives the greeter the same layout name as
-the lock.
+tidewm and Hyprland are both installed for the sessions anyway, and
+`tide-msg --type get_inputs` or `hyprctl devices` gives the greeter the
+same layout name as the lock.
 
 ### 3.5 Look
 
 - **Palette:** libadwaita, dark and light.
 - **Type:** Inter for UI, Ubuntu Mono for code (decided; the pairings
   compared are in [`fonts.png`](docs/mocks/fonts.png)).
-- **Radii:** 10–16 px.
-- **Windows:** no gaps, no borders, inactive dim 0.12, a shadow under the
-  focused one.
+- **Radii:** the shell's are mostly 6–13 px.
+- **Windows:** no gaps, and no borders by default. Corners are rounded by
+  6 px, which the Borders page can turn off; tidewm's are square.
+  Dimming inactive windows, at 0.12, and a shadow under the focused one
+  (§6.2).
 - **Bar:** 36 px.
+
+### 3.6 tidewm: tide's own compositor
+
+tidewm ([mikelward/tidewm](https://github.com/mikelward/tidewm)) is tide's
+fork of dwl, the small dwm-style wlroots compositor. It carries tide's
+workspaces, sway's config syntax and sway's IPC. §21.1 has the case for
+it and its history. Hyprland stays the default (§3.1). Today tidewm does
+two jobs:
+
+- **It runs the login screen** where it runs (§3.4, §11). `tide-greeter`
+  checks `tidewm -v`, and falls back to a stripped Hyprland.
+- **It's an optional session**, "tide (tidewm)", beside the default
+  Hyprland one (§5.3). The shell, the units and `tide doctor` work in
+  both. Where tidewm's session differs, the section says so.
+
+`setup` builds tidewm from its latest `main`, against wlroots 0.20, which
+`deps.lock` pins where the distro has none. tidesway, tide's fork of sway,
+can take tidewm's place in a third session, which is still being built
+(§5.3).
 
 ## 4. Requirements and how each is met
 
@@ -294,15 +327,15 @@ the lock.
 | R3 | Two columns + stack | mode `twocol` | Lua |
 | R4 | Lone window 80% on ultrawide, 100% otherwise | the layout reads the work area's aspect, in every mode | Lua |
 | R5 | Monocle, and maximize or fullscreen the current window | mode `monocle`; Hyprland `fullscreen` states 1 and 0 (§6.3) | Lua / native |
-| R6 | Layout per workspace | the layout keeps a mode per workspace | Lua |
-| R7 | Dim inactive; no borders, gaps | `decoration:dim_inactive`, `dim_strength 0.12`, `border_size 0`, gaps 0 | native |
+| R6 | Layout per workspace, and per monitor within it | the layout keeps a mode per part (§6.5) | Lua |
+| R7 | Dimming inactive windows; no borders, no gaps | `decoration:dim_inactive`, `dim_strength 0.12`, `border_size 0`, gaps 0 | native |
 | R8 | One full-width bar, flush to the edges, all workspaces by name | Quickshell `PanelWindow` per monitor + `Quickshell.Hyprland` | shell |
 | R9 | Tray icons | `Quickshell.Services.SystemTray`; the shell is the SNI watcher | shell |
 | R10 | Network, volume, Bluetooth, power | `Networking`, `Pipewire`, `Bluetooth`, `UPower` | shell |
 | R11 | Labeled clocks for America/Los_Angeles, America/New_York, Europe/London | fixed place labels `SF` / `NYC` / `LON` by default; tzdata abbreviations (PDT/PST …), **not** CLDR, in the popover or on request (§7.3) | shell |
 | R12 | Local clock shows the date | `MMM d` in place of a label | shell |
 | R13 | Urgency on the workspace widget | Hyprland `urgent` on toplevel/workspace, plus attention derived from notifications, since Chrome can't flag urgency on Wayland (§14) | native + shell |
-| R14 | Tap Super for the launcher | a release bind on `SUPER_L` → a Hyprland global shortcut → Quickshell `GlobalShortcut`. Fixed in Hyprland 0.57.0; `conf` binds it only from 0.57, and `Super+Space` before (§8) | native + shell |
+| R14 | Tap Super for the launcher | a release bind on `SUPER_L` → a Hyprland global shortcut → Quickshell `GlobalShortcut`. Fixed in Hyprland 0.57.0; tide's Hyprland config binds it only from 0.57, and `Super+Space` before (§8) | native + shell |
 | R15 | Fuzzy search of `.desktop` apps | `DesktopEntries` + our scorer | shell |
 | R16 | Quick actions | a built-in action list | shell |
 | R16a | Named workspaces, with standing ones and home (`in` by default) first | Hyprland's `name:` workspaces, home kept by a `persistent` workspace rule; the shell's name prompt (§6.5) | native + shell |
@@ -354,101 +387,120 @@ work". The old setup shows how it fought itself:
 
 ### 5.2 Who owns what
 
+The table is the target. Where M2's transitional shell (below) still
+differs, a row says so under *Today (M2)*, naming the setting that switches
+it.
+
 | Job | Owner | Started by | Kept out |
 |---|---|---|---|
-| Compositor | Hyprland | uwsm `wayland-wm@tide-hyprland.service` | — |
-| Bar (exactly one per monitor), launcher, OSD, wallpaper | tide (`qs -c tide`) | `tide.service` | waybar, swaybar, swww/swaybg, fuzzel/rofi aren't started; `doctor` counts top-layer bars |
-| Notifications (`org.freedesktop.Notifications`) | tide | `tide.service`, before any app | dunst/mako/swaync: not installed; `doctor` flags any activatable one |
-| Tray host (`org.kde.StatusNotifierWatcher`) | tide | `tide.service`, before any app | `nm-applet`, `blueman-applet`, `xembedsniproxy` not run |
-| Polkit agent | tide (`Quickshell.Services.Polkit`) | `tide.service` | polkit-gnome/-kde agents not run; the packaged `hyprpolkitagent.service` is skipped in tide's sessions by a drop-in |
+| Compositor | Hyprland; tidewm in its optional session (§3.6) | uwsm `wayland-wm@tide\x2dhyprland.service`, or `wayland-wm@tide\x2dtidewm.service` | — |
+| Bar (exactly one per monitor), launcher, OSD, wallpaper | tide (`qs -c tide`). *Today (M2):* `tide-shell` runs it where Quickshell 0.3 or newer can load it, else waybar, with swww or swaybg for the wallpaper (`TIDE_BAR`) | `tide.service` | waybar, swaybar, swww, swaybg, fuzzel and rofi aren't started; `doctor` counts top-layer bars |
+| Notifications (`org.freedesktop.Notifications`) | tide. *Today (M2):* swaync, unless `TIDE_NOTIFICATIONS=1` with the Quickshell bar | `tide.service`, before any app | dunst, mako and swaync: not installed; `doctor` flags any activatable one. *Today (M2):* `setup` masks swaync's unit, and `tide-shell` runs swaync itself |
+| Tray host (`org.kde.StatusNotifierWatcher`) | tide. *Today (M2):* waybar's tray, when waybar is the bar (`TIDE_BAR`) | `tide.service`, before any app | `nm-applet`, `blueman-applet`, `xembedsniproxy` not run |
+| Polkit agent | tide (`Quickshell.Services.Polkit`). *Today (M2):* the first agent `tide-shell` finds, hyprpolkitagent, polkit-gnome's or KDE's, unless `TIDE_POLKIT=1` | `tide.service` | polkit-gnome's and KDE's agents not run; the packaged `hyprpolkitagent.service` is skipped in tide's sessions by a drop-in |
 | Lock screen | `tide-lock`, a separate Quickshell process with the same QML (`WlSessionLock` + PAM service `tide-lock`) | hypridle's `lock_cmd`, on logind's `Lock` signal → `tide-lock.service` | hyprlock runs only as the lock's fallback (§10) |
 | Idle timeline, `org.freedesktop.ScreenSaver`, logind lock and sleep bridge | hypridle (§10) | `hypridle.service` | swayidle not run; the shell does not time idle |
-| Screen-share picker | tide, via xdph `custom_picker_binary` | xdph, on demand | `hyprland-share-picker` |
+| Screen-share picker | tide, via xdph `custom_picker_binary`; in tidewm's session, xdg-desktop-portal-wlr's chooser, `tide-share-picker --dmenu` (§12) | the portal, on demand | `hyprland-share-picker`, which runs only where no tide shell does (§12) |
 | System and session buses | dbus-broker (§5.4) | `dbus.service`, its alias, in the system and user managers | dbus-daemon: the installer enables dbus-broker where the distro keeps dbus-daemon |
 | Portals | `xdg-desktop-portal` + `-hyprland` + `-gtk` | D-Bus activation | `-kde`, `-gnome`, `-wlr` never selected: `tide-portals.conf` names `hyprland;gtk`. tidewm's session (§5.3) reads `tidewm-portals.conf`, `wlr;gtk`, instead |
-| Theme schedule | tide | `tide.service` | `theme-daemon.sh` retired |
+| Theme schedule | tide | `tide.service` | `theme-daemon.sh` retired. *Today (M2):* conf's `theme-daemon.sh` still runs where it's installed (`TIDE_THEME_DAEMON`), to restart swaync, and waybar when that's the bar, in the new style |
 | Audio | PipeWire + WirePlumber | their own socket units | PulseAudio |
 | Network, Bluetooth | NetworkManager, BlueZ (system) | system units | tray applets |
 | Network passwords (NetworkManager's secret agent), and Bluetooth pairing (BlueZ's agent) | `tide-agent`, asking through the shell (§5.6) | the shell, unless `TIDE_AGENT=0` | nm-applet skipped by autostart while the shell's agent runs, and stood aside for when it runs anyway |
 | Secrets | gnome-keyring, unlocked by PAM at login | greetd PAM + `gnome-keyring-daemon.socket` | KWallet in this session |
 | Lid, power button | logind's defaults (`HandleLidSwitch=suspend`, `HandleLidSwitchDocked=ignore`), plus a Hyprland `bindl` pair on the lid switch: closing it with an external monitor attached disables the internal panel, and opening it re-enables the panel with its configured mode and returns the panel's workspaces to it | logind / Hyprland | `lid.sh`'s own suspend logic, and the `HandleLidSwitch=ignore` drop-in the old `setup-hypr` installed |
-| "Show in folder" (`org.freedesktop.FileManager1`) | Nautilus (§16.2) | D-Bus activation via tide's user-level service file → `tide-filemanager.service`, whose launcher picks Dolphin under Plasma and which stops with the session | the arbitrary pick between Dolphin's and Nautilus's system activation files |
+| "Show in folder" (`org.freedesktop.FileManager1`), planned (§16.2) | Nautilus | D-Bus activation via tide's user-level service file → `tide-filemanager.service`, whose launcher picks Dolphin under Plasma and which stops with the session | the arbitrary pick between Dolphin's and Nautilus's system activation files. *Today:* tide installs neither file nor unit, so the bus still picks one of those |
 | Terminal for `Terminal=true` apps | kitty, via `xdg-terminal-exec` | on demand | GLib's fallback list (Konsole) |
 | Clipboard history | `tide clipboard store`, encrypted under a key in the keyring (§8.4) | `tide-clipboard.service` | other clipboard managers aren't started |
 | Input method, for accents on a held letter | fcitx5 with `tide-accents` (§8.6) | `tide-fcitx5.service`, unless `TIDE_IME=0` | fcitx5's own autostart entry, which the installer hides |
 | Apps | you | `tide launch` from keybinds and the launcher, which waits for the shell to be ready, then runs `uwsm app --` (§5.4) | — |
 
 **M2 transitional shell.** Until the Quickshell shell lands (M3 and M4),
-`tide.service` runs `tide-shell` instead of `qs -c tide`.
-It runs the Quickshell bar (`qs -c tide`) when Quickshell 0.3 or newer
-and the shell are installed, and waybar otherwise (`TIDE_BAR` picks). An
-older `qs` can't load the bar (§3.2), so the shell logs its version and
-runs waybar, and `doctor` reports it. Once swaync owns the notification
-name, the shell also sends a critical notification: "tide's bar couldn't
-start", with the version and the fix. If it can't send it, it logs why. It
-starts `conf`'s theme daemon, which runs swaync, and waybar when that's the
-bar, and the first polkit agent it finds. tide doesn't need `conf`: with no
-theme daemon, the shell logs so and starts swaync, and waybar when that's
-the bar, itself, in their default style. With the Quickshell bar, light
-and dark still switch, as the Quickshell shell sets them (§15); with
-waybar's, they don't. With `TIDE_NOTIFICATIONS=1` and the
-Quickshell bar, the shell is the notification server, and no swaync starts.
-A `TIDE_THEME_DAEMON` that isn't there, or no swaync or waybar where one is
-needed, fails the start. It reports ready once swaync (or the shell) owns
-`org.freedesktop.Notifications` and the bar's tray owns
-`org.kde.StatusNotifierWatcher`, each from inside the unit. It waits 12 s
-(`TIDE_SHELL_WAIT`). A tray that hasn't appeared by then fails the start:
-the bar didn't come up. A notification server that hasn't doesn't, once
-the tray is there. Failing would have systemd kill a working bar, three
-times, and end in the fallback terminal. The shell reports ready, logs
-the missing name, who should own it and what the bus last said, and goes
-on without notifications. It looks for the owner for 60 s more
-(`TIDE_SHELL_LATE_WAIT`), and logs when it appears, or that it hasn't;
-`doctor` reports a missing owner at any time. A start that gives up, and
-one that goes on without notifications, also log what the unit was
-running: each process in its cgroup, with its age and command line, so one
-that was stuck is named. The polkit agent's registration isn't
-observable from a script, so it isn't waited for. Its exit doesn't fail the
-unit, either: an agent exits at once when another already holds the
-session, and failing the unit for that restarted the bar in a loop at
-login. The shell starts the agent alone again instead, after 5 s, doubling
-to once a minute, so it takes over when the other agent goes and comes
-back after a crash; `doctor` names the other agent. With waybar's bar it
-also runs the wallpaper (swww, or swaybg where swww isn't packaged;
-supervised but not waited for); the Quickshell shell draws its own (§15).
-It runs tide's `apply-input.sh` once, which Hyprland's autostart ran
-before it shrank to `uwsm finalize`. Then it starts tide's
-`watch-input.sh` for the session. Hyprland has no event for a new device,
-so that listens to udev and runs `apply-input.sh` again when a mouse,
-touchpad or keyboard is plugged in, such as through a KVM switch. In
-tidewm's session it follows tidewm's `input` event instead, through
-`tide-msg --subscribe input` (§16). Either script missing is logged, with
-what it costs; the session goes on.
+`tide.service` runs `tide-shell` instead of `qs -c tide`. It runs each
+owner in the unit's cgroup:
 
-With `TIDE_POLKIT=1` the shell is the polkit agent
-(`Quickshell.Services.Polkit`), opt-in until it has run in a live session,
-and `tide-shell` starts no other; under waybar, where the shell doesn't
-run, it still starts the agent it finds. The shell's agent isn't in the
-ready check yet either. It keeps the M2 agent's backoff: polkitd lets one
-agent register per session, and Quickshell 0.3.1 only logs a refusal, so a
-registration that hasn't happened 5 s on counts as refused, and the agent
-is made again, waiting twice as long each time, up to a minute.
-Quickshell's polkit module is optional at build time
-(`-DSERVICE_POLKIT=OFF`, Quickshell 0.3.1's `BUILD.md`), and a missing
-module fails every file that imports it. So the agent is a file of its
-own, loaded only with `TIDE_POLKIT=1`, and a Quickshell built without
-polkit still runs the shell when the agent is off. With it on, `tide
-doctor` asks the shell (`qs -c tide ipc call polkit status`) whether its
-agent was made and registered, since `tide-shell` then starts no other.
+- **The bar** (`TIDE_BAR`). The Quickshell bar (`qs -c tide`) when
+  Quickshell 0.3 or newer and the shell are installed, and waybar
+  otherwise. An older `qs` can't load the bar (§3.2), so the shell logs
+  its version and runs waybar, and `doctor` reports it. Once swaync owns
+  the notification name, the shell also sends a critical notification:
+  "tide's bar couldn't start", with the version and the fix. If it can't
+  send it, it logs why.
+- **Notifications** (`TIDE_NOTIFICATIONS`). `conf`'s theme daemon runs
+  swaync, and waybar when that's the bar. tide doesn't need `conf`: with
+  no theme daemon, the shell logs so and starts swaync, and waybar when
+  that's the bar, itself, in their default style. With
+  `TIDE_NOTIFICATIONS=1` and the Quickshell bar, the shell is the
+  notification server, and no swaync starts.
+- **Light and dark.** With the Quickshell bar they still switch, as the
+  Quickshell shell sets them (§15). With waybar's, they switch only where
+  `conf`'s theme daemon runs.
+- **The polkit agent** (`TIDE_POLKIT`). The first one it finds:
+  hyprpolkitagent, polkit-gnome's, then KDE's, which is always installed
+  (§5.5).
+  - Its registration isn't observable from a script, so it isn't waited
+    for.
+  - Its exit doesn't fail the unit, either. An agent exits at once when
+    another already holds the session, and failing the unit for that
+    restarted the bar in a loop at login.
+  - **The backoff.** The shell starts the agent alone again instead,
+    after 5 s, doubling to once a minute. So it takes over when the other
+    agent goes, and comes back after a crash. `doctor` names the other
+    agent. Every agent tide runs keeps this backoff.
+  - With `TIDE_POLKIT=1` the Quickshell shell is the agent
+    (`Quickshell.Services.Polkit`), opt-in until it has run in a live
+    session, and `tide-shell` starts no other. Under waybar, where the
+    shell doesn't run, it still starts the agent it finds. The shell's
+    agent isn't in the ready check yet either. It keeps the backoff:
+    polkitd lets one agent register per session, and Quickshell 0.3.1 only
+    logs a refusal, so a registration that hasn't happened 5 s on counts as
+    refused.
+  - Quickshell's polkit module is optional at build time
+    (`-DSERVICE_POLKIT=OFF`, Quickshell 0.3.1's `BUILD.md`), and a missing
+    module fails every file that imports it. So the agent is a file of its
+    own, loaded only with `TIDE_POLKIT=1`, and a Quickshell built without
+    polkit still runs the shell when the agent is off. With it on, `tide
+    doctor` asks the shell (`qs -c tide ipc call polkit status`) whether
+    its agent was made and registered, since `tide-shell` then starts no
+    other.
+- **The wallpaper**, with waybar's bar: swww, or swaybg where swww isn't
+  packaged, supervised but not waited for. The Quickshell shell draws its
+  own (§15).
+- **Input.** It runs tide's `apply-input.sh` once, which Hyprland's
+  autostart ran before it shrank to `uwsm finalize`. Then it starts tide's
+  `watch-input.sh` for the session. Hyprland has no event for a new
+  device, so that listens to udev and runs `apply-input.sh` again when a
+  mouse, touchpad or keyboard is plugged in, such as through a KVM switch.
+  In tidewm's session it follows tidewm's `input` event instead, through
+  `tide-msg --subscribe input` (§16). Either script missing is logged,
+  with what it costs; the session goes on.
+- **Ready.** It reports ready once swaync (or the shell) owns
+  `org.freedesktop.Notifications` and the bar's tray owns
+  `org.kde.StatusNotifierWatcher`, each from inside the unit. It waits
+  12 s (`TIDE_SHELL_WAIT`).
+  - A tray that hasn't appeared by then fails the start: the bar didn't
+    come up.
+  - A notification server that hasn't doesn't, once the tray is there.
+    Failing would have systemd kill a working bar, three times, and end in
+    the fallback terminal. The shell reports ready, logs the missing name,
+    who should own it and what the bus last said, and goes on without
+    notifications. It looks for the owner for 60 s more
+    (`TIDE_SHELL_LATE_WAIT`), and logs when it appears, or that it hasn't.
+    `doctor` reports a missing owner at any time.
+  - A start that gives up, and one that goes on without notifications,
+    also log what the unit was running: each process in its cgroup, with
+    its age and command line, so one that was stuck is named.
+  - A `TIDE_THEME_DAEMON` that isn't there, or no swaync or waybar where
+    one is needed, fails the start.
 
 ### 5.3 Start order
 
 ```mermaid
 flowchart TD
   G[greetd + tide greeter] -->|PAM: auth, unlock keyring| U["uwsm start -e -D tide:Hyprland -- tide-hyprland"]
-  U --> W["wayland-wm@tide-hyprland.service (Hyprland)"]
+  U --> W["wayland-wm@tide\x2dhyprland.service (Hyprland)"]
   W -->|"exec-once: the splash, then uwsm finalize"| GS[graphical-session.target]
-  GS --> Q["tide.service: bar, launcher, notifications, tray watcher, polkit"]
+  GS --> Q["tide.service: bar, launcher, notifications, tray watcher, polkit agent"]
   GS --> I["hypridle.service (Type=dbus: ready once it owns org.freedesktop.ScreenSaver)"]
   I -->|"lock_cmd, on logind Lock"| L["tide-lock.service (on demand)"]
   I -->|Before=| Q
@@ -508,9 +560,9 @@ flowchart TD
     drop-in goes.
 - **The session entry** is `tide.desktop` in `wayland-sessions`, so
   the current display manager lists it too (M2).
-- **Each entry's `Exec` is `tide-session hyprland` or `tide-session
-  tidewm`**, plain words. GDM puts `Exec` inside double quotes of its own,
-  unescaped, and SDDM splits it on spaces with no quoting, so a quote in
+- **Each entry's `Exec` is `tide-session hyprland`, `tide-session
+  tidewm` or `tide-session tidesway`**, plain words. GDM puts `Exec`
+  inside double quotes of its own, unescaped, and SDDM splits it on spaces with no quoting, so a quote in
   `Exec` breaks the command before anything runs: `-N "tide (tidewm)"`
   logged in and straight back out, with nothing in the journal.
   `tide-session` runs the `uwsm start` below, and logs what it ran, uwsm's
@@ -521,7 +573,7 @@ flowchart TD
   Hyprland drew. Now only a problem goes to stderr; the rest goes to the
   journal alone. On a text console, `tide-session` clears it and hides the
   cursor first, and shows the cursor again when the session ends. The
-  login goes greeter, black, then the session's splash (below).
+  login goes greeter, black, then the session's splash (above).
 - **The greeter leaves nothing on the console** (maintainer, 2026-11-14).
   greetd runs it on the same text console. Its compositor's log and its
   own lines went there, and showed for a moment as the greeter ended,
@@ -530,9 +582,9 @@ flowchart TD
   goes to the journal as `tide-greeter`. A greeter that fails brings the
   console back, with its cursor, for agreety's text login.
 - **A login starts clean.** The user manager can outlive a logout
-  (lingering, or a login straight after), and with it the last session's
-  failed units. A shell that hit its start limit there is refused its
-  start for the rest of the two minutes (§5.3, below), so the new session
+  (lingering, a shpool session, or a login straight after), and with it
+  the last session's failed units. A shell that hit its start limit
+  there is refused its start for the rest of the two minutes (§5.3, below), so the new session
   went straight to the fallback terminal. `tide-session` first runs
   `systemctl --user reset-failed` for tide's units and hypridle, which
   clears the failed state and the start limit's count (systemctl(1)). It
@@ -569,15 +621,16 @@ flowchart TD
     output, and how it ended, as `tide-keys`, `tide-hyprland` and
     `tide-input`.
 - **Nothing holds up telling uwsm the session is ready.** uwsm ends a
-  session that never says so. Going home, before that, is given 5 seconds
-  (`tide-msg` has no limit of its own), and a failed `uwsm finalize` is
-  logged.
+  session that never says so. In tidewm's session, going to home (§6.5)
+  before that is given 5 seconds (`tide-msg` has no limit of its own),
+  and a failed `uwsm finalize` is logged.
 - **A shell that can't run leaves a terminal, not an empty session.**
   `tide.service` gives up after three failed starts in two minutes, wide
   enough that 15-second start timeouts can't restart it forever, and its
   `OnFailure=` starts `tide-shell-fallback.service`. With
-  `RestartMode=direct`, a failure the next start recovers from doesn't. That opens the first
-  terminal there is, saying the shell didn't start and that Super+Shift+E
+  `RestartMode=direct`, a failure that the next start recovers from
+  doesn't start the fallback. The fallback opens the first terminal there
+  is, saying the shell didn't start and that Super+Shift+E
   logs out, with the shell's status and log, then a shell to fix it from.
   It runs only in a tide session. It first starts waybar, where installed,
   as the transient unit `tide-bar-fallback`, so there's a bar meanwhile; it
@@ -592,8 +645,8 @@ flowchart TD
   over tidewm's IPC), a clock, the tray, the network, the volume and the
   battery, and says tide's bar isn't running.
 - **A Hyprland too old for tide's config never gets a tide session.**
-  Before 0.56.2, Hyprland can't run `hypr/tide/hyprland.lua`, and comes up
-  with its own banner and no tide keys or bar. So:
+  Before 0.56.2, Hyprland can't run tide's `hypr/hyprland.lua`, and comes
+  up with its own banner and no tide keys or bar. So:
   - `tide-hyprland` won't start one. It logs why, and the login screen
     comes back.
   - `install/tide-setup` checks the session's Hyprland last. If it's too
@@ -601,86 +654,99 @@ flowchart TD
     saying so, and the tide session's entry comes off the login screen,
     even with `--ignore-errors`. tide (tidewm) keeps its own entry. A
     later run with a Hyprland new enough puts it back.
-- **tidewm's session** (§21.1) is an option beside Hyprland's, not the
-  default: `tide-tidewm.desktop`, listed as "tide (tidewm)" only where
-  tidewm is installed. It runs `uwsm start -e -D tidewm:tide -- tide-tidewm`,
-  and the wrapper execs tidewm with `uwsm finalize SWAYSOCK I3SOCK` as its
-  startup command, so the session gets its own target,
-  `wayland-session@tide\x2dtidewm.target`, and tidewm's IPC socket. Quickshell's
-  I3 client reads `I3SOCK` first, so it's handed on too: tidewm's own, or
-  `SWAYSOCK`'s value from a tidewm that sets none, which replaces one the
-  user manager kept from an earlier session. The wrapper also starts
-  tidewm without `WAYLAND_DISPLAY`, `DISPLAY`, `SWAYSOCK`, `I3SOCK` and
-  `HYPRLAND_INSTANCE_SIGNATURE`, and logs any it dropped. An earlier
-  session can leave them, and wlroots runs a compositor that sees
-  `WAYLAND_DISPLAY` or `DISPLAY` as a window in that display. tidewm
-  comes first in `XDG_CURRENT_DESKTOP` for the portals:
-  xdg-desktop-portal reads the first file it finds for any of the
-  session's names, trying each name in a directory before the next
-  directory, so tide installs `tidewm-portals.conf` (wlr, then gtk)
-  beside `tide-portals.conf`. `tide doctor` checks xdg-desktop-portal-wlr
-  is installed there, by its `wlr.portal` file. tide's units, hypridle and the autostart
-  allowlist take any `XDG_CURRENT_DESKTOP` with `tide` in it. `tide`
-  and `tide-grant` record grants, read the focused workspace, and ask
-  whether a polkit prompt may take the keyboard (`tide prompt-focus`,
-  from GET_SEATS's `prompt_may_focus`), over tidewm's IPC there, through
-  `tide-msg`, a small client of sway's protocol. The shell asks tidewm
-  which monitor has focus and which workspaces there are, through
-  Quickshell's I3 module, so its popups, prompts, OSD and launcher open
-  on the focused monitor, and the bar, the switcher and the name prompt
-  list tidewm's workspaces, one per name, and go to them. Its windows come
-  from tidewm's `GET_TREE`, asked through `tide-msg`, and window events
-  (`TidewmData.qml`), for the bar's icons and title and the switcher's
-  Windows tab, which focus, bring back and maximize them. Its marks
-  (§14.4) come from tidewm's window events too: a window tidewm marks
-  urgent is the guard's, and notifications' marks are kept as on
-  Hyprland, but tidewm's guard isn't told them. The name prompt (§6.5)
-  takes new windows from them, judging each by the window its first
-  `focus` event carries, and moves a window or closes it there with
-  `move to workspace number` and `kill`. Super+Z minimizes with tidewm's
-  own `minimize` (§6.7). The Mouse, Touchpad and Keyboard pages (§16)
-  write `~/.config/tidewm/tide-input.conf`, tidewm's `input type:` lines,
-  which conf's tidewm config includes, and apply it with `tide-msg
-  reload`. A mouse's acceleration is libinput's adaptive profile there, or
-  flat at 0, since tidewm has no curve. A device's own settings are an
-  `input` block naming it as Hyprland does, which tidewm takes too, and
-  the pages list tidewm's devices by those names, from its `GET_INPUTS`.
-  tidewm's `type:pointer` is anything that can't tap, a laptop's pointing
-  stick included, so `apply-input.sh` gives those the touchpad's settings
-  in `tide-devices.conf` (§16).
-  The Appearance page's dim strength (§6.2) is
-  `tide-appearance.conf`'s `dim_inactive`, applied the same way. The
-  Displays page (§16) writes `tide-outputs.conf`, an `output` line for
-  each monitor, named by the description it has on Hyprland, which
-  tidewm takes too, with its scale and place, applied the same way; it
-  lists the monitors tidewm's `GET_OUTPUTS` gives. The Layouts page
-  writes `tide-layouts.conf`, tidewm's layout lines, applied the same way;
-  a reload that changes the layouts' defaults starts every workspace's
-  from them again there, as `tide_layout.reload()` does, but one for
-  another page leaves them be. The Floating page writes
-  `tide-floating.conf`, conf's dialog rules (§6.4) and two `for_window`
-  lines a rule, one for a Wayland
-  window's app ID and one for an X11 window's class, which tidewm keeps
-  apart as sway does, applied the same way. tidewm matches with PCRE2,
-  which reads the page's patterns as Hyprland's RE2 does but for `\v`,
-  `\b` and `\B`, so each is the same pattern with those spelled out as
-  RE2 means them, anchored to match the whole class and title as Hyprland
-  does; it floats the open windows a new rule covers too, and Super+Alt+F
-  fills the page in for tidewm's focused window. What else the shell takes from Hyprland's
-  events is still Hyprland's. The shell asks Hyprland nothing there, and
-  tells no layout of the bar's popovers (§6.6): tidewm drags the edge
-  itself, and passes a press over a popup to it. Home (§6.5) is the shell's to
-  keep there, as tidewm's config can't know its name: `tide-tidewm`
-  starts tidewm on it and keeps it, by the name the shell last wrote to
-  `tide-workspaces.lua`, and the shell keeps it from then on, with
-  `persist workspace`. tidewm's window rules (`for_window`) name a
-  workspace, but its config can't know home's name, which the shell can
-  change, so the shell is home's apps' rule there: a window of one of them that opens elsewhere is sent
-  home as it opens, unfollowed, as Hyprland's rule sends it, and one that
-  opened before the shell knew its app is sent once it does. The bar
-  warns of tidewm's config errors (§7.4). `tide doctor` counts bars, reports config errors
-  and checks home from tidewm's `GET_OUTPUTS`, `GET_CONFIG` and
-  `GET_WORKSPACES` there.
+- **tidewm's session** (§3.6) is an option beside Hyprland's, not the
+  default. Here is how it differs.
+  - **Its entry and target.** `tide-tidewm.desktop`, listed as "tide
+    (tidewm)" only where tidewm is installed, runs `uwsm start -e -D
+    tidewm:tide -- tide-tidewm`. The wrapper execs tidewm with `uwsm
+    finalize SWAYSOCK I3SOCK` as its startup command, so the session gets
+    its own target, `wayland-session@tide\x2dtidewm.target`, and tidewm's
+    IPC socket. Quickshell's I3 client reads `I3SOCK` first, so it's
+    handed on too: tidewm's own, or `SWAYSOCK`'s value from a tidewm that
+    sets none, which replaces one the user manager kept from an earlier
+    session.
+  - **A clean environment.** The wrapper starts tidewm without
+    `WAYLAND_DISPLAY`, `DISPLAY`, `SWAYSOCK`, `I3SOCK` and
+    `HYPRLAND_INSTANCE_SIGNATURE`, and logs any it dropped. An earlier
+    session can leave them, and wlroots runs a compositor that sees
+    `WAYLAND_DISPLAY` or `DISPLAY` as a window in that display.
+  - **Portals** (§12). tidewm comes first in `XDG_CURRENT_DESKTOP`.
+    xdg-desktop-portal reads the first file it finds for any of the
+    session's names, trying each name in a directory before the next
+    directory, so tide installs `tidewm-portals.conf` (wlr, then gtk)
+    beside `tide-portals.conf`. `tide doctor` checks
+    xdg-desktop-portal-wlr is installed there, by its `wlr.portal` file.
+  - **Units.** tide's units, hypridle and the autostart allowlist take any
+    `XDG_CURRENT_DESKTOP` with `tide` in it.
+  - **IPC.** `tide` and `tide-grant` record grants, read the focused
+    workspace, and ask whether a polkit prompt may take the keyboard
+    (`tide prompt-focus`, from GET_SEATS's `prompt_may_focus`). They do it
+    over tidewm's IPC, through `tide-msg`, a small client of sway's
+    protocol.
+  - **The shell.** It asks tidewm which monitor has focus and which
+    workspaces there are, through Quickshell's I3 module. So its popups,
+    prompts, OSD and launcher open on the focused monitor, and the bar,
+    the switcher and the name prompt list tidewm's workspaces, one per
+    name, and go to them.
+    - Its windows come from tidewm's `GET_TREE`, asked through
+      `tide-msg`, and window events (`TidewmData.qml`). They give the
+      bar's icons and title and the switcher's Windows tab, which focus,
+      bring back and maximize them.
+    - Its marks (§14.4) come from tidewm's window events too: a window
+      tidewm marks urgent is the guard's. Notifications' marks are kept as
+      on Hyprland, but tidewm's guard isn't told them.
+    - The name prompt (§6.5) takes new windows from them, judging each by
+      the window its first `focus` event carries. It moves a window or
+      closes it there with `move to workspace number` and `kill`.
+    - Super+Z minimizes with tidewm's own `minimize` (§6.7).
+    - What else the shell takes from Hyprland's events is still
+      Hyprland's. The shell asks Hyprland nothing there, and tells no
+      layout of the bar's popovers (§6.6): tidewm drags the edge itself,
+      and passes a press over a popup to it.
+  - **Settings pages** (§16). Each writes a file in `~/.config/tidewm/`
+    that tide's tidewm config (`tidewm/tide.conf`) includes, and applies
+    it with `tide-msg reload`.
+    - The Mouse, Touchpad and Keyboard pages write `tide-input.conf`,
+      tidewm's `input type:` lines. A mouse's acceleration is libinput's
+      adaptive profile there, or flat at 0, since tidewm has no curve. A
+      device's own settings are an `input` block naming it as Hyprland
+      does, which tidewm takes too, and the pages list tidewm's devices by
+      those names, from its `GET_INPUTS`. tidewm's `type:pointer` is
+      anything that can't tap, a laptop's pointing stick included, so
+      `apply-input.sh` gives those the touchpad's settings in
+      `tide-devices.conf`.
+    - The Appearance page's dimming strength (§6.2) is
+      `tide-appearance.conf`'s `dim_inactive`.
+    - The Displays page writes `tide-outputs.conf`, an `output` line for
+      each monitor, with its scale and place. Each is named by the
+      description it has on Hyprland, which tidewm takes too. The page
+      lists the monitors tidewm's `GET_OUTPUTS` gives.
+    - The Layouts page writes `tide-layouts.conf`, tidewm's layout lines.
+      A reload that changes the layouts' defaults starts every
+      workspace's from them again there, as `tide_layout.reload()` does,
+      but one for another page leaves them be.
+    - The Floating page writes `tide-floating.conf`: the built-in dialog
+      rules (§6.4), and two `for_window` lines a rule, one for a Wayland
+      window's app ID and one for an X11 window's class, which tidewm
+      keeps apart as sway does. tidewm matches with PCRE2, which reads the
+      page's patterns as Hyprland's RE2 does but for `\v`, `\b` and `\B`.
+      So each is the same pattern with those spelled out as RE2 means
+      them, anchored to match the whole class and title as Hyprland does.
+      It floats the open windows a new rule covers too. `ipc call
+      floating remember` fills the page in for tidewm's focused window,
+      but tide's tidewm config doesn't bind it to Super+Alt+F yet.
+  - **Home** (§6.5) is the shell's to keep there, as tidewm's config
+    can't know its name. `tide-tidewm` starts tidewm on it and keeps it,
+    by the name the shell last wrote to `tide-workspaces.lua`, and the
+    shell keeps it from then on, with `persist workspace`. tidewm's window
+    rules (`for_window`) name a workspace, but its config can't know
+    home's name, which the shell can change. So the shell is home's apps'
+    rule there: a window of one of them that opens elsewhere is sent home
+    as it opens, unfollowed, as Hyprland's rule sends it, and one that
+    opened before the shell knew its app is sent once it does.
+  - **Errors.** The bar warns of tidewm's config errors (§7.4). `tide
+    doctor` counts bars, reports config errors and checks home from
+    tidewm's `GET_OUTPUTS`, `GET_CONFIG` and `GET_WORKSPACES` there.
 - **tidesway's session** is tidewm's, with tidesway (mikelward/tidesway,
   tide's fork of sway) run in tidewm's place: `tide-tidesway.desktop`,
   listed as "tide (tidesway)" only where a `tidesway` command is
@@ -704,7 +770,9 @@ flowchart TD
   `WantedBy=graphical-session.target`. Plasma also reaches that target, and
   that is exactly how swaync leaked into KDE. Nothing tide installs
   starts in a KDE session but the launcher's own process, which
-  `setup-kde` turns on (§8.5).
+  `setup-kde` turns on (§8.5). The planned "Show in folder" service
+  (§5.2) would be a second: it's user-level, so it answers in every
+  session, and opens Dolphin under Plasma.
 - **Owners before clients.** `tide.service` is
   `Before=xdg-desktop-autostart.target`, and it counts as started only once
   the shell says every owner it hosts is ready. hypridle, the one owner
@@ -720,21 +788,23 @@ flowchart TD
     ScreenSaver name itself, it would time out and restart forever.
   - Both autostart and `tide launch` wait for `tide.service`,
     so they wait for hypridle too. If hypridle fails, the shell still
-    starts (`Wants=`, not `Requires=`), and `doctor` reports it. Ordering alone isn't enough,
-  because a plain service is "started" the moment `qs` is launched.
-  - The unit is `Type=notify` with `NotifyAccess=all`.
-  - The shell runs `systemd-notify --ready` only after all of these report
-    ready:
+    starts (`Wants=`, not `Requires=`), and `doctor` reports it.
+  - The unit is `Type=notify` with `NotifyAccess=all`. Ordering alone
+    isn't enough, because a plain service is "started" the moment `qs` is
+    launched.
+  - The shell runs `systemd-notify --ready` only after both of these
+    report ready:
     - the notification server owns `org.freedesktop.Notifications`;
-    - the tray owns `org.kde.StatusNotifierWatcher`;
-    - the polkit agent has registered with polkitd, or found that another
-      agent already holds the session. That is not a failure: the shell
-      reports ready and retries the agent with backoff, as the M2 shell
-      does (§5.2), and `doctor` names the other agent.
+    - the tray owns `org.kde.StatusNotifierWatcher`.
 
-    Waiting on a list of names from outside would miss any owner that isn't
-    a name, like the polkit agent. The shell is the one place that knows
-    when all of its jobs are up.
+    The polkit agent isn't waited for yet, the shell's included (§5.2,
+    `TODO.md`). It's planned to join once the shell's agent is the
+    default: ready once it has registered with polkitd, or found that
+    another agent already holds the session. That won't be a failure: the
+    shell will report ready, retry the agent with the backoff (§5.2), and
+    `doctor` will name the other agent. Waiting on a list of names from
+    outside would miss any owner that isn't a name, like the polkit agent.
+    The shell is the one place that knows when all of its jobs are up.
   - `TimeoutStartSec=15`: a shell that never gets ready fails the unit,
     and its log says which owner didn't report.
   - So no app starts before the owners exist, and D-Bus activation never
@@ -779,16 +849,16 @@ flowchart TD
   dbus-daemon costs. `tide doctor` reports a session bus that is still
   dbus-daemon's.
 - **Two `exec-once`s.** Hyprland's config starts nothing but the splash
-  and `uwsm finalize`, and `hypr/hyprland_test.lua` asserts it. The splash
-  has to show before the session's units start, so it can't be one.
+  and `uwsm finalize`, and tide's `hypr/hyprland_test.lua` asserts it.
+  The splash has to show before the session's units start, so it can't be one.
 - **Autostart is an allowlist.** XDG autostart entries run in tide only
   if they are on its list: `nm-applet` while the shell's agent isn't
   running, plus any desktop IDs in `~/.config/tide/autostart`. Everything
   else is skipped in tide and still runs under KDE. `doctor` reports any
   that ran anyway.
   - **Leftovers are stopped.** The user manager can outlive a logout
-    (lingering, or a shpool session), and so can the autostart units it
-    ran, which never met the list. Once the shell is up, `tide.service`
+    (§5.3, "A login starts clean"), and so can the autostart units it ran,
+    which never met the list. Once the shell is up, `tide.service`
     runs `tide autostart-sweep`, which stops each one still running from
     before this session that the list skips now. A unit started this
     session is left alone, since the list let it start.
@@ -826,8 +896,8 @@ flowchart TD
   app with it.
 - **Key-bound launches wait for the shell too.** Autostart waits for the
   shell's ready signal, and so does `tide launch`: a key pressed in
-  the first second after login can't start an app before the notification,
-  tray and polkit owners exist.
+  the first second after login can't start an app before the notification
+  and tray owners exist.
   - `systemctl --user start tide.service` blocks until the shell
     reports ready. A shell that's already up isn't started
     (`is-active`), so a launch later in the session costs one question.
@@ -930,14 +1000,15 @@ flowchart TD
   - a config for hypridle and for the lock's fallback, yours or tide's
     (§10), as each aborts without one, and yours not a link to a file
     that's gone, as a config repo leaves when it drops one;
-  - the home workspace (§6.5): there, and kept by `conf`'s `persistent`
-    rule, with the shell's `tide-workspaces.lua` naming it;
+  - the home workspace (§6.5): there, and kept by tide's Hyprland
+    config's `persistent` rule, with the shell's `tide-workspaces.lua`
+    naming it;
   - the network agent (§5.6): `tide-agent` registered, or what holds
     the job instead; and, with a Bluetooth adapter, its pairing agent.
   - the keyring unlocked, asked through the Secret Service: logging in
     leaves it locked when the login manager's PAM stack lacks
     `pam_gnome_keyring`, or the keyring's password isn't the login
-    password, and every app that keeps a secret then asks again (§14).
+    password, and every app that keeps a secret then asks again (§11).
 
   It prints one line per problem, with the fix. Each feature that leans on
   something outside tide adds its check here, by principle 6 (§1).
@@ -967,7 +1038,9 @@ flowchart TD
 KDE Plasma stays installed as the fallback session.
 tide's units are scoped to its own session, its portal config is
 desktop-specific, and it installs no global D-Bus activation files. Logging
-into Plasma is therefore unaffected. The reverse direction is the autostart
+into Plasma is therefore unaffected. The planned "Show in folder" file
+(§5.2) is the one exception: it's user-level, and under Plasma it opens
+Dolphin, Plasma's own file manager. The reverse direction is the autostart
 allowlist above.
 
 What scripts' `setup` installs for tide stays out of Plasma too. It masks
@@ -1004,7 +1077,7 @@ agent follows in the same helper (below).
   few MB of memory. $0.
 - **New failure modes,** each with what you see:
   - *`tide-agent` missing or exiting.* The shell restarts it with the
-    polkit agent's backoff (5 s, doubling to a minute) and says so once in
+    polkit agent's backoff (§5.2) and says so once in
     a notification; `tide doctor` names it. Meanwhile NetworkManager has no
     agent: a Wi-Fi password falls back to the popover's field, a VPN row
     says "Couldn't connect", and a background reconnect that needs a new
@@ -1018,7 +1091,7 @@ agent follows in the same helper (below).
     waits up to 5 s for that answer to be sent before it closes the bus.
     NetworkManager fails that connection; you try again.
   - *The keyring locked or missing.* A saved VPN password isn't found, so
-    you're asked for it. The keyring is unlocked at login (§5.2), so this
+    you're asked for it. The keyring is unlocked at login (§11), so this
     means something else is wrong, and the log says what.
   - *A VPN plugin without an auth dialog.* The request is declined and
     the log names the plugin; `nmcli --ask` still works.
@@ -1173,10 +1246,19 @@ SERVICE`, `-i` when it may ask, `-r` for new secrets, and each hint as
   “Home”: it needs a password", with **Connect**, which brings it up again
   through the shell, so the prompt then takes the keyboard.
 
-**`tide doctor`** asks the shell (`qs -c tide ipc call agent status`):
-`registered`, `standing-aside` (with nm-applet's pid), `waiting` (for
-NetworkManager) or `missing` (the helper isn't installed, or keeps
-exiting). It reports:
+**`tide doctor`** asks the shell (`qs -c tide ipc call agent status`),
+which answers in one of seven states:
+
+- `off`: `TIDE_AGENT=0`;
+- `missing`: the helper isn't running, as it isn't installed or keeps
+  exiting;
+- `starting`: it's running, but hasn't said where it stands;
+- `registered`;
+- `standing-aside`, with nm-applet's pid;
+- `waiting`, for NetworkManager;
+- `unregistered`, with the error NetworkManager gave.
+
+It reports:
 
 - with the agent on: a missing or failing helper, NetworkManager not
   running or refusing it, and nm-applet running, which means its dialogs
@@ -1186,16 +1268,17 @@ exiting). It reports:
 
 With a Bluetooth adapter (`/sys/class/bluetooth/hci*`) and the Quickshell
 shell running, it also asks `ipc call agent bluetooth`, which answers in
-the same words for the pairing agent. bluetoothd not running, BlueZ
-refusing the agent, and `tide-agent` missing are reported. Registered,
-starting, and standing aside for blueman's applet are fine. With no
+the same states for the pairing agent, standing aside for blueman's
+applet, and BlueZ's error for `unregistered`. bluetoothd not running
+(`waiting`), BlueZ refusing the agent (`unregistered`), and `tide-agent` missing are reported. `registered`,
+`starting` and `standing-aside` are fine. With no
 adapter, or under waybar, where blueman-manager brings its own agent,
 nothing is checked.
 
 **Bluetooth pairing**, in the same helper. tide had no pairing agent of
-its own once blueman's applet left the autostart list (§5.4). blueman-manager still starts its applet while it's open, so
-pairing from it keeps working. The helper's second job is BlueZ's `org.bluez.Agent1`,
-registered with `AgentManager1` as the default agent, capability
+its own once blueman's applet left the autostart list, though pairing
+from blueman-manager keeps working (§5.4). The helper's second job is
+BlueZ's `org.bluez.Agent1`, registered with `AgentManager1` as the default agent, capability
 `KeyboardDisplay`. It stands aside while `org.blueman.Applet` has an
 owner, as it does for nm-applet. BlueZ uses the agent of the process that
 asked to pair, else the most recent default (`agent_get`, BlueZ 5.87), so
@@ -1228,22 +1311,24 @@ abandoned, and bluetoothd going takes down whatever it had asked. So does
 NetworkManager going, for its requests. The popover
 gains no pairing of its own: *pair* still opens blueman-manager.
 
-**Steps.**
+**Steps**, all done:
 
 1. This design.
 2. `cmd/tide-agent`: the NetworkManager agent, with the keyring and the
    VPN dialogs, tested against a private D-Bus with stand-ins for
    NetworkManager, the Secret Service and systemd.
 3. The shell's side: the prompt, the popover's row, the notifications,
-   `ipc call agent status`, `TIDE_AGENT=1`, and `tide doctor`.
+   `ipc call agent status`, and `tide doctor`.
 4. The BlueZ agent.
-5. **nm-applet comes off `autostart_default`**, and the agent is on unless
-   `TIDE_AGENT=0`. That waits for a live session with `TIDE_AGENT=1` that
-   has checked: a Wi-Fi key typed in the popover with no second dialog, a
-   VPN password and a one-time code, Esc on each, a request while locked
-   turning into a notification after, and a clean `tide doctor`. Neither
-   NetworkManager nor BlueZ runs in CI, so until then every step is
-   tested against stand-ins only.
+5. **The agent on by default**, unless `TIDE_AGENT=0`. nm-applet stays in
+   `autostart_default`, but runs only while the shell's agent doesn't
+   (§5.4). This waited for a live session with `TIDE_AGENT=1` that had
+   checked: a Wi-Fi key typed in the popover with no second dialog, a VPN
+   password and a one-time code, Esc on each, a request while locked
+   turning into a notification after, and a clean `tide doctor`.
+
+Neither NetworkManager nor BlueZ runs in CI, so CI tests every step
+against stand-ins only.
 
 ## 6. Windows and layouts
 
