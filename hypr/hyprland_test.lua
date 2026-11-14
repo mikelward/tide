@@ -2246,6 +2246,12 @@ test("a lone window and video never dim", function()
     eq("video", S.rules["no-dim-video"].match.content)
 end)
 
+test("only floating windows cast shadows, so tiled ones don't overlap", function()
+    load()
+    eq(false, S.rules["no-shadow-tiled"].match.float)
+    eq(true, S.rules["no-shadow-tiled"].no_shadow)
+end)
+
 --------------------------------------------------------------------------------
 -- Autostart
 --------------------------------------------------------------------------------

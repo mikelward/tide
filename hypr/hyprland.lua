@@ -2516,6 +2516,10 @@ hl.window_rule({
 hl.window_rule({ name = "no-dim-lone-window", match = { workspace = "w[tv1]" }, no_dim = true })
 hl.window_rule({ name = "no-dim-video", match = { content = "video" }, no_dim = true })
 
+-- Tiled windows touch, with no gaps, so a shadow would fall over the one
+-- beside: only a floating window casts one, as on tidewm.
+hl.window_rule({ name = "no-shadow-tiled", match = { float = false }, no_shadow = true })
+
 -- tide's notification popups (SPEC.md §9) show black in a screen
 -- share, so one that appears while sharing doesn't show its text.
 hl.layer_rule({
