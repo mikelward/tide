@@ -1494,25 +1494,40 @@ local function spanning(name)
     return { outputs = outs, main = main, focused = focused }
 end
 
--- Workspaces by name (tide SPEC.md §6.5, §6.6). The bar's order is the standing workspaces, home first, then the rest in the
--- order they were made (falling IDs), then numbered ones, as tide's bar
--- has it (shell/lib/workspaces.mjs's workspaceOrder). A standing one is
--- in the order whether it's made yet or not, and going there makes it.
+-- Where a Hyprland workspace comes in the order they were made, as tide's
+-- bar has it (shell/lib/workspaces.mjs's madeOrder): a numbered one's ID,
+-- or a named one's before Hyprland 0.57, which gives each new named one a
+-- lower ID. From 0.57 a named workspace has no ID, so it's minus its place
+-- in Hyprland's list, which keeps them in the order they were made. `i` is
+-- that place, from 1.
+local function made_order(ws, i)
+    if type(ws.id) == "number" then
+        return ws.id
+    end
+    return -i
+end
+
+-- Workspaces by name (tide SPEC.md §6.5, §6.6). The bar's order is the
+-- standing workspaces, home first, then the rest in the order they were
+-- made (made_order), then numbered ones, as tide's bar has it
+-- (shell/lib/workspaces.mjs's workspaceOrder). A standing one is in the
+-- order whether it's made yet or not, and going there makes it.
 local function bar_order()
     local listed = query("couldn't list the workspaces", hl.get_workspaces) or {}
     -- Each monitor's part of a workspace is listed once, as the workspace,
-    -- at the place of its part made first (the highest ID).
+    -- at the place of its part made first (the highest order).
     local real, seen = {}, {}
-    for _, ws in ipairs(listed) do
+    for i, ws in ipairs(listed) do
         local name = plain(ws.name or "")
-        if type(ws.id) == "number" and name ~= "" and not name:find("^special:") then
+        local order = made_order(ws, i)
+        if name ~= "" and not name:find("^special:") then
             local w = seen[name]
             if not w then
-                w = { id = ws.id, name = name }
+                w = { order = order, name = name }
                 seen[name] = w
                 table.insert(real, w)
-            elseif ws.id > w.id then
-                w.id = ws.id
+            elseif order > w.order then
+                w.order = order
             end
         end
     end
@@ -1521,24 +1536,24 @@ local function bar_order()
         local found
         for _, exact in ipairs({ true, false }) do
             for _, w in ipairs(real) do
-                if not found and not taken[w.id] and (exact and w.name == name or not exact and w.name:lower() == name:lower()) then
+                if not found and not taken[w] and (exact and w.name == name or not exact and w.name:lower() == name:lower()) then
                     found = w
                 end
             end
         end
         if found then
-            taken[found.id] = true
+            taken[found] = true
         end
         table.insert(out, found and found.name or name)
     end
     local named, numbered = {}, {}
     for _, w in ipairs(real) do
-        if not taken[w.id] then
-            table.insert(w.id < 0 and named or numbered, w)
+        if not taken[w] then
+            table.insert(w.order < 0 and named or numbered, w)
         end
     end
-    table.sort(named, function(a, b) return a.id > b.id end)
-    table.sort(numbered, function(a, b) return a.id < b.id end)
+    table.sort(named, function(a, b) return a.order > b.order end)
+    table.sort(numbered, function(a, b) return a.order < b.order end)
     for _, list in ipairs({ named, numbered }) do
         for _, w in ipairs(list) do
             table.insert(out, w.name)

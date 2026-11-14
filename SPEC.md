@@ -240,7 +240,10 @@ else in this spec changes.
   `IdleInhibitor`, `IdleMonitor` and `Quickshell.Networking`, and an older
   `qs` can't load a file that names one, so there's no bar at all, and no
   lock. Debian's package is 0.2.1 (its `qs --version`, 2026-10-06), so `setup` builds
-  there, as it does where there's no package.
+  there, as it does where there's no package. On Hyprland 0.57 or newer the
+  bar needs Quickshell 0.3.2: 0.57 gives a named workspace an address, its
+  name, and no ID, and 0.3.2 is the first Quickshell to follow workspaces by
+  address (`HyprlandWorkspace.address`).
 - **Memory** is unmeasured; M2 measures it and sets a budget.
 
 ### 3.3 Session: uwsm and systemd user units
@@ -1522,6 +1525,30 @@ in how long they last and what stays visible:
     `destroyworkspacev2>>ID,NAME` and `renameworkspace>>ID,NAME`. A name
     may hold a comma, so the shell reads the ID up to the first comma and
     the rest as the name.
+- **Hyprland 0.57** (checked in 0.57.2's source) gives a named workspace no
+  ID. Every workspace has an address instead: a numbered one's is its
+  number, a named one's the name it was made with, which a rename keeps
+  (`CRegularWorkspace::createNamed`, `RegularWorkspace.cpp`). In Lua a named
+  workspace's `id` is nil and its `addressable_name` the address; `hyprctl
+  -j` gives `address`, and `id` only for a numbered one.
+  - So tide keys a workspace by its address, or by its ID before 0.57: the
+    bar, the layout's state for each workspace, and the focus guard's
+    record of where you are.
+  - Hyprland lists its workspaces in the order they were made: it adds a
+    new one to the end of its list (`CState::add`, `State.cpp`). From 0.57
+    that list is the order of the named workspaces, for the bar
+    (`hyprctl workspaces -j`, read again as each is made or destroyed) and
+    for the keys (`hl.get_workspaces`).
+  - The events give the address where they gave the ID:
+    `createworkspacev2>>ADDRESS,NAME`. An address may hold a comma too, so
+    the shell splits where the address is one it knows, or where both
+    halves match, as a new workspace's do, or else at the first comma.
+    Where two addresses it knows fit, as `in` and `in,docs` both fit
+    `in,docs,archive`, the list Hyprland gives next settles it: the
+    workspace whose `ADDRESS,NAME` is the event's text, or for one
+    destroyed, the one no longer listed.
+  - `name:ADDRESS` selects a workspace by its address (`CWorkspaceResolver`,
+    `Resolver.cpp`), so home renamed elsewhere is renamed back through it.
   - A numbered workspace, such as the one a second monitor gets (below),
     is listed after the named ones, by number.
 

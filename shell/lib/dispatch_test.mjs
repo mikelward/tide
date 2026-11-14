@@ -39,13 +39,21 @@ test("a workspace is reached by name, quoted for Lua", () => {
 test("home is renamed back by its ID", () => {
     assert.equal(renameWorkspace(-1338, "in", true), 'hl.dsp.workspace.rename({ workspace = -1338, name = "in" })');
     assert.equal(renameWorkspace(-1338, "in", false), "renameworkspace -1338 in");
+    assert.equal(renameWorkspace("-1338", "in", true), 'hl.dsp.workspace.rename({ workspace = -1338, name = "in" })', "a key from Quickshell");
+});
+
+test("on Hyprland 0.57 home is renamed back by its address", () => {
+    assert.equal(renameWorkspace("in", "in", true), 'hl.dsp.workspace.rename({ workspace = "name:in", name = "in" })');
+    assert.equal(renameWorkspace('a "b"', "in", true), 'hl.dsp.workspace.rename({ workspace = "name:a \\"b\\"", name = "in" })');
 });
 
 test("a name that isn't one line, or isn't text, goes into no dispatch", () => {
     assert.throws(() => focusWorkspaceName("a\nb", true), /not a workspace name/);
     assert.throws(() => focusWorkspaceName("  ", false), /not a workspace name/);
     assert.throws(() => focusWorkspaceName(3, true), /not a workspace name/);
-    assert.throws(() => renameWorkspace("x", "in", true), /not a workspace ID/);
+    assert.throws(() => renameWorkspace("x", "in", false), /not a workspace ID/, "only Lua takes an address");
+    assert.throws(() => renameWorkspace("a\nb", "in", true), /not a workspace ID/);
+    assert.throws(() => renameWorkspace(null, "in", true), /not a workspace ID/);
 });
 
 test("the name prompt moves its window by address, following it", () => {

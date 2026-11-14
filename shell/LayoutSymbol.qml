@@ -3,6 +3,7 @@ import Quickshell.Hyprland
 import "lib/barsettings.mjs" as BarSettings
 import "lib/layouts.mjs" as Layouts
 import "lib/tidewm.mjs" as Tw
+import "lib/workspaces.mjs" as Ws
 
 // The layout of the workspace shown on this bar's monitor (SPEC.md §6.1,
 // §7.1): its symbol, or `[n]` in monocle with n windows hidden. On
@@ -20,7 +21,7 @@ Text {
         if (Compositor.tidewm || !root.workspace || !root.monitor) {
             return "";
         }
-        return LayoutData.modes[root.workspace.id] ?? Layouts.defaultMode({
+        return Ws.modeOf(LayoutData.modes, Ws.workspaceKey(root.workspace)) ?? Layouts.defaultMode({
             width: root.monitor.width,
             height: root.monitor.height,
             scale: root.monitor.scale,

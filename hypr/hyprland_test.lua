@@ -1016,6 +1016,35 @@ test("Super+PgUp/PgDn skip the workspaces with no windows", function()
         "moving a window still takes it to the next, empty or not")
 end)
 
+-- Workspaces as Hyprland 0.57 lists them, in the order they were made: a
+-- named one has an address, its name, and no ID; a numbered one keeps its
+-- number as both.
+local function addressed(...)
+    local out = {}
+    for _, name in ipairs({ ... }) do
+        local number = tonumber(name)
+        table.insert(out, { id = number, addressable_name = name, name = name })
+    end
+    return out
+end
+
+test("On Hyprland 0.57, named workspaces without IDs keep the bar's order", function()
+    load({ workspaces = STANDING })
+    -- docs made before PR-12, so it comes first after the standing ones.
+    S.workspace_list = addressed("in", "docs", "re", "PR-12", "2")
+    table.insert(S.workspace_list, { addressable_name = "special:scratch", name = "special:scratch" })
+    S.window_list = windows_on("in", "re", "oc", "me", "PR-12", "docs", "2")
+    -- in, re, oc, me, docs, PR-12, 2
+    S.active_workspace = { addressable_name = "me", name = "me" }
+    eq("name:docs", run("SUPER + Page_Down")[1].args.workspace, "the first made after the standing ones")
+    S.active_workspace = { addressable_name = "docs", name = "docs" }
+    eq("name:PR-12", run("SUPER + Page_Down")[1].args.workspace, "then the next made")
+    eq("name:me", run("SUPER + Page_Up")[1].args.workspace, "back to the standing ones")
+    S.active_workspace = { id = 2, addressable_name = "2", name = "2" }
+    eq("name:in", run("SUPER + Page_Down")[1].args.workspace, "numbered last, then home")
+    eq("name:docs", run("SUPER + 5")[1].args.workspace, "Super+5 is the fifth on the bar")
+end)
+
 test("Super+Shift+PgUp/PgDn move the window there and follow it", function()
     load({ workspaces = STANDING })
     S.workspace_list = named("in")

@@ -215,6 +215,7 @@ CTL = {
     ("devices", "-j"): lambda: json.dumps(ANSWERS["j/devices"]),
     ("binds", "-j"): lambda: json.dumps(BINDS),
     ("monitors", "all", "-j"): lambda: json.dumps(ANSWERS["j/monitors"]),
+    ("workspaces", "-j"): lambda: json.dumps(ANSWERS["j/workspaces"]),
     ("configerrors",): lambda: "",
 }
 

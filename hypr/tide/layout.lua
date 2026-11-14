@@ -132,9 +132,16 @@ local function field(obj, key)
     end
 end
 
+-- A workspace's key in `workspaces`: its address from Hyprland 0.57, which
+-- every workspace has, a named one's being its name; before 0.57, its ID.
+-- From 0.57 a named workspace has no ID.
+local function workspace_key(ws)
+    return field(ws, "addressable_name") or field(ws, "id")
+end
+
 local function active_workspace_id()
     local ok, ws = pcall(hl.get_active_workspace)
-    return ok and field(ws, "id") or nil
+    return ok and workspace_key(ws) or nil
 end
 
 local function active_address()
@@ -152,7 +159,7 @@ end
 -- there would overwrite another workspace's state.
 local function workspace_id(ctx, fallback_to_active)
     for _, t in ipairs(ctx.targets) do
-        local id = field(field(field(t, "window"), "workspace"), "id")
+        local id = workspace_key(field(field(t, "window"), "workspace"))
         if id ~= nil then
             return id
         end
@@ -590,7 +597,7 @@ local function sides(vertical)
     local me = active_address()
     local by_ws, mine = {}, nil
     for _, w in ipairs(wins) do
-        local address, ws, box = field(w, "address"), field(field(w, "workspace"), "id"), box_of(w)
+        local address, ws, box = field(w, "address"), workspace_key(field(w, "workspace")), box_of(w)
         if address == me then
             mine = { address = address, ws = ws, box = box, floating = field(w, "floating") }
         end
@@ -603,7 +610,7 @@ local function sides(vertical)
     for _, m in ipairs(mons) do
         local name, box = field(m, "name"), monitor_box(m)
         local ws = field(m, "active_special_workspace") or field(m, "active_workspace")
-        local id = field(ws, "id")
+        local id = workspace_key(ws)
         if name and box then
             local tiles = {}
             if id ~= nil and not field(ws, "has_fullscreen") then
@@ -626,7 +633,7 @@ local function sides(vertical)
             end
             -- A window moved to a monitor goes to its active workspace,
             -- whatever special one shows over it.
-            local active = field(field(m, "active_workspace"), "id")
+            local active = workspace_key(field(m, "active_workspace"))
             list[#list + 1] = { name = name, box = box, area = work_area(m, box), ws = id, active = active, tiles = tiles }
             if field(m, "focused") then
                 focused = list[#list]
@@ -847,7 +854,7 @@ local function tiles(windows, id)
     for _, w in ipairs(windows) do
         local at, size = field(w, "at"), field(w, "size")
         if field(w, "mapped") and not field(w, "hidden") and not field(w, "floating")
-            and field(field(w, "workspace"), "id") == id and at and size then
+            and workspace_key(field(w, "workspace")) == id and at and size then
             boxes[#boxes + 1] = { x = at.x - border, y = at.y - border, w = size.x + 2 * border, h = size.y + 2 * border }
         end
     end
@@ -927,7 +934,7 @@ function M.drag_press()
         return PASS
     end
     local ws = field(mon, "active_workspace")
-    local id = field(ws, "id")
+    local id = workspace_key(ws)
     local st = id ~= nil and workspaces[id]
     if not st or field(ws, "has_fullscreen") then
         return PASS
@@ -1236,7 +1243,7 @@ function M.setup(opts)
         layout_msg = layout_msg,
     })
     hl.on("workspace.active", function(ws)
-        announce(field(ws, "id"))
+        announce(workspace_key(ws))
     end)
     -- For the shell, which calls it through `hyprctl eval`.
     _G.tide_layout = { reload = M.reload, set_popups_open = M.set_popups_open }

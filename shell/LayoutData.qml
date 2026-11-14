@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.I3
+import "lib/workspaces.mjs" as Ws
 import "lib/layouts.mjs" as Layouts
 import "lib/tidewm.mjs" as Tw
 
@@ -15,7 +16,7 @@ Singleton {
     id: root
 
     // Workspace ID to mode.
-    property var modes: ({})
+    property var modes: Ws.NO_MODES
 
     // Output name to {workspace, layout}, on tidewm.
     property var tidewmHeard: ({})
@@ -38,7 +39,7 @@ Singleton {
                 // Assumes a reload runs layout.lua afresh, starting every
                 // workspace again in its default mode; TODO.md has the
                 // live check.
-                root.modes = {};
+                root.modes = Ws.NO_MODES;
                 return;
             }
             if (event.name !== "custom") {
@@ -46,7 +47,7 @@ Singleton {
             }
             const heard = Layouts.parseAnnouncement(event.data);
             if (heard) {
-                root.modes = Object.assign({}, root.modes, { [heard.workspace]: heard.mode });
+                root.modes = Ws.withMode(root.modes, heard.workspace, heard.mode);
             }
         }
     }

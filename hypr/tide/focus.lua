@@ -538,11 +538,16 @@ function M.announce_waiting()
     end
 end
 
--- The workspace showing on the focused monitor, by id, or nil if
--- Hyprland can't say.
+-- The workspace showing on the focused monitor, or nil if Hyprland can't
+-- say: its address from Hyprland 0.57, which every workspace has, a named
+-- one's being its name; before 0.57, its ID. From 0.57 a named workspace
+-- has no ID.
 local function active_workspace_id()
     local ok, ws = pcall(hl.get_active_workspace)
-    return ok and field(ws, "id") or nil
+    if not ok then
+        return nil
+    end
+    return field(ws, "addressable_name") or field(ws, "id")
 end
 
 function M.on_active(w, reason)

@@ -59,12 +59,20 @@ export function focusWorkspaceName(name, lua) {
 }
 
 // Name workspace `id` `name`: the shell undoing a rename of home (§6.5).
+// `id` is the workspace's key (workspaces.mjs's workspaceKey): an ID, as a
+// number or a string, or from Hyprland 0.57 a named workspace's address,
+// which `name:ADDRESS` selects, a rename keeping the address. Only the Lua
+// config can take an address; Hyprland 0.57 reads no other.
 export function renameWorkspace(id, name, lua) {
-    if (!Number.isInteger(id)) {
+    const n = workspaceName(name);
+    if (Number.isInteger(id) || (typeof id === "string" && /^-?\d+$/.test(id))) {
+        const number = Number(id);
+        return lua ? `hl.dsp.workspace.rename({ workspace = ${number}, name = ${luaString(n)} })` : `renameworkspace ${number} ${n}`;
+    }
+    if (!lua || typeof id !== "string" || id.trim() === "" || /[\n\r]/.test(id)) {
         throw new Error(`not a workspace ID: ${id}`);
     }
-    const n = workspaceName(name);
-    return lua ? `hl.dsp.workspace.rename({ workspace = ${id}, name = ${luaString(n)} })` : `renameworkspace ${id} ${n}`;
+    return `hl.dsp.workspace.rename({ workspace = ${luaString("name:" + id)}, name = ${luaString(n)} })`;
 }
 
 // Focus the window at `address` (hex, with or without 0x).
