@@ -1064,31 +1064,44 @@ run "$qs" lock now
 check "lock takes no arguments" test $? -eq 2
 rm "$fake/pgrep"
 
-# lid-closed, as conf's tidewm config runs it once the lid has turned the
-# panel off: it locks for the Power page's Lock with no other monitor on.
+# lid-closed, as tidewm/tide.conf runs it as the lid closes: with another
+# monitor on, it turns the laptop's panel off; with none, it locks for the
+# Power page's Lock.
 power=$tmp/run-config/hypr/tide-power.lua
 mkdir -p "${power%/*}"
-undocked='[{"name": "eDP-1", "active": false, "power": false}]'
-docked='[{"name": "eDP-1", "active": false}, {"name": "DP-1", "active": true}]'
+undocked='[{"name": "eDP-1", "active": true}]'
+docked='[{"name": "eDP-1", "active": true}, {"name": "DP-1", "active": true}]'
 run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$undocked" "$qs" lid-closed
-check "lid-closed with no Power setting leaves the lid to logind" test "$?:$(cat "$log")" = "0:"
+check "lid-closed with no Power setting and no other monitor exits 0" test $? -eq 0
+check "and leaves the lid to logind" lacks "$(cat "$log")" "loginctl"
+check "and the panel on" lacks "$(cat "$log")" "tide-msg output"
+run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$docked" "$qs" lid-closed
+check "lid-closed with another monitor on turns the panel off, whatever the Power page says" \
+    contains "$(cat "$log")" "tide-msg output eDP-1 disable"
 printf '%s\n' "-- Written by tide's settings panel (SPEC.md §16); edit power.local.json instead." 'return {' '    lid_close = "lock",' '}' > "$power"
 run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$undocked" "$qs" lid-closed
 check "lid-closed with Lock and no other monitor on exits 0" test $? -eq 0
 check "and locks, as tide lock does" contains "$(cat "$log")" "loginctl lock-session"
 check "having asked tidewm which monitors are on" contains "$(cat "$log")" "tide-msg --type get_outputs"
+check "and leaves the panel to the lock" lacks "$(cat "$log")" "tide-msg output"
 run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$docked" "$qs" lid-closed
 check "lid-closed with Lock and another monitor on exits 0" test $? -eq 0
-check "and doesn't lock: the lid only turned the panel off" lacks "$(cat "$log")" "loginctl"
-# A panel the config's `output eDP-1 disable` doesn't name (LVDS-1, DSI-1,
-# eDP-2) is still on as the lid closes; it's the laptop's own, not another
-# monitor, so Lock still locks.
+check "and turns the panel off" contains "$(cat "$log")" "tide-msg output eDP-1 disable"
+check "and doesn't lock" lacks "$(cat "$log")" "loginctl"
+run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS='[{"name": "eDP-1", "active": false}, {"name": "DP-1", "active": true}]' "$qs" lid-closed
+check "a panel already off isn't turned off again" lacks "$(cat "$log")" "tide-msg output"
+# Whatever the laptop's panel is named, eDP, LVDS or DSI: it isn't another
+# monitor, and it's the one that goes off.
 for panel in LVDS-1 DSI-1 eDP-2; do
     run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="[{\"name\": \"$panel\", \"active\": true}]" "$qs" lid-closed
-    check "lid-closed with Lock and only the laptop's $panel still on locks" contains "$(cat "$log")" "loginctl lock-session"
-    run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="[{\"name\": \"$panel\", \"active\": true}, {\"name\": \"DP-1\", \"active\": true}]" "$qs" lid-closed
-    check "but not with $panel and another monitor on" lacks "$(cat "$log")" "loginctl"
+    check "lid-closed with Lock and only the laptop's $panel on locks" contains "$(cat "$log")" "loginctl lock-session"
+    run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="[{\"name\": \"DP-1\", \"active\": true}, {\"name\": \"$panel\", \"active\": true}]" "$qs" lid-closed
+    check "but with another monitor on, $panel goes off" contains "$(cat "$log")" "tide-msg output $panel disable"
+    check "and it doesn't lock" lacks "$(cat "$log")" "loginctl"
 done
+run FAKE_IS_ACTIVE=active HYPR_INTERNAL_OUTPUT=HDMI-A-1 \
+    FAKE_TIDEWM_OUTPUTS='[{"name": "HDMI-A-1", "active": true}, {"name": "DP-1", "active": true}]' "$qs" lid-closed
+check "HYPR_INTERNAL_OUTPUT names the panel, as on Hyprland" contains "$(cat "$log")" "tide-msg output HDMI-A-1 disable"
 run FAKE_IS_ACTIVE=active FAKE_TIDEMSG_STATUS=2 FAKE_TIDEMSG_ERROR="SWAYSOCK isn't set" "$qs" lid-closed
 check "lid-closed that can't ask tidewm locks" contains "$(cat "$log")" "loginctl lock-session"
 check "and says why" contains "$(cat "$tmp/err")" "tide lid-closed: couldn't tell whether another monitor is on (tide-msg: SWAYSOCK isn't set), so it locks"
@@ -1096,10 +1109,30 @@ run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="not json" "$qs" lid-closed
 check "lid-closed that can't read tidewm's answer locks too" contains "$(cat "$log")" "loginctl lock-session"
 printf '%s\n' 'return {' '    lid_close = "nothing",' '}' > "$power"
 run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$undocked" "$qs" lid-closed
-check "lid-closed with Do nothing does nothing" test "$?:$(cat "$log")" = "0:"
+check "lid-closed with Do nothing and no other monitor does nothing" lacks "$(cat "$log")" "loginctl"
+run FAKE_IS_ACTIVE=active FAKE_TIDEMSG_STATUS=2 FAKE_TIDEMSG_ERROR="SWAYSOCK isn't set" "$qs" lid-closed
+check "lid-closed with Do nothing that can't ask tidewm doesn't lock" lacks "$(cat "$log")" "loginctl"
+check "and says why" contains "$(cat "$tmp/err")" "tide lid-closed: couldn't tell whether another monitor is on (tide-msg: SWAYSOCK isn't set), so the panel stays on"
 rm "$power"
 run "$qs" lid-closed now
 check "lid-closed takes no arguments" test $? -eq 2
+
+# lid-opened turns the laptop's panel back on if it's off.
+run FAKE_TIDEWM_OUTPUTS='[{"name": "eDP-1", "active": false}, {"name": "DP-1", "active": true}]' "$qs" lid-opened
+check "lid-opened turns a panel that's off on" test "$?:$(grep 'tide-msg output' "$log")" = "0:tide-msg output eDP-1 enable"
+run FAKE_TIDEWM_OUTPUTS='[{"name": "DP-1", "active": true}, {"name": "LVDS-1", "active": false}]' "$qs" lid-opened
+check "whatever it's named" contains "$(cat "$log")" "tide-msg output LVDS-1 enable"
+run FAKE_TIDEWM_OUTPUTS="$docked" "$qs" lid-opened
+check "lid-opened leaves a panel that's on alone" lacks "$(cat "$log")" "tide-msg output"
+run FAKE_TIDEWM_OUTPUTS='[{"name": "DP-1", "active": true}]' "$qs" lid-opened
+check "and does nothing with no panel" test "$?:$(grep -c 'tide-msg output' "$log")" = "0:0"
+run HYPR_INTERNAL_OUTPUT=HDMI-A-1 FAKE_TIDEWM_OUTPUTS='[{"name": "DP-1", "active": true}]' "$qs" lid-opened
+check "a panel HYPR_INTERNAL_OUTPUT names is turned on even unlisted" contains "$(cat "$log")" "tide-msg output HDMI-A-1 enable"
+run FAKE_TIDEMSG_STATUS=2 FAKE_TIDEMSG_ERROR="SWAYSOCK isn't set" "$qs" lid-opened
+check "lid-opened that can't ask tidewm fails" test $? -eq 1
+check "and says why" contains "$(cat "$tmp/err")" "tide lid-opened: couldn't ask tidewm for its outputs, so the laptop's panel may stay off: tide-msg: SWAYSOCK isn't set"
+run "$qs" lid-opened now
+check "lid-opened takes no arguments" test $? -eq 2
 
 # lock-check: quiet with hypridle running; without it, a notification says
 # idle and suspend won't lock.

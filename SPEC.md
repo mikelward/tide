@@ -5577,12 +5577,14 @@ stays hand-written.
     monitor, Lock runs `loginctl lock-session`, and Do nothing leaves the
     panel as it is. With another monitor, the lid turns the panel off, as it
     always has, whichever is chosen.
-  - In tidewm's session (§5.3), conf's tidewm config turns the panel off as
-    the lid closes, then runs `tide lid-closed`, which reads the same file.
-    With no other monitor on, Lock locks, as `tide lock` does. The
-    laptop's panel isn't another monitor, so one the config doesn't turn
-    off (it names only `eDP-1`; an `LVDS-1`, `DSI-1` or `eDP-2` stays on)
-    still locks. If it can't tell whether another monitor is on, it locks.
+  - In tidewm's session (§5.3), `tidewm/tide.conf` runs `tide lid-closed`
+    as the lid closes, and `tide lid-opened` as it opens, even locked. Each
+    finds the laptop's panel as `hyprland.lua` does: `$HYPR_INTERNAL_OUTPUT`,
+    or the first output named `eDP`, `LVDS` or `DSI`. With another monitor
+    on, `lid-closed` turns the panel off, and tidewm moves its windows to
+    the others. With none, it reads the same file, and Lock locks, as
+    `tide lock` does. If it can't tell whether another monitor is on, it
+    locks for Lock. `lid-opened` turns the panel back on if it's off.
   - The shell puts the unit right as it starts, too, since the unit
     outlives a shell that died with it the other way. A file it can't
     write, or a `systemctl` that fails, is a notification once and tried
