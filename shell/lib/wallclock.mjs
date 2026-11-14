@@ -30,3 +30,11 @@ export const SLEEP_MONITOR = ["gdbus", "monitor", "--system",
 export function woke(line) {
     return /\.Manager\.PrepareForSleep \(false,?\)/.test(line);
 }
+
+// Whether a line of SLEEP_MONITOR's output says the laptop's lid opened or
+// closed: logind's LidClosed changing, as
+// `/org/freedesktop/login1: org.freedesktop.DBus.Properties.PropertiesChanged ('org.freedesktop.login1.Manager', {'LidClosed': <true>}, @as [])`.
+// The lock and the greeter count the keyboards again then (SPEC.md §10).
+export function lidMoved(line) {
+    return /\.Properties\.PropertiesChanged \('org\.freedesktop\.login1\.Manager',.*'LidClosed'/.test(line);
+}
