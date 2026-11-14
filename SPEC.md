@@ -657,6 +657,19 @@ flowchart TD
   warns of tidewm's config errors (§7.4). `tide doctor` counts bars, reports config errors
   and checks home from tidewm's `GET_OUTPUTS`, `GET_CONFIG` and
   `GET_WORKSPACES` there.
+- **tidesway's session** is tidewm's, with tidesway (mikelward/tidesway,
+  tide's fork of sway) run in tidewm's place: `tide-tidesway.desktop`,
+  listed as "tide (tidesway)" only where a `tidesway` command is
+  installed. tidesway takes tidewm's `-s` and `-c`, reads tidewm's config
+  and speaks its IPC, so nothing else differs. It runs `uwsm start -e -D
+  tidewm:tidesway:tide -- tide-tidewm --tidesway`. uwsm names a session
+  after its compositor command, not that command's arguments (its
+  README, "Syntax and behavior"), so the target, the units on it and
+  `tide doctor`'s checks are tidewm's. tidewm stays first in
+  `XDG_CURRENT_DESKTOP`, so the portals and the shell are tidewm's too;
+  `tidesway` there is how the shell can tell the two apart. Still being
+  built: `install/tide-setup` installs the entry where it finds
+  `tidesway` and builds none, and no one has logged in to it yet.
 
 ### 5.4 Guards that keep it that way
 

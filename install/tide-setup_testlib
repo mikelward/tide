@@ -103,6 +103,13 @@ case " \$* " in
                     > "$T/share/wayland-sessions/tide-tidewm.desktop"
                 ;;
         esac
+        case " \$sessions " in
+            *" tide-tidesway "*)
+                test -z "\$FAKE_NO_TIDESWAY_ENTRY" || exit 0
+                printf "[Desktop Entry]\\nName=tide (tidesway)\\nExec=tide-session tidesway\\nTryExec=tidesway\\nType=Application\\n" \\
+                    > "$T/share/wayland-sessions/tide-tidesway.desktop"
+                ;;
+        esac
         ;;
 esac
 MOCK

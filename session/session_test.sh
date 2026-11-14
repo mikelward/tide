@@ -33,6 +33,7 @@ dropin=systemd/user/hypridle.service.d/tide.conf
 entry=session/tide.desktop
 wrapper=bin/tide-hyprland
 tidewm_entry=session/tide-tidewm.desktop
+tidesway_entry=session/tide-tidesway.desktop
 tidewm_wrapper=bin/tide-tidewm
 portals=xdg-desktop-portal/tide-portals.conf
 tidewm_portals=xdg-desktop-portal/tidewm-portals.conf
@@ -280,9 +281,19 @@ check "a failure to clear them is logged with systemctl's reason" \
 check "and doesn't stop the login" test "$(printf '%s\n' "$out" | tail -n 1)" = "[tide-tidewm]"
 FAKE_SYSTEMCTL_ERR="Access denied" run_session tidewm >/dev/null
 check "nor change its status" test "$?" -eq 0
+# tidesway's session is tidewm's, with tidesway run in its place: the same
+# wrapper, so the same target and units, told which by its first argument,
+# and tidewm first in XDG_CURRENT_DESKTOP, so the same portals.
+: > "$tmp/session-log"
+out=$(run_session tidesway)
+check "tide-session tidesway runs uwsm with tidewm's wrapper, told to run tidesway" \
+    test "$out" = "$(printf '%s\n' "systemd-cat:" "[start]" "[-e]" "[-D]" "[tidewm:tidesway:tide]" "[-N]" "[tide (tidesway)]" "[--]" "[tide-tidewm]" "[--tidesway]")"
+check "and logs what it ran" \
+    grep -qxF "starting the tide (tidesway) session: uwsm start -e -D tidewm:tidesway:tide -N 'tide (tidesway)' -- tide-tidewm --tidesway" "$tmp/session-log"
+check "and that it ended" grep -qxF "the tide (tidesway) session ended" "$tmp/session-log"
 run_session sway >/dev/null
 check "an unknown session is an error" test "$?" -eq 2
-check "and says which are known" grep -qF "usage: tide-session hyprland|tidewm, not 'sway'" "$tmp/session-err"
+check "and says which are known" grep -qF "usage: tide-session hyprland|tidewm|tidesway, not 'sway'" "$tmp/session-err"
 check "make install-session installs tide-session" grep -qF "bin/tide-session" Makefile
 # A login screen hands Exec on in ways that break a quote: GDM wraps it in
 # double quotes of its own, unescaped (gdm-session.c's gdm-wayland-session
@@ -290,7 +301,7 @@ check "make install-session installs tide-session" grep -qF "bin/tide-session" M
 # splits it on spaces with no quoting at all. A session that logged in
 # then straight out had -N "tide (tidewm)". Each entry's Exec is plain
 # words, nothing a shell or GDM would read as quoting or syntax.
-for e in "$entry" "$tidewm_entry"; do
+for e in "$entry" "$tidewm_entry" "$tidesway_entry"; do
     check "$(basename "$e")'s Exec has no quotes, escapes or shell syntax" \
         lacks_line_matching "$e" "^Exec=.*[\"'\\\\\`\$()<>|;&*?]"
 done
@@ -301,6 +312,16 @@ check "the tidewm entry is offered only where tidewm is installed" \
 check "the tidewm entry says which compositor it runs" \
     has_line "$tidewm_entry" "Name=tide (tidewm)"
 check "and so does Hyprland's" has_line "$entry" "Name=tide (Hyprland)"
+check "the tidesway entry starts the tidesway session through tide-session" \
+    has_line "$tidesway_entry" "Exec=tide-session tidesway"
+check "the tidesway entry lists tidewm first, as tide-session does, then tidesway and tide" \
+    has_line "$tidesway_entry" "DesktopNames=tidewm;tidesway;tide"
+check "the tidesway entry is offered only where tidesway is installed" \
+    has_line "$tidesway_entry" "TryExec=tidesway"
+check "the tidesway entry says which compositor it runs" \
+    has_line "$tidesway_entry" "Name=tide (tidesway)"
+check "make install-session installs it by default" \
+    grep -qxF "SESSIONS ?= tide tide-tidewm tide-tidesway" Makefile
 # Its file name stays tide.desktop, so a login screen's remembered choice
 # and the greeter's ordering, both by file name, still find it.
 check "Hyprland's entry keeps its file name" test "$(basename "$entry")" = tide.desktop
@@ -357,6 +378,17 @@ mkdir -p "$tmp/tidewm-home"
 tidewm_ran=$(tidewm_start)
 check "the tidewm wrapper starts tidewm, passing its arguments through" \
     test "$(printf '%s\n' "$tidewm_ran" | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c x"
+# Told --tidesway first, it runs tidesway with the same startup command and
+# arguments, and says so.
+cp "$tmp/tidewm-bin/tidewm" "$tmp/tidewm-bin/tidesway"
+sed -i 's/^echo "tidewm /echo "tidesway /' "$tmp/tidewm-bin/tidesway"
+: > "$tmp/logged"
+tidesway_ran=$(env PATH="$tmp/tidewm-bin:/usr/bin:/bin" HOME="$tmp/tidewm-home" XDG_CONFIG_HOME="$tmp/tidewm-config" /bin/sh "$tidewm_wrapper" --tidesway -c x 2>/dev/null)
+check "told --tidesway, the wrapper starts tidesway as it starts tidewm" \
+    test "$(printf '%s\n' "$tidesway_ran" | head -n 1)" = "tidesway -s $(printf '%s' "$up" | sed 's/tidewm is up/tidesway is up/')timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c x"
+check "and logs which session it's starting" grep -qF -- "-t tide-tidewm -- starting the tide (tidesway) session" "$tmp/logged"
+: > "$tmp/logged"
+tidewm_ran=$(tidewm_start)
 check "before the shell has named home, tidewm goes to in and keeps it" \
     test "$(printf '%s\n' "$tidewm_ran" | sed -n 2p)" = "tide-msg workspace number in; persist workspace in"
 check "tidewm's startup command finalizes the session with tidewm's IPC socket, under both names" \

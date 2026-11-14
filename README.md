@@ -94,6 +94,10 @@ install it with `sudo make install-session PREFIX=/usr`.
 given `--no-tidewm`, on Debian, Ubuntu, Fedora and Arch, and builds the
 wlroots 0.20 it needs where the distro has none (Ubuntu 26.04, Debian 13, a
 Fedora without it).
+**tide (tidesway)** is that session again on tidesway, tide's fork of sway
+(mikelward/tidesway), which reads tidewm's config and speaks its IPC. It's
+still being built: setup doesn't build tidesway yet, so the session shows
+only where you've installed a `tidesway` command yourself.
 Each session shows at the login screen only where its compositor is
 installed, and setup warns about one that couldn't be. The shell reads
 tidewm's IPC there: the bar's workspaces, windows, title and layout

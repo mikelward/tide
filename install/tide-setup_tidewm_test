@@ -339,6 +339,42 @@ setup; ARGS=(--tidewm); run
 check "a tidewm that runs keeps its session" test -e "$T/share/wayland-sessions/tide-tidewm.desktop"
 check "and nothing is said of it" lacks "$output" "can't run"
 teardown
+# tide (tidesway) is installed where a tidesway is on the session's PATH,
+# which setup doesn't build yet, and comes off the login screen where it's
+# gone.
+setup; ARGS=(--tidewm)
+printf '#!/bin/sh\n' > "$T/usr-local-bin/tidesway"
+chmod +x "$T/usr-local-bin/tidesway"
+run
+check "with a tidesway installed, its session is too" has "$calls" "install-session PREFIX=/usr SESSIONS=tide tide-tidewm tide-tidesway"
+teardown
+setup; ARGS=(--tidewm)
+mkdir -p "$T/share/wayland-sessions"
+echo "an earlier run's" > "$T/share/wayland-sessions/tide-tidesway.desktop"
+run
+check "with no tidesway, its session isn't installed" lacks "$calls" "SESSIONS=tide tide-tidewm tide-tidesway"
+check "and an earlier run's entry comes off the login screen" test ! -e "$T/share/wayland-sessions/tide-tidesway.desktop"
+check "with nothing said of a tidesway that's missing" lacks "$output" "tidesway isn't installed"
+teardown
+# With tidesway alone, no Hyprland and no tidewm, its session is the one to
+# log in to, and the one the last check asks for.
+setup; ARGS=(--no-tidewm); rm "$T/usr-bin/Hyprland"
+printf '#!/bin/sh\n' > "$T/usr-local-bin/tidesway"
+chmod +x "$T/usr-local-bin/tidesway"
+run
+check "with tidesway alone, setup ends well" test "$status" -eq 0
+check "with tidesway alone, its session is installed" has "$calls" "install-session PREFIX=/usr SESSIONS=tide-tidesway"
+check "and tidewm's entry isn't asked for" lacks "$output" "tide (tidewm) session won't show"
+teardown
+setup; ARGS=(--no-tidewm); rm "$T/usr-bin/Hyprland"
+printf '#!/bin/sh\n' > "$T/usr-local-bin/tidesway"
+chmod +x "$T/usr-local-bin/tidesway"
+run FAKE_NO_TIDESWAY_ENTRY=yes
+check "with tidesway alone, a missing entry ends the run" test "$status" -ne 0
+check "and is named, with the command that installs it" has "$output" \
+    "the tide (tidesway) session won't show at the login screen: there's no $T/share/wayland-sessions/tide-tidesway.desktop; run 'sudo make -C"
+check "which installs tidesway's" has "$output" "install-session PREFIX=/usr SESSIONS=tide-tidesway'"
+teardown
 # Under its own name too, and one that exits 0 without a word.
 for says in 'echo "tidewm v0.2.0" >&2; exit 1' 'exit 0'; do
     setup; ARGS=(--tidewm)

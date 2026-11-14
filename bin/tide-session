@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# What a tide session entry runs (SPEC.md §5.3): `tide-session hyprland` or
-# `tide-session tidewm`. It starts the session through uwsm, and says in
+# What a tide session entry runs (SPEC.md §5.3): `tide-session hyprland`,
+# `tide-session tidewm` or `tide-session tidesway`. It starts the session through uwsm, and says in
 # the journal (`journalctl -b -t tide-session`) what it ran, what uwsm
 # printed, and how it ended. A login that goes straight back to the login
 # screen leaves nothing of its own, so this is where to look.
@@ -27,10 +27,13 @@ say() {
 }
 
 case ${1:-} in
-    hyprland) desktops=tide:Hyprland name="tide (Hyprland)" compositor=tide-hyprland ;;
-    tidewm) desktops=tidewm:tide name="tide (tidewm)" compositor=tide-tidewm ;;
+    hyprland) desktops=tide:Hyprland name="tide (Hyprland)" compositor=tide-hyprland flag= ;;
+    tidewm) desktops=tidewm:tide name="tide (tidewm)" compositor=tide-tidewm flag= ;;
+    # tidesway takes tidewm's config and speaks its IPC, so its session is
+    # tidewm's, wrapper, target and portals, with tidesway run in its place.
+    tidesway) desktops=tidewm:tidesway:tide name="tide (tidesway)" compositor=tide-tidewm flag=--tidesway ;;
     *)
-        say "usage: tide-session hyprland|tidewm, not '${1:-}'"
+        say "usage: tide-session hyprland|tidewm|tidesway, not '${1:-}'"
         exit 2
         ;;
 esac
@@ -100,13 +103,13 @@ if test -t 2; then
 fi
 
 forget_failures
-log "starting the tide ($1) session: uwsm start -e -D $desktops -N '$name' -- $compositor"
+log "starting the tide ($1) session: uwsm start -e -D $desktops -N '$name' -- $compositor${flag:+ $flag}"
 # uwsm's own output goes to the journal under this name as well, through
 # systemd-cat where there is one, and the session ends when uwsm returns.
 if command -v systemd-cat >/dev/null 2>&1; then
-    systemd-cat -t tide-session -- uwsm start -e -D "$desktops" -N "$name" -- "$compositor"
+    systemd-cat -t tide-session -- uwsm start -e -D "$desktops" -N "$name" -- "$compositor" ${flag:+"$flag"}
 else
-    uwsm start -e -D "$desktops" -N "$name" -- "$compositor"
+    uwsm start -e -D "$desktops" -N "$name" -- "$compositor" ${flag:+"$flag"}
 fi
 status=$?
 if test "$status" -eq 0; then
