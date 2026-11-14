@@ -291,7 +291,9 @@ PanelWindow {
         // Sets one of the Appearance page's settings, as it does: `qs -c
         // tide ipc call settings setAppearance mode dark`, a time
         // ("07:15"), a latitude or longitude, a dimStrength (0.1),
-        // roundedCorners (true or false), or a
+        // roundedCorners (true or false), the Borders page's borderWidth
+        // or shadowSize (pixels) or shadows (none, floating, focused or
+        // all), or a
         // lightWallpaper or darkWallpaper, a file or a color such as
         // "#1a1d2e" ("" for the default), or a lightWallpaperPosition or
         // darkWallpaperPosition (fill, fill-top, fill-bottom, fit or
@@ -307,7 +309,7 @@ PanelWindow {
                 // Anything else is passed on as it is, to be refused
                 return AppearanceData.set(key, value === "true" ? true : value === "false" ? false : value);
             }
-            return AppearanceData.set(key, key === "dimStrength" ? Number(value) : value);
+            return AppearanceData.set(key, key === "dimStrength" || key === "borderWidth" || key === "shadowSize" ? Number(value) : value);
         }
         // Sets one monitor's scale or position, by its description, as the
         // Displays page does: `qs -c tide ipc call settings setDisplay
@@ -2363,51 +2365,6 @@ PanelWindow {
                                     value: AppearanceData.dimStrength
                                     next: Appearance.steppedDim(AppearanceData.dimStrength, 1)
                                     onActivated: appearance.set("dimStrength", next)
-                                }
-                            }
-                        }
-
-                        // Rounded corners (§6.2), which a click turns on
-                        // or off. Hyprland's and tidesway's: tidewm's windows
-                        // are square.
-                        Item {
-                            width: appearance.width
-                            implicitHeight: 32
-                            visible: !Compositor.tidewm || Compositor.tidesway
-
-                            Text {
-                                anchors.left: parent.left
-                                anchors.leftMargin: 10
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: "Rounded corners"
-                                color: Theme.fg
-                                font.family: Theme.font
-                                font.pixelSize: 13
-                            }
-
-                            // On or off, in the accent color while on, as
-                            // the Idle page's switches.
-                            Rectangle {
-                                anchors.right: parent.right
-                                anchors.rightMargin: 6
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 56
-                                height: 26
-                                radius: 13
-                                color: AppearanceData.roundedCorners ? Theme.accentBg : Theme.surface2
-                                Accessible.name: "Rounded corners"
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: AppearanceData.roundedCorners ? "On" : "Off"
-                                    color: AppearanceData.roundedCorners ? Theme.accentFg : Theme.fg
-                                    font.family: Theme.font
-                                    font.pixelSize: 12
-                                    font.weight: Font.DemiBold
-                                }
-
-                                TapHandler {
-                                    onTapped: appearance.set("roundedCorners", !AppearanceData.roundedCorners)
                                 }
                             }
                         }
@@ -4704,6 +4661,220 @@ PanelWindow {
                             wrapMode: Text.Wrap
                             textFormat: Text.PlainText
                             text: floatingPage.refused
+                            color: Theme.danger
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    // Borders: how a window's edge looks. The settings
+                    // are Appearance's own (AppearanceData), so one set
+                    // on that page before this one was is kept.
+                    Column {
+                        id: borders
+
+                        // Why the last change made here was refused, until
+                        // the next one or another page.
+                        property string refused: ""
+
+                        function set(key, value) {
+                            refused = AppearanceData.set(key, value);
+                            root.report(refused);
+                        }
+
+                        // Where Appearance.SHADOW_CHOICES has the shadows
+                        // in effect.
+                        readonly property int shadowsAt: Appearance.shadowsAt(AppearanceData.settings)
+
+                        onVisibleChanged: refused = ""
+                        visible: root.current.id === "borders"
+                        width: parent.width
+                        topPadding: 6
+                        spacing: 2
+
+                        // Which windows cast a shadow (§6.2), which ‹ and ›
+                        // step through.
+                        Item {
+                            width: borders.width
+                            implicitHeight: 32
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Shadows"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            Row {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+
+                                StepButton {
+                                    name: "go-previous-symbolic"
+                                    value: borders.shadowsAt
+                                    next: Appearance.steppedShadowsAt(borders.shadowsAt, -1)
+                                    onActivated: borders.set("shadows", Appearance.SHADOW_CHOICES[next].shadows)
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 140
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: Appearance.SHADOW_CHOICES[borders.shadowsAt].label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                StepButton {
+                                    name: "go-next-symbolic"
+                                    value: borders.shadowsAt
+                                    next: Appearance.steppedShadowsAt(borders.shadowsAt, 1)
+                                    onActivated: borders.set("shadows", Appearance.SHADOW_CHOICES[next].shadows)
+                                }
+                            }
+                        }
+
+                        // How far a shadow reaches and how wide a border
+                        // is, which − and + step a pixel at a time. The
+                        // size shows only while a window casts a shadow.
+                        Repeater {
+                            model: [
+                                { key: "shadowSize", label: "Shadow size", shown: AppearanceData.shadows !== "none" },
+                                { key: "borderWidth", label: "Border width", shown: true },
+                            ]
+
+                            Item {
+                                id: pixels
+
+                                required property var modelData
+                                readonly property int value: modelData.key === "shadowSize" ? AppearanceData.shadowSize : AppearanceData.borderWidth
+
+                                function stepped(steps) {
+                                    return modelData.key === "shadowSize" ? Appearance.steppedShadow(value, steps) : Appearance.steppedBorder(value, steps);
+                                }
+
+                                visible: modelData.shown
+                                width: borders.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: pixels.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    StepButton {
+                                        name: "list-remove-symbolic"
+                                        value: pixels.value
+                                        next: pixels.stepped(-1)
+                                        onActivated: borders.set(pixels.modelData.key, next)
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 92
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: Appearance.formatPixels(pixels.value)
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                        font.features: ({ "tnum": 1 })
+                                    }
+
+                                    StepButton {
+                                        name: "list-add-symbolic"
+                                        value: pixels.value
+                                        next: pixels.stepped(1)
+                                        onActivated: borders.set(pixels.modelData.key, next)
+                                    }
+                                }
+                            }
+                        }
+
+                        // tidewm's border colors are built in (its
+                        // config.h), so a border there isn't tide's one
+                        // quiet color.
+                        Text {
+                            visible: Compositor.tidewm && !Compositor.tidesway && AppearanceData.borderWidth > 0
+                            x: 10
+                            width: borders.width - 20
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: "On tidewm, the focused window's border is blue."
+                            color: Theme.fgDim
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                        }
+
+                        // Rounded corners (§6.2), which a click turns on
+                        // or off. Hyprland's and tidesway's: tidewm's windows
+                        // are square.
+                        Item {
+                            width: borders.width
+                            implicitHeight: 32
+                            visible: !Compositor.tidewm || Compositor.tidesway
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Rounded corners"
+                                color: Theme.fg
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                            }
+
+                            // On or off, in the accent color while on, as
+                            // the Idle page's switches.
+                            Rectangle {
+                                anchors.right: parent.right
+                                anchors.rightMargin: 6
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 56
+                                height: 26
+                                radius: 13
+                                color: AppearanceData.roundedCorners ? Theme.accentBg : Theme.surface2
+                                Accessible.name: "Rounded corners"
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: AppearanceData.roundedCorners ? "On" : "Off"
+                                    color: AppearanceData.roundedCorners ? Theme.accentFg : Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                }
+
+                                TapHandler {
+                                    onTapped: borders.set("roundedCorners", !AppearanceData.roundedCorners)
+                                }
+                            }
+                        }
+
+                        Text {
+                            visible: borders.refused !== ""
+                            x: 10
+                            width: borders.width - 20
+                            topPadding: 4
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: borders.refused
                             color: Theme.danger
                             font.family: Theme.font
                             font.pixelSize: 12

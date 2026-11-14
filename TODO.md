@@ -7,6 +7,22 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **Only the focused window casts a shadow** (2026-11-14), tiled or
+  floating, where only floating ones did. The maintainer asked for the
+  choice (None, Floating windows, Focused window, All windows) and
+  wondered about focused; the default is the guess. Reversible: `SHADOWS`
+  in `hypr/hyprland.lua`, `shadows` in `tidewm/tide.conf` and
+  `SHADOWS_DEFAULT` in `shell/lib/appearance.mjs`.
+- **A border is the palette's `surface-3`** (2026-11-14), the same on the
+  focused window and the rest, light or dark, when the Borders page
+  turns one on; none by default. `edge` and `line` are 7 to 9% opaque,
+  too faint for a 4 px border. tidewm's colors are built in, so there the
+  focused window's is blue and the page says so, rather than hiding
+  Border width. Reversible: `borderColor` in `shell/lib/appearance.mjs`
+  and `BORDER_COLOR` in `hypr/hyprland.lua`.
+- **A border joins a floating window's resize zone, the shadow doesn't**
+  (2026-11-14): `extend_border_grab_area` stays 8 px whatever the shadow's
+  size.
 - **"Caps Lock is on" reads the keyboards' Caps Lock lights**
   (2026-11-13), through `tide caps-lock`, since tidewm's IPC has no Caps
   Lock state and Hyprland reports it without an event. A keyboard with no
@@ -1215,6 +1231,10 @@ it (maintainer, 2026-11-14).
 - [x] Rounded corners there: the Appearance page shows the row on
       tidesway and writes `corner_radius`, in a file tidewm never reads,
       as tidewm fails on a line it doesn't know.
+- [ ] A border width changed on tidesway reaches only windows opened
+      later, if tidesway's `default_border` is sway's: check on a real
+      session, and have the shell run `border pixel N` on the open ones
+      if so.
 - [ ] A dim strength set on tidewm and then unset on tidesway stays, from
       tidewm's own `tide-appearance.conf`, which the config both read
       still includes, until the next tidewm session writes it again.

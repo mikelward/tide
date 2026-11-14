@@ -25,7 +25,7 @@ export const DEFAULTS = Object.freeze({ mode: "schedule", light: "07:00", dark: 
 const MODES = ["schedule", "sun", "light", "dark"];
 // The settings that decide light or dark, and every one there is.
 const THEME_KEYS = ["mode", "light", "dark", "latitude", "longitude"];
-const KEYS = THEME_KEYS.concat(["city", "dimStrength", "roundedCorners", "lightWallpaper", "darkWallpaper", "lightWallpaperPosition",
+const KEYS = THEME_KEYS.concat(["city", "dimStrength", "roundedCorners", "borderWidth", "shadows", "shadowSize", "lightWallpaper", "darkWallpaper", "lightWallpaperPosition",
     "darkWallpaperPosition", "wallpaperPosition", "barPosition", "barIcons"]);
 // How a picture is placed on a monitor (SPEC.md §15): each mode's own,
 // lightWallpaperPosition or darkWallpaperPosition, else wallpaperPosition,
@@ -95,6 +95,21 @@ export function parseAppearance(text) {
         case "roundedCorners":
             if (typeof v !== "boolean") {
                 return { error: "roundedCorners must be true or false" };
+            }
+            break;
+        case "borderWidth":
+            if (!Number.isInteger(v) || v < 0 || v > BORDER_WIDTH_MAX) {
+                return { error: `borderWidth must be a whole number from 0 to ${BORDER_WIDTH_MAX}` };
+            }
+            break;
+        case "shadows":
+            if (!SHADOWS.includes(v)) {
+                return { error: `shadows must be one of ${SHADOWS.map(m => `"${m}"`).join(", ")}` };
+            }
+            break;
+        case "shadowSize":
+            if (!Number.isInteger(v) || v < 0 || v > SHADOW_SIZE_MAX) {
+                return { error: `shadowSize must be a whole number from 0 to ${SHADOW_SIZE_MAX}` };
             }
             break;
         case "lightWallpaper":
@@ -683,15 +698,99 @@ export function roundedCorners(settings) {
     return settings.roundedCorners ?? true;
 }
 
+// How wide a window's border is, in pixels (SPEC.md §6.2): none unless a
+// setting says, as hypr/hyprland.lua's BORDER_SIZE and tidewm/tide.conf's
+// default_border have it, which appearance_test.mjs holds it to.
+export const BORDER_WIDTH = 0;
+// The widest the page and the files allow. Hyprland's border_size stops
+// at 20 and tidewm's default_border at 100.
+export const BORDER_WIDTH_MAX = 16;
+
+export function borderWidth(settings) {
+    return settings.borderWidth ?? BORDER_WIDTH;
+}
+
+// The border width moved `steps` pixels, as shell/lib/steps.mjs moves one.
+export function steppedBorder(value, steps) {
+    return stepped(value, steps, 1, 0, BORDER_WIDTH_MAX);
+}
+
+// Which windows cast a shadow (SPEC.md §6.2), in the order the Borders
+// page steps through them: none, floating ones, the focused one, tiled or
+// floating, or all of them, tiles too.
+export const SHADOWS = Object.freeze(["none", "floating", "focused", "all"]);
+// Which do when nothing says: hypr/hyprland.lua's SHADOWS and
+// tidewm/tide.conf's shadows.
+export const SHADOWS_DEFAULT = "focused";
+
+export function shadows(settings) {
+    return settings.shadows ?? SHADOWS_DEFAULT;
+}
+
+// The choices as the Borders page names them, in SHADOWS' order.
+export const SHADOW_CHOICES = Object.freeze([
+    Object.freeze({ shadows: "none", label: "None" }),
+    Object.freeze({ shadows: "floating", label: "Floating windows" }),
+    Object.freeze({ shadows: "focused", label: "Focused window" }),
+    Object.freeze({ shadows: "all", label: "All windows" }),
+]);
+
+// The index in SHADOW_CHOICES of `settings`' choice.
+export function shadowsAt(settings) {
+    return Math.max(0, SHADOW_CHOICES.findIndex(c => c.shadows === shadows(settings)));
+}
+
+// The index `steps` steps through SHADOW_CHOICES from `at`, stopping at
+// either end.
+export function steppedShadowsAt(at, steps) {
+    return Math.max(0, Math.min(SHADOW_CHOICES.length - 1, at + steps));
+}
+
+// tidewm's and tidesway's word for each choice, their `shadows` line's.
+const SHADOWS_CONF = Object.freeze({ none: "disable", floating: "floating", focused: "active", all: "all" });
+
+// How far a shadow reaches, in pixels (SPEC.md §6.2), when nothing says:
+// hypr/hyprland.lua's SHADOW_RANGE, and tidewm's and tidesway's own
+// shadow_blur_radius.
+export const SHADOW_SIZE = 8;
+// The farthest the page and the files allow. Hyprland's range and the
+// others' shadow_blur_radius stop at 100.
+export const SHADOW_SIZE_MAX = 32;
+
+export function shadowSize(settings) {
+    return settings.shadowSize ?? SHADOW_SIZE;
+}
+
+// The shadow size moved `steps` pixels.
+export function steppedShadow(value, steps) {
+    return stepped(value, steps, 1, 0, SHADOW_SIZE_MAX);
+}
+
+// How the page shows a width or a size: in pixels.
+export function formatPixels(value) {
+    return `${value} px`;
+}
+
+// A border's color (SPEC.md §6.2), light or dark: the palette's surface-3,
+// the same on the focused window and the rest, as dimming is the focus
+// cue. As "rrggbbaa", which Hyprland and sway both spell their own way.
+export function borderColor(dark) {
+    const c = (dark ? PALETTE.dark : PALETTE.light).surface3;
+    // The palette's are #rrggbb, or Qt's #aarrggbb.
+    return c.length === 9 ? c.slice(3) + c.slice(1, 3) : c.slice(1) + "ff";
+}
+
 // What reaches Hyprland, as the Lua table conf's hyprland.lua reads from
 // ~/.config/hypr/tide-appearance.lua: only what's set, so the config's own
-// stands for the rest. A number and a boolean are all it holds, so it needs
-// no escapes.
-export function appearanceLua(settings) {
+// stands for the rest, and, while there's a border, its color for the
+// theme in effect (`dark` true or false; left out, no color). Numbers,
+// booleans, one of SHADOWS and a color of hex digits are all it holds, so
+// it needs no escapes.
+export function appearanceLua(settings, dark = undefined) {
     const lines = [
         "-- Written by tide from appearance.json and appearance.local.json (tide SPEC.md §16).",
-        "-- Change those, or the Appearance page of tide's settings, not this file. Only",
-        "-- what's set is here; hyprland.lua has the rest.",
+        "-- Change those, or the Appearance and Borders pages of tide's settings, not this",
+        "-- file. Only what's set is here; hyprland.lua has the rest.",
         "return {",
     ];
     if (settings.dimStrength !== undefined) {
@@ -700,6 +799,18 @@ export function appearanceLua(settings) {
     if (settings.roundedCorners !== undefined) {
         lines.push(`    rounded_corners = ${settings.roundedCorners},`);
     }
+    if (settings.borderWidth !== undefined) {
+        lines.push(`    border_width = ${settings.borderWidth},`);
+    }
+    if (settings.shadows !== undefined) {
+        lines.push(`    shadows = "${settings.shadows}",`);
+    }
+    if (settings.shadowSize !== undefined) {
+        lines.push(`    shadow_size = ${settings.shadowSize},`);
+    }
+    if (dark !== undefined && borderWidth(settings) > 0) {
+        lines.push(`    border_color = "rgba(${borderColor(dark)})",`);
+    }
     lines.push("}");
     return lines.join("\n") + "\n";
 }
@@ -707,20 +818,45 @@ export function appearanceLua(settings) {
 // What reaches tidewm (SPEC.md §5.3), as the lines conf's tidewm config
 // includes from ~/.config/tidewm/tide-appearance.conf: only what's set, so
 // the config's own stands for the rest. tidewm's dim_inactive takes the
-// strength as Hyprland's dim_strength does, from 0 to 1. tidewm's windows
-// are square, so roundedCorners has no line.
+// strength as Hyprland's dim_strength does, from 0 to 1, its
+// default_border the width, its shadows which windows cast one, and its
+// shadow_blur_radius how far. tidewm's windows are square and its border's
+// colors are built in, so roundedCorners and the border's color have no
+// line.
 // On tidesway (`tidesway` true) it's the file tidesway alone reads, after
-// the config, ~/.config/tidewm/tidesway.d/tide-appearance.conf, which has
-// its corner_radius too, a line tidewm would fail on: ROUNDING, as
-// Hyprland's, or 0. It's always there, as tidesway's own default is square.
-export function appearanceConf(settings, tidesway = false) {
+// the config, ~/.config/tidewm/tidesway.d/tide-appearance.conf, with the
+// lines tidewm would fail on as well: a floating window's border, which
+// sway sets apart from a tiled one's; while there's a border, its color
+// for the theme in effect (`dark`); and its corner_radius, ROUNDING, as
+// Hyprland's, or 0, always there, as tidesway's own default is square.
+export function appearanceConf(settings, tidesway = false, dark = true) {
     const lines = [
         "# Written by tide from appearance.json and appearance.local.json (tide SPEC.md §16).",
-        "# Change those, or the Appearance page of tide's settings, not this file. Only",
-        "# what's set is here; tidewm's config has the rest.",
+        "# Change those, or the Appearance and Borders pages of tide's settings, not this",
+        "# file. Only what's set is here; tidewm's config has the rest.",
     ];
     if (settings.dimStrength !== undefined) {
         lines.push(`dim_inactive ${settings.dimStrength}`);
+    }
+    if (settings.borderWidth !== undefined) {
+        lines.push(`default_border pixel ${settings.borderWidth}`);
+        if (tidesway) {
+            lines.push(`default_floating_border pixel ${settings.borderWidth}`);
+        }
+    }
+    if (tidesway && borderWidth(settings) > 0) {
+        const color = `#${borderColor(dark)}`;
+        const text = (dark ? PALETTE.dark : PALETTE.light).fg;
+        // sway's border, background, text, indicator and child_border.
+        for (const cls of ["focused", "focused_inactive", "unfocused"]) {
+            lines.push(`client.${cls} ${color} ${color} ${text} ${color} ${color}`);
+        }
+    }
+    if (settings.shadows !== undefined) {
+        lines.push(`shadows ${SHADOWS_CONF[settings.shadows]}`);
+    }
+    if (settings.shadowSize !== undefined) {
+        lines.push(`shadow_blur_radius ${settings.shadowSize}`);
     }
     if (tidesway) {
         lines.push(`corner_radius ${roundedCorners(settings) ? ROUNDING : 0}`);
