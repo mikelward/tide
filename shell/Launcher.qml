@@ -30,8 +30,13 @@ Singleton {
         run(command, null, workingDirectory);
     }
 
-    function run(command, then, workingDirectory) {
+    // `shown`, if given, is what the log calls the command, in place of
+    // its own words: a script's name, say, for one passed to `sh -c`.
+    function run(command, then, workingDirectory, shown) {
         const properties = { command: command, then: then };
+        if (shown) {
+            properties.shown = shown;
+        }
         if (workingDirectory) {
             properties.workingDirectory = workingDirectory;
         }
@@ -51,8 +56,10 @@ Singleton {
             // what it has to say and calls `then` exactly once.
             // Made once, not bound, so nothing can start it over mid-run.
             property var tracker: null
+            // What the log calls the command, if not its own words.
+            property var shown: null
 
-            Component.onCompleted: tracker = Run.track(command, then, {
+            Component.onCompleted: tracker = Run.track(shown ?? command, then, {
                 warn: m => console.warn(m),
                 log: m => console.log(m)
             })

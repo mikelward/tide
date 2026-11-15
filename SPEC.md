@@ -3686,7 +3686,8 @@ keys, listing Plasma's apps and its System Settings pages. Kickoff stays
 on the tap of `Meta`.
 
 - **Resident.** It's a second Quickshell config, `shell/kde.qml`, holding
-  only the launcher. `tide-kde.service` runs it, `WantedBy=` and
+  the launcher and the Borders settings' applier (below).
+  `tide-kde.service` runs it, `WantedBy=` and
   `PartOf=plasma-workspace.target`, so it starts with Plasma and stops at
   logout. `setup` enables it. It never starts in tide's own session:
   it's `ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE`.
@@ -3752,6 +3753,50 @@ on the tap of `Meta`.
   appearance schedule and the rest of tide's state aren't asked or
   started: `launcher.mjs`'s `onPlasma` says it's Plasma, from
   `XDG_CURRENT_DESKTOP`.
+- **Borders.** tide on KDE has a window decoration, `org.tide.decoration`,
+  which draws §6.2's shadows, border and rounded corners. It reads them
+  from `kwinrc`'s `[tide-decoration]`, and again each time KWin reads its
+  settings (tide-kde's SPEC.md §4.8). The config writes them there, from
+  `appearance.json` and `appearance.local.json`, as Plasma's session
+  starts and each time either file changes (`KdeBorders.qml`,
+  `shell/lib/kdeborders.mjs`). So a change made in tide's session, by
+  hand or by a sync, shows on Plasma without tide-kde's `make setup`.
+  - The entries are `Shadows` (`none`, `floating`, `focused` or `all`),
+    `ShadowSize`, `BorderWidth` and `RoundedCorners` (`true` or `false`),
+    with tide's defaults for what neither file sets.
+  - **Only tide's decoration.** It writes while `kwinrc`'s
+    `[org.kde.kdecoration2]` `library` is `org.tide.decoration`, KWin's
+    choice of it, which tide-kde's `make setup` makes. With any other
+    decoration it writes nothing and asks KWin for nothing. It never
+    chooses the decoration itself.
+  - **How.** One `sh` process per change: `kreadconfig6` for the choice
+    and each entry, `kwriteconfig6` for each entry that differs, then
+    `busctl --user call org.kde.KWin /KWin org.kde.KWin reconfigure`,
+    once, and only if something was written. `kreadconfig6` prints an
+    entry's value, or an empty line (kconfig's `kreadconfig.cpp`);
+    `reconfigure` is KWin's own (`org.kde.KWin.xml`). One runs at a time,
+    and a change during a run gets a run of its own after it.
+  - **A bad setting** is named in the log and left out, so the decoration
+    gets tide's default for it and the other settings still apply. That is
+    tide-kde's rule, not the settings pages', which keep the last good
+    file: there's no page on Plasma to show the error. A file that can't
+    be read leaves `kwinrc` as it is, and so does a change still waiting
+    for its run when a file stops being readable.
+  - **A failure** is logged: no `kreadconfig6`, a write that fails, or a
+    KWin that can't be asked, which leaves the entries for the next login.
+  - **One mapping, twice.** tide-kde's `scripts/setup.mjs` writes the same
+    entries from the same files, in code of its own. `make check-tide-kde
+    TIDE_KDE=DIR` reads both ways over the same sample files and fails
+    when the settings, the errors or the entries differ. It is run by
+    hand, as nothing in CI has a tide-kde checkout.
+  - **Not there:** the Borders page. Settings doesn't run on Plasma, so a
+    change there is an edit to the file. A decoration chosen in System
+    Settings while the config runs gets tide's settings at the next
+    change or login.
+  - **Cost and reliability:** nothing to pay, nothing new to install
+    beyond Plasma's own `kreadconfig6` and `kwriteconfig6`, and no
+    network. Two file watches, and a handful of short processes per
+    change. Without tide's decoration it's one `kreadconfig6` per change.
 - **Theme.** Plasma's icon theme, as `kde.qml` names none, unlike the
   `Adwaita` pragma `shell.qml` sets for tide's session. Light or dark
   follows Plasma's color scheme, from the palette it gives Qt apps.
@@ -6092,6 +6137,9 @@ settings NAME ARGS...`; most answer why not, or an empty string.
     Shadow size shows only while a window casts one.
   - Over IPC, `setAppearance shadows`, `shadowSize`, `borderWidth` or
     `roundedCorners`, then the value, sets one.
+  - On KDE Plasma they reach tide's window decoration there through
+    `kwinrc`, as the files change (§8.5). The page itself is tide's
+    session's.
 
 - **Appearance** sets §15's settings, in `appearance.local.json`.
   - It shows light or dark now, and until when, with a button to switch
@@ -6715,6 +6763,12 @@ What each covers:
   decides what each key does, and reads the table and settings, with no
   fcitx5 in it. `make test-accents` builds `accents_core_test.cpp` with
   the C++ compiler alone and runs it, from `make test` (§8.6).
+- **The Borders settings on Plasma** (§8.5). `kdeborders_test.mjs` runs
+  the command in `sh` against stand-ins for `kreadconfig6`,
+  `kwriteconfig6` and `busctl`: what's written, nothing for another
+  decoration, and KWin asked once per change. The integration test's
+  Plasma step starts `kde.qml` with such stand-ins and expects the same
+  of it. No KWin, KConfig or decoration runs in either.
 - **Qt's JavaScript, not Node's.** Quickshell runs those modules in Qt's
   QML engine, which (checked on Qt 6.11; CI runs Ubuntu 26.04's Qt 6.10)
   has no object spread and none of

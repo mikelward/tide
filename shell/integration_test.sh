@@ -54,7 +54,8 @@
 # With wtype, it also types into them. It opens the launcher, types the
 # name of an app only it installs, and expects Enter to run that app. It
 # starts the launcher on Plasma (kde.qml) and expects it to run an app and
-# a System Settings page through kstart, without asking Hyprland. It
+# a System Settings page through kstart, without asking Hyprland, and to
+# give tide's decoration there the Borders settings. It
 # opens Super+Return's name prompt, with no window focused, and expects a
 # name and Enter to go to that workspace. Given
 # the password of the user running it, it also unlocks the lock: it types a
@@ -1860,7 +1861,12 @@ launch() {
 # tab, Enter activates the one window tide on KDE says wants attention. A stand-in kstart on
 # its PATH keeps each command, and a stand-in busctl answers as KWin's
 # D-Bus does (shell/lib/kwin_test.mjs has KWin's own answers) and keeps
-# each call. It must not ask Hyprland, which Plasma doesn't
+# each call. As it starts, it must give tide's decoration there the Borders
+# settings of appearance.json and appearance.local.json (SPEC.md §8.5):
+# stand-ins for kreadconfig6, which says KWin's decoration is tide's and its
+# corners already rounded, and kwriteconfig6, which keeps each write, must
+# see the three that differ written, and busctl KWin asked to read its
+# settings again, once. It must not ask Hyprland, which Plasma doesn't
 # run, or report from its files. Its icons are Plasma's theme, which isn't
 # here, so a placeholder icon passes. Its log is $tmp/kde.qs.log.
 kde() {
@@ -1889,6 +1895,25 @@ case "\$*" in
 esac
 EOF
     chmod +x "$tmp/bin/busctl" || exit 1
+    : >"$tmp/busctl" || exit 1
+    rm -f "$tmp/kwritten" || exit 1
+    mkdir -p "$tmp/home/.config/tide" || exit 1
+    printf '{"shadows": "all", "borderWidth": 2, "roundedCorners": true}\n' >"$tmp/home/.config/tide/appearance.json" || exit 1
+    printf '{"shadowSize": 8, "dark": "20:00"}\n' >"$appearance_local" || exit 1
+    cat >"$tmp/bin/kreadconfig6" <<'EOF' || exit 1
+#!/bin/sh
+case "$*" in
+"--file kwinrc --group org.kde.kdecoration2 --key library") echo org.tide.decoration ;;
+"--file kwinrc --group tide-decoration --key RoundedCorners") echo true ;;
+*) echo ;;
+esac
+EOF
+    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s/kwritten"\n' "$tmp" >"$tmp/bin/kwriteconfig6" || exit 1
+    chmod +x "$tmp/bin/kreadconfig6" "$tmp/bin/kwriteconfig6" || exit 1
+    _reconfigure='call org.kde.KWin /KWin org.kde.KWin reconfigure'
+    _written='--file kwinrc --group tide-decoration --key Shadows all
+--file kwinrc --group tide-decoration --key ShadowSize 8
+--file kwinrc --group tide-decoration --key BorderWidth 2'
     keyboard
     env -i PATH="$tmp/bin:$PATH" HOME="$tmp/home" XDG_RUNTIME_DIR="$tmp/run" \
         ${bus_address:+DBUS_SESSION_BUS_ADDRESS="$bus_address"} \
@@ -1908,6 +1933,16 @@ EOF
     i=0
     until grep -q 'read OnlyShowIn and NotShowIn' "$log"; do
         if waited "the launcher on Plasma didn't read the desktop entries' OnlyShowIn" "$i"; then
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    i=0
+    until grep -qF -- "$_reconfigure" "$tmp/busctl"; do
+        if waited "the launcher on Plasma didn't give tide's decoration the Borders settings and have KWin read them" "$i"; then
+            sed 's/^/  kwriteconfig6 /' "$tmp/kwritten" >&2
             grep -v '^\[' "$log" >&2
             exit 1
         fi
@@ -1943,6 +1978,13 @@ EOF
     if test "$_started" != "$_expected"; then
         echo "FAIL: the launcher on Plasma should run \`kstart --application tide-test-probe\`, then \`kstart --application kcm_tidezebra\`; it ran:" >&2
         sed 's/^/  kstart /' "$tmp/kstarted" >&2
+        exit 1
+    fi
+    # By now a second apply would have run too.
+    if test "$(cat "$tmp/kwritten" 2>&1)" != "$_written" || test "$(grep -cF -- "$_reconfigure" "$tmp/busctl")" -ne 1; then
+        echo "FAIL: the launcher on Plasma should write tide's decoration its shadows, shadow size and border width, which differ, and ask KWin to read its settings again, once; it ran:" >&2
+        sed 's/^/  kwriteconfig6 /' "$tmp/kwritten" >&2
+        grep -F -- "$_reconfigure" "$tmp/busctl" | sed 's/^/  busctl /' >&2
         exit 1
     fi
     # KWin's windows and desktops: each tab reads them as it opens, so the
@@ -1997,7 +2039,9 @@ EOF
         cat "$tmp/reports" >&2
         exit 1
     fi
+    rm "$tmp/home/.config/tide/appearance.json" "$appearance_local" || exit 1
     echo "ok: the launcher on Plasma runs an app, and a System Settings page hidden from menus, through kstart, and goes to KWin's windows and desktops"
+    echo "ok: on Plasma, tide's decoration gets the Borders settings that differ, and KWin is asked to read them once"
 }
 
 # share: on the shell launch() started, asks the share picker for a share
