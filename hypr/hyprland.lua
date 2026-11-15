@@ -32,18 +32,30 @@
 --   screenshot      the screenshot command, which takes --window and
 --                   --region (grim and slurp, to the clipboard)
 -- A wrong one fails here, by name.
--- The rescue keys: a terminal on Super+T and the way out on Super+Shift+E,
--- bound before anything below can fail, so a config that stops part-way (a
--- wrong option, a settings file this Hyprland can't take, a bug) still
--- leaves keys to fix it with. apply_keys() takes them back as it binds
--- every key, these two among them.
+-- tide's launcher (SPEC.md §8) while its shell runs; the call fails
+-- otherwise (no shell), and the `launcher` option runs instead, or a
+-- notification says why.
+local function launcher_command(launcher)
+    return "qs -c tide ipc call launcher toggle || "
+        .. (launcher or "notify-send -a tide 'No launcher' 'Super+Space opens the launcher in the tide shell, which is not running.'")
+end
+
+-- The rescue keys: a terminal on Super+T, the launcher on Super+Space and
+-- the way out on Super+Shift+E (SPEC.md §16), bound before anything below
+-- can fail, so a config that stops part-way (a wrong option, a settings
+-- file this Hyprland can't take, a bug) still leaves keys to fix it with.
+-- apply_keys() takes them back as it binds every key, these among them.
 local rescue_keys = {}
 do
     local given = ...
-    local rescue_terminal = type(given) == "table" and type(given.terminal) == "string" and given.terminal
-        or "xdg-terminal-exec"
+    local function given_string(name)
+        return type(given) == "table" and type(given[name]) == "string" and given[name] or nil
+    end
+    local rescue_terminal = given_string("terminal") or "xdg-terminal-exec"
+    local rescue_launcher = launcher_command(given_string("launcher"))
     for _, r in ipairs({
         { "SUPER + T", function() return hl.dsp.exec_cmd(rescue_terminal) end, "Terminal" },
+        { "SUPER + Space", function() return hl.dsp.exec_cmd(rescue_launcher) end, "Launcher" },
         { "SUPER + SHIFT + E", function() return hl.dsp.exit() end, "Quit Hyprland" },
     }) do
         local ok, err = pcall(function() hl.bind(r[1], r[2](), { description = r[3] }) end)
@@ -1301,12 +1313,7 @@ bind("files", key("E"), app(opts.files or ("xdg-open " .. home)), does("Files"))
 if opts.apps then
     opts.apps({ bind = bind, fixed = fixed, key = key, app = app, exec = exec, does = does, terminal = terminal })
 end
--- tide's launcher (SPEC.md §8) while its shell runs; the call fails
--- otherwise (no shell), and the `launcher` option runs instead, or a
--- notification says why.
-bind("launcher", key("Space"), exec("qs -c tide ipc call launcher toggle || "
-    .. (opts.launcher or "notify-send -a tide 'No launcher' 'Super+Space opens the launcher in the tide shell, which is not running.'")),
-    does("Launcher"))
+bind("launcher", key("Space"), exec(launcher_command(opts.launcher)), does("Launcher"))
 -- A bare Super tap opens tide's launcher too, through the shell's
 -- tide:launcher global shortcut (tide SPEC.md §8.2), which is quicker than a
 -- qs call per tap. Only from Hyprland 0.57: before it, a release bind on
