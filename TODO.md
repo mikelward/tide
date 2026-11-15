@@ -2085,6 +2085,26 @@ Hyprland yet. Still to do:
   variable in the session that raised `Lock`), and it must fail toward
   locking.
 - Crash it on purpose and walk the three ways out (§10).
+- **"No keyboard" with a Logitech ERGO K860 on its receiver**
+  (2026-11-15). On a desktop with keyd and a KVM, the login screen said
+  "No keyboard" with the K860 on, and typing didn't clear it. A week
+  before, the lock screen said it only when the KVM had switched away.
+  Since keyd, its virtual keyboard always counted, so neither screen
+  ever said it. fc411de leaves keyd's device out, and counts a HID++
+  keyboard only once its battery exists and reads `online` 1; that
+  battery rule is the only new part, and the likely cause. The receiver
+  appears a couple of seconds before the keyboard, and the battery
+  later still. On the machine, with the K860 idle, then right after a
+  key press, then after switching the KVM away and back:
+  - `tide keyboards`
+  - `cat /sys/class/power_supply/hidpp_battery_*/{model_name,online,status}`
+  - `udevadm info /sys/class/input/eventN` for the K860's event device
+    (its `ID_INPUT_*` and the path), and `readlink -f` of it.
+
+  If `online` reads 0, or there's no battery, while the K860 types, drop
+  or narrow `asleep()`'s battery rule in `bin/tide`: the KVM case is
+  covered without it, since switching away takes the receiver, and its
+  devices, away.
 - `tide idle-suspend` is hypridle's 30-minute step in `conf`: it suspends
   on battery only, and on AC leaves the flag for unplugging while idle,
   which `shell/UnplugSuspend.qml` acts on (§10, `shell/lib/unplug.mjs`),
