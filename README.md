@@ -111,9 +111,9 @@ session runs when you have no `~/.config/tidewm/config`; yours can
 `include tide.conf` and rebind what it likes (SPEC.md §6.8).
 
 `make install-session` also installs tide's greeter, for greetd (SPEC.md
-§11): `tide-greeter`, which runs Hyprland with its own config and the
-greeter on the lock's face, plus a copy of the shell for it and a greetd
-config template in `$(PREFIX)/share/tide/greeter/greetd.toml`.
+§11): `tide-greeter`, which runs tidewm (one with `-k`) or else Hyprland,
+with its own config and the greeter on the lock's face, plus a copy of
+the shell for it and a greetd config template in `$(PREFIX)/share/tide/greeter/greetd.toml`.
 `install/tide-setup --greeter` switches your display manager to it, and
 `--no-greeter` switches back. By hand, as root:
 

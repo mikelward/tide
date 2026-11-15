@@ -4638,14 +4638,23 @@ talk, a demo, or a meeting room's screen.
 
 - **greetd** runs **`tide-greeter`** as greetd's own greeter user. It
   starts a compositor for the greeter (§3.4), and logs which and why:
-  - **tidewm**, where `tidewm -v` runs and `tide-msg` is beside
-    `tide-greeter` to end it. Its config, which `tide-greeter` writes to
-    the runtime directory at each start, binds one key to `nop`, so
-    tidewm's built-in keys are gone and only Ctrl+Alt+F1-F12 switch VT; has
-    no window drags; and has localed's keymap. Its `-s` command runs the
+  - **tidewm**, where `tidewm -v` runs, tidewm has `-k` and `tide-msg` is
+    beside `tide-greeter` to end it. Its config, which `tide-greeter`
+    writes to the runtime directory at each start, binds one key to `nop`;
+    has no window drags; and has localed's keymap. Its `-s` command runs the
     greeter, then `tide-msg exit`, or, should that fail, sends tidewm
     SIGTERM, which it takes as a request to quit. The greeter turns the displays off and on
     with `tide-msg output * power`.
+  - tidewm runs with `-k`, so only the config's keys work, and only
+    Ctrl+Alt+F1-F12 switch VT. Without `-k`, tidewm turns its built-in keys
+    to quit, open a terminal and open the launcher back on for a config
+    with an error or no `exit` binding. The greeter's config has none, so
+    anyone at the login screen could open a terminal as the greeter user.
+  - A tidewm older than `-k` would refuse it and not start. So
+    `tide-greeter` reads the usage `tidewm -h` prints first: a tidewm whose
+    usage lists `[-k]` has it. One that doesn't is passed over for
+    Hyprland, or for the text login where there's no Hyprland, and the
+    journal says why.
   - **Hyprland** otherwise, with tide's greeter config
     (`greeter/hyprland.lua`): every monitor at its preferred mode; no key
     bindings, so only Hyprland's built-in VT switch acts on a key; none of

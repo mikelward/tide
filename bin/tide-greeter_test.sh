@@ -62,34 +62,57 @@ cat >"$tmp/stubs/qs" <<'EOF'
 exit "${QS_EXIT:-0}"
 EOF
 chmod +x "$tmp/stubs/busctl" "$tmp/stubs/Hyprland" "$tmp/stubs/qs" || exit 1
-# tidewm, in a directory of its own so only some runs have it: -v says its
-# version and exits 1, as dwl does, or fails with $TIDEWM_V_FAILS; a run records its arguments, the
-# desktop qs gets and its config, then runs its -s command, as tidewm does,
-# and exits $TIDEWM_EXIT. tide-msg, beside tide-greeter, records what it's
-# asked.
+# tidewm, in a directory of its own so only some runs have it, taking
+# options as tidewm's getopt does: -v says its version and exits 1, as dwl
+# does; -h gives the usage, which lists -k, but for $TIDEWM_NO_K, a tidewm
+# older than -k, which rejects it with the usage; $TIDEWM_V_FAILS makes it
+# a tidewm that can't run at all. A run records its arguments, the desktop qs gets and its
+# config, then runs its -s command, as tidewm does, and exits $TIDEWM_EXIT.
+# tide-msg, beside tide-greeter, records what it's asked.
 mkdir "$tmp/tw" || exit 1
 cat >"$tmp/tw/tidewm" <<'EOF'
 #!/bin/sh
-if test "$1" = -v; then
-    if test -n "${TIDEWM_V_FAILS-}"; then
-        echo "tidewm: error while loading shared libraries"
-        exit 127
-    fi
-    # As dwl's -v does: the version on stderr, and exit 1.
-    echo "dwl v0.3.120" >&2
-    exit 1
+if test -n "${TIDEWM_V_FAILS-}"; then
+    echo "tidewm: error while loading shared libraries"
+    exit 127
 fi
+usage() {
+    if test -n "${TIDEWM_NO_K-}"; then
+        echo "Usage: tidewm [-v] [-d] [-c config file] [-s startup command]" >&2
+    else
+        echo "Usage: tidewm [-v] [-d] [-c config file] [-k] [-s startup command]" >&2
+    fi
+    exit 1
+}
+config= command=
+while getopts c:ks:hdv opt; do
+    case $opt in
+        c) config=$OPTARG ;;
+        s) command=$OPTARG ;;
+        d) ;;
+        h) usage ;;
+        k)
+            if test -n "${TIDEWM_NO_K-}"; then
+                echo "tidewm: invalid option -- 'k'" >&2
+                usage
+            fi
+            ;;
+        # As dwl's -v does: the version on stderr, and exit 1.
+        v) echo "dwl v0.3.120" >&2; exit 1 ;;
+        *) usage ;;
+    esac
+done
 {
     printf 'tidewm'
-    printf ' [%s]' "$1" "$2" "$3"
+    printf ' [%s]' "$@"
     printf '\n'
     echo "XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP-}"
     echo "TIDE_GREETER_MSG=${TIDE_GREETER_MSG-}"
-    cat "$2"
+    cat "$config"
 } >"$STUB_LOG"
 # As tidewm does, a SIGTERM is a request to quit, cleanly.
 trap 'echo "tidewm: quit on SIGTERM" >>"$STUB_LOG.msg"; exit 0' TERM
-sh -c "$4"
+sh -c "$command"
 exit "${TIDEWM_EXIT:-0}"
 EOF
 cat >"$prefix/bin/tide-msg" <<'EOF'
@@ -129,7 +152,7 @@ greeter() {
     out=$(env -i PATH="${GREETER_PATH:-$tmp/stubs:$tmp/sys}" STUB_LOG="$tmp/log" \
         BUSCTL_OUT="${BUSCTL_OUT-}" BUSCTL_EXIT="${BUSCTL_EXIT:-0}" HYPRLAND_EXIT="${HYPRLAND_EXIT:-0}" \
         QS_EXIT="${QS_EXIT:-0}" XDG_RUNTIME_DIR="${RUNTIME_DIR-$run}" \
-        TIDEWM_V_FAILS="${TIDEWM_V_FAILS-}" TIDEWM_EXIT="${TIDEWM_EXIT:-0}" TIDE_MSG_FAILS="${TIDE_MSG_FAILS-}" \
+        TIDEWM_V_FAILS="${TIDEWM_V_FAILS-}" TIDEWM_NO_K="${TIDEWM_NO_K-}" TIDEWM_EXIT="${TIDEWM_EXIT:-0}" TIDE_MSG_FAILS="${TIDE_MSG_FAILS-}" \
         TIDE_GREETER_AGREETY_DIRS="${AGREETY_DIRS-}" TIDE_GREETER_ICON_DIRS="${ICON_DIRS-$tmp/icons}" \
         ${ON_CONSOLE:+TIDE_GREETER_ON_CONSOLE=1} \
         "$prefix/bin/tide-greeter" "$@" 2>&1)
@@ -330,8 +353,9 @@ BUSCTL_EXIT=0
 GREETER_PATH="$tmp/tw:$tmp/stubs:$tmp/sys"
 greeter 0
 check "with tidewm, the greeter runs on it" contains "$out" "tide-greeter: the greeter runs on tidewm"
-check "with its own config" contains "$ran" "tidewm [-c] [$run/tide-greeter-tidewm.conf] [-s]"
-check "which binds one key to nothing, so tidewm's own keys are gone" contains "$ran" "bindsym XF86Tools nop"
+check "with its own config, and only its keys (-k)" \
+    contains "$ran" "tidewm [-k] [-c] [$run/tide-greeter-tidewm.conf] [-s]"
+check "which binds one key to nothing" contains "$ran" "bindsym XF86Tools nop"
 check "and drags no windows" contains "$ran" "floating_modifier none"
 check "with localed's keymap" contains "$ran" "    xkb_layout us
     xkb_model pc105
@@ -378,6 +402,24 @@ greeter 0
 check "a tidewm that can't run leaves Hyprland" contains "$ran" "args [--config]"
 check "and says why" contains "$out" "tidewm -v failed (tidewm: error while loading shared libraries); the greeter runs on Hyprland"
 TIDEWM_V_FAILS=
+
+# A tidewm older than -k would put its own keys, a terminal's among them,
+# back on the login screen, so the greeter doesn't run on it.
+TIDEWM_NO_K=1
+greeter 0
+check "a tidewm without -k leaves Hyprland" contains "$ran" "args [--config]"
+check "and isn't run" lacks "$ran" "tidewm ["
+check "and says why" contains "$out" "tidewm is older than -k"
+mkdir "$tmp/qs-only" || exit 1
+ln -s "$tmp/stubs/qs" "$tmp/qs-only/qs" || exit 1
+GREETER_PATH="$tmp/tw:$tmp/qs-only:$tmp/sys" AGREETY_DIRS="$tmp/agreety"
+greeter 0
+check "a tidewm without -k and no Hyprland leaves the text login" contains "$out" "agreety --cmd /bin/sh"
+check "and tidewm isn't run" test -z "$ran"
+check "which says why on the console" \
+    contains "$out" "could not start: there's no Hyprland on the greeter's PATH ($tmp/tw:$tmp/qs-only:$tmp/sys), and tidewm is older than -k"
+GREETER_PATH="$tmp/tw:$tmp/stubs:$tmp/sys" AGREETY_DIRS=
+TIDEWM_NO_K=
 
 mv "$prefix/bin/tide-msg" "$tmp/tide-msg.away" || exit 1
 greeter 0
