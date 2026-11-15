@@ -2352,7 +2352,8 @@ or workspace goes there.
   **Unmute** work; a bad entry is a notification naming it.
 - **Check minimizing live on Hyprland 0.57.1** (SPEC.md §6.7; conf's
   `Super+Z` is mikelward/conf#440). Tested only against stubs: `Super+Z`
-  hides the window and focus goes to the one under it; the corner tray
+  hides the window and focus goes to the one under the pointer, or with
+  the pointer on the bar, to the window you were in before; the corner tray
   appears on that monitor with the app's icon, shows the title on hover,
   and a click brings the window back focused; the Windows tab lists it as
   minimized and Enter restores it; a minimized window wanting attention
@@ -2736,9 +2737,9 @@ one planned.
 - [ ] **Decide tidewm's dimming strength.** `tidewm/tide.conf` ships 0.07
       and `hypr/hyprland.lua` 0.12 (SPEC.md §6.2). Test both on tidewm's
       black layer, then make them one number or say why they differ.
-- [ ] **Where focus goes after a minimize.** tidewm goes back to the window
-      you were in before; SPEC.md §6.7 says the window that was under it.
-      Pick one.
+- [x] **Where focus goes after a minimize.** The window under the pointer,
+      or with none, the window you were in before, on both sessions
+      (SPEC.md §6.7; maintainer, 2026-11-15).
 - [ ] **Hold popups during fullscreen video,** as a screen share does
       (SPEC.md §6.3, §9).
 - [ ] **"Show in folder."** A user-level

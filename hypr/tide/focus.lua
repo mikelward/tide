@@ -583,6 +583,144 @@ function M.next_attention()
     return true
 end
 
+-- Whether w is on a workspace a monitor shows, and not minimized.
+local function shown(w)
+    local ws = field(w, "workspace")
+    return field(ws, "visible") == true and not minimized_from(w)
+end
+
+-- Whether the point x, y is inside w, by where Hyprland is laying it out.
+local function contains(w, x, y)
+    local at, size = field(w, "at"), field(w, "size")
+    local wx, wy, ww, wh = field(at, "x"), field(at, "y"), field(size, "x"), field(size, "y")
+    if type(wx) ~= "number" or type(wy) ~= "number" or type(ww) ~= "number" or type(wh) ~= "number" then
+        return false
+    end
+    return x >= wx and x < wx + ww and y >= wy and y < wy + wh
+end
+
+-- How recently w was focused, lower being later; never is last.
+local function recency(w)
+    local id = field(w, "focus_history_id")
+    return (math.type(id) == "integer" and id >= 0) and id or math.huge
+end
+
+-- Whether w may take focus once `gone` is minimized from `monitor`: not
+-- gone, not one the guard keeps waiting, which you haven't chosen, and not
+-- one on another monitor, where the pointer is only when you moved focus
+-- here without it. A nil monitor, when Hyprland doesn't say, is any.
+local function may_follow(w, gone, monitor)
+    local address = field(w, "address")
+    if not address or key(address) == key(gone) or not shown(w) then
+        return false
+    end
+    for _, waiting in ipairs(state.waiting) do
+        if key(waiting) == key(address) then
+            return false
+        end
+    end
+    return monitor == nil or field(field(w, "monitor"), "id") == monitor
+end
+
+-- The window you were in before `gone` on its monitor, or nil. Read
+-- before the move: moving it focuses Hyprland's own pick, which would then
+-- head the focus history, and a window's fields are read live.
+local function used_before(gone, windows, monitor)
+    local best, best_id = nil, math.huge
+    for _, w in ipairs(windows) do
+        local id = recency(w)
+        if id < best_id and may_follow(w, gone, monitor) then
+            best, best_id = w, id
+        end
+    end
+    return best and field(best, "address")
+end
+
+-- The window under the pointer once `gone` has left (SPEC.md §6.7), as
+-- closing the window you're in finds one (§14.2): a floating one before
+-- a tile, where the layout has put the windows that re-tiled. nil if
+-- there's none, or it may not take focus. Topmost among floating windows
+-- is taken to be the one used last.
+local function under_pointer(gone, windows, cursor, monitor)
+    local function floating(w)
+        return field(w, "floating") == true
+    end
+    local under = nil
+    for _, w in ipairs(windows) do
+        local address = field(w, "address")
+        if cursor and address and key(address) ~= key(gone) and shown(w) and contains(w, cursor.x, cursor.y)
+                and (monitor == nil or field(field(w, "monitor"), "id") == monitor) then
+            if not under
+                    or floating(w) ~= floating(under) and floating(w)
+                    or floating(w) == floating(under) and recency(w) < recency(under) then
+                under = w
+            end
+        end
+    end
+    return under and may_follow(under, gone, monitor) and field(under, "address") or nil
+end
+
+-- Minimizes the window at `address` to the minimize workspace of the
+-- workspace named `name` (SPEC.md §6.7), for the shell's Super+Z. If it
+-- was the window you were in, focus goes where after_minimize says, not
+-- where Hyprland's silent move puts it: the window at its old middle, or
+-- else its workspace's first. The pointer stays where it is.
+function M.minimize(address, name)
+    if type(address) ~= "string" or not address:match("^0?x?%x+$") then
+        error("tide_focus.minimize: expected a window address, got " .. tostring(address), 2)
+    end
+    if type(name) ~= "string" or name == "" then
+        error("tide_focus.minimize: expected a workspace name, got " .. tostring(name), 2)
+    end
+    address = "0x" .. key(address)
+    local active = hl.get_active_window()
+    local was_active = active ~= nil and key(field(active, "address") or "") == key(address)
+    local monitor = was_active and field(field(active, "monitor"), "id") or nil
+    local before = nil
+    if was_active then
+        local listed, windows = pcall(hl.get_windows)
+        if not listed or type(windows) ~= "table" then
+            error("tide focus: couldn't list windows before minimizing " .. address .. ": " .. tostring(windows), 0)
+        end
+        before = used_before(address, windows, monitor)
+    end
+    focusing = true -- Hyprland focuses a window as it moves this one
+    local ok, err = pcall(function()
+        hl.dispatch(hl.dsp.window.move({ workspace = MINIMIZED .. name, follow = false, window = "address:" .. address }))
+    end)
+    focusing = false
+    if not ok then
+        error(err, 0)
+    end
+    if not was_active then
+        return
+    end
+    local listed, windows = pcall(hl.get_windows)
+    if not listed or type(windows) ~= "table" then
+        error("tide focus: couldn't list windows to focus after minimizing " .. address .. ": " .. tostring(windows), 0)
+    end
+    local cursor_ok, cursor = pcall(hl.get_cursor_pos)
+    if not cursor_ok then
+        -- With no pointer position, the window you were in before still is.
+        print("tide focus: couldn't read the pointer's position: " .. tostring(cursor))
+        cursor = nil
+    end
+    -- A floating window can overhang another monitor: with the pointer
+    -- there, it's on another monitor whatever window it's over.
+    if monitor ~= nil and type(cursor) == "table" then
+        local at_ok, at = pcall(hl.get_monitor_at_cursor)
+        if not at_ok then
+            print("tide focus: couldn't find the monitor under the pointer: " .. tostring(at))
+        elseif field(at, "id") ~= nil and field(at, "id") ~= monitor then
+            cursor = nil
+        end
+    end
+    local target = under_pointer(address, windows, type(cursor) == "table" and cursor or nil, monitor) or before
+    if target then
+        focus_address(target)
+    end
+end
+
 -- Every marked window, oldest mark first, as the shell orders them: the
 -- guard's announcements and the shell's notification marks (SPEC.md
 -- §14.4), which only the shell sees together, replacing the last list.

@@ -41,6 +41,7 @@ local function load(opts)
         get_active_window = function() return S.active end,
         get_active_workspace = function() return { id = S.workspace } end,
         get_windows = function() return S.windows end,
+        get_monitor_at_cursor = function() return nil end,
         timer = function(fn, opts) table.insert(S.timers, { fn = fn, opts = opts }) end,
         notification = {
             create = function(n) table.insert(S.notified, n) end,
@@ -1283,6 +1284,155 @@ test("next_attention cancels the grants: you chose another window", function()
     m.grant("firefox")
     eq(m.next_attention(), true, "went")
     eq(#m.grants(), 0, "canceled")
+end)
+
+-- minimize (SPEC.md §6.7): the shell minimizes a window through the
+-- guard, which then focuses the window under the pointer, or the one you
+-- were in before. Windows are laid out as Hyprland has them once the
+-- minimized one has gone: its spot taken by the window that re-tiled there.
+local SHOWN = { id = 1, name = "1", visible = true }
+local HIDDEN = { id = 2, name = "2", visible = false }
+
+local function placed(w, x, y, wd, ht, ws, history)
+    w.at, w.size, w.workspace, w.focus_history_id = { x = x, y = y }, { x = wd, y = ht }, ws or SHOWN, history or -1
+    return w
+end
+
+-- Minimizes `gone` with the pointer at x, y: the dispatches the guard made.
+local function minimize(m, gone, x, y)
+    hl.get_cursor_pos = function() return { x = x, y = y } end
+    S.active = gone
+    minimized(gone, "1")
+    S.dispatched = {}
+    m.minimize(gone.address, "1")
+    return S.dispatched
+end
+
+local function is_minimize(d, w)
+    return d and d.dsp == "move" and d.args.window == "address:" .. w.address
+        and d.args.workspace == "special:minimized:1" and d.args.follow == false
+end
+
+test("minimize moves the window to its workspace's minimize workspace, silently", function()
+    local m = load()
+    local gone = placed(window("kitty"), 0, 0, 500, 1000)
+    S.windows = { gone }
+    local d = minimize(m, gone, 250, 500)
+    eq(is_minimize(d[1], gone), true, "moved")
+    eq(#d, 1, "and nothing to focus")
+end)
+
+test("minimize focuses the window that re-tiled under the pointer", function()
+    local m = load()
+    local gone, left, right = window("kitty"), window("chat"), window("mail")
+    placed(left, 0, 0, 1000, 500, SHOWN, 1)
+    placed(right, 0, 500, 1000, 500, SHOWN, 2) -- now where the pointer is
+    S.windows = { gone, left, right }
+    local d = minimize(m, gone, 900, 900)
+    eq(is_minimize(d[1], gone), true, "moved")
+    eq(is_focus(d[2], right), true, "under the pointer, not the one used last")
+end)
+
+test("minimize prefers a floating window over the tile under it", function()
+    local m = load()
+    local gone, tile, float = window("kitty"), window("chat"), window("calc")
+    placed(tile, 0, 0, 1000, 1000, SHOWN, 1)
+    placed(float, 400, 400, 200, 200, SHOWN, 2).floating = true
+    S.windows = { gone, tile, float }
+    eq(is_focus(minimize(m, gone, 500, 500)[2], float), true, "the floating one, on top")
+end)
+
+test("minimize with the pointer over no window focuses the window you were in before", function()
+    local m = load()
+    local gone, older, last = window("kitty"), window("chat"), window("mail")
+    placed(older, 0, 0, 500, 500, SHOWN, 2)
+    placed(last, 500, 0, 500, 500, SHOWN, 1)
+    local music = placed(window("music"), 0, 0, 1000, 1000, HIDDEN, 0) -- under it, but not shown
+    S.windows = { gone, older, last, music }
+    local d = minimize(m, gone, 500, 800) -- below both: the bar, or a gap
+    eq(is_focus(d[2], last), true, "the one used last that's shown")
+end)
+
+test("minimize doesn't focus a waiting window under the pointer", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    local gone, waiting, last = window("kitty"), window("updater"), window("mail")
+    fire("window.open", waiting)
+    placed(waiting, 0, 0, 1000, 500, SHOWN, -1)
+    placed(last, 0, 500, 1000, 500, SHOWN, 1)
+    S.windows = { gone, waiting, last }
+    eq(is_focus(minimize(m, gone, 500, 200)[2], last), true, "the one you were in before")
+end)
+
+test("minimizing a window you aren't in moves no focus", function()
+    local m = load()
+    local gone, here = placed(window("kitty"), 0, 0, 500, 500), placed(window("chat"), 500, 0, 500, 500, SHOWN, 0)
+    S.windows = { gone, here }
+    hl.get_cursor_pos = function() return { x = 100, y = 100 } end
+    S.active = here
+    S.dispatched = {}
+    m.minimize(gone.address, "1")
+    eq(#S.dispatched, 1, "only the move")
+end)
+
+test("minimize doesn't focus a window under the pointer on another monitor", function()
+    local m = load()
+    local gone, here, there = window("kitty"), window("chat"), window("mail")
+    gone.monitor, here.monitor, there.monitor = { id = 0 }, { id = 0 }, { id = 1 }
+    placed(gone, 0, 0, 1000, 1000)
+    placed(here, 0, 0, 1000, 1000, SHOWN, 1)
+    placed(there, 1000, 0, 1000, 1000, { id = 3, name = "3", visible = true }, 2)
+    S.windows = { gone, here, there }
+    eq(is_focus(minimize(m, gone, 1500, 500)[2], here), true, "the one you were in before, on its monitor")
+end)
+
+test("minimize falls back to the window used before it, not the one Hyprland focused moving it", function()
+    local m = load()
+    local gone, mid, last = window("kitty"), window("chat"), window("mail")
+    placed(gone, 0, 0, 500, 500, SHOWN, 0)
+    placed(mid, 500, 0, 500, 500, SHOWN, 2)
+    placed(last, 0, 500, 500, 500, SHOWN, 1)
+    S.windows = { gone, mid, last }
+    -- Hyprland's silent move focuses the window at the old one's middle,
+    -- which then heads the focus history.
+    local dispatch = hl.dispatch
+    hl.dispatch = function(d)
+        dispatch(d)
+        if d.dsp == "move" then
+            mid.focus_history_id, last.focus_history_id, gone.focus_history_id = 0, 2, 1
+        end
+    end
+    eq(is_focus(minimize(m, gone, 500, 2000)[2], last), true, "the one you were in before minimizing")
+end)
+
+test("minimize's fallback skips a window the guard keeps waiting", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    local gone, asking, older = window("kitty"), window("chat"), window("mail")
+    placed(asking, 500, 0, 500, 500, SHOWN, 1)
+    placed(older, 0, 500, 500, 500, SHOWN, 2)
+    S.windows = { gone, asking, older }
+    fire("window.urgent", asking) -- used before, now asking without a grant
+    eq(is_focus(minimize(m, gone, 500, 2000)[2], older), true, "not the waiting one")
+end)
+
+test("minimize doesn't focus a floating window where it overhangs another monitor", function()
+    local m = load()
+    local gone, float, last = window("kitty"), window("calc"), window("mail")
+    gone.monitor, float.monitor, last.monitor = { id = 0 }, { id = 0 }, { id = 0 }
+    placed(gone, 0, 0, 1000, 1000, SHOWN, 0)
+    placed(float, 900, 100, 300, 300, SHOWN, 2).floating = true -- into monitor 1, from x 1000
+    placed(last, 0, 0, 1000, 1000, SHOWN, 1)
+    S.windows = { gone, float, last }
+    hl.get_monitor_at_cursor = function() return { id = 1 } end
+    eq(is_focus(minimize(m, gone, 1100, 200)[2], last), true, "the pointer is on monitor 1")
+end)
+
+test("minimize rejects a bad address or workspace name", function()
+    local m = load()
+    eq(pcall(m.minimize, "x) os.exit(", "1"), false, "address")
+    eq(pcall(m.minimize, "0x1", ""), false, "empty name")
+    eq(pcall(m.minimize, "0x1", 5), false, "not a name")
 end)
 
 io.write(string.format("focus_test.lua: %d passed, %d failed\n", passed, failures))
