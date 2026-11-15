@@ -598,14 +598,40 @@ flowchart TD
   - It warns when the kernel command line has no `splash` (or Fedora's
     `rhgb`), and on Arch when mkinitcpio's `HOOKS` has no `plymouth`:
     either way the boot shows text.
-  - It stays up until the login screen draws (maintainer, 2026-11-14).
-    Plymouth quitting at the end of the boot showed the text console
-    until greetd's greeter drew. With greetd the display manager, setup
-    gives `plymouth-quit.service` a drop-in, `tide-retain-splash.conf`,
-    that quits with `--retain-splash`, as GDM does. The splash's last
-    frame stays until the greeter's compositor draws over it. With any
-    other display manager, or none, nothing may draw over it, so the
-    drop-in goes.
+  - Plymouth quits plainly at the end of the boot, so the text console
+    shows briefly before the login screen (2026-11-15). setup once gave
+    `plymouth-quit.service` a drop-in, `tide-retain-splash.conf`, that quit
+    with `--retain-splash` to keep the splash up until the greeter drew
+    (maintainer, 2026-11-14). On Ubuntu the next boot never showed the
+    greeter, so setup now removes the drop-in. Why, from the source of
+    Plymouth 24.004.60+git20250831 and greetd 0.10.3 (Ubuntu 26.04's and
+    26.10's), Linux 7.0 (26.04's) and systemd 261 (26.10's):
+    - Plymouth draws on VT 1, which it puts in graphics mode
+      (`KD_GRAPHICS`). Quitting with `--retain-splash` skips putting it
+      back in text mode, but still hands VT switching back to the kernel
+      (`VT_AUTO`): `quit_splash()` and `ply_terminal_close()`.
+    - Linux drops every switch away from a VT in graphics mode under
+      `VT_AUTO`, with no error: `set_console()` in `drivers/tty/vt/vt.c`.
+      That covers an ioctl's switch and Ctrl+Alt+F7's.
+    - greetd runs the greeter on the VT its unit keeps getty off:
+      upstream's 1, Debian's and Ubuntu's 7. Its session process puts that
+      VT in text mode, then switches to it (`VT_SETACTIVATE`) and waits
+      (`VT_WAITACTIVE`). From VT 1 left in graphics mode, the switch to
+      VT 7 is dropped.
+    - What frees VT 1 is `getty@tty1.service`: systemd puts its VT in text
+      mode (`TTYReset=yes`) once `plymouth-quit-wait.service` is done. So
+      the screen stays on the splash, or shows VT 1's login prompt, until
+      you switch to VT 7 yourself.
+    - GDM needs no switch. Its login screen runs on VT 1. GDM tells
+      Plymouth to `deactivate` before starting it, and quits Plymouth
+      with `--retain-splash` itself once the login screen's session
+      registers (`daemon/gdm-manager.c`). Its unit conflicts with
+      `plymouth-quit.service`.
+    - On VT 1 greetd needs no switch either, but it puts VT 1 in text mode
+      before starting the greeter, which brings the console back, cleared.
+      So the drop-in gained next to nothing there, and setup removes it
+      whatever the VT.
+    - Handing over GDM's way, from tide's greeter, is in `TODO.md`.
 - **The session entry** is `tide.desktop` in `wayland-sessions`, so
   the current display manager lists it too (M2).
 - **Each entry's `Exec` is `tide-session hyprland`, `tide-session
