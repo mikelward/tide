@@ -66,7 +66,8 @@ M.defaults = {
     new_window = "end",
     mfact_step = 0.025,
     -- How far either side of a split edge a plain left-drag grabs it, in
-    -- pixels (drag_press below); 0 turns edge dragging off.
+    -- pixels (drag_press below); 0 turns edge dragging off. A shadow
+    -- across the edge is part of the zone too, however far it reaches.
     resize_grab = 4,
 }
 
@@ -855,10 +856,68 @@ local function tiles(windows, id)
         local at, size = field(w, "at"), field(w, "size")
         if field(w, "mapped") and not field(w, "hidden") and not field(w, "floating")
             and workspace_key(field(w, "workspace")) == id and at and size then
-            boxes[#boxes + 1] = { x = at.x - border, y = at.y - border, w = size.x + 2 * border, h = size.y + 2 * border }
+            boxes[#boxes + 1] = {
+                x = at.x - border, y = at.y - border, w = size.x + 2 * border, h = size.y + 2 * border,
+                address = field(w, "address"),
+            }
         end
     end
     return boxes
+end
+
+-- Widens each edge's grab zone over the shadow that falls across it, so
+-- the shadow is where a drag starts. Which windows cast one is the
+-- config's to say (conf_appearance.shadows): with "all", every tile's
+-- reaches both ways from an edge; with "focused", only the focused
+-- tile's, out from its own sides and beside it. Floating windows' shadows are
+-- Hyprland's resize_on_border's.
+local function grab_shadows(edges, boxes)
+    local appearance = rawget(_G, "conf_appearance")
+    local mode = type(appearance) == "table" and appearance.shadows
+    if mode ~= "all" and mode ~= "focused" then
+        return
+    end
+    if not truthy(config_value("decoration:shadow:enabled")) then
+        return
+    end
+    local range = tonumber(config_value("decoration:shadow:range")) or 0
+    if range <= 0 then
+        return
+    end
+    local focused
+    if mode == "focused" then
+        local address = active_address()
+        for _, b in ipairs(boxes) do
+            if address ~= nil and b.address == address then
+                focused = b
+            end
+        end
+        if not focused then
+            return
+        end
+    end
+    for _, e in ipairs(edges) do
+        if e.kind == "lone" then
+            -- No neighbor casts a shadow onto a lone window: only its
+            -- own reaches, outward from each side.
+            if not focused or e.x == focused.x or e.x == focused.x + focused.w then
+                e.grab_left = e.side == "left" and range or nil
+                e.grab_right = e.side == "right" and range or nil
+            end
+        else
+            if not focused or e.x == focused.x then
+                e.grab_left = range
+            end
+            if not focused or e.x == focused.x + focused.w then
+                e.grab_right = range
+            end
+        end
+        -- The focused tile's shadow runs only as far down the edge as the
+        -- tile does, and past each end as far as it reaches.
+        if focused then
+            e.grab_top, e.grab_bottom = focused.y - range, focused.y + focused.h + range
+        end
+    end
 end
 
 local function stop_drag()
@@ -963,6 +1022,7 @@ function M.drag_press()
     else
         edges = geometry.split_edges(st.mode, area, #boxes, o)
     end
+    grab_shadows(edges, boxes)
     local edge = geometry.edge_at(edges, area, pos.x, pos.y, grab)
     if not edge or covered(windows, pos.x, pos.y) then
         return PASS

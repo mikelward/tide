@@ -1613,15 +1613,21 @@ in how long they last and what stays visible:
   the parent. A dialog from any other app opens unfocused and is marked
   urgent (§14).
 - **Resizing by an edge.** Drag a floating window's edge or corner, no key
-  held. The grab zone is the 8 px just outside the window, with a resize
-  cursor there; a click inside the window always reaches the app.
+  held. The grab zone is the window's shadow, with a resize cursor there;
+  a click inside the window always reaches the app.
+  - The zone reaches as far as the shadow does (16 px, or the Borders
+    page's Shadow size, §6.2). With shadows off it's the 8 px just outside
+    the window.
+  - A floating window that casts no shadow, as an unfocused one doesn't by
+    default, has the same zone.
   - That's Hyprland's own `resize_on_border`, with
-    `extend_border_grab_area = 8`. A border the Borders page turns on
-    (§6.2) is part of the zone, inside those 8 px.
+    `extend_border_grab_area` set to the shadow's reach. A border the
+    Borders page turns on is part of the zone, inside it.
+  - `hyprland.local.lua`'s own `extend_border_grab_area` wins.
   - Hyprland 0.56.2 grows a floating window's hit box by that zone
     (`CViewHitTester::windowAt`), and starts a resize on a press there
     that's outside the window (`CInputManager::processMouseDownNormal`).
-  - So those 8 px take clicks from whatever is below them.
+  - So the zone takes clicks from whatever is below it.
 - **Any window can be floated** with `Super+Shift+F` or `Super+Insert`.
   On tidewm, a floating window's size and place are remembered per app,
   for the session. tide's Hyprland config sets nothing for that.
@@ -2407,8 +2413,9 @@ config binds the built-in dispatchers instead, with a monitor move for a
 floating window.
 
 - **Dragging the edge between the masters and the stack.** A plain
-  left-press within 4 px either side of that edge starts a drag, and the
-  edge follows the pointer until the button is released.
+  left-press within 4 px either side of that edge, or on a shadow across
+  it, starts a drag, and the edge follows the pointer until the button is
+  released.
   - The edges are tile's, twocol's and threecol's with one stack window.
     In threecol with stacks either side, either side of the centered
     master drags it, and it grows or shrinks both ways.
@@ -2423,7 +2430,7 @@ floating window.
   - The rows of a stack are always equal, so there's no edge to drag
     between two of them; nor between twocol's two masters, which split
     their side equally.
-  - Anywhere else, and over a floating window, its 8 px resize zone, or a
+  - Anywhere else, and over a floating window, its resize zone, or a
     notification or other top or overlay layer, the press reaches the app
     as usual. So does one on a monitor that isn't focused, under a
     fullscreen or maximized window, or with a special workspace shown.
@@ -2457,6 +2464,11 @@ floating window.
     `resize_on_border`, and its Lua can't set one.
   - The grab is `resize_grab`, a `setup()` option, in pixels either side;
     0 turns edge dragging off.
+  - A shadow across the edge is part of the zone, as far as it reaches.
+    By default that's the focused tile's, on its neighbor's side of the
+    edge and only beside that tile. With shadows on every window, it's both sides.
+  - A press in the zone doesn't reach the app under it: a scrollbar
+    within the shadow of the window beside it, say.
 - **The workspace history.** `Super+Tab` and `Super+End` read one
   history: the workspaces other than home, the last used first. On
   Hyprland it's a Lua binding's in tide's Hyprland config, kept from the

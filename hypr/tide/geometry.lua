@@ -226,13 +226,20 @@ function M.split_edges(mode, area, n, o)
 end
 
 -- The edge of `edges` whose grab zone holds the point (x, y): `grab`
--- pixels either side of it, down the area's height. nil if none does.
+-- pixels either side of it, down the area's height. An edge's own
+-- `grab_left` or `grab_right` reaches further that way, where a shadow
+-- falls: between its `grab_top` and `grab_bottom`, or down the whole
+-- height without them. nil if none does.
 function M.edge_at(edges, area, x, y, grab)
     if grab <= 0 or y < area.y or y >= area.y + area.h then
         return nil
     end
     for _, e in ipairs(edges) do
-        if x >= e.x - grab and x < e.x + grab then
+        local left, right = grab, grab
+        if y >= (e.grab_top or y) and y < (e.grab_bottom or y + 1) then
+            left, right = math.max(grab, e.grab_left or 0), math.max(grab, e.grab_right or 0)
+        end
+        if x >= e.x - left and x < e.x + right then
             return e
         end
     end

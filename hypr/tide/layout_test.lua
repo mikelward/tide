@@ -1494,6 +1494,93 @@ test("a press passes when what's above the tiles can't be read", function()
     eq(r and r.pass_event, true, "passes")
 end)
 
+-- The config's shadows, as hyprland.lua says them and Hyprland holds them.
+local function shadows(mode, range)
+    _G.conf_appearance = { shadows = mode }
+    hl.config["decoration:shadow:enabled"] = true
+    hl.config["decoration:shadow:range"] = range
+end
+
+test("the focused tile's shadow across a split edge drags it", function()
+    local qs = drag_setup()
+    shadows("focused", 16)
+    -- The master is focused: its shadow falls right of the edge at 1056.
+    hl.active_window = "0x101"
+    hl.cursor = { x = 1071, y = 500 }
+    eq(qs.drag_press(), nil, "15 px right, in the master's shadow")
+    qs.drag_release()
+    hl.cursor.x = 1072
+    local r = qs.drag_press()
+    eq(r and r.pass_event, true, "16 px right is past it")
+    hl.cursor.x = 1051
+    r = qs.drag_press()
+    eq(r and r.pass_event, true, "it casts none on its own side: 5 px left passes")
+    -- A stack window is focused: its shadow falls left of the edge.
+    hl.active_window = "0x102"
+    hl.cursor.x = 1040
+    eq(qs.drag_press(), nil, "16 px left, in the stack window's shadow")
+    qs.drag_release()
+    hl.cursor.x = 1060
+    r = qs.drag_press()
+    eq(r and r.pass_event, true, "and 4 px right passes")
+    -- 0x102 is the upper of two stack windows: its shadow stops with it.
+    hl.cursor = { x = 1040, y = 1000 }
+    r = qs.drag_press()
+    eq(r and r.pass_event, true, "beside the lower stack window there's no shadow")
+    hl.cursor.x = 1053
+    eq(qs.drag_press(), nil, "but resize_grab's zone is still there")
+    qs.drag_release()
+    _G.conf_appearance = nil
+end)
+
+test("every tile's shadow drags an edge when all of them cast one, and none when none does", function()
+    local qs = drag_setup()
+    shadows("all", 12)
+    for _, x in ipairs({ 1044, 1067 }) do
+        hl.cursor = { x = x, y = 500 }
+        eq(qs.drag_press(), nil, "a press at " .. x .. " is in a shadow")
+        qs.drag_release()
+    end
+    for _, case in ipairs({ { "none", 12 }, { "floating", 12 }, { "all", 0 } }) do
+        shadows(case[1], case[2])
+        hl.cursor = { x = 1067, y = 500 }
+        local r = qs.drag_press()
+        eq(r and r.pass_event, true, case[1] .. " at " .. case[2] .. " px: only resize_grab's zone")
+    end
+    shadows("all", 12)
+    hl.config["decoration:shadow:enabled"] = false
+    local r = qs.drag_press()
+    eq(r and r.pass_event, true, "shadows turned off in Hyprland's own config")
+    _G.conf_appearance = nil
+end)
+
+test("a lone window's shadow drags its width", function()
+    local qs, layout = fresh()
+    hl.area = UW
+    relayout(layout, UW, 1, 1)
+    shadows("focused", 16)
+    hl.active_window = "0x101"
+    hl.cursor = { x = 3111, y = 500 }
+    eq(qs.drag_press(), nil, "15 px right of its right edge")
+    qs.drag_release()
+    hl.cursor.x = 328
+    eq(qs.drag_press(), nil, "16 px left of its left edge")
+    qs.drag_release()
+    for _, mode in ipairs({ "focused", "all" }) do
+        shadows(mode, 16)
+        hl.cursor.x = 3086
+        local r = qs.drag_press()
+        eq(r and r.pass_event, true, mode .. ": 10 px inside its right edge reaches the app")
+        hl.cursor.x = 354
+        r = qs.drag_press()
+        eq(r and r.pass_event, true, mode .. ": 10 px inside its left edge too")
+        hl.cursor.x = 3111
+        eq(qs.drag_press(), nil, mode .. ": its shadow outside still drags")
+        qs.drag_release()
+    end
+    _G.conf_appearance = nil
+end)
+
 test("resize_grab sets the zone, and 0 turns edge drags off", function()
     local qs = drag_setup({ resize_grab = 10 })
     hl.cursor = { x = 1047, y = 500 }
