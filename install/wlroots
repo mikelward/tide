@@ -1,19 +1,20 @@
 # shellcheck shell=sh
-# wlroots 0.20 for tidewm, where the distro has none: sourced by
+# wlroots 0.20 for tidewm and tidesway, where the distro has none: sourced by
 # install/tide-setup, whose helpers (info, detail, warn, build_logged,
 # git_github, $PINS) it uses.
 #
-# tidewm builds against wlroots 0.20, which Debian testing and Arch package
-# and Ubuntu 26.04, Debian 13 and some Fedoras don't. There, build_tidewm builds deps.lock's
-# wlroots group with meson into tidewm's own build directory, then tidewm
-# against it, each with a run path to that directory's lib, so tidewm loads
-# that libwlroots, and nothing else on the system sees it. The group's other
+# tidewm and tidesway build against wlroots 0.20, which Debian testing and
+# Arch package and Ubuntu 26.04, Debian 13 and some Fedoras don't. There,
+# build_tidewm builds deps.lock's wlroots group with meson into tidewm's own
+# build directory, then tidewm against it, each with a run path to that
+# directory's lib, so tidewm loads that libwlroots, and nothing else on the
+# system sees it. build_tidesway does the same in tidesway's. The group's other
 # pins are what wlroots 0.20's meson.build needs newer than Debian 13 has;
 # each builds only where the distro's is older (see wlroots_dep_minimum).
 #
-# The build is in tidewm's directory, named for a checksum of what's built
-# (wlroots_record is part of it), so a new wlroots pin rebuilds tidewm too,
-# and an old tidewm keeps the wlroots it was linked against.
+# The build is in the compositor's directory, named for a checksum of what's
+# built (wlroots_record is part of it), so a new wlroots pin rebuilds the
+# compositor too, and an old one keeps the wlroots it was linked against.
 
 if ! WLROOTS_PINS=$("$PINS" wlroots); then
     echo "tide-setup: couldn't read wlroots' pins from tide's deps.lock" >&2
@@ -26,7 +27,7 @@ fi
 # keymaps; the -dev packages wlroots uses as they are where they're new
 # enough; and for Xwayland, the xcb libraries and Xwayland's own
 # xwayland.pc. The X11 backend, wlroots on an X server, isn't built.
-# shellcheck disable=SC2034  # tide-setup's tidewm_build_deps reads it
+# shellcheck disable=SC2034  # tide-setup's compositor_build_deps reads it
 WLROOTS_APT_DEPS="meson ninja-build bison libexpat1-dev libffi-dev xkb-data
     libwayland-dev libwayland-bin wayland-protocols libdrm-dev libxkbcommon-dev libpixman-1-dev
     libudev-dev libseat-dev libinput-dev libdisplay-info-dev hwdata
@@ -37,7 +38,7 @@ WLROOTS_APT_DEPS="meson ninja-build bison libexpat1-dev libffi-dev xkb-data
 # The same from dnf, for a Fedora with no wlroots 0.20, asked for by
 # pkg-config name where there is one, since Fedora's package names for them
 # vary between releases.
-# shellcheck disable=SC2034  # tide-setup's tidewm_build_deps reads it
+# shellcheck disable=SC2034  # tide-setup's compositor_build_deps reads it
 WLROOTS_DNF_DEPS="meson ninja-build bison xkeyboard-config glslang hwdata
     pkgconfig(expat) pkgconfig(libffi) pkgconfig(wayland-server) pkgconfig(wayland-scanner)
     pkgconfig(wayland-protocols) pkgconfig(libdrm) pkgconfig(xkbcommon) pkgconfig(pixman-1)
@@ -47,7 +48,7 @@ WLROOTS_DNF_DEPS="meson ninja-build bison xkeyboard-config glslang hwdata
     pkgconfig(xcb-icccm) pkgconfig(xcb-render) pkgconfig(xcb-res) pkgconfig(xcb-xfixes)
     pkgconfig(xcb-errors) pkgconfig(xwayland)"
 
-# wlroots_wanted: whether tidewm needs wlroots built here, once its build
+# wlroots_wanted: whether tidewm or tidesway needs wlroots built here, once its build
 # dependencies are installed: on Debian, Ubuntu and Fedora, when pkg-config
 # can't find the distro's wlroots-0.20. Arch packages it.
 wlroots_wanted() {
@@ -58,7 +59,7 @@ wlroots_wanted() {
     ! pkg-config --modversion wlroots-0.20 >/dev/null 2>&1
 }
 
-# wlroots_record: what the build is, for tidewm's build record.
+# wlroots_record: what the build is, for the compositor's build record.
 wlroots_record() {
     printf 'wlroots\n%s\n' "$WLROOTS_PINS"
 }
@@ -78,7 +79,7 @@ wlroots_dep_minimum() {
 
 # wlroots_meson_options NAME: what a pin builds with. Only the libraries:
 # no tests, docs, tools or demos. xkbcommon reads the system's keymaps and
-# Compose files, not ones under tidewm's prefix.
+# Compose files, not ones under the compositor's prefix.
 wlroots_meson_options() {
     case "$1" in
         wayland) echo "-Dtests=false -Ddocumentation=false -Ddtd_validation=false" ;;
@@ -101,14 +102,16 @@ wlroots_env() {
         LDFLAGS="-Wl,-rpath,$_we_dir/lib${LDFLAGS:+ $LDFLAGS}" "$@"
 }
 
-# build_wlroots DIR SRC: builds the wlroots group into DIR, cloning each pin
-# into SRC/NAME, in deps.lock's order, adding to $build_log. A pin whose
+# build_wlroots DIR SRC [FOR]: builds the wlroots group into DIR, cloning
+# each pin into SRC/NAME, in deps.lock's order, adding to $build_log, for
+# FOR, tidewm unless it says another. A pin whose
 # distro version is new enough is skipped. meson never downloads what
 # wlroots' wraps name, which aren't pinned: anything missing fails.
 build_wlroots() {
     _bw_dir=$1
     _bw_src=$2
-    info "Building wlroots for tidewm, which the distro doesn't package"
+    _bw_for=${3:-tidewm}
+    info "Building wlroots for $_bw_for, which the distro doesn't package"
     printf '%s\n' "$WLROOTS_PINS" | while read -r name url tag commit _; do
         test -n "$name" || continue
         _bw_min=$(wlroots_dep_minimum "$name")
@@ -144,7 +147,7 @@ build_wlroots() {
             && build_logged "$name" meson install -C "$_bw_clone/build" \
             || exit 1
     done || {
-        warn "building wlroots failed, so tidewm isn't built; the sources are in $_bw_src"
+        warn "building wlroots failed, so $_bw_for isn't built; the sources are in $_bw_src"
         return 1
     }
 }

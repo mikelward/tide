@@ -108,6 +108,7 @@ INSTALL_TESTS = \
 	install/tide-setup_test \
 	install/tide-setup_hyprland_test \
 	install/tide-setup_tidewm_test \
+	install/tide-setup_tidesway_test \
 	install/tide-setup_fcitx5_test \
 	install/tide-setup_greeter_test \
 	install/tide-setup_greeter_pam_test \

@@ -1,0 +1,228 @@
+#!/bin/bash
+# Tests for tide-setup: the tidesway build, and its session
+#
+# The harness, its fixtures and mocks are in tide-setup_testlib.
+
+# shellcheck source=tide-setup_testlib
+. "$(dirname "$0")/tide-setup_testlib"
+
+set -e
+
+# The commit the fake git says tidesway's main is at, and another it moves to.
+main=5ea0000000000000000000000000000000000001
+moved=5ea0000000000000000000000000000000000002
+build() { printf '%s\n' "$T"/opt/tidesway/main-"${1:-${main:0:12}}"-*; }
+ask="git ls-remote https://github.com/mikelward/tidesway.git refs/heads/main"
+clone="git clone -c advice.detachedHead=false --quiet --filter=blob:none --branch main https://github.com/mikelward/tidesway.git"
+# ts_setup: setup, with src the tidesway clone under its T.
+ts_setup() {
+    setup
+    src="$T/src/tidesway-build/tidesway"
+}
+# old_build NAME: an earlier finished build, current and linked.
+old_build() {
+    mkdir -p "$T/opt/tidesway/$1/bin"
+    printf '#!/bin/sh\n' > "$T/opt/tidesway/$1/bin/tidesway"
+    chmod +x "$T/opt/tidesway/$1/bin/tidesway"
+    echo "old build" > "$T/opt/tidesway/$1/setup-tide-build"
+    ln -sfn "$1" "$T/opt/tidesway/current"
+    ln -sfn "$T/opt/tidesway/current/bin/tidesway" "$T/usr-local-bin/tidesway"
+}
+# someone_elses: a tidesway on the session's PATH that setup didn't link.
+someone_elses() {
+    printf '#!/bin/sh\n' > "$T/usr-local-bin/tidesway"
+    chmod +x "$T/usr-local-bin/tidesway"
+}
+
+check "deps.lock has no tidesway pin" test -z "$(awk '!/^[ \t]*(#|$)/ && $2 == "tidesway"' "$SCRIPT_DIR/../deps.lock")"
+
+# By default tidesway is built from its main, and its session installed
+# beside Hyprland's and tidewm's.
+ts_setup; ARGS=(); run
+check "by default, setup succeeds" test "$status" -eq 0
+check "by default, tidesway's build dependencies are installed, meson and wlroots 0.20 among them" \
+    has "$calls" "apt-get install -y --no-upgrade build-essential meson ninja-build pkgconf git libwlroots-0.20-dev"
+check "and sway's own, pango and cairo among them" has "$calls" "libpango1.0-dev libcairo2-dev"
+check "and Xwayland and wlroots' portal, as tidewm's" has "$calls" "libsystemd-dev xwayland xdg-desktop-portal-wlr"
+check "they're a package step" has "$output" "Installing tidesway's build dependencies"
+deps_line=$(printf '%s\n' "$calls" | grep -n "apt-get install -y --no-upgrade build-essential meson" | head -n1 | cut -d: -f1)
+ask_line=$(printf '%s\n' "$calls" | grep -nF "$ask" | head -n1 | cut -d: -f1)
+check "main's commit is asked for once the build dependencies, git among them, are in" \
+    test -n "$deps_line" -a -n "$ask_line" -a "${deps_line:-0}" -lt "${ask_line:-0}"
+check "it clones main" has "$calls" "$clone $src"
+check "and checks the clone is at that commit" has "$calls" "git -C $src rev-parse HEAD"
+check "and says which commit it builds" has "$output" "Building tidesway's main, at ${main:0:12}, from source"
+check "it sets up meson into its own prefix, never downloading a wrap" \
+    has "$calls" "meson setup $src/build $src --prefix=$(build) --libdir=lib --buildtype=release --wrap-mode=nodownload"
+check "without sway's werror, man pages, wallpapers or completions" \
+    has "$calls" "-Dwerror=false -Dman-pages=disabled -Ddefault-wallpaper=false -Dzsh-completions=false -Dbash-completions=false -Dfish-completions=false"
+check "it compiles" has "$calls" "meson compile -C $src/build"
+check "and installs" has "$calls" "meson install -C $src/build"
+check "never as root" lacks "$calls" "sudo meson"
+check "with the distro's wlroots, wlroots isn't built" lacks "$calls" "wlroots.git"
+check "the build is marked complete" test -f "$(build)/setup-tide-build"
+check "the build records the commit" has "$(cat "$(build)/setup-tide-build")" "https://github.com/mikelward/tidesway.git main $main"
+check "the build is current" test "$(readlink -f "$T/opt/tidesway/current")" = "$(build)"
+check "the build is root's once it's linked" has "$calls" "sudo chown -R 0:0 $(build)"
+check "tidesway is linked onto PATH, through current" \
+    test "$(readlink "$T/usr-local-bin/tidesway")" = "$T/opt/tidesway/current/bin/tidesway"
+check "its sway isn't: tidesway runs the one beside it" test ! -e "$T/usr-local-bin/sway"
+check "its build's output isn't shown" lacks "$output" "Installing /"
+check "its session is installed beside the others" has "$calls" "install-session PREFIX=/usr SESSIONS=tide tide-tidewm tide-tidesway"
+check "and nothing's said of it" lacks "$output" "tide (tidesway) session won't"
+# A second run with main where it was doesn't rebuild.
+: > "$CALLS"
+run
+check "an unmoved main is still asked about" has "$calls" "$ask"
+check "an unmoved main isn't cloned again" lacks "$calls" "$clone"
+check "an unmoved main doesn't rebuild" lacks "$calls" "meson setup $src"
+check "an unmoved main still links" test "$(readlink "$T/usr-local-bin/tidesway")" = "$T/opt/tidesway/current/bin/tidesway"
+# A moved main builds afresh, and the old build goes once current moves.
+first=$(build)
+: > "$CALLS"
+run FAKE_TIDESWAY_MAIN=$moved
+check "a moved main builds" has "$calls" "meson setup $src/build $src --prefix=$T/opt/tidesway/main-${moved:0:12}-"
+check "a moved main's build is current" test "$(readlink -f "$T/opt/tidesway/current")" = "$(build "${moved:0:12}")"
+check "the old main's build is removed" test ! -e "$first"
+check "tidewm's build stays" test -f "$(printf '%s\n' "$T"/opt/tidewm/main-*/setup-tide-build)"
+teardown
+
+# With --no-tidesway, nothing of tidesway's is touched, and its session
+# isn't installed.
+ts_setup; ARGS=(--no-tidesway)
+mkdir -p "$T/share/wayland-sessions"
+echo "an earlier run's" > "$T/share/wayland-sessions/tide-tidesway.desktop"
+run
+check "with --no-tidesway, setup succeeds" test "$status" -eq 0
+check "with --no-tidesway, tidesway isn't cloned" lacks "$calls" "tidesway.git"
+check "with --no-tidesway, it isn't built" lacks "$calls" "tidesway-build"
+check "with --no-tidesway, its build dependencies aren't installed" lacks "$calls" "libpango1.0-dev"
+check "with --no-tidesway, nothing is linked" test ! -e "$T/usr-local-bin/tidesway"
+check "with --no-tidesway, its session isn't installed" has "$calls" "SESSIONS=tide tide-tidewm
+"
+check "and an earlier run's entry comes off the login screen" test ! -e "$T/share/wayland-sessions/tide-tidesway.desktop"
+check "with nothing said of a tidesway that's missing" lacks "$output" "tidesway isn't installed"
+teardown
+# Nor, with --no-tidewm too, is anything of wlroots'.
+ts_setup; ARGS=(--no-tidewm --no-tidesway); run
+check "with neither, nothing of wlroots' is installed" lacks "$calls" "libwlroots"
+teardown
+
+# A tidesway of your own, which setup didn't link, is left alone, and its
+# session installed.
+ts_setup; ARGS=(); someone_elses; run
+check "someone else's tidesway isn't replaced" test ! -L "$T/usr-local-bin/tidesway"
+check "and setup says so" has "$output" "NOT LINKING tidesway: $T/usr-local-bin/tidesway is already there"
+check "with a tidesway installed, its session is too" has "$calls" "install-session PREFIX=/usr SESSIONS=tide tide-tidewm tide-tidesway"
+teardown
+ts_setup; ARGS=(--no-tidesway); someone_elses; run
+check "with --no-tidesway, a tidesway of your own still has its session" has "$calls" "SESSIONS=tide tide-tidewm tide-tidesway"
+teardown
+
+# Another branch, by $TIDESWAY_BRANCH, a slash in its name kept out of the path.
+ts_setup; ARGS=(); run TIDESWAY_BRANCH=fix/thing
+check "another branch is asked about" has "$calls" "git ls-remote https://github.com/mikelward/tidesway.git refs/heads/fix/thing"
+check "another branch builds in a directory of its own" test -f "$(printf '%s\n' "$T"/opt/tidesway/fix-thing-"${main:0:12}"-*/setup-tide-build)"
+teardown
+
+# Main moved between asking and cloning: the commit asked about is built.
+ts_setup; ARGS=(); run FAKE_TIDESWAY_CLONED=$moved
+check "a clone past the commit fetches it" has "$calls" "git -C $src fetch --quiet origin $main"
+check "and checks it out" has "$calls" "git -C $src checkout --quiet $main"
+check "and it's current" test "$(readlink -f "$T/opt/tidesway/current")" = "$(build)"
+teardown
+ts_setup; ARGS=(); run FAKE_TIDESWAY_CLONED=$moved FAKE_CHECKOUT_FAILS=1
+check "an unreachable commit isn't built" lacks "$calls" "meson setup $src"
+check "an unreachable commit says so" has "$output" "couldn't check out tidesway's $main, the commit its main was at"
+check "a failed tidesway build is a warning, not a failure" test "$status" -eq 0
+check "and says what it costs" has "$output" "tidesway couldn't be built; rerun setup to retry"
+check "nothing is linked" test ! -e "$T/usr-local-bin/tidesway"
+check "and setup says its session won't show" has "$output" "tidesway isn't installed, so the tide (tidesway) session won't show at the login screen"
+teardown
+
+# Without GitHub, a build that's there is kept; without one, nothing is.
+ts_setup; ARGS=()
+old_build main-${main:0:12}-1234
+run FAKE_LS_REMOTE_FAILS=1
+check "offline, a build is kept" test "$status" -eq 0
+check "offline, it says why" has "$output" "couldn't ask GitHub which commit tidesway's main is at"
+check "offline, it says which build it keeps" has "$output" "keeping the tidesway build in $T/opt/tidesway/main-${main:0:12}-1234"
+check "offline, nothing is built" lacks "$calls" "meson setup $src"
+check "offline, it's still linked" test "$(readlink "$T/usr-local-bin/tidesway")" = "$T/opt/tidesway/current/bin/tidesway"
+teardown
+ts_setup; ARGS=(); run FAKE_LS_REMOTE_FAILS=1
+check "offline with no build, setup still succeeds" test "$status" -eq 0
+check "offline with no build, it says so" has "$output" "there's no build of tidesway to keep"
+check "offline with no build, nothing is linked" test ! -e "$T/usr-local-bin/tidesway"
+teardown
+
+# A failed build leaves nothing linked and no marker.
+ts_setup; ARGS=(); run FAKE_MESON_FAILS=tidesway
+check "a failed meson doesn't fail setup" test "$status" -eq 0
+check "a failed meson is reported" has "$output" "building tidesway failed"
+check "a failed meson leaves nothing linked" test ! -e "$T/usr-local-bin/tidesway"
+check "a failed meson leaves no marker" test -z "$(find "$T/opt/tidesway" -name setup-tide-build 2>/dev/null)"
+check "tidewm is built all the same" test -L "$T/usr-local-bin/tidewm"
+teardown
+
+# Where the distro has no wlroots 0.20, it's built from its pin into
+# tidesway's build, apart from tidewm's, and tidesway against it.
+ts_setup; ARGS=(--no-tidewm); run FAKE_MISSING=libwlroots-0.20-dev
+check "without wlroots 0.20, setup succeeds" test "$status" -eq 0
+check "the build doesn't ask apt for wlroots" lacks "$calls" "libwlroots-0.20-dev"
+check "it installs wlroots' build dependencies with tidesway's" has "$calls" "libsystemd-dev xwayland xdg-desktop-portal-wlr meson ninja-build bison"
+check "it says what it's building wlroots for" has "$output" "Building wlroots for tidesway"
+check "it builds wlroots into tidesway's build" \
+    has "$calls" "meson setup $T/src/tidesway-build/wlroots/build $T/src/tidesway-build/wlroots --prefix=$(build) --libdir=lib"
+ts_meson=$(printf '%s\n' "$calls" | grep -F -A2 "meson setup $src/build $src ")
+check "tidesway sets up against it, with a run path to it" \
+    has "$ts_meson" "meson env: PKG_CONFIG_PATH=$(build)/lib/pkgconfig:$(build)/share/pkgconfig"
+check "the run path is to the build's own lib" has "$ts_meson" "LDFLAGS=-Wl,-rpath,$(build)/lib"
+check "the build records wlroots' pins" has "$(cat "$(build)/setup-tide-build")" "wlroots"
+check "tidesway is linked" test "$(readlink "$T/usr-local-bin/tidesway")" = "$T/opt/tidesway/current/bin/tidesway"
+teardown
+ts_setup; ARGS=(--no-tidewm); run FAKE_MISSING=libwlroots-0.20-dev FAKE_MESON_FAILS=wlroots
+check "a failed wlroots build is reported for tidesway" has "$output" "building wlroots failed, so tidesway isn't built"
+check "and tidesway isn't built" lacks "$calls" "meson setup $src"
+teardown
+
+# Arch packages wlroots 0.20, and Fedora names the package that has it.
+ts_setup; ARGS=(); run SETUP_OS=arch
+check "on Arch, tidesway's dependencies come from pacman" has "$calls" "pacman -S --needed --noconfirm base-devel git meson ninja wlroots0.20"
+check "on Arch, tidesway is built" has "$calls" "meson install -C $src/build"
+teardown
+ts_setup; ARGS=(); run SETUP_OS=redhat FAKE_DNF_WLROOTS=wlroots0.20-devel
+check "on Fedora, tidesway's dependencies come from dnf" has "$calls" "dnf install -y --setopt=best=False gcc meson ninja-build"
+check "with the package that has wlroots 0.20" has "$calls" "xdg-desktop-portal-wlr wlroots0.20-devel"
+check "on Fedora, tidesway is built" has "$calls" "meson install -C $src/build"
+teardown
+
+# A tidesway that's there but can't run, as one whose wlroots an upgrade
+# took away, comes off the login screen, and the others stay.
+ts_setup; ARGS=()
+mkdir -p "$T/share/wayland-sessions"
+echo "an earlier run's" > "$T/share/wayland-sessions/tide-tidesway.desktop"
+run FAKE_TIDESWAY_BROKEN=yes
+check "a tidesway that can't run is only a warning" test "$status" -eq 0
+check "it's named, with the last line of why" has "$output" \
+    "the tide (tidesway) session won't show at the login screen: its tidesway ($T/usr-local-bin/tidesway) can't run: 'tidesway -v' exited 127, saying 'sway: error while loading shared libraries: libwlroots-0.20.so: cannot open shared object file: No such file or directory'"
+check "its session isn't installed" has "$calls" "install-session PREFIX=/usr SESSIONS=tide tide-tidewm
+"
+check "its entry comes off the login screen" test ! -e "$T/share/wayland-sessions/tide-tidesway.desktop"
+teardown
+
+# With tidesway alone, no Hyprland and no tidewm, its session is the one to
+# log in to, and the one the last check asks for.
+ts_setup; ARGS=(--no-tidewm); rm "$T/usr-bin/Hyprland"; run
+check "with tidesway alone, setup ends well" test "$status" -eq 0
+check "with tidesway alone, its session is installed" has "$calls" "install-session PREFIX=/usr SESSIONS=tide-tidesway"
+check "and tidewm's entry isn't asked for" lacks "$output" "tide (tidewm) session won't show"
+teardown
+ts_setup; ARGS=(--no-tidewm); rm "$T/usr-bin/Hyprland"; run FAKE_NO_TIDESWAY_ENTRY=yes
+check "with tidesway alone, a missing entry ends the run" test "$status" -ne 0
+check "and is named, with the command that installs it" has "$output" \
+    "the tide (tidesway) session won't show at the login screen: there's no $T/share/wayland-sessions/tide-tidesway.desktop; run 'sudo make -C"
+check "which installs tidesway's" has "$output" "install-session PREFIX=/usr SESSIONS=tide-tidesway'"
+teardown
+
+finish

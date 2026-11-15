@@ -147,7 +147,8 @@ rest need only tide, conf or scripts.
 
 **Getting tidewm onto a machine** (scripts' `setup-tide`):
 
-- `setup` builds tidewm's latest `main` (unless `--no-tidewm`), which tidewm's CI gates.
+- `setup` builds tidewm's latest `main` (unless `--no-tidewm`), which tidewm's CI gates,
+  and tidesway's the same way (unless `--no-tidesway`).
   It asks GitHub which commit `main` is at and builds that one, so a rerun
   rebuilds only once `main` has moved. Offline, it keeps the build it has.
 - It uses the distro's wlroots 0.20 on Debian testing and Arch. Where

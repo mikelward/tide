@@ -44,9 +44,13 @@
 #   screen (see build_tidewm). It builds against wlroots 0.20: the distro's
 #   on Debian testing and Arch, and where the distro has none (Ubuntu
 #   26.04, Debian 13, a Fedora without it), one built from pinned tags into
-#   tidewm's own build (see install/wlroots). Each session, Hyprland's and tidewm's,
-#   shows at the login screen only once its compositor is installed, and
-#   setup warns about one that couldn't be;
+#   tidewm's own build (see install/wlroots);
+# - unless --no-tidesway, builds tidesway, tide's fork of sway, the same
+#   way, from its latest main, with meson, into /opt/tidesway, and links its
+#   tidesway command onto PATH, so the tide (tidesway) session shows at the
+#   login screen (see build_tidesway). Each session, Hyprland's, tidewm's
+#   and tidesway's, shows at the login screen only once its compositor is
+#   installed, and setup warns about one that couldn't be;
 # - runs this checkout's `make install` (the
 #   layout, the focus guard, the user units, the portal config) and, with
 #   sudo, `make install-session PREFIX=/usr` (the display manager's session
@@ -93,7 +97,7 @@
 #
 # Usage:
 #     install/tide-setup [--no-install] [--no-sudo] [--ignore-errors]
-#                      [--no-build-hyprland] [--no-tidewm]
+#                      [--no-build-hyprland] [--no-tidewm] [--no-tidesway]
 #                      [--dm tide|sddm|gdm|keep | --greeter | --no-greeter]
 #                      [--splash] [--github PREFIX]
 #                      [-v | --verbose] [-h | --help]
@@ -104,6 +108,7 @@
 # the latest.
 # --no-build-hyprland leaves Hyprland to the distro even when it's too old.
 # --no-tidewm leaves tidewm out: nothing of tidewm's is touched.
+# --no-tidesway leaves tidesway out, as --no-tidewm does tidewm.
 # --dm picks the login screen: tide (greetd running tide's greeter), sddm,
 # gdm, or keep (the default). --greeter is --dm=tide; the rest of this says
 # --greeter for both. --dm=sddm or --dm=gdm installs it if it isn't, and makes
@@ -112,10 +117,11 @@
 # one setup replaced with greetd. Without either, the display manager stays
 # as it is. --splash makes tide's boot splash the default; without it, the
 # boot splash stays as it is. --github PREFIX, or $GITHUB_PREFIX, clones what it clones from
-# GitHub (Quickshell, Hyprland and its libraries and submodules, tidewm)
-# from a mirror instead. Only the host changes: each pinned source build
-# still checks out its pinned commit, so a mirror can't swap what's built.
-# tidewm has no pin: the mirror names the commit of main that's built.
+# GitHub (Quickshell, Hyprland and its libraries and submodules, tidewm,
+# tidesway) from a mirror instead. Only the host changes: each pinned source
+# build still checks out its pinned commit, so a mirror can't swap what's
+# built. tidewm and tidesway have no pin: the mirror names the commit of
+# main that's built.
 #
 # What the package managers, tide's make and systemctl say goes to
 # ~/.local/state/setup/setup.log, which each run starts afresh (or, under
@@ -148,6 +154,7 @@ UPGRADE=no
 # may still be too old, so a source build's links stay in front of it.
 UPGRADE_FAILED_PKGS=
 BUILD_TIDEWM=yes
+BUILD_TIDESWAY=yes
 # Where GitHub's repos come from: empty for github.com itself (see
 # git_github).
 GITHUB_PREFIX="${GITHUB_PREFIX:-}"
@@ -262,11 +269,45 @@ TIDEWM_APT_DEPS="build-essential pkgconf git libwlroots-0.20-dev libwayland-dev 
 TIDEWM_PACMAN_DEPS="base-devel git wlroots0.20 wayland wayland-protocols libinput libxkbcommon
     libxcb xcb-util-wm json-c pcre2 pkgconf xorg-xwayland xdg-desktop-portal-wlr"
 # Fedora's, beside the package that provides wlroots 0.20, which
-# tidewm_build_deps asks dnf for by its pkg-config name, as Fedora names
+# compositor_build_deps asks dnf for by its pkg-config name, as Fedora names
 # wlroots' packages for their version only some of the time; with none,
 # install/wlroots' WLROOTS_DNF_DEPS, to build it.
 TIDEWM_DNF_DEPS="gcc make pkgconf-pkg-config git wayland-devel wayland-protocols-devel
     libinput-devel libxkbcommon-devel libxcb-devel xcb-util-wm-devel json-c-devel pcre2-devel
+    xorg-x11-server-Xwayland xdg-desktop-portal-wlr"
+# tidesway (github.com/mikelward/tidesway), tide's fork of sway, which
+# build_tidesway builds unless --no-tidesway, for tide's tidesway session,
+# another option beside Hyprland's. Not pinned, as tidewm isn't: its latest
+# main, which tidesway's CI gates. $TIDESWAY_BRANCH builds another branch.
+# Its own prefix, as tidewm's, with only its tidesway command linked onto
+# PATH: that runs the sway beside it, so a sway of the distro's stays the
+# one `sway` names.
+TIDESWAY_REPO=https://github.com/mikelward/tidesway.git
+TIDESWAY_BRANCH="${TIDESWAY_BRANCH:-main}"
+TIDESWAY_PREFIX="${TIDESWAY_PREFIX:-/opt/tidesway}"
+TIDESWAY_SRC="${TIDESWAY_SRC:-$HOME/src/tidesway-build}"
+TIDESWAY_BIN_DIR="${TIDESWAY_BIN_DIR:-/usr/local/bin}"
+TIDESWAY_COMMANDS=tidesway
+# What meson builds: sway, swaymsg, swaybar and swaynag, and the tidesway
+# command, without the man pages, wallpapers and shell completions, which
+# nothing would find in its prefix. sway's werror is for its own CI: a
+# compiler newer than CI's would otherwise fail the build on a warning.
+TIDESWAY_MESON_OPTIONS="-Dwerror=false -Dman-pages=disabled -Ddefault-wallpaper=false
+    -Dzsh-completions=false -Dbash-completions=false -Dfish-completions=false"
+# What the build needs, from tidesway's CI (its build-debian and build
+# jobs), plus Xwayland and wlroots' portal, as tidewm's. wlroots 0.20 as
+# for tidewm: the distro's, or install/wlroots' build where it has none.
+TIDESWAY_APT_DEPS="build-essential meson ninja-build pkgconf git libwlroots-0.20-dev libwayland-dev
+    wayland-protocols libinput-dev libudev-dev libxkbcommon-dev libxcb1-dev libxcb-icccm4-dev
+    libjson-c-dev libpcre2-dev libpango1.0-dev libcairo2-dev libgdk-pixbuf-2.0-dev libpixman-1-dev
+    libevdev-dev libdrm-dev libsystemd-dev xwayland xdg-desktop-portal-wlr"
+TIDESWAY_PACMAN_DEPS="base-devel git meson ninja wlroots0.20 wayland wayland-protocols libinput
+    libxkbcommon libxcb xcb-util-wm json-c pcre2 pango cairo gdk-pixbuf2 pixman libevdev libdrm
+    systemd-libs pkgconf xorg-xwayland xdg-desktop-portal-wlr"
+# Fedora's, beside the package with wlroots 0.20, as for tidewm.
+TIDESWAY_DNF_DEPS="gcc meson ninja-build pkgconf-pkg-config git wayland-devel wayland-protocols-devel
+    libinput-devel systemd-devel libxkbcommon-devel libxcb-devel xcb-util-wm-devel json-c-devel
+    pcre2-devel pango-devel cairo-devel gdk-pixbuf2-devel pixman-devel libevdev-devel libdrm-devel
     xorg-x11-server-Xwayland xdg-desktop-portal-wlr"
 # wlroots 0.20 from source, where the distro has none.
 # shellcheck source-path=SCRIPTDIR source=wlroots
@@ -606,7 +647,7 @@ sudo_or_warn() {
 usage() {
     cat <<'USAGE'
 Usage: tide-setup [--no-install] [--no-sudo] [--ignore-errors]
-                  [--no-build-hyprland] [--upgrade]
+                  [--no-build-hyprland] [--upgrade] [--no-tidewm] [--no-tidesway]
                   [--dm tide|sddm|gdm|keep | --greeter | --no-greeter]
                   [--splash] [--github PREFIX] [-v | --verbose] [-h | --help]
 
@@ -628,6 +669,8 @@ Options:
                    (tidewm) session beside Hyprland's. It's built by default,
                    from its latest main: on Debian, Ubuntu and Arch, with the
                    wlroots 0.20 it needs built too where the distro has none
+  --no-tidesway    Don't build tidesway, tide's fork of sway, for the tide
+                   (tidesway) session. It's built by default, as tidewm is
   --dm DM          The login screen from the next boot: tide (greetd with
                    tide's greeter), sddm, gdm, or keep the one there is (the
                    default). SDDM and GDM are installed if they aren't
@@ -639,7 +682,7 @@ Options:
                    the one shown from the next boot
   --github PREFIX  Clone from a GitHub mirror at PREFIX (git@ghe.corp: or
                    https://ghe.corp/) instead of github.com, for the
-                   Quickshell, Hyprland and tidewm source builds. A bare host is
+                   Quickshell, Hyprland, tidewm and tidesway source builds. A bare host is
                    treated as SSH. Also settable via GITHUB_PREFIX
   -v, --verbose    Show what the installers and builds print, instead of
                    keeping it in ~/.local/state/setup/setup.log (the builds'
@@ -676,6 +719,8 @@ while test $# -gt 0; do
         --upgrade) UPGRADE=yes ;;
         --no-upgrade) UPGRADE=no ;;
         --no-tidewm) BUILD_TIDEWM=no ;;
+        --tidesway) BUILD_TIDESWAY=yes ;;
+        --no-tidesway) BUILD_TIDESWAY=no ;;
         --greeter) GREETER=yes ;;
         --no-greeter) GREETER=no ;;
         --splash) SPLASH=yes ;;
@@ -2124,69 +2169,188 @@ unlink_quickshell() {
     test "$_unlinked" = yes
 }
 
-# --- tidewm from source ---
+# --- tidewm and tidesway from source ---
 
-# tidewm_build_deps prints the packages tidewm's build needs here, with
-# what building wlroots needs where apt has no wlroots 0.20, or fails,
-# saying why, on a distro it isn't built on.
-tidewm_build_deps() {
+# compositor_build_deps NAME APT PACMAN DNF prints the packages NAME's build
+# needs here, from the lists given for apt, pacman and dnf, with what
+# building wlroots needs where the distro has no wlroots 0.20, or fails,
+# saying why, on a distro it isn't built on. APT names libwlroots-0.20-dev,
+# which comes out where apt has none.
+compositor_build_deps() {
     case "$(detect_os)" in
         debian)
             if ! _cand=$(apt_candidates libwlroots-0.20-dev); then
-                warn "couldn't ask apt whether it has wlroots 0.20, which tidewm builds against"
+                warn "couldn't ask apt whether it has wlroots 0.20, which $1 builds against"
                 return 1
             fi
             case "$_cand" in
-                "libwlroots-0.20-dev "[0-9]*) echo "$TIDEWM_APT_DEPS" ;;
+                "libwlroots-0.20-dev "[0-9]*) echo "$2" ;;
                 *)
-                    detail "apt has no libwlroots-0.20-dev here (Ubuntu 26.04 has only 0.19), so wlroots is built for tidewm"
-                    echo "$TIDEWM_APT_DEPS" | sed 's/ libwlroots-0\.20-dev / /'
+                    detail "apt has no libwlroots-0.20-dev here (Ubuntu 26.04 has only 0.19), so wlroots is built for $1"
+                    echo "$2" | sed 's/ libwlroots-0\.20-dev / /'
                     echo "$WLROOTS_APT_DEPS"
                     ;;
             esac
             ;;
-        arch) echo "$TIDEWM_PACMAN_DEPS" ;;
+        arch) echo "$3" ;;
         redhat)
             if ! _wlr=$(dnf repoquery -q --whatprovides 'pkgconfig(wlroots-0.20)' --queryformat '%{name}
 '); then
-                warn "couldn't ask dnf which package has wlroots 0.20, which tidewm builds against"
+                warn "couldn't ask dnf which package has wlroots 0.20, which $1 builds against"
                 return 1
             fi
             _wlr=$(printf '%s\n' "$_wlr" | sed -n '/./{p;q;}')
             if test -z "$_wlr"; then
-                detail "dnf has no wlroots 0.20, so wlroots is built for tidewm"
-                echo "$TIDEWM_DNF_DEPS"
+                detail "dnf has no wlroots 0.20, so wlroots is built for $1"
+                echo "$4"
                 echo "$WLROOTS_DNF_DEPS"
             else
-                echo "$TIDEWM_DNF_DEPS $_wlr"
+                echo "$4 $_wlr"
             fi
             ;;
         *)
-            warn "tidewm isn't built on $(detect_os): setup builds it only on Debian, Ubuntu, Fedora and Arch"
+            warn "$1 isn't built on $(detect_os): setup builds it only on Debian, Ubuntu, Fedora and Arch"
             return 1
             ;;
     esac
 }
 
-# tidewm_main_commit prints the commit $TIDEWM_BRANCH is at on GitHub, or
-# fails, saying why.
-tidewm_main_commit() {
-    if ! _tm_ls=$(git_github ls-remote "$TIDEWM_REPO" "refs/heads/$TIDEWM_BRANCH"); then
-        warn "couldn't ask GitHub which commit tidewm's $TIDEWM_BRANCH is at"
+# install_build_deps NAME DEPS... installs NAME's build dependencies as a
+# package step, or fails, naming those that wouldn't install.
+install_build_deps() {
+    _ib_name=$1
+    shift
+    pkg_begin "$(pkg_manager)" "Installing $_ib_name's build dependencies"
+    _ib_status=0
+    install_all "$@" || _ib_status=$?
+    pkg_end
+    if test "$_ib_status" -ne 0; then
+        # shellcheck disable=SC2086  # word-split the package list
+        warn "could not install $_ib_name's build dependencies:$(printf ' %s' $not_installed)"
         return 1
     fi
-    _tm_commit=$(printf '%s\n' "$_tm_ls" | sed -n '1s/[[:space:]].*//p')
-    case "$_tm_commit" in
+}
+
+# branch_commit NAME REPO BRANCH prints the commit NAME's BRANCH is at on
+# GitHub, or fails, saying why.
+branch_commit() {
+    if ! _bc_ls=$(git_github ls-remote "$2" "refs/heads/$3"); then
+        warn "couldn't ask GitHub which commit $1's $3 is at"
+        return 1
+    fi
+    _bc_commit=$(printf '%s\n' "$_bc_ls" | sed -n '1s/[[:space:]].*//p')
+    case "$_bc_commit" in
         '' | *[!0-9a-f]*)
-            warn "tidewm has no branch $TIDEWM_BRANCH on GitHub"
+            warn "$1 has no branch $3 on GitHub"
             return 1
             ;;
     esac
-    if test "${#_tm_commit}" -ne 40; then
-        warn "GitHub named $_tm_commit as tidewm's $TIDEWM_BRANCH, which isn't a commit"
+    if test "${#_bc_commit}" -ne 40; then
+        warn "GitHub named $_bc_commit as $1's $3, which isn't a commit"
         return 1
     fi
-    printf '%s\n' "$_tm_commit"
+    printf '%s\n' "$_bc_commit"
+}
+
+# current_build PREFIX prints the finished build PREFIX/current points at,
+# for a run without GitHub to keep, or fails, saying so, when there's none.
+current_build() {
+    _cb_dir=
+    if test -L "$1/current"; then
+        _cb_dir="$1/$(readlink "$1/current")"
+    fi
+    if test -z "$_cb_dir" || ! test -f "$_cb_dir/setup-tide-build"; then
+        return 1
+    fi
+    printf '%s\n' "$_cb_dir"
+}
+
+# clone_commit NAME REPO BRANCH COMMIT SRC clones BRANCH into SRC, with its
+# history and tags but not their files, and checks out COMMIT, the commit
+# the build's directory is named for, should the branch have moved since
+# it was asked; or fails, saying so, adding to $build_log.
+clone_commit() {
+    build_logged "$1" git_github clone -c advice.detachedHead=false --quiet --filter=blob:none --branch "$3" "$2" "$5" || return 1
+    _cc_head=$(git -C "$5" rev-parse HEAD) || return 1
+    if test "$_cc_head" != "$4"; then
+        detail "$1's $3 moved to $_cc_head; checking out $4"
+        build_logged "$1" git_github -C "$5" fetch --quiet origin "$4" \
+            && build_logged "$1" git_github -C "$5" checkout --quiet "$4" \
+            && _cc_head=$(git -C "$5" rev-parse HEAD)
+    fi
+    if test "$_cc_head" != "$4"; then
+        warn "couldn't check out $1's $4, the commit its $3 was at; not building it"
+        rm -rf "$5" || warn "couldn't remove the clone in $5"
+        return 1
+    fi
+}
+
+# link_build NAME PREFIX BIN_DIR COMMANDS DIR hands the finished build DIR
+# to root, points PREFIX/current at it, then makes sure each of COMMANDS'
+# links in BIN_DIR goes through it, leaving alone a command there that
+# setup didn't link.
+link_build() {
+    for cmd in $4; do
+        if ! test -x "$5/bin/$cmd"; then
+            warn "$5/bin/$cmd is missing; remove $5/setup-tide-build to rebuild"
+            return 1
+        fi
+    done
+    seal_build "$5" "$4" || return 1
+    current="$2/current"
+    if ! sudo_or_warn ln -sfn "${5##*/}" "$current.new" || ! sudo_or_warn mv -Tf "$current.new" "$current"; then
+        warn "couldn't point $current at $5"
+        if test -L "$current.new"; then
+            sudo_or_warn rm -f "$current.new" || warn "couldn't remove $current.new"
+        fi
+        return 1
+    fi
+    for cmd in $4; do
+        link="$3/$cmd"
+        test "$(readlink "$link")" != "$current/bin/$cmd" || continue
+        # Only replace a link of ours; anything else there is someone else's.
+        if test -e "$link" || test -L "$link"; then
+            case "$(readlink "$link")" in
+                "$2"/*) ;;
+                *)
+                    warn "NOT LINKING $cmd: $link is already there, and setup didn't make it; remove it to use this build"
+                    continue
+                    ;;
+            esac
+        fi
+        if ! sudo_or_warn ln -sfn "$current/bin/$cmd" "$link"; then
+            warn "COULDN'T LINK $cmd INTO $3: the tide ($1) session won't show at the login screen; link $current/bin/$cmd onto its PATH yourself"
+        fi
+    done
+}
+
+# remove_old_compositor_builds NAME PREFIX KEEP removes NAME's builds in PREFIX but
+# KEEP, now that current points at it: older builds, of an older main or a
+# pinned tag. A running compositor keeps the files it has open. Only
+# finished builds of setup's, by their marker.
+remove_old_compositor_builds() {
+    for old in "$2"/*-[0-9]*/; do
+        old=${old%/}
+        if ! test -d "$old" || test -L "$old" || test "$old" = "$3" \
+            || ! test -f "$old/setup-tide-build"; then
+            continue
+        fi
+        sudo_or_warn rm -rf "$old" || warn "couldn't remove the old $1 build in $old"
+    done
+}
+
+# fresh_build_dir NAME SRC DIR: removes a stale clone in SRC and a partial
+# install in DIR, which would otherwise be built into and then marked
+# complete, and makes DIR to build into and NAME's build log. The partial
+# install is in root's prefix, so only root can remove it.
+fresh_build_dir() {
+    if ! rm -rf "$2" || { test -e "$3" && ! sudo_or_warn rm -rf "$3"; }; then
+        warn "couldn't remove the old $1 sources or partial build in $2 and $3; not building"
+        return 1
+    fi
+    mkdir -p "${2%/*}" || return 1
+    make_build_dir "$3" || return 1
+    start_build_log "$1" || return 1
 }
 
 # build_tidewm builds the commit tidewm's $TIDEWM_BRANCH is at into its own
@@ -2196,31 +2360,18 @@ tidewm_main_commit() {
 # build's inputs, so a moved main builds afresh and a rerun with nothing
 # changed only relinks. Without GitHub, a build that's current is kept.
 build_tidewm() {
-    deps=$(tidewm_build_deps) || return 1
-    pkg_begin "$(pkg_manager)" "Installing tidewm's build dependencies"
-    deps_status=0
+    deps=$(compositor_build_deps tidewm "$TIDEWM_APT_DEPS" "$TIDEWM_PACMAN_DEPS" "$TIDEWM_DNF_DEPS") || return 1
     # shellcheck disable=SC2086  # word-split the package list
-    install_all $deps || deps_status=$?
-    pkg_end
-    if test "$deps_status" -ne 0; then
-        # shellcheck disable=SC2086  # word-split the package list
-        warn "could not install tidewm's build dependencies:$(printf ' %s' $not_installed)"
-        return 1
-    fi
+    install_build_deps tidewm $deps || return 1
     # Asked after the dependencies, git among them, are installed: a machine
     # without git would otherwise take the offline path.
-    if ! tw_commit=$(tidewm_main_commit); then
-        tw_dir=
-        if test -L "$TIDEWM_PREFIX/current"; then
-            tw_dir="$TIDEWM_PREFIX/$(readlink "$TIDEWM_PREFIX/current")"
-        fi
-        tw_marker="$tw_dir/setup-tide-build"
-        if test -z "$tw_dir" || ! test -f "$tw_marker"; then
+    if ! tw_commit=$(branch_commit tidewm "$TIDEWM_REPO" "$TIDEWM_BRANCH"); then
+        if ! tw_dir=$(current_build "$TIDEWM_PREFIX"); then
             warn "there's no build of tidewm to keep, so it isn't built"
             return 1
         fi
         warn "keeping the tidewm build in $tw_dir, which may be behind its $TIDEWM_BRANCH"
-        link_tidewm
+        link_build tidewm "$TIDEWM_PREFIX" "$TIDEWM_BIN_DIR" "$TIDEWM_COMMANDS" "$tw_dir"
         return
     fi
     tw_short=$(printf '%s\n' "$tw_commit" | cut -c1-12)
@@ -2239,39 +2390,15 @@ build_tidewm() {
     else
         info "Building tidewm's $TIDEWM_BRANCH, at $tw_short, from source"
         src="$TIDEWM_SRC/tidewm"
-        # A stale clone or partial install left in place would be built into
-        # and then marked complete. The partial install is in root's prefix,
-        # so only root can remove it.
-        if ! rm -rf "$src" || { test -e "$tw_dir" && ! sudo_or_warn rm -rf "$tw_dir"; }; then
-            warn "couldn't remove the old tidewm sources or partial build in $src and $tw_dir; not building"
-            return 1
-        fi
-        mkdir -p "$TIDEWM_SRC" || return 1
-        make_build_dir "$tw_dir" || return 1
-        start_build_log tidewm || return 1
-        # The branch's history and tags, without their files, so `tidewm -v`,
-        # which is `git describe --tags`, names the release tag it's at or
-        # follows.
-        build_logged tidewm git_github clone -c advice.detachedHead=false --quiet --filter=blob:none --branch "$TIDEWM_BRANCH" "$TIDEWM_REPO" "$src" || return 1
-        commit=$(git -C "$src" rev-parse HEAD) || return 1
-        # The branch moved since it was asked: build the commit the
-        # directory is named for.
-        if test "$commit" != "$tw_commit"; then
-            detail "tidewm's $TIDEWM_BRANCH moved to $commit; checking out $tw_commit"
-            build_logged tidewm git_github -C "$src" fetch --quiet origin "$tw_commit" \
-                && build_logged tidewm git_github -C "$src" checkout --quiet "$tw_commit" \
-                && commit=$(git -C "$src" rev-parse HEAD)
-        fi
-        if test "$commit" != "$tw_commit"; then
-            warn "couldn't check out tidewm's $tw_commit, the commit its $TIDEWM_BRANCH was at; not building it"
-            rm -rf "$src" || warn "couldn't remove the clone in $src"
-            return 1
-        fi
+        fresh_build_dir tidewm "$src" "$tw_dir" || return 1
+        # The branch's history and tags, so `tidewm -v`, which is `git
+        # describe --tags`, names the release tag it's at or follows.
+        clone_commit tidewm "$TIDEWM_REPO" "$TIDEWM_BRANCH" "$tw_commit" "$src" || return 1
         # Built into tidewm's own directory, so it's sealed and replaced
         # with it.
         tw_make="make"
         if test "$tw_wlroots" = yes; then
-            build_wlroots "$tw_dir" "$TIDEWM_SRC" || return 1
+            build_wlroots "$tw_dir" "$TIDEWM_SRC" tidewm || return 1
             tw_make="wlroots_env $tw_dir make"
         fi
         # shellcheck disable=SC2086  # $tw_make is a command, split on purpose
@@ -2283,59 +2410,65 @@ build_tidewm() {
             return 1
         }
     fi
-    link_tidewm || return 1
-    remove_old_tidewm_builds
+    link_build tidewm "$TIDEWM_PREFIX" "$TIDEWM_BIN_DIR" "$TIDEWM_COMMANDS" "$tw_dir" || return 1
+    remove_old_compositor_builds tidewm "$TIDEWM_PREFIX" "$tw_dir"
 }
 
-# link_tidewm hands $tw_dir to root, points $TIDEWM_PREFIX/current at it,
-# then makes sure tidewm's link goes through it.
-link_tidewm() {
-    for cmd in $TIDEWM_COMMANDS; do
-        if ! test -x "$tw_dir/bin/$cmd"; then
-            warn "$tw_dir/bin/$cmd is missing; remove $tw_marker to rebuild"
+# build_tidesway builds the commit tidesway's $TIDESWAY_BRANCH is at into
+# its own directory under $TIDESWAY_PREFIX, as build_tidewm does tidewm,
+# with meson, and links its tidesway command onto PATH. Where the distro
+# has no wlroots 0.20, it builds one into tidesway's directory too, apart
+# from tidewm's, so each is sealed and replaced with its own.
+build_tidesway() {
+    deps=$(compositor_build_deps tidesway "$TIDESWAY_APT_DEPS" "$TIDESWAY_PACMAN_DEPS" "$TIDESWAY_DNF_DEPS") || return 1
+    # shellcheck disable=SC2086  # word-split the package list
+    install_build_deps tidesway $deps || return 1
+    if ! ts_commit=$(branch_commit tidesway "$TIDESWAY_REPO" "$TIDESWAY_BRANCH"); then
+        if ! ts_dir=$(current_build "$TIDESWAY_PREFIX"); then
+            warn "there's no build of tidesway to keep, so it isn't built"
             return 1
         fi
-    done
-    seal_build "$tw_dir" "$TIDEWM_COMMANDS" || return 1
-    current="$TIDEWM_PREFIX/current"
-    if ! sudo_or_warn ln -sfn "${tw_dir##*/}" "$current.new" || ! sudo_or_warn mv -Tf "$current.new" "$current"; then
-        warn "couldn't point $current at $tw_dir"
-        if test -L "$current.new"; then
-            sudo_or_warn rm -f "$current.new" || warn "couldn't remove $current.new"
-        fi
-        return 1
+        warn "keeping the tidesway build in $ts_dir, which may be behind its $TIDESWAY_BRANCH"
+        link_build tidesway "$TIDESWAY_PREFIX" "$TIDESWAY_BIN_DIR" "$TIDESWAY_COMMANDS" "$ts_dir"
+        return
     fi
-    for cmd in $TIDEWM_COMMANDS; do
-        link="$TIDEWM_BIN_DIR/$cmd"
-        test "$(readlink "$link")" != "$current/bin/$cmd" || continue
-        # Only replace a link of ours; anything else there is someone else's.
-        if test -e "$link" || test -L "$link"; then
-            case "$(readlink "$link")" in
-                "$TIDEWM_PREFIX"/*) ;;
-                *)
-                    warn "NOT LINKING $cmd: $link is already there, and setup didn't make it; remove it to use this build"
-                    continue
-                    ;;
-            esac
+    ts_short=$(printf '%s\n' "$ts_commit" | cut -c1-12)
+    ts_wlroots=no
+    if wlroots_wanted; then
+        ts_wlroots=yes
+    fi
+    ts_record=$(printf '%s\n' "$TIDESWAY_REPO $TIDESWAY_BRANCH $ts_commit" "meson $TIDESWAY_MESON_OPTIONS"
+        test "$ts_wlroots" = no || wlroots_record)
+    ts_sum=$(printf '%s\n' "$ts_record" | cksum | cut -d' ' -f1)
+    ts_dir="$TIDESWAY_PREFIX/$(printf '%s\n' "$TIDESWAY_BRANCH" | tr / -)-$ts_short-$ts_sum"
+    ts_marker="$ts_dir/setup-tide-build"
+    if test -f "$ts_marker"; then
+        detail "tidesway's $TIDESWAY_BRANCH, at $ts_short, is already built in $ts_dir"
+    else
+        info "Building tidesway's $TIDESWAY_BRANCH, at $ts_short, from source"
+        src="$TIDESWAY_SRC/tidesway"
+        fresh_build_dir tidesway "$src" "$ts_dir" || return 1
+        clone_commit tidesway "$TIDESWAY_REPO" "$TIDESWAY_BRANCH" "$ts_commit" "$src" || return 1
+        ts_env=
+        if test "$ts_wlroots" = yes; then
+            build_wlroots "$ts_dir" "$TIDESWAY_SRC" tidesway || return 1
+            ts_env="wlroots_env $ts_dir"
         fi
-        if ! sudo_or_warn ln -sfn "$current/bin/$cmd" "$link"; then
-            warn "COULDN'T LINK $cmd INTO $TIDEWM_BIN_DIR: the tide (tidewm) session won't show at the login screen; link $current/bin/$cmd onto its PATH yourself"
-        fi
-    done
-}
-
-# Older builds, of an older main or a pinned tag, now that current points
-# elsewhere. A running tidewm keeps the files it has open. Only finished builds of setup's, by
-# their marker.
-remove_old_tidewm_builds() {
-    for old in "$TIDEWM_PREFIX"/*-[0-9]*/; do
-        old=${old%/}
-        if ! test -d "$old" || test -L "$old" || test "$old" = "$tw_dir" \
-            || ! test -f "$old/setup-tide-build"; then
-            continue
-        fi
-        sudo_or_warn rm -rf "$old" || warn "couldn't remove the old tidewm build in $old"
-    done
+        # meson never downloads the wlroots its wrap names, which isn't
+        # pinned: a missing one fails.
+        # shellcheck disable=SC2086  # $ts_env is a command, and the options, split on purpose
+        build_logged tidesway $ts_env meson setup "$src/build" "$src" --prefix="$ts_dir" --libdir=lib \
+            --buildtype=release --wrap-mode=nodownload $TIDESWAY_MESON_OPTIONS \
+            && build_logged tidesway meson compile -C "$src/build" \
+            && build_logged tidesway meson install -C "$src/build" || return 1
+        info "Built tidesway's $TIDESWAY_BRANCH, at $ts_short; the build's output is in $build_log"
+        printf '%s\n' "$ts_record" > "$ts_marker" || {
+            warn "couldn't write $ts_marker"
+            return 1
+        }
+    fi
+    link_build tidesway "$TIDESWAY_PREFIX" "$TIDESWAY_BIN_DIR" "$TIDESWAY_COMMANDS" "$ts_dir" || return 1
+    remove_old_compositor_builds tidesway "$TIDESWAY_PREFIX" "$ts_dir"
 }
 
 # --- fcitx5 and tide's accents ---
@@ -2901,8 +3034,8 @@ hyprland_build_kept() {
 
 # check_compositors sets SESSIONS to the login screen's tide sessions whose
 # compositors run here: tide (Hyprland, new enough for tide's config),
-# tide-tidewm (a tidewm that runs) and tide-tidesway (a tidesway that's
-# installed). install_tide installs only those, and takes away
+# tide-tidewm (a tidewm that runs) and tide-tidesway (a tidesway that
+# runs). install_tide installs only those, and takes away
 # one whose compositor is gone. Each missing one is a warning; with none,
 # tide has no session, which stops setup unless errors are ignored.
 check_compositors() {
@@ -2929,10 +3062,15 @@ check_compositors() {
     elif test "$BUILD_TIDEWM" = yes; then
         warn "tidewm isn't installed, so the tide (tidewm) session won't show at the login screen"
     fi
-    # tide (tidesway) where a tidesway is installed: setup builds none yet,
-    # so one that's missing isn't said.
+    # tide (tidesway) where a tidesway that runs is installed, as tidewm's.
     if session_command tidesway; then
-        SESSIONS="${SESSIONS:+$SESSIONS }tide-tidesway"
+        if tidesway_ready; then
+            SESSIONS="${SESSIONS:+$SESSIONS }tide-tidesway"
+        else
+            warn "the tide (tidesway) session won't show at the login screen: $_tidesway_why"
+        fi
+    elif test "$BUILD_TIDESWAY" = yes; then
+        warn "tidesway isn't installed, so the tide (tidesway) session won't show at the login screen"
     fi
     remove_unrunnable_entries
     if test -z "$SESSIONS"; then
@@ -7043,6 +7181,20 @@ tidewm_ready() {
     return 1
 }
 
+# tidesway_ready succeeds when the session's tidesway, on SESSION_PATH,
+# runs: `tidesway -v` is its sway's --version, which exits 0 once sway has
+# loaded its libraries (mikelward/tidesway's tide/tidesway.in). Otherwise
+# it sets _tidesway_why, with the last line of what it said, as
+# tidewm_ready does.
+tidesway_ready() {
+    _sr_out=$(PATH=$SESSION_PATH tidesway -v 2>&1)
+    _sr_status=$?
+    test "$_sr_status" -eq 0 && return 0
+    _sr_last=$(printf '%s\n' "$_sr_out" | tail -n 1)
+    _tidesway_why="its tidesway ($(PATH=$SESSION_PATH command -v tidesway)) can't run: 'tidesway -v' exited $_sr_status, saying '${_sr_last:-nothing}'; rerun $SETUP_COMMAND to build it again"
+    return 1
+}
+
 # say_tidewm_updated says, last, that the tidewm setup was run under is
 # older than the one now installed, as when this run built a newer one:
 # `tide-msg --outdated`, on the session's PATH, exits 0 then. The session
@@ -7432,11 +7584,14 @@ else
     if test "$DISTRO_HYPRLAND" = yes && test "$hyprland_too_old" = no; then
         unlink_hyprland || warn "couldn't remove the links to a source-built Hyprland in $HYPRLAND_BIN_DIR"
     fi
-    # Each compositor is one of two sessions, so a failed build is only a
-    # warning, and the other session still shows (see install_tide). With
-    # neither, there's no session at all, which check_compositors says.
+    # Each compositor is one of the sessions, so a failed build is only a
+    # warning, and the others still show (see install_tide). With none,
+    # there's no session at all, which check_compositors says.
     if test "$BUILD_TIDEWM" = yes; then
         build_tidewm || warn "tidewm couldn't be built; rerun $SETUP_COMMAND to retry"
+    fi
+    if test "$BUILD_TIDESWAY" = yes; then
+        build_tidesway || warn "tidesway couldn't be built; rerun $SETUP_COMMAND to retry"
     fi
     if test "$BUILD_NOW" = yes; then
         build_hyprland || hyprland_build_kept \
