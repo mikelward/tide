@@ -140,8 +140,8 @@ teardown
 # running tide's greeter as the user and on the VT this greetd needs.
 setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run
 check "greetd: installs greetd, with sudo" has "$calls" "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade greetd"
-check "greetd: the config is tide's, with Debian's user and VT" \
-    test "$(cat "$T/etc/greetd/config.toml")" = "$(sed -e 's/^user = .*/user = "_greetd"/' -e 's/^vt = .*/vt = 7/' "$T/greetd.toml")"
+check "greetd: the config is tide's, with Debian's user, on VT 1" \
+    test "$(cat "$T/etc/greetd/config.toml")" = "$(sed -e 's/^user = .*/user = "_greetd"/' -e 's/^vt = .*/vt = 1/' "$T/greetd.toml")"
 check "greetd: the config is root's" has "$calls" "sudo install -D -m 644"
 # The four it needs, and tidewm, which it runs where it's there.
 check "greetd: checks greetd's user can run each command the greeter starts" \
@@ -208,7 +208,7 @@ ARGS=(); run
 check "default after --greeter: greetd stays the display manager" test "$(cat "$T/dm")" = greetd.service
 check "default after --greeter: puts GDM back for no boot" lacks "$calls" "enable --force gdm3.service"
 check "default after --greeter: rewrites greetd's config" \
-    test "$(cat "$T/etc/greetd/config.toml")" = "$(sed -e 's/^user = .*/user = "_greetd"/' -e 's/^vt = .*/vt = 7/' "$T/greetd.toml")"
+    test "$(cat "$T/etc/greetd/config.toml")" = "$(sed -e 's/^user = .*/user = "_greetd"/' -e 's/^vt = .*/vt = 1/' "$T/greetd.toml")"
 # Nothing about logging in changed on this run, so it isn't said again.
 check "default after --greeter: says where to pick tide only with --verbose" lacks "$output" "the \"tide\" session at greetd's greeter"
 check "default after --greeter: the run succeeds" test "$status" -eq 0

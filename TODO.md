@@ -17,9 +17,26 @@ once you have agreed with it or reversed it.
   the login screen again. On VT 1 the drop-in was safe, but greetd puts
   VT 1 back in text mode before the greeter starts, so it gained next to
   nothing. The alternative was keeping it for greetd on VT 1, where it
-  would break again if greetd's VT changed. The handoff done GDM's way is
-  in Boot splash. Reversible: `install/tide-setup`'s
+  would break again if greetd's VT changed. The handoff is now done GDM's
+  way, from greetd (below). Reversible: `install/tide-setup`'s
   `remove_splash_handoff`.
+- **The GDM-style splash handoff's details** (2026-11-15, SPEC.md §5.3),
+  guessed where you hadn't said:
+  - A run without `--splash` removes the handoff, as you asked, though
+    `--splash` otherwise means "leave the splash as it is" when absent: a
+    plain rerun brings the brief text console back. The alternative was
+    keeping it while tide's splash is Plymouth's default.
+  - greetd's VT drop-in is written on every greetd setup runs, even where
+    the unit already keeps getty off VT 1 (upstream's), for one code path.
+  - greetd's `OnFailure=` starts tide's own quit unit, not GDM's
+    `plymouth-quit.service`: greetd conflicts with that, and starting it
+    would cancel greetd's restart.
+  - The plain quit comes 20 s after greetd starts, as long as
+    `plymouth-quit.service` gives its quit.
+  - Quickshell's window first being shown counts as "the greeter has
+    drawn", rather than tidewm or Hyprland starting it.
+  Reversible: `install/tide-setup`'s `greeter_splash_handoff` and
+  `greetd_vt_dropin`.
 - **A `tide-workspaces.lua` with no `ask_for_name` asks nowhere**
   (2026-11-15, SPEC.md §6.5): only a shell from before `askForName` writes
   one, and `tide launch` used to take it as home asking. Now that no
@@ -1415,19 +1432,13 @@ away, so that case holds without it.
 
 - [x] **`tide-setup --splash`**: a Plymouth theme of tide's logo and name,
   with a spinner, on black.
-- [ ] **Keep the splash's last frame until the greeter draws, GDM's
-  way.** A drop-in making `plymouth-quit.service` quit with
-  `--retain-splash` left VT 1 in graphics mode, where Linux drops the
-  switch to greetd's VT 7, so it went (SPEC.md §5.3). GDM instead stops
-  `plymouth-quit.service` (`Conflicts=`), runs `plymouth deactivate`
-  before its compositor takes the display, then `plymouth quit
-  --retain-splash` once the login screen is up, `plymouth quit` if it
-  fails, and has `OnFailure=plymouth-quit.service`. tide's greeter can do
-  the same, but only on the VT Plymouth draws on, VT 1: on VT 7 the
-  switch away from Plymouth's VT ends the splash anyway. So it needs
-  greetd on VT 1 (`vt = 1`, getty kept off tty1), which Debian's and
-  Ubuntu's unit doesn't do, and a test that the boot lands on the greeter
-  when the greeter fails.
+- [x] **Keep the splash's last frame until the greeter draws, GDM's
+  way** (SPEC.md §5.3): greetd on VT 1, `plymouth-quit.service` kept from
+  running, `plymouth deactivate` before greetd starts, `plymouth quit
+  --retain-splash` once the greeter shows, and a plain quit at 20 s or
+  when greetd fails. Left: checking it on a real boot (below), including
+  that the boot lands on the greeter when the greeter fails, and how long
+  greetd's cleared VT 1 shows before the greeter's first frame.
 - [ ] **Check it on a real boot**: the disk unlock's layout row, a
   HiDPI screen (Plymouth scales the 1x images), and shutdown.
 

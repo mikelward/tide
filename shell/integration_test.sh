@@ -2316,6 +2316,13 @@ start_session {"cmd": ["tide-session hyprland"], "env": ["XDG_SESSION_TYPE=wayla
         echo "FAIL: the greeter should remember probe and tide in $_remembered; it has: $(cat "$_remembered" 2>&1)" >&2
         exit 1
     fi
+    # Once on screen, it says so in its runtime directory, where setup
+    # --splash's path unit ends the boot splash (SPEC.md §5.3).
+    if ! test -f "$tmp/run/tide-greeter-shown"; then
+        echo "FAIL: the greeter should leave $tmp/run/tide-greeter-shown once it's on screen" >&2
+        grep -v '^\[' "$log" >&2
+        exit 1
+    fi
     reports "the greeter logged in"
     echo "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
 }

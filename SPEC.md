@@ -598,14 +598,78 @@ flowchart TD
   - It warns when the kernel command line has no `splash` (or Fedora's
     `rhgb`), and on Arch when mkinitcpio's `HOOKS` has no `plymouth`:
     either way the boot shows text.
-  - Plymouth quits plainly at the end of the boot, so the text console
-    shows briefly before the login screen (2026-11-15). setup once gave
-    `plymouth-quit.service` a drop-in, `tide-retain-splash.conf`, that quit
-    with `--retain-splash` to keep the splash up until the greeter drew
-    (maintainer, 2026-11-14). On Ubuntu the next boot never showed the
-    greeter, so setup now removes the drop-in. Why, from the source of
-    Plymouth 24.004.60+git20250831 and greetd 0.10.3 (Ubuntu 26.04's and
-    26.10's), Linux 7.0 (26.04's) and systemd 261 (26.10's):
+  - With greetd running tide's greeter, greetd ends the splash, as GDM
+    does (maintainer, 2026-11-15). The splash stays up until greetd
+    starts, and the greeter covers it. Without `--splash`, or with any
+    other display manager, Plymouth quits plainly at the end of the boot,
+    and the text console shows briefly before the login screen. What
+    setup writes, from the next boot:
+    - greetd runs on VT 1, where Plymouth draws, as upstream's unit and
+      GDM do. A drop-in for greetd's unit, `tide-vt.conf`, keeps getty
+      off VT 1 (`Conflicts=` and `After=getty@tty1.service`), and
+      greetd's config says `vt = 1`. This one is written whenever setup
+      runs greetd, `--splash` or not. Debian's and Ubuntu's unit keeps
+      getty off VT 7 too; that stays, since logind starts no getty there
+      (`NAutoVTs=6`).
+    - With `--splash` and Plymouth installed, a second drop-in,
+      `tide-splash.conf`, has greetd take over Plymouth's quit:
+      `Conflicts=plymouth-quit.service plymouth-quit-wait.service`.
+      systemd drops a unit's start when another unit it conflicts with
+      starts in the same transaction, unless it's needed
+      (`delete_one_unmergeable_job()` in `src/core/transaction.c`), so
+      neither runs at boot.
+    - Dropping `plymouth-quit-wait.service` matters: it waits until
+      Plymouth quits (`plymouth --wait`, with no timeout), and greetd's
+      unit, upstream's and Debian's, comes after it. A drop-in can't
+      remove an `After=` (`systemd.unit(5)`), so the conflict takes it
+      out of the boot. GDM's unit leaves it out for the same reason.
+    - Before greetd starts, as root, `ExecStartPre=-plymouth deactivate`:
+      Plymouth stops drawing, closes VT 1 and drops DRM master, so the
+      greeter's compositor can take the screen, and the last frame stays
+      up until it does (`deactivate_splash()` in Plymouth's `src/main.c`,
+      `deactivate()` in its DRM plugin). GDM does the same before its
+      display server starts.
+    - Once the greeter is on screen, it leaves a file in its runtime
+      directory, `/run/user/UID/tide-greeter-shown`, which only greetd's
+      user can write. Quickshell writes it when the greeter's window is
+      first shown (`shell/greeter.qml`), on tidewm and Hyprland alike. A
+      root path unit, `tide-greeter-shown.path`, sees it and runs
+      `plymouth quit --retain-splash`, once a boot. The greeter can't do
+      that itself: plymouthd refuses every request from a user other
+      than root (`ply_boot_connection_on_request()` in
+      `src/ply-boot-server.c`).
+    - A timer, `tide-splash-quit.timer`, runs a plain `plymouth quit` 20 s
+      after greetd starts (it's ordered after greetd, since `Wants=` orders
+      nothing and greetd may first wait on other units), so a greeter that never shows can't leave
+      Plymouth running. 20 s leaves the greeter time to start its
+      compositor and Quickshell from a cold disk, and is what
+      `plymouth-quit.service` gives its own quit. GDM's is 10 s, but from
+      later on, once its login screen's session has registered.
+    - When greetd fails, `OnFailure=tide-splash-quit.service` quits
+      Plymouth too. That isn't GDM's `plymouth-quit.service`: greetd
+      conflicts with it, so starting it would stop greetd, and a stop
+      cancels a pending restart (`service_stop()` in
+      `src/core/service.c`).
+    - The units run `plymouth` as root at boot, so setup finds it only in
+      root's own directories (`/usr/sbin:/usr/bin:/sbin:/bin`), not the
+      PATH it was run with, and only if root alone can change it and
+      every directory above it. Otherwise it writes none of this, says
+      why, and Plymouth quits before the login screen as before.
+    - Once deactivated, Plymouth's quit leaves VT 1 alone either way: it
+      closed the terminal on deactivating (`deactivate_console()`).
+    - greetd still puts VT 1 in text mode and clears it before starting
+      the greeter (`session/worker.rs`), so the cleared console may show
+      for the moment between that and the greeter's compositor's first
+      frame. Only a real boot shows how long.
+    - Removing greetd as the display manager removes both drop-ins and
+      the units; a run without `--splash` removes `tide-splash.conf` and
+      the units, and greetd stays on VT 1.
+    - The sources are Plymouth 24.004.60+git20250831, greetd 0.10.3
+      (Debian's -7), systemd 261 and GDM 51, Ubuntu's.
+  - Plymouth's own quit with `--retain-splash`, as setup first had it
+    (`tide-retain-splash.conf`, 2026-11-14), broke Ubuntu's boot, and
+    setup removes it. Why, from the source of Plymouth, greetd, Linux 7.0
+    and systemd:
     - Plymouth draws on VT 1, which it puts in graphics mode
       (`KD_GRAPHICS`). Quitting with `--retain-splash` skips putting it
       back in text mode, but still hands VT switching back to the kernel
@@ -613,25 +677,14 @@ flowchart TD
     - Linux drops every switch away from a VT in graphics mode under
       `VT_AUTO`, with no error: `set_console()` in `drivers/tty/vt/vt.c`.
       That covers an ioctl's switch and Ctrl+Alt+F7's.
-    - greetd runs the greeter on the VT its unit keeps getty off:
-      upstream's 1, Debian's and Ubuntu's 7. Its session process puts that
-      VT in text mode, then switches to it (`VT_SETACTIVATE`) and waits
-      (`VT_WAITACTIVE`). From VT 1 left in graphics mode, the switch to
-      VT 7 is dropped.
+    - greetd ran the greeter on Debian's and Ubuntu's VT 7. Its session
+      process puts that VT in text mode, then switches to it
+      (`VT_SETACTIVATE`) and waits (`VT_WAITACTIVE`). From VT 1 left in
+      graphics mode, the switch to VT 7 is dropped.
     - What frees VT 1 is `getty@tty1.service`: systemd puts its VT in text
       mode (`TTYReset=yes`) once `plymouth-quit-wait.service` is done. So
-      the screen stays on the splash, or shows VT 1's login prompt, until
-      you switch to VT 7 yourself.
-    - GDM needs no switch. Its login screen runs on VT 1. GDM tells
-      Plymouth to `deactivate` before starting it, and quits Plymouth
-      with `--retain-splash` itself once the login screen's session
-      registers (`daemon/gdm-manager.c`). Its unit conflicts with
-      `plymouth-quit.service`.
-    - On VT 1 greetd needs no switch either, but it puts VT 1 in text mode
-      before starting the greeter, which brings the console back, cleared.
-      So the drop-in gained next to nothing there, and setup removes it
-      whatever the VT.
-    - Handing over GDM's way, from tide's greeter, is in `TODO.md`.
+      the screen stayed on the splash, or showed VT 1's login prompt,
+      until you switched to VT 7 yourself.
 - **The session entry** is `tide.desktop` in `wayland-sessions`, so
   the current display manager lists it too (M2).
 - **Each entry's `Exec` is `tide-session hyprland`, `tide-session
@@ -4679,6 +4732,10 @@ talk, a demo, or a meeting room's screen.
     on.
   - Either runs one program, the greeter: Quickshell (`shell/greeter.qml`),
     talking to greetd through `tide-greetd` (below).
+  - Once its window is first shown, the greeter leaves
+    `$XDG_RUNTIME_DIR/tide-greeter-shown`, where `setup --splash` ends the
+    boot splash (§5.3). One it can't write is logged, and the splash ends
+    at its timeout.
 
   Once greetd has the session to start, Quickshell exits, the compositor
   exits after it, and greetd starts the session. `make install-session` installs

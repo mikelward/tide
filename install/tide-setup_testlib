@@ -646,6 +646,10 @@ MOCK
     # \$FAKE_GREETD_RESTART_PREVENT, and stays active after exiting with
     # \$FAKE_GREETD_REMAIN, or no.
     # \$FAKE_UNIT_QUERY_FAILS names a property it won't say.
+    # The drop-ins setup writes in $T/etc/systemd/system/greetd.service.d
+    # count too, as systemd reads them once it reloads: their Conflicts and
+    # ExecStartPre are greetd's, and they're among its drop-ins, unless
+    # \$FAKE_DROPINS_UNREAD stands for a systemd that hasn't reloaded.
     # enable --force and disable move
     # display-manager.service as systemd's alias does. Enabling fails with
     # \$FAKE_ENABLE_FAILS, and leaves the alias for greetd with
@@ -686,7 +690,12 @@ if test "\$1" = show; then
         greetd.service:LoadState) if test -e "$T/greetd-installed"; then echo loaded; else echo not-found; fi ;;
         greetd.service:Conflicts)
             test -z "\$FAKE_CONFLICTS_FAILS" || exit 1
-            echo "\${FAKE_GREETD_CONFLICTS-getty@tty7.service shutdown.target}"
+            conflicts="\${FAKE_GREETD_CONFLICTS-getty@tty7.service shutdown.target}"
+            test -n "\$FAKE_DROPINS_UNREAD" || for f in "$T"/etc/systemd/system/greetd.service.d/*.conf; do
+                test -e "\$f" || continue
+                conflicts="\$conflicts \$(sed -n 's/^Conflicts=//p' "\$f" | tr '\\n' ' ')"
+            done
+            echo \$conflicts
             ;;
         greetd.service:Restart | greetd.service:RestartPreventExitStatus | greetd.service:RemainAfterExit)
             test "\${2#--property=}" != "\$FAKE_UNIT_QUERY_FAILS" || exit 1
@@ -700,9 +709,15 @@ if test "\$1" = show; then
             test "\${2#--property=}" != "\$FAKE_UNIT_QUERY_FAILS" || exit 1
             case "\${2#--property=}" in
                 FragmentPath) echo "\${FAKE_GREETD_UNIT-$T/units/greetd.service}" ;;
-                DropInPaths) echo "\${FAKE_GREETD_DROPINS-}" ;;
+                DropInPaths)
+                    dropins="\${FAKE_GREETD_DROPINS-}"
+                    test -n "\$FAKE_DROPINS_UNREAD" || for f in "$T"/etc/systemd/system/greetd.service.d/*.conf; do
+                        test ! -e "\$f" || dropins="\$dropins \$f"
+                    done
+                    echo \$dropins
+                    ;;
                 Names) echo "\${FAKE_GREETD_NAMES-greetd.service}" ;;
-                UnitPath) echo "$T/units $T/units-etc" ;;
+                UnitPath) echo "$T/units $T/units-etc $T/etc/systemd/system" ;;
                 EnvironmentFiles) test -z "\$FAKE_GREETD_ENVFILES" || echo "\$FAKE_GREETD_ENVFILES (ignore_errors=\${FAKE_GREETD_ENVFILES_IGNORED:-no})" ;;
                 Exec*)
                     case "\${2#--property=}" in
@@ -712,6 +727,16 @@ if test "\$1" = show; then
                         *) exe= ;;
                     esac
                     test -z "\$exe" || echo "{ path=\$exe ; argv[]=\$exe\${FAKE_GREETD_ARGS:+ \$FAKE_GREETD_ARGS} ; ignore_errors=\${FAKE_GREETD_EXEC_IGNORED:-no} ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }"
+                    if test "\${2#--property=}" = ExecStartPre && test -z "\$FAKE_DROPINS_UNREAD"; then
+                        for f in "$T"/etc/systemd/system/greetd.service.d/*.conf; do
+                            test -e "\$f" || continue
+                            sed -n 's/^ExecStartPre=//p' "\$f" | while read -r cmd; do
+                                ignore=no
+                                case "\$cmd" in -*) ignore=yes cmd=\${cmd#-} ;; esac
+                                echo "{ path=\${cmd%% *} ; argv[]=\$cmd ; ignore_errors=\$ignore ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }"
+                            done
+                        done
+                    fi
                     ;;
                 *) echo ;;
             esac
@@ -1066,7 +1091,7 @@ run() {
         SETUP_STATE_DIR="$T/var/lib/setup-tide" SETUP_PAM_DIR="$T/pam.d" SETUP_LOGIN_DEFS="$T/login.defs" \
         SETUP_PAM_VENDOR_DIR="$T/vendor-pam.d" SETUP_PAM_AT_INCLUDE=yes \
         SETUP_SESSION_ENTRY="$T/share/wayland-sessions/tide.desktop" SETUP_SESSION_PATH="$T/usr-local-bin:$T/usr-bin" \
-        SETUP_BROWSER_PATH="$T/bin" \
+        SETUP_BROWSER_PATH="$T/bin" SETUP_SPLASH_PATH="$T/bin" \
         FAKE_NERD_TARBALL="$T/nerd-default.tar.xz" SETUP_NERD_SYMBOLS_SHA256="$NERD_DEFAULT_SUM" \
         "$@" "$SCRIPT" "${ARGS[@]}" 2>&1)
     status=$?

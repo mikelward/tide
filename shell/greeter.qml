@@ -407,6 +407,20 @@ ShellRoot {
         onLoaded: root.hostnameText = text()
     }
 
+    // The greeter is on screen: a file in greetd's user's runtime directory,
+    // which setup --splash watches to end the boot splash (SPEC.md §5.3).
+    // Without it, the splash ends at its timeout instead.
+    Process {
+        id: shownMark
+
+        command: ["sh", "-c", ': >"${XDG_RUNTIME_DIR:?}/tide-greeter-shown"']
+        onExited: (code, status) => {
+            if (code !== 0) {
+                console.warn(`tide-greeter: couldn't note that the greeter is on screen (exit ${code}); the boot splash ends at its timeout`);
+            }
+        }
+    }
+
     Variants {
         model: Quickshell.screens
 
@@ -425,6 +439,7 @@ ShellRoot {
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
             color: "#000000"
+            onBackingWindowVisibleChanged: if (backingWindowVisible) shownMark.running = true
 
             LockFace {
                 anchors.fill: parent
