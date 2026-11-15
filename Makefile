@@ -104,7 +104,7 @@ QMLLINT ?= $(shell command -v qmllint6 || command -v qmllint-qt6 || command -v /
 # Build with the Go that's installed, never one downloaded to match go.mod.
 export GOTOOLCHAIN := local
 
-.PHONY: test test-fast test-lua test-selftest test-install test-accents fcitx5 build install install-shell install-session install-splash splash-images mocks palette chars cities unicode connector-zip unshallow-check release-tag dist check-tide-kde
+.PHONY: test test-fast test-lua test-selftest test-compositors test-install test-accents fcitx5 build install install-shell install-session install-splash splash-images mocks palette chars cities unicode connector-zip unshallow-check release-tag dist check-tide-kde
 test: test-fast test-selftest test-install
 
 # install/tide-setup's tests, one target each, so -j runs them side by side.
@@ -132,6 +132,12 @@ $(INSTALL_TESTS):
 # a job of their own beside test-fast's.
 test-selftest:
 	sh shell/integration_test_test.sh
+
+# tide's tidewm and tidesway sessions, started headless as a login starts
+# them: needs both on PATH, with build/tide-msg, wtype, python3 and node
+# (session/compositors_test.sh). CI's compositors job runs it.
+test-compositors:
+	sh session/compositors_test.sh
 
 # The Lua that Hyprland runs, on $(LUA): CI runs it on 5.5, Hyprland's,
 # and again on 5.4, which most distributions package.

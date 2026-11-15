@@ -232,11 +232,60 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # Starts tide's tidewm and tidesway sessions as a login does, headless,
+  # with tide's config through a linked config as a user has it, and checks
+  # it loads whole, its keys run, and without tide.conf a terminal still
+  # opens (session/compositors_test.sh). tidewm and tidesway are built from
+  # their main, as install/tide-setup builds them.
+  #
+  # Cost and reliability: free on GitHub-hosted runners; each build takes
+  # a minute or two on Debian testing, which packages wlroots 0.20. It
+  # depends on Debian's mirrors and on GitHub for the two clones.
+  compositors:
+    runs-on: ubuntu-latest
+    container: debian:testing
+    timeout-minutes: 20
+    needs: classify
+    if: needs.classify.outputs.docs_only != 'true'
+    steps:
+      - name: Install the compositors' build dependencies
+        run: |
+          printf '%s\n' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' 'Acquire::Retries "3";' >/etc/apt/apt.conf.d/80-ci-timeouts
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential meson ninja-build pkgconf git ca-certificates python3 wtype nodejs \
+            libwlroots-0.20-dev libwayland-dev wayland-protocols libinput-dev libudev-dev \
+            libxkbcommon-dev libxcb1-dev libxcb-icccm4-dev libjson-c-dev libpcre2-dev \
+            libpango1.0-dev libcairo2-dev libgdk-pixbuf-2.0-dev libpixman-1-dev libevdev-dev libdrm-dev
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Build tidewm and tidesway from their main
+        run: |
+          git clone -q --depth 1 https://github.com/mikelward/tidewm.git "$RUNNER_TEMP/tidewm"
+          make -C "$RUNNER_TEMP/tidewm"
+          git clone -q --depth 1 https://github.com/mikelward/tidesway.git "$RUNNER_TEMP/tidesway"
+          meson setup "$RUNNER_TEMP/tidesway-build" "$RUNNER_TEMP/tidesway" --prefix /opt/tidesway -Dman-pages=disabled
+          ninja -C "$RUNNER_TEMP/tidesway-build"
+          meson install -C "$RUNNER_TEMP/tidesway-build"
+          install -d /opt/bin
+          install -m 755 "$RUNNER_TEMP/tidewm/dwl" /opt/bin/tidewm
+          ln -s /opt/tidesway/bin/tidesway /opt/bin/tidesway
+      # The checkout belongs to the runner, not the container's root, so git
+      # won't report its status for Go's version stamp.
+      - run: make build/tide-msg
+        env:
+          GOFLAGS: -buildvcs=false
+      - run: PATH="/opt/bin:$PWD/build:$PATH" make test-compositors
+
   lanes:
     name: lanes
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [classify, test, selftest, install, integration]
+    needs: [classify, test, selftest, install, integration, compositors]
     if: always()
     steps:
       - uses: actions/checkout@v5
@@ -248,4 +297,4 @@ jobs:
           pr: ${{ github.event.pull_request.number }}
           classify-result: ${{ needs.classify.result }}
           base-sha: ${{ needs.classify.outputs.base_sha }}
-          results: test=${{ needs.test.result }} selftest=${{ needs.selftest.result }} install=${{ needs.install.result }} integration=${{ needs.integration.result }}
+          results: test=${{ needs.test.result }} selftest=${{ needs.selftest.result }} install=${{ needs.install.result }} integration=${{ needs.integration.result }} compositors=${{ needs.compositors.result }}
