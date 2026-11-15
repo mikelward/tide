@@ -1494,7 +1494,7 @@ aspect of about 2.45, so it's an ultrawide, and a 16:9 one's about 1.84.
 - Dimming fades as focus moves, over 300 ms, as a new window fades in. On
   tidewm, these are `fade_duration 300`.
 - **Shadows.** The focused window casts a soft shadow, tiled or floating:
-  black at 27% by its edge, gone 8 px out. The Borders page's **Shadows**
+  black at 27% by its edge, gone 16 px out. The Borders page's **Shadows**
   says which windows cast one: None, Floating windows, Focused window or
   All windows (maintainer, 2026-11-14; Focused window as the default is a
   guess, in `TODO.md`). **Shadow size** is how far it reaches, 0 to 32 px.
@@ -1515,7 +1515,13 @@ aspect of about 2.45, so it's an ultrawide, and a 16:9 one's about 1.84.
     the shadow follows focus with no Lua of tide's. The size is
     `decoration:shadow:range`.
   - On tidewm and tidesway it is `shadows disable`, `floating`, `active`
-    or `all`, and `shadow_blur_radius`. `tide.conf` has `shadows active`.
+    or `all`, and `shadow_blur_radius`. `tide.conf` has `shadows active`
+    and `shadow_blur_radius 16`.
+  - A shadow reaches 16 px when nothing says, on every compositor
+    (maintainer, 2026-11-15). Each draws it alike, so a size is the same
+    shadow on all of them: black at 27% (`0x44`) by the window's edge,
+    fading as the square of the distance, gone at the size (Hyprland's
+    `shadow.glsl` with `render_power 2`; tidewm's `effects.h`).
 - **Borders.** None by default. The Borders page's **Border width** gives
   every window one, 0 to 16 px, in one quiet color, the palette's
   `surface-3`, the same on the focused window and the rest, as dimming is
@@ -6445,6 +6451,16 @@ The same `.local` convention as `.shrc.local`, `hyprland.conf.local` and
 sway's `config.local`. What this section says holds for every page, so
 the pages in §16 name only where they differ.
 
+- **One value means one thing everywhere** (maintainer, 2026-11-15). A
+  setting's number, and its default, look and act the same on every
+  compositor and platform tide runs on: Hyprland, tidewm, tidesway,
+  Plasma, Chrome (tideco) and macOS (tidemo). Where a compositor's own
+  unit or drawing differs, tide converts the number as it writes that
+  compositor's file, or matches how the compositor draws it, so the file
+  in `~/.config/tide` holds one value for all. There's never a default
+  per compositor. A setting a compositor can't honor at all, such as
+  rounded corners on tidewm, is said to be missing there, not given a
+  different number.
 - **Shared defaults.** Each tide config file is
   `~/.config/tide/<name>.json`: `input`, `keys`, `outputs`, `power`,
   `layouts`, `workspaces`, `floating`, `appearance`, `notifications`,

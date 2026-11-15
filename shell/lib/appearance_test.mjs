@@ -634,10 +634,10 @@ test("tidesway's file rounds the corners as Hyprland does, or squares them", () 
     assert.match(lua, new RegExp(`^local ROUNDING = ${ROUNDING}$`, "m"));
 });
 
-test("there's no border, and a shadow is 8 pixels, until a setting says, each a whole number in range", () => {
+test("there's no border, and a shadow is 16 pixels, until a setting says, each a whole number in range", () => {
     assert.equal(BORDER_WIDTH, 0);
     assert.equal(borderWidth(DEFAULTS), 0);
-    assert.equal(shadowSize(DEFAULTS), 8);
+    assert.equal(shadowSize(DEFAULTS), 16);
     assert.equal(borderWidth(loadAppearance('{"borderWidth": 2}', '{"borderWidth": 4}').settings), 4, "the local file's wins");
     assert.equal(shadowSize(loadAppearance(null, '{"shadowSize": 0}').settings), 0);
     assert.deepEqual(parseAppearance(`{"borderWidth": ${BORDER_WIDTH_MAX}, "shadowSize": ${SHADOW_SIZE_MAX}}`),
@@ -742,7 +742,7 @@ test("tidewm's file has what's set of the border's width, which windows cast a s
     const conf = readFileSync(new URL("../../tidewm/tide.conf", import.meta.url), "utf8");
     assert.match(conf, /^default_border none$/m);
     assert.match(conf, /^shadows active$/m);
-    assert.doesNotMatch(conf, /^shadow_blur_radius/m, "tidewm's own is 8");
+    assert.match(conf, new RegExp(`^shadow_blur_radius ${SHADOW_SIZE}$`, "m"), "the page's default, as on Hyprland");
 });
 
 test("tidewm's file has a border's color, light or dark, while there's a border", () => {

@@ -3197,7 +3197,7 @@ end)
 
 test("tide-appearance.lua sets the shadow's size, and turns it off at 0", function()
     load()
-    eq(8, S.config.decoration.shadow.range, "8 with nothing set")
+    eq(16, S.config.decoration.shadow.range, "16 with nothing set")
     eq(true, S.config.decoration.shadow.enabled)
     load({ appearance = "return { shadow_size = 20 }" })
     eq(20, S.config.decoration.shadow.range)
@@ -3210,7 +3210,7 @@ test("tide-appearance.lua sets the shadow's size, and turns it off at 0", functi
     eq(false, S.config.decoration.shadow.enabled, "none, whatever the size")
     write(TIDE_APPEARANCE, "return {}")
     conf_appearance.reload()
-    eq(8, S.config.decoration.shadow.range, "a setting tide stops making")
+    eq(16, S.config.decoration.shadow.range, "a setting tide stops making")
     eq(true, S.config.decoration.shadow.enabled)
 end)
 
@@ -3247,7 +3247,7 @@ test("a border or shadow tide-appearance.lua gets wrong is reported, naming it, 
         eq(1, #S.notifications, case[1])
         truthy(S.notifications[1].text:find("tide-appearance.lua: " .. case[2], 1, true), S.notifications[1].text)
         eq(0, S.config.general.border_size, case[1])
-        eq(8, S.config.decoration.shadow.range, case[1])
+        eq(16, S.config.decoration.shadow.range, case[1])
         eq("rgba(46464dff)", S.config.general.col.active_border, case[1])
     end
 end)

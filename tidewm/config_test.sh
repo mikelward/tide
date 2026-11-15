@@ -41,7 +41,7 @@ lines=$(awk '
     { print }' "$tmp/plain")
 
 bad=$(printf '%s\n' "$lines" | grep -v '^  ' | awk '{ print $1 }' | grep -vxE \
-    'set|bindsym|bindswitch|for_window|output|input|mode|single_window|dim_inactive|default_border|fade_duration|shadows|focus_guard|floating_modifier|xwayland_scaling|include' || true)
+    'set|bindsym|bindswitch|for_window|output|input|mode|single_window|dim_inactive|default_border|fade_duration|shadows|shadow_blur_radius|focus_guard|floating_modifier|xwayland_scaling|include' || true)
 check "every line is a directive tidewm takes${bad:+: $bad}" empty "$bad"
 
 # As tide on Hyprland: dimming, not a border, shows the focused window.
