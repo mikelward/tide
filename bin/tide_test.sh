@@ -269,12 +269,14 @@ check "tide workspace takes no arguments" test $? -eq 2
 run "$qs" launch --new-workspace app one
 check "--new-workspace is gone: the name prompt names a workspace" test $? -eq 2
 
-# A launch from home asks the shell's name prompt first (SPEC.md §6.5),
-# and waits on a FIFO for its answer, so the app starts from here, in the
-# caller's environment, with TIDE_WORKSPACE and the grant for the
-# workspace chosen. The fake qs answers $FAKE_ANSWER ("workspace docs" by
-# default; "none" answers nothing) once it's asked.
+# A launch from home, once its askForName is on, asks the shell's name
+# prompt first (SPEC.md §6.5), and waits on a FIFO for its answer, so the
+# app starts from here, in the caller's environment, with TIDE_WORKSPACE
+# and the grant for the workspace chosen. The fake qs answers $FAKE_ANSWER
+# ("workspace docs" by default; "none" answers nothing) once it's asked.
 mkdir -p "$tmp/run-config/hypr" "$tmp/prompt-runtime"
+# A file from a shell before askForName lists no ask_for_name, and then
+# none asks, home included.
 printf '%s\n' 'return {' '    home = "PR-12 login",' '    in_apps = {},' '}' > "$tmp/run-config/hypr/tide-workspaces.lua"
 cat > "$fake/qs" <<'FAKE'
 #!/bin/sh
@@ -290,6 +292,11 @@ echo "${FAKE_QS_REPLY-asked}"
 exit "${FAKE_QS_STATUS:-0}"
 FAKE
 chmod +x "$fake/qs"
+run XDG_RUNTIME_DIR="$tmp/prompt-runtime" "$qs" launch app
+check "with no ask_for_name, a launch from home doesn't ask" not_contains "$(cat "$log")" "qs -c tide"
+check "and starts where you are" contains "$(cat "$log")" "uwsm app -- app"
+printf '%s\n' 'return {' '    home = "PR-12 login",' '    in_apps = {},' '    ask_for_name = {' '        "PR-12 login",' '    },' '    pinned = {},' '}' \
+    > "$tmp/run-config/hypr/tide-workspaces.lua"
 run XDG_RUNTIME_DIR="$tmp/prompt-runtime" CALLER_SETTING=kept "$qs" launch --app org.example.Editor -- "$fake/app" one
 check "a launch from home asks the name prompt" contains "$(cat "$log")" "qs -c tide ipc call prompt launch"
 check "it says which apps, and where to answer" \
@@ -362,8 +369,7 @@ check "and says why" contains "$(cat "$tmp/err")" "--background records no focus
 run "$qs" launch --background --workspace docs app
 check "--background with --workspace is refused" test $? -eq 2
 # Which workspaces ask is each one's askForName (SPEC.md §6.5), which the
-# shell writes as ask_for_name; the file above, from a shell before it,
-# names none, so home asked.
+# shell writes as ask_for_name; the file above names home.
 printf '%s\n' 'return {' '    home = "PR-12 login",' '    in_apps = {},' '    ask_for_name = {' '        "re",' '    },' '    pinned = {},' '}' \
     > "$tmp/run-config/hypr/tide-workspaces.lua"
 : > "$log"

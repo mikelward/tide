@@ -704,11 +704,11 @@ export function homeRenamed(id, event, home) {
     return event !== null && event.type === "renamed" && id !== null && event.id === id && event.name !== home;
 }
 
-// Launches the name prompt sent to a workspace whose askForName is on,
-// home by default (SPEC.md §6.5), so the window each opens there, through
-// its grant, doesn't ask again: newest first, each
-// {apps, at}, `apps` the classes its window may have (`*` for any, as the
-// focus guard's grant reads it) and `at` the answer's time in seconds. One
+// Launches the name prompt sent to a workspace whose askForName is on
+// (SPEC.md §6.5), so the window each opens there, through its grant,
+// doesn't ask again: newest first, each {apps, at}, `apps` the classes
+// its window may have (`*` for any, as the focus guard's grant reads it)
+// and `at` the answer's time in seconds. One
 // is good for HOME_LAUNCH_SECONDS: the guard's grant holds 10 s from
 // `tide launch` making it, after the answer, and a window that opens
 // later opens where you are, like any other.
@@ -725,9 +725,9 @@ export function homeLaunched(launches, apps, now) {
     return [{ apps: list, at: now }].concat(liveLaunches(launches, now)).slice(0, 20);
 }
 
-// A window of class `cls` that would ask on home, at `now`: {launches,
-// launched}, launched saying it's the window of a launch sent home, which
-// that launch is then done with, so it keeps home without asking.
+// A window of class `cls` that would ask where it opened, at `now`:
+// {launches, launched}, launched saying it's the window of a launch sent
+// there, which that launch is then done with, so it stays without asking.
 export function homeLaunchWindow(launches, cls, now) {
     const live = liveLaunches(launches, now);
     // The oldest first, as a grant goes to the first window it matches.

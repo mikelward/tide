@@ -15,8 +15,8 @@ export const MAX_NAME = 32;
 export const DEFAULT_STANDING = Object.freeze(["in", "re", "oc", "me"]);
 
 // What each setting is when no file sets it. A null workspaceSettings is
-// one no file sets: then home asks for a name and nothing is pinned
-// (workspaceSettingsOf).
+// one no file sets: then no workspace asks for a name and nothing is
+// pinned (workspaceSettingsOf).
 export const DEFAULT_SETTINGS = Object.freeze({
     standing: DEFAULT_STANDING,
     inApps: Object.freeze([]),
@@ -198,11 +198,12 @@ function workspaceSettingsError(value) {
 }
 
 // Each workspace's settings in effect (SPEC.md §6.5): workspaceSettings
-// as the files have it, or, when neither sets it, home asking for a name.
+// as the files have it, or, when neither sets it, none, so no workspace
+// asks for a name and nothing is pinned.
 export function workspaceSettingsOf(settings) {
     const ws = settings?.workspaceSettings;
     if (ws === null || ws === undefined) {
-        return { [homeName(settings ?? {})]: { askForName: true } };
+        return {};
     }
     return ws;
 }

@@ -135,8 +135,9 @@ focus grant, and runs it with `uwsm app` so it outlives a shell restart.
 Repeat `--app` when the app's window class could be any of several IDs.
 `--workspace NAME` takes the app's first window to the workspace named
 NAME, made if it's new. Without it, a launch from a workspace whose new
-windows ask for a name (home, unless the Workspaces settings say otherwise)
-asks the shell's name prompt for one first, and waits for the answer. The app gets `TIDE_WORKSPACE`, that workspace's
+windows ask for a name (none, unless you turn it on in the Workspaces
+settings) asks the shell's name prompt for one first, and waits for the
+answer. The app gets `TIDE_WORKSPACE`, that workspace's
 name (or else the focused one's) with only its letters and digits, in any
 script, NFC-normalized,
 and `tide workspace` prints the focused workspace's the same way

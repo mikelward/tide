@@ -1558,13 +1558,13 @@ written_settings() {
             ;;
     esac
     # Each workspace's own settings (SPEC.md §6.5): re's switch turned on
-    # and gmail pinned on in, in workspaces.local.json, home still asking as
-    # it did with no workspaceSettings, and both in the file conf reads.
+    # and gmail pinned on in, in workspaces.local.json, home not asking as
+    # it didn't with no workspaceSettings, and both in the file conf reads.
     ipc call settings setWorkspaceAskForName re true >/dev/null || exit 1
     ipc call settings addPinnedApp in gmail >/dev/null || exit 1
     if ! python3 -c 'import json, sys
 s = json.load(open(sys.argv[1]))["workspaceSettings"]
-assert s == {"in": {"askForName": True, "pinnedApps": ["gmail"]}, "re": {"askForName": True, "pinnedApps": []}}, s' "$workspaces_local"; then
+assert s == {"in": {"askForName": False, "pinnedApps": ["gmail"]}, "re": {"askForName": True, "pinnedApps": []}}, s' "$workspaces_local"; then
         echo "FAIL: the Workspaces page should turn on re's askForName and pin gmail on in, in $workspaces_local as it answers; it has: $(cat "$workspaces_local" 2>&1)" >&2
         exit 1
     fi
