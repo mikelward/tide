@@ -2665,16 +2665,20 @@ test("a wrong option fails the load, by name", function()
     end
 end)
 
-test("a config that fails part-way still has a terminal and the way out", function()
-    local ok = pcall(load, { opts = { terminal = "kitty", browser = "firefox" } })
+test("a config that fails part-way still has a terminal, the launcher and the way out", function()
+    local ok = pcall(load, { opts = { terminal = "kitty", launcher = "fuzzel", browser = "firefox" } })
     eq(false, ok)
     eq("kitty", S.binds["|SUPER + T"].target.args, "your terminal")
     eq("Terminal", S.binds["|SUPER + T"].opts.description)
+    eq("qs -c tide ipc call launcher toggle || fuzzel", S.binds["|SUPER + Space"].target.args, "your launcher")
+    eq("Launcher", S.binds["|SUPER + Space"].opts.description)
     eq("Quit Hyprland", S.binds["|SUPER + SHIFT + E"].opts.description)
-    -- With options that aren't even a table, the default terminal.
+    -- With options that aren't even a table, the default terminal and launcher.
     ok = pcall(load, { opts = "kitty" })
     eq(false, ok)
     eq("xdg-terminal-exec", S.binds["|SUPER + T"].target.args)
+    truthy(S.binds["|SUPER + Space"].target.args:find("qs -c tide ipc call launcher toggle || notify-send", 1, true),
+        "the launcher, or why it isn't there")
     truthy(S.binds["|SUPER + SHIFT + E"], "the way out")
 end)
 
@@ -2691,6 +2695,12 @@ test("a config that loads gives the rescue keys to the real bindings", function(
     eq(nil, S.binds["|SUPER + T"], "the terminal moved")
     eq(nil, S.binds["|SUPER + SHIFT + E"], "quit moved")
     eq("Terminal", S.binds["|SUPER + D"].opts.description)
+end)
+
+test("a launcher moved to other keys takes the rescue launcher's with it", function()
+    load({ keys = [[return { keys = { launcher = { "SUPER + R" } } }]] })
+    eq(nil, S.binds["|SUPER + Space"], "the launcher moved")
+    eq("Launcher", S.binds["|SUPER + R"].opts.description)
 end)
 
 test("quit, the terminal and the launcher can't be turned off", function()
