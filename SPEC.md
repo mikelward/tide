@@ -95,6 +95,11 @@ names in brackets.
   monitor.
 - Inactive windows are **darkened**. That is the focus cue: no borders, no
   gaps. The focused window also casts a soft shadow.
+- **The same on every compositor.** tide behaves the same on Hyprland,
+  tidewm, tidesway and KDE Plasma: the same keys, mouse actions, settings
+  and defaults. A difference is a bug unless this spec names it and says
+  why, as something the compositor can't do. A change to one is made to
+  all of them.
 - **Named workspaces**, not numbered ones. The home workspace, **in** by
   default, holds mail, chat, calendar and music; a few standing ones are
   always listed; every other workspace is named for its work, and a window
@@ -2412,6 +2417,19 @@ layout's `focus_side` and `move_side`, and `focus_vertical` and
 config binds the built-in dispatchers instead, with a monitor move for a
 floating window.
 
+- **Drag to resize, on every platform and compositor.** A window's shadow
+  is where a drag resizes it, floating or tiled, and the zone is at least
+  as wide as the shadow. Hover a window to focus it, then drag its shadow.
+  - The edges that drag are the focused window's that touch another window
+    and have something to resize, and a lone window's sides when it isn't
+    the display's full width. An edge at the display's edge doesn't drag.
+  - Rows within a stack don't resize yet (`TODO.md`).
+  - With shadows off, the zone is 8 px outside a floating window and 4 px
+    either side of a tiled edge, so the mouse can still resize.
+  - On KDE Plasma it needs tide's window decoration (tide-kde).
+  - Hyprland's tiles don't follow this yet: focus follows the pointer onto
+    the neighbor before a press, so the focused tile's shadow is never
+    under it. Their edge drags from 4 px either side (`TODO.md`).
 - **Dragging the edge between the masters and the stack.** A plain
   left-press within 4 px either side of that edge, or on a shadow across
   it, starts a drag, and the edge follows the pointer until the button is

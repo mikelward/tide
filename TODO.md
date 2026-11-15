@@ -2299,8 +2299,21 @@ through `drag_press` / `drag_release` in `layout.lua` and a 16 ms
   goes. Pick it up on the Hyprland upgrade PR that brings the patch in.
 - No resize cursor on the tiled edge: Hyprland 0.56.2's Lua can't set one,
   and its own comes only from `resize_on_border`.
-- Rows within a stack are equal, so they have no edge to drag. Per-window
-  weights in `geometry.lua` would add one.
+- [ ] Resize within a stack by dragging (asked 2026-11-15, not the
+  priority). Rows within a stack are equal, so they have no edge to drag.
+  Per-window weights in `geometry.lua` would add one, and the same on
+  tidewm, tidesway and KDE Plasma.
+- [ ] One standard for drag to resize on every platform and compositor
+  (SPEC.md §6.6, asked 2026-11-15): a window's shadow is its drag zone, on
+  each edge that isn't at the display's edge and has something to resize.
+  - tidewm, tidesway, KDE Plasma (tide-kde's decoration): done.
+  - Hyprland: floating windows done. Tiles aren't: with `follow_mouse`,
+    moving onto the focused tile's shadow focuses the neighbor first, and
+    tide's Lua sees no pointer motion to hold focus as tidewm does. So a
+    tile edge drags from 4 px either side only. Fix it, how not yet
+    decided; low priority while Hyprland's future is open, and not at the
+    cost of diverging from the other compositors.
+  - tide for Chrome and tide for macOS: not looked at yet.
 
 ## Double-click the bar to maximize
 
