@@ -11,7 +11,9 @@ import "lib/lock.mjs" as Lock
 // keyboard's says when it falls asleep or wakes. It's counted again when
 // the laptop's lid opens or closes too, as logind says (Sleep.qml): behind
 // a closed lid the built-in keyboard isn't one. While it can't be told, there counts
-// as one, so the field shows its focus as it did before.
+// as one, so the field shows its focus as it did before. A key pressed on
+// the face (keyPressed) proves one whatever the count says, until a device
+// goes and a count after it finds none (Lock.keyboardsNext).
 Scope {
     id: root
 
@@ -26,11 +28,21 @@ Scope {
     property var current: Lock.KEYBOARDS_INITIAL
 
     function refresh() {
-        root.keyboardsEvent({ type: "refresh" });
+        root.keyboardsEvent({ type: "refresh", cue: "" });
+    }
+
+    // A key reached the face, so there's a keyboard to type with, even
+    // one keyd retypes or whose battery hasn't said it's connected yet.
+    function keyPressed() {
+        root.keyboardsEvent({ type: "key" });
     }
 
     function keyboardsEvent(event) {
         const r = Lock.keyboardsNext(root.current, event);
+        const line = Lock.keyboardsKeyLog(root.current, r.state);
+        if (line !== null) {
+            console.log(`${root.name}: ${line}`);
+        }
         root.current = r.state;
         if (r.query) {
             names.lookUp();
@@ -41,7 +53,7 @@ Scope {
         target: Sleep
 
         function onLidMoved() {
-            root.refresh();
+            root.keyboardsEvent({ type: "lid" });
         }
     }
 
@@ -98,7 +110,9 @@ Scope {
 
     // Each line is a cue to count again: an event, or, once it's
     // listening, its header, which line buffering lets through at once, so
-    // a change between the first count and then isn't missed.
+    // a change between the first count and then isn't missed. A device
+    // removed or a battery changing may be a keyboard going, which ends a
+    // key's proof (Lock.keyboardsCue).
     Process {
         id: watch
 
@@ -108,7 +122,7 @@ Scope {
         running: true
 
         stdout: SplitParser {
-            onRead: root.refresh()
+            onRead: data => root.keyboardsEvent({ type: "refresh", cue: Lock.keyboardsCue(data) })
         }
         onStarted: started = true
         onExited: (code, status) => {

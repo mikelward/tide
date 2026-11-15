@@ -4514,12 +4514,25 @@ talk, a demo, or a meeting room's screen.
     keyboard plugged in can be typed on. Built-in is by the device's
     bus: i8042, I2C, SPI or host. A built-in keyboard on USB, as some
     laptops', still counts. The lid is `/proc/acpi/button/lid`'s.
+  - A key pressed on a face proves a keyboard, whatever the count says
+    (maintainer, 2026-11-15): "No keyboard" goes and the field gets its
+    border and caret. A wireless keyboard's HID++ battery can be slow to
+    appear, or still say it isn't connected, while the keyboard types,
+    and keys through keyd's virtual keyboard count too. The proof lasts
+    until a device goes (udev removes one, a battery changes, or a lid
+    opens or closes, which hides the built-in keyboard with no udev
+    event) and a count started after that finds none, so a count already running as
+    the key came can't undo it, and an unplugged keyboard, or one the KVM
+    switched away, still shows "No keyboard". Typing reaches the field
+    whatever the count, since the face takes every key.
   - `tide keyboards` names them. The lock and the greeter run it at start
     and again on each input or battery event `udevadm monitor` reports,
     so the border follows a KVM switch within moments, and when logind
     says the lid opened or closed (`LidClosed`, on the listener §7.3 has).
   - Each time the keyboards change, the journal names them, or says
-    none, so a wake or a KVM switch can be followed.
+    none, so a wake or a KVM switch can be followed. It also says when a
+    key stands in for a keyboard none was found for, and when a device
+    going ends that.
   - If either command can't run, the field shows its focus as it did
     before, and says why in the journal.
 - **A prompt PAM wants answered visibly** (a one-time code it echoes, a

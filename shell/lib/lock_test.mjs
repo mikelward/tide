@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { exitCode, CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, facePalette, fieldLook, hasKeyboard, keyboardsLog, keyboardsNext, layoutNext, layoutRow, layoutName, CAPS_LOCK_INITIAL, CAPS_LOCK_ON, capsLockNext, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
+import { exitCode, CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, facePalette, fieldLook, hasKeyboard, keyboardsCue, keyboardsKeyLog, keyboardsLog, keyboardsNext, layoutNext, layoutRow, layoutName, CAPS_LOCK_INITIAL, CAPS_LOCK_ON, capsLockNext, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -573,6 +573,102 @@ test("an input event during a read reads once more after it", () => {
     r = keyboardsNext(r.state, { type: "answer", names: "Keychron K2\n" });
     assert.equal(r.query, false);
     assert.equal(r.state.count, 1);
+});
+
+// What udevadm's monitor prints for each event (systemd's
+// src/udev/udevadm-monitor.c), as LockKeyboards reads it.
+const REMOVE = "UDEV  [1234.567890] remove   /devices/pci0000:00/0000:00:14.0/usb1/1-2/1-2:1.2/0003:046D:C52B.0003/0003:046D:4062.0004/input/input20/event5 (input)";
+const BATTERY = "UDEV  [1234.567890] change   /devices/pci0000:00/0000:00:14.0/usb1/1-2/1-2:1.2/0003:046D:C52B.0003/0003:046D:4062.0004/power_supply/hidpp_battery_0 (power_supply)";
+const BATTERY_ADD = "UDEV  [1234.567890] add      /devices/pci0000:00/0000:00:14.0/usb1/1-2/1-2:1.2/0003:046D:C52B.0003/0003:046D:4062.0004/power_supply/hidpp_battery_0 (power_supply)";
+const INPUT_ADD = "UDEV  [1234.567890] add      /devices/pci0000:00/0000:00:14.0/usb1/1-2/1-2:1.2/0003:046D:C52B.0003/0003:046D:4062.0004/input/input20/event5 (input)";
+
+test("a device removed, or a battery changing, may be a keyboard going; an add or the header isn't", () => {
+    assert.equal(keyboardsCue(REMOVE), "gone");
+    assert.equal(keyboardsCue(BATTERY), "gone");
+    assert.equal(keyboardsCue(BATTERY_ADD), "");
+    assert.equal(keyboardsCue(INPUT_ADD), "");
+    assert.equal(keyboardsCue("monitor will print the received events for:"), "");
+    assert.equal(keyboardsCue(""), "");
+});
+
+test("a key proves a keyboard while tide keyboards finds none", () => {
+    const asleep = keyboards({ type: "refresh" }, { type: "answer", names: "" });
+    assert.equal(hasKeyboard(asleep), false);
+    const typed = keyboardsNext(asleep, { type: "key" }).state;
+    assert.equal(hasKeyboard(typed), true);
+    // A count with no device going since, as the header's, still finds none:
+    // the key stands.
+    const again = keyboards(...[{ type: "refresh" }, { type: "answer", names: "" }, { type: "key" },
+        { type: "refresh", cue: "" }, { type: "answer", names: "" }]);
+    assert.equal(hasKeyboard(again), true);
+});
+
+test("a read that started before the key can't take it back", () => {
+    let r = keyboardsNext(KEYBOARDS_INITIAL, { type: "refresh" });
+    r = keyboardsNext(r.state, { type: "answer", names: "" });
+    // A battery change starts a read; the key comes while it runs.
+    r = keyboardsNext(r.state, { type: "refresh", cue: "gone" });
+    assert.equal(r.query, true);
+    r = keyboardsNext(r.state, { type: "key" });
+    r = keyboardsNext(r.state, { type: "answer", names: "" });
+    assert.equal(hasKeyboard(r.state), true);
+});
+
+test("a keyboard going after the key brings No keyboard back", () => {
+    const typed = keyboards({ type: "refresh" }, { type: "answer", names: "" }, { type: "key" });
+    // Unplugged, or switched away by the KVM.
+    let r = keyboardsNext(typed, { type: "refresh", cue: "gone" });
+    assert.equal(r.query, true);
+    r = keyboardsNext(r.state, { type: "answer", names: "" });
+    assert.equal(hasKeyboard(r.state), false);
+    // A key from then on proves one again.
+    assert.equal(hasKeyboard(keyboardsNext(r.state, { type: "key" }).state), true);
+});
+
+test("a lid closing after the key brings No keyboard back, as a device going does", () => {
+    // A laptop with no other keyboard: the built-in one goes behind the
+    // lid with no udev remove, and tide keyboards finds none.
+    const typed = keyboards({ type: "refresh" }, { type: "answer", names: "AT Translated Set 2 keyboard\n" },
+        { type: "key" });
+    let r = keyboardsNext(typed, { type: "lid" });
+    assert.equal(r.query, true);
+    r = keyboardsNext(r.state, { type: "answer", names: "" });
+    assert.equal(hasKeyboard(r.state), false);
+});
+
+test("a device going during a read is counted by the read after it", () => {
+    let r = keyboardsNext(keyboards({ type: "refresh" }, { type: "answer", names: "" }, { type: "key" }),
+        { type: "refresh", cue: "" });
+    // The read started before the device went, so its answer can't say.
+    r = keyboardsNext(r.state, { type: "refresh", cue: "gone" });
+    assert.equal(r.query, false);
+    r = keyboardsNext(r.state, { type: "answer", names: "" });
+    assert.equal(r.query, true);
+    assert.equal(hasKeyboard(r.state), true);
+    r = keyboardsNext(r.state, { type: "answer", names: "" });
+    assert.equal(hasKeyboard(r.state), false);
+});
+
+test("a device going while one is counted leaves the key's proof for a count that finds one", () => {
+    const typed = keyboards({ type: "refresh" }, { type: "answer", names: "" }, { type: "key" },
+        { type: "refresh", cue: "gone" }, { type: "answer", names: "Logitech ERGO K860\n" });
+    assert.equal(hasKeyboard(typed), true);
+    assert.equal(hasKeyboard(keyboards(...[{ type: "refresh" }, { type: "answer", names: "" }, { type: "key" },
+        { type: "refresh", cue: "gone" }, { type: "answer", names: "Logitech ERGO K860\n" },
+        { type: "refresh", cue: "gone" }, { type: "answer", names: "" }])), false);
+});
+
+test("the journal says when a key stands in for the count, and when that ends", () => {
+    const asleep = keyboards({ type: "refresh" }, { type: "answer", names: "" });
+    const typed = keyboardsNext(asleep, { type: "key" }).state;
+    assert.equal(keyboardsKeyLog(asleep, typed), "a key was pressed, so there's a keyboard though none was found");
+    assert.equal(keyboardsKeyLog(typed, keyboardsNext(typed, { type: "key" }).state), null);
+    const gone = keyboards({ type: "refresh" }, { type: "answer", names: "" }, { type: "key" },
+        { type: "refresh", cue: "gone" }, { type: "answer", names: "" });
+    assert.equal(keyboardsKeyLog(typed, gone), "a device went since the last key, and no keyboard is left");
+    // A key while one is counted needs no line.
+    const one = keyboards({ type: "refresh" }, { type: "answer", names: "Keychron K2\n" });
+    assert.equal(keyboardsKeyLog(one, keyboardsNext(one, { type: "key" }).state), null);
 });
 
 test("the row under the field names the layout, and No keyboard or Caps Lock beside it", () => {

@@ -1451,6 +1451,19 @@ bus event0 0011
 run TIDE_KEYBOARDS_SYS="$input" TIDE_KEYBOARDS_UDEV="$udev" TIDE_KEYBOARDS_LID="$tmp/no-lid" "$qs" keyboards
 check "with no lid, a keyboard on the i8042 bus counts" test "$(cat "$tmp/out")" = "AT Translated Set 2 keyboard"
 
+# Over Bluetooth, BlueZ makes the keyboard through uhid: its HID device sits
+# under /sys/devices/virtual/misc/uhid, with hid-generic and no HID++
+# battery, but it's the input device's parent, so it isn't keyd's kind.
+rm -r "$input" "$udev"
+mkdir -p "$input" "$udev" "$tmp/drivers/hid-generic"
+input_device "ERGO K860 Keyboard" 13:84 event0 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1 ID_BUS=bluetooth
+bus event0 0005
+ln -s "$tmp/drivers/hid-generic" "$input/event0/device/device/driver"
+input_device "keyd virtual keyboard" 13:85 event1 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
+rm -r "$input/event1/device/device"
+keyboards
+check "a Bluetooth keyboard counts beside keyd's" test "$(cat "$tmp/out")" = "ERGO K860 Keyboard"
+
 # A desktop with its keyboard switched away by the KVM, or asleep: what's
 # left can't type. keyd's virtual keyboard, which sits on no hardware, only
 # retypes another keyboard's keys; a gaming mouse has every key udev asks of
