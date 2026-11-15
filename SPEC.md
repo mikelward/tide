@@ -6828,8 +6828,8 @@ are what "done" means.
 `make test` runs three targets, each of which CI also runs:
 
 - `test-fast`: the Lua (`test-lua`), the shell scripts' `*_test.sh`, the
-  integration test, the accents test, `qmllint` and the Node tests over
-  `shell/lib`, the theme, connector, character and city generators, and
+  integration test, the accents test, `qmllint`, Qt's compiler and the
+  Node tests over `shell/lib`, the theme, connector, character and city generators, and
   `go vet` and `go test`.
 - `test-selftest`: `shell/integration_test_test.sh`, which runs the whole
   integration test against stand-ins for each of its cases. It takes
@@ -6871,6 +6871,12 @@ What each covers:
   regular expressions, so each mistake fails a test rather than the shell.
   `shell/integration_test.sh` also greps the modules and QML for `{ ...`,
   so an object spread fails even where `qmllint` isn't installed.
+- **Declared before use.** Qt warns of a name a file uses above the line
+  that declares it (`qt.qml.usedbeforedeclared`), even inside a function
+  that runs later. A module-level `const` read before its line runs throws.
+  `shell/compile_test.sh` compiles each module and QML file with
+  `qmlcachegen`, Qt's own compiler, and fails on any such warning. It
+  checks every file, where Quickshell warns only of those it loads.
 - **The shell, the lock and the greeter load.** `shell/integration_test.sh`
   installs the shell as `make install` does, and starts it with `qs -c
   tide`, the lock with `qs -p .../lock.qml` and the greeter with `qs -p

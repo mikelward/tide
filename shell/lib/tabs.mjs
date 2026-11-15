@@ -52,6 +52,9 @@ export function applied(browsers, m) {
     return browsers;
 }
 
+// The classes Chromium browsers give their windows.
+const BROWSER_CLASS = /chrom|brave|vivaldi|opera|edge/i;
+
 // Whether a toplevel's title is a window of `browser` whose active tab is
 // `title`. Chrome and Brave title a window "TAB - Google Chrome" or
 // "TAB - Brave", with a profile's name beside it in some versions, so the
@@ -73,9 +76,6 @@ export function titleMatches(windowTitle, tabTitle, browser, app = "") {
     }
     return w.slice(t.length + 3).split(" - ").includes(b);
 }
-
-// The classes Chromium browsers give their windows.
-const BROWSER_CLASS = /chrom|brave|vivaldi|opera|edge/i;
 
 // Each browser window's toplevel: [{source, windowId, address}], the first
 // toplevel (in `windows`' order) whose title matches, each toplevel taken
