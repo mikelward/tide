@@ -1,0 +1,74 @@
+#!/bin/bash
+# Tests for tide-setup: the tidesway build, with --tidesway
+#
+# The harness, its fixtures and mocks are in tide-setup_testlib.
+
+# shellcheck source=tide-setup_testlib
+. "$(dirname "$0")/tide-setup_testlib"
+
+set -e
+
+# The commit the fake git says tidesway's main is at.
+main=5a5e000000000000000000000000000000000001
+build() { printf '%s\n' "$T"/opt/tidesway/main-"${main:0:12}"-*; }
+ask="git ls-remote https://github.com/mikelward/tidesway.git refs/heads/main"
+
+# Without --tidesway, nothing of tidesway's is touched.
+setup; ARGS=(); run
+check "without --tidesway, setup succeeds" test "$status" -eq 0
+check "without --tidesway, tidesway isn't cloned" lacks "$calls" "tidesway.git"
+check "nor built" lacks "$calls" "tidesway-build"
+check "nor linked" test ! -e "$T/usr-local-bin/tidesway"
+check "nor its session installed" lacks "$calls" "tide-tidesway"
+teardown
+
+# With --tidesway on Debian testing, which packages wlroots 0.20: build main.
+setup; ARGS=(--tidesway); run
+check "--tidesway succeeds" test "$status" -eq 0
+check "--tidesway installs tidesway's build dependencies, meson and wlroots 0.20 among them" \
+    has "$calls" "apt-get install -y --no-upgrade build-essential meson ninja-build pkgconf git libwlroots-0.20-dev"
+check "and pango and cairo, for sway's bar" has "$calls" "libpango1.0-dev libcairo2-dev"
+check "and asks GitHub which commit main is at" has "$calls" "$ask"
+check "and clones main" has "$calls" "https://github.com/mikelward/tidesway.git $T/src/tidesway-build/tidesway"
+check "and says which commit it builds" has "$output" "Building tidesway's main, at ${main:0:12}, from source"
+check "it's set up with meson into its own prefix, without -Werror or man pages" \
+    has "$calls" "meson setup $T/src/tidesway-build/tidesway/build $T/src/tidesway-build/tidesway --prefix=$T/opt/tidesway/main-${main:0:12}-"
+check "with release options" has "$calls" "-Dbuildtype=release -Dwerror=false -Dman-pages=disabled"
+check "then compiled and installed" has "$calls" "meson install -C $T/src/tidesway-build/tidesway/build"
+check "never with sudo" lacks "$calls" "sudo meson"
+check "the build is marked complete" test -f "$(build)/setup-tide-build"
+check "and current" test "$(readlink -f "$T/opt/tidesway/current")" = "$(build)"
+check "tidesway is linked onto PATH, through current" \
+    test "$(readlink "$T/usr-local-bin/tidesway")" = "$T/opt/tidesway/current/bin/tidesway"
+check "and nothing else of its is: a distro's sway stays" test ! -e "$T/usr-local-bin/sway"
+check "the build is root's once it's linked" has "$calls" "sudo chown -R 0:0 $(build)"
+check "its session is installed beside the others" has "$calls" "install-session PREFIX=/usr SESSIONS=tide tide-tidewm tide-tidesway"
+teardown
+
+# A rerun with main where it was builds nothing.
+setup; ARGS=(--tidesway); run
+before=$calls
+run
+check "a rerun at the same commit builds nothing" lacks "${calls#"$before"}" "meson setup $T/src/tidesway-build"
+check "and keeps the link" test "$(readlink "$T/usr-local-bin/tidesway")" = "$T/opt/tidesway/current/bin/tidesway"
+teardown
+
+# Without GitHub and with no build to keep, it says so and goes on.
+setup; ARGS=(--tidesway); run FAKE_LS_REMOTE_FAILS=1
+check "without GitHub, setup goes on" has "$output" "there's no build of tidesway to keep, so it isn't built"
+check "and says the session won't show" has "$output" "tidesway isn't installed, so the tide (tidesway) session won't show at the login screen"
+teardown
+
+# A build that fails is a warning, not an end.
+setup; ARGS=(--tidesway); run FAKE_MESON_FAILS=tidesway
+check "a failed build is said" has "$output" "tidesway couldn't be built; rerun setup --tidesway to retry"
+check "and nothing is linked" test ! -e "$T/usr-local-bin/tidesway"
+teardown
+
+# Where apt has no wlroots 0.20, wlroots is built for it too.
+setup; ARGS=(--tidesway); run FAKE_MISSING=libwlroots-0.20-dev
+check "without the distro's wlroots, tidesway builds against one built into its prefix" \
+    has "$calls" "meson env: PKG_CONFIG_PATH=$(build)/lib/pkgconfig"
+teardown
+
+finish

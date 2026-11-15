@@ -1270,6 +1270,9 @@ it (maintainer, 2026-11-14).
       `tide-tidewm --tidesway`, installed where a `tidesway` command is.
 - [x] tidesway installs that command: tidewm's `-s` and `-c` over its
       sway (mikelward/tidesway#21).
+- [x] setup builds it with `--tidesway`, from its latest main, as tidewm
+      is built (`build_tidesway`).
+- [ ] Log in to the tide (tidesway) session and check it works end to end.
 - [x] Rounded corners there: the Appearance page shows the row on
       tidesway and writes `corner_radius`, in a file tidewm never reads,
       as tidewm fails on a line it doesn't know.

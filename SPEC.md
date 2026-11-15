@@ -799,9 +799,13 @@ flowchart TD
   README, "Syntax and behavior"), so the target, the units on it and
   `tide doctor`'s checks are tidewm's. tidewm stays first in
   `XDG_CURRENT_DESKTOP`, so the portals and the shell are tidewm's too;
-  `tidesway` there is how the shell can tell the two apart. Still being
-  built: `install/tide-setup` installs the entry where it finds
-  `tidesway` and builds none, and no one has logged in to it yet.
+  `tidesway` there is how the shell can tell the two apart.
+  `install/tide-setup --tidesway` builds tidesway from its latest `main`
+  into `/opt/tidesway`, as tidewm's is built, with meson and the wlroots
+  it needs where the distro has none (maintainer, 2026-11-15). Only its
+  `tidesway` command is linked onto PATH: its `sway` and the rest stay in
+  the prefix. Without the flag, a tidesway already there is kept. No one
+  has logged in to it yet.
 
 ### 5.4 Guards that keep it that way
 

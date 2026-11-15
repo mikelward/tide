@@ -93,7 +93,7 @@
 #
 # Usage:
 #     install/tide-setup [--no-install] [--no-sudo] [--ignore-errors]
-#                      [--no-build-hyprland] [--no-tidewm]
+#                      [--no-build-hyprland] [--no-tidewm] [--tidesway]
 #                      [--dm tide|sddm|gdm|keep | --greeter | --no-greeter]
 #                      [--splash] [--github PREFIX]
 #                      [-v | --verbose] [-h | --help]
@@ -104,6 +104,10 @@
 # the latest.
 # --no-build-hyprland leaves Hyprland to the distro even when it's too old.
 # --no-tidewm leaves tidewm out: nothing of tidewm's is touched.
+# --tidesway builds tidesway, tide's fork of sway, from its latest main into
+# /opt/tidesway, as tidewm is built, so the tide (tidesway) session, whose
+# windows have rounded corners, shows at the login screen. Without it,
+# a tidesway already there is kept, not updated.
 # --dm picks the login screen: tide (greetd running tide's greeter), sddm,
 # gdm, or keep (the default). --greeter is --dm=tide; the rest of this says
 # --greeter for both. --dm=sddm or --dm=gdm installs it if it isn't, and makes
@@ -148,6 +152,7 @@ UPGRADE=no
 # may still be too old, so a source build's links stay in front of it.
 UPGRADE_FAILED_PKGS=
 BUILD_TIDEWM=yes
+BUILD_TIDESWAY=no
 # Where GitHub's repos come from: empty for github.com itself (see
 # git_github).
 GITHUB_PREFIX="${GITHUB_PREFIX:-}"
@@ -267,6 +272,33 @@ TIDEWM_PACMAN_DEPS="base-devel git wlroots0.20 wayland wayland-protocols libinpu
 # install/wlroots' WLROOTS_DNF_DEPS, to build it.
 TIDEWM_DNF_DEPS="gcc make pkgconf-pkg-config git wayland-devel wayland-protocols-devel
     libinput-devel libxkbcommon-devel libxcb-devel xcb-util-wm-devel json-c-devel pcre2-devel
+    xorg-x11-server-Xwayland xdg-desktop-portal-wlr"
+# tidesway (github.com/mikelward/tidesway), tide's fork of sway, which
+# build_tidesway builds with --tidesway, for tide's tidesway session, which
+# rounds windows' corners. Its latest main, as tidewm's, into its own
+# prefix, with only its tidesway command linked onto PATH: its sway,
+# swaymsg and the rest stay in the prefix, so a sway of the distro's is
+# untouched. Built with meson, as tidesway's CI builds it, without
+# -Werror, as a newer compiler than CI's may warn, and without man pages.
+TIDESWAY_REPO=https://github.com/mikelward/tidesway.git
+TIDESWAY_BRANCH="${TIDESWAY_BRANCH:-main}"
+TIDESWAY_PREFIX="${TIDESWAY_PREFIX:-/opt/tidesway}"
+TIDESWAY_SRC="${TIDESWAY_SRC:-$HOME/src/tidesway-build}"
+TIDESWAY_BIN_DIR="${TIDESWAY_BIN_DIR:-/usr/local/bin}"
+TIDESWAY_COMMANDS=tidesway
+TIDESWAY_MESON_OPTIONS="-Dbuildtype=release -Dwerror=false -Dman-pages=disabled"
+# What the build needs, from tidesway's CI, plus what tidewm's session
+# runs with: Xwayland and wlroots' portal.
+TIDESWAY_APT_DEPS="build-essential meson ninja-build pkgconf git libwlroots-0.20-dev libwayland-dev
+    wayland-protocols libinput-dev libudev-dev libxkbcommon-dev libxcb1-dev libxcb-icccm4-dev
+    libjson-c-dev libpcre2-dev libpango1.0-dev libcairo2-dev libgdk-pixbuf-2.0-dev libpixman-1-dev
+    libevdev-dev libdrm-dev libsystemd-dev xwayland xdg-desktop-portal-wlr"
+TIDESWAY_PACMAN_DEPS="base-devel git meson wlroots0.20 wayland wayland-protocols libinput libxkbcommon
+    libxcb xcb-util-wm json-c pcre2 pango cairo gdk-pixbuf2 pixman libevdev libdrm systemd-libs
+    pkgconf xorg-xwayland xdg-desktop-portal-wlr"
+TIDESWAY_DNF_DEPS="gcc meson ninja-build pkgconf-pkg-config git wayland-devel wayland-protocols-devel
+    libinput-devel systemd-devel libxkbcommon-devel libxcb-devel xcb-util-wm-devel json-c-devel
+    pcre2-devel pango-devel cairo-devel gdk-pixbuf2-devel pixman-devel libevdev-devel libdrm-devel
     xorg-x11-server-Xwayland xdg-desktop-portal-wlr"
 # wlroots 0.20 from source, where the distro has none.
 # shellcheck source-path=SCRIPTDIR source=wlroots
@@ -676,6 +708,8 @@ while test $# -gt 0; do
         --upgrade) UPGRADE=yes ;;
         --no-upgrade) UPGRADE=no ;;
         --no-tidewm) BUILD_TIDEWM=no ;;
+        --tidesway) BUILD_TIDESWAY=yes ;;
+        --no-tidesway) BUILD_TIDESWAY=no ;;
         --greeter) GREETER=yes ;;
         --no-greeter) GREETER=no ;;
         --splash) SPLASH=yes ;;
@@ -2338,6 +2372,205 @@ remove_old_tidewm_builds() {
     done
 }
 
+# --- tidesway from source ---
+
+# tidesway_build_deps prints the packages tidesway's build needs here, with
+# what building wlroots needs where apt has no wlroots 0.20, as
+# tidewm_build_deps does for tidewm.
+tidesway_build_deps() {
+    case "$(detect_os)" in
+        debian)
+            if ! _cand=$(apt_candidates libwlroots-0.20-dev); then
+                warn "couldn't ask apt whether it has wlroots 0.20, which tidesway builds against"
+                return 1
+            fi
+            case "$_cand" in
+                "libwlroots-0.20-dev "[0-9]*) echo "$TIDESWAY_APT_DEPS" ;;
+                *)
+                    detail "apt has no libwlroots-0.20-dev here, so wlroots is built for tidesway"
+                    echo "$TIDESWAY_APT_DEPS" | sed 's/ libwlroots-0\.20-dev / /'
+                    echo "$WLROOTS_APT_DEPS"
+                    ;;
+            esac
+            ;;
+        arch) echo "$TIDESWAY_PACMAN_DEPS" ;;
+        redhat)
+            if ! _wlr=$(dnf repoquery -q --whatprovides 'pkgconfig(wlroots-0.20)' --queryformat '%{name}
+'); then
+                warn "couldn't ask dnf which package has wlroots 0.20, which tidesway builds against"
+                return 1
+            fi
+            _wlr=$(printf '%s\n' "$_wlr" | sed -n '/./{p;q;}')
+            if test -z "$_wlr"; then
+                detail "dnf has no wlroots 0.20, so wlroots is built for tidesway"
+                echo "$TIDESWAY_DNF_DEPS"
+                echo "$WLROOTS_DNF_DEPS"
+            else
+                echo "$TIDESWAY_DNF_DEPS $_wlr"
+            fi
+            ;;
+        *)
+            warn "tidesway isn't built on $(detect_os): setup builds it only on Debian, Ubuntu, Fedora and Arch"
+            return 1
+            ;;
+    esac
+}
+
+# tidesway_main_commit prints the commit $TIDESWAY_BRANCH is at on GitHub,
+# or fails, saying why.
+tidesway_main_commit() {
+    if ! _ts_ls=$(git_github ls-remote "$TIDESWAY_REPO" "refs/heads/$TIDESWAY_BRANCH"); then
+        warn "couldn't ask GitHub which commit tidesway's $TIDESWAY_BRANCH is at"
+        return 1
+    fi
+    _ts_commit=$(printf '%s\n' "$_ts_ls" | sed -n '1s/[[:space:]].*//p')
+    case "$_ts_commit" in
+        '' | *[!0-9a-f]*)
+            warn "tidesway has no branch $TIDESWAY_BRANCH on GitHub"
+            return 1
+            ;;
+    esac
+    if test "${#_ts_commit}" -ne 40; then
+        warn "GitHub named $_ts_commit as tidesway's $TIDESWAY_BRANCH, which isn't a commit"
+        return 1
+    fi
+    printf '%s\n' "$_ts_commit"
+}
+
+# build_tidesway builds the commit tidesway's $TIDESWAY_BRANCH is at into
+# its own directory under $TIDESWAY_PREFIX, as this user, with meson, then
+# hands it to root and links tidesway onto PATH, as build_tidewm does
+# tidewm. A rerun with nothing changed only relinks; without GitHub, a
+# build that's current is kept.
+build_tidesway() {
+    deps=$(tidesway_build_deps) || return 1
+    pkg_begin "$(pkg_manager)" "Installing tidesway's build dependencies"
+    deps_status=0
+    # shellcheck disable=SC2086  # word-split the package list
+    install_all $deps || deps_status=$?
+    pkg_end
+    if test "$deps_status" -ne 0; then
+        # shellcheck disable=SC2086  # word-split the package list
+        warn "could not install tidesway's build dependencies:$(printf ' %s' $not_installed)"
+        return 1
+    fi
+    if ! ts_commit=$(tidesway_main_commit); then
+        ts_dir=
+        if test -L "$TIDESWAY_PREFIX/current"; then
+            ts_dir="$TIDESWAY_PREFIX/$(readlink "$TIDESWAY_PREFIX/current")"
+        fi
+        ts_marker="$ts_dir/setup-tide-build"
+        if test -z "$ts_dir" || ! test -f "$ts_marker"; then
+            warn "there's no build of tidesway to keep, so it isn't built"
+            return 1
+        fi
+        warn "keeping the tidesway build in $ts_dir, which may be behind its $TIDESWAY_BRANCH"
+        link_tidesway
+        return
+    fi
+    ts_short=$(printf '%s\n' "$ts_commit" | cut -c1-12)
+    ts_wlroots=no
+    if wlroots_wanted; then
+        ts_wlroots=yes
+    fi
+    ts_record=$(printf '%s\n' "$TIDESWAY_REPO $TIDESWAY_BRANCH $ts_commit" "meson $TIDESWAY_MESON_OPTIONS"
+        test "$ts_wlroots" = no || wlroots_record)
+    ts_sum=$(printf '%s\n' "$ts_record" | cksum | cut -d' ' -f1)
+    ts_dir="$TIDESWAY_PREFIX/$(printf '%s\n' "$TIDESWAY_BRANCH" | tr / -)-$ts_short-$ts_sum"
+    ts_marker="$ts_dir/setup-tide-build"
+    if test -f "$ts_marker"; then
+        detail "tidesway's $TIDESWAY_BRANCH, at $ts_short, is already built in $ts_dir"
+    else
+        info "Building tidesway's $TIDESWAY_BRANCH, at $ts_short, from source"
+        src="$TIDESWAY_SRC/tidesway"
+        if ! rm -rf "$src" || { test -e "$ts_dir" && ! sudo_or_warn rm -rf "$ts_dir"; }; then
+            warn "couldn't remove the old tidesway sources or partial build in $src and $ts_dir; not building"
+            return 1
+        fi
+        mkdir -p "$TIDESWAY_SRC" || return 1
+        make_build_dir "$ts_dir" || return 1
+        start_build_log tidesway || return 1
+        build_logged tidesway git_github clone -c advice.detachedHead=false --quiet --depth 1 --branch "$TIDESWAY_BRANCH" "$TIDESWAY_REPO" "$src" || return 1
+        commit=$(git -C "$src" rev-parse HEAD) || return 1
+        if test "$commit" != "$ts_commit"; then
+            detail "tidesway's $TIDESWAY_BRANCH moved to $commit; checking out $ts_commit"
+            build_logged tidesway git_github -C "$src" fetch --quiet --depth 1 origin "$ts_commit" \
+                && build_logged tidesway git_github -C "$src" checkout --quiet "$ts_commit" \
+                && commit=$(git -C "$src" rev-parse HEAD)
+        fi
+        if test "$commit" != "$ts_commit"; then
+            warn "couldn't check out tidesway's $ts_commit, the commit its $TIDESWAY_BRANCH was at; not building it"
+            rm -rf "$src" || warn "couldn't remove the clone in $src"
+            return 1
+        fi
+        ts_env=
+        if test "$ts_wlroots" = yes; then
+            build_wlroots "$ts_dir" "$TIDESWAY_SRC" || return 1
+            ts_env="wlroots_env $ts_dir"
+        fi
+        # shellcheck disable=SC2086  # $ts_env is a command and the options words, split on purpose
+        build_logged tidesway $ts_env meson setup "$src/build" "$src" --prefix="$ts_dir" $TIDESWAY_MESON_OPTIONS \
+            && build_logged tidesway $ts_env meson compile -C "$src/build" \
+            && build_logged tidesway $ts_env meson install -C "$src/build" || return 1
+        info "Built tidesway's $TIDESWAY_BRANCH, at $ts_short; the build's output is in $build_log"
+        printf '%s\n' "$ts_record" > "$ts_marker" || {
+            warn "couldn't write $ts_marker"
+            return 1
+        }
+    fi
+    link_tidesway || return 1
+    remove_old_tidesway_builds
+}
+
+# link_tidesway hands $ts_dir to root, points $TIDESWAY_PREFIX/current at
+# it, then makes sure tidesway's link goes through it, as link_tidewm does.
+link_tidesway() {
+    for cmd in $TIDESWAY_COMMANDS; do
+        if ! test -x "$ts_dir/bin/$cmd"; then
+            warn "$ts_dir/bin/$cmd is missing; remove $ts_marker to rebuild"
+            return 1
+        fi
+    done
+    seal_build "$ts_dir" "$TIDESWAY_COMMANDS" || return 1
+    current="$TIDESWAY_PREFIX/current"
+    if ! sudo_or_warn ln -sfn "${ts_dir##*/}" "$current.new" || ! sudo_or_warn mv -Tf "$current.new" "$current"; then
+        warn "couldn't point $current at $ts_dir"
+        if test -L "$current.new"; then
+            sudo_or_warn rm -f "$current.new" || warn "couldn't remove $current.new"
+        fi
+        return 1
+    fi
+    for cmd in $TIDESWAY_COMMANDS; do
+        link="$TIDESWAY_BIN_DIR/$cmd"
+        test "$(readlink "$link")" != "$current/bin/$cmd" || continue
+        if test -e "$link" || test -L "$link"; then
+            case "$(readlink "$link")" in
+                "$TIDESWAY_PREFIX"/*) ;;
+                *)
+                    warn "NOT LINKING $cmd: $link is already there, and setup didn't make it; remove it to use this build"
+                    continue
+                    ;;
+            esac
+        fi
+        if ! sudo_or_warn ln -sfn "$current/bin/$cmd" "$link"; then
+            warn "COULDN'T LINK $cmd INTO $TIDESWAY_BIN_DIR: the tide (tidesway) session won't show at the login screen; link $current/bin/$cmd onto its PATH yourself"
+        fi
+    done
+}
+
+# Older builds of setup's, by their marker, now that current points
+# elsewhere.
+remove_old_tidesway_builds() {
+    for old in "$TIDESWAY_PREFIX"/*-[0-9]*/; do
+        old=${old%/}
+        if ! test -d "$old" || test -L "$old" || test "$old" = "$ts_dir" \
+            || ! test -f "$old/setup-tide-build"; then
+            continue
+        fi
+        sudo_or_warn rm -rf "$old" || warn "couldn't remove the old tidesway build in $old"
+    done
+}
+
 # --- fcitx5 and tide's accents ---
 
 # fcitx5 offers a held letter's accents, through tide-accents, in
@@ -2929,10 +3162,12 @@ check_compositors() {
     elif test "$BUILD_TIDEWM" = yes; then
         warn "tidewm isn't installed, so the tide (tidewm) session won't show at the login screen"
     fi
-    # tide (tidesway) where a tidesway is installed: setup builds none yet,
-    # so one that's missing isn't said.
+    # tide (tidesway) where a tidesway is installed; one that's missing is
+    # said only where --tidesway asked for it.
     if session_command tidesway; then
         SESSIONS="${SESSIONS:+$SESSIONS }tide-tidesway"
+    elif test "$BUILD_TIDESWAY" = yes; then
+        warn "tidesway isn't installed, so the tide (tidesway) session won't show at the login screen"
     fi
     remove_unrunnable_entries
     if test -z "$SESSIONS"; then
@@ -7437,6 +7672,9 @@ else
     # neither, there's no session at all, which check_compositors says.
     if test "$BUILD_TIDEWM" = yes; then
         build_tidewm || warn "tidewm couldn't be built; rerun $SETUP_COMMAND to retry"
+    fi
+    if test "$BUILD_TIDESWAY" = yes; then
+        build_tidesway || warn "tidesway couldn't be built; rerun $SETUP_COMMAND --tidesway to retry"
     fi
     if test "$BUILD_NOW" = yes; then
         build_hyprland || hyprland_build_kept \
