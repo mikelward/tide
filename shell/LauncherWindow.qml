@@ -277,8 +277,9 @@ PanelWindow {
         } else {
             // Ctrl+Enter names the workspace first (SPEC.md §8.2), and the
             // prompt launches with `tide launch --workspace NAME`: the focus
-            // guard takes the app's first window there as it opens. From
-            // home, Enter asks the same, as `tide launch` hands it over.
+            // guard takes the app's first window there as it opens. From a
+            // workspace that asks, Enter asks the same, as `tide launch`
+            // hands it over.
             // On Plasma, kstart reads an app's working directory from its
             // entry, but a desktop action runs as a bare command, so it's
             // started from the entry's directory as under tide.

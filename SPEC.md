@@ -102,9 +102,10 @@ names in brackets.
   all of them.
 - **Named workspaces**, not numbered ones. The home workspace, **in** by
   default, holds mail, chat, calendar and music; a few standing ones are
-  always listed; every other workspace is named for its work, and a window
-  that opens on home asks which (§6.5). Home's mail, chat and calendar are
-  pinned there, so a close key leaves them open.
+  always listed; every other workspace is named for its work. A new window
+  on a workspace you choose can ask which workspace it goes to (§6.5).
+  Home's mail, chat and calendar are pinned there, so a close key leaves
+  them open.
 - One full-width bar: every workspace on the left, by name, with
   **urgency** shown on the workspace that wants attention. The tray,
   network, volume, Bluetooth, power and notifications sit on the right.
@@ -1846,10 +1847,9 @@ in how long they last and what stays visible:
   matched to windows the same way, through the same lookups.
 - Both are optional. A workspace it doesn't list, or a field it leaves
   out, doesn't ask and pins nothing.
-- With no `workspaceSettings` in either file, it's
-  `{ HOME: { "askForName": true } }`, home by its name, so home asks, as it
-  always has, and nothing is pinned. Once either file has one, home asks
-  only if it says so.
+- With no `workspaceSettings` in either file, no workspace asks and
+  nothing is pinned. Home used to ask by default. A prompt for every new
+  window got in the way, so now it's off until you turn it on.
 - A key that isn't a workspace's name (§6.5's rules, no space around it),
   one named twice ignoring case, a field that isn't one of the two, an
   `askForName` that isn't `true` or `false`, or a `pinnedApps` that isn't a
@@ -1860,7 +1860,7 @@ in how long they last and what stays visible:
 **A new window on a workspace that asks goes to a workspace.**
 
 - When any other app's window opens on a workspace whose `askForName` is
-  on, home by default, including a link a browser opens as a new window,
+  on, including a link a browser opens as a new window,
   tide opens the name prompt for it. A home app's window never asks: it
   goes home by its rule, wherever you are.
   - This holds only for a window that would take focus anyway (§14.1): one
@@ -1919,8 +1919,8 @@ in how long they last and what stays visible:
   `TIDE_WORKSPACE` (below), and its first window goes to that workspace
   through the launch's grant (§14.3). Esc there cancels the launch, and
   nothing opens. A home app launches straight away.
-  - A launch from a workspace that doesn't ask, home included once its
-    `askForName` is off, launches where you are, with no prompt.
+  - A launch from a workspace that doesn't ask launches where you are,
+    with no prompt.
   - Enter on a workspace that asks, home say, launches there. The window
     opens there, so it would ask as a new window there does. The shell
     notes the launch's classes instead, as it answers, and the first window
@@ -1936,7 +1936,7 @@ in how long they last and what stays visible:
   - It learns which workspaces ask from `tide-workspaces.lua`'s
     `ask_for_name`, which the shell writes from each one's `askForName`,
     matching a name ignoring case. A file from a shell before that setting
-    has none, and then home asks, as it did.
+    has none, and then none asks.
   - A key bound to a launcher script grants `--app '*'`, which names no
     app, so for the prompt that launch is looked up too: `conf`'s
     `Super+C`, `runenv google-chat`, names `google-chat` and its
@@ -3286,8 +3286,8 @@ See [`switcher.png`](docs/mocks/switcher.png).
     (§6.5) first, and the app's first window goes to the workspace named
     there. It asks for one of home's apps too, which may then name home. A quick action opens no window, so there `Ctrl+Enter` does what
     `Enter` does.
-  - From home, `Enter` prompts the same way, unless the app is one of
-    home's (§6.5).
+  - From a workspace that asks (§6.5), `Enter` prompts the same way,
+    unless the app is one of home's.
     - The focus guard moves the app's first window there as it opens, and
       focus follows (§14.3). Nothing switches before the app starts, so
       nothing you do in between is overridden.
@@ -5991,9 +5991,9 @@ settings NAME ARGS...`; most answer why not, or an empty string.
     naming it, and the rest of the list still applies, unlike the other
     settings here. tide for macOS reads the same key.
   - `workspaceSettings` is each workspace's `askForName` and `pinnedApps`
-    (§6.5). With neither file setting it, home asks for a name and nothing
-    is pinned. `conf`'s shared file pins mail, chat and calendar on `in`,
-    which asks.
+    (§6.5). With neither file setting it, no workspace asks for a name and
+    nothing is pinned. `conf`'s shared file pins mail, chat and calendar on
+    `in`, and turns on its `askForName`.
   - The lists are lists, so a `.local` file's replaces the shared one whole
     (§16.1). So does a `.local` file's `workspaceSettings`, an object, so a
     machine's is exactly what it says.
@@ -6006,9 +6006,8 @@ settings NAME ARGS...`; most answer why not, or an empty string.
     `askForName`, and its pinned apps, a list with a bin per entry and a
     field that asks for a program or web address, such as `gmail`.
     - The first change copies the `workspaceSettings` in effect into the
-      `.local` file, as a list's first change does. With neither file
-      setting it, that's home asking, so turning on another workspace's
-      switch leaves home's on.
+      `.local` file, as a list's first change does, so changing one
+      workspace leaves the others as they were.
   - Each entry has a bin that takes it out, and the standing workspaces and
     the patterns, whose order counts, have arrows that move one. The first
     standing workspace is marked as home, so moving another first makes it

@@ -93,15 +93,25 @@ test("a bad setting is an error at load naming it, and the last good settings st
     assert.match(parseWorkspaceSettings('{"standing": []}').error, /standing/);
 });
 
-test("with no workspaceSettings, home asks for a name and nothing is pinned", () => {
+test("with no workspaceSettings, no workspace asks for a name and nothing is pinned", () => {
     const { settings } = loadWorkspaceSettings('{"standing": ["home", "in"]}', null);
     assert.equal(settings.workspaceSettings, null);
-    assert.deepEqual(workspaceSettingsOf(settings), { home: { askForName: true } });
+    assert.deepEqual(workspaceSettingsOf(settings), {});
+    assert.deepEqual(workspaceSetting(settings, "home"), { askForName: false, pinnedApps: [] }, "not even home");
+    assert.equal(asksForName(settings, "home"), false);
+    assert.equal(asksForName(settings, "home@DP-2"), false);
+    assert.equal(asksForName(settings, "in"), false);
+    assert.deepEqual(askingWorkspaces(DEFAULT_SETTINGS), []);
+});
+
+test("home asks once its askForName is on, matched ignoring case and on any monitor", () => {
+    const { settings, errors } = loadWorkspaceSettings('{"standing": ["home", "in"], "workspaceSettings": {"home": {"askForName": true}}}', null);
+    assert.deepEqual(errors, []);
     assert.deepEqual(workspaceSetting(settings, "home"), { askForName: true, pinnedApps: [] });
     assert.equal(asksForName(settings, "HOME"), true, "a name matches ignoring case");
     assert.equal(asksForName(settings, "home@DP-2"), true, "a monitor's part is its workspace");
     assert.equal(asksForName(settings, "in"), false);
-    assert.deepEqual(askingWorkspaces(DEFAULT_SETTINGS), ["in"]);
+    assert.deepEqual(askingWorkspaces(settings), ["home"]);
 });
 
 test("workspaceSettings sets each workspace's askForName and pinnedApps, and what it leaves out is off", () => {
@@ -182,7 +192,7 @@ test("tide-workspaces.lua lists the workspaces that ask for a name and each one'
     assert.ok(lua.includes('    pinned = {\n        {\n            workspace = "in",\n            classes = {\n                "gmail",\n            },\n'
         + '            sites = {\n                "chat.google.com",\n            },\n        },\n    },\n'), lua);
     const none = workspacesLua(DEFAULT_SETTINGS);
-    assert.ok(none.includes('    ask_for_name = {\n        "in",\n    },\n'), none);
+    assert.ok(none.includes("    ask_for_name = {},\n"), none);
     assert.ok(none.includes("    pinned = {},\n"), none);
     assert.ok(workspacesLua({ standing: ["in"], workspaceSettings: {} }).includes("    ask_for_name = {},\n"));
 });
@@ -409,15 +419,16 @@ test("the window judged is the one at its address, wherever focus is now", () =>
     assert.equal(clientAt(null, "55aa03"), null);
 });
 
-test("a window first focused on home asks for a name, unless it shouldn't", () => {
+test("a window first focused on a workspace that asks asks for a name, unless it shouldn't", () => {
     const client = (extra) => Object.assign({ address: "0x1", class: "kitty", title: "~", floating: false, workspace: { id: -1338, name: "in" } }, extra);
-    const settings = { standing: ["in", "re"], inApps: [] };
+    assert.equal(promptWanted(client({}), { standing: ["in", "re"], inApps: [] }), false, "home doesn't ask with no workspaceSettings");
+    const settings = { standing: ["in", "re"], inApps: [], workspaceSettings: { in: { askForName: true } } };
     assert.equal(promptWanted(client({}), settings), true);
     assert.equal(promptWanted(client({ workspace: { id: -1339, name: "docs" } }), settings), false, "elsewhere");
     assert.equal(promptWanted(client({ workspace: { id: -1340, name: "in@DP-2" } }), settings), true, "home's part on another monitor");
     assert.equal(promptWanted(client({ floating: true }), settings), false, "a dialog");
     assert.equal(promptWanted(client({ class: "", title: "" }), settings), false, "a status popup");
-    assert.equal(promptWanted(client({ class: "chrome-chat.google.com__-Default" }), { standing: ["in"], inApps: ["chat.google.com"] }), false, "a home app");
+    assert.equal(promptWanted(client({ class: "chrome-chat.google.com__-Default" }), Object.assign({}, settings, { inApps: ["chat.google.com"] })), false, "a home app");
     assert.equal(promptWanted(null, settings), false);
 });
 

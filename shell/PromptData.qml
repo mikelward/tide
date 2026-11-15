@@ -11,10 +11,9 @@ import "lib/workspaces.mjs" as Ws
 
 // The name prompt's requests (SPEC.md §6.5), one shown at a time by
 // NamePrompt.qml, the rest waiting their turn (Names.promptQueued):
-//   - a new window on a workspace whose askForName is on, home by default,
-//     as it's first focused, unless it's a dialog, a status popup or one
-//     of home's apps (Names.promptWanted). One that takes focus as it
-//     opens asks at once; one the focus guard left waiting asks when you
+//   - a new window on a workspace whose askForName is on, as it's first
+//     focused, unless it's a dialog, a status popup or one of home's apps
+//     (Names.promptWanted). One that takes focus as it opens asks at once; one the focus guard left waiting asks when you
 //     go to it. One a launch sent to such a workspace opens there and
 //     doesn't ask again (Ws.windowPrompt);
 //   - Super+Return, for a workspace to go to, moving no window, so it
@@ -43,9 +42,8 @@ Singleton {
     // answer that comes after it closed is dropped (Names.windowAnswered).
     // tidewm's focus event carries the window, so it's judged at once.
     property var windows: Names.NO_WINDOWS
-    // Launches answered with a workspace that asks, home by default
-    // (Ws.homeLaunched), so their windows, which open there, don't ask
-    // again.
+    // Launches answered with a workspace that asks (Ws.homeLaunched), so
+    // their windows, which open there, don't ask again.
     property var homeLaunches: Ws.NO_HOME_LAUNCHES
 
     function ask(request) {

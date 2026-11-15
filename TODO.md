@@ -7,6 +7,12 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **A `tide-workspaces.lua` with no `ask_for_name` asks nowhere**
+  (2026-11-15, SPEC.md §6.5): only a shell from before `askForName` writes
+  one, and `tide launch` used to take it as home asking. Now that no
+  workspace asks by default, it takes it as none, so `home_workspace` went.
+  The alternative is keeping home asking for an old shell's file.
+  Reversible: `bin/tide`'s `asks_for_name`.
 - **On Plasma the shell sets tide's decoration only where it's already
   chosen** (2026-11-15, SPEC.md §8.5): it never writes KWin's choice of
   decoration, where tide-kde's `make setup` chooses it once installed. A
@@ -410,7 +416,7 @@ once you have agreed with it or reversed it.
   (2026-11-04), as the lists do, rather than merging per workspace: the
   page copies the settings in effect on its first change, so a machine's
   file says exactly what it gets. The cost: a hand-written local entry for
-  one workspace drops the shared ones, home's `askForName` included. The
+  one workspace drops the shared ones, an `askForName` included. The
   alternative is merging by workspace name and then by field. Reversible:
   `loadWorkspaceSettings`.
 - **A window opening on a monitor's part of a workspace that asks asks
@@ -750,19 +756,20 @@ once you have agreed with it or reversed it.
 - [ ] **A click on the name prompt's backdrop does nothing.** The launcher
   closes on one, but here closing means Esc, which closes the window. It's
   one MouseArea in `NamePrompt.qml`.
-- [ ] **A window asks for a name when it's first focused on home**, judged
+- [ ] **A window asks for a name when it's first focused on a workspace
+  that asks**, judged
   from `hyprctl clients -j` then, by its address, rather than as it opens. That
   covers a window the guard focuses as it opens and one it left waiting
-  with one rule. It also means a window moved to home before it was ever
+  with one rule. It also means a window moved there before it was ever
   focused asks. It's `PromptData.qml`'s event handler.
 - [ ] **A launch's prompt starts empty.** There's no window to take a short
   name from. The app's name would be the other choice. It's
   `NamePrompt.qml`'s `suggested`.
 - [ ] **`tide launch` reads the focused workspace before granting focus**,
-  to tell a launch from home, which asks for a name and grants nothing,
-  from the rest. That's one `hyprctl` call, a few ms, before a key press
-  can cancel the grant. Reading it after the grant would leave a grant
-  behind for every launch from home.
+  to tell a launch from a workspace that asks, which asks for a name and
+  grants nothing, from the rest. That's one `hyprctl` call, a few ms,
+  before a key press can cancel the grant. Reading it after the grant
+  would leave a grant behind for every such launch.
 
 - [ ] **An `inApps` entry shaped like a host is a class and a site both,
   and starts nothing.** SPEC.md §6.5 kept `calendar.google.com` working
@@ -2344,10 +2351,12 @@ Super+Return (`qs -c tide ipc call prompt go`) and Super+Shift+Return
 workspace keys in conf; Alt+Tab's previous master; the switcher, its four
 tabs, and Super+A's Attention tab in place of the attention cycle. To check on a live session: home exists
 from the first frame and survives a config reload; a standing workspace is
-made by clicking it on the bar; a rename of home is undone; the prompt
-opens for a window you open on home and for one first focused there, not
-for a dialog, and Enter, Esc and an existing name do what SPEC.md §6.5
-says; a launch from home asks first, and Esc launches nothing; each
+made by clicking it on the bar; a rename of home is undone; with home's
+"New windows ask for a workspace" on, the prompt opens for a window you
+open on home and for one first focused there, not for a dialog, and Enter,
+Esc and an existing name do what SPEC.md §6.5 says; a launch from home
+asks first, and Esc launches nothing; with it off, as by default, neither
+asks; each
 switcher key opens its tab, Tab moves between them, Enter on a window
 or workspace goes there.
 

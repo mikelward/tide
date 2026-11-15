@@ -50,12 +50,14 @@ test("a workspace's switch and pinned apps go to the local file, the settings in
     const r = editedWorkspace(SHARED, '{"muted": ["slack"]}', "re", w => withAskForName(w, true));
     assert.deepEqual(JSON.parse(r.text), {
         muted: ["slack"],
-        workspaceSettings: { in: { askForName: true }, re: { askForName: true, pinnedApps: [] } },
-    }, "home keeps asking, as it did with no workspaceSettings");
+        workspaceSettings: { re: { askForName: true, pinnedApps: [] } },
+    }, "home doesn't start asking, as it didn't with no workspaceSettings");
     const settings = loadWorkspaceSettings(SHARED, r.text).settings;
     assert.equal(workspaceSetting(settings, "re").askForName, true);
-    const off = editedWorkspace(SHARED, r.text, "IN", w => withAskForName(w, false));
-    assert.deepEqual(JSON.parse(off.text).workspaceSettings.in, { askForName: false, pinnedApps: [] }, "matched ignoring case, keeping its own");
+    const off = editedWorkspace(SHARED, r.text, "RE", w => withAskForName(w, false));
+    assert.deepEqual(JSON.parse(off.text).workspaceSettings, { re: { askForName: false, pinnedApps: [] } }, "matched ignoring case, keeping its own");
+    const on = editedWorkspace(SHARED, null, "in", w => withAskForName(w, true));
+    assert.equal(workspaceSetting(loadWorkspaceSettings(SHARED, on.text).settings, "in").askForName, true, "home asks once its switch is on");
     const pinned = editedWorkspace(SHARED, off.text, "in", w => withPinned(w, " gmail "));
     assert.deepEqual(pinned.setting, { askForName: false, pinnedApps: ["gmail"] });
     assert.match(editedWorkspace(SHARED, pinned.text, "in", w => withPinned(w, "Gmail")).error, /Gmail is already in the list/);

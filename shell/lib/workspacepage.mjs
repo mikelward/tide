@@ -49,10 +49,10 @@ function localObject(localText) {
 // `name` as `change` makes them of the ones in effect ({askForName,
 // pinnedApps}, workspaceSetting's): {text, setting}, or {error}. As a list
 // does, the first change copies the workspaceSettings in effect into the
-// local file, since a local one replaces the shared one whole (§16.1): with
-// neither file setting it, that's home asking for a name, so turning on
-// another workspace's switch leaves home's on. An entry is found by its
-// name ignoring case, and keeps the case it has.
+// local file, since a local one replaces the shared one whole (§16.1), so
+// changing one workspace leaves the others as they were. With neither file
+// setting it, there's none to copy. An entry is found by its name ignoring
+// case, and keeps the case it has.
 export function editedWorkspace(sharedText, localText, name, change) {
     const loaded = loadWorkspaceSettings(sharedText, localText);
     if (loaded.errors.length > 0) {
