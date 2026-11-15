@@ -3,8 +3,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    DESKTOPS_COMMAND, WINDOWS_COMMAND, infoCommand, activateCommand, goCommand, jsonLines, parseDesktops, parseWindows, parseInfo,
-    launcherWindows, launcherWorkspaces,
+    DESKTOPS_COMMAND, WINDOWS_COMMAND, ATTENTION_COMMAND, infoCommand, activateCommand, goCommand, jsonLines, parseDesktops, parseWindows,
+    parseInfo, parseAttention, launcherWindows, launcherWorkspaces,
 } from "./kwin.mjs";
 
 const D1 = "12ff2cac-c6ec-42cb-870c-68a2adeded1d";
@@ -90,4 +90,39 @@ test("a window on every desktop counts on each", () => {
     const windows = parseWindows(MATCH);
     const infos = parseInfo([info("kitty", []), info("firefox", [D2])].join("\n"), [SHELL, FIREFOX]);
     assert.deepEqual(launcherWorkspaces(desktops, current, windows, infos).map((w) => w.count), [1, 2]);
+});
+
+// What plasmashell's evaluateScript gave, through busctl, for what tide on
+// KDE wrote.
+function saved(text) {
+    return `{"type":"s","data":[${JSON.stringify(text)}]}`;
+}
+
+test("the windows wanting attention are what tide on KDE keeps in plasmashell", () => {
+    assert.deepEqual(ATTENTION_COMMAND.slice(3, 9), ["call", "org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell", "evaluateScript", "s"]);
+    assert.match(ATTENTION_COMMAND[ATTENTION_COMMAND.length - 1], /currentConfigGroup = \["tide"\].*readConfig\("attention"/);
+    assert.deepEqual(parseAttention(saved(`${JSON.stringify([FIREFOX])}\n`)), [FIREFOX]);
+    assert.deepEqual(parseAttention(saved("[]")), []);
+    assert.deepEqual(parseAttention(saved("")), [], "no tide on KDE, none");
+    assert.throws(() => parseAttention(saved("{oops")), /aren't a list: \{oops/);
+    assert.throws(() => parseAttention(saved('{"a":1}')), /aren't a list/);
+});
+
+test("a window wanting attention is urgent, and so is its desktop", () => {
+    const { desktops, current } = parseDesktops(DESKTOPS);
+    const windows = parseWindows(MATCH);
+    const infos = parseInfo([info("kitty", [D1]), info("firefox", [D2])].join("\n"), [SHELL, FIREFOX]);
+    // One from a session before, which no window has now, is nothing
+    const attention = [FIREFOX, "{gone}"];
+    assert.deepEqual(launcherWindows(windows, infos, desktops, attention).map((w) => [w.title, w.urgent]),
+        [["shell", false], ["Some page — Firefox", true]]);
+    assert.deepEqual(launcherWorkspaces(desktops, current, windows, infos, attention).map((w) => [w.name, w.urgent]),
+        [["in", false], ["re", true]]);
+});
+
+test("a window on every desktop wanting attention marks none of them", () => {
+    const { desktops, current } = parseDesktops(DESKTOPS);
+    const windows = parseWindows(MATCH);
+    const infos = parseInfo([info("kitty", []), info("firefox", [D2])].join("\n"), [SHELL, FIREFOX]);
+    assert.deepEqual(launcherWorkspaces(desktops, current, windows, infos, [SHELL]).map((w) => w.urgent), [false, false]);
 });

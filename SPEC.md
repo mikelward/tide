@@ -3650,9 +3650,9 @@ on the tap of `Meta`.
   runs `qs -p ~/.config/quickshell/tide/kde.qml ipc call launcher
   toggle`. KWin has no global shortcut Quickshell can take, unlike
   Hyprland's.
-- **Tabs.** Apps, Workspaces, Windows and Actions. Attention is the focus
-  guard's (§14), which Plasma doesn't run, and so is muting an app's
-  windows (`Ctrl+M`).
+- **Tabs.** Apps, Workspaces, Windows, Attention and Actions. Muting an
+  app's windows (`Ctrl+M`) is tide's notifications' (§9), which Plasma
+  doesn't run.
   - `Ctrl+Enter` does what `Enter` does, and the footer leaves it out:
     there are no tide workspaces to open an app on.
   - **Workspaces** are KWin's virtual desktops, in its order, and **Windows**
@@ -3661,15 +3661,26 @@ on the tap of `Meta`.
     (`shell/lib/kwin.mjs`, `KWinData.qml`):
     `org.kde.KWin.VirtualDesktopManager`'s `desktops` and `current`, the
     `org.kde.krunner1` runner at `/WindowsRunner` with an empty query, and
-    `getWindowInfo` for each window's app and desktop, all in three
+    `getWindowInfo` for each window's app and desktop, in three
     processes. Enter sets `current`, or runs the window's match, which
     activates it.
   - KWin says nothing a launcher could listen to, so it reads them afresh
     each time it opens, and the tabs fill in a moment after.
   - The runner matches desktops too, by their bare IDs; only matches whose
     ID is a window's UUID, in braces, are windows (checked on KWin 6.7.5).
-  - tide on KDE (mikelward/tide-kde), a KWin script, tiles those windows
-    and names those desktops; the tabs need none of it.
+  - **Attention** lists the windows KWin marks as wanting attention:
+    those its focus stealing prevention keeps from taking focus, which
+    `setup-kde` turns on, and those that ask. A desktop with one is
+    marked on the Workspaces tab. KWin's D-Bus doesn't say which: neither
+    `getWindowInfo` nor the runner has such a field (KWin's
+    `dbusinterface.cpp`, `windowsrunnerinterface.cpp`). So tide on KDE, a
+    KWin script, which sees each window's `demandsAttention`, writes their
+    UUIDs as JSON to the desktop's settings in plasmashell, group `tide`,
+    key `attention`. The launcher reads them with plasmashell's
+    `evaluateScript`, in a fourth process beside the other three.
+    Without tide on KDE, it lists none.
+  - tide on KDE (mikelward/tide-kde) also tiles those windows and names
+    those desktops; the other tabs need none of it.
 - **Apps.** Every entry `XDG_CURRENT_DESKTOP=KDE` shows, so Plasma's own
   apps and System Settings, which `SETTINGS_APPS` (§8.2) drops only under
   tide.

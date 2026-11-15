@@ -11,9 +11,9 @@ import { windowEntry, windowMuted } from "./mute.mjs";
 // The tabs, in order.
 export const TABS = Object.freeze(["apps", "workspaces", "windows", "attention", "actions"]);
 
-// The tabs on KDE Plasma (SPEC.md §8.5): KWin's desktops and windows, but
-// no Attention, which is tide's focus guard's.
-export const PLASMA_TABS = Object.freeze(["apps", "workspaces", "windows", "actions"]);
+// The tabs on KDE Plasma (SPEC.md §8.5): KWin's desktops and windows, and
+// the windows KWin marks as wanting attention, as tide on KDE tells them.
+export const PLASMA_TABS = Object.freeze(["apps", "workspaces", "windows", "attention", "actions"]);
 
 // The tabs on Plasma when `plasma`, or else tide's.
 export function tabsFor(plasma) {
