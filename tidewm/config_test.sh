@@ -69,10 +69,12 @@ unknown=$(printf '%s\n' "$bindings" | while IFS= read -r c; do
 done | grep -vxE 'exec|kill|exit|layout|mfact|nmaster|zoom|focus|maximize|fullscreen|floating|workspace|move|movestack|resize|input|output|mode|reload|grant|dim|sticky|urgent|nop|rename|persist|unpersist|chvt|unlock|switch' || true)
 check "every binding runs commands tidewm knows${unknown:+: $unknown}" empty "$unknown"
 
+# A binding with no key, `none`, is left out: it's named for the Keyboard
+# shortcuts page to give it one.
 keys=$(awk '/^mode / { mode = $2 } /^}/ { mode = "" } $1 == "bindsym" {
     i = 2; flags = mode
     while ($i ~ /^--/) { if ($i == "--release" || $i == "--kept-open") flags = flags $i; i++ }
-    print (flags == "" ? "-" : flags) " " tolower($i) }' "$tmp/plain" | while read -r f combo; do
+    if ($i != "none") print (flags == "" ? "-" : flags) " " tolower($i) }' "$tmp/plain" | while read -r f combo; do
     printf '%s %s\n' "$f" "$(printf '%s\n' "$combo" | tr '+' '\n' | sort | tr '\n' '+')"
 done)
 dup=$(printf '%s\n' "$keys" | sort | uniq -d)
@@ -115,20 +117,29 @@ check "and no other binding has Super+Shift+R or Super+Ctrl+R" \
 
 # Every name hyprland.lua binds, so keys.json serves both sessions, but the
 # floating rules' key and the layout used last, which have no tidewm
-# command yet, and restore and the next window wanting attention, which
-# have no key by default, and tidewm names only a binding with a key.
-hnames=$(grep -oE '^ *bind\("[a-z0-9_]+"' "$hypr" | sed 's/.*"\(.*\)"/\1/' | sort -u | grep -vxE 'floating_rule|last_layout|restore|next_attention')
+# command yet.
+hnames=$(grep -oE '^ *bind\("[a-z0-9_]+"' "$hypr" | sed 's/.*"\(.*\)"/\1/' | sort -u | grep -vxE 'floating_rule|last_layout')
 tnames=$(sed -n 's/^bindsym .*--name=\([a-z0-9_]*\) .*/\1/p' "$cfg" | sort -u)
 missing=$(printf '%s\n' "$hnames" | grep -vxF "$tnames" || true)
 check "each of hyprland.lua's named bindings is here too${missing:+: $missing}" empty "$missing"
 
-# The next window wanting attention has no key, so the file gives your
-# own config its command, $next_attention: the shell's `attention next`,
-# or without the shell, the window tidewm marked urgent last. Run here
-# with stand-ins for qs and tide-msg on PATH.
-# shellcheck disable=SC2016 # $next_attention is the config's, not the shell's
-next_attention=$(sed -n 's/^set \$next_attention //p' "$cfg")
-check "the file sets \$next_attention" test -n "$next_attention"
+# Hyprland's bindings with no key have none here too, as tidewm's
+# `bindsym --name NAME none`, for the Keyboard shortcuts page to give one.
+for name in restore next_attention; do
+    check "$name has no key on Hyprland" \
+        test "$(grep -c "^bind(\"$name\", {}," "$hypr")" -eq 1
+    check "nor here, but it's named for the page to give it one" \
+        test "$(grep -c "^bindsym --name=$name none " "$tmp/named")" -eq 1
+done
+# Restore puts the window back in its tile from either, as Hyprland's.
+check "restore takes the window out of fullscreen and maximize" \
+    test "$(sed -n 's/^bindsym --name=restore none //p' "$tmp/named")" = "fullscreen disable; maximize disable"
+
+# The next window wanting attention: the shell's `attention next`, or
+# without the shell, the window tidewm marked urgent last. Run here with
+# stand-ins for qs and tide-msg on PATH.
+next_attention=$(sed -n 's/^bindsym --name=next_attention none exec //p' "$tmp/named")
+check "next_attention runs a command" test -n "$next_attention"
 check "which runs the shell's attention next" \
     contains "$next_attention" "qs -c tide ipc call attention next || "
 # shellcheck disable=SC2016 # the stand-ins' variables are their own
