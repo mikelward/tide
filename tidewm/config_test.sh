@@ -37,7 +37,7 @@ lines=$(awk '
     /^[[:space:]]*}[[:space:]]*$/ { inblock = 0; next }
     inblock == "input" { sub(/^[[:space:]]+/, ""); print "  " $0; next }
     inblock == "mode" { sub(/^[[:space:]]+/, ""); print; next }
-    /{[[:space:]]*$/ { inblock = $1; sub(/[[:space:]]*{[[:space:]]*$/, ""); print; next }
+    /[{][[:space:]]*$/ { inblock = $1; sub(/[[:space:]]*[{][[:space:]]*$/, ""); print; next }
     { print }' "$tmp/plain")
 
 bad=$(printf '%s\n' "$lines" | grep -v '^  ' | awk '{ print $1 }' | grep -vxE \
@@ -54,7 +54,7 @@ check "windows fade over 300 ms, as on Hyprland (not '$fade')" test "$fade" = "f
 shadows=$(printf '%s\n' "$lines" | awk '$1 == "shadows"' | tail -n 1)
 check "the focused window casts a shadow (shadows active, not '$shadows')" test "$shadows" = "shadows active"
 
-blocks=$(grep -E '{[[:space:]]*$' "$cfg" | grep -vE '^(input|mode) ' || true)
+blocks=$(grep -E '[{][[:space:]]*$' "$cfg" | grep -vE '^(input|mode) ' || true)
 check "the file's blocks are input blocks and modes" empty "$blocks"
 
 bindings=$(printf '%s\n' "$lines" | awk '$1 == "bindsym" || $1 == "bindswitch" {
