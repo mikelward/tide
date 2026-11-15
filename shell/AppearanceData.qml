@@ -26,10 +26,13 @@ import "lib/writes.mjs" as Writes
 // rest), shadows and shadow_blur_radius, which conf's tidewm config
 // includes, and
 // `tide-msg reload` has tidewm read it, as InputData's. On tidesway it's
+// that file too, which tidesway reads through the same config, so a
+// setting unset there leaves none of tidewm's behind, and
 // ~/.config/tidewm/tidesway.d/tide-appearance.conf, which tidesway reads
 // after the config and tidewm never does, with its corner_radius and its
-// floating windows' border too. A border's color is light's or dark's, so
-// while there's one the file is written again as that changes.
+// floating windows' border: the two as one (Appearance.joinedConfs). A
+// border's color is light's or dark's, so while there's one the file is
+// written again as that changes.
 Singleton {
     id: root
 
@@ -214,13 +217,16 @@ Singleton {
 
     // Writes what Hyprland is to have and applies it, when it's changed.
     function writeDim() {
-        const writtenText = written.readNow();
-        if (written.broken !== "") {
+        const tidewmText = written.readNow();
+        const ownText = Compositor.tidesway ? tideswayWritten.readNow() : null;
+        const broken = [written.broken, Compositor.tidesway ? tideswayWritten.broken : ""].filter(b => b !== "");
+        if (broken.length > 0) {
             // Unreadable, it isn't written over either; it's read again on
             // the retry.
-            root.stepped(Writes.targetUnreadable(root.target, `${written.broken}; the dim keeps its strength`));
+            root.stepped(Writes.targetUnreadable(root.target, `${broken[0]}; the dim keeps its strength`));
             return;
         }
+        const writtenText = Compositor.tidesway ? Appearance.joinedConfs(tidewmText, ownText) : tidewmText;
         // Applied as the shell starts even unchanged on Hyprland: a shell
         // that died with an apply still to retry would otherwise leave it
         // unapplied, and setting the same strength again changes nothing.
@@ -230,13 +236,33 @@ Singleton {
         root.target = Compositor.tidewm
             ? Writes.readTarget(root.target, writtenText, root.target.known ? writtenText : applied.firstApplied(writtenText, root.target.failure)).state
             : Writes.readTarget(root.target, writtenText, null).state;
-        root.stepped(Writes.wantTarget(root.target, Compositor.tidewm ? Appearance.appearanceConf(root.settings, Compositor.tidesway, root.dark) : Appearance.appearanceLua(root.settings, root.dark)));
+        root.stepped(Writes.wantTarget(root.target, root.wanted()));
+    }
+
+    // What the file should say: on tidesway, tidewm's and its own as one.
+    function wanted() {
+        if (Compositor.tidesway) {
+            return Appearance.joinedConfs(Appearance.appearanceConf(root.settings, root.dark), Appearance.tideswayConf(root.settings));
+        }
+        return Compositor.tidewm ? Appearance.appearanceConf(root.settings, root.dark) : Appearance.appearanceLua(root.settings, root.dark);
+    }
+
+    // Writes `text`, what wanted() says, returning why it couldn't, or "":
+    // on tidesway, tidewm's file, then tidesway's own. One that fails
+    // leaves the target as it was, so both are written again on the retry.
+    function writeText(text) {
+        if (!Compositor.tidesway) {
+            return written.writeNow(text);
+        }
+        const texts = Appearance.splitConfs(text);
+        const error = written.writeNow(texts[0]);
+        return error !== "" ? error : tideswayWritten.writeNow(texts[1]);
     }
 
     function stepped(r) {
         root.target = r.state;
         if (r.action?.write !== undefined) {
-            const error = written.writeNow(r.action.write);
+            const error = root.writeText(r.action.write);
             root.stepped(Writes.targetWritten(root.target, error === "" ? "" : `${error}; the dim keeps its strength`));
             return;
         }
@@ -374,15 +400,20 @@ Singleton {
         path: local.path
     }
 
-    // What hyprland.lua reads, or on tidewm what its config includes.
-    // Written only when it would say something else.
+    // What hyprland.lua reads, or on tidewm and tidesway what its config
+    // includes. Written only when it would say something else.
     SettingsFile {
         id: written
 
-        // tidesway's is the one it alone reads, after the config, as it
-        // holds a line tidewm would fail on.
-        path: Compositor.tidesway ? `${root.configHome}/tidewm/tidesway.d/tide-appearance.conf`
-            : Compositor.tidewm ? `${root.configHome}/tidewm/tide-appearance.conf` : `${root.configHome}/hypr/tide-appearance.lua`
+        path: Compositor.tidewm ? `${root.configHome}/tidewm/tide-appearance.conf` : `${root.configHome}/hypr/tide-appearance.lua`
+    }
+
+    // On tidesway, what it alone reads, after the config, as it holds lines
+    // tidewm would fail on.
+    SettingsFile {
+        id: tideswayWritten
+
+        path: `${root.configHome}/tidewm/tidesway.d/tide-appearance.conf`
     }
 
     // This session's record of what tidewm last read.

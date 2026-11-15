@@ -1492,10 +1492,16 @@ aspect of about 2.45, so it's an ultrawide, and a 16:9 one's about 1.84.
   Borders page's **Rounded corners** turns that off, for square ones,
   and back on (maintainer, 2026-11-14). tidewm's windows are square, so
   the page has no such row there. On tidesway the shell writes
-  `corner_radius 6`, or `0`, with the dimming strength, to
+  `corner_radius 6`, or `0`, to
   `~/.config/tidewm/tidesway.d/tide-appearance.conf`, which tidesway reads
   after the config and tidewm never does: tidewm fails on a line it
   doesn't know, and the two share a config.
+- On tidesway the shell also writes tidewm's own
+  `~/.config/tidewm/tide-appearance.conf`, the dimming strength's, the
+  border's and the shadows', just as a tidewm session would. tidesway
+  reads it through the config both share, so a setting unset on tidesway
+  leaves none of tidewm's behind. The second file holds only what tidewm
+  lacks: the corners and a floating window's border.
 - Dimming fades as focus moves, over 300 ms, as a new window fades in. On
   tidewm, these are `fade_duration 300`.
 - **Shadows.** The focused window casts a soft shadow, tiled or floating:
