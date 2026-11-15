@@ -1551,8 +1551,12 @@ aspect of about 2.45, so it's an ultrawide, and a 16:9 one's about 1.84.
     them out as it starts. An urgent window's stays the compositor's
     own red. On tidesway a floating window's border is its
     own line, `default_floating_border`, in the file tidesway alone reads.
-    sway gives a new default width to windows opened later, not those
-    already open *(unverified on tidesway)*.
+  - tidewm gives a new width to every window as it reloads (its
+    `docs/config.md`). sway's `default_border` sets the width for windows
+    opened later only (`cmd_default_border`), and so does tidesway's. So
+    on tidesway, once it has read a new width, the shell gives it to the
+    windows already open, with `[con_id=N] border pixel W`. A floating
+    window that draws its own decorations keeps them, as a new one does.
 - `hyprland.local.lua`'s own `dim_strength`, `rounding`, `border_size`,
   border colors and shadow `range` and `enabled` win over the pages'.
 

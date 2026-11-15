@@ -6,6 +6,7 @@ import Quickshell.Io
 import "lib/appearance.mjs" as Appearance
 import "lib/launch.mjs" as Run
 import "lib/report.mjs" as Report
+import "lib/tidewm.mjs" as Tw
 import "lib/writes.mjs" as Writes
 
 // Light or dark (SPEC.md §15). The shell owns the schedule: it reads
@@ -30,9 +31,11 @@ import "lib/writes.mjs" as Writes
 // setting unset there leaves none of tidewm's behind, and
 // ~/.config/tidewm/tidesway.d/tide-appearance.conf, which tidesway reads
 // after the config and tidewm never does, with its corner_radius and its
-// floating windows' border: the two as one (Appearance.joinedConfs). A
-// border's color is light's or dark's, so while there's one the file is
-// written again as that changes.
+// floating windows' border: the two as one (Appearance.joinedConfs). There
+// a new border width also goes to the windows already open, as tidesway's
+// default_border reaches only those opened later. A border's color is
+// light's or dark's, so while there's one the file is written again as
+// that changes.
 Singleton {
     id: root
 
@@ -259,6 +262,27 @@ Singleton {
         return error !== "" ? error : tideswayWritten.writeNow(texts[1]);
     }
 
+    // tidesway read `after` in place of `before`: windows already open
+    // get the border width new ones now would (Appearance.newBorder), all
+    // but one drawing its own decorations (Tw.borderCommand). One that
+    // can't be told keeps its border until it's closed.
+    function borderOpenWindows(before, after) {
+        const width = Appearance.newBorder(before, after);
+        if (width === null) {
+            return;
+        }
+        const command = Tw.borderCommand(TidewmData.state.list, width);
+        if (command === "") {
+            return;
+        }
+        console.log(`tide: giving the open windows a ${width} px border`);
+        Launcher.run(["tide-msg", command], ok => {
+            if (!ok) {
+                console.warn(`tide: couldn't give the open windows a ${width} px border; they keep theirs until they're closed`);
+            }
+        });
+    }
+
     function stepped(r) {
         root.target = r.state;
         if (r.action?.write !== undefined) {
@@ -474,9 +498,13 @@ Singleton {
                 // tidewm read its config again, or is older than the one installed:
                 // its errors, or the bar's warning, may have changed.
                 ConfigErrorsData.reloaded();
+                const before = root.target.applied;
                 const done = Writes.targetApplied(root.target, error);
                 if (Compositor.tidewm && error === "" && !deferred) {
                     applied.record(Writes.recordOf(done.state.applied));
+                    if (Compositor.tidesway) {
+                        root.borderOpenWindows(before, done.state.applied);
+                    }
                 }
                 root.stepped(done);
                 destroy();

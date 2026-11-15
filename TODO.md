@@ -18,6 +18,15 @@ once you have agreed with it or reversed it.
   writes only its own file, leaving a stale floating border in tidesway's
   until tidesway's shell starts. Reversible: `shell/AppearanceData.qml`'s
   `wanted` and `writeText`, `appearance.mjs`'s `tideswayConf`.
+- **A new border width reaches every open window on tidesway**
+  (2026-11-15, SPEC.md §6.2): once tidesway has read a width unlike the
+  one before, the shell sends `[con_id=N] border pixel W` for every
+  window but a floating one drawing its own decorations (sway's `csd`),
+  which a new window keeps too. A window a `for_window` rule gave its own
+  border gets the new width as well, as the Borders page gives "every
+  window" one. A width unset by hand changes no open window: the config's
+  own isn't the shell's to know. Reversible: `shell/AppearanceData.qml`'s
+  `borderOpenWindows`, `tidewm.mjs`'s `borderCommand`.
 - **setup builds tidesway by default** (2026-11-15, SPEC.md §5.3): as it
   builds tidewm, from its latest `main`, unpinned, with `--no-tidesway` to
   leave it out, though no one has logged in to tidesway yet. It costs a
@@ -1294,7 +1303,7 @@ it (maintainer, 2026-11-14).
 - [x] Rounded corners there: the Appearance page shows the row on
       tidesway and writes `corner_radius`, in a file tidewm never reads,
       as tidewm fails on a line it doesn't know.
-- [ ] A border width changed on tidesway reaches only windows opened
+- [x] A border width changed on tidesway reaches only windows opened
       later, if tidesway's `default_border` is sway's: check on a real
       session, and have the shell run `border pixel N` on the open ones
       if so.

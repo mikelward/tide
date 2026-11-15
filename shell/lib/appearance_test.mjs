@@ -12,7 +12,7 @@ import {
     expandHome, pickCommand, galleryFolders, galleryCommand, galleryThumbnailCommand, galleryThumbnail, gallerySource, newLines, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
-    POSITIONS, POSITION_CHOICES, BAR_POSITIONS, BAR_CHOICES, barAtBottom, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf, tideswayConf, joinedConfs, splitConfs, ROUNDING,
+    POSITIONS, POSITION_CHOICES, BAR_POSITIONS, BAR_CHOICES, barAtBottom, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf, tideswayConf, joinedConfs, splitConfs, confBorder, newBorder, ROUNDING,
     BORDER_WIDTH, BORDER_WIDTH_MAX, borderWidth, steppedBorder, SHADOW_SIZE, SHADOW_SIZE_MAX, shadowSize, steppedShadow, formatPixels, borderColor,
     SHADOWS, SHADOWS_DEFAULT, shadows, SHADOW_CHOICES, shadowsAt, steppedShadowsAt,
     LOOK_ROOT, lookDir, lookCommand, lookWriteCommand, lookCopied, lookJson, parseLook, lookAt
@@ -810,6 +810,28 @@ test("both files joined split back as they were, and anything else is tidewm's a
     assert.deepEqual(splitConfs("# tidewm\ndim_inactive 0.1\n"), ["# tidewm\ndim_inactive 0.1\n", null]);
     assert.deepEqual(splitConfs("[not json"), ["[not json", null]);
     assert.deepEqual(splitConfs("[1, 2]"), ["[1, 2]", null]);
+});
+
+test("a file's border is its last default_border line's width", () => {
+    assert.equal(confBorder(appearanceConf({ borderWidth: 4 })), 4);
+    assert.equal(confBorder(appearanceConf({ borderWidth: 0 })), 0);
+    assert.equal(confBorder(appearanceConf({})), null, "none set");
+    assert.equal(confBorder("default_border none\n"), 0);
+    assert.equal(confBorder("default_border pixel 2\ndefault_border pixel 5\n"), 5);
+    assert.equal(confBorder(null), null);
+    assert.equal(confBorder(joinedConfs(appearanceConf({ borderWidth: 7 }), tideswayConf({ borderWidth: 7 }))), 7);
+    assert.equal(confBorder(joinedConfs(null, tideswayConf({ borderWidth: 7 }))), null,
+        "a floating window's default isn't a tiled one's");
+});
+
+test("open windows get a new width once tidesway reads one, and only then", () => {
+    const conf = w => joinedConfs(appearanceConf(w === undefined ? {} : { borderWidth: w }), tideswayConf({}));
+    assert.equal(newBorder(conf(0), conf(4)), 4);
+    assert.equal(newBorder(conf(4), conf(0)), 0, "back to none");
+    assert.equal(newBorder(conf(undefined), conf(2)), 2);
+    assert.equal(newBorder(null, conf(2)), 2, "what tidesway had unknown");
+    assert.equal(newBorder(conf(4), conf(4)), null, "the same width: a dim change, say");
+    assert.equal(newBorder(conf(4), conf(undefined)), null, "unset: the config's own, which the shell can't know");
 });
 
 test("only a dim that's set reaches Hyprland", () => {
