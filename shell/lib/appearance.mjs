@@ -829,12 +829,10 @@ export function appearanceLua(settings, dark = undefined) {
 // focused window and the rest: tidewm colors a border by the last of the
 // five, sway's child_border. tidewm's windows are square, so
 // roundedCorners has no line.
-// On tidesway (`tidesway` true) it's the file tidesway alone reads, after
-// the config, ~/.config/tidewm/tidesway.d/tide-appearance.conf, with the
-// lines tidewm would fail on as well: a floating window's border, which
-// sway sets apart from a tiled one's, and its corner_radius, ROUNDING, as
-// Hyprland's, or 0, always there, as tidesway's own default is square.
-export function appearanceConf(settings, tidesway = false, dark = true) {
+// tidesway reads this file too, through the same config, so the shell
+// writes it on tidesway as well (joinedConfs): a setting unset there then
+// leaves no line of tidewm's behind.
+export function appearanceConf(settings, dark = true) {
     const lines = [
         "# Written by tide from appearance.json and appearance.local.json (tide SPEC.md §16).",
         "# Change those, or the Appearance and Borders pages of tide's settings, not this",
@@ -845,9 +843,6 @@ export function appearanceConf(settings, tidesway = false, dark = true) {
     }
     if (settings.borderWidth !== undefined) {
         lines.push(`default_border pixel ${settings.borderWidth}`);
-        if (tidesway) {
-            lines.push(`default_floating_border pixel ${settings.borderWidth}`);
-        }
     }
     if (borderWidth(settings) > 0) {
         const color = `#${borderColor(dark)}`;
@@ -863,10 +858,58 @@ export function appearanceConf(settings, tidesway = false, dark = true) {
     if (settings.shadowSize !== undefined) {
         lines.push(`shadow_blur_radius ${settings.shadowSize}`);
     }
-    if (tidesway) {
-        lines.push(`corner_radius ${roundedCorners(settings) ? ROUNDING : 0}`);
-    }
     return lines.join("\n") + "\n";
+}
+
+// What reaches tidesway beyond tidewm's file (appearanceConf), in the file
+// it alone reads, after the config,
+// ~/.config/tidewm/tidesway.d/tide-appearance.conf: the lines tidewm would
+// fail on. A floating window's border, which sway sets apart from a tiled
+// one's, while the width is set, and its corner_radius, ROUNDING, as
+// Hyprland's, or 0, always there, as tidesway's own default is square.
+export function tideswayConf(settings) {
+    const lines = [
+        "# Written by tide from appearance.json and appearance.local.json (tide SPEC.md §16).",
+        "# Change those, or the Appearance and Borders pages of tide's settings, not this",
+        "# file. tidewm's tide-appearance.conf, which tidesway reads first, has the rest.",
+    ];
+    if (settings.borderWidth !== undefined) {
+        lines.push(`default_floating_border pixel ${settings.borderWidth}`);
+    }
+    lines.push(`corner_radius ${roundedCorners(settings) ? ROUNDING : 0}`);
+    return lines.join("\n") + "\n";
+}
+
+// On tidesway the shell writes both files, tidewm's (appearanceConf) and
+// tidesway's own (tideswayConf), as one file for shell/lib/writes.mjs's
+// target, since one reload reads them both: their texts, each null for no
+// file, as one, or null when neither is there.
+export function joinedConfs(tidewmText, tideswayText) {
+    return tidewmText === null && tideswayText === null ? null : JSON.stringify([tidewmText, tideswayText]);
+}
+
+// joinedConfs' texts again, [tidewm's, tidesway's], each null for no file.
+// Anything else, a record a shell before this one kept of a single file,
+// say, is taken for tidewm's alone.
+export function splitConfs(joined) {
+    if (joined === null || joined === undefined) {
+        return [null, null];
+    }
+    // A config file starts with a comment, never with JSON's [.
+    if (!joined.startsWith("[")) {
+        return [joined, null];
+    }
+    try {
+        const texts = JSON.parse(joined);
+        if (Array.isArray(texts) && texts.length === 2 && texts.every(t => t === null || typeof t === "string")) {
+            return texts;
+        }
+    } catch (e) {
+        // Not joined after all: one file's own text, which is tidewm's, as
+        // below. Nothing's lost, so it's logged only for debugging.
+        console.debug(`tide: an appearance record isn't two files (${e.message}); taking it for tidewm's`);
+    }
+    return [joined, null];
 }
 
 // What's wrong with a wallpaper setting, or "": a file's path, absolute or

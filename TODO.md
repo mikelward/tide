@@ -7,6 +7,17 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **On tidesway the shell writes tidewm's appearance file too**
+  (2026-11-15, SPEC.md §6.2): the dimming strength, border and shadows go
+  to `~/.config/tidewm/tide-appearance.conf`, just as a tidewm session
+  writes it, which tidesway reads through the config both share, and
+  `tidesway.d/tide-appearance.conf` keeps only what tidewm lacks (the
+  corners, a floating window's border). So unsetting a setting on either
+  leaves nothing of the other's. The two are one target for
+  `shell/lib/writes.mjs`, one reload reading both. A tidewm session still
+  writes only its own file, leaving a stale floating border in tidesway's
+  until tidesway's shell starts. Reversible: `shell/AppearanceData.qml`'s
+  `wanted` and `writeText`, `appearance.mjs`'s `tideswayConf`.
 - **setup builds tidesway by default** (2026-11-15, SPEC.md §5.3): as it
   builds tidewm, from its latest `main`, unpinned, with `--no-tidesway` to
   leave it out, though no one has logged in to tidesway yet. It costs a
@@ -1287,7 +1298,7 @@ it (maintainer, 2026-11-14).
       later, if tidesway's `default_border` is sway's: check on a real
       session, and have the shell run `border pixel N` on the open ones
       if so.
-- [ ] A dim strength set on tidewm and then unset on tidesway stays, from
+- [x] A dim strength set on tidewm and then unset on tidesway stays, from
       tidewm's own `tide-appearance.conf`, which the config both read
       still includes, until the next tidewm session writes it again.
 - [x] `install/tide-setup` builds tidesway, as it builds tidewm.

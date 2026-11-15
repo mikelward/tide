@@ -12,7 +12,7 @@ import {
     expandHome, pickCommand, galleryFolders, galleryCommand, galleryThumbnailCommand, galleryThumbnail, gallerySource, newLines, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
-    POSITIONS, POSITION_CHOICES, BAR_POSITIONS, BAR_CHOICES, barAtBottom, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf, ROUNDING,
+    POSITIONS, POSITION_CHOICES, BAR_POSITIONS, BAR_CHOICES, barAtBottom, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf, tideswayConf, joinedConfs, splitConfs, ROUNDING,
     BORDER_WIDTH, BORDER_WIDTH_MAX, borderWidth, steppedBorder, SHADOW_SIZE, SHADOW_SIZE_MAX, shadowSize, steppedShadow, formatPixels, borderColor,
     SHADOWS, SHADOWS_DEFAULT, shadows, SHADOW_CHOICES, shadowsAt, steppedShadowsAt,
     LOOK_ROOT, lookDir, lookCommand, lookWriteCommand, lookCopied, lookJson, parseLook, lookAt
@@ -622,11 +622,9 @@ test("rounded corners are on until a setting turns them off, and only one that's
 const confLines = text => text.split("\n").filter(line => line !== "" && !line.startsWith("#"));
 
 test("tidesway's file rounds the corners as Hyprland does, or squares them", () => {
-    assert.deepEqual(confLines(appearanceConf({}, true)), [`corner_radius ${ROUNDING}`], "rounded unless turned off");
-    assert.deepEqual(confLines(appearanceConf({ roundedCorners: true }, true)), [`corner_radius ${ROUNDING}`]);
-    assert.deepEqual(confLines(appearanceConf({ roundedCorners: false }, true)), ["corner_radius 0"]);
-    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, roundedCorners: false }, true)),
-        ["dim_inactive 0.1", "corner_radius 0"]);
+    assert.deepEqual(confLines(tideswayConf({})), [`corner_radius ${ROUNDING}`], "rounded unless turned off");
+    assert.deepEqual(confLines(tideswayConf({ roundedCorners: true })), [`corner_radius ${ROUNDING}`]);
+    assert.deepEqual(confLines(tideswayConf({ roundedCorners: false })), ["corner_radius 0"]);
     // tidewm fails on a line it doesn't know, so its own file never has it
     assert.deepEqual(confLines(appearanceConf({ roundedCorners: true })), []);
     // The radius is Hyprland's
@@ -736,7 +734,7 @@ test("tidewm's file has what's set of the border's width, which windows cast a s
     assert.deepEqual(confLines(appearanceConf({ shadows: "focused" })), ["shadows active"]);
     assert.deepEqual(confLines(appearanceConf({ shadows: "all" })), ["shadows all"]);
     assert.deepEqual(confLines(appearanceConf({ shadowSize: 20 })), ["shadow_blur_radius 20"]);
-    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, borderWidth: 0, shadows: "all", shadowSize: 0 }, false, false)),
+    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, borderWidth: 0, shadows: "all", shadowSize: 0 }, false)),
         ["dim_inactive 0.1", "default_border pixel 0", "shadows all", "shadow_blur_radius 0"]);
     // The defaults are tide.conf's
     const conf = readFileSync(new URL("../../tidewm/tide.conf", import.meta.url), "utf8");
@@ -748,7 +746,7 @@ test("tidewm's file has what's set of the border's width, which windows cast a s
 test("tidewm's file has a border's color, light or dark, while there's a border", () => {
     const dark = `#${borderColor(true)}`;
     const light = `#${borderColor(false)}`;
-    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, borderWidth: 2, shadows: "all" }, false, true)), [
+    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, borderWidth: 2, shadows: "all" }, true)), [
         "dim_inactive 0.1",
         "default_border pixel 2",
         `client.focused ${dark} ${dark} #ededf1 ${dark} ${dark}`,
@@ -756,46 +754,62 @@ test("tidewm's file has a border's color, light or dark, while there's a border"
         `client.unfocused ${dark} ${dark} #ededf1 ${dark} ${dark}`,
         "shadows all",
     ]);
-    assert.deepEqual(confLines(appearanceConf({ borderWidth: 6 }, false, false)), [
+    assert.deepEqual(confLines(appearanceConf({ borderWidth: 6 }, false)), [
         "default_border pixel 6",
         `client.focused ${light} ${light} #1f1f24 ${light} ${light}`,
         `client.focused_inactive ${light} ${light} #1f1f24 ${light} ${light}`,
         `client.unfocused ${light} ${light} #1f1f24 ${light} ${light}`,
     ]);
     // Each is a line tidewm takes: three to five colors, #RRGGBB or #RRGGBBAA
-    for (const line of confLines(appearanceConf({ borderWidth: 6 }, false, true)).slice(1)) {
+    for (const line of confLines(appearanceConf({ borderWidth: 6 }, true)).slice(1)) {
         assert.match(line, /^client\.(focused|focused_inactive|unfocused)( #[0-9a-f]{6}([0-9a-f]{2})?){5}$/);
     }
     // No border, no color, so light and dark are the same file
     for (const settings of [{}, { borderWidth: 0 }, { shadows: "focused", dimStrength: 0.2 }]) {
-        assert.doesNotMatch(appearanceConf(settings, false, true), /client\./);
-        assert.equal(appearanceConf(settings, false, true), appearanceConf(settings, false, false));
+        assert.doesNotMatch(appearanceConf(settings, true), /client\./);
+        assert.equal(appearanceConf(settings, true), appearanceConf(settings, false));
     }
-    assert.notEqual(appearanceConf({ borderWidth: 1 }, false, true), appearanceConf({ borderWidth: 1 }, false, false),
+    assert.notEqual(appearanceConf({ borderWidth: 1 }, true), appearanceConf({ borderWidth: 1 }, false),
         "with a border, the theme changes the file, so a flip writes it again");
 });
 
-test("tidesway's file has tidewm's lines, and a border's on floating windows too", () => {
-    const dark = `#${borderColor(true)}`;
-    const light = `#${borderColor(false)}`;
-    assert.deepEqual(confLines(appearanceConf({ shadows: "focused", shadowSize: 12 }, true, true)),
-        ["shadows active", "shadow_blur_radius 12", `corner_radius ${ROUNDING}`]);
-    assert.deepEqual(confLines(appearanceConf({ borderWidth: 0 }, true, true)),
-        ["default_border pixel 0", "default_floating_border pixel 0", `corner_radius ${ROUNDING}`], "no border, no color");
-    assert.deepEqual(confLines(appearanceConf({ borderWidth: 4, shadows: "none" }, true, true)), [
-        "default_border pixel 4",
-        "default_floating_border pixel 4",
-        `client.focused ${dark} ${dark} #ededf1 ${dark} ${dark}`,
-        `client.focused_inactive ${dark} ${dark} #ededf1 ${dark} ${dark}`,
-        `client.unfocused ${dark} ${dark} #ededf1 ${dark} ${dark}`,
-        "shadows disable",
-        `corner_radius ${ROUNDING}`,
-    ]);
-    assert.deepEqual(confLines(appearanceConf({ borderWidth: 2 }, true, false)).slice(2, 5), [
-        `client.focused ${light} ${light} #1f1f24 ${light} ${light}`,
-        `client.focused_inactive ${light} ${light} #1f1f24 ${light} ${light}`,
-        `client.unfocused ${light} ${light} #1f1f24 ${light} ${light}`,
-    ]);
+test("tidesway's own file has only what tidewm lacks: a floating window's border and the corners", () => {
+    assert.deepEqual(confLines(tideswayConf({ shadows: "focused", shadowSize: 12, dimStrength: 0.1 })),
+        [`corner_radius ${ROUNDING}`], "tidewm's file, which tidesway reads too, has the rest");
+    assert.deepEqual(confLines(tideswayConf({ borderWidth: 0 })),
+        ["default_floating_border pixel 0", `corner_radius ${ROUNDING}`]);
+    assert.deepEqual(confLines(tideswayConf({ borderWidth: 4, shadows: "none", roundedCorners: false })),
+        ["default_floating_border pixel 4", "corner_radius 0"]);
+    assert.doesNotMatch(tideswayConf({ borderWidth: 4 }), /client\.|^default_border/m,
+        "a tiled window's border and the color are tidewm's file's");
+});
+
+test("on tidesway both files are one, so a setting unset there leaves no line of tidewm's", () => {
+    // Set on tidewm, then unset on tidesway: what the shell writes there
+    // has tidewm's file without it, where it used to keep tidewm's own
+    const set = joinedConfs(appearanceConf({ dimStrength: 0.2, borderWidth: 3 }, true), tideswayConf({ dimStrength: 0.2, borderWidth: 3 }));
+    const unset = joinedConfs(appearanceConf({}, true), tideswayConf({}));
+    const [tidewmSet] = splitConfs(set);
+    const [tidewmUnset, own] = splitConfs(unset);
+    assert.match(tidewmSet, /^dim_inactive 0\.2$/m);
+    assert.match(tidewmSet, /^default_border pixel 3$/m);
+    assert.deepEqual(confLines(tidewmUnset), [], "tidewm's file says nothing, so the config's own stands");
+    assert.deepEqual(confLines(own), [`corner_radius ${ROUNDING}`]);
+    assert.notEqual(set, unset, "so unsetting writes and reloads");
+    // Exactly what a tidewm session writes, so the two never fight over it
+    assert.equal(tidewmUnset, appearanceConf({}, true));
+});
+
+test("both files joined split back as they were, and anything else is tidewm's alone", () => {
+    assert.equal(joinedConfs(null, null), null, "neither there");
+    assert.deepEqual(splitConfs(joinedConfs("a\n", "b\n")), ["a\n", "b\n"]);
+    assert.deepEqual(splitConfs(joinedConfs(null, "b\n")), [null, "b\n"]);
+    assert.deepEqual(splitConfs(joinedConfs("# a\n", null)), ["# a\n", null]);
+    assert.deepEqual(splitConfs(null), [null, null]);
+    // A record of tidewm's file alone, kept before
+    assert.deepEqual(splitConfs("# tidewm\ndim_inactive 0.1\n"), ["# tidewm\ndim_inactive 0.1\n", null]);
+    assert.deepEqual(splitConfs("[not json"), ["[not json", null]);
+    assert.deepEqual(splitConfs("[1, 2]"), ["[1, 2]", null]);
 });
 
 test("only a dim that's set reaches Hyprland", () => {
