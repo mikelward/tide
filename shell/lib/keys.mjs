@@ -372,6 +372,10 @@ export function editedKeys(sharedText, localText, change) {
     return { text, state: { preset: result.state.preset, keys: sorted } };
 }
 
+// The bindings that always keep a key, so a session can always be fixed
+// from and left: what each is called where one is refused.
+export const KEPT = Object.freeze({ quit: "Quit", terminal: "Terminal", launcher: "The launcher" });
+
 // The keys conf is to bind: the preset's, with yours over them. A
 // preset's binding gives up keys you gave another, so yours take them, as
 // conf would hand them out in its own order otherwise.
@@ -391,10 +395,6 @@ export function mergedKeys(state) {
     }
     return out;
 }
-
-// The bindings that always keep a key, so a session can always be fixed
-// from and left: what each is called where one is refused.
-export const KEPT = Object.freeze({ quit: "Quit", terminal: "Terminal", launcher: "The launcher" });
 
 function keptError(name) {
     return `${KEPT[name]} needs a shortcut`;

@@ -37,6 +37,34 @@ const WALLPAPER_POSITION_KEYS = [["lightWallpaper", "lightWallpaperPosition"], [
 export const BAR_POSITIONS = Object.freeze(["top", "bottom"]);
 const DAY = 24 * 60 * 60 * 1000;
 
+// How wide a window's border is, in pixels (SPEC.md §6.2): none unless a
+// setting says, as hypr/hyprland.lua's BORDER_SIZE and tidewm/tide.conf's
+// default_border have it, which appearance_test.mjs holds it to.
+export const BORDER_WIDTH = 0;
+// The widest the page and the files allow. Hyprland's border_size stops
+// at 20 and tidewm's default_border at 100.
+export const BORDER_WIDTH_MAX = 16;
+
+// Which windows cast a shadow (SPEC.md §6.2), in the order the Borders
+// page steps through them: none, floating ones, the focused one, tiled or
+// floating, or all of them, tiles too.
+export const SHADOWS = Object.freeze(["none", "floating", "focused", "all"]);
+// Which do when nothing says: hypr/hyprland.lua's SHADOWS and
+// tidewm/tide.conf's shadows.
+export const SHADOWS_DEFAULT = "focused";
+
+// How far a shadow reaches, in pixels (SPEC.md §6.2), when nothing says:
+// hypr/hyprland.lua's SHADOW_RANGE, and tidewm/tide.conf's
+// shadow_blur_radius, which tidewm and tidesway read. Each compositor
+// draws it alike, so one number is one shadow on all of them: black at
+// 0x44 by the window's edge, fading as the square of the distance, gone
+// at this many pixels (Hyprland's shadow.glsl, render_power 2; tidewm's
+// effects.h).
+export const SHADOW_SIZE = 16;
+// The farthest the page and the files allow. Hyprland's range and the
+// others' shadow_blur_radius stop at 100.
+export const SHADOW_SIZE_MAX = 32;
+
 // "HH:MM" as {h, min}, or null when it isn't a 24-hour time.
 export function parseTime(text) {
     const m = typeof text === "string" ? /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(text) : null;
@@ -698,14 +726,6 @@ export function roundedCorners(settings) {
     return settings.roundedCorners ?? true;
 }
 
-// How wide a window's border is, in pixels (SPEC.md §6.2): none unless a
-// setting says, as hypr/hyprland.lua's BORDER_SIZE and tidewm/tide.conf's
-// default_border have it, which appearance_test.mjs holds it to.
-export const BORDER_WIDTH = 0;
-// The widest the page and the files allow. Hyprland's border_size stops
-// at 20 and tidewm's default_border at 100.
-export const BORDER_WIDTH_MAX = 16;
-
 export function borderWidth(settings) {
     return settings.borderWidth ?? BORDER_WIDTH;
 }
@@ -714,14 +734,6 @@ export function borderWidth(settings) {
 export function steppedBorder(value, steps) {
     return stepped(value, steps, 1, 0, BORDER_WIDTH_MAX);
 }
-
-// Which windows cast a shadow (SPEC.md §6.2), in the order the Borders
-// page steps through them: none, floating ones, the focused one, tiled or
-// floating, or all of them, tiles too.
-export const SHADOWS = Object.freeze(["none", "floating", "focused", "all"]);
-// Which do when nothing says: hypr/hyprland.lua's SHADOWS and
-// tidewm/tide.conf's shadows.
-export const SHADOWS_DEFAULT = "focused";
 
 export function shadows(settings) {
     return settings.shadows ?? SHADOWS_DEFAULT;
@@ -748,18 +760,6 @@ export function steppedShadowsAt(at, steps) {
 
 // tidewm's and tidesway's word for each choice, their `shadows` line's.
 const SHADOWS_CONF = Object.freeze({ none: "disable", floating: "floating", focused: "active", all: "all" });
-
-// How far a shadow reaches, in pixels (SPEC.md §6.2), when nothing says:
-// hypr/hyprland.lua's SHADOW_RANGE, and tidewm/tide.conf's
-// shadow_blur_radius, which tidewm and tidesway read. Each compositor
-// draws it alike, so one number is one shadow on all of them: black at
-// 0x44 by the window's edge, fading as the square of the distance, gone
-// at this many pixels (Hyprland's shadow.glsl, render_power 2; tidewm's
-// effects.h).
-export const SHADOW_SIZE = 16;
-// The farthest the page and the files allow. Hyprland's range and the
-// others' shadow_blur_radius stop at 100.
-export const SHADOW_SIZE_MAX = 32;
 
 export function shadowSize(settings) {
     return settings.shadowSize ?? SHADOW_SIZE;
