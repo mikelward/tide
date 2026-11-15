@@ -27,16 +27,6 @@ once you have agreed with it or reversed it.
   window" one. A width unset by hand changes no open window: the config's
   own isn't the shell's to know. Reversible: `shell/AppearanceData.qml`'s
   `borderOpenWindows`, `tidewm.mjs`'s `borderCommand`.
-- **setup builds tidesway by default** (2026-11-15, SPEC.md §5.3): as it
-  builds tidewm, from its latest `main`, unpinned, with `--no-tidesway` to
-  leave it out, though no one has logged in to tidesway yet. It costs a
-  sway build each time tidesway's `main` moves, and where the distro has
-  no wlroots 0.20, a wlroots build of its own beside tidewm's, so each
-  compositor is sealed and replaced with its own. It builds with
-  `-Dwerror=false` and without man pages, wallpapers or completions,
-  which nothing finds in `/opt/tidesway`, and links only `tidesway` onto
-  `PATH`. Reversible: `install/tide-setup`'s `BUILD_TIDESWAY` and
-  `TIDESWAY_MESON_OPTIONS`.
 - **next_attention goes through the shell** (2026-11-15, SPEC.md §6.6,
   §14.3): the key runs the shell's `qs -c tide ipc call attention next`,
   which goes to the Attention tab's top row as Enter does, on Hyprland and
