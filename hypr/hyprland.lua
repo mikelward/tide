@@ -694,6 +694,10 @@ local BORDER_SIZE = 0
 -- until tide's shell writes the one for light or dark.
 local BORDER_COLOR = "rgba(46464dff)"
 
+-- How far outside a floating window a drag resizes it when it has no
+-- shadow: smaller than Hyprland's 15, so less of what's below is taken.
+local GRAB_AREA = 8
+
 hl.config({
     general = {
         layout = qs and "lua:tide" or "master",
@@ -711,12 +715,12 @@ hl.config({
             inactive_border = BORDER_COLOR,
         },
         -- Drag a floating window's edge or corner to resize it, with a
-        -- resize cursor there: the 8 px just outside it and its border, if
-        -- it has one, smaller than Hyprland's 15 so less of what's below is
-        -- taken (tide SPEC.md §6.4). The tide layout drags the tiled edges
-        -- itself (below).
+        -- resize cursor there: its shadow, or with none the 8 px just
+        -- outside it, and its border if it has one (apply_tide_appearance;
+        -- tide SPEC.md §6.4). The tide layout drags the tiled edges itself
+        -- (below).
         resize_on_border = true,
-        extend_border_grab_area = 8,
+        extend_border_grab_area = GRAB_AREA,
         hover_icon_on_border = true,
         allow_tearing = false,
     },
@@ -1046,6 +1050,31 @@ local local_border_active = nil
 local local_border_inactive = nil
 local local_shadow_range = nil
 local local_shadow_enabled = nil
+local local_grab_area = nil
+
+-- A floating window's shadow is where a drag resizes it: Hyprland's grab
+-- zone reaches as far as the shadow does, and with no shadow it's
+-- GRAB_AREA. The tide layout reads conf_appearance.shadows for its tiles'
+-- edges. From apply_tide_appearance, and again once hyprland.local.lua
+-- has had its say.
+local tide_shadows, tide_shadow_range = "none", 0
+local grab_area = GRAB_AREA
+local function grab_shadows()
+    -- On as apply_tide_appearance turns them on: not with the page's size 0.
+    local enabled = tide_shadows ~= "none" and tide_shadow_range > 0
+    if local_shadow_enabled ~= nil then
+        enabled = local_shadow_enabled == true or (type(local_shadow_enabled) == "number" and local_shadow_enabled ~= 0)
+    end
+    local shown = enabled and tonumber(local_shadow_range or tide_shadow_range) or 0
+    local area = shown > 0 and shown or GRAB_AREA
+    if local_grab_area == nil and area ~= grab_area then
+        grab_area = area
+        hl.config({ general = { extend_border_grab_area = area } })
+    end
+    -- hyprland.local.lua's shadows over the Borders page's none are on
+    -- every window: neither no-shadow rule is on then.
+    _G.conf_appearance.shadows = shown <= 0 and "none" or tide_shadows == "none" and "all" or tide_shadows
+end
 
 -- The most the Borders page and appearance.json allow (the shell's
 -- appearance.mjs).
@@ -1161,11 +1190,13 @@ local function apply_tide_appearance()
     if local_shadow_enabled == nil then
         hl.config({ decoration = { shadow = { enabled = mode ~= "none" and range > 0 } } })
     end
+    tide_shadows, tide_shadow_range = mode, range
+    grab_shadows()
     hl.window_rule({ name = "no-shadow-tiled", enabled = mode == "floating", match = { float = false }, no_shadow = true })
     hl.window_rule({ name = "no-shadow-unfocused", enabled = mode == "focused", match = { focus = false }, no_shadow = true })
 end
-apply_tide_appearance()
 _G.conf_appearance = { reload = apply_tide_appearance }
+apply_tide_appearance()
 
 -- A 3-finger horizontal swipe changes workspace.
 hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
@@ -3109,6 +3140,9 @@ do
                 if type(general) == "table" and general.border_size ~= nil then
                     local_border = general.border_size
                 end
+                if type(general) == "table" and general.extend_border_grab_area ~= nil then
+                    local_grab_area = general.extend_border_grab_area
+                end
                 local col = type(general) == "table" and general.col
                 if type(col) == "table" and col.active_border ~= nil then
                     local_border_active = col.active_border
@@ -3136,6 +3170,8 @@ do
             if not ok then
                 notify_error("hyprland.local.lua stopped (the calls before this applied): " .. tostring(run_err))
             end
+            -- Its shadow, or its own grab zone, in place of tide's.
+            grab_shadows()
             -- tide's rules were added before the local catch-all was known,
             -- so they're added again with it, under the local file's and a
             -- closed lid's, as a reload of tide's settings would add them.
