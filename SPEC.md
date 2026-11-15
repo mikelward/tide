@@ -4505,7 +4505,11 @@ talk, a demo, or a meeting room's screen.
     is; a virtual keyboard a program makes, as keyd's is, which has no
     hardware parent in sysfs; or a wireless keyboard its receiver says is
     asleep, off or connected elsewhere, as Logitech's HID++ battery says
-    by its `online`, 0. A receiver plugged in, as by a KVM, lists a HID++
+    by its `online`, 0. The driver keeps `online` at 0 while the battery
+    charges too, where its level comes from HID++ 1.0's register or 2.0's
+    feature 0x1000, which give one only while it discharges. So a battery
+    whose `status` is `Charging` is connected; one that's gone is
+    `Unknown`. A receiver plugged in, as by a KVM, lists a HID++
     keyboard that's off with no battery at all, since the driver adds it
     only once the keyboard connects, so one with none isn't a keyboard
     yet. A HID++ keyboard with no battery to report would never count.
