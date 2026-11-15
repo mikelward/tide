@@ -220,6 +220,15 @@ export function attentionRows(windows, marks, query, muted = []) {
     return filtered(rows, query, (r) => [r.item.name, r.item.sub]);
 }
 
+// Where the next_attention key goes (SPEC.md §14.4): the Attention tab's
+// top row's window, the most recently marked, as a row's item, so it's
+// brought up as Enter brings up the row; or null when none is marked.
+// Going there clears its mark, so the next press goes to the next one.
+export function nextAttention(windows, marks, muted = []) {
+    const rows = attentionRows(windows, marks, "", muted);
+    return rows.length > 0 ? rows[0].item : null;
+}
+
 // What the list says when a tab has no rows.
 export function emptyText(tab, query) {
     if (String(query ?? "").trim() !== "") {

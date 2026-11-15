@@ -206,6 +206,19 @@ PanelWindow {
         }
     }
 
+    // Brings up a window row's window, as Enter does: on its own
+    // workspace, which clears its mark, and a minimized one back on the
+    // workspace it came from (§6.7).
+    function goToWindow(item) {
+        if (root.plasma) {
+            KWinData.activate(item.address);
+        } else if (item.restoreTo) {
+            Compositor.moveWindowTo(item.address, item.restoreTo);
+        } else {
+            Compositor.focusWindow(item.address);
+        }
+    }
+
     // workspace for the app's window first, in the name prompt.
     function runRow(index, newWorkspace) {
         const row = rows[index];
@@ -226,13 +239,7 @@ PanelWindow {
         }
         if (row.item.kind === "window") {
             close();
-            if (root.plasma) {
-                KWinData.activate(row.item.address);
-            } else if (row.item.restoreTo) {
-                Compositor.moveWindowTo(row.item.address, row.item.restoreTo);
-            } else {
-                Compositor.focusWindow(row.item.address);
-            }
+            goToWindow(row.item);
             return;
         }
         // A browser tab: its browser brings it up, then its window takes
@@ -468,6 +475,24 @@ PanelWindow {
         }
         function close(): void {
             root.close();
+        }
+    }
+
+    // `qs -c tide ipc call attention next`: conf's next_attention, which
+    // has no key by default (SPEC.md §14.4). It goes to the Attention
+    // tab's top row as Enter would, so the next call goes to the next one.
+    // With none marked it does nothing, and says so.
+    IpcHandler {
+        target: "attention"
+
+        function next(): string {
+            const item = Switcher.nextAttention(root.allWindows, MarkData.marks, WorkspacesData.muted);
+            if (!item) {
+                return "no window wants attention";
+            }
+            root.close();
+            root.goToWindow(item);
+            return "ok";
         }
     }
 

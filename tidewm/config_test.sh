@@ -115,12 +115,46 @@ check "and no other binding has Super+Shift+R or Super+Ctrl+R" \
 
 # Every name hyprland.lua binds, so keys.json serves both sessions, but the
 # floating rules' key and the layout used last, which have no tidewm
-# command yet, and restore, which has no key by default (Super+X and
-# Super+Shift+X toggle).
-hnames=$(grep -oE '^ *bind\("[a-z0-9_]+"' "$hypr" | sed 's/.*"\(.*\)"/\1/' | sort -u | grep -vxE 'floating_rule|last_layout|restore')
+# command yet, and restore and the next window wanting attention, which
+# have no key by default, and tidewm names only a binding with a key.
+hnames=$(grep -oE '^ *bind\("[a-z0-9_]+"' "$hypr" | sed 's/.*"\(.*\)"/\1/' | sort -u | grep -vxE 'floating_rule|last_layout|restore|next_attention')
 tnames=$(sed -n 's/^bindsym .*--name=\([a-z0-9_]*\) .*/\1/p' "$cfg" | sort -u)
 missing=$(printf '%s\n' "$hnames" | grep -vxF "$tnames" || true)
 check "each of hyprland.lua's named bindings is here too${missing:+: $missing}" empty "$missing"
+
+# The next window wanting attention has no key, so the file gives your
+# own config its command, $next_attention: the shell's `attention next`,
+# or without the shell, the window tidewm marked urgent last. Run here
+# with stand-ins for qs and tide-msg on PATH.
+# shellcheck disable=SC2016 # $next_attention is the config's, not the shell's
+next_attention=$(sed -n 's/^set \$next_attention //p' "$cfg")
+check "the file sets \$next_attention" test -n "$next_attention"
+check "which runs the shell's attention next" \
+    contains "$next_attention" "qs -c tide ipc call attention next || "
+# shellcheck disable=SC2016 # the stand-ins' variables are their own
+if command -v jq >/dev/null 2>&1; then
+    mkdir "$tmp/bin"
+    # qs succeeds as $QS says; tide-msg prints $TREE for get_tree and
+    # records any command it's sent.
+    printf '#!/bin/sh\necho "qs $*" >>"$RAN"\ntest "$QS" = up\n' >"$tmp/bin/qs"
+    printf '#!/bin/sh\nif test "$1" = --type; then cat "$TREE"; else echo "tide-msg $*" >>"$RAN"; fi\n' >"$tmp/bin/tide-msg"
+    chmod +x "$tmp/bin/qs" "$tmp/bin/tide-msg"
+    ran_next_attention() {
+        : >"$tmp/ran"
+        printf '%s\n' "$2" >"$tmp/tree.json"
+        PATH="$tmp/bin:$PATH" QS=$1 RAN="$tmp/ran" TREE="$tmp/tree.json" sh -c "$next_attention" >/dev/null 2>&1
+        grep '^tide-msg ' "$tmp/ran" || true
+    }
+    tree='{"nodes":[{"type":"workspace","nodes":[
+        {"id":4,"type":"con","urgent":false,"urgent_order":0},
+        {"id":7,"type":"con","urgent":true,"urgent_order":3},
+        {"id":9,"type":"floating_con","urgent":true,"urgent_order":5}]}]}'
+    check "with the shell, the shell goes there" empty "$(ran_next_attention up "$tree")"
+    check "without it, the window tidewm marked last comes up" \
+        test "$(ran_next_attention down "$tree")" = "tide-msg [con_id=9] focus"
+    check "and with none marked, nothing does" \
+        empty "$(ran_next_attention down '{"nodes":[{"id":4,"type":"con","urgent":false,"urgent_order":0}]}')"
+fi
 
 # tide's own defaults, not anyone's preferences.
 for personal in runenv dvorak kitty left_handed; do

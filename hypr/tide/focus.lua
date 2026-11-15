@@ -20,6 +20,8 @@
 -- (Super+A, SPEC.md §8.1, §14.3): the ones the guard kept waiting,
 -- activations without a grant, and the windows notifications mark. It
 -- tells the guard their order (`set_order`), so the two agree.
+-- `tide_focus.next_attention()` goes to the latest of them, for the
+-- next_attention key when the shell isn't running.
 -- If the guard itself fails, windows still open unfocused: the failure mode
 -- is "never steals", not "always steals".
 --
@@ -86,6 +88,7 @@ local state = {
     active = nil, -- { address, pid, app } of the focused window
     waiting = {}, -- addresses of windows left unfocused, oldest first
     shell_order = nil, -- every marked window, oldest first, from the shell
+    since_order = {}, -- addresses left waiting since the shell's last order, oldest first
 }
 
 -- The clock is a field so the tests can drive it.
@@ -360,9 +363,11 @@ local function key(address)
 end
 
 local function forget(address)
-    for i = #state.waiting, 1, -1 do
-        if key(state.waiting[i]) == key(address) then
-            table.remove(state.waiting, i)
+    for _, list in ipairs({ state.waiting, state.since_order }) do
+        for i = #list, 1, -1 do
+            if key(list[i]) == key(address) then
+                table.remove(list, i)
+            end
         end
     end
 end
@@ -374,6 +379,7 @@ local function wait(w)
     end
     forget(address)
     table.insert(state.waiting, address)
+    table.insert(state.since_order, address)
     return address
 end
 
@@ -512,6 +518,71 @@ function M.on_close(w)
     unlist(address)
 end
 
+-- Every marked window, most recently marked first: in the shell's order
+-- once it has given one, as its Attention tab lists them. A window left
+-- waiting since the shell last spoke is newest, even one it listed, as
+-- the shell makes a repeated mark newest. One its list left out before (a
+-- muted app's) stays out.
+local function targets()
+    local seen, out = {}, {}
+    local function add(address)
+        if not seen[key(address)] then
+            seen[key(address)] = true
+            table.insert(out, address)
+        end
+    end
+    local fresh = state.shell_order and state.since_order or state.waiting
+    for i = #fresh, 1, -1 do
+        add(fresh[i])
+    end
+    local order = state.shell_order or {}
+    for i = #order, 1, -1 do
+        add(order[i])
+    end
+    return out
+end
+
+-- The window at `address`, or nil if Hyprland has none there now.
+local function window_at(address)
+    local ok, windows = pcall(hl.get_windows)
+    if not ok then
+        error("tide focus: couldn't list windows to find " .. address .. ": " .. tostring(windows), 0)
+    end
+    for _, w in ipairs(type(windows) == "table" and windows or {}) do
+        local a = field(w, "address")
+        if a and key(a) == key(address) then
+            return w
+        end
+    end
+    return nil
+end
+
+-- The next_attention key without tide's shell (SPEC.md §14.3; with it,
+-- the shell's `attention next` does this from its own list): goes to the
+-- most recently marked window, on any workspace, restoring a minimized
+-- one, and returns true. Going there clears its mark, so the next call
+-- goes to the next one. With none marked it does nothing and returns
+-- false: no fallback to the last window.
+function M.next_attention()
+    local list = targets()
+    if #list == 0 then
+        return false
+    end
+    local address = list[1]
+    cancel_grants() -- you chose another window
+    forget(address)
+    unlist(address)
+    local w = window_at(address)
+    if w then
+        focus(w)
+    else
+        -- Gone since it was marked, or Hyprland can't say: the focus
+        -- dispatch finds it if it's there, and does nothing if not.
+        focus_address(address)
+    end
+    return true
+end
+
 -- Every marked window, oldest mark first, as the shell orders them: the
 -- guard's announcements and the shell's notification marks (SPEC.md
 -- §14.4), which only the shell sees together, replacing the last list.
@@ -527,6 +598,7 @@ function M.set_order(addresses)
         table.insert(order, "0x" .. key(address))
     end
     state.shell_order = order
+    state.since_order = {}
 end
 
 -- Announces every waiting window again, oldest first, without the
@@ -560,7 +632,10 @@ function M.on_active(w, reason)
     state.workspace = active_workspace_id()
     local address = state.active and state.active.address
     if address then
-        forget(address) -- however you got there, it isn't waiting now
+        -- However you got there, it isn't waiting now, and the shell clears
+        -- its marks too, so it's off the shell's list until it says again.
+        forget(address)
+        unlist(address)
     end
     -- Focus coming back to the window you were already in (the launcher
     -- closing) isn't moving on, nor is it staying on nothing on the same
@@ -868,6 +943,7 @@ function M.setup(opts)
     state.workspace = active_workspace_id()
     state.waiting = {}
     state.shell_order = nil
+    state.since_order = {}
     local w = hl.get_active_window()
     if w then
         state.active = active_record(w)

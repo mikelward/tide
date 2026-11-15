@@ -7,6 +7,19 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **next_attention goes through the shell, and isn't in tidewm's config**
+  (2026-11-15, SPEC.md §6.6, §14.3): the key runs the shell's `qs -c
+  tide ipc call attention next`, which goes to the Attention tab's top row
+  as Enter does, on Hyprland and tidewm alike, so the two always agree.
+  Without the shell, Hyprland's guard goes to the top of its copy of the
+  shell's list (`tide_focus.next_attention()`), and tidewm's config to
+  the window tidewm marked urgent last (`urgent_order`). tidewm names
+  only a binding with a key, so `tidewm/tide.conf` sets
+  `$next_attention` for your config to bind rather than binding it, as
+  `restore` is left out; the Keyboard shortcuts page can't offer it there
+  until tidewm can (below). Focusing a window now also takes it off the
+  guard's copy of the shell's list. Reversible: `hypr/hyprland.lua`,
+  `hypr/tide/focus.lua`, `tidewm/tide.conf`, `shell/LauncherWindow.qml`.
 - **§6.6's key table has a column per platform** (2026-11-14): Hyprland
   and tidewm, KDE, chromeOS and macOS, a row per binding name. "none" is
   a binding with no key by default and "—" no binding there. The rows
@@ -2382,6 +2395,17 @@ or workspace goes there.
     tab rows under their windows, Enter, and the "not listed" line.
   - [ ] On a live session: Chrome and Brave both connected, a shell
     restart, and Enter on a tab in a window on another workspace.
+
+## Keys with no default on tidewm
+
+tidewm names only a binding with a key (`bindsym --name`), and `rebind`
+skips a name no line has given, so `restore` and `next_attention`, which
+have no key by default (SPEC.md §6.6), aren't in `tidewm/tide.conf` and
+the Keyboard shortcuts page can't offer them there. A way in tidewm to
+name a binding with no keys, such as `bindsym --name NAME none COMMAND`,
+listed by `GET_NAMED_BINDINGS` with no default keys, would let
+`tide.conf` name both, and `tidewm/config_test.sh` drop them from its
+exceptions. That's a change to mikelward/tidewm first.
 
 ## An overview of every workspace
 

@@ -1161,5 +1161,129 @@ test("grant_seconds sets how long a notification's grant waits", function()
     eq(S.timers[1].opts.timeout, 4000, "timeout")
 end)
 
+-- next_attention (SPEC.md §14.3), the unbound next_attention key's without
+-- the shell: the window it went to, or nil, and whether it went.
+local function next_attention(m)
+    S.dispatched = {}
+    local went = m.next_attention()
+    for _, d in ipairs(S.dispatched) do
+        if d.dsp == "focus" then
+            return went, (d.args.window:gsub("^address:", ""))
+        end
+    end
+    return went, nil
+end
+
+test("next_attention goes to the latest waiting window, then the next, then nowhere", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    local a, b = window("one"), window("two")
+    fire("window.open", a)
+    fire("window.open", b)
+    S.windows = { a, b }
+    local went, to = next_attention(m)
+    eq(went, true, "went")
+    eq(to, b.address, "the latest first")
+    -- Going there clears its mark, before Hyprland says it's focused.
+    went, to = next_attention(m)
+    eq(to, a.address, "then the older one")
+    focused(a, DISPATCH)
+    went, to = next_attention(m)
+    eq(went, false, "none left")
+    eq(to, nil, "and nothing focused, not the last window")
+    eq(#S.dispatched, 0, "no dispatch at all")
+end)
+
+test("next_attention follows the shell's order, newest first", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    local waiting, chat = window("updater"), window("chat")
+    fire("window.open", waiting)
+    S.windows = { waiting, chat }
+    -- The shell sees the guard's window and a notification's, oldest
+    -- first; it may write an address without the 0x.
+    m.set_order({ waiting.address, (chat.address:gsub("^0x", "")) })
+    local _, to = next_attention(m)
+    eq(to, chat.address, "the shell's newest")
+    _, to = next_attention(m)
+    eq(to, waiting.address, "then the older one")
+    eq(next_attention(m), false, "the shell's list is used up")
+end)
+
+test("next_attention takes a window announced since the shell last spoke as the newest", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    local chat, late = window("chat"), window("late")
+    S.windows = { chat, late }
+    m.set_order({ chat.address })
+    fire("window.open", late)
+    local _, to = next_attention(m)
+    eq(to, late.address, "the one the shell hasn't listed yet")
+    _, to = next_attention(m)
+    eq(to, chat.address, "then the shell's")
+end)
+
+test("next_attention takes a listed window that asks again as the newest", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    local a, b = window("one"), window("two")
+    S.windows = { a, b }
+    m.set_order({ a.address, b.address })
+    fire("window.urgent", a)
+    local _, to = next_attention(m)
+    eq(to, a.address, "the one that asked again")
+    _, to = next_attention(m)
+    eq(to, b.address, "then the shell's next")
+    eq(next_attention(m), false, "and each only once")
+end)
+
+test("next_attention keeps out a waiting window the shell's list left out", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    local muted, chat = window("muted"), window("chat")
+    fire("window.open", muted)
+    S.windows = { muted, chat }
+    -- The shell leaves out a muted app's window, and stops later.
+    m.set_order({ chat.address })
+    local _, to = next_attention(m)
+    eq(to, chat.address, "the shell's")
+    eq(next_attention(m), false, "not the window it left out")
+    m.set_order({})
+    eq(next_attention(m), false, "nor after an empty list")
+end)
+
+test("focusing a marked window another way takes it off the shell's list", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    local chat, mail = window("chat"), window("mail")
+    S.windows = { chat, mail }
+    m.set_order({ chat.address, mail.address })
+    focused(mail, CLICK)
+    local _, to = next_attention(m)
+    eq(to, chat.address, "mail was attended to")
+end)
+
+test("next_attention restores a minimized window to the workspace it came from", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    local chat = minimized(window("org.example.Chat"), "re")
+    S.windows = { chat }
+    m.set_order({ chat.address })
+    S.dispatched = {}
+    eq(m.next_attention(), true, "went")
+    restored(S.dispatched, chat, "re")
+end)
+
+test("next_attention cancels the grants: you chose another window", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    local w = window("updater")
+    fire("window.open", w)
+    S.windows = { w }
+    m.grant("firefox")
+    eq(m.next_attention(), true, "went")
+    eq(#m.grants(), 0, "canceled")
+end)
+
 io.write(string.format("focus_test.lua: %d passed, %d failed\n", passed, failures))
 os.exit(failures == 0 and 0 or 1)
