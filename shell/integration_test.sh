@@ -286,7 +286,7 @@ for _helper in gsettings gdbus nmcli systemctl timedatectl udevadm busctl; do
 done
 # tide keyboards, as the lock and the greeter run it, over one keyboard
 # laid out as sysfs and udev's data have it.
-mkdir -p "$tmp/input/event0/device" "$tmp/udev" || exit 1
+mkdir -p "$tmp/input/event0/device/device" "$tmp/udev" || exit 1
 printf '13:64\n' >"$tmp/input/event0/dev" || exit 1
 printf 'Test keyboard\n' >"$tmp/input/event0/device/name" || exit 1
 printf 'E:ID_INPUT=1\nE:ID_INPUT_KEY=1\nE:ID_INPUT_KEYBOARD=1\n' >"$tmp/udev/c13:64" || exit 1
@@ -2399,7 +2399,7 @@ echo "ok: make install-shell over the running shell reloads it once, after every
 load_runs='hyprctl devices -j
 tide keyboards
 tide caps-lock
-udevadm monitor --udev --subsystem-match=input
+udevadm monitor --udev --subsystem-match=input --subsystem-match=power_supply
 gdbus monitor --system --dest org.freedesktop.login1'
 load greeter "the greeter" -p "$tmp/home/.config/quickshell/tide/greeter.qml"
 load_runs=
@@ -2467,7 +2467,7 @@ load_compositor=
 load_runs='hyprctl devices -j
 tide keyboards
 tide caps-lock
-udevadm monitor --udev --subsystem-match=input
+udevadm monitor --udev --subsystem-match=input --subsystem-match=power_supply
 gdbus monitor --system --dest org.freedesktop.login1'
 # A clocks.local.json and a wallpaper record the lock refuses, which it
 # should name.

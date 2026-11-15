@@ -1351,7 +1351,8 @@ mkdir -p "$udev"
 # input_device NAME NUMBERS EVENT [PROPERTY...]: eventN with its dev
 # numbers, its device's name ("" for none), and udev's properties for it.
 input_device() {
-    mkdir -p "$input/$3/device"
+    # Its parent: hardware, as a device a program makes has none.
+    mkdir -p "$input/$3/device/device"
     printf '%s\n' "$2" > "$input/$3/dev"
     test -z "$1" || printf '%s\n' "$1" > "$input/$3/device/name"
     _numbers=$2
@@ -1443,6 +1444,48 @@ check "and a Bluetooth one does" test "$(cat "$tmp/out")" = "AT Translated Set 2
 bus event0 0011
 run TIDE_KEYBOARDS_SYS="$input" TIDE_KEYBOARDS_UDEV="$udev" TIDE_KEYBOARDS_LID="$tmp/no-lid" "$qs" keyboards
 check "with no lid, a keyboard on the i8042 bus counts" test "$(cat "$tmp/out")" = "AT Translated Set 2 keyboard"
+
+# A desktop with its keyboard switched away by the KVM, or asleep: what's
+# left can't type. keyd's virtual keyboard, which sits on no hardware, only
+# retypes another keyboard's keys; a gaming mouse has every key udev asks of
+# a keyboard; and a wireless keyboard's receiver stays plugged in while it
+# sleeps, which its battery says (HID++'s "online").
+rm -r "$input" "$udev"
+mkdir -p "$input" "$udev"
+input_device "Logitech ERGO K860" 13:80 event0 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
+input_device "keyd virtual keyboard" 13:81 event1 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
+input_device "Logitech PRO 2 MOUSE" 13:82 event2 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1 ID_INPUT_MOUSE=1
+input_device "Keychron K2" 13:83 event3 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
+# online EVENT 0|1: its HID++ battery says whether it's connected.
+online() {
+    mkdir -p "$input/$1/device/device/power_supply/hidpp_battery_0"
+    printf '%s\n' "$2" > "$input/$1/device/device/power_supply/hidpp_battery_0/online"
+}
+rm -r "$input/event1/device/device"
+online event0 1
+keyboards
+check "a wireless keyboard that's awake and one plugged in count, not keyd's or a mouse" \
+    test "$(cat "$tmp/out")" = "Logitech ERGO K860
+Keychron K2"
+rm -r "$input/event3"
+online event0 0
+keyboards
+status=$?
+check "with the wireless one asleep and the other switched away, there's no keyboard" test ! -s "$tmp/out"
+check "and keyboards exits 0" test "$status" -eq 0
+online event0 1
+keyboards
+check "which the wireless one waking brings back" test "$(cat "$tmp/out")" = "Logitech ERGO K860"
+# The KVM switches the receiver back with the wireless keyboard off: its
+# receiver lists it, but HID++ adds its battery only once it connects.
+rm -r "$input/event0/device/device/power_supply"
+mkdir -p "$tmp/drivers/logitech-hidpp-device"
+ln -s "$tmp/drivers/logitech-hidpp-device" "$input/event0/device/device/driver"
+keyboards
+check "a wireless keyboard its receiver lists before it first connects isn't one" test ! -s "$tmp/out"
+online event0 1
+keyboards
+check "until it connects" test "$(cat "$tmp/out")" = "Logitech ERGO K860"
 
 # tide caps-lock: the keyboards' Caps Lock lights, as /sys/class/leds lays
 # them out, beside another light that isn't one.

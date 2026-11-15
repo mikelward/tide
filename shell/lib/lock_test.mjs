@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Run from "./launch.mjs";
-import { exitCode, CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, facePalette, fieldLook, hasKeyboard, keyboardsNext, layoutNext, layoutRow, layoutName, CAPS_LOCK_INITIAL, CAPS_LOCK_ON, capsLockNext, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
+import { exitCode, CARET_BLINK_TICKS, KEYBOARDS_INITIAL, LAYOUT_INITIAL, caretBlinks, caretShown, facePalette, fieldLook, hasKeyboard, keyboardsLog, keyboardsNext, layoutNext, layoutRow, layoutName, CAPS_LOCK_INITIAL, CAPS_LOCK_ON, capsLockNext, layoutLabel, layoutSettled, mainKeyboard, mainKeymap, switchLayoutCommand, tidewmKeyboard, nextLayout, POWER_IDLE, powerBusy, powerNext, IDLE_FLAG_SECONDS, INITIAL, MAX_DOTS, MAX_ECHO, NO_KEYBOARD, WRONG, fieldText, idleFlagFresh, keyEvent, next, powerMessage, saverPosition, shortHostname, statusLine, faceTop } from "./lock.mjs";
 
 // Runs events from `state`, collecting every action.
 function run(state, ...events) {
@@ -751,4 +751,12 @@ test("the lock exits cleanly only once a password was accepted", () => {
     assert.equal(exitCode(INITIAL), 1);
     assert.equal(exitCode(Object.assign({}, INITIAL, { checking: true })), 1);
     assert.equal(exitCode(undefined), 1);
+});
+
+test("the journal names the keyboards each time they change", () => {
+    assert.equal(keyboardsLog(null, "Logitech ERGO K860\nKeychron K2\n"), "found keyboards: Logitech ERGO K860, Keychron K2");
+    assert.equal(keyboardsLog("Logitech ERGO K860\n", ""), "found no keyboard");
+    assert.equal(keyboardsLog(null, ""), "found no keyboard");
+    assert.equal(keyboardsLog("Keychron K2\n", "Keychron K2\n"), null);
+    assert.equal(keyboardsLog("Keychron K2\n", null), null);
 });

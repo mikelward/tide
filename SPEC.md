@@ -4469,17 +4469,27 @@ talk, a demo, or a meeting room's screen.
     last one named stays. The line under the row keeps PAM's message or the
     failure.
   - A keyboard is an input device udev tags `ID_INPUT_KEYBOARD`: one with
-    every key from Esc to D. A power button isn't one. A USB receiver's
-    keyboard part is, paired or not.
+    every key from Esc to D. A power button isn't one. Nor is any that
+    can't be typed on while the keyboard is away (maintainer, 2026-11-15):
+    a mouse udev tags a mouse too, as a gaming mouse with a keyboard's keys
+    is; a virtual keyboard a program makes, as keyd's is, which has no
+    hardware parent in sysfs; or a wireless keyboard its receiver says is
+    asleep, off or connected elsewhere, as Logitech's HID++ battery says
+    by its `online`, 0. A receiver plugged in, as by a KVM, lists a HID++
+    keyboard that's off with no battery at all, since the driver adds it
+    only once the keyboard connects, so one with none isn't a keyboard
+    yet. A HID++ keyboard with no battery to report would never count.
   - While the laptop's lid is closed, its built-in keyboard isn't one
     (maintainer, 2026-11-14): with an external monitor alone, only a
     keyboard plugged in can be typed on. Built-in is by the device's
     bus: i8042, I2C, SPI or host. A built-in keyboard on USB, as some
     laptops', still counts. The lid is `/proc/acpi/button/lid`'s.
   - `tide keyboards` names them. The lock and the greeter run it at start
-    and again on each input event `udevadm monitor` reports, so the
-    border follows a KVM switch within moments, and when logind says the
-    lid opened or closed (`LidClosed`, on the listener §7.3 has).
+    and again on each input or battery event `udevadm monitor` reports,
+    so the border follows a KVM switch within moments, and when logind
+    says the lid opened or closed (`LidClosed`, on the listener §7.3 has).
+  - Each time the keyboards change, the journal names them, or says
+    none, so a wake or a KVM switch can be followed.
   - If either command can't run, the field shows its focus as it did
     before, and says why in the journal.
 - **A prompt PAM wants answered visibly** (a one-time code it echoes, a
