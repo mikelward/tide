@@ -1953,11 +1953,35 @@ local function attention_without_shell()
         hl.dispatch(hl.dsp.focus({ last = true }))
     end
 end
-_G.conf_attention = { without_shell = attention_without_shell }
 bind("attention", key("A"), exec("qs -c tide ipc call switcher toggle attention || { "
     .. "notify-send -a tide 'No Attention tab' 'Super+A lists the windows that want attention in the tide shell, which is not running.'; "
     .. "hyprctl eval 'conf_attention.without_shell()'; }"),
     does("The windows that want attention"))
+
+-- The next window wanting attention (tide SPEC.md §14.3), with no key by
+-- default: tide's Keyboard shortcuts or tide-keys.lua give it one. A press
+-- goes to the Attention tab's top row, as Enter there does, clearing its
+-- mark, so the next press goes to the next one; with none, nothing. The
+-- shell does it from its list; without the shell, the focus guard from the
+-- same list (tide_focus.set_order), or in a plain login, where there's no
+-- guard, the urgent window.
+local function next_attention_without_shell()
+    local guard = rawget(_G, "tide_focus")
+    if type(guard) == "table" and type(guard.next_attention) == "function" then
+        guard.next_attention()
+        return
+    end
+    local urgent = query("next_attention: couldn't look for an urgent window", function()
+        local w = hl.get_urgent_window()
+        return w and w.address
+    end)
+    if urgent then
+        hl.dispatch(hl.dsp.focus({ window = "address:" .. urgent }))
+    end
+end
+_G.conf_attention = { without_shell = attention_without_shell, next_without_shell = next_attention_without_shell }
+bind("next_attention", {}, exec("qs -c tide ipc call attention next || hyprctl eval 'conf_attention.next_without_shell()'"),
+    does("Go to the next window wanting attention"))
 
 -- Screenshots to the clipboard as PNG: the screen, the focused window
 -- (Alt), or a region (Shift or Super). The `screenshot` option's command

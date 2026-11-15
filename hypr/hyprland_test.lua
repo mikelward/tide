@@ -1666,6 +1666,38 @@ test("without the shell, Super+A brings up the urgent window, or the last one", 
     S.urgent_window = nil
 end)
 
+test("next_attention has no key, runs the shell's attention next, and falls back to the guard", function()
+    load({ keys = [[return { keys = { next_attention = { "SUPER + CTRL + A" } } }]] })
+    local b = bind("SUPER + CTRL + A")
+    eq("Go to the next window wanting attention", b.opts.description)
+    local t = b.target
+    truthy(t.args:find("qs -c tide ipc call attention next || hyprctl eval 'conf_attention.next_without_shell()'", 1, true), t.args)
+    local script = tmp .. "/next-attention.sh"
+    local f = assert(io.open(script, "w"))
+    f:write(t.args, "\n")
+    f:close()
+    truthy(os.execute("sh -n '" .. script .. "'"), "the command parses as sh")
+end)
+
+test("without the shell, next_attention goes to the guard's latest mark, or the urgent window, or nowhere", function()
+    load()
+    local called = 0
+    _G.tide_focus = { next_attention = function() called = called + 1 return false end }
+    S.urgent_window = { address = "0xabc" }
+    S.dispatched = {}
+    conf_attention.next_without_shell()
+    eq(1, called, "the guard's list")
+    eq(0, #S.dispatched, "and nothing else, even with none marked there")
+    _G.tide_focus = nil
+    S.dispatched = {}
+    conf_attention.next_without_shell()
+    eq("address:0xabc", S.dispatched[1].args.window, "no guard: the urgent window")
+    S.urgent_window = nil
+    S.dispatched = {}
+    conf_attention.next_without_shell()
+    eq(0, #S.dispatched, "none urgent: nothing, not the last window")
+end)
+
 test("tide's notification popups are blacked out of screen shares", function()
     load()
     local r = S.layer_rules["no-share-notifications"]
@@ -3566,6 +3598,15 @@ test("the layout used last has no key of its own, and tide's keys can give it on
     same({}, keys.last_layout.keys)
     load()
     eq(nil, listed_keys().last_layout, "master has none")
+end)
+
+test("the next window wanting attention has no key by default, and is listed for tide's keys", function()
+    load()
+    local keys = listed_keys()
+    truthy(keys.next_attention, "listed")
+    eq("Go to the next window wanting attention", keys.next_attention.does)
+    same({}, keys.next_attention.defaults)
+    same({}, keys.next_attention.keys)
 end)
 
 test("the named bindings are listed for tide, in order, with what each does and its keys", function()

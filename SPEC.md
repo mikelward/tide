@@ -2148,6 +2148,7 @@ is a platform's other key, with why. The notes under the table say more.
 | the launcher: the switcher's Apps tab (§8); `launcher` | `Super+Space` | `Meta+Space` | `Search+Space`: the dashboard | `Super+Space` |
 | home, or back to the last workspace; `home_or_back` | **`Super+Tab`** | `Meta+Tab` | — | `Super+Tab` |
 | the switcher's Attention tab (§8.1); `attention` | **`Super+A`** | — | `Search+A` | `Super+A` |
+| **the next window wanting attention** (§14.3); `next_attention` | none; on tidewm, from your own config (below) | none | none | none |
 | the overview of every workspace's windows (§8.7) | — | — | none | differs: `Ctrl+Up`, Mission Control's key |
 | next keyboard layout (§16); `next_keyboard_layout` | **`Super+Alt+Space`** | — | — | differs: macOS's own *(unverified)* |
 | a terminal; `terminal` | `Super+T` | — | — | `Super+T` |
@@ -2205,6 +2206,10 @@ is a platform's other key, with why. The notes under the table say more.
   `Super+E`: `xdg-terminal-exec` and `xdg-open` without them. Hyprland
   binds the tap from 0.57: before it, a release binding fired after every
   `Super` chord. tidewm binds it with `--release Super_L`.
+  tidewm names only a binding with a key, so `next_attention` isn't in
+  `tidewm/tide.conf`: it sets `$next_attention` for your own config to
+  bind with `--name=next_attention`, and the Keyboard shortcuts page can
+  change it from then on.
 - **KDE.** KWin global shortcuts, each starting `tide:` in System
   Settings' Shortcuts, where you can change them. "—" there leaves the key to Plasma's
   own shortcut, if it has one. `Meta+Space` is tide's launcher, from
@@ -2230,6 +2235,9 @@ is a platform's other key, with why. The notes under the table say more.
 **What they do**, beyond the table:
 - **`Super+A`** lists every window wanting attention, on any workspace,
   most recent first; Enter goes there.
+- **`next_attention`** goes to the top of that list, as Enter there
+  does. That clears its mark, so the next press goes to the next one.
+  With none, it does nothing.
 - **`Super+Alt+Space`** works once there are two layouts, on every
   keyboard (§16), as a click on the bar's layout label does.
 - **The picker.** `Super+V` opens what you've copied, and emoji and
@@ -2604,7 +2612,9 @@ reads the settings files the shell writes (`tide-*.lua`).
   still win. `tidewm/config_test.sh` checks that it binds every name
   `hyprland.lua` does, so `keys.json` serves both. It leaves out three:
   `floating_rule` and `last_layout`, which tidewm has no command for yet,
-  and `restore`, which has no key by default (§6.6).
+  and `restore` and `next_attention`, which have no key by default and
+  which tidewm can't name without one (§6.6). The file sets
+  `$next_attention` for yours to bind.
 - **Names.** The Lua calls the shell makes, such as
   `conf_workspaces.reload()`, keep the `conf_` names from when this code
   was `conf`'s.
@@ -3106,6 +3116,8 @@ See [`switcher.png`](docs/mocks/switcher.png).
 - **Keys that open it.** Each opens it on its own tab: a tap of `Super`
   and `Super+Space` on Apps, and `Super+A` on Attention (§6.6). The same
   key again, or `Esc`, closes it; another tab's key moves to that tab.
+  `next_attention`, with no key by default, goes to Attention's top row
+  without opening it (§14.3).
   Workspaces, Windows and Actions have no key of their own: `Tab` reaches
   them.
   - tide's Hyprland and tidewm configs bind them (`hypr/hyprland.lua`,
@@ -4970,6 +4982,16 @@ this spec.
     `tide_focus.focus_attention()`, `end_cycle()` and `tide-cycle`
     events are gone. With no marks, the tab says so, and there's no
     fallback to the last window.
+  - The cycle is back beside the tab, simpler, as `next_attention`, a
+    binding with no key by default (§6.6). Each press goes to the tab's
+    top row, as Enter does, which clears its mark, so the next press goes
+    to the next one. Nothing is held, and with no marks it does nothing.
+    It runs the shell's `qs -c tide ipc call attention next`. Without the
+    shell, `tide_focus.next_attention()` goes to the top of the guard's
+    list, which is the shell's last order; in a plain Hyprland login, with
+    no guard, Hyprland's urgent window; and on tidewm, the window tidewm
+    marked urgent last. Focusing a window by any means takes it off the
+    guard's copy of the shell's list.
 - **Polkit prompts in M2.** The transitional polkit agent is a window of
   its own, and Lua can't see which process asked. So the guard applies the
   keyboard half of the §14.1 rule: a known agent's window takes focus when

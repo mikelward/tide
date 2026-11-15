@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    TABS, PLASMA_TABS, tabsFor, TAB_NAMES, PLACEHOLDERS, footerKeys, movedTab, toggled, logoTapped, tabChanged, workspaceRows, windowRows, attentionRows, emptyText,
+    TABS, PLASMA_TABS, tabsFor, TAB_NAMES, PLACEHOLDERS, footerKeys, movedTab, toggled, logoTapped, tabChanged, workspaceRows, windowRows, attentionRows, nextAttention, emptyText,
 } from "./switcher.mjs";
 import { NO_MARKS, updateMarks, barWorkspaces } from "./workspaces.mjs";
 
@@ -108,6 +108,29 @@ test("the Attention tab lists the marked windows, the latest mark first", () => 
     // Focusing one clears its mark, and it leaves the tab.
     const after = updateMarks(marks, { type: "focused", address: "b" });
     assert.deepEqual(attentionRows(windows, after, "").map((r) => r.item.address), ["a"]);
+});
+
+test("next_attention goes to the Attention tab's top row, then the next, then nowhere", () => {
+    let marks = updateMarks(NO_MARKS, { type: "guarded", address: "a" });
+    marks = updateMarks(marks, { type: "guarded", address: "b" });
+    assert.equal(nextAttention(windows, marks).address, "b", "the latest mark");
+    // Going there focuses it, which clears its mark.
+    marks = updateMarks(marks, { type: "focused", address: "b" });
+    assert.equal(nextAttention(windows, marks).address, "a", "then the next");
+    marks = updateMarks(marks, { type: "focused", address: "a" });
+    assert.equal(nextAttention(windows, marks), null, "none marked: nothing, not the last window");
+});
+
+test("next_attention restores a minimized window, and skips a muted app's", () => {
+    let marks = updateMarks(NO_MARKS, { type: "guarded", address: "a" });
+    marks = updateMarks(marks, { type: "guarded", address: "b" });
+    const listed = [
+        { address: "a", title: "Chat", app: "chat", appName: "Chat", workspace: "special:minimized:in", focus: 1 },
+        { address: "b", title: "Slack", app: "Slack", appName: "Slack", workspace: "re", focus: 0 },
+    ];
+    const next = nextAttention(listed, marks, ["slack"]);
+    assert.equal(next.address, "a");
+    assert.equal(next.restoreTo, "in", "back where it came from, as Enter does");
 });
 
 test("a tab with nothing to show says so", () => {
