@@ -905,7 +905,7 @@ teardown
 setup; ARGS=(); run FAKE_ENTRY_TRYEXEC="$T/usr-bin/uwsm"
 check "session: a TryExec path that's there is fine" test "$status" -eq 0
 teardown
-setup; ARGS=(--no-tidewm); rm "$T/usr-bin/uwsm"; run FAKE_ENTRY_TRYEXEC=
+setup; ARGS=(--no-tidewm --no-tidesway); rm "$T/usr-bin/uwsm"; run FAKE_ENTRY_TRYEXEC=
 check "session: an entry without TryExec is always listed" test "$status" -eq 0
 teardown
 # Beside it, tide (tidewm)'s session is checked too, and starts through uwsm.
@@ -926,7 +926,7 @@ check "session: no Hyprland is a warning beside tidewm" test "$status" -eq 0
 check "session: no Hyprland says the session won't show" has "$output" "Hyprland isn't installed, so the tide (Hyprland) session won't show at the login screen"
 teardown
 # Without tidewm, there's no session at all.
-setup; ARGS=(--no-tidewm); rm "$T/usr-bin/Hyprland"; run
+setup; ARGS=(--no-tidewm --no-tidesway); rm "$T/usr-bin/Hyprland"; run
 check "session: no Hyprland ends the run" test "$status" -ne 0
 check "session: no Hyprland says there's no session" has "$output" "neither Hyprland 0.56.2 or later nor tidewm is installed"
 teardown
@@ -937,7 +937,7 @@ teardown
 # A Hyprland too old for tide's config (0.56.1, where the build
 # couldn't run) would log in to Hyprland's banner with no tide keys or bar.
 # The run ends, saying so, and the session comes off the login screen.
-setup; ARGS=(--no-tidewm); run FAKE_GREETER_HYPRLAND_VERSION=0.56.1
+setup; ARGS=(--no-tidewm --no-tidesway); run FAKE_GREETER_HYPRLAND_VERSION=0.56.1
 check "session: a Hyprland too old ends the run" test "$status" -ne 0
 check "session: and says why" has "$output" \
     "its Hyprland is 0.56.1, and tide's config needs 0.56.2 or later"
@@ -945,7 +945,7 @@ check "session: and takes the session off the login screen" test ! -e "$T/share/
 check "session: and is repeated at the end" \
     has "$(printf '%s\n' "$output" | sed -n '/from this run, again:/,$p')" "its Hyprland is 0.56.1"
 teardown
-setup; ARGS=(--no-tidewm --ignore-errors); run FAKE_GREETER_HYPRLAND_VERSION=0.56.1
+setup; ARGS=(--no-tidewm --no-tidesway --ignore-errors); run FAKE_GREETER_HYPRLAND_VERSION=0.56.1
 check "session: --ignore-errors still takes a session that can't run off the login screen" \
     test ! -e "$T/share/wayland-sessions/tide.desktop"
 check "session: and still fails the run, at the end" test "$status" -eq 1
@@ -1225,6 +1225,8 @@ Nothing new to install
 Installing fcitx5, for accents in tide
 Nothing new to install
 Installing tidewm's build dependencies
+Nothing new to install
+Installing tidesway's build dependencies
 Nothing new to install
 tide-setup finished with no warnings or errors"
 check "quiet: a rerun starts the log afresh" test "$(log | grep -c '^+ make -C .* install GO=go$')" -eq 1

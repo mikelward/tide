@@ -247,7 +247,10 @@ done
 MOCK
     # meson setup also logs the compilers it was given, and the run path
     # and pkg-config path when it's given a run path. Setting up the
-    # checkout \$FAKE_MESON_FAILS names fails.
+    # checkout \$FAKE_MESON_FAILS names fails. Installing tidesway's build
+    # installs its sway and its tidesway command into the prefix its setup
+    # was given; that answers -v as sway's --version, or, with
+    # \$FAKE_TIDESWAY_BROKEN, as one whose wlroots is gone.
     cat > "$T/bin/meson" <<MOCK
 #!/bin/sh
 printf "%s\\n" "meson \$*" >> "$CALLS"
@@ -255,6 +258,25 @@ test "\$1" != setup || printf "%s\\n" "meson compilers CC=\$CC CXX=\$CXX" >> "$C
 if test "\$1" = setup; then
     case "\$LDFLAGS" in *-rpath*) printf "%s\\n" "meson env: PKG_CONFIG_PATH=\$PKG_CONFIG_PATH LDFLAGS=\$LDFLAGS" >> "$CALLS" ;; esac
     test "\${3##*/}" != "\${FAKE_MESON_FAILS:-no such checkout}" || exit 1
+    for arg; do
+        case "\$arg" in
+            --prefix=*) mkdir -p "\$2" && printf "%s\\n" "\${arg#--prefix=}" > "\$2/fake-prefix" ;;
+        esac
+    done
+fi
+if test "\$1" = install && test "\$2" = -C && test "\${3%/build}" != "\$3" && test "\${3%/build}" = "\${3%/tidesway/build}/tidesway"; then
+    prefix=\$(cat "\$3/fake-prefix") || exit 1
+    mkdir -p "\$prefix/bin"
+    printf "#!/bin/sh\\n" > "\$prefix/bin/sway"
+    {
+        printf "#!/bin/sh\\n"
+        printf "if test -n \\"\\\$FAKE_TIDESWAY_BROKEN\\"; then\\n"
+        printf "    echo \\"sway: error while loading shared libraries: libwlroots-0.20.so: cannot open shared object file: No such file or directory\\" >&2\\n"
+        printf "    exit 127\\n"
+        printf "fi\\n"
+        printf "echo \\"sway version 1.12-5ea0000 (Nov 15 2026, branch 'main')\\"\\n"
+    } > "\$prefix/bin/tidesway"
+    chmod 755 "\$prefix/bin/sway" "\$prefix/bin/tidesway"
 fi
 MOCK
     # pkg-config finds wlroots-0.20 unless apt has no libwlroots-0.20-dev
@@ -491,10 +513,11 @@ MOCK
     # git clone creates the checkout, its last argument, or fails for a
     # repository named in \$FAKE_CLONE_FAILS; pull just logs, or
     # fails with \$FAKE_PULL_FAILS. Both say what they did, as git does,
-    # unless --quiet. ls-remote names tidewm's main as \$FAKE_TIDEWM_MAIN,
-    # or a fixed commit, or fails with \$FAKE_LS_REMOTE_FAILS. A tidewm
-    # clone is at main, or \$FAKE_TIDEWM_CLONED, and checkout moves it, unless
-    # \$FAKE_CHECKOUT_FAILS.
+    # unless --quiet. ls-remote names tidewm's main as \$FAKE_TIDEWM_MAIN and
+    # tidesway's as \$FAKE_TIDESWAY_MAIN, or fixed commits, or fails with
+    # \$FAKE_LS_REMOTE_FAILS. A tidewm clone is at main, or
+    # \$FAKE_TIDEWM_CLONED, a tidesway one at main, or \$FAKE_TIDESWAY_CLONED,
+    # and checkout moves it, unless \$FAKE_CHECKOUT_FAILS.
     cat > "$T/bin/git" <<MOCK
 #!/bin/sh
 printf "%s\\n" "git \$*" >> "$CALLS"
@@ -506,6 +529,7 @@ while test "\$i" -lt "\${GIT_CONFIG_COUNT:-0}"; do
     i=\$((i + 1))
 done
 tidewm_main=\${FAKE_TIDEWM_MAIN:-71de000000000000000000000000000000000001}
+tidesway_main=\${FAKE_TIDESWAY_MAIN:-5ea0000000000000000000000000000000000001}
 if test "\$1" = ls-remote; then
     if test -n "\$FAKE_LS_REMOTE_FAILS"; then
         echo "fatal: unable to access '\$2/': Could not resolve host: github.com" >&2
@@ -513,6 +537,7 @@ if test "\$1" = ls-remote; then
     fi
     case "\$2" in
         */tidewm.git) printf "%s\\t%s\\n" "\$tidewm_main" "\$3" ;;
+        */tidesway.git) printf "%s\\t%s\\n" "\$tidesway_main" "\$3" ;;
     esac
     exit 0
 fi
@@ -533,6 +558,7 @@ if test "\$1" = clone; then
     esac
     mkdir -p "\$last/.git"
     test "\${last##*/}" != tidewm || echo "\${FAKE_TIDEWM_CLONED:-\$tidewm_main}" > "\$last/.git/fake-head"
+    test "\${last##*/}" != tidesway || echo "\${FAKE_TIDESWAY_CLONED:-\$tidesway_main}" > "\$last/.git/fake-head"
     # A Hyprland pin's checkout has the build file its pin names, or a
     # CMakeLists.txt for the one in \$FAKE_CHECKOUT_CMAKE.
     kind=\$(awk -v name="\${last##*/}" '\$1 == name { print \$3 }' "$T/pins")
@@ -1034,6 +1060,7 @@ run() {
         HYPRLAND_PREFIX="$T/opt/hyprland" HYPRLAND_SRC="$T/src/hyprland-build" HYPRLAND_BIN_DIR="$T/usr-local-bin" \
         QUICKSHELL_PREFIX="$T/opt/quickshell" QUICKSHELL_SRC="$T/src/quickshell-build" QUICKSHELL_BIN_DIR="$T/usr-local-bin" \
         TIDEWM_PREFIX="$T/opt/tidewm" TIDEWM_SRC="$T/src/tidewm-build" TIDEWM_BIN_DIR="$T/usr-local-bin" \
+        TIDESWAY_PREFIX="$T/opt/tidesway" TIDESWAY_SRC="$T/src/tidesway-build" TIDESWAY_BIN_DIR="$T/usr-local-bin" \
         SETUP_GREETD_DIR="$T/etc/greetd" SETUP_GREETD_TEMPLATE="$T/greetd.toml" \
         SETUP_GREETER_PATH="$T/usr-local-bin:$T/usr-bin" SETUP_GREETER_HOME="$T/var/lib/tide-greeter" SETUP_LOOK_ROOT="$T/var/lib/tide/look" \
         SETUP_STATE_DIR="$T/var/lib/setup-tide" SETUP_PAM_DIR="$T/pam.d" SETUP_LOGIN_DEFS="$T/login.defs" \
