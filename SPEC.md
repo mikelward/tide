@@ -2485,7 +2485,19 @@ in the bottom-right corner. The other four options there were weighed and
 not taken.
 
 - **`Super+Z` minimizes the focused window.** It leaves the layout, which
-  re-tiles without it, and focus goes to the window that was under it.
+  re-tiles without it.
+  - Focus goes to the window under the pointer, as when you close one
+    (§14.2): usually the one that re-tiled into its spot. With the
+    pointer over no window, such as the bar or a gap, focus goes to the
+    window you were in before on that monitor. So it does with the
+    pointer on another monitor, where it only is when you moved focus
+    without it, even over a floating window that overhangs it. The
+    pointer stays put.
+  - Hyprland's own silent move would focus the window at the old one's
+    middle, or else the workspace's first (`Actions::moveToWorkspace`,
+    0.57.1). So the shell minimizes through the focus guard,
+    `tide_focus.minimize`, which focuses the right one after it.
+    tidewm does the same itself.
   - `Super+Delete` was the other candidate. It's ambiguous with
     `Super+Backspace`, which closes the window: a Mac keyboard labels
     Backspace "delete".
@@ -4914,6 +4926,7 @@ this spec.
   qtile configs both turned warping off.
 - **Closing a window** focuses the window under the pointer
   (`input:focus_on_close cursor`), like KWin's NextFocusPrefersMouse.
+  Minimizing one does the same (§6.7).
 - **A link clicked in kitty** is handed to the running Chrome, which asks
   to activate its window.
   - KWin allows that, because kitty's activation token carries a fresh

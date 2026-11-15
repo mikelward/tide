@@ -148,14 +148,23 @@ export function closeWindow(address, lua) {
 
 // Minimize the window at `address` from the workspace named `name`: a
 // silent move to that workspace's minimize workspace, which nothing shows
-// (SPEC.md §6.7). Focus goes to the window that was under it. Restoring it
+// (SPEC.md §6.7). Focus goes to the window under the pointer, or the one
+// you were in before (tide_focus.minimize). Restoring it
 // is moveWindowToWorkspace back to `name`.
 export function minimizeWindow(address, name, lua) {
     const w = windowAddress(address);
-    const target = minimizedWorkspace(workspaceName(name));
-    return lua
-        ? `hl.dsp.window.move({ workspace = ${luaString(target)}, follow = false, window = ${luaString(w)} })`
-        : `movetoworkspacesilent ${target},${w}`;
+    const n = workspaceName(name);
+    const target = minimizedWorkspace(n);
+    if (!lua) {
+        return `movetoworkspacesilent ${target},${w}`;
+    }
+    // The focus guard moves it and then focuses the window under the
+    // pointer (SPEC.md §6.7), where Hyprland's silent move would focus the
+    // one at its old middle.
+    const move = `hl.dsp.window.move({ workspace = ${luaString(target)}, follow = false, window = ${luaString(w)} })`;
+    return "function() if type(tide_focus) == \"table\" and type(tide_focus.minimize) == \"function\" then "
+        + `tide_focus.minimize(${luaString(w.slice("address:".length))}, ${luaString(n)}) `
+        + `else hl.dispatch(${move}) end end`;
 }
 
 // Float the window at `address`, leaving one floating already as it is: a

@@ -70,8 +70,12 @@ test("its Esc closes a window politely, by address", () => {
 });
 
 test("minimizing moves a window silently to its workspace's minimize workspace", () => {
+    // Through the focus guard, which then focuses the window under the
+    // pointer (SPEC.md §6.7), or Hyprland's own move without it.
     assert.equal(minimizeWindow("55AA01", "re", true),
-        'hl.dsp.window.move({ workspace = "special:minimized:re", follow = false, window = "address:0x55aa01" })');
+        'function() if type(tide_focus) == "table" and type(tide_focus.minimize) == "function" then '
+        + 'tide_focus.minimize("0x55aa01", "re") '
+        + 'else hl.dispatch(hl.dsp.window.move({ workspace = "special:minimized:re", follow = false, window = "address:0x55aa01" })) end end');
     assert.equal(minimizeWindow("0x55aa01", "PR-12, login", false), "movetoworkspacesilent special:minimized:PR-12, login,address:0x55aa01");
     assert.throws(() => minimizeWindow("x) os.exit(", "re", true), /not a window address/);
     assert.throws(() => minimizeWindow("55aa01", "a\nb", true), /not a workspace name/);
