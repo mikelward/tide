@@ -4,11 +4,11 @@
 # greetd's greeter user: a compositor that shows the greeter
 # (share/tide/shell/greeter.qml) on every monitor and exits when the greeter
 # does, so greetd can start the session it chose. The compositor is
-# tidewm, with a config this writes, where tidewm runs and tide-msg is
-# here to end it; else Hyprland, with share/tide/greeter/hyprland.lua. The
-# greeter talks to greetd through tide-greetd, beside this command. `make
-# install-session` puts them all under the same PREFIX, which is how this
-# finds the rest.
+# tidewm, with a config this writes and only its keys (-k), where tidewm
+# runs, has -k and tide-msg is here to end it; else Hyprland, with
+# share/tide/greeter/hyprland.lua. The greeter talks to greetd through
+# tide-greetd, beside this command. `make install-session` puts them all
+# under the same PREFIX, which is how this finds the rest.
 #
 # The keyboard is the system's X11 keymap as localed has it (`localectl
 # set-x11-keymap`; /etc/default/keyboard on Debian), which `setup` sets to
@@ -99,11 +99,13 @@ greetd_client=$(dirname -- "$0")/tide-greetd
 if ! test -x "$greetd_client"; then
     text_login "can't run $greetd_client; install the greeter with \`make install-session\`"
 fi
-# The compositor: tidewm, tide's own, where it runs (`tidewm -v`) and
-# tide-msg is beside this to end it, else Hyprland. Which, and why, is
-# logged.
+# The compositor: tidewm, tide's own, where it runs (`tidewm -v`), has -k
+# and tide-msg is beside this to end it, else Hyprland. Which, and why, is
+# logged; why not tidewm is kept in $no_tidewm, for a text login should
+# Hyprland be missing too.
 tide_msg=$(dirname -- "$0")/tide-msg
 compositor=Hyprland
+no_tidewm=
 # `tidewm -v` prints "dwl VERSION" and exits 1, as dwl does, so a version
 # named counts as running, as setup's tidewm_ready takes it; anything else
 # is a tidewm that can't run, such as one missing a library.
@@ -116,19 +118,38 @@ tidewm_runs() {
     esac
     return 1
 }
+# Whether tidewm has -k: its usage, which `tidewm -h` prints, lists it.
+# One older than -k would refuse it and not start at all.
+tidewm_has_k() {
+    case "$(tidewm -h 2>&1)" in
+        *"Usage:"*"[-k]"*) return 0 ;;
+    esac
+    return 1
+}
 if command -v tidewm >/dev/null 2>&1; then
     if ! tidewm_runs; then
-        echo "$prog: tidewm -v failed ($(printf '%s\n' "$tw_version" | sed -n '$p')); the greeter runs on Hyprland" >&2
+        no_tidewm="tidewm -v failed ($(printf '%s\n' "$tw_version" | sed -n '$p'))"
+    elif ! tidewm_has_k; then
+        # Without -k, tidewm turns config.h's keys to quit, open a terminal
+        # and open the launcher back on whenever its config has no exit
+        # binding, as the greeter's hasn't: a terminal at the login screen.
+        no_tidewm="tidewm is older than -k, which keeps its own keys, a terminal's among them, off the login screen (tidewm -v says $(printf '%s\n' "$tw_version" | sed -n '1p'))"
     elif ! test -x "$tide_msg"; then
-        echo "$prog: can't run $tide_msg, which ends tidewm; the greeter runs on Hyprland" >&2
+        no_tidewm="can't run $tide_msg, which ends tidewm"
     else
         compositor=tidewm
     fi
+fi
+if test -n "$no_tidewm"; then
+    echo "$prog: $no_tidewm; the greeter runs on Hyprland" >&2
 fi
 echo "$prog: the greeter runs on $compositor" >&2
 
 for command in "$compositor" qs; do
     if ! command -v "$command" >/dev/null 2>&1; then
+        if test "$command" = Hyprland && test -n "$no_tidewm"; then
+            text_login "there's no Hyprland on the greeter's PATH ($PATH), and $no_tidewm; rerun setup"
+        fi
         text_login "there's no $command on the greeter's PATH ($PATH); rerun setup"
     fi
 done
@@ -213,9 +234,10 @@ quote() {
 }
 
 # tidewm_config: tidewm's config for the greeter, on stdout. One binding
-# that does nothing, so the file's bindings are all there are and
-# config.h's aren't (Ctrl+Alt+F1-F12 switch VT whatever it binds); no
-# window drags; and localed's keymap. A keymap value tidewm's syntax can't
+# that does nothing, so the file's bindings are all there are, and tidewm
+# runs with -k, so config.h's never come back, not even for a config with
+# an error or no exit binding (Ctrl+Alt+F1-F12 switch VT whatever it
+# binds); no window drags; and localed's keymap. A keymap value tidewm's syntax can't
 # carry as one word is left out, and said.
 tidewm_config() {
     echo "# tide's greeter on tidewm, written by tide-greeter at each start."
@@ -270,7 +292,7 @@ if test "$compositor" = tidewm; then
     # qs reads which compositor it's on from here (shell/lib/compositor.mjs).
     # And which tide-msg to ask tidewm with: the one beside this, which setup
     # checked, not whichever is first on the PATH.
-    XDG_CURRENT_DESKTOP=tidewm TIDE_GREETER_MSG=$tide_msg tidewm -c "$tw_config" -s "$(tidewm_command)" 3>&-
+    XDG_CURRENT_DESKTOP=tidewm TIDE_GREETER_MSG=$tide_msg tidewm -k -c "$tw_config" -s "$(tidewm_command)" 3>&-
 else
     Hyprland --config "$config" 3>&-
 fi
