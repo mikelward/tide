@@ -750,9 +750,13 @@ export function steppedShadowsAt(at, steps) {
 const SHADOWS_CONF = Object.freeze({ none: "disable", floating: "floating", focused: "active", all: "all" });
 
 // How far a shadow reaches, in pixels (SPEC.md §6.2), when nothing says:
-// hypr/hyprland.lua's SHADOW_RANGE, and tidewm's and tidesway's own
-// shadow_blur_radius.
-export const SHADOW_SIZE = 8;
+// hypr/hyprland.lua's SHADOW_RANGE, and tidewm/tide.conf's
+// shadow_blur_radius, which tidewm and tidesway read. Each compositor
+// draws it alike, so one number is one shadow on all of them: black at
+// 0x44 by the window's edge, fading as the square of the distance, gone
+// at this many pixels (Hyprland's shadow.glsl, render_power 2; tidewm's
+// effects.h).
+export const SHADOW_SIZE = 16;
 // The farthest the page and the files allow. Hyprland's range and the
 // others' shadow_blur_radius stop at 100.
 export const SHADOW_SIZE_MAX = 32;

@@ -740,7 +740,7 @@ local DIM_STRENGTH = 0.12
 -- rounded corners off.
 local ROUNDING = 6
 -- How far a shadow reaches, unless the Borders page sets a size.
-local SHADOW_RANGE = 8
+local SHADOW_RANGE = 16
 -- Which windows cast one, unless the Borders page says: none, floating
 -- ones, the focused one, tiled or floating, or all of them.
 local SHADOWS = "focused"
