@@ -3,6 +3,9 @@
 // desktops and the current one (org.kde.KWin.VirtualDesktopManager), its
 // windows (the krunner1 runner at /WindowsRunner, whose empty query lists
 // them all) and each one's app and desktop (org.kde.KWin.getWindowInfo).
+// KWin's D-Bus doesn't say which windows want attention, so tide on KDE
+// (mikelward/tide-kde), a KWin script, keeps their UUIDs in the desktop's
+// settings in plasmashell, which the Attention tab reads.
 // Pure functions over busctl's JSON, so they test with no KWin; KWinData.qml
 // runs the commands.
 
@@ -21,6 +24,12 @@ export const WINDOWS_COMMAND = Object.freeze(BUSCTL.concat(["call", KWIN, "/Wind
 export function infoCommand(uuids) {
     return ["sh", "-c", 'for id; do busctl --user --json=short call org.kde.KWin /KWin org.kde.KWin getWindowInfo s "$id" || echo null; done', "sh"].concat(uuids);
 }
+
+// The windows wanting attention, as tide on KDE keeps them: their UUIDs as
+// JSON, in the desktop's settings, group "tide", key "attention".
+const ATTENTION_SCRIPT = 'const d = desktops()[0]; if (d) { d.currentConfigGroup = ["tide"]; print(d.readConfig("attention", "[]")); }';
+export const ATTENTION_COMMAND = Object.freeze(BUSCTL.concat(["call", "org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell",
+    "evaluateScript", "s", ATTENTION_SCRIPT]));
 
 // Activates the window the runner matched as `match`.
 export function activateCommand(match) {
@@ -74,6 +83,27 @@ export function parseWindows(text) {
     return out;
 }
 
+// The UUIDs of the windows wanting attention, from ATTENTION_COMMAND's
+// output: none when plasmashell has nothing, as without tide on KDE.
+// Throws on a list that isn't one, naming it.
+export function parseAttention(text) {
+    const [reply] = jsonLines(text);
+    const saved = String(reply?.data?.[0] ?? "").trim();
+    if (saved === "") {
+        return [];
+    }
+    let list;
+    try {
+        list = JSON.parse(saved);
+    } catch (e) {
+        throw new Error(`the windows wanting attention aren't a list: ${saved.slice(0, 80)}`);
+    }
+    if (!Array.isArray(list)) {
+        throw new Error(`the windows wanting attention aren't a list: ${saved.slice(0, 80)}`);
+    }
+    return list.filter((id) => typeof id === "string");
+}
+
 // Each window's {app, desktops}, by UUID, from infoCommand's output for
 // `uuids`, in the same order. A window gone meanwhile reads as null and is
 // left out.
@@ -97,10 +127,11 @@ export function parseInfo(text, uuids) {
 
 // The Windows tab's windows, as the launcher lists them (allWindows):
 // {address, title, app, workspace, urgent, focus}. `address` is the
-// runner's match, which activateCommand takes. A window on every desktop
-// (none listed) shows none; one gone since the list is left out, as is one
-// that asks to be left out of switchers.
-export function launcherWindows(windows, info, desktops) {
+// runner's match, which activateCommand takes; `urgent`, whether its UUID
+// is in `attention`. A window on every desktop (none listed) shows none;
+// one gone since the list is left out, as is one that asks to be left out
+// of switchers.
+export function launcherWindows(windows, info, desktops, attention = []) {
     const names = {};
     for (const d of desktops) {
         names[d.id] = d.name;
@@ -114,7 +145,7 @@ export function launcherWindows(windows, info, desktops) {
                 title: w.title,
                 app: i2.app,
                 workspace: i2.desktops.length === 1 ? (names[i2.desktops[0]] ?? "") : "",
-                urgent: false,
+                urgent: attention.includes(w.uuid),
                 focus: i,
             };
         });
@@ -123,9 +154,10 @@ export function launcherWindows(windows, info, desktops) {
 // The Workspaces tab's workspaces, as Switcher.workspaceRows takes them:
 // every desktop in KWin's order, the current one marked, with how many
 // windows each has and the first one's app, a window on every desktop (none
-// listed) counting on each. `desktop` is the desktop's ID, which goCommand
+// listed) counting on each, and whether one of its own wants attention (a
+// UUID in `attention`). `desktop` is the desktop's ID, which goCommand
 // takes, as two desktops may share a name.
-export function launcherWorkspaces(desktops, current, windows, info) {
+export function launcherWorkspaces(desktops, current, windows, info, attention = []) {
     return desktops.map((d) => {
         const here = windows.filter((w) => {
             const on = info[w.uuid]?.desktops;
@@ -137,7 +169,7 @@ export function launcherWorkspaces(desktops, current, windows, info) {
             name: d.name,
             home: false,
             state: d.id === current ? "current" : here.length > 0 ? "occupied" : "empty",
-            urgent: false,
+            urgent: here.some((w) => attention.includes(w.uuid) && info[w.uuid].desktops.length > 0),
             count: here.length,
             app: here.length > 0 ? info[here[0].uuid].app : "",
         };

@@ -29,8 +29,8 @@ PanelWindow {
     id: root
 
     // On KDE Plasma (SPEC.md §8.5), where kde.qml runs it alone: Apps,
-    // Workspaces, Windows and Actions, Plasma's actions, kstart, KWin's
-    // desktops and windows (KWinData), and nothing that asks Hyprland or
+    // Workspaces, Windows, Attention and Actions, Plasma's actions, kstart,
+    // KWin's desktops and windows (KWinData), and nothing that asks Hyprland or
     // starts tide's own state (Compositor, NotificationData and the rest).
     readonly property bool plasma: LauncherData.plasma
     // The tabs it has (Switcher.tabsFor).
@@ -94,6 +94,7 @@ PanelWindow {
     readonly property var rows: root.tab === "workspaces" ? Switcher.workspaceRows(root.workspaceList, root.query)
         : root.tab === "windows" && root.plasma ? Switcher.windowRows(root.allWindows, root.query)
         : root.tab === "windows" ? Switcher.windowRows(root.allWindows, root.query, WorkspacesData.muted, Tabs.tabRows(TabsData.browsers, root.allWindows))
+        : root.tab === "attention" && root.plasma ? Switcher.attentionRows(root.allWindows, Workspaces.NO_MARKS, root.query)
         : root.tab === "attention" ? Switcher.attentionRows(root.allWindows, MarkData.marks, root.query, WorkspacesData.muted)
         : root.appRows
     // Frecency is read as of the opening, so the order doesn't shift while

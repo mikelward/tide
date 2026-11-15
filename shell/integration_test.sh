@@ -1855,8 +1855,9 @@ launch() {
 # unless Meta+Space's `launcher toggle` opens it, "cafepro" and Enter run
 # Café Probe through kstart by its desktop ID, and "zebra" and Enter open a
 # System Settings page that's hidden from menus. Then, on its Windows tab,
-# "probe" and Enter must activate KWin's window of that title, and on its
-# Workspaces tab, "re" and Enter go to that desktop. A stand-in kstart on
+# "probe" and Enter must activate KWin's window of that title, on its
+# Workspaces tab, "re" and Enter go to that desktop, and on its Attention
+# tab, Enter activates the one window tide on KDE says wants attention. A stand-in kstart on
 # its PATH keeps each command, and a stand-in busctl answers as KWin's
 # D-Bus does (shell/lib/kwin_test.mjs has KWin's own answers) and keeps
 # each call. It must not ask Hyprland, which Plasma doesn't
@@ -1883,6 +1884,8 @@ case "\$*" in
     echo '{"type":"a{sv}","data":[{"uuid":{"type":"s","data":"{w1}"},"desktopFile":{"type":"s","data":"tide-test-probe"},"desktops":{"type":"as","data":["d2"]}}]}' ;;
 *getWindowInfo*w2*)
     echo '{"type":"a{sv}","data":[{"uuid":{"type":"s","data":"{w2}"},"desktopFile":{"type":"s","data":"foot"},"desktops":{"type":"as","data":["d1"]}}]}' ;;
+*evaluateScript*attention*)
+    echo '{"type":"s","data":["[\\"{w2}\\"]"]}' ;;
 esac
 EOF
     chmod +x "$tmp/bin/busctl" || exit 1
@@ -1944,17 +1947,20 @@ EOF
     fi
     # KWin's windows and desktops: each tab reads them as it opens, so the
     # query waits for that read to be in
-    for _tab in "windows:probe:Run ss 0_{w1} " "workspaces:re:set-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager current s d2"; do
+    for _tab in "windows:probe:Run ss 0_{w1} " "workspaces:re:set-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager current s d2" \
+        "attention::Run ss 0_{w2} "; do
         _name=${_tab%%:*}
         _rest=${_tab#*:}
         _query=${_rest%%:*}
         _call=${_rest#*:}
         _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
-        _reads=$(grep -c "read 2 of KWin's windows and 2 desktops" "$log")
+        _reads=$(grep -c "read 2 of KWin's windows, 1 wanting attention, and 2 desktops" "$log")
+        # Each tab's own calls, so one can't pass on another's
+        : >"$tmp/busctl" || exit 1
         ipc call switcher toggle "$_name" >/dev/null || exit 1
         focused "$_focus"
         i=0
-        until test "$(grep -c "read 2 of KWin's windows and 2 desktops" "$log")" -gt "$_reads"; do
+        until test "$(grep -c "read 2 of KWin's windows, 1 wanting attention, and 2 desktops" "$log")" -gt "$_reads"; do
             if waited "the launcher on Plasma didn't read KWin's windows on its $_name tab" "$i"; then
                 cat "$tmp/busctl" >&2
                 grep -v '^\[' "$log" >&2

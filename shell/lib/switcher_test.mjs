@@ -172,15 +172,16 @@ test("the logo opens Apps, closes it on its own monitor, and moves it from anoth
     assert.deepEqual(logoTapped(true, "apps", true), { visible: true, tab: "apps", move: true });
 });
 
-test("on Plasma, the switcher has KWin's workspaces and windows, but no Attention, nor workspace to open on", () => {
-    assert.deepEqual(tabsFor(true), ["apps", "workspaces", "windows", "actions"]);
+test("on Plasma, the switcher has KWin's workspaces, windows and windows wanting attention, but no workspace to open on", () => {
+    assert.deepEqual(tabsFor(true), ["apps", "workspaces", "windows", "attention", "actions"]);
     assert.equal(tabsFor(false), TABS);
     assert.equal(movedTab("apps", 1, PLASMA_TABS), "workspaces");
-    assert.equal(movedTab("windows", 1, PLASMA_TABS), "actions");
+    assert.equal(movedTab("windows", 1, PLASMA_TABS), "attention");
     assert.equal(movedTab("apps", -1, PLASMA_TABS), "actions");
-    assert.throws(() => toggled(false, "apps", "attention", PLASMA_TABS));
+    assert.deepEqual(toggled(false, "apps", "attention", PLASMA_TABS), { visible: true, tab: "attention" });
     assert.deepEqual(toggled(false, "apps", "windows", PLASMA_TABS), { visible: true, tab: "windows" });
     assert.equal(footerKeys("windows", true).some(([k]) => k === "Ctrl+M"), false, "muting is tide's notifications'");
+    assert.equal(footerKeys("attention", true).some(([k]) => k === "Ctrl+M"), false);
     const keys = footerKeys("apps", true).map(([k]) => k);
     assert.equal(keys.includes("Ctrl+↵"), false);
     assert.equal(keys.includes("PgDn"), true);
@@ -193,4 +194,13 @@ test("workspace rows keep KWin's desktop IDs, as two desktops may share a name",
     ];
     assert.deepEqual(workspaceRows(list, "").map((r) => r.item.desktop), ["a", "b"]);
     assert.equal(workspaceRows([{ id: 1, name: "in", state: "current", count: 0 }], "")[0].item.desktop, null);
+});
+
+test("on Plasma, the Attention tab lists the windows KWin marks, with no marks of tide's own", () => {
+    const windows = [
+        { address: "0_{a}", title: "shell", app: "kitty", appName: "kitty", workspace: "in", urgent: false, focus: 0 },
+        { address: "0_{b}", title: "Chat", app: "chat", appName: "Chat", workspace: "re", urgent: true, focus: 1 },
+    ];
+    assert.deepEqual(attentionRows(windows, NO_MARKS, "").map((r) => r.item.address), ["0_{b}"]);
+    assert.deepEqual(attentionRows(windows, NO_MARKS, "kitty"), []);
 });

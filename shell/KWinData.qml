@@ -5,11 +5,13 @@ import Quickshell
 import Quickshell.Io
 import "lib/kwin.mjs" as KWin
 
-// KWin's desktops and windows, for the launcher's Workspaces and Windows
-// tabs on KDE Plasma (SPEC.md §8.5), from KWin's own D-Bus through busctl
-// (lib/kwin.mjs). Read each time the launcher opens, as KWin says nothing
-// the launcher could listen to: the desktops and the window list at once,
-// then each window's app and desktop, in one more process.
+// KWin's desktops and windows, for the launcher's Workspaces, Windows and
+// Attention tabs on KDE Plasma (SPEC.md §8.5), from KWin's own D-Bus
+// through busctl (lib/kwin.mjs), and which windows want attention, from
+// what tide on KDE keeps in plasmashell. Read each time the launcher opens,
+// as KWin says nothing the launcher could listen to: the desktops, the
+// window list and the windows wanting attention at once, then each
+// window's app and desktop, in one more process.
 Singleton {
     id: root
 
@@ -22,16 +24,20 @@ Singleton {
     property int generation: 0
     property var desktops: null
     property var matched: null
+    property var attention: null
 
     function refresh() {
         root.generation += 1;
         root.desktops = null;
         root.matched = null;
+        root.attention = null;
         desktopsReader.running = false;
         windowsReader.running = false;
+        attentionReader.running = false;
         infoReader.running = false;
         desktopsReader.running = true;
         windowsReader.running = true;
+        attentionReader.running = true;
     }
 
     // Brings up the window the runner matched as `match`.
@@ -54,7 +60,7 @@ Singleton {
     }
 
     function readInfo() {
-        if (root.desktops === null || root.matched === null) {
+        if (root.desktops === null || root.matched === null || root.attention === null) {
             return;
         }
         infoReader.generation = root.generation;
@@ -64,9 +70,10 @@ Singleton {
     }
 
     function finish(info) {
-        root.windows = KWin.launcherWindows(root.matched, info, root.desktops.desktops);
-        root.workspaces = KWin.launcherWorkspaces(root.desktops.desktops, root.desktops.current, root.matched, info);
-        console.log(`tide: launcher: read ${root.windows.length} of KWin's windows and ${root.workspaces.length} desktops`);
+        root.windows = KWin.launcherWindows(root.matched, info, root.desktops.desktops, root.attention);
+        root.workspaces = KWin.launcherWorkspaces(root.desktops.desktops, root.desktops.current, root.matched, info, root.attention);
+        const wanting = root.windows.filter(w => w.urgent).length;
+        console.log(`tide: launcher: read ${root.windows.length} of KWin's windows, ${wanting} wanting attention, and ${root.workspaces.length} desktops`);
     }
 
     Process {
@@ -115,6 +122,32 @@ Singleton {
         stderr: StdioCollector {
             onStreamFinished: if (text.trim() !== "") {
                 console.warn(`tide: busctl couldn't ask KWin for its windows: ${text.trim()}`);
+            }
+        }
+    }
+
+    Process {
+        id: attentionReader
+
+        property int generation: 0
+
+        command: KWin.ATTENTION_COMMAND
+        onRunningChanged: if (running) {
+            generation = root.generation;
+        }
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (attentionReader.generation !== root.generation) {
+                    return;
+                }
+                // Without plasmashell, or tide on KDE, none: the other tabs fill in all the same
+                root.attention = text.trim() === "" ? [] : root.parsed("windows wanting attention", () => KWin.parseAttention(text)) ?? [];
+                root.readInfo();
+            }
+        }
+        stderr: StdioCollector {
+            onStreamFinished: if (text.trim() !== "") {
+                console.warn(`tide: busctl couldn't ask plasmashell which windows want attention: ${text.trim()}`);
             }
         }
     }
