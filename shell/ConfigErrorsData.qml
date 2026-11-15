@@ -23,7 +23,7 @@ Singleton {
     id: root
 
     readonly property bool listening: true
-    readonly property string compositorName: Errors.compositorName(Compositor.tidewm)
+    readonly property string compositorName: Errors.compositorName(Compositor.tidewm, Compositor.tidesway)
     // The last load's errors, and what's been said of them (Errors.loaded).
     property var state: Errors.NOTHING
     // The errors, as tidewm worded them: none in Hyprland's session.
