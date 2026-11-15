@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
     NO_WINDOWS, treeWindows, refreshed, windowEvent, asksForTree, markEvents, appOf, shellWindows, activeWindow,
     heardLayout, barSymbol, tiledOn,
-    promptEvent, homeEvent, bindingFloats, keyFloated, closeRefused, keepOpenCommand, sendCommand, floatCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand, shortcutCommand,
+    promptEvent, homeEvent, bindingFloats, keyFloated, closeRefused, keepOpenCommand, borderCommand, sendCommand, floatCommand, focusCommand, moveAndFocusCommand, closeCommand, minimizeCommand, maximizeCommand, shortcutCommand,
 } from "./tidewm.mjs";
 import { minimizedFrom, trayWindows } from "./minimized.mjs";
 import { promptWanted } from "./workspacenames.mjs";
@@ -426,4 +426,25 @@ test("a monitor's tiled windows are those on its part of the current workspace, 
     ], order: [] }, [{ id: 1, name: "in" }, { id: 2, name: "2" }]);
     assert.equal(tiledOn(windows, "in", "DP-1"), 2);
     assert.equal(tiledOn(windows, "in", "HDMI-A-1"), 1);
+});
+
+test("tidesway's open windows get a new border width, but one drawing its own decorations", () => {
+    const tree = {
+        id: 1, type: "root", nodes: [{
+            id: 2, type: "output", nodes: [{
+                id: 3, type: "workspace",
+                nodes: [{ id: 10, type: "con", border: "none" }, { id: 11, type: "con", border: "pixel" }],
+                floating_nodes: [{ id: 12, type: "floating_con", border: "csd" }, { id: 13, type: "floating_con", border: "none" }],
+            }],
+        }],
+    };
+    const { list } = treeWindows(tree);
+    assert.equal(borderCommand(list, 4),
+        "[con_id=10] border pixel 4; [con_id=11] border pixel 4; [con_id=13] border pixel 4");
+    assert.equal(borderCommand(list, 0),
+        "[con_id=10] border pixel 0; [con_id=11] border pixel 0; [con_id=13] border pixel 0", "none again");
+    assert.equal(borderCommand([], 4), "", "no windows, nothing to send");
+    assert.equal(borderCommand([{ id: 12, type: "floating_con", border: "csd" }], 4), "");
+    assert.throws(() => borderCommand(list, "4; exec rm"), /not a border width/);
+    assert.throws(() => borderCommand(list, -1), /not a border width/);
 });

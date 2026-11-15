@@ -912,6 +912,32 @@ export function splitConfs(joined) {
     return [joined, null];
 }
 
+// The width a config file's text gives new windows, by its last
+// default_border line: `pixel N` is N and `none` 0, or null with none.
+// The text may be joinedConfs', whose tidewm part has it.
+export function confBorder(text) {
+    const [own] = splitConfs(text);
+    let width = null;
+    for (const line of (own ?? "").split("\n")) {
+        const m = /^default_border\s+(none|pixel\s+([0-9]+))\s*$/.exec(line);
+        if (m) {
+            width = m[1] === "none" ? 0 : Number(m[2]);
+        }
+    }
+    return width;
+}
+
+// The width to give the windows already open once tidesway has read
+// `after` in place of `before` (the target's applied texts, either null
+// when unknown): sway gives a new default_border to windows opened later
+// only. The new width when the text says one, unlike before, or null for
+// nothing to change, as when it says none, and the config's own, which
+// the shell can't know, stands.
+export function newBorder(before, after) {
+    const width = confBorder(after);
+    return width !== null && width !== confBorder(before) ? width : null;
+}
+
 // What's wrong with a wallpaper setting, or "": a file's path, absolute or
 // from ~/, on one line, a color, or "" for the default.
 function wallpaperError(key, v) {

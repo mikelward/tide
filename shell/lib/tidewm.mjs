@@ -340,6 +340,26 @@ export function maximizeCommand(address) {
     return c === null ? null : `${c} maximize toggle`;
 }
 
+// The command that gives each of `list`'s windows (TidewmData's state's,
+// tidewm's containers) a border `width` pixels wide, `[con_id=N] border
+// pixel W` each, joined with "; ", or "" for none: on tidesway, whose
+// default_border, as sway's, reaches only windows opened later (SPEC.md
+// §6.2). Not a floating window drawing its own decorations, its border
+// "csd", which a new one keeps too: sway's border command would take them
+// away.
+export function borderCommand(list, width) {
+    if (!Number.isInteger(width) || width < 0) {
+        throw new Error(`not a border width: ${width}`);
+    }
+    const commands = [];
+    for (const node of list ?? []) {
+        if (isWindow(node) && node.border !== "csd") {
+            commands.push(`[con_id=${node.id}] border pixel ${width}`);
+        }
+    }
+    return commands.join("; ");
+}
+
 // The command that has tidewm keep open the windows pinned where they are
 // (SPEC.md §6.5), and no others: `[con_id=N] keep_open enable` or
 // `disable` for each of `windows` (shellWindows) whose keepOpen isn't
