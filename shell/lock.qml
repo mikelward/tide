@@ -324,6 +324,7 @@ ShellRoot {
             unread: root.unread
             onEvent: event => root.dispatch(event)
             onCapsLockPressed: capsLockLight.refresh()
+            onKeyPressed: keyboards.keyPressed()
             onPower: id => powerActions.press(id)
         }
     }

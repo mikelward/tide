@@ -538,24 +538,66 @@ function readNext(kind, state, event, take) {
 // that can't be told (no answer yet, a read that failed, or no watch on
 // udev to say when it changes), there counts as one: the field shows its
 // focus as it did before this could be told.
+//
+// A key pressed on the face proves one too, whatever the count says: a
+// wireless keyboard's battery can be slow to appear, or say it isn't
+// connected, while the keyboard types. The key stands until a read that
+// started after a device went (keyboardsCue) finds none, so a read
+// already running as the key came can't take it back, and an unplugged
+// keyboard, or one the KVM switched away, still leaves "No keyboard".
 //   count      how many keyboards, null while unknown
 //   watching   udev's input events are being followed
 //   querying, again   as for the layout
-export const KEYBOARDS_INITIAL = Object.freeze({ count: null, watching: true, querying: false, again: false });
+//   gone       how many devices have gone (keyboardsCue), from the start
+//   asked      `gone` when the running read started
+//   key        `gone` at the last key, or null while no key stands
+export const KEYBOARDS_INITIAL = Object.freeze({ count: null, watching: true, querying: false, again: false, gone: 0, asked: 0, key: null });
 
-// Events: {type: "refresh"} (start, or an input device came or went),
-// {type: "answer", names} (`tide keyboards`' output, null when it failed)
-// and {type: "lost"} (the watch on udev ended, so a change would go
-// unseen). Returns {state, query}, as layoutNext does.
+// Events: {type: "refresh", cue} (start, or a line from udev's monitor,
+// with keyboardsCue's verdict on it), {type: "answer", names}
+// (`tide keyboards`' output, null when it failed), {type: "key"} (a key
+// pressed on the face), {type: "lid"} (a lid opened or closed) and
+// {type: "lost"} (the watch on udev ended, so a change would go unseen).
+// Returns {state, query}, as layoutNext does.
 export function keyboardsNext(state, event) {
+    // A lid moving hides or shows the built-in keyboard with no udev
+    // event, so it counts as a device going: the key's proof needs a count
+    // after it.
+    if (event.type === "lid") event = { type: "refresh", cue: "gone" };
     if (event.type === "lost") {
         return { state: Object.freeze(Object.assign({}, state, { watching: false })), query: false };
     }
-    return readNext("keyboards", state, event, (answer) => ({
-        count: typeof answer.names === "string"
+    if (event.type === "key") {
+        return { state: Object.freeze(Object.assign({}, state, { key: state.gone })), query: false };
+    }
+    const before = event.type === "refresh" && event.cue === "gone"
+        ? Object.assign({}, state, { gone: state.gone + 1 })
+        : state;
+    const r = readNext("keyboards", before, event, (answer) => {
+        const count = typeof answer.names === "string"
             ? answer.names.split("\n").filter((line) => line.trim() !== "").length
-            : null,
-    }));
+            : null;
+        // None found by a read that started after a device went since the
+        // key: the key's keyboard may be the one that went.
+        const went = count === 0 && state.key !== null && state.asked > state.key;
+        return { count, key: went ? null : state.key };
+    });
+    // A read starting now sees each device that went before it.
+    return r.query
+        ? { state: Object.freeze(Object.assign({}, r.state, { asked: r.state.gone })), query: true }
+        : r;
+}
+
+// Whether a line from `udevadm monitor --udev` (systemd's
+// src/udev/udevadm-monitor.c: "UDEV  [time] ACTION DEVPATH (SUBSYSTEM)")
+// may be a keyboard going: "gone" for a device removed, as an unplug or a
+// KVM switching away makes, or a battery changing, as a wireless
+// keyboard's does when HID++ finds it no longer connected; "" for the rest,
+// an add or the monitor's header.
+export function keyboardsCue(line) {
+    const m = /^UDEV\s+\[[^\]]*\]\s+(\S+)\s+\S+\s+\((\S+)\)/.exec(String(line));
+    if (!m) return "";
+    return m[1] === "remove" || (m[1] === "change" && m[2] === "power_supply") ? "gone" : "";
 }
 
 // Whether Caps Lock is on (SPEC.md §10), from `tide caps-lock`, read at
@@ -586,7 +628,22 @@ export function keyboardsLog(previous, answer) {
 }
 
 export function hasKeyboard(state) {
-    return !state.watching || state.count === null || state.count > 0;
+    return !state.watching || state.count === null || state.count > 0 || state.key !== null;
+}
+
+// What the journal says when a key starts or stops standing in for the
+// count (keyboardsNext), so a face that showed its focus with no keyboard
+// found can be followed. null when that didn't change, or a keyboard was
+// counted all along.
+export function keyboardsKeyLog(before, after) {
+    const standsIn = (s) => s.key !== null && s.count === 0;
+    if (!standsIn(before) && standsIn(after) && before.key === null) {
+        return "a key was pressed, so there's a keyboard though none was found";
+    }
+    if (before.key !== null && after.key === null) {
+        return "a device went since the last key, and no keyboard is left";
+    }
+    return null;
 }
 
 // The face's colors, light or dark (SPEC.md §10, §11): the background's

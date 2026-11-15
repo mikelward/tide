@@ -182,6 +182,9 @@ Item {
     signal event(var event)
     // Caps Lock was pressed, so whether it's on is read again.
     signal capsLockPressed()
+    // Any key reached the face, which proves there's a keyboard
+    // (LockKeyboards.keyPressed).
+    signal keyPressed()
     signal power(string id)
     signal pickUser(string name)
     signal pickSession(string id)
@@ -212,6 +215,7 @@ Item {
         }
 
         Keys.onPressed: keyEvent => {
+            face.keyPressed();
             keyEvent.accepted = true;
             const event = Lock.keyEvent({
                 key: keyEvent.key === Qt.Key_Return || keyEvent.key === Qt.Key_Enter ? "enter"

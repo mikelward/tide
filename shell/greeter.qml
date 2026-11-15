@@ -443,6 +443,7 @@ ShellRoot {
                 keyboard: keyboards.present
                 capsLock: capsLockLight.on
                 onCapsLockPressed: capsLockLight.refresh()
+                onKeyPressed: keyboards.keyPressed()
                 users: root.users
                 userName: root.user
                 userPickable: Greeter.canPickUser(root.face)

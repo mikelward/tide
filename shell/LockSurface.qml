@@ -25,6 +25,7 @@ WlSessionLockSurface {
     signal event(var event)
     signal power(string id)
     signal capsLockPressed()
+    signal keyPressed()
 
     color: "#000000"
 
@@ -47,6 +48,7 @@ WlSessionLockSurface {
         capsLock: surface.capsLock
         onEvent: event => surface.event(event)
         onCapsLockPressed: surface.capsLockPressed()
+        onKeyPressed: surface.keyPressed()
         onPower: id => surface.power(id)
     }
 }
