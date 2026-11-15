@@ -575,6 +575,16 @@ export function capsLockNext(state, event) {
     });
 }
 
+// What the journal says when `tide keyboards`' answer changes (SPEC.md
+// §10), so a KVM switch or a wake can be followed by its time: "found
+// keyboards: A, B" or "found no keyboard". null when the answer is the
+// last one logged, or failed (null), which is logged where it fails.
+export function keyboardsLog(previous, answer) {
+    if (typeof answer !== "string" || answer === previous) return null;
+    const names = answer.split("\n").map((n) => n.trim()).filter((n) => n !== "");
+    return names.length === 0 ? "found no keyboard" : `found keyboards: ${names.join(", ")}`;
+}
+
 export function hasKeyboard(state) {
     return !state.watching || state.count === null || state.count > 0;
 }

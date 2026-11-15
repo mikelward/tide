@@ -577,7 +577,7 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                 # on udev for their coming and going.
                 if ! test -e "\$(dirname "\$0")/no-keyboard-watch"; then
                     tide keyboards >/dev/null 2>&1 &
-                    udevadm monitor --udev --subsystem-match=input >/dev/null 2>&1 &
+                    udevadm monitor --udev --subsystem-match=input --subsystem-match=power_supply >/dev/null 2>&1 &
                 fi
                 # And Caps Lock, for "Caps Lock is on" under the field.
                 if ! test -e "\$(dirname "\$0")/no-caps-lock"; then
@@ -1887,7 +1887,7 @@ case_99() {
 mkdir -p "$tmp/udevadm-tail" || exit 1
 printf '#!/bin/sh\necho "tail $*"\n' >"$tmp/udevadm-tail/tail" || exit 1
 chmod +x "$tmp/udevadm-tail/tail" || exit 1
-out=$(PATH="$tmp/udevadm-tail:$PATH" sh shell/udevadm_stand_in.sh monitor --udev --subsystem-match=input 2>&1)
+out=$(PATH="$tmp/udevadm-tail:$PATH" sh shell/udevadm_stand_in.sh monitor --udev --subsystem-match=input --subsystem-match=power_supply 2>&1)
 code=$?
 check "the stand-in udevadm prints the monitor's header" \
     contains "$code:$out" "0:monitor will print the received events for:

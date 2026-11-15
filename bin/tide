@@ -247,10 +247,12 @@
 #     Prints the name of each keyboard plugged in, one per line, and nothing
 #     when there's none. The lock and the greeter show the password field's
 #     focus only while there's one to type with (SPEC.md §10), and run it
-#     again on each input device udev adds or removes. A keyboard is what
-#     udev tags ID_INPUT_KEYBOARD: an input device with every key from Esc
-#     to D, so not a power button or a mouse's side buttons, though a USB
-#     receiver's keyboard part counts whether or not a keyboard is paired.
+#     again on each input device udev adds or removes and each battery that
+#     changes. A keyboard is what udev tags ID_INPUT_KEYBOARD: an input
+#     device with every key from Esc to D, so not a power button. A mouse
+#     with a keyboard's keys, as a gaming mouse has, isn't one, nor is a
+#     keyboard a program makes, as keyd's virtual one is, nor a wireless
+#     one its receiver says is asleep or connected to another machine.
 #     One behind a monitor's USB hub comes and goes as the monitor's KVM
 #     switches to this machine and away. While the laptop's lid is closed,
 #     as when it's used with an external monitor alone, its built-in
@@ -1719,6 +1721,25 @@ built_in() {
     return 1
 }
 
+# Whether the input device $1 is a wireless one its receiver says isn't
+# connected. Logitech's HID++ driver keeps its battery's "online" at 0
+# while it's asleep, off or paired with another machine, and adds the
+# battery only once it first connects: a receiver plugged in, as by a
+# KVM, lists a keyboard that's off with no battery at all.
+asleep() {
+    _connected=
+    for _online in "$1"/device/device/power_supply/*/online; do
+        IFS= read -r _state 2>/dev/null <"$_online" || continue
+        case "$_state" in
+            0) return 0 ;;
+            1) _connected=1 ;;
+        esac
+    done
+    test -z "$_connected" || return 1
+    _driver=$(readlink "$1/device/device/driver" 2>/dev/null) || return 1
+    test "${_driver##*/}" = logitech-hidpp-device
+}
+
 keyboards() {
     test $# -eq 0 || usage
     if ! test -d "$keyboards_sys" || ! test -r "$keyboards_sys"; then
@@ -1738,8 +1759,23 @@ keyboards() {
     for node in "$keyboards_sys"/event*; do
         IFS= read -r numbers 2>/dev/null <"$node/dev" || continue
         grep -qx 'E:ID_INPUT_KEYBOARD=1' "$keyboards_udev/c$numbers" 2>/dev/null || continue
+        # A mouse with a keyboard's keys, as a gaming mouse has, isn't one.
+        if grep -qx 'E:ID_INPUT_MOUSE=1' "$keyboards_udev/c$numbers" 2>/dev/null; then
+            continue
+        fi
+        # Nor is one a program made, as keyd's is, which only retypes
+        # another keyboard's keys: it sits on no hardware.
+        if ! test -e "$node/device/device"; then
+            continue
+        fi
         # Behind a closed lid, the built-in one can't be typed on.
         if test "$lid" = closed && built_in "$node"; then
+            continue
+        fi
+        # A wireless keyboard asleep, or switched to another machine, is
+        # still there through its receiver, but its HID++ battery says it's
+        # not connected. One with no such battery counts.
+        if asleep "$node"; then
             continue
         fi
         name=

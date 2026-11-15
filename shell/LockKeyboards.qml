@@ -7,9 +7,10 @@ import "lib/lock.mjs" as Lock
 // on the login and lock faces (Lock.keyboardsNext): `tide keyboards` at
 // start, and again on each input device udev adds or removes, which
 // `udevadm monitor` reports. A monitor's KVM switching its USB keyboard
-// to this machine or away is one. It's counted again when the laptop's
-// lid opens or closes too, as logind says (Sleep.qml): behind a closed lid
-// the built-in keyboard isn't one. While it can't be told, there counts
+// to this machine or away is one. So is a battery changing: a wireless
+// keyboard's says when it falls asleep or wakes. It's counted again when
+// the laptop's lid opens or closes too, as logind says (Sleep.qml): behind
+// a closed lid the built-in keyboard isn't one. While it can't be told, there counts
 // as one, so the field shows its focus as it did before.
 Scope {
     id: root
@@ -51,6 +52,8 @@ Scope {
         // only by stopping without `started` (shell/lib/launch.mjs).
         property bool started: false
         property int lastCode: -1
+        // The last list logged, so only a change is.
+        property var lastNames: null
 
         function lookUp() {
             started = false;
@@ -81,7 +84,15 @@ Scope {
             if (!started) {
                 console.warn(`${root.name}: keyboards: couldn't start tide keyboards; the password field shows its focus whether or not there's a keyboard`);
             }
-            root.keyboardsEvent({ type: "answer", names: started && lastCode === 0 ? namesOut.text : null });
+            const answer = started && lastCode === 0 ? namesOut.text : null;
+            // Each change in the journal, by name, so a wake or a KVM
+            // switch can be followed: what came, and when.
+            const line = Lock.keyboardsLog(names.lastNames, answer);
+            if (line !== null) {
+                console.log(`${root.name}: ${line}`);
+                names.lastNames = answer;
+            }
+            root.keyboardsEvent({ type: "answer", names: answer });
         }
     }
 
@@ -93,7 +104,7 @@ Scope {
 
         property bool started: false
 
-        command: ["stdbuf", "-oL", "udevadm", "monitor", "--udev", "--subsystem-match=input"]
+        command: ["stdbuf", "-oL", "udevadm", "monitor", "--udev", "--subsystem-match=input", "--subsystem-match=power_supply"]
         running: true
 
         stdout: SplitParser {
