@@ -31,7 +31,8 @@ It leaves the display manager as it is, with tide as one more session;
 `--greeter` makes greetd, with tide's greeter, the login screen, and
 `--no-greeter` puts back the one it replaced. `--splash` makes tide's
 boot splash, its logo and a spinner on black, the one shown from the next
-boot (SPEC.md §5.3). `--help` lists the rest.
+boot; with tide's greeter, it stays up until the login screen shows
+(SPEC.md §5.3). `--help` lists the rest.
 `git pull` and run it again to update.
 
 Each push to main is also a release, tagged `v0.MINOR.<commits>`, on the
@@ -119,6 +120,10 @@ the shell for it and a greetd config template in `$(PREFIX)/share/tide/greeter/g
 
 - install greetd, and copy the template to `/etc/greetd/config.toml` with
   `user` set to the greeter account your greetd package created;
+- run greetd on VT 1, as the template's `vt = 1` says: where its unit
+  keeps getty off another VT, as Debian's and Ubuntu's does VT 7, give it
+  a drop-in with `Conflicts=getty@tty1.service` and
+  `After=getty@tty1.service`;
 - give that account a home it can write, where the greeter remembers the
   last login;
 - add `auth optional pam_gnome_keyring.so` and `session optional

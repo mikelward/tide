@@ -372,6 +372,16 @@ GREETD_DIR="${SETUP_GREETD_DIR:-/etc/greetd}"
 # The display manager Debian and Ubuntu start (see use_display_manager).
 DEFAULT_DM_FILE="${SETUP_ETC:-/etc}/X11/default-display-manager"
 GREETD_TEMPLATE="${SETUP_GREETD_TEMPLATE:-/usr/share/tide/greeter/greetd.toml}"
+# Where root's own units go, and the drop-ins setup gives greetd's unit
+# there: one that runs it on VT 1 (greetd_vt_dropin), and --splash's
+# handoff from the boot splash (greeter_splash_handoff), with the units it
+# starts.
+SYSTEM_UNIT_DIR="${SETUP_ETC:-/etc}/systemd/system"
+GREETD_VT_DROPIN="$SYSTEM_UNIT_DIR/greetd.service.d/tide-vt.conf"
+GREETD_SPLASH_DROPIN="$SYSTEM_UNIT_DIR/greetd.service.d/tide-splash.conf"
+SPLASH_HANDOFF_FILES="$GREETD_SPLASH_DROPIN $SYSTEM_UNIT_DIR/tide-greeter-shown.path
+$SYSTEM_UNIT_DIR/tide-greeter-shown.service $SYSTEM_UNIT_DIR/tide-splash-quit.timer
+$SYSTEM_UNIT_DIR/tide-splash-quit.service"
 # The greeter's PATH: greetd sources /etc/profile, which sets this for every
 # user but root.
 GREETER_PATH="${SETUP_GREETER_PATH:-/usr/local/bin:/usr/bin:/bin}"
@@ -3688,29 +3698,81 @@ greeter_user() {
     return 1
 }
 
-# greeter_vt sets vt to the VT greetd's unit keeps getty off, which its
-# config has to name: upstream's unit takes VT 1 and Debian's VT 7, and a
-# greeter on any other VT would fight a getty for it. Fails, setting why,
-# when it can't tell, or the unit keeps getty off none, or off one Linux
-# hasn't got, which greetd would fail to start on at every boot.
+# greetd_vt_dropin gives greetd's unit the drop-in GREETD_VT_DROPIN, which
+# keeps getty off VT 1, as upstream greetd's unit and GDM's do, so the
+# greeter can run there (tide SPEC.md §5.3): Plymouth draws the boot splash
+# on VT 1, and Linux drops a switch away from it while the splash holds it.
+# Debian's and Ubuntu's unit keeps getty off VT 7 instead, which stays as it
+# is: logind starts no getty there (NAutoVTs=6). systemd reloads to see it.
+# Fails, setting why, if it couldn't.
+greetd_vt_dropin() {
+    _gv_was=${changed-}
+    changed=no
+    if ! install_text "$GREETD_VT_DROPIN" "# Written by tide's setup: greetd runs on VT 1, where Plymouth draws the
+# boot splash, so getty stays off it (tide SPEC.md §5.3).
+[Unit]
+Conflicts=getty@tty1.service
+After=getty@tty1.service"; then
+        changed=$_gv_was
+        why="couldn't write $GREETD_VT_DROPIN, which keeps getty off greetd's VT 1"
+        return 1
+    fi
+    _gv_changed=$changed
+    test "$_gv_changed" = yes || changed=$_gv_was
+    test "$_gv_changed" = yes || return 0
+    if ! sudo_logged systemctl daemon-reload; then
+        why="couldn't reload systemd to read $GREETD_VT_DROPIN"
+        return 1
+    fi
+}
+
+# greeter_vt sets vt to 1, the VT greetd_vt_dropin keeps getty off, which
+# greetd's config has to name. Fails, setting why, when systemd can't say,
+# or says the unit doesn't, as when it hasn't read the drop-in.
 greeter_vt() {
     if ! _conflicts=$(unit_property greetd.service Conflicts); then
         why="couldn't ask systemd which VT greetd's unit keeps for it"
         return 1
     fi
-    vt=$(printf '%s\n' "$_conflicts" | tr ' ' '\n' \
-        | sed -n 's/^getty@tty\([0-9][0-9]*\)\.service$/\1/p' | head -n1)
-    if test -z "$vt"; then
-        why="greetd's unit keeps getty off no VT, so the greeter would share one with a login prompt"
-        return 1
-    fi
-    case "$vt" in
-        [1-9] | [1-5][0-9] | 6[0-3]) ;;
+    case " $_conflicts " in
+        *" getty@tty1.service "*) vt=1 ;;
         *)
-            why="greetd's unit keeps getty off tty$vt, which isn't one of Linux's VTs, 1 to 63, so greetd couldn't start there"
+            why="systemd says greetd's unit doesn't keep getty off VT 1, as $GREETD_VT_DROPIN has it, so the greeter would share it with a login prompt"
             return 1
             ;;
     esac
+}
+
+# remove_greetd_dropins takes away what setup gave greetd's unit, the VT
+# drop-in and --splash's handoff, once greetd is no longer the display
+# manager.
+remove_greetd_dropins() {
+    # shellcheck disable=SC2086  # a list of paths setup names
+    remove_unit_files "what setup gave greetd's unit" "$GREETD_VT_DROPIN" $SPLASH_HANDOFF_FILES
+}
+
+# remove_unit_files WHAT FILE...: removes each FILE, unit files or
+# drop-ins, WHAT for messages, that's there, and has systemd reload
+# without them.
+remove_unit_files() {
+    _ru_what=$1
+    shift
+    _ru_files=
+    for _ru_file; do
+        test ! -e "$_ru_file" || _ru_files="$_ru_files $_ru_file"
+    done
+    test -n "$_ru_files" || return 0
+    # shellcheck disable=SC2086  # a list of paths setup names
+    if ! sudo_logged rm -f $_ru_files; then
+        warn "couldn't remove $_ru_what ($_ru_files ); remove them with sudo rm"
+        return 0
+    fi
+    if sudo_logged systemctl daemon-reload; then
+        detail "removed $_ru_what"
+    else
+        # Each boot reads the units afresh.
+        warn "removed $_ru_what, but couldn't reload systemd; it's gone from the next boot"
+    fi
 }
 
 # trusted_entry PATH: whether PATH itself, not where a link leads, is root's,
@@ -5880,6 +5942,14 @@ UNIT_AWK='
             sub(/^[^=]*=[ \t]*/, "", l)
             if (l !~ /^(simple|exec|idle|)$/) found(file, key "=" l)
         }
+        # Only the one --splash gives it, which tells Plymouth to let go of
+        # the screen, and whose failure systemd ignores: anything else could
+        # stop greetd starting.
+        if (section == "Service" && key == "ExecStartPre") {
+            v = l
+            sub(/^[^=]*=[ \t]*/, "", v)
+            if (v !~ /^-\/[^ \t]*\/plymouth[ \t]+deactivate$/) found(file, key "=")
+        }
         if ((section, key) in units) {
             v = l
             sub(/^[^=]*=/, "", v)
@@ -5903,9 +5973,13 @@ UNIT_AWK='
         # The units each may name, those the units greetd ships with name.
         # A getty on a VT Linux has, 1 to 63.
         getty = "getty@tty([1-9]|[1-5][0-9]|6[0-3])"
-        units["Unit", "After"] = "^(systemd-user-sessions|plymouth-quit-wait|" getty ")[.]service$"
-        units["Unit", "Wants"] = "^(systemd-user-sessions|plymouth-quit-wait)[.]service$"
-        units["Unit", "Conflicts"] = "^" getty "[.]service$"
+        # And those setup gives it itself: for the VT, a getty, and for
+        # --splash, the quit of Plymouth it takes over and the units that
+        # end the splash (greeter_splash_handoff).
+        units["Unit", "After"] = "^(systemd-user-sessions|plymouth-quit-wait|plymouth-quit|" getty ")[.]service$"
+        units["Unit", "Wants"] = "^((systemd-user-sessions|plymouth-quit-wait)[.]service|tide-greeter-shown[.]path|tide-splash-quit[.]timer)$"
+        units["Unit", "Conflicts"] = "^(" getty "|plymouth-quit|plymouth-quit-wait)[.]service$"
+        units["Unit", "OnFailure"] = "^tide-splash-quit[.]service$"
         units["Install", "WantedBy"] = units["Install", "RequiredBy"] = units["Install", "UpheldBy"] = "^(graphical|multi-user)[.]target$"
         units["Unit", "StartLimitAction"] = units["Service", "StartLimitAction"] = "^none$"
         # Enabling with --force replaces what another name links to, so an
@@ -5943,8 +6017,9 @@ UNIT_AWK='
 # one that might, RootDirectory, BindPaths or Environment, say, isn't here,
 # so a unit that makes it isn't trusted. Nor is one that ends greetd once
 # it's running, RuntimeMaxSec or WatchdogSec, which greetd never answers.
-# Its Type has to be one UNIT_AWK allows.
-GREETD_UNIT_SETTINGS="Type ExecStart Restart RestartSec RestartSteps
+# Its Type has to be one UNIT_AWK allows, and its ExecStartPre the one
+# --splash gives it (greeter_splash_handoff), which UNIT_AWK checks.
+GREETD_UNIT_SETTINGS="Type ExecStart ExecStartPre Restart RestartSec RestartSteps
 RestartMaxDelaySec RestartPreventExitStatus RestartForceExitStatus
 SuccessExitStatus RemainAfterExit TimeoutSec TimeoutStartSec TimeoutStopSec
 TimeoutAbortSec TimeoutStartFailureMode TimeoutStopFailureMode
@@ -5956,9 +6031,10 @@ StartLimitIntervalSec StartLimitBurst StartLimitAction KeyringMode"
 # restarting it, which a newer systemd reads there. None can stop greetd
 # starting: a condition, an assert, or a unit it requires, which could,
 # isn't here, nor a unit it comes before, and UNIT_AWK checks the units the
-# others name.
+# others name. OnFailure starts a unit when greetd fails, which UNIT_AWK
+# allows only for --splash's (greeter_splash_handoff).
 GREETD_UNIT_SECTION="Description Documentation After Wants Conflicts
-StartLimitIntervalSec StartLimitBurst StartLimitAction"
+OnFailure StartLimitIntervalSec StartLimitBurst StartLimitAction"
 
 # The [Install] settings it may make, which say what enabling it links it
 # to: Also, which enables other units with it, isn't here, and UNIT_AWK
@@ -5983,7 +6059,7 @@ greetd_unit_settings() {
                 greetd_unit_own_why=yes
                 case "$_gs_b" in
                     .*) why="greetd's unit has a $_gs_b line in $_gs_a, which setup doesn't follow" ;;
-                    After=?* | Wants=?* | Conflicts=?* | Alias=?* | WantedBy=?* | RequiredBy=?* | UpheldBy=?* | StartLimitAction=?*)
+                    After=?* | Wants=?* | Conflicts=?* | OnFailure=?* | Alias=?* | WantedBy=?* | RequiredBy=?* | UpheldBy=?* | StartLimitAction=?*)
                         why="greetd's unit sets $_gs_b in $_gs_a, which isn't one setup knows is safe there: only those greetd's own units use are"
                         ;;
                     *) why="greetd's unit sets $_gs_b in $_gs_a, which isn't one of the settings setup knows can't change what greetd runs" ;;
@@ -6821,6 +6897,7 @@ restore_display_manager() {
         warn "couldn't put back $1; run '$(way_back "$1")'"
         return 1
     fi
+    remove_greetd_dropins
     if test "$1" = none; then
         DM_CHANGED=yes
         info "greetd is no longer the display manager; from the next boot, log in on a text console"
@@ -6855,6 +6932,8 @@ not_switching() {
     if test "$_dm" != "$dm_before"; then
         restore_display_manager "$dm_before" || :
     fi
+    # What this run gave greetd's unit before it stopped short.
+    remove_greetd_dropins
 }
 
 # setup_greeter makes greetd, with tide's greeter, the display manager with
@@ -6940,7 +7019,7 @@ setup_greeter() {
         restore_display_manager "$_back" || :
         return 0
     fi
-    if ! greetd_config; then
+    if ! greetd_vt_dropin || ! greetd_config; then
         not_switching "$why"
         return 0
     fi
@@ -7085,8 +7164,12 @@ use_display_manager() {
         undo_dm_file
         return 0
     fi
-    if test "$_ud_before" = greetd.service && ! sudo_logged systemctl disable greetd.service; then
-        warn "couldn't disable greetd, so it may start beside $_ud_name from the next boot; run 'sudo systemctl disable greetd.service'"
+    if test "$_ud_before" = greetd.service; then
+        if sudo_logged systemctl disable greetd.service; then
+            remove_greetd_dropins
+        else
+            warn "couldn't disable greetd, so it may start beside $_ud_name from the next boot; run 'sudo systemctl disable greetd.service'"
+        fi
     fi
     DM_CHANGED=yes
     info "From the next boot, $_ud_name is the login screen, in place of $(describe_dm "$_ud_before")"
@@ -7494,7 +7577,8 @@ setup_splash() {
 # plymouth-quit.service a drop-in that quit with --retain-splash. That
 # leaves VT 1 in graphics mode, where Linux drops every switch to another
 # VT, greetd's to its own included, so the boot stayed on the splash or
-# VT 1's console (tide SPEC.md §5.3). Plymouth quits plainly now.
+# VT 1's console (tide SPEC.md §5.3). greetd ends the splash now
+# (greeter_splash_handoff).
 remove_splash_handoff() {
     test -e "$SPLASH_HANDOFF_DROPIN" || return 0
     if ! sudo_logged rm -f "$SPLASH_HANDOFF_DROPIN"; then
@@ -7506,6 +7590,116 @@ remove_splash_handoff() {
     else
         # Each boot reads the units afresh, so it's gone from the next one.
         warn "removed $SPLASH_HANDOFF_DROPIN, but couldn't reload systemd; it's gone from the next boot"
+    fi
+}
+
+# How long the boot splash waits for tide's greeter to show before
+# Plymouth quits anyway, from greetd's start: the greeter starts its
+# compositor and Quickshell from a cold disk first, and plymouth-quit.service,
+# which this takes over from, gives its quit 20 seconds too.
+SPLASH_WAIT=20
+# Where the splash's units find plymouth: root's own directories, never the
+# PATH setup was run with, since the units run it as root at boot.
+SPLASH_PATH="${SETUP_SPLASH_PATH:-/usr/sbin:/usr/bin:/sbin:/bin}"
+
+# greeter_splash_handoff: with --splash, and greetd running tide's greeter,
+# greetd ends the boot splash, as GDM does (tide SPEC.md §5.3). A drop-in for
+# greetd's unit keeps plymouth-quit.service, and plymouth-quit-wait.service,
+# which waits for Plymouth to quit, from running, has Plymouth let go of the
+# screen (deactivate) before greetd starts, and starts two units. When the
+# greeter has shown, it leaves a file in its runtime directory, which only
+# greetd's user can write: a path unit sees it and quits Plymouth leaving the
+# splash's last frame on screen. A timer quits it plainly after SPLASH_WAIT
+# seconds, as greetd's failure does, so Plymouth never outlives a greeter
+# that doesn't show. The quit units aren't plymouth-quit.service: greetd
+# conflicts with that, and starting it on a failure would stop greetd's
+# restart. Without --splash, Plymouth or greetd as tide's display manager,
+# all of it goes.
+greeter_splash_handoff() {
+    _gh_plymouth=
+    if test "$SPLASH" = yes && test "$GREETER_ACTIVE" = yes; then
+        _gh_plymouth=$(PATH=$SPLASH_PATH command -v plymouth) || _gh_plymouth=
+        # The units run it as root at boot, so only root may change it.
+        if test -n "$_gh_plymouth" && ! trusted "$_gh_plymouth"; then
+            warn "the boot splash quits before the login screen shows, as its plymouth isn't root's alone: $why"
+            _gh_plymouth=
+        fi
+    fi
+    if test -z "$_gh_plymouth"; then
+        # shellcheck disable=SC2086  # a list of paths setup names
+        remove_unit_files "the boot splash's handoff to greetd's greeter" $SPLASH_HANDOFF_FILES
+        return 0
+    fi
+    _gh_uid=$(getent passwd "$greeter" | cut -d: -f3) || _gh_uid=
+    case "$_gh_uid" in
+        "" | *[!0-9]*)
+            warn "couldn't look up $greeter's user ID, so the boot splash quits before the login screen shows"
+            return 0
+            ;;
+    esac
+    _gh_was=${changed-}
+    changed=no
+    _gh_head="# Written by tide's setup (--splash): greetd ends the boot splash once
+# tide's greeter shows (tide SPEC.md §5.3)."
+    # The units first, and the drop-in that starts them last, so a run that
+    # stops short leaves no greetd waiting on units that aren't there.
+    if ! install_text "$SYSTEM_UNIT_DIR/tide-greeter-shown.path" "$_gh_head
+[Unit]
+Description=Wait for tide's greeter to show
+
+[Path]
+PathExists=/run/user/$_gh_uid/tide-greeter-shown" \
+        || ! install_text "$SYSTEM_UNIT_DIR/tide-greeter-shown.service" "$_gh_head
+[Unit]
+Description=End the boot splash under tide's greeter
+
+[Service]
+Type=oneshot
+# Once a boot: the path unit starts it again whenever it stops.
+RemainAfterExit=yes
+TimeoutSec=20
+ExecStart=-$_gh_plymouth quit --retain-splash" \
+        || ! install_text "$SYSTEM_UNIT_DIR/tide-splash-quit.timer" "$_gh_head
+[Unit]
+Description=End the boot splash if tide's greeter hasn't shown
+# greetd pulls this in with Wants=, which orders nothing: without this, its
+# 20 seconds could run out while greetd still waits, as for remote mounts.
+After=greetd.service
+
+[Timer]
+OnActiveSec=${SPLASH_WAIT}s
+AccuracySec=1s" \
+        || ! install_text "$SYSTEM_UNIT_DIR/tide-splash-quit.service" "$_gh_head
+[Unit]
+Description=End the boot splash
+
+[Service]
+Type=oneshot
+TimeoutSec=20
+ExecStart=-$_gh_plymouth quit" \
+        || ! install_text "$GREETD_SPLASH_DROPIN" "$_gh_head
+[Unit]
+Conflicts=plymouth-quit.service plymouth-quit-wait.service
+After=plymouth-quit.service
+Wants=tide-greeter-shown.path tide-splash-quit.timer
+OnFailure=tide-splash-quit.service
+
+[Service]
+ExecStartPre=-$_gh_plymouth deactivate"; then
+        changed=$_gh_was
+        warn "couldn't write the units that end the boot splash under greetd's greeter, so it quits before the login screen shows"
+        # shellcheck disable=SC2086  # a list of paths setup names
+        remove_unit_files "the boot splash's handoff to greetd's greeter" $SPLASH_HANDOFF_FILES
+        return 0
+    fi
+    _gh_changed=$changed
+    test "$_gh_changed" = yes || changed=$_gh_was
+    test "$_gh_changed" = yes || return 0
+    if sudo_logged systemctl daemon-reload; then
+        detail "the boot splash stays up until greetd's greeter shows"
+    else
+        # Each boot reads the units afresh.
+        warn "couldn't reload systemd after writing the boot splash's handoff to greetd's greeter; it takes effect from the next boot"
     fi
 }
 
@@ -7600,6 +7794,7 @@ else
     if test "$SPLASH" = yes; then
         setup_splash
     fi
+    greeter_splash_handoff
     # With or without --splash, as an earlier --splash wrote it.
     remove_splash_handoff
 fi

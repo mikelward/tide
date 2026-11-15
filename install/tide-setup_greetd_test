@@ -129,9 +129,10 @@ teardown
 # can't check could be anything, and greetd runs it as root.
 setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run
 printf 'garbage\n' > "$T/etc/greetd/config.toml"
-run FAKE_GO_VERSION=go1.19.8 FAKE_GREETD_CONFLICTS="shutdown.target"
+run FAKE_GO_VERSION=go1.19.8 FAKE_DROPINS_UNREAD=1
 check "greetd: a config this run can't write puts GDM back even when a later step fails" test "$(cat "$T/dm")" = gdm3.service
-check "greetd: and says why" has "$output" "greetd's unit keeps getty off no VT, so the greeter would share one with a login prompt; greetd isn't kept with a config this run couldn't put right, so putting back gdm3.service for the next boot"
+check "greetd: and says why" has "$output" "systemd says greetd's unit doesn't keep getty off VT 1, as $T/etc/systemd/system/greetd.service.d/tide-vt.conf has it, so the greeter would share it with a login prompt; greetd isn't kept with a config this run couldn't put right, so putting back gdm3.service for the next boot"
+check "greetd: and takes its VT drop-in away with it" test ! -e "$T/etc/systemd/system/greetd.service.d/tide-vt.conf"
 teardown
 # One this run makes runnable again takes over again at the end.
 setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run
@@ -256,25 +257,47 @@ setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; printf 'UID_MIN\t\t\t 500\
 check "greetd: a UID at login.defs' UID_MIN is a person's" has "$output" "greetd has no system account to run the greeter as"
 teardown
 
-# The VT is the one greetd's unit keeps getty off.
-setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run FAKE_GREETD_CONFLICTS="getty@tty1.service shutdown.target"
-check "greetd: upstream's unit gets VT 1" has "$(cat "$T/etc/greetd/config.toml")" "vt = 1"
-teardown
-setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run FAKE_GREETD_CONFLICTS="getty@tty63.service shutdown.target"
-check "greetd: a unit keeping getty off VT 63, Linux's last, gets it" has "$(cat "$T/etc/greetd/config.toml")" "vt = 63"
-teardown
-# Linux has VTs 1 to 63, and greetd would fail to start on any other at
-# every boot.
-for tty in 0 64 07; do
-    setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run FAKE_GREETD_CONFLICTS="getty@tty$tty.service shutdown.target"
-    greeter_not_ready "a unit keeping getty off tty$tty" "greetd's unit keeps getty off tty$tty, which isn't one of Linux's VTs, 1 to 63, so greetd couldn't start there"
+# greetd runs on VT 1, where Plymouth draws the boot splash, as upstream's
+# unit and GDM have it: a drop-in keeps getty off it, whatever VT the unit
+# keeps for it, Debian's 7 or upstream's 1 (SPEC.md §5.3).
+vt_dropin=$T/etc/systemd/system/greetd.service.d/tide-vt.conf
+for conflicts in "getty@tty7.service shutdown.target" "getty@tty1.service shutdown.target" "shutdown.target"; do
+    setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run FAKE_GREETD_CONFLICTS="$conflicts"
+    vt_dropin=$T/etc/systemd/system/greetd.service.d/tide-vt.conf
+    check "greetd: a unit keeping getty off '$conflicts' gets VT 1" has "$(cat "$T/etc/greetd/config.toml")" "vt = 1"
+    check "greetd: with a drop-in keeping getty off VT 1 ($conflicts)" \
+        has "$(cat "$vt_dropin" 2>/dev/null)" "[Unit]
+Conflicts=getty@tty1.service
+After=getty@tty1.service"
+    check "greetd: which systemd reloads to see ($conflicts)" has "$calls" "sudo systemctl daemon-reload"
+    check "greetd: and greetd is the display manager ($conflicts)" test "$(cat "$T/dm")" = greetd.service
     teardown
 done
-# A unit that keeps getty off no VT, or a VT systemd won't say, isn't
-# switched to: the greeter would share its VT with a login prompt.
-setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run FAKE_GREETD_CONFLICTS="shutdown.target"
-check "greetd: a unit naming no getty doesn't switch" test "$(cat "$T/dm")" = gdm3.service
-check "greetd: and says why" has "$output" "not making greetd the display manager, so gdm3.service stays: greetd's unit keeps getty off no VT, so the greeter would share one with a login prompt"
+# A rerun with it in place reloads nothing for it, and --no-greeter takes it
+# away with greetd.
+setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run
+vt_dropin=$T/etc/systemd/system/greetd.service.d/tide-vt.conf
+: > "$CALLS"
+run
+check "greetd: a rerun with the VT drop-in in place keeps it" test -f "$vt_dropin"
+check "greetd: and reloads nothing" lacks "$calls" "sudo systemctl daemon-reload"
+: > "$CALLS"
+ARGS=(--no-greeter); run
+check "--no-greeter: takes the VT drop-in away" test ! -e "$vt_dropin"
+check "--no-greeter: and systemd reloads without it" has "$calls" "sudo systemctl daemon-reload"
+teardown
+# A drop-in setup can't write, or systemd hasn't read, isn't switched to:
+# the greeter would share VT 1 with a login prompt.
+setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"
+run FAKE_INSTALL_FAILS="$T/etc/systemd/system/greetd.service.d/tide-vt.conf"
+check "greetd: a VT drop-in it can't write doesn't switch" test "$(cat "$T/dm")" = gdm3.service
+check "greetd: and says why" has "$output" "not making greetd the display manager, so gdm3.service stays: couldn't write $T/etc/systemd/system/greetd.service.d/tide-vt.conf, which keeps getty off greetd's VT 1"
+check "greetd: and writes no config" test ! -e "$T/etc/greetd/config.toml"
+teardown
+setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run FAKE_DROPINS_UNREAD=1
+check "greetd: a VT drop-in systemd hasn't read doesn't switch" test "$(cat "$T/dm")" = gdm3.service
+check "greetd: and says why" has "$output" "systemd says greetd's unit doesn't keep getty off VT 1, as $T/etc/systemd/system/greetd.service.d/tide-vt.conf has it, so the greeter would share it with a login prompt"
+check "greetd: and takes the drop-in away again" test ! -e "$T/etc/systemd/system/greetd.service.d/tide-vt.conf"
 check "greetd: and writes no config" test ! -e "$T/etc/greetd/config.toml"
 teardown
 setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run FAKE_CONFLICTS_FAILS=1

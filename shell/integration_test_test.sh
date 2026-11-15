@@ -845,10 +845,13 @@ EOF
     # starts a session, as $1 says: `tide`, as it should; `alpha`, the
     # wrong one; `forgetful`, tide without remembering it; `stays`,
     # nothing; `codeless`, tide without answering the prompt after the
-    # password.
+    # password; `unshown`, tide without saying it's on screen, which the
+    # rest do first.
     cat >"$1/greeter_client.py" <<'EOF'
 import json, os, socket, struct, sys, time
 mode = sys.argv[1]
+if mode != "unshown":
+    open(os.path.join(os.environ["XDG_RUNTIME_DIR"], "tide-greeter-shown"), "w").close()
 header = struct.Struct("=I")
 conn = socket.socket(socket.AF_UNIX)
 conn.connect(os.environ["GREETD_SOCK"])
@@ -2185,6 +2188,12 @@ check "a launcher on Plasma that writes a Borders setting KWin already has fails
 check "and says what it ran" contains "$out" "  kwriteconfig6 --file kwinrc --group tide-decoration --key RoundedCorners true"
 }
 
+case_134() {
+stubs "$tmp/greeter-unshown" "exit 0" "$loaded" ":" "" full "$all_runs" "" "" "$(login_as unshown)"
+run "$tmp/greeter-unshown"
+check "a greeter that never says it's on screen fails" test "$code" -ne 0
+check "and says so" contains "$out" "the greeter should leave"
+}
 
 # --case N RESULT: run case_N alone, and write its passes and failures to
 # RESULT, which a case that exits early leaves unwritten.

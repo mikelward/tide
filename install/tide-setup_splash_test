@@ -216,4 +216,111 @@ echo "[Service]" > "$handoff"; ARGS=(--splash --no-sudo); splash_run
 check "--no-sudo leaves the drop-in for a run with sudo" test -e "$handoff"
 teardown
 
+# With greetd running tide's greeter, greetd ends the boot splash, as GDM
+# does (SPEC.md §5.3): Plymouth's own quit doesn't run, Plymouth lets go of
+# the screen before greetd starts, and quits leaving the splash on screen
+# once the greeter shows, or plainly after 20 seconds or when greetd fails.
+# handoff_files: the drop-in and the units, under $T/etc.
+handoff_files() {
+    printf '%s\n' "$T/etc/systemd/system/greetd.service.d/tide-splash.conf" \
+        "$T/etc/systemd/system/tide-greeter-shown.path" "$T/etc/systemd/system/tide-greeter-shown.service" \
+        "$T/etc/systemd/system/tide-splash-quit.timer" "$T/etc/systemd/system/tide-splash-quit.service"
+}
+setup; splash_setup; echo gdm3.service > "$T/dm"; ARGS=(--greeter --splash); splash_run
+units=$T/etc/systemd/system
+check "greetd: the run succeeds" test "$status" -eq 0
+check "greetd: is the display manager" test "$(cat "$T/dm")" = greetd.service
+dropin=$(cat "$units/greetd.service.d/tide-splash.conf" 2>/dev/null || :)
+check "greetd keeps plymouth-quit.service and the wait for it from running" \
+    has "$dropin" "Conflicts=plymouth-quit.service plymouth-quit-wait.service"
+check "and comes after the first, as GDM does" has "$dropin" "After=plymouth-quit.service"
+check "starts the units that end the splash" has "$dropin" "Wants=tide-greeter-shown.path tide-splash-quit.timer"
+check "and ends it when greetd fails" has "$dropin" "OnFailure=tide-splash-quit.service"
+check "has Plymouth let go of the screen before greetd starts, as root" \
+    has "$dropin" "[Service]
+ExecStartPre=-$T/bin/plymouth deactivate"
+check "the greeter's file in its runtime directory, which only greetd's user can write, ends it" \
+    has "$(cat "$units/tide-greeter-shown.path" 2>/dev/null)" "PathExists=/run/user/999/tide-greeter-shown"
+shown=$(cat "$units/tide-greeter-shown.service" 2>/dev/null || :)
+check "leaving the splash on screen for the greeter to cover" has "$shown" "ExecStart=-$T/bin/plymouth quit --retain-splash"
+check "once a boot" has "$shown" "RemainAfterExit=yes"
+check "a timer ends it if the greeter hasn't shown in 20 seconds" \
+    has "$(cat "$units/tide-splash-quit.timer" 2>/dev/null)" "OnActiveSec=20s"
+check "20 seconds from greetd starting, not from whatever greetd waited for first" \
+    has "$(cat "$units/tide-splash-quit.timer" 2>/dev/null)" "After=greetd.service"
+check "plainly" has "$(cat "$units/tide-splash-quit.service" 2>/dev/null)" "ExecStart=-$T/bin/plymouth quit"
+check "and lets plymouth-quit.service run nowhere" lacks "$(cat "$units/tide-splash-quit.service" 2>/dev/null)" "plymouth-quit.service"
+check "systemd reloads to see them" has "$calls" "sudo systemctl daemon-reload"
+check "and the old plymouth-quit drop-in stays gone" test ! -e "$units/plymouth-quit.service.d/tide-retain-splash.conf"
+check "warns of nothing" lacks "$output" "Warning:"
+# A rerun keeps greetd, whose unit with them is still the greeter's, and
+# reloads nothing.
+: > "$CALLS"
+splash_run
+check "a rerun keeps greetd the display manager" test "$(cat "$T/dm")" = greetd.service
+check "and puts back no other" lacks "$calls" "enable --force gdm3.service"
+check "and reloads nothing" lacks "$calls" "sudo systemctl daemon-reload"
+# Without --splash, the handoff goes; greetd stays on VT 1.
+: > "$CALLS"
+ARGS=(--greeter); splash_run
+for f in $(handoff_files); do
+    check "without --splash, ${f#"$T/"} goes" test ! -e "$f"
+done
+check "and systemd reloads without them" has "$calls" "sudo systemctl daemon-reload"
+check "and greetd keeps VT 1" test -f "$units/greetd.service.d/tide-vt.conf"
+check "and stays the display manager" test "$(cat "$T/dm")" = greetd.service
+# --no-greeter takes it all away with greetd.
+ARGS=(--greeter --splash); splash_run
+: > "$CALLS"
+ARGS=(--no-greeter --splash); splash_run
+for f in $(handoff_files) "$units/greetd.service.d/tide-vt.conf"; do
+    check "--no-greeter: ${f#"$T/"} goes" test ! -e "$f"
+done
+check "--no-greeter: GDM is back" test "$(cat "$T/dm")" = gdm3.service
+teardown
+# With any other display manager, nothing draws over the splash, so nothing
+# of it is written, and a greetd setup didn't make the display manager is
+# left as it is.
+for dm in gdm3.service greetd.service; do
+    setup; splash_setup; echo "$dm" > "$T/dm"; ARGS=(--splash); splash_run
+    for f in $(handoff_files); do
+        check "with $dm not tide's, ${f#"$T/"} isn't written" test ! -e "$f"
+    done
+    teardown
+done
+# Without Plymouth, there's no splash to end.
+setup; splash_setup; rm "$T/bin/plymouth"; echo gdm3.service > "$T/dm"; ARGS=(--greeter --splash)
+splash_run
+for f in $(handoff_files); do
+    check "without Plymouth, ${f#"$T/"} isn't written" test ! -e "$f"
+done
+check "and greetd still takes over" test "$(cat "$T/dm")" = greetd.service
+teardown
+# The units run plymouth as root at boot, so it has to be root's alone, from
+# root's own directories, never one a user's PATH puts first.
+setup; splash_setup; echo gdm3.service > "$T/dm"; ARGS=(--greeter --splash)
+splash_run FAKE_OWNER="1000:$T/bin/plymouth"
+for f in $(handoff_files); do
+    check "a plymouth that isn't root's: ${f#"$T/"} isn't written" test ! -e "$f"
+done
+check "a plymouth that isn't root's is a warning naming why" has "$output" "$T/bin/plymouth is uid 1000's, not root's"
+check "and greetd still takes over" test "$(cat "$T/dm")" = greetd.service
+teardown
+setup; splash_setup; echo gdm3.service > "$T/dm"; ARGS=(--greeter --splash); mkdir -p "$T/root-bin"
+splash_run SETUP_SPLASH_PATH="$T/root-bin"
+for f in $(handoff_files); do
+    check "a plymouth only on the user's PATH: ${f#"$T/"} isn't written" test ! -e "$f"
+done
+teardown
+# A unit it can't write leaves none: greetd would wait on units that
+# aren't there, and Plymouth would never quit.
+setup; splash_setup; echo gdm3.service > "$T/dm"; ARGS=(--greeter --splash)
+splash_run FAKE_INSTALL_FAILS="$T/etc/systemd/system/greetd.service.d/tide-splash.conf"
+check "a handoff it can't write is a warning" has "$output" "couldn't write the units that end the boot splash under greetd's greeter, so it quits before the login screen shows"
+for f in $(handoff_files); do
+    check "and ${f#"$T/"} isn't left" test ! -e "$f"
+done
+check "which isn't fatal" test "$status" -eq 0
+teardown
+
 finish

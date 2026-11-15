@@ -322,4 +322,34 @@ setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; run FAKE_GREETD_ARGS="--co
 greeter_not_ready "a greetd started with arguments" "greetd's unit starts it as $T/usr-sbin/greetd --config /tmp/greetd.toml, and setup only trusts greetd started with no arguments"
 teardown
 
+# What setup --splash gives greetd's unit (greeter_splash_handoff) is the
+# greeter's: it takes over Plymouth's quit, has Plymouth let go of the
+# screen first, and starts the units that end the splash (SPEC.md §5.3).
+splash_dropin='[Unit]\nConflicts=plymouth-quit.service plymouth-quit-wait.service\nAfter=plymouth-quit.service\nWants=tide-greeter-shown.path tide-splash-quit.timer\nOnFailure=tide-splash-quit.service\n\n[Service]\nExecStartPre=-%s deactivate\n'
+setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; printf '#!/bin/sh\n' > "$T/usr-bin/plymouth"; chmod +x "$T/usr-bin/plymouth"
+mkdir -p "$T/units-etc/greetd.service.d"; printf "$splash_dropin" "$T/usr-bin/plymouth" > "$T/units-etc/greetd.service.d/tide-splash.conf"
+run FAKE_GREETD_DROPINS="$T/units-etc/greetd.service.d/tide-splash.conf"
+check "greetd: a unit with --splash's drop-in is the greeter's" test "$(cat "$T/dm")" = greetd.service
+teardown
+# Anything else it might run first could stop greetd starting, so only
+# that, with the - that has systemd go on when it fails.
+for pre in '%s deactivate' '-%s quit' '-/bin/sh -c %s' '-%s deactivate --now'; do
+    setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; printf '#!/bin/sh\n' > "$T/usr-bin/plymouth"; chmod +x "$T/usr-bin/plymouth"
+    mkdir -p "$T/units-etc/greetd.service.d"
+    printf "[Service]\nExecStartPre=$pre\n" "$T/usr-bin/plymouth" > "$T/units-etc/greetd.service.d/pre.conf"
+    run FAKE_GREETD_DROPINS="$T/units-etc/greetd.service.d/pre.conf"
+    shown=$(printf -- "$pre" plymouth)
+    greeter_not_ready "a greetd unit that runs '$shown' first" "greetd's unit sets ExecStartPre= in $T/units-etc/greetd.service.d/pre.conf, which isn't one of the settings setup knows can't change what greetd runs"
+    teardown
+done
+# Nor may it name units other than those, when it fails, waits for or
+# keeps off.
+for setting in '[Unit]\nOnFailure=reboot.target' '[Unit]\nWants=other.timer' '[Unit]\nConflicts=plymouth-start.service' \
+    '[Unit]\nAfter=tide-greeter-shown.path'; do
+    setup; ARGS=(--greeter); echo gdm3.service > "$T/dm"; printf '%b\n' "$setting" >> "$T/units/greetd.service"; run
+    shown=${setting#*\\n}
+    greeter_not_ready "a greetd unit with $shown" "greetd's unit sets $shown in $T/units/greetd.service, which isn't one setup knows is safe there: only those greetd's own units use are"
+    teardown
+done
+
 finish
