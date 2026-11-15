@@ -162,6 +162,9 @@ test("Hyprland's errors are hyprctl configerrors' lines, and its words name Hypr
     assert.equal(hyprlandErrors("", false).errors, undefined);
     assert.equal(compositorName(false), "Hyprland");
     assert.equal(compositorName(true), "tidewm");
+    assert.equal(compositorName(true, true), "tidesway", "tidesway's session is tidewm's too");
+    assert.equal(summary(["/c:1: bad"], "tidesway"), "tidesway's config has 1 error");
+    assert.equal(summary([], "tidesway", true), "tidesway was updated");
     assert.equal(summary(["x"], "Hyprland"), "Hyprland's config has 1 error");
     assert.equal(advice(["x", "y"], "Hyprland"), "Fix them, then reload Hyprland's config.");
     assert.equal(notifyCommand(["x"], "Hyprland")[4], "Hyprland's config has 1 error");

@@ -148,8 +148,10 @@ export function retry(state) {
 }
 
 // The compositor whose config it is, as the words below name it.
-export function compositorName(tidewm) {
-    return tidewm ? "tidewm" : "Hyprland";
+// tidesway's session is tidewm's too (compositor.mjs's isTidesway), and
+// names it: its errors are tidesway's reading of the config.
+export function compositorName(tidewm, tidesway = false) {
+    return tidesway ? "tidesway" : tidewm ? "tidewm" : "Hyprland";
 }
 
 // "tidewm's config has 2 errors", the notification's summary, the bar
@@ -158,7 +160,7 @@ export function compositorName(tidewm) {
 // instead, whatever its errors.
 export function summary(errors, name = "tidewm", outdated = false) {
     if (outdated) {
-        return "tidewm was updated";
+        return `${name} was updated`;
     }
     if (errors.length === 0) {
         return "";
