@@ -3023,6 +3023,10 @@ reload could take most key bindings with it (maintainer, 2026-11-14).
   `tidewm -v`, on `PATH`, prints: both are the `git describe` the binary
   was built with. It exits 0 when they differ, 1 when they match or no
   tidewm is installed, and 2 when it can't tell.
+  - tidesway answers `GET_VERSION` as tidewm, with its own version in a
+    `tidesway` field too (mikelward/tidesway#30). With that field, it's
+    the one compared, with what `tidesway -v` prints, its sway's `sway
+    version VERSION`. Without it, tidewm's are, as before.
 - `tide-msg --if-current COMMAND` sends the command only when they
   match, or it can't tell, and exits 3 otherwise. Everything of tide's
   that reloads tidewm's config goes through it: the settings pages

@@ -247,3 +247,83 @@ func TestARefusedSubscriptionExits1(t *testing.T) {
 		t.Fatalf("status %d, out %q, err %q", status, out, errOut)
 	}
 }
+
+// tidesway's GET_VERSION (mikelward/tidesway#30): tidewm's, with its own
+// version beside it.
+const tideswayVersion = `{"human_readable":"tidewm 1.12-5ea0000 (Nov 15 2026, branch 'main') (tidesway)","variant":"tidewm","tidesway":"1.12-5ea0000 (Nov 15 2026, branch 'main')","major":1,"minor":12,"patch":0}`
+
+// installedBoth puts a tidewm saying `tidewm` and a tidesway saying
+// `tidesway` for -v, each as it does, in one directory, and returns PATH
+// naming it. An empty one isn't there.
+func installedBoth(t *testing.T, tidewm, tidesway string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if tidewm != "" {
+		script := "#!/bin/sh\ntest \"$1\" = -v || exit 64\necho '" + tidewm + "' >&2\nexit 1\n"
+		if err := os.WriteFile(filepath.Join(dir, "tidewm"), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if tidesway != "" {
+		// Its sway's --version: on stdout, exiting 0.
+		script := "#!/bin/sh\ntest \"$1\" = -v || exit 64\necho \"" + tidesway + "\"\n"
+		if err := os.WriteFile(filepath.Join(dir, "tidesway"), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return "PATH=" + dir
+}
+
+func TestOnTideswayItsOwnVersionIsCompared(t *testing.T) {
+	same := "sway version 1.12-5ea0000 (Nov 15 2026, branch 'main')"
+	newer := "sway version 1.12-5ea1111 (Nov 16 2026, branch 'main')"
+	for what, c := range map[string]struct {
+		path   string
+		status int
+		out    string
+	}{
+		"the same tidesway, beside a tidewm of another version": {installedBoth(t, "dwl v0.3.108", same), 1, ""},
+		"the same tidesway alone":                               {installedBoth(t, "", same), 1, ""},
+		"a newer tidesway": {installedBoth(t, "dwl v0.3.108", newer), 0,
+			"tidesway 1.12-5ea0000 (Nov 15 2026, branch 'main') is running, and 1.12-5ea1111 (Nov 16 2026, branch 'main') is installed\n"},
+		// The one running is tidesway, so a tidewm alone is none newer.
+		"only a tidewm": {installedBoth(t, "dwl v0.3.108", ""), 1, ""},
+	} {
+		tidesway := swayipctest.New(t, tideswayVersion)
+		status, out, errOut := tideMsg([]string{"SWAYSOCK=" + tidesway.Socket, c.path}, "--outdated")
+		if status != c.status || out != c.out || errOut != "" {
+			t.Errorf("%s: status %d, out %q, err %q", what, status, out, errOut)
+		}
+	}
+	tidesway := swayipctest.New(t, tideswayVersion)
+	status, _, errOut := tideMsg([]string{"SWAYSOCK=" + tidesway.Socket, installedBoth(t, "", "Segmentation fault")}, "--outdated")
+	if status != 2 || !strings.Contains(errOut, "couldn't tell whether tidesway was updated") {
+		t.Errorf("an installed one that can't say: status %d, err %q", status, errOut)
+	}
+	empty := swayipctest.New(t, `{"human_readable":"tidewm 1.12 (tidesway)","tidesway":""}`)
+	status, _, errOut = tideMsg([]string{"SWAYSOCK=" + empty.Socket, installedBoth(t, "", same)}, "--outdated")
+	if status != 2 || !strings.Contains(errOut, "tidesway's version is empty") {
+		t.Errorf("an empty version: status %d, err %q", status, errOut)
+	}
+}
+
+func TestIfCurrentReloadsTheTideswayInstalled(t *testing.T) {
+	tidesway := swayipctest.New(t, tideswayVersion, `[{"success":true}]`)
+	path := installedBoth(t, "dwl v0.3.108", "sway version 1.12-5ea0000 (Nov 15 2026, branch 'main')")
+	status, out, errOut := tideMsg([]string{"SWAYSOCK=" + tidesway.Socket, path}, "--if-current", "reload")
+	if status != 0 || out != "" || errOut != "" {
+		t.Fatalf("status %d, out %q, err %q", status, out, errOut)
+	}
+	if got := tidesway.Payloads(); !slices.Contains(got, "reload") {
+		t.Fatalf("sent %q, no reload", got)
+	}
+	tidesway = swayipctest.New(t, tideswayVersion, `[{"success":true}]`)
+	path = installedBoth(t, "", "sway version 1.12-5ea1111 (Nov 16 2026, branch 'main')")
+	status, _, errOut = tideMsg([]string{"SWAYSOCK=" + tidesway.Socket, path}, "--if-current", "reload")
+	if status != 3 || !strings.Contains(errOut, "reload wasn't sent: tidesway was updated") {
+		t.Fatalf("a newer tidesway: status %d, err %q", status, errOut)
+	}
+	if got := tidesway.Payloads(); slices.Contains(got, "reload") {
+		t.Fatalf("an outdated tidesway was sent %q", got)
+	}
+}

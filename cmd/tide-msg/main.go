@@ -37,7 +37,9 @@
 // PATH, as after a setup run that built a newer one, saying both
 // versions; 1 if it is, or none is installed; and 2 if it can't tell. The
 // one running stays until its session ends, and may not read a config
-// written for the new one (SPEC.md §7.4).
+// written for the new one (SPEC.md §7.4). tidesway answers GET_VERSION as
+// tidewm, with its own version in a `tidesway` field too: then it's that,
+// and the `tidesway` on PATH, that are compared.
 //
 //	tide-msg --if-current COMMAND...
 //
@@ -72,75 +74,111 @@ func main() {
 // notCurrent is --if-current's exit status when it didn't send the command.
 const notCurrent = 3
 
-// runningVersion is what the tidewm at socket calls its version:
-// GET_VERSION's human_readable, "tidewm v0.3.120", without the name.
-func runningVersion(socket string) (string, error) {
+// running is what the compositor at socket says it is, by GET_VERSION:
+// tidewm, its version human_readable's, "tidewm v0.3.120", without the
+// name; or tidesway, which answers as tidewm does but also gives its own
+// version, as `tidesway -v` has it, in a field of its own
+// (mikelward/tidesway's sway-ipc(7)).
+type running struct {
+	name, version string
+}
+
+func runningVersion(socket string) (running, error) {
 	reply, err := swayipc.Send(socket, swayipc.Queries["get_version"], nil)
 	if err != nil {
-		return "", fmt.Errorf("couldn't ask tidewm at %s for its version: %v", socket, err)
+		return running{}, fmt.Errorf("couldn't ask tidewm at %s for its version: %v", socket, err)
 	}
 	var version struct {
-		HumanReadable string `json:"human_readable"`
+		HumanReadable string  `json:"human_readable"`
+		Tidesway      *string `json:"tidesway"`
 	}
 	if err := json.Unmarshal(reply, &version); err != nil {
-		return "", fmt.Errorf("tidewm's version isn't JSON: %v", err)
+		return running{}, fmt.Errorf("tidewm's version isn't JSON: %v", err)
+	}
+	if version.Tidesway != nil {
+		if *version.Tidesway == "" {
+			return running{}, errors.New("tidesway's version is empty")
+		}
+		return running{"tidesway", *version.Tidesway}, nil
 	}
 	name, rest, _ := strings.Cut(version.HumanReadable, " ")
 	if name != "tidewm" || rest == "" {
-		return "", fmt.Errorf("tidewm's version is %q, not \"tidewm VERSION\"", version.HumanReadable)
+		return running{}, fmt.Errorf("tidewm's version is %q, not \"tidewm VERSION\"", version.HumanReadable)
 	}
-	return rest, nil
+	return running{"tidewm", rest}, nil
 }
 
-// installedVersion is what the tidewm on env's PATH calls its version, or
-// "" if there's none there. `tidewm -v` prints "dwl VERSION" to stderr
-// and exits 1, being dwl's (mikelward/tidewm's dwl.c, 2026-11); "tidewm
-// VERSION" is taken too, should it come to say its own name. Both come
-// from the one VERSION the binary was built with, so the same build says
-// the same over IPC.
-func installedVersion(env []string) (string, error) {
-	var path string
+// onPath is the executable `name` on env's PATH, or "" if there's none.
+func onPath(env []string, name string) string {
 	for _, e := range env {
 		if dirs, ok := strings.CutPrefix(e, "PATH="); ok {
 			for _, dir := range filepath.SplitList(dirs) {
-				file := filepath.Join(dir, "tidewm")
+				file := filepath.Join(dir, name)
 				if info, err := os.Stat(file); dir != "" && err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
-					path = file
-					break
+					return file
 				}
 			}
 		}
 	}
+	return ""
+}
+
+// installedVersion is what the `name` on env's PATH, tidewm or tidesway,
+// calls its version, or "" if there's none there. `tidewm -v` prints "dwl
+// VERSION" to stderr and exits 1, being dwl's (mikelward/tidewm's dwl.c,
+// 2026-11); "tidewm VERSION" is taken too, should it come to say its own
+// name. `tidesway -v` prints its sway's "sway version VERSION" and exits 0
+// (mikelward/tidesway's tide/tidesway.in and sway/main.c). Each comes from
+// the one VERSION the binary was built with, so the same build says the
+// same over IPC.
+func installedVersion(env []string, name string) (string, error) {
+	path := onPath(env, name)
 	if path == "" {
 		return "", nil
 	}
 	cmd := exec.Command(path, "-v")
 	cmd.Env = env
-	// It exits 1 having said its version, so only what it says counts.
+	// tidewm exits 1 having said its version, so only what it says counts.
 	out, err := cmd.CombinedOutput()
 	line, _, _ := strings.Cut(string(out), "\n")
-	name, rest, _ := strings.Cut(strings.TrimSpace(line), " ")
-	if (name != "dwl" && name != "tidewm") || rest == "" {
+	line = strings.TrimSpace(line)
+	var version string
+	if name == "tidesway" {
+		version, _ = strings.CutPrefix(line, "sway version ")
+		if version == line {
+			version = ""
+		}
+	} else {
+		said, rest, _ := strings.Cut(line, " ")
+		if said == "dwl" || said == "tidewm" {
+			version = rest
+		}
+	}
+	if version == "" {
 		if line == "" && err != nil {
 			return "", fmt.Errorf("couldn't run %s -v: %v", path, err)
 		}
 		return "", fmt.Errorf("%s -v said %q, not its version", path, line)
 	}
-	return rest, nil
+	return version, nil
 }
 
-// outdated is whether the tidewm running isn't the one installed, and
-// both versions. With none installed there's nothing newer to run.
-func outdated(socket string, env []string) (bool, string, string, error) {
-	installed, err := installedVersion(env)
-	if err != nil || installed == "" {
-		return false, "", installed, err
+// outdated is whether the compositor running isn't the one installed,
+// which one it is, and both versions. With neither tidewm nor tidesway
+// installed there's nothing newer to run, and the one running isn't asked.
+func outdated(socket string, env []string) (bool, string, string, string, error) {
+	if onPath(env, "tidewm") == "" && onPath(env, "tidesway") == "" {
+		return false, "tidewm", "", "", nil
 	}
-	running, err := runningVersion(socket)
+	now, err := runningVersion(socket)
 	if err != nil {
-		return false, "", installed, err
+		return false, "tidewm", "", "", err
 	}
-	return running != installed, running, installed, nil
+	installed, err := installedVersion(env, now.name)
+	if err != nil || installed == "" {
+		return false, now.name, now.version, installed, err
+	}
+	return now.version != installed, now.name, now.version, installed, nil
 }
 
 func run(args []string, env []string, stdout, stderr io.Writer) int {
@@ -223,26 +261,26 @@ func run(args []string, env []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	if *isOutdated {
-		is, running, installed, err := outdated(socket, env)
+		is, name, running, installed, err := outdated(socket, env)
 		if err != nil {
-			fmt.Fprintf(stderr, "tide-msg: couldn't tell whether tidewm was updated: %v\n", err)
+			fmt.Fprintf(stderr, "tide-msg: couldn't tell whether %s was updated: %v\n", name, err)
 			return 2
 		}
 		if !is {
 			return 1
 		}
-		fmt.Fprintf(stdout, "tidewm %s is running, and %s is installed\n", running, installed)
+		fmt.Fprintf(stdout, "%s %s is running, and %s is installed\n", name, running, installed)
 		return 0
 	}
 	cmd := strings.Join(flags.Args(), " ")
 	if *ifCurrent {
-		is, running, installed, err := outdated(socket, env)
+		is, name, running, installed, err := outdated(socket, env)
 		if err != nil {
 			// Not known to be older, so it's asked, as it would be
 			// without --if-current.
-			fmt.Fprintf(stderr, "tide-msg: couldn't tell whether tidewm was updated, so %s is sent anyway: %v\n", cmd, err)
+			fmt.Fprintf(stderr, "tide-msg: couldn't tell whether %s was updated, so %s is sent anyway: %v\n", name, cmd, err)
 		} else if is {
-			fmt.Fprintf(stderr, "tide-msg: %s wasn't sent: tidewm was updated (%s is running, and %s is installed), and the one running may not read the new one's config. Log out and back in.\n", cmd, running, installed)
+			fmt.Fprintf(stderr, "tide-msg: %s wasn't sent: %s was updated (%s is running, and %s is installed), and the one running may not read the new one's config. Log out and back in.\n", cmd, name, running, installed)
 			return notCurrent
 		}
 	}
