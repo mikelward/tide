@@ -1505,6 +1505,16 @@ check "a wireless keyboard its receiver lists before it first connects isn't one
 online event0 1
 keyboards
 check "until it connects" test "$(cat "$tmp/out")" = "Logitech ERGO K860"
+# HID++ keeps a battery's "online" at 0 while it charges, as its 1.0
+# register and 2.0's battery feature 0x1000 only give a level while it
+# discharges: a keyboard on its cable, typed on, is still connected.
+printf 'Charging\n' > "$input/event0/device/device/power_supply/hidpp_battery_0/status"
+online event0 0
+keyboards
+check "a wireless keyboard that's charging counts" test "$(cat "$tmp/out")" = "Logitech ERGO K860"
+printf 'Unknown\n' > "$input/event0/device/device/power_supply/hidpp_battery_0/status"
+keyboards
+check "but not one that's disconnected, whose status HID++ makes unknown" test ! -s "$tmp/out"
 
 # tide caps-lock: the keyboards' Caps Lock lights, as /sys/class/leds lays
 # them out, beside another light that isn't one.

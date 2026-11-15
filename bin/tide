@@ -1713,10 +1713,17 @@ built_in() {
 # KVM, lists a keyboard that's off with no battery at all.
 asleep() {
     _connected=
-    for _online in "$1"/device/device/power_supply/*/online; do
-        IFS= read -r _state 2>/dev/null <"$_online" || continue
+    for _supply in "$1"/device/device/power_supply/*; do
+        IFS= read -r _state 2>/dev/null <"$_supply/online" || continue
         case "$_state" in
-            0) return 0 ;;
+            0)
+                # HID++ also keeps it at 0 while the battery charges: its
+                # 1.0 register and 2.0's feature 0x1000 give a level only
+                # while it discharges. One that's gone is "Unknown".
+                IFS= read -r _status 2>/dev/null <"$_supply/status" || return 0
+                test "$_status" = Charging || return 0
+                _connected=1
+                ;;
             1) _connected=1 ;;
         esac
     done
