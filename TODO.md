@@ -7,6 +7,12 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **On Plasma the shell sets tide's decoration only where it's already
+  chosen** (2026-11-15, SPEC.md §8.5): it never writes KWin's choice of
+  decoration, where tide-kde's `make setup` chooses it once installed. A
+  running launcher changing which decoration windows have seemed too
+  much. It also takes a bad setting one at a time, as tide-kde's setup
+  does, not a file at a time as the settings pages do.
 - **On tidesway the shell writes tidewm's appearance file too**
   (2026-11-15, SPEC.md §6.2): the dimming strength, border and shadows go
   to `~/.config/tidewm/tide-appearance.conf`, just as a tidewm session
@@ -2695,6 +2701,29 @@ and System Settings pages. Each step is its own PR.
 - [ ] **On a real Plasma 6 session**: the surface opens on the focused
   monitor with the keyboard, how long `Meta+Space` takes, that a started
   app gets focus, and the process's memory.
+- [x] **The Borders settings reach tide's decoration** (tide-kde's
+  `org.tide.decoration`) as `appearance.json` or `appearance.local.json`
+  changes, and as Plasma's session starts: `KdeBorders.qml` writes
+  `kwinrc`'s `[tide-decoration]` and has KWin read it, while that
+  decoration is KWin's. Tested by `kdeborders_test.mjs`, which runs the
+  command against stand-ins for `kreadconfig6`, `kwriteconfig6` and
+  `busctl`, and the integration test's kde step, with the same stand-ins
+  under Quickshell. `make check-tide-kde` passed against tide-kde
+  23b9c33. Not checked on Plasma: that the decoration redraws on
+  `reconfigure`, and that Quickshell sees KConfig's and an editor's
+  rewrites of the files (CI turns its file watcher off).
+- [ ] **The Borders page on Plasma.** Settings doesn't run there, so a
+  change is an edit to `appearance.local.json`. Either a Settings window
+  in `kde.qml` with the pages that make sense on Plasma, or a quick
+  action that opens the file.
+- [ ] **Follow KWin's choice of decoration.** One chosen in System
+  Settings while `kde.qml` runs gets tide's settings only at the next
+  change or login. Watching `kwinrc` would apply them at once, at a read
+  per write of that file, which KWin makes often.
+- [ ] **One mapping for tide-kde's setup too.** Its `scripts/setup.mjs`
+  restates `kdeborders.mjs`; `make check-tide-kde` compares them by hand.
+  Either tide-kde's CI runs that check with its tide checkout, or its
+  setup calls a `tide` command that applies them.
 
 ## Edit a clipboard entry before pasting
 

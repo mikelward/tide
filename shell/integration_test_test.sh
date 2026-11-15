@@ -1015,7 +1015,15 @@ kde_tab() {
         "$1" "$focused" "$typed" "$2"
 }
 kde_tabs="$(kde_tab windows 'call org.kde.KWin /WindowsRunner org.kde.krunner1 Run ss "0_{w1}" ""'); $(kde_tab workspaces 'set-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager current s d2'); $(kde_tab attention 'call org.kde.KWin /WindowsRunner org.kde.krunner1 Run ss "0_{w2}" ""')"
-kde_launcher="$(kde_ran "--application tide-test-probe" "--application kcm_tidezebra"); $kde_tabs"
+# Before any of that, as it starts, it gives tide's decoration the Borders
+# settings that differ from kwinrc's, and has KWin read them, through the
+# integration test's stand-ins.
+kde_wrote() {
+    printf 'kwriteconfig6 --file kwinrc --group tide-decoration --key %s; ' "Shadows all" "ShadowSize 8" "BorderWidth 2"
+}
+kde_reconfigured='busctl --user call org.kde.KWin /KWin org.kde.KWin reconfigure'
+kde_borders="$(kde_wrote)$kde_reconfigured"
+kde_launcher="$kde_borders; $(kde_ran "--application tide-test-probe" "--application kcm_tidezebra"); $kde_tabs"
 # What a greeter does once the login step starts it: it takes the keyboard,
 # then logs in on the passwords typed, as greeter_client.py's MODE says.
 login_as() {
@@ -2135,7 +2143,7 @@ kde_stubs() {
 }
 
 case_122() {
-kde_stubs "$tmp/kde-runs-wrong" "$(kde_ran "--application tide-test-probe" "--application other")"
+kde_stubs "$tmp/kde-runs-wrong" "$kde_borders; $(kde_ran "--application tide-test-probe" "--application other")"
 run "$tmp/kde-runs-wrong"
 check "a launcher on Plasma that runs the wrong page fails" test "$code" -ne 0
 check "and says what it ran" contains "$out" "  kstart --application other"
@@ -2149,10 +2157,32 @@ check "and says so" contains "$out" "the launcher on Plasma asked Hyprland, whic
 }
 
 case_124() {
-kde_stubs "$tmp/kde-unfocused" "$kde_toggled"
+kde_stubs "$tmp/kde-unfocused" "$kde_borders; $kde_toggled"
 run "$tmp/kde-unfocused"
 check "a launcher on Plasma that never takes the keyboard fails" test "$code" -ne 0
 check "and says so" contains "$out" "the launcher on Plasma didn't take the keyboard"
+}
+
+case_131() {
+kde_stubs "$tmp/kde-no-borders" "$(kde_ran "--application tide-test-probe" "--application kcm_tidezebra"); $kde_tabs"
+run "$tmp/kde-no-borders"
+check "a launcher on Plasma that leaves tide's decoration its old Borders settings fails" test "$code" -ne 0
+check "and says so" contains "$out" "the launcher on Plasma didn't give tide's decoration the Borders settings and have KWin read them"
+}
+
+case_132() {
+kde_stubs "$tmp/kde-borders-twice" "$kde_borders; $kde_launcher"
+run "$tmp/kde-borders-twice"
+check "a launcher on Plasma that writes the Borders settings twice fails" test "$code" -ne 0
+check "and says what it ran" contains "$out" "  kwriteconfig6 --file kwinrc --group tide-decoration --key BorderWidth 2
+  kwriteconfig6 --file kwinrc --group tide-decoration --key Shadows all"
+}
+
+case_133() {
+kde_stubs "$tmp/kde-borders-all" "kwriteconfig6 --file kwinrc --group tide-decoration --key RoundedCorners true; $kde_launcher"
+run "$tmp/kde-borders-all"
+check "a launcher on Plasma that writes a Borders setting KWin already has fails" test "$code" -ne 0
+check "and says what it ran" contains "$out" "  kwriteconfig6 --file kwinrc --group tide-decoration --key RoundedCorners true"
 }
 
 
