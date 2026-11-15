@@ -1552,8 +1552,7 @@ in how long they last and what stays visible:
 
 - Each key toggles its own state, so pressed again it puts the window back
   in its tile. **Restore** puts it back from either, with no key by
-  default; Keyboard's shortcuts can give it one (§16). tidewm's session
-  has no restore.
+  default; Keyboard's shortcuts can give it one (§16).
 - **Hyprland pieces.** Maximize and fullscreen are Hyprland's own `fullscreen`
   states: 1 is maximized, 0 is fullscreen. Monocle is one of the tide
   layout's own (§6.1).
@@ -2148,7 +2147,7 @@ is a platform's other key, with why. The notes under the table say more.
 | the launcher: the switcher's Apps tab (§8); `launcher` | `Super+Space` | `Meta+Space` | `Search+Space`: the dashboard | `Super+Space` |
 | home, or back to the last workspace; `home_or_back` | **`Super+Tab`** | `Meta+Tab` | — | `Super+Tab` |
 | the switcher's Attention tab (§8.1); `attention` | **`Super+A`** | — | `Search+A` | `Super+A` |
-| **the next window wanting attention** (§14.3); `next_attention` | none; on tidewm, from your own config (below) | none | none | none |
+| **the next window wanting attention** (§14.3); `next_attention` | none | none | none | none |
 | the overview of every workspace's windows (§8.7) | — | — | none | differs: `Ctrl+Up`, Mission Control's key |
 | next keyboard layout (§16); `next_keyboard_layout` | **`Super+Alt+Space`** | — | — | differs: macOS's own *(unverified)* |
 | a terminal; `terminal` | `Super+T` | — | — | `Super+T` |
@@ -2185,7 +2184,7 @@ is a platform's other key, with why. The notes under the table say more.
 | monocle; `monocle` | ``Super+` `` or **`Super+O`** | `Meta+O`, ``Meta+` `` | differs: `Search+O`, as Chrome can't bind a backtick | ``Super+` ``, `Super+O` |
 | maximize (§6.3); `maximize` | **`Super+X`** | `Meta+X` | differs: chromeOS's `Alt+=` | `Super+X` |
 | fullscreen (§6.3); `fullscreen` | **`Super+Shift+X`** | `Meta+Shift+X` | differs: chromeOS's fullscreen key | `Super+Shift+X` |
-| **restore**, from maximize or fullscreen; `restore` | none; not on tidewm | none | — | none |
+| **restore**, from maximize or fullscreen; `restore` | none | none | — | none |
 | float or tile; `float` | `Super+Shift+F` or `Super+Insert` | `Meta+Shift+F`, `Meta+Ins` | `Search+Shift+F` | `Super+Shift+F`, `Super+Insert` |
 | a floating rule for the window (§6.4); `floating_rule` | **`Super+Alt+F`**: not on tidewm yet | — | — | differs: `Super+Shift+I`, as Super can't take Alt |
 | maximize the window under the pointer | **`Super`+middle-click** | — | — | `Super`+middle-click |
@@ -2206,10 +2205,9 @@ is a platform's other key, with why. The notes under the table say more.
   `Super+E`: `xdg-terminal-exec` and `xdg-open` without them. Hyprland
   binds the tap from 0.57: before it, a release binding fired after every
   `Super` chord. tidewm binds it with `--release Super_L`.
-  tidewm names only a binding with a key, so `next_attention` isn't in
-  `tidewm/tide.conf`: it sets `$next_attention` for your own config to
-  bind with `--name=next_attention`, and the Keyboard shortcuts page can
-  change it from then on.
+  A binding with no key is named on both, for the Keyboard shortcuts
+  page to give it one: Hyprland's `bind(NAME, {}, ...)`, and tidewm's
+  `bindsym --name NAME none ...`.
 - **KDE.** KWin global shortcuts, each starting `tide:` in System
   Settings' Shortcuts, where you can change them. "—" there leaves the key to Plasma's
   own shortcut, if it has one. `Meta+Space` is tide's launcher, from
@@ -2610,11 +2608,11 @@ reads the settings files the shell writes (`tide-*.lua`).
   again, since tidewm's later binding of the same keys replaces the
   earlier one, then end with `include tide-*.conf` so the settings pages
   still win. `tidewm/config_test.sh` checks that it binds every name
-  `hyprland.lua` does, so `keys.json` serves both. It leaves out three:
-  `floating_rule` and `last_layout`, which tidewm has no command for yet,
-  and `restore` and `next_attention`, which have no key by default and
-  which tidewm can't name without one (§6.6). The file sets
-  `$next_attention` for yours to bind.
+  `hyprland.lua` does, so `keys.json` serves both. It leaves out two:
+  `floating_rule` and `last_layout`, which tidewm has no command for yet.
+  `restore` and `next_attention` have no key, as on Hyprland, but are
+  named, with tidewm's `none` for the keys (§6.6). An older tidewm,
+  without `none`, reports both lines as errors and loads the rest.
 - **Names.** The Lua calls the shell makes, such as
   `conf_workspaces.reload()`, keep the `conf_` names from when this code
   was `conf`'s.
