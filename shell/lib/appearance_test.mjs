@@ -10,7 +10,7 @@ import {
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, placed, locationRow, resetLocation, withLocation, steppedTime, steppedTimePast, parseCoordinate, withSetting,
     DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua, roundedCorners,
     expandHome, pickCommand, galleryFolders, galleryCommand, galleryThumbnailCommand, galleryThumbnail, gallerySource, newLines, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
-    wallpaperColor, lockColor, WALLPAPER_COLORS,
+    wallpaperColor, lockColor, WALLPAPER_COLORS, barColor, barColors, barColorReads, barColorChoices, contrast, BAR_CONTRAST,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
     POSITIONS, POSITION_CHOICES, BAR_POSITIONS, BAR_CHOICES, barAtBottom, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf, tideswayConf, joinedConfs, splitConfs, confBorder, newBorder, ROUNDING,
     BORDER_WIDTH, BORDER_WIDTH_MAX, borderWidth, steppedBorder, SHADOW_SIZE, SHADOW_SIZE_MAX, shadowSize, steppedShadow, formatPixels, borderColor,
@@ -1719,4 +1719,46 @@ test("stdout's lines are taken whole, as they come", () => {
     assert.deepEqual(newLines("/a\t/t/a\n/b\t", 0), { lines: ["/a\t/t/a"], taken: 8 });
     assert.deepEqual(newLines("/a\t/t/a\n/b\t\n/c\t/t/c\n", 8), { lines: ["/b\t", "/c\t/t/c"], taken: 20 });
     assert.deepEqual(newLines("/a\t/t/a\n", 8), { lines: [], taken: 8 }, "nothing new");
+});
+
+test("the bar's color is lightBarColor or darkBarColor, or the palette's", () => {
+    const s = parseAppearance('{"lightBarColor": "#DFE3EE", "darkBarColor": "#13303a"}').settings;
+    assert.equal(barColor(s, false), "#dfe3ee");
+    assert.equal(barColor(s, true), "#13303a");
+    assert.equal(barColor({}, true), "", "none set: the palette's");
+    assert.equal(withSetting('{"darkBarColor": "#13303a"}', "darkBarColor", null).text.includes("darkBarColor"), false, "Default takes it out");
+});
+
+test("a bar color the mode's text can't be read on fails at load, naming it", () => {
+    for (const [json, want] of [
+        ['{"darkBarColor": "#ffffff"}', /^appearance\.json: darkBarColor is too light/],
+        ['{"lightBarColor": "#000"}', /^appearance\.json: lightBarColor is too dark/],
+        ['{"lightBarColor": "blue"}', /^appearance\.json: lightBarColor must be a color/],
+        ['{"darkBarColor": ""}', /^appearance\.json: darkBarColor must be a color/],
+    ]) {
+        const loaded = loadAppearance(json, null);
+        assert.match(loaded.errors[0], want, json);
+    }
+});
+
+test("the Bar page offers the wallpaper colors each mode's text reads on", () => {
+    assert.equal(contrast("#000000", "#ffffff"), 21);
+    for (const dark of [false, true]) {
+        const offered = barColors(dark);
+        assert.ok(offered.length >= 3, `some for ${dark ? "dark" : "light"}`);
+        for (const c of offered) {
+            assert.ok(barColorReads(c.color, dark), c.label);
+            assert.ok(contrast(c.color, dark ? "#ededf1" : "#1f1f24") >= BAR_CONTRAST, c.label);
+            assert.equal(withSetting("{}", dark ? "darkBarColor" : "lightBarColor", c.color).error, undefined, c.label);
+        }
+    }
+    assert.ok(!barColors(true).some(c => barColors(false).includes(c)), "no color offered for both");
+});
+
+test("the Bar page's choices start with Default, the palette's own, which takes the setting out", () => {
+    for (const dark of [false, true]) {
+        const [first, ...rest] = barColorChoices(dark);
+        assert.deepEqual(first, { label: "Default", color: dark ? "#16161a" : "#fafafb", value: null });
+        assert.deepEqual(rest.map(c => c.value), barColors(dark).map(c => c.color));
+    }
 });

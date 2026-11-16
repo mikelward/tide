@@ -5693,6 +5693,14 @@ to be focused.
   default, or `bottom` (§7.1). Anything else fails at load, naming the
   setting. A machine can set its own in `appearance.local.json`, which the
   Bar page writes (§16).
+- **The bar's color.** `lightBarColor` and `darkBarColor` in
+  `appearance.json` are the bar's background in light and dark mode, as
+  `#rrggbb` or `#rgb`. Without one, it's the palette's `barBg`. The bar's
+  text and icons stay the mode's, so a color must contrast with the
+  mode's text by at least 7:1 (WCAG's AAA): a light color for light
+  mode, a dark one for dark. Anything else fails at load, naming the
+  setting. The minimized windows' tray and the overview's backdrop take
+  it too.
 - **The bar's layout.** `barLayout` in `appearance.json` lists the bar's
   items, `logo`, `workspaces`, `title` and `icons`, in order, each with a
   `zone` of `left`, `center` or `right` and shown or not (§7.1). Anything
@@ -6578,13 +6586,19 @@ settings NAME ARGS...`; most answer why not, or an empty string.
     `stretch`). A new wallpaper goes back to `fill`, so set its position
     after it.
 
-- **Bar** sets where the bar runs, where its items go, and which status
-  icons it shows (§7.1).
+- **Bar** sets where the bar runs, its color, where its items go, and
+  which status icons it shows (§7.1).
   A right-click on the bar opens it, off any item or on one no other page
   fits (§7.1's table).
   - **Position**, which ‹ and › step between Top and Bottom, is
     `barPosition` in `appearance.local.json` (§15). Every bar moves at
     once, and what opens from it with it.
+  - **Light background** and **Dark background** each have a swatch
+    that opens the colors: Default, the palette's own, the wallpaper
+    colors that mode's text reads on, and a field for any `#rrggbb`. A
+    color the text can't be read on is refused. They're `lightBarColor`
+    and `darkBarColor` in `appearance.local.json` (§15), and the bar
+    changes at once.
   - **Layout** lists the bar's items by zone, Left, Center, then Right:
     the logo, the workspaces (with the layout symbol), the window title,
     and the status icons as one group (§7.1). Each shows its zone, has ↑
@@ -6595,7 +6609,8 @@ settings NAME ARGS...`; most answer why not, or an empty string.
     ↑ and ↓, which move it, and an On or Off switch. It's `barIcons` in
     `appearance.local.json`, and the bar follows at once.
   - Over IPC, `setAppearance barPosition top` or `bottom` sets the
-    position. No call changes the layout or the icons.
+    position, and `setAppearance darkBarColor "#13303a"` a color. No call
+    changes the layout or the icons.
 
 - **Notifications** sets §9's, in `notifications.json` and
   `notifications.local.json`, and lists `muted` from `workspaces.json`.

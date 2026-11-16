@@ -26,7 +26,8 @@ const MODES = ["schedule", "sun", "light", "dark"];
 // The settings that decide light or dark, and every one there is.
 const THEME_KEYS = ["mode", "light", "dark", "latitude", "longitude"];
 const KEYS = THEME_KEYS.concat(["city", "dimStrength", "roundedCorners", "borderWidth", "shadows", "shadowSize", "lightWallpaper", "darkWallpaper", "lightWallpaperPosition",
-    "darkWallpaperPosition", "wallpaperPosition", "barPosition", "barIcons", "barLayout"]);
+    "darkWallpaperPosition", "wallpaperPosition", "barPosition", "barIcons", "barLayout",
+    "lightBarColor", "darkBarColor"]);
 // How a picture is placed on a monitor (SPEC.md §15): each mode's own,
 // lightWallpaperPosition or darkWallpaperPosition, else wallpaperPosition,
 // for both.
@@ -164,6 +165,12 @@ export function parseAppearance(text) {
             // which drops one it doesn't know.
             if (!barIconsValid(v)) {
                 return { error: 'barIcons must be a list like [{"id": "network", "shown": true}]' };
+            }
+            break;
+        case "lightBarColor":
+        case "darkBarColor":
+            if (barColorError(key, v)) {
+                return { error: barColorError(key, v) };
             }
             break;
         case "barLayout":
@@ -1629,6 +1636,60 @@ export function positionAt(settings, dark) {
 // either end.
 export function steppedPositionAt(at, steps) {
     return Math.max(0, Math.min(POSITION_CHOICES.length - 1, at + steps));
+}
+
+// The bar's background in light or `dark` mode (SPEC.md §15), as #rrggbb:
+// lightBarColor or darkBarColor, or "" for the palette's.
+export function barColor(settings, dark) {
+    return wallpaperColor(settings[dark ? "darkBarColor" : "lightBarColor"]);
+}
+
+// How much a bar color must contrast with the mode's text (the WCAG
+// ratio), so the bar's text and icons, which stay the mode's, read on it.
+export const BAR_CONTRAST = 7;
+
+// The WCAG contrast ratio of two #rrggbb colors, from 1 to 21.
+export function contrast(a, b) {
+    const lum = (hex) => {
+        const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+            .map(v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    };
+    const [x, y] = [lum(a), lum(b)];
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+// Whether `color`, #rrggbb, is a bar color the `dark` mode's text reads on.
+export function barColorReads(color, dark) {
+    return contrast(color, (dark ? PALETTE.dark : PALETTE.light).fg) >= BAR_CONTRAST;
+}
+
+// What's wrong with lightBarColor or darkBarColor, or "".
+function barColorError(key, v) {
+    const c = wallpaperColor(v);
+    if (c === "") {
+        return `${key} must be a color as #rrggbb or #rgb, such as "#1a1d2e"`;
+    }
+    const dark = key === "darkBarColor";
+    if (!barColorReads(c, dark)) {
+        return `${key} is too ${dark ? "light" : "dark"} for the bar's text; choose a ${dark ? "darker" : "lighter"} color`;
+    }
+    return "";
+}
+
+// The colors the Bar page offers for light or `dark` mode (SPEC.md §16):
+// the wallpaper colors the mode's text reads on.
+export function barColors(dark) {
+    return WALLPAPER_COLORS.filter(c => barColorReads(c.color, dark));
+}
+
+// The Bar page's choices for light or `dark` mode, [{label, color, value}]:
+// Default, the palette's own (value null, which takes the setting out),
+// then barColors.
+export function barColorChoices(dark) {
+    const own = (dark ? PALETTE.dark : PALETTE.light).barBg;
+    return [{ label: "Default", color: "#" + own.slice(-6), value: null }]
+        .concat(barColors(dark).map(c => ({ label: c.label, color: c.color, value: c.color })));
 }
 
 // Whether `settings` put the bar along the bottom edge (SPEC.md §7.1).

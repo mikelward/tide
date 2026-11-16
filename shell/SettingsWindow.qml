@@ -2504,7 +2504,7 @@ PanelWindow {
                                         }
 
                                         TapHandler {
-                                            onTapped: wallpaperColors.show(wallpaper.modelData.key, wallpaper.modelData.label, swatch)
+                                            onTapped: wallpaperColors.show(wallpaper.modelData.key, wallpaper.modelData.label, swatch, appearance)
                                         }
                                     }
 
@@ -2788,6 +2788,68 @@ PanelWindow {
                                     value: barRow.at
                                     next: BarSide.steppedBarChoice(barRow.at, 1)
                                     onActivated: barPage.set("barPosition", Appearance.BAR_CHOICES[next].position)
+                                }
+                            }
+                        }
+
+                        // The bar's background in light and dark mode
+                        // (§15), chosen from the swatch's colors, Default
+                        // or one its text reads on, or typed there. It
+                        // changes at once. It's appearance.json's
+                        // lightBarColor and darkBarColor.
+                        Repeater {
+                            model: [{ key: "lightBarColor", label: "Light background", dark: false }, { key: "darkBarColor", label: "Dark background", dark: true }]
+
+                            Item {
+                                id: barColorRow
+
+                                required property var modelData
+                                readonly property var choices: Appearance.barColorChoices(modelData.dark)
+                                readonly property string shows: Appearance.barColor(AppearanceData.settings, modelData.dark)
+
+                                width: barPage.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: barColorRow.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                // Opens the colors: the one set, or the
+                                // palette's.
+                                Rectangle {
+                                    id: barSwatch
+
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 26
+                                    height: 26
+                                    radius: 7
+                                    color: barSwatchHover.hovered || wallpaperColors.key === barColorRow.modelData.key ? Theme.surface2 : "transparent"
+                                    Accessible.name: barColorRow.modelData.label
+
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: 16
+                                        height: 16
+                                        radius: 4
+                                        color: barColorRow.shows !== "" ? barColorRow.shows : barColorRow.choices[0].color
+                                        border.color: Theme.edge
+                                    }
+
+                                    HoverHandler {
+                                        id: barSwatchHover
+                                    }
+
+                                    TapHandler {
+                                        onTapped: wallpaperColors.show(barColorRow.modelData.key, barColorRow.modelData.label, barSwatch, barPage, barColorRow.choices)
+                                    }
                                 }
                             }
                         }
@@ -5478,25 +5540,34 @@ PanelWindow {
             }
         }
 
-        // A wallpaper's colors (§16), under its swatch: tide's palette's
-        // backgrounds, dark then light, and a field for any #rrggbb, set
-        // with Enter. Choosing one sets it as the row's field would, and
-        // closes them; Escape closes them with nothing set.
+        // A wallpaper's or the bar's colors (§16), under its swatch: tide's
+        // palette's backgrounds, dark then light (for the bar, Default and
+        // those its text reads on), and a field for any #rrggbb, set with
+        // Enter. Choosing one sets it as the row's field would, and closes
+        // them; Escape closes them with nothing set.
         Rectangle {
             id: wallpaperColors
 
-            // The setting, lightWallpaper or darkWallpaper, or "" when shut.
+            // The setting, lightWallpaper, darkWallpaper, lightBarColor or
+            // darkBarColor, or "" when shut.
             property string key: ""
             property string label: ""
+            // The colors, [{label, color, value}], a value of null taking
+            // the setting out, and none meaning the color.
+            property var choices: Appearance.WALLPAPER_COLORS
+            // The page that sets it, with set(key, value).
+            property var page: null
             readonly property string current: Appearance.wallpaperColor(AppearanceData.settings[key] ?? "")
             // The color under the pointer, by its label.
             property string hovered: ""
 
             // Opens under `swatch`, or over it with no room below.
-            function show(key, label, swatch) {
+            function show(key, label, swatch, page, choices) {
                 const at = swatch.mapToItem(card, 0, 0);
                 wallpaperColors.key = key;
                 wallpaperColors.label = label;
+                wallpaperColors.page = page;
+                wallpaperColors.choices = choices ?? Appearance.WALLPAPER_COLORS;
                 x = Math.max(6, Math.min(at.x, card.width - width - 6));
                 y = at.y + swatch.height + 4 + height <= card.height - 6 ? at.y + swatch.height + 4 : Math.max(6, at.y - 4 - height);
                 hex.text = current;
@@ -5511,9 +5582,10 @@ PanelWindow {
 
             function choose(value) {
                 const key = wallpaperColors.key;
+                const page = wallpaperColors.page;
                 close();
                 keys.forceActiveFocus();
-                appearance.set(key, value);
+                page.set(key, value);
             }
 
             visible: key !== ""
@@ -5551,13 +5623,14 @@ PanelWindow {
                     spacing: 6
 
                     Repeater {
-                        model: Appearance.WALLPAPER_COLORS
+                        model: wallpaperColors.choices
 
                         Rectangle {
                             id: choice
 
                             required property var modelData
-                            readonly property bool chosen: modelData.color === wallpaperColors.current
+                            readonly property var value: modelData.value === undefined ? modelData.color : modelData.value
+                            readonly property bool chosen: (value ?? "") === wallpaperColors.current
 
                             width: 32
                             height: 32
@@ -5574,7 +5647,7 @@ PanelWindow {
                             }
 
                             TapHandler {
-                                onTapped: wallpaperColors.choose(choice.modelData.color)
+                                onTapped: wallpaperColors.choose(choice.value)
                             }
                         }
                     }

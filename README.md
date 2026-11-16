@@ -168,7 +168,8 @@ clocks and their popover, a keep-awake toggle, network, Bluetooth, volume
 and battery with their percentages, the system monitor (CPU %, with top
 processes, memory and temperature) and the session menu, plus the volume and mic-mute OSD. It runs
 along the top of each monitor, or the bottom with Settings' Bar page
-(`barPosition`, SPEC.md §15), which also places the logo, workspaces,
+(`barPosition`, SPEC.md §15), which also sets its color in light and
+dark mode (`lightBarColor`, `darkBarColor`), places the logo, workspaces,
 window title and status icons left, center or right (`barLayout`), and
 chooses which icons show and their order (`barIcons`). To use it, install
 Quickshell (above), run `make install` and `sudo make install-session`,
