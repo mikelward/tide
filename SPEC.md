@@ -4554,8 +4554,7 @@ talk, a demo, or a meeting room's screen.
   - A keyboard is an input device udev tags `ID_INPUT_KEYBOARD`: one with
     every key from Esc to D. A power button isn't one. Nor is any that
     can't be typed on while the keyboard is away (maintainer, 2026-11-15):
-    a mouse udev tags a mouse too, as a gaming mouse with a keyboard's keys
-    is; a virtual keyboard a program makes, as keyd's is, which has no
+    a virtual keyboard a program makes, as keyd's is, which has no
     hardware parent in sysfs; or a wireless keyboard its receiver says is
     asleep, off or connected elsewhere, as Logitech's HID++ battery says
     by its `online`, 0. The driver keeps `online` at 0 while the battery
@@ -4566,6 +4565,10 @@ talk, a demo, or a meeting room's screen.
     keyboard that's off with no battery at all, since the driver adds it
     only once the keyboard connects, so one with none isn't a keyboard
     yet. A HID++ keyboard with no battery to report would never count.
+  - A mouse udev tags a keyboard too counts (maintainer, 2026-11-16).
+    Logitech's receiver gives every device behind it both a mouse's and a
+    keyboard's reports, so an ERGO K860 and a PRO 2 MOUSE look the same to
+    udev and in their capabilities.
   - While the laptop's lid is closed, its built-in keyboard isn't one
     (maintainer, 2026-11-14): with an external monitor alone, only a
     keyboard plugged in can be typed on. Built-in is by the device's

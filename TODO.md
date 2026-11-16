@@ -1371,23 +1371,16 @@ the session's keys (SPEC.md §5.4). Left:
 
 ## "No keyboard" on the maintainer's machine (SPEC.md §10)
 
-A key now proves a keyboard, but why the ERGO K860 on its Logitech
-receiver went uncounted while it typed isn't known (2026-11-15: a desktop
-with keyd and a KVM). A week before, the lock said "No keyboard" only
-when the KVM had switched away; since keyd, its virtual keyboard always
-counted, so neither screen said it; fc411de leaves keyd's device out and
-counts a HID++ keyboard only once its battery exists and reads `online`
-1, the one new rule and the likely cause. The receiver appears a couple
-of seconds before the keyboard, the battery later still. Check on the
-machine with the K860 idle, then right after a key press, then after
-switching the KVM away and back: `tide keyboards`, `ls -l
-/sys/class/input/event*`, `udevadm info` on the K860's event device, the
-K860's `/sys/class/power_supply/hidpp_battery_*/{model_name,online,status}`
-and `journalctl -t tide-greeter`. If `online` reads 0, or there's no
-battery, while it types, drop or narrow `asleep()`'s battery rule in
-`bin/tide`: switching the KVM away takes the receiver, and its devices,
-away, so that case holds without it.
+Found 2026-11-16 on a desktop with keyd and a KVM: udev tags the ERGO
+K860 a mouse too, as Logitech's receiver gives each device both kinds of
+reports, so `tide keyboards` left it out. A mouse tagged a keyboard now
+counts. After the KVM switches back, the K860 types a few seconds before
+HID++ adds its battery, so "No keyboard" still shows until it does.
 
+- [ ] **Count a HID++ keyboard before its battery appears**: drop or
+  narrow `asleep()`'s no-battery rule in `bin/tide`. Switching the KVM
+  away takes the receiver, and its devices, away, so that case holds
+  without it.
 - [ ] **Its battery's `online` while it types.** Read in
   hid-logitech-hidpp.c (Linux 7.3): the driver adds the battery on the
   device's first connect, once it answers HID++'s ping, and sets `online`
@@ -1396,13 +1389,6 @@ away, so that case holds without it.
   that fails on a connect notification sets it 0 with status Unknown, and
   a failed query leaves it as it was, 0 for a battery just added. A keyboard that types without a fresh
   connect notification keeps a stale 0 until its next battery broadcast.
-- [ ] **A keyboard with a touchpad.** hid-logitech-dj gives a receiver's
-  device one report descriptor with its keyboard and mouse reports, and
-  sets one input device per application only on the receiver's own
-  interfaces, so a K400's keyboard is likely one input device udev tags a
-  mouse too, which `tide keyboards` leaves out. A Lightspeed gaming
-  mouse gets the same full keyboard descriptor, so the key bitmap can't
-  tell them apart; check what udev tags on a real K400 first.
 - [ ] **Bluetooth.** BlueZ makes a Bluetooth keyboard through uhid, under
   `/sys/devices/virtual/misc/uhid/`, but its input device still has the
   HID device as its parent, so "no hardware parent" doesn't drop it (a
