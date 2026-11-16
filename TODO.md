@@ -183,8 +183,8 @@ once you have agreed with it or reversed it.
   Reversible, in `Overview.qml`.
 - **Arrange displays on tidewm saves sway's file** (2026-11-08):
   nwg-displays runs as on sway, with `--outputs_path
-  ~/.config/sway/outputs`, the file tide's and conf's tidewm configs
-  include after tide-outputs.conf, so an arrangement there wins. The shell makes
+  ~/.config/sway/outputs`, the file the tidewm session's config
+  includes after tide-outputs.conf, so an arrangement there wins. The shell makes
   `~/.config/sway` first, and `$XDG_CONFIG_HOME/sway` where that's set,
   since nwg-displays quits unless sway's directory under its config home
   is there. Reversible, in `lib/settings.mjs`'s `advancedFor`.

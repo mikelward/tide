@@ -107,9 +107,10 @@ symbol, the switcher, the launcher's screenshots and the Sharing pill
 all work, and screen sharing goes through xdg-desktop-portal-wlr, which
 `tide doctor` checks for. Its maintainer uses it every day. Hyprland's
 stays the default. tidewm's keys are tide's own config,
-`~/.config/tidewm/tide.conf`, which `make install` puts there and the
-session runs when you have no `~/.config/tidewm/config`; yours can
-`include tide.conf` and rebind what it likes (SPEC.md §6.8).
+`~/.config/tidewm/tide.conf`, which `make install` puts there. The
+session reads it first, then your `~/.config/tidewm/config`, then what
+tide's settings pages saved, so yours says only what it changes
+(SPEC.md §6.8).
 
 `make install-session` also installs tide's greeter, for greetd (SPEC.md
 §11): `tide-greeter`, which runs tidewm (one with `-k`) or else Hyprland,

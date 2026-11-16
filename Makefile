@@ -65,7 +65,7 @@ HYPR_DIR ?= $(HOME)/.config/hypr/tide
 # tide-tidewm and tide-tidesway. install/tide-setup gives only those whose
 # compositor runs.
 SESSIONS ?= tide tide-tidewm tide-tidesway
-# tidewm's own directory, where tide-tidewm looks for tide.conf and tide's
+# tidewm's own directory, where tide-tidewm looks for session.conf and tide's
 # shell writes the tide-*.conf it includes: $XDG_CONFIG_HOME's, as both have it.
 TIDEWM_DIR ?= $(or $(XDG_CONFIG_HOME),$(HOME)/.config)/tidewm
 # Where hypridle's config and the Idle page's tide-idle.conf are.
@@ -277,7 +277,7 @@ install: build install-shell
 	install -m 755 hypr/tide/apply-input.sh hypr/tide/watch-input.sh hypr/tide/next-layout.sh "$(HYPR_DIR)/"
 	@# tidesway.d holds what tidesway alone reads, which the shell writes.
 	install -d "$(TIDEWM_DIR)" "$(TIDEWM_DIR)/tidesway.d"
-	install -m 644 tidewm/tide.conf "$(TIDEWM_DIR)/"
+	install -m 644 tidewm/tide.conf tidewm/session.conf "$(TIDEWM_DIR)/"
 	install -d "$(SYSTEMD_USER_DIR)/hypridle.service.d" "$(SYSTEMD_USER_DIR)/hyprpolkitagent.service.d" "$(SYSTEMD_USER_DIR)/app-.service.d"
 	install -m 644 systemd/user/tide.service systemd/user/tide-lock.service systemd/user/tide-lock-fallback.service systemd/user/tide-idle-fallback.service systemd/user/tide-shell-fallback.service systemd/user/tide-clipboard.service systemd/user/tide-fcitx5.service systemd/user/tide-lid-inhibit.service systemd/user/tide-kde.service "$(SYSTEMD_USER_DIR)/"
 	install -m 644 systemd/user/hypridle.service.d/tide.conf "$(SYSTEMD_USER_DIR)/hypridle.service.d/"

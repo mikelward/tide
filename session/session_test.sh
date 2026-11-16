@@ -466,29 +466,48 @@ tidewm_ran=$(tidewm_start)
 check "a home tidewm's start can't name is left to the shell" \
     test "$tidewm_ran" = "tidewm -s ${up}$fin -c x
 uwsm finalize SWAYSOCK I3SOCK"
-# Without a config of your own, tidewm gets tide's; with one, or a -c,
-# it's tidewm's to read.
+# The session's config is session.conf, which `make install` puts beside
+# tide.conf: tide's, then yours, then the settings pages' and the display
+# arrangement, each winning over the one before, so a config of yours
+# that's missing or broken can't lose tide's keys or the pages' settings.
+# A -c given wins over it.
 rm -f "$tmp/tidewm-config/hypr/tide-workspaces.lua"
 mkdir -p "$tmp/tidewm-config/tidewm"
 : > "$tmp/tidewm-config/tidewm/tide.conf"
 tidewm_bare() {
-    env PATH="$tmp/tidewm-bin:/usr/bin:/bin" HOME="$tmp/tidewm-home" XDG_CONFIG_HOME="$tmp/tidewm-config" /bin/sh "$tidewm_wrapper" 2>/dev/null
+    env PATH="$tmp/tidewm-bin:/usr/bin:/bin" HOME="$tmp/tidewm-home" XDG_CONFIG_HOME="$tmp/tidewm-config" \
+        /bin/sh "$tidewm_wrapper" 2>/dev/null
 }
-check "with no config of yours, tidewm runs tide's" \
-    test "$(tidewm_bare | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c $tmp/tidewm-config/tidewm/tide.conf"
-check "a -c given wins over tide's" \
+cfg=$tmp/tidewm-config/tidewm
+check "an install from before session.conf runs tide.conf without a config of yours, as it did" \
+    test "$(tidewm_bare | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c $cfg/tide.conf"
+# shellcheck disable=SC2016 # sh -c's own $1 to $3
+check "and says why" sh -c 'env PATH="$1:/usr/bin:/bin" HOME="$2" XDG_CONFIG_HOME="$3" /bin/sh "$4" 2>&1 >/dev/null | grep -qF "no $3/tidewm/session.conf"' \
+    sh "$tmp/tidewm-bin" "$tmp/tidewm-home" "$tmp/tidewm-config" "$tidewm_wrapper"
+cp tidewm/session.conf "$cfg/"
+check "tidewm runs session.conf" \
+    test "$(tidewm_bare | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c $cfg/session.conf"
+: > "$cfg/config"
+check "with a config of yours too" \
+    test "$(tidewm_bare | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c $cfg/session.conf"
+check "which is tide's, yours, the settings pages' and the display arrangement, in that order, beside it" \
+    test "$(grep '^include' tidewm/session.conf)" = "include tide.conf
+include config
+include tide-*.conf
+include ~/.config/sway/outputs"
+# shellcheck disable=SC2016 # sh -c's own $1
+check "make install puts session.conf beside tide.conf" \
+    sh -c 'make -n install XDG_CONFIG_HOME="$1" 2>/dev/null | grep -qF "tidewm/tide.conf tidewm/session.conf \"$1/tidewm/\""' sh "$tmp/xdg"
+check "a -c given wins over it" \
     test "$(tidewm_start | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin -c x"
-: > "$tmp/tidewm-config/tidewm/config"
-check "your own config is tidewm's to read" \
-    test "$(tidewm_bare | head -n 1)" = "tidewm -s ${up}timeout 5 tide-msg 'workspace number in; persist workspace in'; $fin"
 # make install puts tide.conf where the wrapper looks: XDG_CONFIG_HOME's
 # tidewm, else ~/.config's.
 # shellcheck disable=SC2016 # sh -c's own $1
 check "make install puts tide.conf in XDG_CONFIG_HOME's tidewm" \
-    sh -c 'make -n install XDG_CONFIG_HOME="$1" 2>/dev/null | grep -qF "tidewm/tide.conf \"$1/tidewm/\""' sh "$tmp/xdg"
+    sh -c 'make -n install XDG_CONFIG_HOME="$1" 2>/dev/null | grep -qF "tidewm/session.conf \"$1/tidewm/\""' sh "$tmp/xdg"
 # shellcheck disable=SC2016 # and here
 check "and without it, in ~/.config's" \
-    sh -c 'env -u XDG_CONFIG_HOME HOME="$1" make -n install 2>/dev/null | grep -qF "tidewm/tide.conf \"$1/.config/tidewm/\""' sh "$tmp/home"
+    sh -c 'env -u XDG_CONFIG_HOME HOME="$1" make -n install 2>/dev/null | grep -qF "tidewm/session.conf \"$1/.config/tidewm/\""' sh "$tmp/home"
 # A tide-msg that never answers would hold up the finalize after it, and
 # uwsm ends a session that never says it's ready.
 # The wrapper's 5 seconds, not the stub, end the wait: without them the whole
