@@ -2297,7 +2297,7 @@ is a platform's other key, with why. The notes under the table say more.
 | move the window to the previous, next workspace; `move_to_previous_workspace`, `move_to_next_workspace` | **`Super+Shift+PgUp`**, **`Super+Shift+PgDn`** | `Meta+Shift+PgUp`, `Meta+Shift+PgDown` | `Search+Shift+PageUp`, `Search+Shift+PageDown` | `Super+Shift+PgUp`, `Super+Shift+PgDn` |
 | focus down, up the stack; `focus_down`, `focus_up` | `Super+J`, `Super+K` | `Meta+J`, `Meta+K` | `Search+J`, `Search+K` | `Super+J`, `Super+K` |
 | move the window down, up the stack; `move_down`, `move_up` | `Super+Shift+J`, `Super+Shift+K` | `Meta+Shift+J`, `Meta+Shift+K` | `Search+Shift+J`, `Search+Shift+K` | `Super+Shift+J`, `Super+Shift+K` |
-| go to a workspace, by name (§6.5); `go_to_workspace` | `Super+Return` | — | differs: `Search+W`, as Chrome can't bind Return | `Super+Return` |
+| go to a workspace, by name (§6.5); `go_to_workspace` | `Super+Return` | `Meta+Return` | differs: `Search+W`, as Chrome can't bind Return | `Super+Return` |
 | move the window to a workspace, by name; `move_to_workspace` | **`Super+Shift+Return`** | — | differs: `Search+Shift+W` | `Super+Shift+Return` |
 | make the window the master; `swap_master` | **`Alt+Tab`** | `Alt+Tab` | differs: `Search+Shift+M`, as chromeOS keeps `Alt+Tab` | `Alt+Tab`, with Karabiner |
 | grow, shrink the master (`mfact`, by §6.1's step); `grow_master`, `shrink_master` | `Super+\`, `Super+/` | `Meta+\`, `Meta+/` | differs: `Search+N`, `Search+H` | `Super+\`, `Super+/` |
@@ -2333,8 +2333,9 @@ is a platform's other key, with why. The notes under the table say more.
   `bindsym --name NAME none ...`.
 - **KDE.** KWin global shortcuts, each starting `tide:` in System
   Settings' Shortcuts, where you can change them. "—" there leaves the key to Plasma's
-  own shortcut, if it has one. `Meta+Space` is tide's launcher, from
-  `tide-kde.service` and scripts' `setup-kde` (§8.5). A pinned window
+  own shortcut, if it has one. `Meta+Space` is tide's launcher and
+  `Meta+Return` its name prompt, from `tide-kde.service` and scripts'
+  `setup-kde` (§8.5). A pinned window
   closes as any other: a KWin script can't take an app's keys.
 - **chromeOS.** tide for Chrome's commands work only while a Chrome window
   has focus. "chromeOS's" marks a key the system binds, not tide for
@@ -3898,6 +3899,14 @@ on the tap of `Meta`.
     Without tide on KDE, it lists none.
   - tide on KDE (mikelward/tide-kde) also tiles those windows and names
     those desktops; the other tabs need none of it.
+- **The name prompt.** `Meta+Return` opens §6.5's prompt to go to a
+  workspace, over KWin's desktops in its order. Enter sets `current` to
+  the desktop of that name, or makes one after the last with
+  `createDesktop` and goes to it; KWin doesn't say which it made, so the
+  desktops are read again to find it. `setup-kde` binds the key to scripts'
+  `tide-go-to-workspace`, which runs `qs -p
+  ~/.config/quickshell/tide/kde.qml ipc call prompt go`. The prompts for a
+  window or a launch, and `Super+Shift+Return`, aren't on Plasma.
 - **Apps.** Every entry `XDG_CURRENT_DESKTOP=KDE` shows, so Plasma's own
   apps and System Settings, which `SETTINGS_APPS` (§8.2) drops only under
   tide.

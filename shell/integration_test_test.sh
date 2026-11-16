@@ -234,8 +234,12 @@ if test "\$1" = ipc; then
         *"call settings shownPage"*) if test -e "\$XDG_RUNTIME_DIR/settings-page"; then cat "\$XDG_RUNTIME_DIR/settings-page"; fi ;;
         *"call settings close"*) rm -f "\$XDG_RUNTIME_DIR/settings-page" ;;
         # Super+Return's name prompt, in its go mode, or as a move with
-        # DIR/prompt-moves, until it's answered.
-        *"call prompt go"*) if test -e "\$(dirname "\$0")/prompt-moves"; then echo move; else echo go; fi >"\$XDG_RUNTIME_DIR/prompt-open" ;;
+        # DIR/prompt-moves, until it's answered. On Plasma, once its
+        # launcher has opened, Meta+Return's, the first time and then the
+        # second, each marked.
+        *"call prompt go"*)
+            if test -e "\$(dirname "\$0")/prompt-moves"; then echo move; else echo go; fi >"\$XDG_RUNTIME_DIR/prompt-open"
+            if ! test -e "\$XDG_RUNTIME_DIR/kde-toggle"; then :; elif test -e "\$XDG_RUNTIME_DIR/prompt-go"; then : >"\$XDG_RUNTIME_DIR/prompt-rego"; else : >"\$XDG_RUNTIME_DIR/prompt-go"; fi ;;
         # Super+Z in tidewm's session: the window tidewm's events focused,
         # minimized by its container on Quickshell's own connection
         # (tidewm_client.py), once that has sent it.
@@ -1017,6 +1021,15 @@ kde_tab() {
     printf 'until test -e "$XDG_RUNTIME_DIR/switcher-%s"; do sleep 0.1; done; %s; echo "  INFO: tide: launcher: read 2 of KWin'"'"'s windows, 1 wanting attention, and 2 desktops"; %s; busctl --user %s' \
         "$1" "$focused" "$typed" "$2"
 }
+# Then Meta+Return's name prompt opens twice, each time taking the
+# keyboard and reading KWin's desktops: it goes to "re", then makes "oc"
+# after the last and goes to it.
+kde_prompt() {
+    printf 'until test -e "$XDG_RUNTIME_DIR/%s"; do sleep 0.1; done; %s; busctl --user --json=short get-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager desktops current >/dev/null; %s; %s' \
+        "$1" "$focused" "$typed" "$2"
+}
+kde_vdm='org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager'
+kde_prompts="$(kde_prompt prompt-go "busctl --user set-property $kde_vdm current s d2"); $(kde_prompt prompt-rego "busctl --user -- call $kde_vdm createDesktop us 2 oc; busctl --user set-property $kde_vdm current s d3")"
 kde_tabs="$(kde_tab windows 'call org.kde.KWin /WindowsRunner org.kde.krunner1 Run ss "0_{w1}" ""'); $(kde_tab workspaces 'set-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager current s d2'); $(kde_tab attention 'call org.kde.KWin /WindowsRunner org.kde.krunner1 Run ss "0_{w2}" ""')"
 # Before any of that, as it starts, it gives tide's decoration the Borders
 # settings that differ from kwinrc's, and has KWin read them, through the
@@ -1026,7 +1039,7 @@ kde_wrote() {
 }
 kde_reconfigured='busctl --user call org.kde.KWin /KWin org.kde.KWin reconfigure'
 kde_borders="$(kde_wrote)$kde_reconfigured"
-kde_launcher="$kde_borders; $(kde_ran "--application tide-test-probe" "--application kcm_tidezebra"); $kde_tabs"
+kde_launcher="$kde_borders; $(kde_ran "--application tide-test-probe" "--application kcm_tidezebra"); $kde_tabs; $kde_prompts"
 # What a greeter does once the login step starts it: it takes the keyboard,
 # then logs in on the passwords typed, as greeter_client.py's MODE says.
 login_as() {
@@ -1117,6 +1130,9 @@ check "having typed an app's query, then a settings page's" test "$(sed -n 7,8p 
 zebra"
 check "then a window's on the Windows tab, and a desktop's on Workspaces" test "$(sed -n 9,10p "$tmp/clean/typed")" = "probe
 re"
+check "and a name prompt on Plasma that goes to a desktop by name passes" contains "$out" "ok: on Plasma, Super+Return's name prompt goes to a desktop by name, making one that's new"
+check "having typed a desktop's name, then a new one's" test "$(sed -n 12,13p "$tmp/clean/typed")" = "re
+oc"
 }
 
 case_8() {
@@ -1682,7 +1698,7 @@ echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
 check "a lock that unlocks on the right password passes" test "$code" -eq 0
 check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
-check "having typed a wrong password, then the right one" test "$(sed -n 12,13p "$tmp/unlocks/typed")" = "not-pw
+check "having typed a wrong password, then the right one" test "$(sed -n 14,15p "$tmp/unlocks/typed")" = "not-pw
 pw"
 check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
 }
@@ -1759,7 +1775,7 @@ run "$tmp/clean"
 check "a greeter that logs in to tide on the right password passes" \
     contains "$out" "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
 check "having typed a wrong password, then the right one, then the code" \
-    test "$(sed -n 12,14p "$tmp/clean/typed")" = "not-tide-greeter-test
+    test "$(sed -n 14,16p "$tmp/clean/typed")" = "not-tide-greeter-test
 tide-greeter-test
 246810"
 }

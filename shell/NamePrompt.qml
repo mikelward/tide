@@ -19,10 +19,14 @@ import "lib/workspaces.mjs" as Ws
 //     followed by every workspace, not just those that match it.
 //   - Enter goes to the selected row's workspace, made if it's new; Esc is
 //     PromptData.cancel's.
+// On KDE Plasma (SPEC.md §8.5), where kde.qml runs it, it's Super+Return's
+// alone, KWinPromptData's, over KWin's desktops; nothing here asks
+// Hyprland or starts tide's own state (Compositor, PromptData).
 PanelWindow {
     id: root
 
-    readonly property var request: PromptData.current
+    readonly property bool plasma: LauncherData.plasma
+    readonly property var request: root.plasma ? KWinPromptData.current : PromptData.current
     readonly property bool asking: root.request !== null
     // The request the text was last set for, so a new one starts afresh and
     // the same one keeps what you typed.
@@ -34,13 +38,15 @@ PanelWindow {
     property int selected: 0
 
     // The window asked about, one of Compositor.windows, or null.
-    readonly property var window: root.request && root.request.address !== undefined
+    readonly property var window: !root.plasma && root.request && root.request.address !== undefined
         ? Compositor.windows.find(w => w.address === root.request.address) ?? null
         : null
     readonly property string suggested: root.window
         ? Names.shortName(root.window.title, DesktopEntries.heuristicLookup(root.window.app)?.name ?? "", PromptData.patterns)
         : ""
-    readonly property var names: Ws.workspaceOrder(Compositor.workspaces, WorkspacesData.standing).map(w => w.name)
+    readonly property var names: root.plasma
+        ? KWinData.desktopList.map(d => d.name)
+        : Ws.workspaceOrder(Compositor.workspaces, WorkspacesData.standing).map(w => w.name)
     readonly property var rows: Names.promptRows({
         names: root.names,
         typed: field.text,
@@ -65,8 +71,21 @@ PanelWindow {
             selected: root.selected,
             typed: field.text
         });
-        if (choice.name !== undefined) {
+        if (choice.name === undefined) {
+            return;
+        }
+        if (root.plasma) {
+            KWinPromptData.answer(choice.name);
+        } else {
             PromptData.answer(choice.name);
+        }
+    }
+
+    function cancel() {
+        if (root.plasma) {
+            KWinPromptData.cancel();
+        } else {
+            PromptData.cancel();
         }
     }
 
@@ -77,7 +96,8 @@ PanelWindow {
         root.shownFor = root.request.id;
         root.edited = false;
         root.selected = 0;
-        const focused = Compositor.focusedScreen;
+        // On Plasma, KWin puts it on the monitor it chooses.
+        const focused = root.plasma ? null : Compositor.focusedScreen;
         if (focused) {
             root.screen = focused;
         }
@@ -172,7 +192,7 @@ PanelWindow {
                         }
                     }
 
-                    Keys.onEscapePressed: PromptData.cancel()
+                    Keys.onEscapePressed: root.cancel()
                     Keys.onReturnPressed: root.enter()
                     Keys.onEnterPressed: root.enter()
                     Keys.onUpPressed: root.selected = Search.moved(root.selected, -1, root.rows.length)
