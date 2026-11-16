@@ -134,16 +134,30 @@ and 13 not at all; that table, with dwl's line numbers, is in this file's
 history. Of the 8 rows left, tidewm itself lacks something in 4; the
 rest need only tide, conf or scripts.
 
-| Row | tidewm | tide, conf, scripts | Left |
-|---|---|---|---|
-| §11 greeter | done | tide: no | The greeter on tidewm, with its displays off by `output * power` |
-| §17 fractional scale | part | conf: done | X11 cursors at a fractional scale |
-| §10 lock restore | done | tide: done | M5's crash walk |
-| §12 share | done | scripts: done | A share in Chrome; the restore flag waits on xdpw |
-| §12 hide from capture | no | — | Deferred by the maintainer: an output source without the shell's surfaces (L) |
-| §14.1 polkit | done | tide: part | The requester check: whether it descends from the focused window's process, unbuilt on Hyprland too |
-| §14.3 marks | part | — | A notice for a held window with no shell running, which tidewm decided against |
-| §6.4 X11 | part | done | X11 windows that sometimes never map, a dialog after its window most of all, in wlroots and Xwayland |
+| Row | tidewm | tidesway | tide, conf, scripts | Left |
+|---|---|---|---|---|
+| §11 greeter | done | done | tide: no | The greeter on tidewm or tidesway, with its displays off by `output * power` |
+| §17 fractional scale | part | part | conf: done | X11 cursors at a fractional scale |
+| §10 lock restore | done | done | tide: done | M5's crash walk |
+| §12 share | done | done | scripts: done | A share in Chrome; the restore flag waits on xdpw |
+| §12 hide from capture | no | no | — | Deferred by the maintainer: an output source without the shell's surfaces (L) |
+| §14.1 polkit | done | done | tide: part | The requester check: whether it descends from the focused window's process, unbuilt on Hyprland too |
+| §14.3 marks | part | part | — | A notice for a held window with no shell running, which tidewm decided against |
+| §6.4 X11 | part | part | done | X11 windows that sometimes never map, a dialog after its window most of all, in wlroots and Xwayland |
+
+**tidesway**, tide's fork of sway 1.12
+([mikelward/tidesway](https://github.com/mikelward/tidesway)), meets the
+rows as tidewm does, by tidewm's own tests: on 2026-11-16 it passed 879 of
+tidewm's 882 at tidewm `f4d2a24`. Of the other three, one is skipped
+without tide's and conf's checkouts. The two that fail are differences
+tidesway keeps on purpose (its TODO.md, *Decisions needing review*):
+- sway's GET_MARKS, which tidewm doesn't have.
+- A keymap that fails only once a later input line merges into it is
+  blamed on that later line.
+
+Neither is a row here. tide's session runs it as `tide-session tidesway`
+(TODO.md, *A tidesway session*); like tidewm, nothing has run on it in a
+real login.
 
 **Getting tidewm onto a machine** (scripts' `setup-tide`):
 
