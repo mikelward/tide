@@ -41,6 +41,18 @@ export function goCommand(id) {
     return ["busctl", "--user", "set-property", KWIN, ...VDM, "current", "s", id];
 }
 
+// Makes a desktop named `name` after the last of the `count` there are.
+// `--` ends busctl's options, so a name starting with a dash is a name.
+export function createCommand(count, name) {
+    return ["busctl", "--user", "--", "call", KWIN, ...VDM, "createDesktop", "us", String(count), name];
+}
+
+// The ID of the desktop named `name`, exactly, among parseDesktops's
+// `desktops`, or null.
+export function desktopNamed(desktops, name) {
+    return desktops.find((d) => d.name === name)?.id ?? null;
+}
+
 // The JSON values in busctl's output, one per line, skipping blank lines.
 // Throws on a line that isn't JSON, naming it.
 export function jsonLines(text) {

@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    DESKTOPS_COMMAND, WINDOWS_COMMAND, ATTENTION_COMMAND, infoCommand, activateCommand, goCommand, jsonLines, parseDesktops, parseWindows,
+    DESKTOPS_COMMAND, WINDOWS_COMMAND, ATTENTION_COMMAND, infoCommand, activateCommand, goCommand, createCommand, desktopNamed, jsonLines, parseDesktops, parseWindows,
     parseInfo, parseAttention, launcherWindows, launcherWorkspaces,
 } from "./kwin.mjs";
 
@@ -30,6 +30,18 @@ test("the commands are KWin's own D-Bus, through busctl", () => {
     assert.deepEqual(infoCommand([SHELL]).slice(-2), ["sh", SHELL]);
     assert.deepEqual(activateCommand(`0_${SHELL}`).slice(-4), ["Run", "ss", `0_${SHELL}`, ""]);
     assert.deepEqual(goCommand(D2).slice(-3), ["current", "s", D2]);
+});
+
+test("a new desktop goes after the last, whatever its name starts with", () => {
+    assert.deepEqual(createCommand(2, "-x"), ["busctl", "--user", "--", "call", "org.kde.KWin", "/VirtualDesktopManager",
+        "org.kde.KWin.VirtualDesktopManager", "createDesktop", "us", "2", "-x"]);
+});
+
+test("a desktop is found by its exact name", () => {
+    const { desktops } = parseDesktops(DESKTOPS);
+    assert.equal(desktopNamed(desktops, "re"), D2);
+    assert.equal(desktopNamed(desktops, "Re"), null);
+    assert.equal(desktopNamed(desktops, "oc"), null);
 });
 
 test("desktops come in KWin's order, with the current one", () => {

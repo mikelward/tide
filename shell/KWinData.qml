@@ -19,6 +19,9 @@ Singleton {
     // launcher lists them; [] until the first read is in.
     property var windows: []
     property var workspaces: []
+    // KWin's desktops, [{id, name}], in its order, as last read: the name
+    // prompt's workspaces (KWinPromptData).
+    property var desktopList: []
 
     // The read in flight: its desktops and windows as they come in.
     property int generation: 0
@@ -48,6 +51,24 @@ Singleton {
     // Goes to the desktop with ID `id`.
     function goTo(id) {
         Launcher.run(KWin.goCommand(id));
+    }
+
+    // Goes to the desktop named `name`, making it after the last if
+    // there's none, as Super+Return's prompt does on Hyprland (SPEC.md
+    // §8.5). KWin doesn't say which desktop it made, so the desktops are
+    // read again to find it.
+    function goToNamed(name) {
+        const id = KWin.desktopNamed(root.desktopList, name);
+        if (id !== null) {
+            root.goTo(id);
+            return;
+        }
+        Launcher.run(KWin.createCommand(root.desktopList.length, name), ok => {
+            if (ok) {
+                namedReader.name = name;
+                namedReader.running = true;
+            }
+        });
     }
 
     function parsed(what, read) {
@@ -91,6 +112,7 @@ Singleton {
                     return;
                 }
                 root.desktops = root.parsed("desktops", () => KWin.parseDesktops(text)) ?? { desktops: [], current: null };
+                root.desktopList = root.desktops.desktops;
                 root.readInfo();
             }
         }
@@ -169,6 +191,35 @@ Singleton {
         stderr: StdioCollector {
             onStreamFinished: if (text.trim() !== "") {
                 console.warn(`tide: busctl couldn't ask KWin about a window: ${text.trim()}`);
+            }
+        }
+    }
+
+    // The desktops again, once goToNamed made one, to go to it.
+    Process {
+        id: namedReader
+
+        property string name: ""
+
+        command: KWin.DESKTOPS_COMMAND
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const read = root.parsed("desktops", () => KWin.parseDesktops(text));
+                if (read === null) {
+                    return;
+                }
+                root.desktopList = read.desktops;
+                const id = KWin.desktopNamed(read.desktops, namedReader.name);
+                if (id === null) {
+                    console.warn(`tide: KWin made no desktop named ${JSON.stringify(namedReader.name)}, so there's none to go to`);
+                    return;
+                }
+                root.goTo(id);
+            }
+        }
+        stderr: StdioCollector {
+            onStreamFinished: if (text.trim() !== "") {
+                console.warn(`tide: busctl couldn't ask KWin for its desktops: ${text.trim()}`);
             }
         }
     }
