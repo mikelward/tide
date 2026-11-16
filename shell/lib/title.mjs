@@ -68,13 +68,3 @@ export function hasFocus(data) {
 function oneLine(title) {
     return String(title ?? "").replace(/\s+/g, " ").trim();
 }
-
-// How wide the bar's centered title may be: its own width, at most `max`,
-// and no wider than twice the room between the bar's middle and the
-// nearer of the left group's end (`left`) and the right group's start
-// (`right`), less `gap`, so it stays centered. The right group starts at
-// the first of the privacy pills, then the tray.
-export function titleWidth({ implicit, max, barWidth, left, right, gap }) {
-    const room = Math.min(barWidth / 2 - left, right - barWidth / 2);
-    return Math.max(0, Math.min(implicit, max, 2 * room - gap));
-}

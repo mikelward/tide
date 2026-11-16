@@ -10,6 +10,7 @@ import "lib/audio.mjs" as Audio
 import "lib/cities.mjs" as Cities
 import "lib/barside.mjs" as BarSide
 import "lib/baricons.mjs" as BarIcons
+import "lib/barlayout.mjs" as BarLayout
 import "lib/clipboard.mjs" as Clip
 import "lib/dnd.mjs" as Dnd
 import "lib/floating.mjs" as FloatRules
@@ -2722,6 +2723,10 @@ PanelWindow {
                         property string refused: ""
                         // The Icons list, made whole (lib/baricons.mjs).
                         readonly property var icons: BarIcons.iconList(AppearanceData.settings.barIcons)
+                        // The Layout list, made whole, by zone
+                        // (lib/barlayout.mjs).
+                        readonly property var layout: BarLayout.layoutList(AppearanceData.settings.barLayout)
+                        readonly property var layoutRows: BarLayout.byZone(barPage.layout)
 
                         function set(key, value) {
                             refused = AppearanceData.set(key, value);
@@ -2783,6 +2788,97 @@ PanelWindow {
                                     value: barRow.at
                                     next: BarSide.steppedBarChoice(barRow.at, 1)
                                     onActivated: barPage.set("barPosition", Appearance.BAR_CHOICES[next].position)
+                                }
+                            }
+                        }
+
+                        Heading {
+                            text: "LAYOUT"
+                        }
+
+                        // Each of the bar's items, by zone (§7.1): the
+                        // arrows move it, past its zone's end into the
+                        // next, and a click on its switch shows or hides
+                        // it. The center zone stays on the bar's middle.
+                        // The bar follows at once. It's appearance.json's
+                        // barLayout (§15).
+                        Repeater {
+                            model: barPage.layoutRows
+
+                            Item {
+                                id: layoutRow
+
+                                required property var modelData
+                                required property int index
+
+                                width: barPage.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: layoutRow.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 64
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: BarLayout.ZONE_LABELS[layoutRow.modelData.zone]
+                                        color: Theme.fgDim
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                    }
+
+                                    StepButton {
+                                        name: "go-up-symbolic"
+                                        // Dimmed where it can't move: a step
+                                        // into the next zone keeps its row.
+                                        value: 0
+                                        next: BarLayout.moved(barPage.layout, layoutRow.index, -1) !== null ? 1 : 0
+                                        onActivated: barPage.set("barLayout", BarLayout.moved(barPage.layout, layoutRow.index, -1))
+                                    }
+
+                                    StepButton {
+                                        name: "go-down-symbolic"
+                                        // Dimmed where it can't move: a step
+                                        // into the next zone keeps its row.
+                                        value: 0
+                                        next: BarLayout.moved(barPage.layout, layoutRow.index, 1) !== null ? 1 : 0
+                                        onActivated: barPage.set("barLayout", BarLayout.moved(barPage.layout, layoutRow.index, 1))
+                                    }
+
+                                    // On or off, as the icons' switches.
+                                    Rectangle {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 56
+                                        height: 26
+                                        radius: 13
+                                        color: layoutRow.modelData.shown ? Theme.accentBg : Theme.surface2
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: layoutRow.modelData.shown ? "On" : "Off"
+                                            color: layoutRow.modelData.shown ? Theme.accentFg : Theme.fg
+                                            font.family: Theme.font
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                        }
+
+                                        TapHandler {
+                                            onTapped: barPage.set("barLayout", BarLayout.switched(barPage.layout, layoutRow.index, !layoutRow.modelData.shown))
+                                        }
+                                    }
                                 }
                             }
                         }

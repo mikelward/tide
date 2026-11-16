@@ -2819,6 +2819,28 @@ See [`bar.png`](docs/mocks/bar.png).
 - **It is a plain rectangle flush with its edge and both sides:** no
   margin, no corner radius, no shadow, no floating pill. Rounded corners
   belong only to things that pop up (popovers, notifications, the launcher).
+- **The Bar page places the bar's items** (§16), in three zones: left,
+  center and right. The items are the logo, the workspaces (with the
+  layout symbol after them), the window title, and the status icons as
+  one group. Each goes in any zone, in any order, or is turned off.
+  - By default the bar is as described below: the logo and workspaces
+    left, the title centered, the status icons right.
+  - The center zone sits on the bar's true middle, whatever the sides
+    hold. It moves over only as far as it must to clear them, keeping
+    clear of the left when it can't clear both. Spacers between items
+    couldn't do that: two stretching spacers center what's between them
+    only when the sides are the same width.
+  - The window title takes the room its zone leaves, up to its own width,
+    and keeps 32 px from what's beside it. Centered, it stays centered.
+  - The pills aren't placed. They start the right zone, or sit at the
+    right edge with it empty, and show only while they have something to
+    say, so a warning is never moved off or hidden. The config errors'
+    warning stays first in the status icons, wherever they go, and shows
+    even with them turned off.
+  - An item with nothing to show, such as the title with no window
+    focused, takes no place, so it leaves no gap.
+  - It's `barLayout` in `appearance.json` (§15); `shell/lib/barlayout.mjs`
+    makes a stored list whole and places the items.
 - **Left:** tide's logo, two waves in the accent blue
   (`shell/icons/tide-symbolic.svg`), then every workspace by name: the
   standing ones, home first, then the rest in the order they were made
@@ -5671,6 +5693,12 @@ to be focused.
   default, or `bottom` (§7.1). Anything else fails at load, naming the
   setting. A machine can set its own in `appearance.local.json`, which the
   Bar page writes (§16).
+- **The bar's layout.** `barLayout` in `appearance.json` lists the bar's
+  items, `logo`, `workspaces`, `title` and `icons`, in order, each with a
+  `zone` of `left`, `center` or `right` and shown or not (§7.1). Anything
+  but a list of `{"id": …, "zone": …, "shown": true or false}` fails at
+  load, naming the setting. An id the bar doesn't know is dropped, not an
+  error. A local file's list replaces the shared one whole.
 - **The bar's icons.** `barIcons` in `appearance.json` lists the status
   icons, in order, each shown or not (§7.1). Anything but a list of
   `{"id": …, "shown": true or false}` fails at load, naming the setting.
@@ -6550,17 +6578,24 @@ settings NAME ARGS...`; most answer why not, or an empty string.
     `stretch`). A new wallpaper goes back to `fill`, so set its position
     after it.
 
-- **Bar** sets where the bar runs and which status icons it shows (§7.1).
+- **Bar** sets where the bar runs, where its items go, and which status
+  icons it shows (§7.1).
   A right-click on the bar opens it, off any item or on one no other page
   fits (§7.1's table).
   - **Position**, which ‹ and › step between Top and Bottom, is
     `barPosition` in `appearance.local.json` (§15). Every bar moves at
     once, and what opens from it with it.
+  - **Layout** lists the bar's items by zone, Left, Center, then Right:
+    the logo, the workspaces (with the layout symbol), the window title,
+    and the status icons as one group (§7.1). Each shows its zone, has ↑
+    and ↓, which move it, past its zone's end into the next, and an On or
+    Off switch. It's `barLayout` in `appearance.local.json`, and the bar
+    follows at once.
   - **Icons** lists the status icons in the bar's order (§7.1). Each has
     ↑ and ↓, which move it, and an On or Off switch. It's `barIcons` in
     `appearance.local.json`, and the bar follows at once.
   - Over IPC, `setAppearance barPosition top` or `bottom` sets the
-    position. No call changes the icons.
+    position. No call changes the layout or the icons.
 
 - **Notifications** sets §9's, in `notifications.json` and
   `notifications.local.json`, and lists `muted` from `workspaces.json`.
