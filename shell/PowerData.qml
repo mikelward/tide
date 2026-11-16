@@ -27,6 +27,25 @@ Singleton {
     // Whether power-profiles-daemon is there, as last listed (null before).
     property var profilesDaemon: null
 
+    // On tidewm and tidesway, a monitor coming on while the lid is shut
+    // turns the laptop's panel off, as Hyprland's config does itself (`tide
+    // lid-docked`, SPEC.md §16): their lid binding hears a lid shut at login
+    // before any other monitor is on, and a shut laptop can be docked. As
+    // the shell starts, and as the monitors change.
+    readonly property int screenCount: Quickshell.screens.length
+    onScreenCountChanged: root.lidDocked()
+
+    function lidDocked() {
+        if (!Compositor.tidewm) {
+            return;
+        }
+        Launcher.run(["tide", "lid-docked"], (ok, errors) => {
+            if (!ok) {
+                console.warn(`tide: couldn't turn the laptop's panel off with the lid shut: ${errors.trim() || "tide lid-docked failed"}`);
+            }
+        });
+    }
+
     readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || `${Quickshell.env("HOME")}/.config`
     readonly property string dir: `${root.configHome}/tide`
 

@@ -1140,6 +1140,37 @@ check "and says why" contains "$(cat "$tmp/err")" "tide lid-opened: couldn't ask
 run "$qs" lid-opened now
 check "lid-opened takes no arguments" test $? -eq 2
 
+# lid-docked, as the shell runs it as tidewm's monitors change: with the lid
+# shut, as logind's LidClosed says, and another monitor on, the panel goes
+# off; it never locks. busctl answers $FAKE_LID (shut by default).
+cat > "$fake/busctl" <<'FAKE'
+#!/bin/sh
+printf "busctl %s\n" "$*" >> "$FAKE_LOG"
+echo "${FAKE_LID-b true}"
+exit "${FAKE_BUSCTL_STATUS:-0}"
+FAKE
+chmod +x "$fake/busctl"
+printf '%s\n' 'return {' '    lid_close = "lock",' '}' > "$power"
+run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$docked" "$qs" lid-docked
+check "lid-docked with the lid shut and another monitor on turns the panel off" \
+    test "$?:$(grep 'tide-msg output' "$log")" = "0:tide-msg output eDP-1 disable"
+check "having asked logind whether the lid is shut" \
+    contains "$(cat "$log")" "busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager LidClosed"
+run FAKE_IS_ACTIVE=active FAKE_TIDEWM_OUTPUTS="$undocked" "$qs" lid-docked
+check "with the lid shut and no other monitor, it neither locks" lacks "$(cat "$log")" "loginctl"
+check "nor turns the panel off" lacks "$(cat "$log")" "tide-msg output"
+run FAKE_LID="b false" FAKE_TIDEWM_OUTPUTS="$docked" "$qs" lid-docked
+check "with the lid open, it leaves the panel on" test "$?:$(grep -c 'tide-msg' "$log")" = "0:0"
+run FAKE_BUSCTL_STATUS=1 FAKE_LID="Failed to connect to bus" FAKE_TIDEWM_OUTPUTS="$docked" "$qs" lid-docked
+check "without logind's answer, it leaves the panel as it is" lacks "$(cat "$log")" "tide-msg output"
+check "and says why" contains "$(cat "$tmp/err")" "tide lid-docked: couldn't ask logind whether the lid is shut"
+run FAKE_TIDEMSG_STATUS=2 FAKE_TIDEMSG_ERROR="SWAYSOCK isn't set" "$qs" lid-docked
+check "unsure of the monitors, it doesn't lock" lacks "$(cat "$log")" "loginctl"
+check "and says why" contains "$(cat "$tmp/err")" "tide lid-docked: couldn't tell whether another monitor is on (tide-msg: SWAYSOCK isn't set), so the panel stays on"
+rm "$power"
+run "$qs" lid-docked now
+check "lid-docked takes no arguments" test $? -eq 2
+
 # lock-check: quiet with hypridle running; without it, a notification says
 # idle and suspend won't lock.
 run FAKE_IS_ACTIVE=active "$qs" lock-check

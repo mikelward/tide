@@ -125,6 +125,7 @@ ShellRoot {
         ClipboardSettingsData.load();
         // The lid's action, put right from the start.
         PowerData.load();
+        PowerData.lidDocked();
         PopupsData.resync();
         // Pinned windows kept open by tidewm, in its session.
         PinnedData.load();
