@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import "lib/appearance.mjs" as Appearance
 import "lib/barside.mjs" as BarSide
 import "lib/palette.mjs" as Palette
 
@@ -36,7 +37,10 @@ Singleton {
     // them all in place.
     readonly property var palette: dark ? Palette.PALETTE.dark : Palette.PALETTE.light
 
-    readonly property color barBg: palette.barBg
+    // The bar's background: lightBarColor or darkBarColor (§15), which the
+    // mode's text reads on, or the palette's.
+    readonly property string barColor: root.plasma ? "" : Appearance.barColor(AppearanceData.settings, root.dark)
+    readonly property color barBg: barColor !== "" ? barColor : palette.barBg
     readonly property color fg: palette.fg
     readonly property color fgDim: palette.fgDim
     readonly property color fgFaint: palette.fgFaint
