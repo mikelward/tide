@@ -2425,9 +2425,7 @@ launchers through `runenv`. They're `conf`'s, not tide's:
 | `Super+M` | Google Meet |
 | `Super+Y` | YouTube Music |
 | `Super+H` | the home folder |
-| `Super+I` | IRC |
 | `Super+N` | a notepad |
-| `Super+R` | a remote desktop |
 | `Super+B`, `Super+Shift+B` | connect the headphones, and switch to the next audio profile |
 
 `conf`'s Terminal on the VM, which had `Super+V`, has no key now; the

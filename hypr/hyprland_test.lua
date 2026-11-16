@@ -451,8 +451,6 @@ local PERSONAL = {
         t.bind("headphones", t.key("B"), t.exec(runenv .. " bluetooth-connect"), t.does("Connect the headphones"))
         t.bind("audio_profile", t.key("SHIFT + B"), t.exec(runenv .. " pulseprofile.py"), t.does("Next audio profile"))
         t.bind("home_folder", t.key("H"), t.app(runenv .. " home"), t.does("Home folder"))
-        t.bind("irc", t.key("I"), t.app(runenv .. " irc"), t.does("IRC"))
-        t.bind("remote_desktop", t.key("R"), t.app(runenv .. " remote-desktop"), t.does("Remote desktop"))
         t.bind("music", t.key("Y"), t.app(runenv .. " youtube-music"), t.does("YouTube Music"))
         t.bind("chat", t.key("C"), t.app(runenv .. " google-chat"), t.does("Google Chat"))
         t.bind("calendar", t.key("SHIFT + C"), t.app(runenv .. " google-calendar"), t.does("Google Calendar"))
@@ -893,7 +891,7 @@ test("every key in the spec is bound", function()
     local keys = {
         "SUPER + Space", "SUPER + T", "SUPER + W", "SUPER + V", "SUPER + G", "SUPER + F",
         "SUPER + SHIFT + G", "SUPER + E", "SUPER + B", "SUPER + C", "SUPER + SHIFT + C", "SUPER + SHIFT + V", "SUPER + semicolon",
-        "SUPER + H", "SUPER + I", "SUPER + M", "SUPER + N", "SUPER + R", "SUPER + Y",
+        "SUPER + H", "SUPER + M", "SUPER + N", "SUPER + Y",
         "SUPER + BackSpace", "SUPER + Z", "SUPER + L", "SUPER + S", "SUPER + P",
         "SUPER + Left", "SUPER + Right", "SUPER + SHIFT + Left", "SUPER + SHIFT + Right",
         "SUPER + Page_Up", "SUPER + Page_Down", "SUPER + SHIFT + Page_Up", "SUPER + SHIFT + Page_Down",
@@ -920,8 +918,9 @@ end)
 test("the dropped keys stay unbound", function()
     load()
     -- BSP toggle and rotate master. Super+O, which rotated the master, is
-    -- monocle now, and Super+P, which pseudo-tiled, presenter mode.
-    for _, k in ipairs({ "SUPER + SHIFT + backslash", "SUPER + SHIFT + O" }) do
+    -- monocle now, and Super+P, which pseudo-tiled, presenter mode. Super+I
+    -- and Super+R ran IRC and a remote desktop.
+    for _, k in ipairs({ "SUPER + SHIFT + backslash", "SUPER + SHIFT + O", "SUPER + I", "SUPER + R" }) do
         eq(nil, S.binds["|" .. k], k)
     end
 end)
