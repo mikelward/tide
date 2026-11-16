@@ -2184,6 +2184,14 @@ monitor has its own part of it, with its own windows and layout.
     name can't hold `@` (above).
   - The main monitor is the one showing the parts with plain names. At
     login it's the first monitor, which tide's Hyprland config gives home.
+  - A monitor that connects after it, as a laptop's panel can at login,
+    comes up on a numbered workspace of Hyprland's, which is no tide
+    workspace: the bar and the switcher listed it as `1`, and going there
+    did nothing (maintainer, 2026-11-16). So when a monitor connects, and
+    after a reload, any other monitor showing a numbered workspace is
+    given its part of the main monitor's workspace, and the numbered one,
+    empty and hidden then, goes. tidewm, tidesway and Plasma show the
+    current workspace on a new monitor themselves.
   - Each part, the main one's included, has a workspace rule binding it
     to its monitor, added before it's first used, so Hyprland makes it
     there whichever monitor has focus and whatever dispatch makes it
