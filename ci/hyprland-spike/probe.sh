@@ -22,22 +22,42 @@ export XDG_RUNTIME_DIR=/tmp/run
 mkdir -m 700 -p "$XDG_RUNTIME_DIR"
 export LIBSEAT_BACKEND=noop
 ls -l /dev/dri || true
+for dev in /sys/class/drm/card*; do echo "$dev: $(readlink -f "$dev/device/driver" 2>/dev/null)"; done
 : > /tmp/empty.lua
-Hyprland --i-am-really-stupid -c /tmp/empty.lua >/tmp/hyprland.log 2>&1 &
-hypr=$!
+vkms=
+for dev in /sys/class/drm/card[0-9]; do
+    case "$(readlink -f "$dev/device/driver")" in */vkms) vkms=/dev/dri/${dev##*/} ;; esac
+done
+echo "vkms is ${vkms:-not found}"
+# Each try: a name, then the environment it adds. The first that starts wins.
 up=
-for _ in $(seq 60); do
-    if hyprctl version >/dev/null 2>&1; then up=1; break; fi
-    kill -0 "$hypr" 2>/dev/null || break
-    sleep 0.5
+for try in \
+    "vkms+kms_swrast|AQ_DRM_DEVICES=$vkms MESA_LOADER_DRIVER_OVERRIDE=kms_swrast" \
+    "vkms+software|AQ_DRM_DEVICES=$vkms LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe" \
+    "vkms+swrast-gbm|AQ_DRM_DEVICES=$vkms MESA_LOADER_DRIVER_OVERRIDE=kms_swrast LIBGL_ALWAYS_SOFTWARE=1 GBM_BACKEND=dri"; do
+    name=${try%%|*}
+    rm -rf "$XDG_RUNTIME_DIR/hypr"
+    # shellcheck disable=SC2086 # the try's words are separate variables
+    env ${try#*|} Hyprland --i-am-really-stupid -c /tmp/empty.lua >"/tmp/hyprland-$name.log" 2>&1 &
+    hypr=$!
+    for _ in $(seq 40); do
+        if hyprctl version >/dev/null 2>&1; then up=$name; break; fi
+        kill -0 "$hypr" 2>/dev/null || break
+        sleep 0.5
+    done
+    if test -n "$up"; then
+        break
+    fi
+    echo "--- $name didn't start:"
+    grep -E 'ERR|CRIT|renderer|EGL' "/tmp/hyprland-$name.log" | grep -v eglQueryDeviceStringEXT | sort -u | head -15
+    find "$XDG_RUNTIME_DIR/hypr" -name hyprland.log -exec grep -E 'ERR|CRIT' {} + 2>/dev/null | sort -u | head -15
+    kill "$hypr" 2>/dev/null; wait "$hypr" 2>/dev/null
 done
 if test -n "$up"; then
-    pass "Hyprland is up: $(hyprctl version | head -1)"
+    pass "Hyprland is up with $up: $(hyprctl version | head -1)"
     hyprctl monitors | head -5
 else
-    tail -60 /tmp/hyprland.log
-    find "$XDG_RUNTIME_DIR" -name '*.log' -exec tail -60 {} + 2>/dev/null
-    fail "Hyprland didn't start"
+    fail "Hyprland didn't start with any of the tries"
 fi
 end
 
@@ -75,7 +95,12 @@ if test -n "$up"; then
     cp /tide/hypr/hyprland.lua "$HOME/.config/hypr/tide/hyprland.lua"
     hyprctl kill >/dev/null 2>&1 || true
     kill "$hypr" 2>/dev/null; wait "$hypr" 2>/dev/null
-    Hyprland --i-am-really-stupid -c "$HOME/.config/hypr/tide/hyprland.lua" >/tmp/tide-hyprland.log 2>&1 &
+    winner=$(printf '%s\n' "vkms+kms_swrast|AQ_DRM_DEVICES=$vkms MESA_LOADER_DRIVER_OVERRIDE=kms_swrast" \
+        "vkms+software|AQ_DRM_DEVICES=$vkms LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe" \
+        "vkms+swrast-gbm|AQ_DRM_DEVICES=$vkms MESA_LOADER_DRIVER_OVERRIDE=kms_swrast LIBGL_ALWAYS_SOFTWARE=1 GBM_BACKEND=dri" \
+        | grep "^$up|" | cut -d'|' -f2)
+    # shellcheck disable=SC2086
+    env $winner Hyprland --i-am-really-stupid -c "$HOME/.config/hypr/tide/hyprland.lua" >/tmp/tide-hyprland.log 2>&1 &
     hypr=$!
     up=
     for _ in $(seq 60); do
