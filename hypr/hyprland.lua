@@ -2326,7 +2326,11 @@ end
 -- so this only handles the docked case: closing the lid with an external
 -- display turns the panel off, and Hyprland moves its workspaces over.
 -- Opening it turns the panel back on and returns those workspaces.
-local lid = { panel = nil, workspaces = {} }
+-- closed: whether the lid is shut, as the last switch event said. libinput
+-- says so as the session starts with the lid already shut
+-- (fallback_interface_sync_initial_state), often before any external
+-- monitor has connected, so the panel goes off once one does (below).
+local lid = { panel = nil, workspaces = {}, closed = false }
 
 -- A config reload starts a fresh Lua state and clears every monitor rule, so
 -- a closed lid is also kept in a file in this Hyprland instance's runtime
@@ -2337,6 +2341,44 @@ do
     local sig = os.getenv("HYPRLAND_INSTANCE_SIGNATURE")
     if dir and dir ~= "" and sig and sig ~= "" then
         lid_file = dir .. "/hypr/" .. sig .. "/tide-lid"
+    end
+end
+
+-- That the lid is shut, docked or not, kept beside it: a reload would
+-- otherwise take the lid as open until it next moves, and leave the panel on
+-- when a monitor connects. An empty file; there only while the lid is shut.
+local lid_closed_file = lid_file and lid_file .. "-closed"
+
+local function mark_lid(closed)
+    lid.closed = closed
+    if not lid_closed_file then
+        return
+    end
+    if closed then
+        local f, err = io.open(lid_closed_file, "w")
+        local ok = f ~= nil
+        if f then
+            ok, err = f:close()
+        end
+        if not ok then
+            -- Not fatal: only a reload before the lid opens loses it.
+            notify_error("lid: couldn't note that the lid is shut: " .. tostring(err))
+        end
+        return
+    end
+    local ok, err, code = os.remove(lid_closed_file)
+    -- ENOENT: the lid was shut before this config, or the note failed.
+    if not ok and code ~= 2 then
+        notify_error("lid: couldn't clear the note that the lid is shut, so a reload will take it as shut; delete "
+            .. lid_closed_file .. ": " .. tostring(err))
+    end
+end
+
+if lid_closed_file then
+    local f = io.open(lid_closed_file)
+    if f then
+        f:close()
+        lid.closed = true
     end
 end
 
@@ -2438,11 +2480,13 @@ local function tide_lid_close()
     return value.lid_close or "suspend"
 end
 
-local function lid_close()
+-- Turns the internal panel off, with its workspaces noted for when it's
+-- back, when another monitor is on. Returns whether there's another.
+local function panel_off()
     local monitors = hl.get_monitors()
     local panel = internal_panel(monitors)
     if not panel then
-        return
+        return true
     end
     local external = false
     for _, m in ipairs(monitors) do
@@ -2450,13 +2494,8 @@ local function lid_close()
             external = true
         end
     end
-    -- Undocked: leave the panel alone. logind suspends and hypridle locks,
-    -- unless tide's Power page says Lock, which locks here, or Do nothing.
     if not external then
-        if tide_lid_close() == "lock" then
-            hl.dispatch(exec(lock))
-        end
-        return
+        return false
     end
     lid.panel = panel
     lid.workspaces = {}
@@ -2468,9 +2507,30 @@ local function lid_close()
     end
     save_lid()
     hl.monitor({ output = panel, disabled = true })
+    return true
 end
 
+local function lid_close()
+    mark_lid(true)
+    -- Undocked: leave the panel alone. logind suspends and hypridle locks,
+    -- unless tide's Power page says Lock, which locks here, or Do nothing.
+    if not panel_off() and tide_lid_close() == "lock" then
+        hl.dispatch(exec(lock))
+    end
+end
+
+-- A monitor that connects while the lid is shut, as one does at a login
+-- with the lid already closed, or docking a closed laptop: the panel goes
+-- off, as if the lid had closed then. Nothing locks. The panel itself
+-- connecting counts too: at a login the external monitor may come first.
+hl.on("monitor.added", function()
+    if lid.closed and not lid.panel then
+        panel_off()
+    end
+end)
+
 local function lid_open()
+    mark_lid(false)
     local panel = lid.panel
     if not panel then
         -- No record of a close (it predates this config, or the state file
@@ -2542,7 +2602,9 @@ if lid_file then
 end
 
 hl.on("monitor.added", function(m)
-    if not lid.panel or m.name ~= lid.panel then
+    -- With the lid shut, the panel connecting is its first arrival, which
+    -- the handler above has just turned off: keep the state for the open.
+    if lid.closed or not lid.panel or m.name ~= lid.panel then
         return
     end
     for _, id in ipairs(lid.workspaces) do

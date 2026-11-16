@@ -74,6 +74,7 @@ local TIDE_FLOATING = ".config/hypr/tide-floating.lua"
 local TIDE_KEYS = ".config/hypr/tide-keys.lua"
 local KEYS_FILE = "run/hypr/sig1/tide-keys.json"
 local LID_FILE = "run/hypr/sig1/tide-lid"
+local LID_CLOSED_FILE = "run/hypr/sig1/tide-lid-closed"
 local HOMES_FILE = "run/hypr/sig1/tide-homes"
 
 local function exists(rel)
@@ -1931,6 +1932,47 @@ local function undocked()
     S.workspace_list = { { id = 1, monitor = S.monitor_list[1] } }
 end
 
+test("a lid shut before a monitor connects turns the panel off once one does", function()
+    -- As at a login with the lid already closed: libinput says so before
+    -- the external monitor connects, and the Power page says Lock.
+    load({ env = TIDE, power = [[return { lid_close = "lock" }]] })
+    undocked()
+    lid("on")
+    eq(0, #S.monitors, "alone, the panel is left on")
+    docked()
+    S.dispatched = {}
+    fire("monitor.added", { name = "DP-1" })
+    eq(1, #S.monitors)
+    eq("eDP-1", S.monitors[1].output)
+    eq(true, S.monitors[1].disabled, "with a monitor beside it, the panel goes off")
+    for _, d in ipairs(S.dispatched) do
+        truthy(not is_dsp(d, "exec_cmd"), "and nothing locks again")
+    end
+    lid("off")
+    eq(false, rule_for({ name = "eDP-1" }).disabled, "opening the lid turns it on again")
+    S.monitors = {}
+    fire("monitor.added", { name = "DP-2" })
+    eq(0, #S.monitors, "with the lid open, a monitor connecting leaves the panel be")
+end)
+
+test("a lid shut at login turns the panel off when it connects after the external monitor", function()
+    load({ env = TIDE })
+    S.monitor_list = { { name = "DP-1" } }
+    lid("on")
+    fire("monitor.added", { name = "DP-1" })
+    eq(0, #S.monitors, "no panel yet")
+    docked()
+    fire("monitor.added", { name = "eDP-1" })
+    eq(1, #S.monitors)
+    eq("eDP-1", S.monitors[1].output)
+    eq(true, S.monitors[1].disabled, "the panel goes off as it connects")
+    -- Off, the panel is no longer listed (as on Hyprland 0.56.2), so only
+    -- the closed-lid state the panel's own arrival left can turn it back on.
+    S.monitor_list = { { name = "DP-1" } }
+    lid("off")
+    eq(false, rule_for({ name = "eDP-1" }).disabled, "opening the lid turns it on again")
+end)
+
 test("undocked, closing the lid leaves the panel to logind's suspend by default", function()
     load({ env = TIDE })
     undocked()
@@ -1995,6 +2037,24 @@ test("a reload with the lid closed keeps the panel off, and opening restores it"
     fire("monitor.added", { name = "eDP-1" })
     eq(2, #S.dispatched, "the workspaces saved before the reload go back")
     eq(false, exists(LID_FILE))
+end)
+
+test("a lid shut undocked stays shut across a reload, so docking turns the panel off", function()
+    load({ env = TIDE })
+    undocked()
+    lid("on")
+    load({ env = TIDE, reload = true, monitors = { { name = "eDP-1" } } })
+    docked()
+    S.monitors = {}
+    fire("monitor.added", { name = "DP-1" })
+    eq("eDP-1", S.monitors[1] and S.monitors[1].output)
+    eq(true, S.monitors[1].disabled, "the panel goes off as the monitor connects")
+    lid("off")
+    eq(false, exists(LID_CLOSED_FILE), "opening the lid forgets it was shut")
+    load({ env = TIDE, reload = true, monitors = { { name = "eDP-1" }, { name = "DP-1" } } })
+    S.monitors = {}
+    fire("monitor.added", { name = "DP-2" })
+    eq(0, #S.monitors, "after a reload with the lid open, the panel is left be")
 end)
 
 test("a lid state that can't be written is reported and not left behind", function()

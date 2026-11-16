@@ -167,6 +167,14 @@
 #     Suspend, and the shell holds the lid for Do nothing. When it can't
 #     tell whether another monitor is on, it locks for Lock.
 #
+#   tide lid-docked
+#
+#     What a monitor coming on does in tidewm's session, which the shell runs
+#     as its monitors change: with the lid shut, as logind says, and another
+#     monitor on, it turns the laptop's panel off, as lid-closed does. A
+#     login with the lid already shut, or a shut laptop docked, gets no
+#     lid-closed with another monitor on. It never locks.
+#
 #   tide lid-opened
 #
 #     Turns the laptop's panel, found as lid-closed finds it, back on as the
@@ -310,6 +318,7 @@ usage() {
     echo "       $prog lock [--now]" >&2
     echo "       $prog lid-closed" >&2
     echo "       $prog lid-opened" >&2
+    echo "       $prog lid-docked" >&2
     echo "       $prog lock-check" >&2
     echo "       $prog idle-lock" >&2
     echo "       $prog idle-suspend [--unplugged | --cancel]" >&2
@@ -1333,6 +1342,28 @@ lid_closed() {
     # Power page says, as it does on Hyprland. With none, Lock locks, and
     # the panel stays as it is for logind or the lock. Unsure, it locks for
     # Lock, the safe way to be wrong.
+    lid_panel_off lid-closed
+    case $? in
+        0) return 0 ;;
+        1) return 1 ;;
+        3)
+            if test "$action" != lock; then
+                echo "$prog lid-closed: couldn't tell whether another monitor is on ($lid_unsure), so the panel stays on" >&2
+                return 0
+            fi
+            echo "$prog lid-closed: couldn't tell whether another monitor is on ($lid_unsure), so it locks" >&2
+            ;;
+    esac
+    test "$action" = lock || return 0
+    lock
+}
+
+# lid_panel_off WHAT: with another monitor on, turns the laptop's panel off,
+# if it's on, naming WHAT in what it says. Returns 0 with another monitor on,
+# 1 when the panel wouldn't go off, 2 with none, and 3 when it can't tell,
+# with why in $lid_unsure.
+lid_panel_off() {
+    lid_unsure=
     panel=
     others=
     if outputs=$(tide-msg --type get_outputs 2>&1) &&
@@ -1340,25 +1371,41 @@ lid_closed() {
         others=$(printf '%s' "$outputs" |
             jq -r --arg panel "$panel" '[.[] | select(.active == true and .name != $panel)] | length' 2>&1) &&
         test "$others" -ge 0 2>/dev/null; then
-        if test "$others" -gt 0; then
-            panel_on=$(printf '%s' "$outputs" |
-                jq -r --arg panel "$panel" 'any(.[]; .name == $panel and .active == true)')
-            if test "$panel_on" = true && ! err=$(tide-msg output "$panel" disable 2>&1); then
-                echo "$prog lid-closed: couldn't turn the laptop's panel, $panel, off: ${err:-tide-msg failed}" >&2
-                return 1
-            fi
-            return 0
+        test "$others" -gt 0 || return 2
+        panel_on=$(printf '%s' "$outputs" |
+            jq -r --arg panel "$panel" 'any(.[]; .name == $panel and .active == true)')
+        if test "$panel_on" = true && ! err=$(tide-msg output "$panel" disable 2>&1); then
+            echo "$prog $1: couldn't turn the laptop's panel, $panel, off: ${err:-tide-msg failed}" >&2
+            return 1
         fi
-    else
-        reason=${others:-${panel:-$outputs}}
-        if test "$action" != lock; then
-            echo "$prog lid-closed: couldn't tell whether another monitor is on ($reason), so the panel stays on" >&2
-            return 0
-        fi
-        echo "$prog lid-closed: couldn't tell whether another monitor is on ($reason), so it locks" >&2
+        return 0
     fi
-    test "$action" = lock || return 0
-    lock
+    lid_unsure=${others:-${panel:-$outputs}}
+    return 3
+}
+
+# A monitor coming on while the lid is shut, as logind says, turns the
+# panel off, as closing the lid would have: at a login with the lid already
+# shut, libinput says so before any other monitor is on, and a closed laptop
+# can be docked. The shell runs it as tidewm's monitors change. It never
+# locks.
+lid_docked() {
+    test $# -eq 0 || usage
+    if ! closed=$(busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
+        org.freedesktop.login1.Manager LidClosed 2>&1); then
+        echo "$prog lid-docked: couldn't ask logind whether the lid is shut, so the laptop's panel stays as it is: $closed" >&2
+        return 1
+    fi
+    test "$closed" = "b true" || return 0
+    lid_panel_off lid-docked
+    case $? in
+        1) return 1 ;;
+        3)
+            echo "$prog lid-docked: couldn't tell whether another monitor is on ($lid_unsure), so the panel stays on" >&2
+            return 1
+            ;;
+    esac
+    return 0
 }
 
 # The laptop's panel back on as the lid opens, if it's off: the one
@@ -1779,6 +1826,7 @@ case "${1:-}" in
     lock) shift; lock "$@" ;;
     lid-closed) shift; lid_closed "$@" ;;
     lid-opened) shift; lid_opened "$@" ;;
+    lid-docked) shift; lid_docked "$@" ;;
     lock-check) shift; lock_check "$@" ;;
     idle-lock) shift; idle_lock "$@" ;;
     idle-suspend) shift; idle_suspend "$@" ;;

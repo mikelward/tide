@@ -6148,6 +6148,22 @@ settings NAME ARGS...`; most answer why not, or an empty string.
     the others. With none, it reads the same file, and Lock locks, as
     `tide lock` does. If it can't tell whether another monitor is on, it
     locks for Lock. `lid-opened` turns the panel back on if it's off.
+  - **A lid already shut** (maintainer, 2026-11-16). At a login with the
+    lid shut, libinput says so as the session starts
+    (`fallback_interface_sync_initial_state`), usually before any other
+    monitor has connected, so the lid's handler finds none and leaves the
+    panel on. A shut laptop docked later is the same. So a monitor coming
+    on while the lid is shut turns the panel off, as closing the lid would
+    have; it never locks.
+    - On Hyprland, `hyprland.lua` keeps the lid's last switch event, and
+      its `monitor.added` handler turns the panel off. A shut lid is noted
+      in `tide-lid-closed` beside `tide-lid`, so a config reload still
+      knows it.
+    - On tidewm and tidesway, the shell runs `tide lid-docked` as it starts
+      and as the number of monitors changes. It asks logind's `LidClosed`
+      (`busctl`) and, with the lid shut and another monitor on, turns the
+      panel off, as `lid-closed` does.
+    - Opening the lid turns the panel back on, as before.
   - The shell puts the unit right as it starts, too, since the unit
     outlives a shell that died with it the other way. A `systemctl` that
     fails is retried as a file is (§16.1).
