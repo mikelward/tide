@@ -76,6 +76,9 @@ ShellRoot {
     // Suspends on unplugging after the idle suspend step skipped it on AC.
     UnplugSuspend {}
 
+    // Switches the power profile as the power source changes (Power page).
+    PowerFollow {}
+
     // `qs ipc -p DIR call install hold`, then `install reload`, from
     // shell/install.sh (SPEC.md §5.4): stops reloading at each file's
     // change while `make install` puts in files that change together, then

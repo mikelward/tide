@@ -1,10 +1,10 @@
 // Tests for power.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULTS, hasProfilesDaemon, inhibitCommand, lidLabel, loadPowerSettings, powerLua, steppedLid, withSetting } from "./power.mjs";
+import { DEFAULTS, hasProfilesDaemon, inhibitCommand, lidLabel, loadPowerSettings, powerLua, profileFor, profileLabel, steppedLid, steppedProfile, withSetting } from "./power.mjs";
 
 test("closing the lid suspends by default, as logind does, with nothing held", () => {
-    assert.deepEqual(loadPowerSettings(null, null), { settings: { lidClose: "suspend" }, errors: [] });
+    assert.deepEqual(loadPowerSettings(null, null), { settings: { lidClose: "suspend", onAC: "", onBattery: "" }, errors: [] });
     assert.deepEqual(inhibitCommand(DEFAULTS), ["systemctl", "--user", "stop", "tide-lid-inhibit.service"]);
 });
 
@@ -47,4 +47,36 @@ test("the lid's choices step and stop at either end", () => {
     assert.equal(steppedLid("nothing", 1), "nothing");
     assert.equal(steppedLid("suspend", -1), "suspend");
     assert.equal(lidLabel("nothing"), "Do nothing");
+});
+
+test("the power profile is left alone by default, on either power source", () => {
+    assert.equal(profileFor(DEFAULTS, false, true), null);
+    assert.equal(profileFor(DEFAULTS, true, true), null);
+});
+
+test("the power profile follows the power source as the settings say", () => {
+    const s = loadPowerSettings('{"onAC": "performance", "onBattery": "balanced"}', null).settings;
+    assert.equal(profileFor(s, false, true), 2, "performance on AC");
+    assert.equal(profileFor(s, true, true), 1, "balanced on battery");
+    assert.equal(profileFor({ onAC: "", onBattery: "power-saver" }, true, true), 0);
+    assert.equal(profileFor({ onAC: "", onBattery: "power-saver" }, false, true), null, "AC left alone");
+});
+
+test("performance where the machine has none is balanced", () => {
+    assert.equal(profileFor({ onAC: "performance", onBattery: "" }, false, false), 1);
+});
+
+test("a power profile setting that isn't one is an error naming it", () => {
+    const r = loadPowerSettings('{"onAC": "turbo"}', null);
+    assert.match(r.errors[0], /onAC must be "", "power-saver", "balanced", "performance", not "turbo"/);
+    assert.match(withSetting(null, "onBattery", "max").error, /onBattery must be/);
+    assert.deepEqual(JSON.parse(withSetting('{"lidClose": "lock"}', "onAC", "performance").text), { lidClose: "lock", onAC: "performance" });
+});
+
+test("the profile choices step and stop at either end", () => {
+    assert.equal(steppedProfile("", 1), "power-saver");
+    assert.equal(steppedProfile("performance", 1), "performance");
+    assert.equal(steppedProfile("", -1), "");
+    assert.equal(profileLabel(""), "Leave it");
+    assert.equal(profileLabel("power-saver"), "Power saver");
 });
