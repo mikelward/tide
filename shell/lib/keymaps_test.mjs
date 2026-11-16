@@ -8,7 +8,7 @@ import { keysId, recordedKeys } from "./keys.mjs";
 // a preset may name.
 const NAMES = new Set([
     "terminal", "terminal_on_workstation", "browser", "browser_third", "browser_second", "headphones",
-    "audio_profile", "chat", "calendar", "home_folder", "irc", "meet", "notepad", "remote_desktop", "music",
+    "audio_profile", "chat", "calendar", "home_folder", "meet", "notepad", "music",
     "files", "launcher", "next_keyboard_layout", "notifications", "clipboard", "fill", "characters", "close",
     "minimize", "lock", "keep_awake", "presenter", "quit", "next_layout", "previous_layout", "monocle",
     "grow_master", "shrink_master", "add_master", "remove_master", "swap_master", "focus_down", "focus_up",
