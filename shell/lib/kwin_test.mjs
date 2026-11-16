@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    DESKTOPS_COMMAND, WINDOWS_COMMAND, ATTENTION_COMMAND, infoCommand, activateCommand, goCommand, createCommand, desktopNamed, jsonLines, parseDesktops, parseWindows,
+    DESKTOPS_COMMAND, WINDOWS_COMMAND, ATTENTION_COMMAND, infoCommand, activateCommand, goCommand, createCommand, desktopNamed, moveScript, moveCommand, moveShown, jsonLines, parseDesktops, parseWindows,
     parseInfo, parseAttention, launcherWindows, launcherWorkspaces,
 } from "./kwin.mjs";
 
@@ -35,6 +35,64 @@ test("the commands are KWin's own D-Bus, through busctl", () => {
 test("a new desktop goes after the last, whatever its name starts with", () => {
     assert.deepEqual(createCommand(2, "-x"), ["busctl", "--user", "--", "call", "org.kde.KWin", "/VirtualDesktopManager",
         "org.kde.KWin.VirtualDesktopManager", "createDesktop", "us", "2", "-x"]);
+});
+
+// A KWin workspace with desktops in, re and the window `active`, enough
+// for moveScript, which runs against it.
+function kwinWith(active) {
+    const printed = [];
+    const ws = {
+        desktops: [{ name: "in" }, { name: "re" }],
+        currentDesktop: null,
+        activeWindow: active,
+        createDesktop(position, name) {
+            this.desktops.splice(position, 0, { name });
+        },
+    };
+    new Function("workspace", "print", moveScript("oc \"x\""))(ws, (m) => printed.push(m));
+    return { ws, printed };
+}
+
+test("moving takes the window you're in to a new desktop, made after the last, and follows it", () => {
+    const w = { normalWindow: true, specialWindow: false, desktops: [] };
+    const { ws, printed } = kwinWith(w);
+    assert.deepEqual(ws.desktops.map((d) => d.name), ["in", "re", "oc \"x\""]);
+    assert.deepEqual(w.desktops, [ws.desktops[2]]);
+    assert.equal(ws.currentDesktop, ws.desktops[2]);
+    assert.equal(ws.activeWindow, w);
+    assert.deepEqual(printed, []);
+});
+
+test("moving to a desktop there makes none", () => {
+    const w = { normalWindow: true, specialWindow: false, desktops: [] };
+    const ws = { desktops: [{ name: "in" }, { name: "re" }], activeWindow: w, createDesktop() { throw new Error("made one"); } };
+    new Function("workspace", "print", moveScript("re"))(ws, () => {});
+    assert.deepEqual(w.desktops, [ws.desktops[1]]);
+    assert.equal(ws.currentDesktop, ws.desktops[1]);
+});
+
+test("with no app window focused, nothing moves, and the journal says so", () => {
+    const { ws, printed } = kwinWith({ normalWindow: false, specialWindow: false, desktops: [] });
+    assert.equal(ws.desktops.length, 2);
+    assert.equal(ws.currentDesktop, null);
+    assert.match(printed[0], /no window to move/);
+    assert.match(kwinWith(null).printed[0], /no window to move/);
+});
+
+test("the move runs through KWin's scripting, with the script as an argument", () => {
+    const cmd = moveCommand("re");
+    assert.deepEqual(cmd.slice(0, 2), ["sh", "-c"]);
+    assert.match(cmd[2], /loadScript ss "\$f" tide-move/);
+    assert.match(cmd[2], /org\.kde\.kwin\.Script run/);
+    assert.equal(cmd[4], moveScript("re"));
+});
+
+test("the log names a move by its desktop, not its script, which the launch tracker joins", async () => {
+    const { track } = await import("./launch.mjs");
+    const logged = [];
+    const t = track(moveShown("re"), null, { warn: (m) => logged.push(m), log: (m) => logged.push(m) });
+    t.on({ type: "stopped" });
+    assert.deepEqual(logged, ["tide: couldn't start KWin's script moving the window to \"re\""]);
 });
 
 test("a desktop is found by its exact name", () => {

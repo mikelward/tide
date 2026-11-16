@@ -71,6 +71,14 @@ Singleton {
         });
     }
 
+    // Moves the window you're in to the desktop named `name`, made after
+    // the last if there's none, and follows it, as Super+Shift+Return's
+    // prompt does on Hyprland (SPEC.md §8.5), through a KWin script
+    // (KWin.moveScript).
+    function moveToNamed(name) {
+        Launcher.run(KWin.moveCommand(name), null, null, KWin.moveShown(name));
+    }
+
     function parsed(what, read) {
         try {
             return read();

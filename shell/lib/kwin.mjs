@@ -53,6 +53,61 @@ export function desktopNamed(desktops, name) {
     return desktops.find((d) => d.name === name)?.id ?? null;
 }
 
+// The KWin script that moves the window you're in to the desktop named
+// `name`, making it after the last if there's none, then follows it there.
+// KWin's D-Bus has no call that moves a window, so moveCommand loads this.
+// A window that isn't an app's normal one, or none, stays where it is, and
+// the journal says so (KWin's print).
+export function moveScript(name) {
+    return `(function () {
+    const name = ${JSON.stringify(name)};
+    const w = workspace.activeWindow;
+    if (!w || !w.normalWindow || w.specialWindow) {
+        print("tide: no window to move to the desktop named " + name);
+        return;
+    }
+    const named = () => workspace.desktops.find((d) => d.name === name);
+    if (!named()) {
+        workspace.createDesktop(workspace.desktops.length, name);
+    }
+    const d = named();
+    if (!d) {
+        print("tide: KWin made no desktop named " + name + ", so the window stays");
+        return;
+    }
+    w.desktops = [d];
+    workspace.currentDesktop = d;
+    workspace.activeWindow = w;
+})();
+`;
+}
+
+// Runs moveScript(name) in KWin: writes it to a file in the runtime
+// directory, loads it through /Scripting, runs it and unloads it, then
+// removes the file. KWin refuses to load a second script by the same
+// name, so one left from a run that failed part-way is unloaded first.
+const MOVE_RUNNER = `f=$(mktemp "\${XDG_RUNTIME_DIR:-/tmp}/tide-move.XXXXXX.js") || exit 1
+trap 'rm -f "$f"' EXIT
+printf '%s' "$1" >"$f" || exit 1
+s="org.kde.KWin /Scripting org.kde.kwin.Scripting"
+busctl --user call $s unloadScript s tide-move >/dev/null
+id=$(busctl --user call $s loadScript ss "$f" tide-move) || exit 1
+id=\${id#i }
+case $id in ''|-*|*[!0-9]*) echo "KWin wouldn't load the script that moves the window: $id" >&2; exit 1 ;; esac
+busctl --user call org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script run
+ran=$?
+busctl --user call $s unloadScript s tide-move >/dev/null
+exit $ran`;
+
+// What the log calls moveCommand(name), in place of the script it holds.
+export function moveShown(name) {
+    return ["KWin's script moving the window to", JSON.stringify(name)];
+}
+
+export function moveCommand(name) {
+    return ["sh", "-c", MOVE_RUNNER, "tide-move", moveScript(name)];
+}
+
 // The JSON values in busctl's output, one per line, skipping blank lines.
 // Throws on a line that isn't JSON, naming it.
 export function jsonLines(text) {

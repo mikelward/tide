@@ -269,6 +269,8 @@ if test "\$1" = ipc; then
             echo "[con_id=23] move to workspace number in" >"\$XDG_RUNTIME_DIR/tidewm-command"
             read -r _ <"\$XDG_RUNTIME_DIR/tidewm-sent"
             echo "sent 23 to in" ;;
+        # Meta+Shift+Return's on Plasma, marked.
+        *"call prompt move"*) : >"\$XDG_RUNTIME_DIR/prompt-move" ;;
         *"call prompt shown"*) if test -e "\$XDG_RUNTIME_DIR/prompt-open"; then cat "\$XDG_RUNTIME_DIR/prompt-open"; fi ;;
         *"call picker open characters"*) : >"\$XDG_RUNTIME_DIR/picker-open" ;;
         *"call sharepicker pick \$XDG_RUNTIME_DIR/"*) printf '%s' "\$7" >"\$XDG_RUNTIME_DIR/sharepicker-open" && echo shown ;;
@@ -1023,13 +1025,16 @@ kde_tab() {
 }
 # Then Meta+Return's name prompt opens twice, each time taking the
 # keyboard and reading KWin's desktops: it goes to "re", then makes "oc"
-# after the last and goes to it.
+# after the last and goes to it. Then Meta+Shift+Return's opens, and moves
+# the window to "re" by loading, running and unloading a KWin script.
 kde_prompt() {
     printf 'until test -e "$XDG_RUNTIME_DIR/%s"; do sleep 0.1; done; %s; busctl --user --json=short get-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager desktops current >/dev/null; %s; %s' \
         "$1" "$focused" "$typed" "$2"
 }
 kde_vdm='org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager'
-kde_prompts="$(kde_prompt prompt-go "busctl --user set-property $kde_vdm current s d2"); $(kde_prompt prompt-rego "busctl --user -- call $kde_vdm createDesktop us 2 oc; busctl --user set-property $kde_vdm current s d3")"
+kde_scripting='org.kde.KWin /Scripting org.kde.kwin.Scripting'
+kde_moved="busctl --user call $kde_scripting unloadScript s tide-move; busctl --user call $kde_scripting loadScript ss \"\$XDG_RUNTIME_DIR/tide-move.x.js\" tide-move >/dev/null; busctl --user call org.kde.KWin /Scripting/Script3 org.kde.kwin.Script run; busctl --user call $kde_scripting unloadScript s tide-move"
+kde_prompts="$(kde_prompt prompt-go "busctl --user set-property $kde_vdm current s d2"); $(kde_prompt prompt-rego "busctl --user -- call $kde_vdm createDesktop us 2 oc; busctl --user set-property $kde_vdm current s d3"); $(kde_prompt prompt-move "$kde_moved")"
 kde_tabs="$(kde_tab windows 'call org.kde.KWin /WindowsRunner org.kde.krunner1 Run ss "0_{w1}" ""'); $(kde_tab workspaces 'set-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager current s d2'); $(kde_tab attention 'call org.kde.KWin /WindowsRunner org.kde.krunner1 Run ss "0_{w2}" ""')"
 # Before any of that, as it starts, it gives tide's decoration the Borders
 # settings that differ from kwinrc's, and has KWin read them, through the
@@ -1131,8 +1136,10 @@ zebra"
 check "then a window's on the Windows tab, and a desktop's on Workspaces" test "$(sed -n 9,10p "$tmp/clean/typed")" = "probe
 re"
 check "and a name prompt on Plasma that goes to a desktop by name passes" contains "$out" "ok: on Plasma, Super+Return's name prompt goes to a desktop by name, making one that's new"
-check "having typed a desktop's name, then a new one's" test "$(sed -n 12,13p "$tmp/clean/typed")" = "re
-oc"
+check "having typed a desktop's name, then a new one's, then where to move the window" test "$(sed -n 12,14p "$tmp/clean/typed")" = "re
+oc
+re"
+check "and a move prompt on Plasma that runs a KWin script passes" contains "$out" "ok: on Plasma, Super+Shift+Return's name prompt moves the window by a KWin script"
 }
 
 case_8() {
@@ -1698,7 +1705,7 @@ echo 'Failed to authenticate.'; echo 'Authenticated successfully.'; exit 0"
 run "$tmp/unlocks" TIDE_LOCK_PASSWORD=pw
 check "a lock that unlocks on the right password passes" test "$code" -eq 0
 check "and says so" contains "$out" "ok: the lock turns down a wrong password and unlocks on the right one"
-check "having typed a wrong password, then the right one" test "$(sed -n 14,15p "$tmp/unlocks/typed")" = "not-pw
+check "having typed a wrong password, then the right one" test "$(sed -n 15,16p "$tmp/unlocks/typed")" = "not-pw
 pw"
 check "in a UTF-8 locale, for a password beyond ASCII" test "$(sort -u "$tmp/unlocks/typed-lang")" = C.UTF-8
 }
@@ -1775,7 +1782,7 @@ run "$tmp/clean"
 check "a greeter that logs in to tide on the right password passes" \
     contains "$out" "ok: the greeter turns down a wrong password, and logs in to tide on the right one and a visible code"
 check "having typed a wrong password, then the right one, then the code" \
-    test "$(sed -n 14,16p "$tmp/clean/typed")" = "not-tide-greeter-test
+    test "$(sed -n 15,17p "$tmp/clean/typed")" = "not-tide-greeter-test
 tide-greeter-test
 246810"
 }

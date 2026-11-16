@@ -20,8 +20,9 @@ import "lib/workspaces.mjs" as Ws
 //   - Enter goes to the selected row's workspace, made if it's new; Esc is
 //     PromptData.cancel's.
 // On KDE Plasma (SPEC.md §8.5), where kde.qml runs it, it's Super+Return's
-// alone, KWinPromptData's, over KWin's desktops; nothing here asks
-// Hyprland or starts tide's own state (Compositor, PromptData).
+// and Super+Shift+Return's alone, KWinPromptData's, over KWin's desktops,
+// starting empty: nothing here asks Hyprland or starts tide's own state
+// (Compositor, PromptData).
 PanelWindow {
     id: root
 
