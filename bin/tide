@@ -249,10 +249,11 @@
 #     focus only while there's one to type with (SPEC.md §10), and run it
 #     again on each input device udev adds or removes and each battery that
 #     changes. A keyboard is what udev tags ID_INPUT_KEYBOARD: an input
-#     device with every key from Esc to D, so not a power button. A mouse
-#     with a keyboard's keys, as a gaming mouse has, isn't one, nor is a
-#     keyboard a program makes, as keyd's virtual one is, nor a wireless
-#     one its receiver says is asleep or connected to another machine.
+#     device with every key from Esc to D, so not a power button, but a
+#     mouse with a keyboard's keys is, as Logitech's receiver makes every
+#     device behind it look like both. A keyboard a program makes, as
+#     keyd's virtual one is, isn't one, nor is a wireless one its receiver
+#     says is asleep or connected to another machine.
 #     One behind a monitor's USB hub comes and goes as the monitor's KVM
 #     switches to this machine and away. While the laptop's lid is closed,
 #     as when it's used with an external monitor alone, its built-in
@@ -1751,10 +1752,6 @@ keyboards() {
     for node in "$keyboards_sys"/event*; do
         IFS= read -r numbers 2>/dev/null <"$node/dev" || continue
         grep -qx 'E:ID_INPUT_KEYBOARD=1' "$keyboards_udev/c$numbers" 2>/dev/null || continue
-        # A mouse with a keyboard's keys, as a gaming mouse has, isn't one.
-        if grep -qx 'E:ID_INPUT_MOUSE=1' "$keyboards_udev/c$numbers" 2>/dev/null; then
-            continue
-        fi
         # Nor is one a program made, as keyd's is, which only retypes
         # another keyboard's keys: it sits on no hardware.
         if ! test -e "$node/device/device"; then

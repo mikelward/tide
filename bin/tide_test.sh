@@ -1381,6 +1381,14 @@ check "keyboards names udev's keyboards, and the device of one with no name" \
     test "$(cat "$tmp/out")" = "Keychron K2
 event3"
 check "and says nothing else" test ! -s "$tmp/err"
+# A mouse with a keyboard's keys, as a gaming mouse has, counts: on
+# Logitech's receiver a keyboard looks the same.
+input_device "Gaming Mouse" 13:69 event5 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1 ID_INPUT_MOUSE=1
+keyboards
+check "a mouse udev tags a keyboard too counts" test "$(cat "$tmp/out")" = "Keychron K2
+event3
+Gaming Mouse"
+rm -r "$input/event5"
 # A KVM switching away takes the keyboard behind it: its device and udev's
 # data go.
 rm -r "$input/event0" "$input/event3"
@@ -1466,14 +1474,19 @@ check "a Bluetooth keyboard counts beside keyd's" test "$(cat "$tmp/out")" = "ER
 
 # A desktop with its keyboard switched away by the KVM, or asleep: what's
 # left can't type. keyd's virtual keyboard, which sits on no hardware, only
-# retypes another keyboard's keys; a gaming mouse has every key udev asks of
-# a keyboard; and a wireless keyboard's receiver stays plugged in while it
-# sleeps, which its battery says (HID++'s "online").
+# retypes another keyboard's keys; and a wireless keyboard's receiver stays
+# plugged in while it sleeps, which its battery says (HID++'s "online").
+# Logitech's receiver gives each device behind it a mouse's reports as well
+# as a keyboard's, so udev tags the K860 a mouse too, as it does the PRO 2
+# MOUSE. A mouse tagged a keyboard counts; the PRO 2 is left out only for
+# having no HID++ battery, as on the maintainer's desk.
 rm -r "$input" "$udev"
-mkdir -p "$input" "$udev"
-input_device "Logitech ERGO K860" 13:80 event0 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
+mkdir -p "$input" "$udev" "$tmp/drivers/logitech-hidpp-device"
+input_device "Logitech ERGO K860" 13:80 event0 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1 ID_INPUT_MOUSE=1
+ln -s "$tmp/drivers/logitech-hidpp-device" "$input/event0/device/device/driver"
 input_device "keyd virtual keyboard" 13:81 event1 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
 input_device "Logitech PRO 2 MOUSE" 13:82 event2 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1 ID_INPUT_MOUSE=1
+ln -s "$tmp/drivers/logitech-hidpp-device" "$input/event2/device/device/driver"
 input_device "Keychron K2" 13:83 event3 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
 # online EVENT 0|1: its HID++ battery says whether it's connected.
 online() {
@@ -1483,7 +1496,7 @@ online() {
 rm -r "$input/event1/device/device"
 online event0 1
 keyboards
-check "a wireless keyboard that's awake and one plugged in count, not keyd's or a mouse" \
+check "a wireless keyboard that's awake and one plugged in count, not keyd's" \
     test "$(cat "$tmp/out")" = "Logitech ERGO K860
 Keychron K2"
 rm -r "$input/event3"
@@ -1498,8 +1511,6 @@ check "which the wireless one waking brings back" test "$(cat "$tmp/out")" = "Lo
 # The KVM switches the receiver back with the wireless keyboard off: its
 # receiver lists it, but HID++ adds its battery only once it connects.
 rm -r "$input/event0/device/device/power_supply"
-mkdir -p "$tmp/drivers/logitech-hidpp-device"
-ln -s "$tmp/drivers/logitech-hidpp-device" "$input/event0/device/device/driver"
 keyboards
 check "a wireless keyboard its receiver lists before it first connects isn't one" test ! -s "$tmp/out"
 online event0 1
