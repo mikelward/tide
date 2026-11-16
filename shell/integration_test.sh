@@ -1861,7 +1861,9 @@ launch() {
 # tab, Enter activates the one window tide on KDE says wants attention.
 # Super+Return's `prompt go` must then open the name prompt, where "re"
 # and Enter go to that desktop, and "oc", which no desktop has, makes one
-# after the last and goes to it. A stand-in kstart on
+# after the last and goes to it; and Super+Shift+Return's `prompt move`,
+# where "re" and Enter load, run and unload the KWin script that moves the
+# window there. A stand-in kstart on
 # its PATH keeps each command, and a stand-in busctl answers as KWin's
 # D-Bus does (shell/lib/kwin_test.mjs has KWin's own answers) and keeps
 # each call. As it starts, it must give tide's decoration there the Borders
@@ -1893,6 +1895,8 @@ case "\$*" in
     echo '{"type":"s","data":"d1"}' ;;
 *createDesktop\ us\ 2\ oc)
     : >"$tmp/made-oc" ;;
+*" loadScript ss "*)
+    echo 'i 3' ;;
 *Match*)
     echo '{"type":"a(sssida{sv})","data":[[["0_{w1}","Probe page","wayland",100,0.8,{}],["0_{w2}","shell","wayland",100,0.8,{}],["8_d2","re","user-desktop",30,0.5,{}]]]}' ;;
 *getWindowInfo*w1*)
@@ -2070,9 +2074,45 @@ EOF
             i=$((i + 1))
         done
     done
-    if ! grep -qF -- '-- call org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager createDesktop us 2 oc' "$tmp/busctl"; then
-        echo "FAIL: the name prompt on Plasma should make the desktop oc after the last; busctl was asked:" >&2
+    _made=$(cat "$tmp/busctl")
+    # Super+Shift+Return's: the window you're in, moved by a KWin script
+    _focus=$(($(grep -c '} wl_keyboard#[0-9]*\.enter(' "$log") + 1))
+    : >"$tmp/busctl" || exit 1
+    ipc call prompt move >/dev/null || exit 1
+    focused "$_focus"
+    i=0
+    until grep -q 'get-property.*desktops' "$tmp/busctl"; do
+        if waited "the move prompt on Plasma didn't read KWin's desktops" "$i"; then
+            cat "$tmp/busctl" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    timeout "$wait" env -i PATH="$PATH" XDG_RUNTIME_DIR="$tmp/run" WAYLAND_DISPLAY=wayland-1 \
+        LANG=C.UTF-8 "$wtype_path" "re
+" >"$tmp/wtype.log" 2>&1
+    typed $? "the move prompt on Plasma"
+    i=0
+    until grep -qF -- 'call org.kde.KWin /Scripting/Script3 org.kde.kwin.Script run' "$tmp/busctl" 2>/dev/null &&
+        test "$(grep -c 'unloadScript s tide-move' "$tmp/busctl")" -ge 2; do
+        if waited "the move prompt on Plasma didn't load, run and unload the KWin script that moves the window" "$i"; then
+            cat "$tmp/busctl" >&2
+            grep -v '^\[' "$log" >&2
+            exit 1
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    if ! grep -q 'call org.kde.KWin /Scripting org.kde.kwin.Scripting loadScript ss .*/tide-move\..*\.js tide-move' "$tmp/busctl"; then
+        echo "FAIL: the move prompt on Plasma should load its script as tide-move; busctl was asked:" >&2
         cat "$tmp/busctl" >&2
+        exit 1
+    fi
+    if ! printf '%s\n' "$_made" | grep -qF -- '-- call org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager createDesktop us 2 oc'; then
+        echo "FAIL: the name prompt on Plasma should make the desktop oc after the last; busctl was asked:" >&2
+        printf '%s\n' "$_made" >&2
         exit 1
     fi
     kill "$qs_pid"
@@ -2091,6 +2131,7 @@ EOF
     rm "$tmp/home/.config/tide/appearance.json" "$appearance_local" || exit 1
     echo "ok: the launcher on Plasma runs an app, and a System Settings page hidden from menus, through kstart, and goes to KWin's windows and desktops"
     echo "ok: on Plasma, Super+Return's name prompt goes to a desktop by name, making one that's new"
+    echo "ok: on Plasma, Super+Shift+Return's name prompt moves the window by a KWin script"
     echo "ok: on Plasma, tide's decoration gets the Borders settings that differ, and KWin is asked to read them once"
 }
 
