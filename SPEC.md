@@ -740,7 +740,11 @@ flowchart TD
   Never only `$XDG_RUNTIME_DIR` or `/tmp`, which go at logout.
   - Hyprland's own log is a file in the runtime directory, so tide's and
     the greeter's configs turn on `debug:enable_stdout_logs`. Its stdout is
-    the journal's: uwsm's `wayland-wm@` unit, and greetd's.
+    the journal's: uwsm's `wayland-wm@` unit, and greetd's. Hyprland
+    stops writing to stdout once its config has loaded unless that setting
+    is on, so the session config (`session.lua`) and tide's `hyprland.lua`
+    set it first, before anything that can fail. A login whose config
+    stops part-way is the one whose log is needed.
   - Hyprland sends what `exec` starts to `/dev/null`, so the greeter's
     command pipes Quickshell's output through `systemd-cat`. In the tide
     session, a key's command, `uwsm finalize` and the input script run

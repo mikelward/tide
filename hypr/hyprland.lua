@@ -77,6 +77,17 @@ do
     end
 end
 
+-- Hyprland's own log is a file under $XDG_RUNTIME_DIR, gone at logout; on
+-- stdout it's also in the journal (uwsm's wayland-wm@ unit), which keeps
+-- it. Set as the rescue keys are, before anything below can fail: a config
+-- that stops part-way is the login whose log matters most.
+do
+    local ok, err = pcall(hl.config, { debug = { enable_stdout_logs = true, colored_stdout_logs = false } })
+    if not ok then
+        print("tide: couldn't send Hyprland's log to the journal: " .. tostring(err))
+    end
+end
+
 local opts = ...
 if opts == nil then
     opts = {}
@@ -829,11 +840,10 @@ hl.config({
     },
     -- Focus never drags the pointer along with it.
     cursor = { no_warps = true },
-    -- Hyprland's own log is a file under $XDG_RUNTIME_DIR, gone at logout;
-    -- on stdout it's also in the journal (uwsm's wayland-wm@ unit), which
-    -- keeps it. In the tide session, the shell's bar shows the config's
-    -- errors (tide SPEC.md §7.4), so Hyprland's own banner is hidden.
-    debug = { enable_stdout_logs = true, colored_stdout_logs = false, suppress_errors = tide_session },
+    -- In the tide session, the shell's bar shows the config's errors (tide
+    -- SPEC.md §7.4), so Hyprland's own banner is hidden. Its log goes to
+    -- the journal from the top of this file.
+    debug = { suppress_errors = tide_session },
 })
 
 --------------------------------------------------------------------------------

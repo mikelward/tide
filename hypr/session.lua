@@ -16,6 +16,18 @@
 --
 -- TIDE_HYPRLAND_LUA names another tide hyprland.lua, for tests.
 
+-- Hyprland's own log is a file under $XDG_RUNTIME_DIR, gone at logout; on
+-- stdout it's also in the journal (uwsm's wayland-wm@ unit), which keeps
+-- it. Set first, so a session whose config stops early, yours or tide's,
+-- still leaves its log. tide's hyprland.lua sets it too, for a login that
+-- loads it without this file.
+do
+    local ok, err = pcall(hl.config, { debug = { enable_stdout_logs = true, colored_stdout_logs = false } })
+    if not ok then
+        print("tide: couldn't send Hyprland's log to the journal: " .. tostring(err))
+    end
+end
+
 local home = os.getenv("HOME") or ""
 local config_home = os.getenv("XDG_CONFIG_HOME")
 if config_home == nil or config_home == "" then
