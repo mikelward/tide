@@ -4555,16 +4555,13 @@ talk, a demo, or a meeting room's screen.
     every key from Esc to D. A power button isn't one. Nor is any that
     can't be typed on while the keyboard is away (maintainer, 2026-11-15):
     a virtual keyboard a program makes, as keyd's is, which has no
-    hardware parent in sysfs; or a wireless keyboard its receiver says is
-    asleep, off or connected elsewhere, as Logitech's HID++ battery says
-    by its `online`, 0. The driver keeps `online` at 0 while the battery
-    charges too, where its level comes from HID++ 1.0's register or 2.0's
-    feature 0x1000, which give one only while it discharges. So a battery
-    whose `status` is `Charging` is connected; one that's gone is
-    `Unknown`. A receiver plugged in, as by a KVM, lists a HID++
-    keyboard that's off with no battery at all, since the driver adds it
-    only once the keyboard connects, so one with none isn't a keyboard
-    yet. A HID++ keyboard with no battery to report would never count.
+    hardware parent in sysfs.
+  - A wireless keyboard counts while its receiver is plugged in, asleep
+    or not (maintainer, 2026-11-16). After a KVM switches the receiver
+    back, an ERGO K860 types within a moment, but Logitech's HID++ driver
+    adds its battery a second or two later, so the battery can't say
+    when it's ready. Switching the KVM away takes the receiver, and the
+    keyboard with it.
   - A mouse udev tags a keyboard too counts (maintainer, 2026-11-16).
     Logitech's receiver gives every device behind it both a mouse's and a
     keyboard's reports, so an ERGO K860 and a PRO 2 MOUSE look the same to
@@ -4576,13 +4573,11 @@ talk, a demo, or a meeting room's screen.
     laptops', still counts. The lid is `/proc/acpi/button/lid`'s.
   - A key pressed on a face proves a keyboard, whatever the count says
     (maintainer, 2026-11-15): "No keyboard" goes and the field gets its
-    border and caret. A wireless keyboard's HID++ battery can be slow to
-    appear, or still say it isn't connected, while the keyboard types,
-    and keys through keyd's virtual keyboard count too. The proof lasts
-    until a device goes (udev removes one, a battery changes, or a lid
-    opens or closes, which hides the built-in keyboard with no udev
-    event) and a count started after that finds none, so a count already running as
-    the key came can't undo it, and an unplugged keyboard, or one the KVM
+    border and caret. Keys through keyd's virtual keyboard count too.
+    The proof lasts until a device goes (udev removes one, a battery
+    changes, or a lid opens or closes, which hides the built-in keyboard
+    with no udev event) and a count started after that finds none, so a
+    count already running as the key came can't undo it, and an unplugged keyboard, or one the KVM
     switched away, still shows "No keyboard". Typing reaches the field
     whatever the count, since the face takes every key.
   - `tide keyboards` names them. The lock and the greeter run it at start
