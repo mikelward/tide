@@ -6,7 +6,8 @@
 # symlink into a dotfiles checkout, including the tide.conf `make install`
 # puts beside the link, and the files tide's shell writes
 # (session/shell_files.mjs). uwsm, logger, systemd-cat, systemctl and qs
-# are stand-ins; qs says which of the shell's commands a key ran. It does
+# are stand-ins; the binding events say which of the shell's commands a
+# key ran. It does
 # so with a config that includes tide.conf and the shell's files itself,
 # as configs from before the session layered them did, and with one that
 # only says what it changes, as the session reads tide's first and the
@@ -67,7 +68,8 @@ session() {
     # which the Keyboard shortcuts page moves again
     own='bindsym --name=terminal $mod+t exec xdg-terminal-exec
 bindsym --name=screenshot Print exec true
-bindsym --name=launcher $mod+z exec qs -c tide ipc call launcher toggle'
+bindsym --name=launcher $mod+z exec qs -c tide ipc call launcher toggle
+bindsym F12 exec qs marker'
     if test "$kind" = overrides; then
         printf '%s\n' "$own" > "$home/checkout/config"
     else
@@ -76,7 +78,8 @@ bindsym --name=launcher $mod+z exec qs -c tide ipc call launcher toggle'
     ln -s "$home/checkout/config" "$home/.config/tidewm/config"
 
     # Stand-ins: uwsm finalize says the session is ready, uwsm start runs
-    # the compositor command; qs says each command it's given.
+    # the compositor command; xdg-terminal-exec says it ran. The binding
+    # events say what qs was given.
     mkfifo "$tmp/ready" "$tmp/qs"
     cat > "$stub/uwsm" <<STUB
 #!/bin/sh
@@ -86,7 +89,7 @@ finalize) printf 'SWAYSOCK=%s\nWAYLAND_DISPLAY=%s\n' "\$SWAYSOCK" "\$WAYLAND_DIS
 start) while test "\$1" != --; do shift; done; shift; exec "\$@" ;;
 esac
 STUB
-    printf '#!/bin/sh\necho "$*" > %s\n' "$tmp/qs" > "$stub/qs"
+    printf '#!/bin/sh\nexit 0\n' > "$stub/qs"
     printf '#!/bin/sh\nexit 0\n' > "$stub/logger"
     printf '#!/bin/sh\nwhile test "$1" != --; do shift; done\nshift\nexec "$@"\n' > "$stub/systemd-cat"
     printf '#!/bin/sh\nexit 0\n' > "$stub/systemctl"
@@ -137,17 +140,83 @@ STUB
     home_ws=$(tide-msg --type get_workspaces | python3 -c 'import json, sys; print([w["name"] for w in json.load(sys.stdin) if w["focused"]][0])')
     check "$wm${kind:+ ($kind)}: the session starts on home, in (not $home_ws)" test "$home_ws" = in
 
-    # Each key runs the shell's command it's bound to, in the keymap the
-    # config gives the keyboard; Super+x is the launcher's on the Keyboard
-    # shortcuts page, which wins over the config's Super+z
-    for key in "x launcher toggle" "Return prompt go" "v picker toggle clipboard"; do
-        k=${key%% *}
-        want=${key#* }
-        within 10 wtype -M logo -k "$k" -m logo &
-        ran=$(within 10 cat "$tmp/qs")
-        wait $! 2>/dev/null
-        check "$wm${kind:+ ($kind)}: Super+$k runs '$want' (ran '$ran')" sh -c 'case "$1" in *"$2"*) exit 0 ;; esac; exit 1' sh "$ran" "$want"
-    done
+    # Each of tide's keys that runs a shell command runs that command and
+    # nothing else, in the keymap the config gives the keyboard, Super_L
+    # pressed round it as a hand does: the binding events say what each key
+    # ran, in the order the compositor ran it, and F12's, the config's
+    # marker, says it's done, so a second binding (the Super tap's
+    # launcher, say) shows. Super+x is the launcher's on the Keyboard
+    # shortcuts page, which wins over the config's Super+z.
+    # The subscriber says "subscribed" once the compositor has taken the
+    # subscription, then, at each marker, the commands run since the last,
+    # qs's arguments, the fallback after || left out, on one line.
+    mkfifo "$tmp/bindings"
+    python3 -c '
+import json, os, socket, struct, sys
+s = socket.socket(socket.AF_UNIX)
+s.connect(os.environ["SWAYSOCK"])
+f = s.makefile("rb")
+def send(kind, payload):
+    data = payload.encode()
+    s.sendall(b"i3-ipc" + struct.pack("=II", len(data), kind) + data)
+def receive():
+    magic, length, kind = struct.unpack("=6sII", f.read(14))
+    return kind, json.loads(f.read(length))
+send(2, json.dumps(["binding"]))
+kind, reply = receive()
+if not reply.get("success"):
+    sys.exit("the binding subscription was refused")
+print("subscribed", flush=True)
+ran = []
+while True:
+    kind, event = receive()
+    command = event["binding"]["command"]
+    if command == "exec qs marker":
+        print("; ".join(ran), flush=True)
+        ran = []
+    else:
+        ran.append(command.removeprefix("exec qs ").split(" || ")[0])
+' > "$tmp/bindings" &
+    exec 3<"$tmp/bindings"
+    # The next line, in 10 seconds at most (sh reads no further than it)
+    next_line() { within 10 sh -c 'IFS= read -r line && printf %s "$line"' <&3; }
+    # What a key ran: a key that can't be sent, or no marker in time, says
+    # so, as no command does.
+    ran_by() {
+        if ! within 10 wtype "$@" || ! within 10 wtype -k F12; then
+            ran="(the keys couldn't be sent)"
+            return
+        fi
+        ran=$(next_line) || ran="(no marker in 10 seconds)"
+    }
+    subscribed=$(next_line)
+    check "$wm${kind:+ ($kind)}: the binding events come (not '$subscribed')" test "$subscribed" = subscribed
+    tide-msg --type get_named_bindings | python3 -c '
+import json, sys
+mods = {"Mod4": "logo", "Shift": "shift", "Ctrl": "ctrl", "Control": "ctrl", "Mod1": "alt"}
+for b in json.load(sys.stdin):
+    if not b.get("command", "").startswith("exec qs "):
+        continue
+    for k in b.get("keys", []):
+        parts = k.split("+")
+        ms = [mods.get(p) for p in parts[:-1]]
+        if None not in ms:
+            # What qs is given: a fallback after || runs in sh
+            print(" ".join(ms) + "|" + parts[-1] + "|" + b["command"][len("exec qs "):].split(" || ")[0])
+' > "$tmp/keys"
+    check "$wm${kind:+ ($kind)}: tide's shell keys are there" grep -qix "logo|x|-c tide ipc call launcher toggle" "$tmp/keys"
+    while IFS='|' read -r ms k want; do
+        set -- -P Super_L
+        for m in $ms; do set -- "$@" -M "$m"; done
+        set -- "$@" -k "$k"
+        for m in $ms; do set -- "$@" -m "$m"; done
+        ran_by "$@" -p Super_L
+        check "$wm${kind:+ ($kind)}: $ms+$k runs '$want' alone (ran '$ran')" test "$ran" = "$want"
+    done < "$tmp/keys"
+    # The Super tap alone runs the launcher, once
+    ran_by -P Super_L -p Super_L
+    check "$wm${kind:+ ($kind)}: a Super tap runs the launcher once (ran '$ran')" test "$ran" = "-c tide ipc call launcher toggle"
+    exec 3<&-
 
     tide-msg exit >/dev/null 2>&1
     wait
