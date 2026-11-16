@@ -542,7 +542,7 @@ local function load(setup)
             -- One that's there but can't be opened: a link to itself
             assert(os.execute("ln -s hyprland.lua '" .. yours .. "'"))
         end
-        env_overrides.TIDE_HYPRLAND_LUA = config_path
+        env_overrides.TIDE_HYPRLAND_LUA = setup.tide_path or config_path
         assert(loadfile(here .. "/session.lua"))()
         os.remove(yours)
         return S
@@ -2681,6 +2681,20 @@ test("a wrong option fails the load, by name", function()
     end
 end)
 
+test("a config that fails part-way still sends Hyprland's log to the journal", function()
+    local ok = pcall(load, { opts = { browser = "firefox" } })
+    eq(false, ok)
+    eq(true, S.config.debug.enable_stdout_logs, "stdout logs, for the journal, which outlasts a logout")
+    eq(false, S.config.debug.colored_stdout_logs, "colored")
+end)
+
+test("a session whose tide config won't load still sends Hyprland's log to the journal", function()
+    local ok, err = pcall(load, { session = true, tide_path = tmp .. "/no-such-hyprland.lua" })
+    eq(false, ok)
+    truthy(tostring(err):find("tide's hyprland.lua didn't load", 1, true), tostring(err))
+    eq(true, S.config.debug.enable_stdout_logs, "stdout logs, for the journal")
+end)
+
 test("a config that fails part-way still has a terminal, the launcher and the way out", function()
     local ok = pcall(load, { opts = { terminal = "kitty", launcher = "fuzzel", browser = "firefox" } })
     eq(false, ok)
@@ -2744,7 +2758,8 @@ test("a hyprland.lua that runs tide's itself, as before, hands its options over,
     local plain = #S.calls
     load({ session = true, yours = 'loadfile(os.getenv("TIDE_HYPRLAND_LUA"))({ terminal = "kitty" })' })
     eq("kitty", S.binds["|SUPER + T"].target.args, "your terminal")
-    eq(plain, #S.calls, "the same calls as tide's run once")
+    -- The session's one call of its own sends Hyprland's log to the journal.
+    eq(plain + 1, #S.calls, "the same calls as tide's run once, and the session's log setting")
     eq(0, #S.notifications)
 end)
 
