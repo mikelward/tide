@@ -92,8 +92,11 @@ check "every tide launch names the app its window grant is for" empty "$nogrant"
 undescribed=$(grep -E '^[[:space:]]*bind(sym|switch|code) ' "$cfg" | grep -v -- '--desc "[^"]' || true)
 check "every binding has a description${undescribed:+: $undescribed}" empty "$undescribed"
 
-check "the settings tide's shell writes are included, then nwg-displays' outputs, last, so they win" \
-    test "$(printf '%s\n' "$lines" | tail -n 2 | tr '\n' '|')" = "include tide-*.conf|include ~/.config/sway/outputs|"
+# The session includes the settings pages' files and nwg-displays' outputs
+# after your config (tidewm/session.conf); tide.conf including them too would
+# put them before yours on tidesway, which reads a file once.
+includes=$(printf '%s\n' "$lines" | grep -E '^include ' || true)
+check "tide.conf leaves the settings pages and the outputs to the session${includes:+: $includes}" empty "$includes"
 check "the focus guard is on" contains "$(cat "$tmp/plain")" "focus_guard enable"
 # The lock key runs what Hyprland's session runs: `tide lock`, which locks
 # with no idle daemon running too, where logind's Lock alone has nothing

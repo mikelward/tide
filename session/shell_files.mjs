@@ -20,7 +20,9 @@ if (!dir) {
 const appearance = { dimStrength: 0.12, borderWidth: 2, shadowSize: 16, roundedCorners: true };
 mkdirSync(join(dir, "tidesway.d"), { recursive: true });
 const files = {
-    "tide-keys.conf": keysConf({ preset: "tide", keys: {} }).text,
+    // The launcher moved on the Keyboard shortcuts page, which wins over
+    // the config's own move of it (compositors_test.sh)
+    "tide-keys.conf": keysConf({ preset: "tide", keys: { launcher: ["SUPER + X"] } }).text,
     "tide-input.conf": inputConf({ keyboard: { variant: "dvorak" }, touchpad: { tapToClick: true } }),
     "tide-outputs.conf": outputsConf({ monitors: { "Example Panel 0x1": { scale: 1.25 } } }),
     "tide-layouts.conf": layoutsConf({}),

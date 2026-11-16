@@ -88,16 +88,31 @@ case $home in
         start="timeout 5 tide-msg 'workspace number $word; persist workspace $word'; $start"
         ;;
 esac
-# Without a config of your own, tide's, which `make install` puts beside
-# where yours would be (tidewm/tide.conf). A -c given here wins.
+# The session's config is session.conf, which `make install` puts beside
+# tide.conf (tidewm/session.conf): tide.conf, then your config, then the
+# settings pages' tide-*.conf, then the display arrangement Displays saves,
+# a later one winning where two say the same thing (SPEC.md §6.8). So a
+# config of yours that's missing, or that lost its include of tide.conf,
+# keeps tide's keys and the pages' settings, and yours need only say what
+# it changes. Its includes are relative, so they're beside it wherever
+# that is. tidesway reads tidesway.d beside it too, as beside any config
+# it's given. An install from before session.conf runs your config, or
+# tide.conf without one, as it did, and says so. A -c given here wins.
 config_dir=${XDG_CONFIG_HOME:-$HOME/.config}/tidewm
 given=no
 for arg; do
     case $arg in -c) given=yes ;; esac
 done
-if test "$given" = no && ! test -e "$config_dir/config" && ! test -e "$HOME/.config/tidewm/config" \
-    && test -f "$config_dir/tide.conf"; then
-    set -- -c "$config_dir/tide.conf" "$@"
+if test "$given" = no; then
+    if test -f "$config_dir/session.conf"; then
+        set -- -c "$config_dir/session.conf" "$@"
+    else
+        say "no $config_dir/session.conf, so $wm reads your config alone: run tide's make install"
+        if ! test -e "$config_dir/config" && ! test -e "$HOME/.config/tidewm/config" \
+            && test -f "$config_dir/tide.conf"; then
+            set -- -c "$config_dir/tide.conf" "$@"
+        fi
+    fi
 fi
 # The startup command logs first, as that's the first sign tidewm is up.
 start="logger -t tide-tidewm -- '$wm is up; going home and telling uwsm the session is ready' 2>/dev/null; $start"

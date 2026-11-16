@@ -2409,7 +2409,7 @@ is a platform's other key, with why. The notes under the table say more.
 
 **`conf`'s keys.** `conf` loads tide's configs and adds its owner's app
 keys: the `terminal`, `files` and `apps` options on Hyprland (§6.8), and
-`bindsym` lines after `include tide.conf` on tidewm. Most run `scripts`'
+`bindsym` lines in its tidewm config, which the session reads after `tide.conf`. Most run `scripts`'
 launchers through `runenv`. They're `conf`'s, not tide's:
 
 | Keys | Action |
@@ -2749,12 +2749,25 @@ reads the settings files the shell writes (`tide-*.lua`).
 - `hyprland.local.lua` still loads last, so a machine's settings win.
 - **tidewm's.** The tidewm session's keys are the same, in tidewm's own
   syntax: `tidewm/tide.conf`, which `make install` puts in
-  `~/.config/tidewm/`, and `tide-tidewm` passes with `-c` when you have no
-  `~/.config/tidewm/config`. Yours can `include tide.conf` and bind keys
-  again, since tidewm's later binding of the same keys replaces the
-  earlier one, then end with `include tide-*.conf` so the settings pages
-  still win. `tidewm/config_test.sh` checks that it binds every name
-  `hyprland.lua` does, so `keys.json` serves both. It leaves out two:
+  `~/.config/tidewm/`.
+- **Layered.** The tidewm and tidesway sessions read `tide.conf`, then
+  your `~/.config/tidewm/config`, then the settings pages' `tide-*.conf`,
+  then the display arrangement Displays saves (maintainer, 2026-11-16):
+  `tidewm/session.conf`, which `make install` puts beside `tide.conf` and
+  `tide-tidewm` passes with `-c`. Its includes are relative, so they're
+  beside it; tidesway reads its own `tidesway.d/*.conf` after it. A later one
+  wins where two say the same thing, as a later binding of the same keys
+  replaces the earlier one. So yours says only what it changes, and one
+  that's missing, broken or lost its include of `tide.conf` still has
+  tide's keys and the pages' settings. The pages write only what you
+  changed there, so they win over yours only for those. An older config
+  that includes `tide.conf` and `tide-*.conf` itself works as before.
+  `tide.conf` includes neither the pages nor the outputs, as tidesway
+  reads a file once, where the first include put it. An install from
+  before `session.conf` reads your config alone, as before, and the
+  journal says to run `make install`.
+- **tide.conf's names.** `tidewm/config_test.sh` checks that `tide.conf`
+  binds every name `hyprland.lua` does, so `keys.json` serves both. It leaves out two:
   `floating_rule` and `last_layout`, which tidewm has no command for yet.
   `restore` and `next_attention` have no key, as on Hyprland, but are
   named, with tidewm's `none` for the keys (§6.6). An older tidewm,
@@ -6811,7 +6824,7 @@ light/dark switch.
 | Images | Loupe | swayimg if you want a keyboard-driven gallery |
 | PDFs | Papers | GNOME's replacement for Evince; zathura for keyboard use |
 | Archives | built into Nautilus | File Roller if Thunar wins |
-| Displays | nwg-displays (GTK 3) | writes Hyprland's monitor config, or on tidewm sway's `~/.config/sway/outputs`, which tide's and conf's tidewm configs include; also linked from Settings |
+| Displays | nwg-displays (GTK 3) | writes Hyprland's monitor config, or on tidewm sway's `~/.config/sway/outputs`, which the tidewm session includes last (§6.8); also linked from Settings |
 | Bluetooth pairing | blueman-manager (GTK 3) | overskride is GTK 4 but thinly packaged |
 | Clipboard history | `tide clipboard`, encrypted, with the picker on `Super+V` (§8.4) | `tide-clipboard.service` runs `wl-paste --watch tide clipboard store`, which skips password-manager copies |
 | Audio mixer | pavucontrol (GTK 4) | pwvucontrol for the libadwaita look |
