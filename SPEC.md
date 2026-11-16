@@ -2726,14 +2726,25 @@ reads the settings files the shell writes (`tide-*.lua`).
   A config of your own that never names tide, as an old `hyprland.conf`
   left behind, gives a session without tide's keys: `tide-hyprland` says
   which file in the journal.
-- **Your own on top.** Your `hyprland.lua` can load it with `loadfile` and
-  pass it a table of options: the terminal, the file manager, a command
-  helper scripts run under, input options (a keyboard variant), each
-  mouse's handedness and wheel speed, your own app keys (`apps`, a
-  function given tide's `bind`), what a plain Hyprland login also starts,
-  the launcher's fallback and the screenshot command. An unknown option,
-  or one of the wrong type, fails the load by name. `conf` does this with
-  its owner's preferences.
+- **Your own on top.** Your `hyprland.lua` gives a table of options: the
+  terminal, the file manager, a command helper scripts run under, input
+  options (a keyboard variant), each mouse's handedness and wheel speed,
+  your own app keys (`apps`, a function given tide's `bind`), what a plain
+  Hyprland login also starts, the launcher's fallback and the screenshot
+  command. An unknown option, or one of the wrong type, fails the load by
+  name. `conf` does this with its owner's preferences.
+- **Layered, as on tidewm.** The session runs Hyprland on
+  `hypr/session.lua`, which `make install` puts beside `hyprland.lua`
+  (maintainer, 2026-11-16). It runs your `hyprland.lua` for its options
+  alone, then tide's with them, which applies the settings pages, then
+  `hyprland.local.lua`. Yours returns its options, or runs tide's
+  `hyprland.lua` with them as before, which under the session hands them
+  over instead, so tide's runs once. A `hyprland.lua` of yours that's
+  missing, broken or never loads tide's still leaves tide's keys, layout
+  and the pages' settings, and a notification says what went wrong. What
+  else yours does runs before tide's, so a setting tide makes too goes in
+  `hyprland.local.lua`. A `hyprland.conf` left behind isn't read, and the
+  journal says so. An install from before `session.lua` runs as before.
 - **Rescue keys.** The file's first act binds `Super+T`, your terminal,
   `Super+Space`, the launcher, and `Super+Shift+E`, quit: quit, the terminal
   and the launcher always keep a key (§16). A load that stops part-way, on

@@ -1,19 +1,21 @@
 -- tide's Hyprland config (SPEC.md §6, §14 and §16), for Hyprland 0.56.2+,
 -- which reads only Lua. `make install` puts it in ~/.config/hypr/tide,
--- beside the layout, and tide-hyprland runs Hyprland with it when you have
--- no ~/.config/hypr/hyprland.lua of your own. Tiling comes from the tide
--- layout when it's installed and from Hyprland's master layout otherwise.
+-- beside the layout and session.lua, which tide-hyprland runs Hyprland
+-- with: it runs this with your ~/.config/hypr/hyprland.lua's options.
+-- Tiling comes from the tide layout when it's installed and from
+-- Hyprland's master layout otherwise.
 --
--- Your own hyprland.lua can load it with your preferences, then change
--- what it likes:
+-- Your own hyprland.lua returns your preferences:
 --
---   loadfile(os.getenv("HOME") .. "/.config/hypr/tide/hyprland.lua")({
+--   return {
 --       terminal = "kitty",
 --       input = { kb_variant = "dvorak" },
 --       apps = function(t)
 --           t.bind("browser", t.key("G"), t.app("firefox", "firefox"), t.does("Browser"))
 --       end,
---   })
+--   }
+--
+-- or, as before session.lua, runs this file with them, which works too.
 --
 -- The options, all optional:
 --   terminal        the terminal Super+T opens (xdg-terminal-exec)
@@ -38,6 +40,14 @@
 local function launcher_command(launcher)
     return "qs -c tide ipc call launcher toggle || "
         .. (launcher or "notify-send -a tide 'No launcher' 'Super+Space opens the launcher in the tide shell, which is not running.'")
+end
+
+-- Under tide's session (session.lua), a hyprland.lua of yours that runs
+-- this file with its options, as configs did before it, hands them over
+-- instead: the session runs this file once, after yours, with them.
+if type(tide_session) == "table" and tide_session.collect then
+    tide_session.opts = (...)
+    return
 end
 
 -- The rescue keys: a terminal on Super+T, the launcher on Super+Space and

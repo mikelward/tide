@@ -263,7 +263,7 @@ build/tide-kwin-paste: go.mod $(wildcard cmd/tide-kwin-paste/*.go)
 # session's target, is the installer's job (install/tide-setup).
 install: build install-shell
 	install -d "$(HYPR_DIR)"
-	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/span.lua hypr/tide/layout.lua hypr/tide/focus.lua hypr/tide/pinned.lua hypr/hyprland.lua hypr/hyprland.local.lua.template "$(HYPR_DIR)/"
+	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/span.lua hypr/tide/layout.lua hypr/tide/focus.lua hypr/tide/pinned.lua hypr/hyprland.lua hypr/session.lua hypr/hyprland.local.lua.template "$(HYPR_DIR)/"
 	@# tide's hypridle config, for a hypridle with none of yours, beside
 	@# the tide-idle.conf it sources, which hypridle finds beside it.
 	install -d "$(IDLE_DIR)"

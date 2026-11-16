@@ -82,8 +82,26 @@ check "a --config given wins over tide's" \
 check "TIDE_HYPRLAND_CONFIG names another" \
     test "$(HOME="$tmp/hyprhome" XDG_CONFIG_HOME='' TIDE_HYPRLAND_CONFIG=/y PATH="$tmp/wrapper-bin" /bin/sh "$wrapper")" = "start-hyprland -- --config /y"
 : > "$tmp/hyprhome/.config/hypr/hyprland.lua"
-check "your own hyprland.lua is Hyprland's to read" \
+check "before session.lua is installed, your own hyprland.lua is Hyprland's to read" \
     test "$(HOME="$tmp/hyprhome" XDG_CONFIG_HOME='' PATH="$tmp/wrapper-bin" /bin/sh "$wrapper")" = "start-hyprland --"
+# shellcheck disable=SC2069 # stderr alone, as the journal gets it
+check "and the journal says to run make install" \
+    test -n "$(HOME="$tmp/hyprhome" XDG_CONFIG_HOME='' PATH="$tmp/wrapper-bin:/usr/bin:/bin" /bin/sh "$wrapper" 2>&1 >/dev/null | grep -F "session.lua: run tide's make install")"
+# With session.lua, the session's config is tide's, with your hyprland.lua's
+# options, then the pages' (SPEC.md §6.8), whether yours is there or not.
+: > "$tmp/hyprhome/.config/hypr/tide/session.lua"
+check "with session.lua, Hyprland runs it, your hyprland.lua too" \
+    test "$(HOME="$tmp/hyprhome" XDG_CONFIG_HOME='' PATH="$tmp/wrapper-bin" /bin/sh "$wrapper")" = "start-hyprland -- --config $tmp/hyprhome/.config/hypr/tide/session.lua"
+rm "$tmp/hyprhome/.config/hypr/hyprland.lua"
+check "and without it" \
+    test "$(HOME="$tmp/hyprhome" XDG_CONFIG_HOME='' PATH="$tmp/wrapper-bin" /bin/sh "$wrapper")" = "start-hyprland -- --config $tmp/hyprhome/.config/hypr/tide/session.lua"
+echo 'bind = SUPER, Q, exec, kitty' > "$tmp/hyprhome/.config/hypr/hyprland.conf"
+# shellcheck disable=SC2069 # stderr alone, as the journal gets it
+check "a hyprland.conf left behind is named as not read" \
+    test -n "$(HOME="$tmp/hyprhome" XDG_CONFIG_HOME='' PATH="$tmp/wrapper-bin:/usr/bin:/bin" /bin/sh "$wrapper" 2>&1 >/dev/null | grep -F "hyprland.conf isn't read in tide's session")"
+rm -r "$tmp/hyprhome/.config/hypr/hyprland.conf" "$tmp/hyprhome/.config/hypr/tide/session.lua"
+check "make install puts session.lua beside tide's hyprland.lua" \
+    sh -c 'make -n install 2>/dev/null | grep -qF "hypr/hyprland.lua hypr/session.lua"'
 # The input method's variables (SPEC.md §8.6) are the compositor's, so every
 # app it starts has them: set where fcitx5 is installed, unless TIDE_IME=0,
 # and left as they were otherwise.
