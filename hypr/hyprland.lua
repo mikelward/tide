@@ -3014,7 +3014,8 @@ local function apply_tide_workspaces()
         ruled[k] = nil
     end
     -- Only the first monitor has home as its default: another that
-    -- connects gets a numbered workspace (tide SPEC.md §6.5, Monitors).
+    -- connects gets a numbered workspace, which show_parts (below) swaps
+    -- for its part of the main monitor's (tide SPEC.md §6.5, Monitors).
     local monitor = before.monitor or first_monitor()
     local rule = hl.workspace_rule({ workspace = "name:" .. ws.home, persistent = true, default = true, monitor = monitor })
     for i, pattern in ipairs(ws.in_apps) do
@@ -3084,6 +3085,41 @@ _G.conf_workspaces = {
         move_window(address, name, follow == true)
     end,
 }
+
+-- Every other monitor shows its part of the workspace the main monitor
+-- shows (tide SPEC.md §6.5, Monitors). One that connects after the first,
+-- as a laptop's panel can at login, shows a numbered workspace of
+-- Hyprland's instead, which is no tide workspace, yet the bar and the
+-- switcher list it, and going there does nothing. So that monitor is given
+-- its part of the main monitor's workspace, and the numbered one, empty and
+-- hidden then, goes, as Hyprland's empty workspaces do. Again after a
+-- reload, for a session that has one already.
+local function show_parts()
+    if not span then
+        return
+    end
+    local main = main_output()
+    if not main then
+        return
+    end
+    local shown, stray
+    for _, m in ipairs(query("couldn't list the monitors", hl.get_monitors) or {}) do
+        local ws = m.active_workspace
+        local name = ws and ws.name
+        if type(name) == "string" then
+            if m.name == main then
+                shown = plain(name)
+            elseif type(ws.id) == "number" and ws.id > 0 and name == tostring(ws.id) then
+                stray = true
+            end
+        end
+    end
+    if stray and shown and shown ~= "" and not shown:find("^special:") then
+        go(shown)
+    end
+end
+hl.on("monitor.added", show_parts)
+hl.on("config.reloaded", show_parts)
 
 do
     local path = config_home .. "/hypr/hyprland.local.lua"

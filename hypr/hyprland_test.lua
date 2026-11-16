@@ -1149,6 +1149,47 @@ test("with span.lua on two monitors, a workspace key shows the workspace on both
     eq("DP-2", S.workspace_rules["name:re"].monitor, "the plain part's rule moves to the new main")
 end)
 
+test("a monitor that connects showing a numbered workspace shows its part of the main one's instead", function()
+    load({ workspaces = STANDING, span = FAKE_SPAN })
+    two_monitors()
+    S.monitor_list[1].active_workspace = { id = -1340, name = "re" }
+    -- The panel connected first and took home; DP-2 comes next.
+    S.monitor_list[2].active_workspace = { id = -1341, name = "re@DP-2" }
+    fire("monitor.added", { name = "eDP-1", id = 0 })
+    S.monitor_list[2].active_workspace = { id = 1, name = "1" }
+    S.dispatched = {}
+    fire("monitor.added", { name = "DP-2", id = 1 })
+    local d = {}
+    for _, x in ipairs(S.dispatched) do
+        if is_dsp(x, "focus") then
+            table.insert(d, x)
+        end
+    end
+    eq("focus name:re@DP-2, focus name:re", targets(d), "the main monitor's workspace, on both")
+    -- One that already shows a part is left as it is, after a reload too.
+    S.monitor_list[2].active_workspace = { id = -1341, name = "re@DP-2" }
+    S.dispatched = {}
+    fire("monitor.added", { name = "DP-2", id = 1 })
+    fire("config.reloaded")
+    eq(0, #S.dispatched, "nothing to put right")
+end)
+
+test("a reload puts right a monitor left showing a numbered workspace", function()
+    load({ workspaces = STANDING, span = FAKE_SPAN })
+    two_monitors()
+    S.monitor_list[1].active_workspace = { id = -1338, name = "in" }
+    S.monitor_list[2].active_workspace = { id = 1, name = "1" }
+    S.dispatched = {}
+    fire("config.reloaded")
+    local focused = {}
+    for _, x in ipairs(S.dispatched) do
+        if is_dsp(x, "focus") then
+            table.insert(focused, x)
+        end
+    end
+    eq("focus name:in@DP-2, focus name:in", targets(focused))
+end)
+
 test("with span.lua, each monitor's part is one workspace on the bar's order", function()
     load({ workspaces = STANDING, span = FAKE_SPAN })
     two_monitors()
