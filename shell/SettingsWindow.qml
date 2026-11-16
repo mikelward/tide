@@ -3800,6 +3800,65 @@ PanelWindow {
                             font.pixelSize: 13
                         }
 
+                        // The profile to switch to as the power source
+                        // changes: ‹ and › step through Leave it, Power
+                        // saver, Balanced and Performance (PowerFollow).
+                        Repeater {
+                            model: PowerData.profilesDaemon === true ? [{ key: "onAC", label: "On AC power" }, { key: "onBattery", label: "On battery" }] : []
+
+                            Item {
+                                id: follow
+
+                                required property var modelData
+                                readonly property string value: PowerData.settings[modelData.key]
+                                readonly property int at: Power.PROFILE_CHOICES.findIndex(c => c.value === follow.value)
+
+                                width: power.width
+                                implicitHeight: 32
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: follow.modelData.label
+                                    color: Theme.fg
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                }
+
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    StepButton {
+                                        name: "go-previous-symbolic"
+                                        value: follow.at
+                                        next: Math.max(0, follow.at - 1)
+                                        onActivated: power.changed(PowerData.set(follow.modelData.key, Power.steppedProfile(follow.value, -1)))
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 92
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: Power.profileLabel(follow.value)
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                    }
+
+                                    StepButton {
+                                        name: "go-next-symbolic"
+                                        value: follow.at
+                                        next: Math.min(Power.PROFILE_CHOICES.length - 1, follow.at + 1)
+                                        onActivated: power.changed(PowerData.set(follow.modelData.key, Power.steppedProfile(follow.value, 1)))
+                                    }
+                                }
+                            }
+                        }
+
                         Heading {
                             text: "LID"
                         }

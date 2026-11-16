@@ -1,6 +1,7 @@
-// The Power page (SPEC.md §16): what closing the lid does, from power.json
-// and power.local.json, and whether power-profiles-daemon is there for the
-// page's power profile, as pure functions the QML binds to.
+// The Power page (SPEC.md §16): what closing the lid does and the power
+// profile on AC power and on battery, from power.json and power.local.json,
+// and whether power-profiles-daemon is there for the page's power profile,
+// as pure functions the QML binds to.
 
 import { jsonError } from "./clocks.mjs";
 
@@ -12,7 +13,16 @@ export const LID_CHOICES = Object.freeze([
     { value: "nothing", label: "Do nothing" },
 ]);
 
-export const DEFAULTS = Object.freeze({ lidClose: "suspend" });
+// The power profile to switch to as the power source changes: "" leaves
+// it as it is. Values are power-profiles-daemon's names.
+export const PROFILE_CHOICES = Object.freeze([
+    { value: "", label: "Leave it" },
+    { value: "power-saver", label: "Power saver" },
+    { value: "balanced", label: "Balanced" },
+    { value: "performance", label: "Performance" },
+]);
+
+export const DEFAULTS = Object.freeze({ lidClose: "suspend", onAC: "", onBattery: "" });
 
 // The unit that holds logind's lid switch for Lock and Do nothing.
 export const INHIBIT_UNIT = "tide-lid-inhibit.service";
@@ -28,7 +38,12 @@ export function valueError(key, value) {
             ? ""
             : `lidClose must be ${LID_CHOICES.map(c => c.value).join(", ")}, not ${JSON.stringify(value)}`;
     }
-    return `${JSON.stringify(key)} isn't a setting (lidClose)`;
+    if (key === "onAC" || key === "onBattery") {
+        return PROFILE_CHOICES.some(c => c.value === value)
+            ? ""
+            : `${key} must be ${PROFILE_CHOICES.map(c => JSON.stringify(c.value)).join(", ")}, not ${JSON.stringify(value)}`;
+    }
+    return `${JSON.stringify(key)} isn't a setting (lidClose, onAC, onBattery)`;
 }
 
 function parse(text) {
@@ -115,4 +130,29 @@ export function steppedLid(value, steps) {
 
 export function lidLabel(value) {
     return (LID_CHOICES.find(c => c.value === value) ?? LID_CHOICES[0]).label;
+}
+
+// The profile `s` wants on this power source, as Quickshell's PowerProfile
+// number (power saver 0, balanced 1, performance 2), or null to leave it.
+// Performance on a machine without it is balanced, as power-profiles-daemon
+// offers it only where the platform has one.
+export function profileFor(s, onBattery, hasPerformance) {
+    const wanted = onBattery ? s.onBattery : s.onAC;
+    if (wanted === "power-saver") {
+        return 0;
+    }
+    if (wanted === "balanced" || (wanted === "performance" && !hasPerformance)) {
+        return 1;
+    }
+    return wanted === "performance" ? 2 : null;
+}
+
+// The page's profile choice `steps` from `value`, stopping at either end.
+export function steppedProfile(value, steps) {
+    const at = PROFILE_CHOICES.findIndex(c => c.value === value);
+    return PROFILE_CHOICES[Math.max(0, Math.min(PROFILE_CHOICES.length - 1, (at < 0 ? 0 : at) + steps))].value;
+}
+
+export function profileLabel(value) {
+    return (PROFILE_CHOICES.find(c => c.value === value) ?? PROFILE_CHOICES[0]).label;
 }

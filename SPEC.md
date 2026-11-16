@@ -6026,8 +6026,8 @@ settings NAME ARGS...`; most answer why not, or an empty string.
     is turned back into its key on a US layout's symbols (`!` is `1`).
   - Over IPC, only `openPage keys`: no call changes a binding.
 
-- **Power** shows the battery and sets the power profile and what closing
-  the lid does.
+- **Power** shows the battery and sets the power profile, the profile to
+  switch to on AC power and on battery, and what closing the lid does.
   - The battery's charge and time left are UPower's, as the bar's
     battery popover shows them (§7.4).
   - The power profiles are power-profiles-daemon's, chosen as in that
@@ -6037,6 +6037,25 @@ settings NAME ARGS...`; most answer why not, or an empty string.
     `org.freedesktop.UPower.PowerProfiles` among them, running or
     activatable, the page says power-profiles-daemon isn't there and
     offers none.
+  - **On AC power** and **On battery** switch the power profile as the
+    power source changes (maintainer, 2026-11-16): Leave it, Power saver,
+    Balanced or Performance. They're `onAC` and `onBattery` in
+    `power.json` and `power.local.json`, as power-profiles-daemon names
+    them (`power-saver`, `balanced`, `performance`), or `""` for Leave
+    it, the default. `conf` ships `performance` on AC and `balanced` on
+    battery. ‹ and › step through them; the rows show only where
+    power-profiles-daemon is.
+  - The shell asks for the profile as it starts, as UPower's `OnBattery`
+    changes and as either file does (`PowerFollow.qml`), and logs each
+    switch. At start it asks again once Quickshell has read the daemon's
+    profile, as until then Quickshell reports Balanced and no Performance. Leave it asks for nothing, so a profile chosen by hand stays
+    until the next change. Performance where the machine has none is
+    Balanced, as power-profiles-daemon offers Performance only where the
+    platform does.
+  - It reads the files itself, so it runs on Plasma too (`kde.qml`), where
+    the page doesn't and PowerDevil's own per-source profile stays unset.
+    tide for macOS gives the same settings to `pmset` (its SPEC.md); tide
+    for Chrome has no way to set a power profile, so they're missing there.
   - **Closing the lid** with no other monitor suspends, locks or does
     nothing: `lidClose` in `power.json` and `power.local.json`, `suspend`
     by default. ‹ and › step through them.
