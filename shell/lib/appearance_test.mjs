@@ -1666,6 +1666,20 @@ test("barIcons is a list of icons, each shown or not, and anything else fails na
     }
 });
 
+test("barLayout is a list of the bar's items, each in a zone and shown or not, and anything else fails naming it", () => {
+    const layout = [{ id: "workspaces", zone: "center", shown: true }, { id: "title", zone: "center", shown: false }];
+    assert.deepEqual(loadAppearance(JSON.stringify({ barLayout: layout }), null).settings.barLayout, layout);
+    assert.deepEqual(parseAppearance('{"barLayout": [{"id": "gone", "zone": "left", "shown": true}]}').settings.barLayout,
+        [{ id: "gone", zone: "left", shown: true }], "an id the bar doesn't know is its to drop, so a newer tide's list loads");
+    for (const bad of ['"center"', '[{"id": "title", "shown": true}]', '[{"id": "title", "zone": "middle", "shown": true}]',
+        '[{"id": "title", "zone": "center", "shown": "no"}]', '[{"id": "title", "zone": "center", "shown": true, "at": 1}]', '[null]']) {
+        const loaded = loadAppearance(`{"barLayout": ${bad}}`, null);
+        assert.equal(loaded.errors.length, 1, bad);
+        assert.match(loaded.errors[0], /^appearance\.json: barLayout must be a list/, bad);
+        assert.equal(loaded.settings.barLayout, undefined, `${bad} keeps the last good`);
+    }
+});
+
 test("the Bar page's icon list is written to the local file, beside the rest", () => {
     const icons = [{ id: "network", shown: false }];
     const r = withSetting('{"barPosition": "bottom"}', "barIcons", icons);

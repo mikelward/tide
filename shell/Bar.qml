@@ -3,7 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland
 import "lib/barclick.mjs" as Click
-import "lib/title.mjs" as Title
+import "lib/barlayout.mjs" as BarLayout
 import "lib/barsettings.mjs" as BarSettings
 import "lib/settings.mjs" as Settings
 
@@ -18,13 +18,51 @@ PanelWindow {
     // This bar's HyprlandMonitor, or null on tidewm, which isn't asked.
     readonly property var monitor: Compositor.tidewm ? null : Hyprland.monitorFor(bar.screen)
 
-    // How far each click target on the right reaches past its ends: the
-    // gaps between them split, so none is dead, whatever their spacing.
-    readonly property var reaches: Click.chainReaches([presenter, sharing, mic, statusIcons].map(item => ({
-        left: item.x,
-        right: item.x + item.width,
-        shown: item.visible
-    })), { end: bar.width })
+    // The Bar page's layout (SPEC.md §7.1): each item's zone, order and
+    // whether it shows (appearance.json's barLayout, lib/barlayout.mjs).
+    readonly property var layout: BarLayout.layoutList(AppearanceData.settings.barLayout)
+    readonly property var shown: {
+        const out = {};
+        for (const e of bar.layout) {
+            out[e.id] = e.shown;
+        }
+        return out;
+    }
+    // Where each shown item goes, and how wide the title may be. The
+    // workspaces' width takes in the layout symbol after them.
+    // The status icons are placed even when they're off, for the config
+    // errors' warning they hold, which always shows (StatusIcons.qml).
+    readonly property var place: BarLayout.placed(bar.layout.map(e => e.id === "icons" ? Object.assign({}, e, { shown: true }) : e), {
+        logo: logo.implicitWidth,
+        workspaces: workspaces.implicitWidth + 7 + layoutSymbol.implicitWidth,
+        title: Math.min(windowTitle.implicitWidth, windowTitle.maxWidth),
+        icons: statusIcons.implicitWidth
+    }, { width: bar.width, pills: pills.implicitWidth })
+
+    // How far each click target reaches past its ends: the gaps between
+    // them split, so none is dead, whatever their spacing. The first
+    // reaches the bar's left edge and the last its right one. The title is
+    // a target too, so its neighbors stop at it.
+    readonly property var targets: [
+        { id: "logo", item: logo },
+        { id: "workspaces", item: workspaces },
+        { id: "title", item: windowTitle },
+        { id: "presenter", item: presenter, in: pills },
+        { id: "sharing", item: sharing, in: pills },
+        { id: "mic", item: mic, in: pills },
+        { id: "icons", item: statusIcons }
+    ].map(t => ({
+        id: t.id,
+        left: t.item.x + (t.in ? t.in.x : 0),
+        right: t.item.x + (t.in ? t.in.x : 0) + t.item.width,
+        shown: t.item.visible && t.item.width > 0
+    })).sort((a, b) => a.left - b.left)
+    readonly property var reaches: {
+        const chain = Click.chainReaches(bar.targets, { start: 0, end: bar.width });
+        const out = {};
+        bar.targets.forEach((t, i) => out[t.id] = chain[i]);
+        return out;
+    }
 
     screen: modelData
     WlrLayershell.namespace: "tide-bar"
@@ -56,28 +94,20 @@ PanelWindow {
         }
     }
 
-    // How far the wave logo and the workspaces reach past their ends: the
-    // logo out to the bar's left edge, and the gap between them split.
-    readonly property var leftReaches: Click.chainReaches([logo, workspaces].map(item => ({
-        left: item.x,
-        right: item.x + item.width,
-        shown: item.visible
-    })), { start: 0 })
-
-    // tide's logo, two waves, first on the left (§7.1): a tap opens the
-    // launcher on this monitor, or closes it.
+    // tide's logo, two waves, first on the left by default (§7.1): a tap
+    // opens the launcher on this monitor, or closes it.
     SymbolicIcon {
         id: logo
 
-        anchors.left: parent.left
-        anchors.leftMargin: 12
+        visible: bar.shown.logo
+        x: bar.place.x.logo ?? 0
         anchors.verticalCenter: parent.verticalCenter
         file: "tide-symbolic.svg"
         color: Theme.accent
 
         BarHit {
             settings: BarSettings.page("logo")
-            reach: bar.leftReaches[0]
+            reach: bar.reaches.logo
 
             TapHandler {
                 onTapped: LauncherData.toggle(bar.screen)
@@ -88,17 +118,19 @@ PanelWindow {
     Workspaces {
         id: workspaces
 
-        anchors.left: logo.right
-        anchors.leftMargin: 8
+        visible: bar.shown.workspaces
+        x: bar.place.x.workspaces ?? 0
         anchors.verticalCenter: parent.verticalCenter
         monitorName: bar.screen?.name ?? ""
         // The layout symbol after it isn't a target.
-        reach: bar.leftReaches[1]
+        reach: bar.reaches.workspaces
     }
 
+    // The layout symbol, after the workspaces wherever they are.
     LayoutSymbol {
         id: layoutSymbol
 
+        visible: bar.shown.workspaces
         anchors.left: workspaces.right
         anchors.leftMargin: 7
         anchors.verticalCenter: parent.verticalCenter
@@ -106,63 +138,63 @@ PanelWindow {
         screenName: bar.screen?.name ?? ""
     }
 
-    // Centered on the bar, and no wider than the room between the left and
-    // right groups allows on both sides, so it stays centered.
+    // The window title, as wide as its zone leaves room for
+    // (BarLayout.placed): centered by default, it stays centered.
     WindowTitle {
-        anchors.horizontalCenter: parent.horizontalCenter
+        id: windowTitle
+
+        visible: bar.shown.title
+        x: bar.place.x.title ?? 0
         anchors.verticalCenter: parent.verticalCenter
-        width: Title.titleWidth({
-            implicit: implicitWidth,
-            max: maxWidth,
-            barWidth: bar.width,
-            left: layoutSymbol.x + layoutSymbol.width,
-            right: presenter.x,
-            gap: 32
-        })
+        width: bar.place.title
         monitorName: bar.screen?.name ?? ""
+        reach: bar.reaches.title
     }
 
-    // Presenter mode's pill, then the privacy pills, come first on the
-    // right (§7.1).
-    PresenterPill {
-        id: presenter
+    // Presenter mode's pill, then the privacy pills, first in the right
+    // zone (§7.1). They aren't in the layout: each shows only while it
+    // has something to say.
+    Row {
+        id: pills
 
-        reach: bar.reaches[0]
-        anchors.right: sharing.left
-        anchors.rightMargin: visible ? 4 : 0
+        x: bar.place.pills
         anchors.verticalCenter: parent.verticalCenter
-    }
+        spacing: 4
 
-    SharingPill {
-        id: sharing
+        PresenterPill {
+            id: presenter
 
-        reach: bar.reaches[1]
-        anchors.right: mic.left
-        anchors.rightMargin: visible ? 4 : 0
-        anchors.verticalCenter: parent.verticalCenter
-    }
+            reach: bar.reaches.presenter
+            anchors.verticalCenter: parent.verticalCenter
+        }
 
-    MicPill {
-        id: mic
+        SharingPill {
+            id: sharing
 
-        reach: bar.reaches[2]
-        anchors.right: statusIcons.left
-        anchors.rightMargin: visible ? 10 : 0
-        anchors.verticalCenter: parent.verticalCenter
+            reach: bar.reaches.sharing
+            anchors.verticalCenter: parent.verticalCenter
+        }
+
+        MicPill {
+            id: mic
+
+            reach: bar.reaches.mic
+            anchors.verticalCenter: parent.verticalCenter
+        }
     }
 
     // The tray, the status icons and the clocks, in the Bar page's order
-    // (§7.4). With the clocks' own 5 px, the last clock's text sits 11 px
-    // from the edge.
+    // (§7.4). At the right edge, with the clocks' own 5 px, the last
+    // clock's text sits 11 px from it.
     StatusIcons {
         id: statusIcons
 
-        reach: bar.reaches[3]
+        iconsShown: bar.shown.icons
+        x: bar.place.x.icons ?? 0
+        reach: bar.reaches.icons
         // Its screen's name is its monitor's, on Hyprland and tidewm alike,
         // and the bell opens the center there (HistoryData.openOn).
         monitorName: bar.screen?.name ?? ""
-        anchors.right: parent.right
-        anchors.rightMargin: 6
         anchors.verticalCenter: parent.verticalCenter
     }
 

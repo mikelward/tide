@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import "lib/title.mjs" as Title
 import "lib/barsettings.mjs" as BarSettings
+import "lib/barclick.mjs" as Click
 
 // The window title in the middle of this monitor's bar (SPEC.md §7.1):
 // the focused window's when it's on this monitor, else nothing, from
@@ -11,6 +12,9 @@ Text {
 
     // This bar's monitor's name.
     required property string monitorName
+    // How far its click target reaches past its ends (Bar.qml), out to the
+    // bar's edge when it's the last item there.
+    property var reach: ({ left: Click.PAD, right: Click.PAD })
 
     // About Title.MAX_TITLE characters wide, as waybar's max-length had
     // it. Past that, and past the room Bar.qml gives it, the text elides,
@@ -45,6 +49,7 @@ Text {
     BarHit {
         settings: BarSettings.page("title")
         visible: root.window !== null
+        reach: root.reach
 
         TapHandler {
             onDoubleTapped: {

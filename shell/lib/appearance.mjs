@@ -26,7 +26,7 @@ const MODES = ["schedule", "sun", "light", "dark"];
 // The settings that decide light or dark, and every one there is.
 const THEME_KEYS = ["mode", "light", "dark", "latitude", "longitude"];
 const KEYS = THEME_KEYS.concat(["city", "dimStrength", "roundedCorners", "borderWidth", "shadows", "shadowSize", "lightWallpaper", "darkWallpaper", "lightWallpaperPosition",
-    "darkWallpaperPosition", "wallpaperPosition", "barPosition", "barIcons"]);
+    "darkWallpaperPosition", "wallpaperPosition", "barPosition", "barIcons", "barLayout"]);
 // How a picture is placed on a monitor (SPEC.md §15): each mode's own,
 // lightWallpaperPosition or darkWallpaperPosition, else wallpaperPosition,
 // for both.
@@ -166,6 +166,13 @@ export function parseAppearance(text) {
                 return { error: 'barIcons must be a list like [{"id": "network", "shown": true}]' };
             }
             break;
+        case "barLayout":
+            // The bar's items, each in a zone, in order, shown or not
+            // (barlayout.mjs), which drops an id it doesn't know.
+            if (!barLayoutValid(v)) {
+                return { error: 'barLayout must be a list like [{"id": "workspaces", "zone": "center", "shown": true}]' };
+            }
+            break;
         default:
             return { error: `unknown setting "${key}"` };
         }
@@ -180,6 +187,15 @@ function barIconsValid(v) {
     return Array.isArray(v) && v.every(e => e !== null && typeof e === "object" && !Array.isArray(e)
         && typeof e.id === "string" && /^[a-z]+$/.test(e.id) && typeof e.shown === "boolean"
         && Object.keys(e).length === 2);
+}
+
+// Whether `v` is a list of {id, zone, shown}: an id that's a lowercase
+// name, a zone of left, center or right, shown true or false, and nothing
+// else.
+function barLayoutValid(v) {
+    return Array.isArray(v) && v.every(e => e !== null && typeof e === "object" && !Array.isArray(e)
+        && typeof e.id === "string" && /^[a-z]+$/.test(e.id) && ["left", "center", "right"].includes(e.zone)
+        && typeof e.shown === "boolean" && Object.keys(e).length === 3);
 }
 
 const NEEDS_PLACE = 'mode "sun" needs latitude and longitude';

@@ -35,9 +35,14 @@ Item {
     readonly property var icons: BarIcons.iconList(AppearanceData.settings.barIcons)
     readonly property var order: ["config"].concat(root.icons.map(e => e.id))
 
+    // Whether the Bar page's Layout shows the status icons. With them off,
+    // the config errors' warning still shows, alone: a warning is never
+    // hidden (SPEC.md §7.1).
+    property bool iconsShown: true
+
     // Whether the Bar page shows the icon `id`.
     function on(id) {
-        return root.icons.some(e => e.id === id && e.shown);
+        return root.iconsShown && root.icons.some(e => e.id === id && e.shown);
     }
 
     function size(item) {

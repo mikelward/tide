@@ -1,7 +1,7 @@
 // Tests for title.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_TITLE, HOVER_LINE, hoverTitle, barTitle, barWindow, activeAtStart, hasFocus, titleWidth } from "./title.mjs";
+import { MAX_TITLE, HOVER_LINE, hoverTitle, barTitle, barWindow, activeAtStart, hasFocus } from "./title.mjs";
 
 const editor = { address: "abc", monitor: "DP-1", title: "SPEC.md - tide" };
 
@@ -54,16 +54,6 @@ test("whitespace collapses onto one line", () => {
 
 test("a window with no title shows nothing", () => {
     assert.equal(barTitle({ monitor: "DP-1", active: { ...editor, title: undefined } }), "");
-});
-
-test("the title keeps clear of the nearer side, the Sharing pill included", () => {
-    const bar = { implicit: 400, max: 500, barWidth: 1000, left: 200, gap: 32 };
-    // Right group starts at 800: 300 each side of the middle.
-    assert.equal(titleWidth({ ...bar, right: 800 }), 400);
-    // A Sharing pill moves the right group's start to 620: 120 of room.
-    assert.equal(titleWidth({ ...bar, right: 620 }), 2 * 120 - 32);
-    assert.equal(titleWidth({ ...bar, implicit: 600, right: 900 }), 500);
-    assert.equal(titleWidth({ ...bar, right: 500 }), 0);
 });
 
 test("the bar's title stands for the window a double-click maximizes", () => {
