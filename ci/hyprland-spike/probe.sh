@@ -25,10 +25,15 @@ ls -l /dev/dri || true
 for dev in /sys/class/drm/card*; do echo "$dev: $(readlink -f "$dev/device/driver" 2>/dev/null)"; done
 : > /tmp/empty.lua
 vkms=
+# vkms is a faux device on newer kernels, so it's found by its path, not
+# its driver's name.
 for dev in /sys/class/drm/card[0-9]; do
-    case "$(readlink -f "$dev/device/driver")" in */vkms) vkms=/dev/dri/${dev##*/} ;; esac
+    case "$(readlink -f "$dev")" in */vkms/*) vkms=/dev/dri/${dev##*/} ;; esac
 done
 echo "vkms is ${vkms:-not found}"
+if test -z "$vkms"; then
+    fail "no vkms device to give Hyprland"
+fi
 # Each try: a name, then the environment it adds. The first that starts wins.
 up=
 for try in \
