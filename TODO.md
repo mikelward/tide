@@ -1373,22 +1373,15 @@ the session's keys (SPEC.md §5.4). Left:
 
 Found 2026-11-16 on a desktop with keyd and a KVM: udev tags the ERGO
 K860 a mouse too, as Logitech's receiver gives each device both kinds of
-reports, so `tide keyboards` left it out. A mouse tagged a keyboard now
-counts. After the KVM switches back, the K860 types a few seconds before
-HID++ adds its battery, so "No keyboard" still shows until it does.
+reports, and after the KVM switches back it types a second or two before
+HID++ adds its battery. `tide keyboards` now counts a mouse tagged a
+keyboard and no longer asks the battery.
 
-- [ ] **Count a HID++ keyboard before its battery appears**: drop or
-  narrow `asleep()`'s no-battery rule in `bin/tide`. Switching the KVM
-  away takes the receiver, and its devices, away, so that case holds
-  without it.
-- [ ] **Its battery's `online` while it types.** Read in
-  hid-logitech-hidpp.c (Linux 7.3): the driver adds the battery on the
-  device's first connect, once it answers HID++'s ping, and sets `online`
-  1 on a battery query that answers: 0x1001 (voltage) unless it reports
-  "not charging", 0x1000 when discharging or full, 0x1004 always. A ping
-  that fails on a connect notification sets it 0 with status Unknown, and
-  a failed query leaves it as it was, 0 for a battery just added. A keyboard that types without a fresh
-  connect notification keeps a stale 0 until its next battery broadcast.
+- [ ] **Stop watching batteries.** The lock and the greeter still run
+  `udevadm monitor` on `power_supply`, and read the keyboards again on
+  each battery change, though no battery decides a count now. Drop it
+  from `LockKeyboards.qml`, `keyboardsCue` and the integration test's
+  stand-in.
 - [ ] **Bluetooth.** BlueZ makes a Bluetooth keyboard through uhid, under
   `/sys/devices/virtual/misc/uhid/`, but its input device still has the
   HID device as its parent, so "no hardware parent" doesn't drop it (a

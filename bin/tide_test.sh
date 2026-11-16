@@ -1472,60 +1472,40 @@ rm -r "$input/event1/device/device"
 keyboards
 check "a Bluetooth keyboard counts beside keyd's" test "$(cat "$tmp/out")" = "ERGO K860 Keyboard"
 
-# A desktop with its keyboard switched away by the KVM, or asleep: what's
-# left can't type. keyd's virtual keyboard, which sits on no hardware, only
-# retypes another keyboard's keys; and a wireless keyboard's receiver stays
-# plugged in while it sleeps, which its battery says (HID++'s "online").
-# Logitech's receiver gives each device behind it a mouse's reports as well
-# as a keyboard's, so udev tags the K860 a mouse too, as it does the PRO 2
-# MOUSE. A mouse tagged a keyboard counts; the PRO 2 is left out only for
-# having no HID++ battery, as on the maintainer's desk.
+# A desktop with keyd and a KVM. keyd's virtual keyboard, which sits on no
+# hardware, only retypes another keyboard's keys. Logitech's receiver gives
+# each device behind it a mouse's reports as well as a keyboard's, so udev
+# tags the K860 and the PRO 2 MOUSE alike, and both count.
 rm -r "$input" "$udev"
 mkdir -p "$input" "$udev" "$tmp/drivers/logitech-hidpp-device"
 input_device "Logitech ERGO K860" 13:80 event0 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1 ID_INPUT_MOUSE=1
-ln -s "$tmp/drivers/logitech-hidpp-device" "$input/event0/device/device/driver"
 input_device "keyd virtual keyboard" 13:81 event1 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
-input_device "Logitech PRO 2 MOUSE" 13:82 event2 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1 ID_INPUT_MOUSE=1
-ln -s "$tmp/drivers/logitech-hidpp-device" "$input/event2/device/device/driver"
-input_device "Keychron K2" 13:83 event3 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
-# online EVENT 0|1: its HID++ battery says whether it's connected.
-online() {
-    mkdir -p "$input/$1/device/device/power_supply/hidpp_battery_0"
-    printf '%s\n' "$2" > "$input/$1/device/device/power_supply/hidpp_battery_0/online"
-}
 rm -r "$input/event1/device/device"
-online event0 1
+input_device "Keychron K2" 13:83 event3 ID_INPUT=1 ID_INPUT_KEY=1 ID_INPUT_KEYBOARD=1
+# The KVM switches the receiver back: the K860 types a moment later, and
+# HID++ adds its battery a second or two after that.
+ln -s "$tmp/drivers/logitech-hidpp-device" "$input/event0/device/device/driver"
 keyboards
-check "a wireless keyboard that's awake and one plugged in count, not keyd's" \
+check "a wireless keyboard counts before its battery shows, beside one plugged in, not keyd's" \
     test "$(cat "$tmp/out")" = "Logitech ERGO K860
 Keychron K2"
-rm -r "$input/event3"
-online event0 0
+# battery EVENT ONLINE STATUS: its HID++ battery.
+battery() {
+    mkdir -p "$input/$1/device/device/power_supply/hidpp_battery_0"
+    printf '%s\n' "$2" > "$input/$1/device/device/power_supply/hidpp_battery_0/online"
+    printf '%s\n' "$3" > "$input/$1/device/device/power_supply/hidpp_battery_0/status"
+}
+# Asleep, or charging, HID++ says it isn't online; a key wakes it.
+battery event0 0 Unknown
+keyboards
+check "and while its battery says it's asleep" test "$(cat "$tmp/out")" = "Logitech ERGO K860
+Keychron K2"
+# Switching the KVM away takes the receiver and the keyboard behind it.
+rm -r "$input/event0" "$input/event3"
 keyboards
 status=$?
-check "with the wireless one asleep and the other switched away, there's no keyboard" test ! -s "$tmp/out"
+check "with the KVM switched away, there's no keyboard" test ! -s "$tmp/out"
 check "and keyboards exits 0" test "$status" -eq 0
-online event0 1
-keyboards
-check "which the wireless one waking brings back" test "$(cat "$tmp/out")" = "Logitech ERGO K860"
-# The KVM switches the receiver back with the wireless keyboard off: its
-# receiver lists it, but HID++ adds its battery only once it connects.
-rm -r "$input/event0/device/device/power_supply"
-keyboards
-check "a wireless keyboard its receiver lists before it first connects isn't one" test ! -s "$tmp/out"
-online event0 1
-keyboards
-check "until it connects" test "$(cat "$tmp/out")" = "Logitech ERGO K860"
-# HID++ keeps a battery's "online" at 0 while it charges, as its 1.0
-# register and 2.0's battery feature 0x1000 only give a level while it
-# discharges: a keyboard on its cable, typed on, is still connected.
-printf 'Charging\n' > "$input/event0/device/device/power_supply/hidpp_battery_0/status"
-online event0 0
-keyboards
-check "a wireless keyboard that's charging counts" test "$(cat "$tmp/out")" = "Logitech ERGO K860"
-printf 'Unknown\n' > "$input/event0/device/device/power_supply/hidpp_battery_0/status"
-keyboards
-check "but not one that's disconnected, whose status HID++ makes unknown" test ! -s "$tmp/out"
 
 # tide caps-lock: the keyboards' Caps Lock lights, as /sys/class/leds lays
 # them out, beside another light that isn't one.
