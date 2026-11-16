@@ -27,9 +27,14 @@ say "starting the tide session"
 if test "${TIDE_IME:-}" != 0 && command -v fcitx5 >/dev/null 2>&1; then
     export QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx
 fi
-# Without a Hyprland config of your own, tide's default, which `make
-# install` puts beside the layout (SPEC.md §6). TIDE_HYPRLAND_CONFIG names
-# another; a --config given here wins over both.
+# tide's session config, session.lua, which `make install` puts beside
+# tide's hyprland.lua (SPEC.md §6.8): tide's, with your hyprland.lua's
+# options over its defaults, then the settings pages', then
+# hyprland.local.lua. So a hyprland.lua of yours that's missing, broken or
+# never loads tide's still leaves tide's keys and the pages' settings.
+# TIDE_HYPRLAND_CONFIG names another; a --config given here wins over
+# both. An install from before session.lua runs as it did: yours, or
+# tide's hyprland.lua without one.
 config_home=${XDG_CONFIG_HOME:-$HOME/.config}
 given=no
 for arg in "$@"; do
@@ -39,10 +44,19 @@ if test "$given" = yes; then
     :
 elif test -n "${TIDE_HYPRLAND_CONFIG:-}"; then
     set -- --config "$TIDE_HYPRLAND_CONFIG" "$@"
+elif test -f "$HOME/.config/hypr/tide/session.lua"; then
+    set -- --config "$HOME/.config/hypr/tide/session.lua" "$@"
+    # Hyprland's hyprland.conf, an old one left behind, isn't Lua, so the
+    # session can't take options from it.
+    if ! test -e "$config_home/hypr/hyprland.lua" && test -e "$config_home/hypr/hyprland.conf"; then
+        say "$config_home/hypr/hyprland.conf isn't read in tide's session: give your options in a hyprland.lua, or move it away"
+    fi
 elif ! test -e "$config_home/hypr/hyprland.lua" && ! test -e "$config_home/hypr/hyprland.conf" \
     && test -f "$HOME/.config/hypr/tide/hyprland.lua"; then
+    say "no $HOME/.config/hypr/tide/session.lua: run tide's make install"
     set -- --config "$HOME/.config/hypr/tide/hyprland.lua" "$@"
 else
+    say "no $HOME/.config/hypr/tide/session.lua: run tide's make install"
     # A config of your own is Hyprland's, and tide's keys and layout come
     # only if it loads tide's. One that never names tide, as an old
     # hyprland.conf left behind does, gives a session without them, so the

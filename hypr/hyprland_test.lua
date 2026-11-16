@@ -531,6 +531,22 @@ local function load(setup)
     if setup and setup.monitors then
         S.monitor_list = setup.monitors
     end
+    -- Through tide's session (session.lua), with setup.yours as your
+    -- hyprland.lua, or none
+    if setup and setup.session then
+        local yours = tmp .. "/.config/hypr/hyprland.lua"
+        os.remove(yours)
+        if setup.yours then
+            write(".config/hypr/hyprland.lua", setup.yours)
+        elseif setup.yours_loop then
+            -- One that's there but can't be opened: a link to itself
+            assert(os.execute("ln -s hyprland.lua '" .. yours .. "'"))
+        end
+        env_overrides.TIDE_HYPRLAND_LUA = config_path
+        assert(loadfile(here .. "/session.lua"))()
+        os.remove(yours)
+        return S
+    end
     local opts = PERSONAL
     if setup and setup.opts then
         opts = setup.opts
@@ -2711,6 +2727,60 @@ test("quit, the terminal and the launcher can't be turned off", function()
     eq(nil, S.binds["|SUPER + L"], "lock is off, as asked")
     eq(1, #S.notifications)
     truthy(S.notifications[1].text:find("terminal can't be turned off, so it keeps its keys", 1, true), S.notifications[1].text)
+end)
+
+--------------------------------------------------------------------------------
+-- The session: tide's, with your options, then the pages (session.lua)
+--------------------------------------------------------------------------------
+test("the session runs tide's with the options your hyprland.lua returns", function()
+    load({ session = true, yours = 'return { terminal = "kitty" }' })
+    eq("kitty", S.binds["|SUPER + T"].target.args, "your terminal")
+    truthy(S.binds["|SUPER + Space"], "tide's launcher")
+    eq(0, #S.notifications)
+end)
+
+test("a hyprland.lua that runs tide's itself, as before, hands its options over, and tide's runs once", function()
+    load({ opts = { terminal = "kitty" } })
+    local plain = #S.calls
+    load({ session = true, yours = 'loadfile(os.getenv("TIDE_HYPRLAND_LUA"))({ terminal = "kitty" })' })
+    eq("kitty", S.binds["|SUPER + T"].target.args, "your terminal")
+    eq(plain, #S.calls, "the same calls as tide's run once")
+    eq(0, #S.notifications)
+end)
+
+test("without a hyprland.lua of yours, tide's defaults and keys", function()
+    load({ session = true })
+    eq("xdg-terminal-exec", S.binds["|SUPER + T"].target.args)
+    truthy(S.binds["|SUPER + Space"], "tide's launcher")
+    eq(0, #S.notifications)
+end)
+
+test("a hyprland.lua that fails leaves tide's keys and the pages' settings, and says why", function()
+    load({ session = true, yours = 'error("boom")', keys = [[return { keys = { launcher = { "SUPER + R" } } }]] })
+    eq("xdg-terminal-exec", S.binds["|SUPER + T"].target.args, "tide's terminal")
+    eq("Launcher", S.binds["|SUPER + R"].opts.description, "the Keyboard shortcuts page's launcher key")
+    eq(1, #S.notifications)
+    truthy(S.notifications[1].text:find("Your hyprland.lua failed, so tide's defaults apply: ", 1, true), S.notifications[1].text)
+    truthy(S.notifications[1].text:find("boom", 1, true), S.notifications[1].text)
+end)
+
+test("one that fails after handing its options over keeps them", function()
+    load({ session = true, yours = 'loadfile(os.getenv("TIDE_HYPRLAND_LUA"))({ terminal = "kitty" })\nerror("later")' })
+    eq("kitty", S.binds["|SUPER + T"].target.args, "your terminal")
+    truthy(S.notifications[1].text:find("with the options it gave", 1, true), S.notifications[1].text)
+end)
+
+test("one that's there but can't be opened leaves tide's keys, and says why", function()
+    load({ session = true, yours_loop = true })
+    truthy(S.binds["|SUPER + Space"], "tide's launcher")
+    eq(1, #S.notifications)
+    truthy(S.notifications[1].text:find("Your hyprland.lua couldn't be opened", 1, true), S.notifications[1].text)
+end)
+
+test("one that isn't Lua leaves tide's keys, and says why", function()
+    load({ session = true, yours = "this is not lua" })
+    truthy(S.binds["|SUPER + Space"], "tide's launcher")
+    truthy(S.notifications[1].text:find("Your hyprland.lua didn't load", 1, true), S.notifications[1].text)
 end)
 
 --------------------------------------------------------------------------------

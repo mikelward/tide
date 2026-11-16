@@ -48,11 +48,11 @@ By hand, it's:
     systemctl --user enable tide.service tide-clipboard.service tide-fcitx5.service tide-kde.service
 
 `make install` also puts tide's Hyprland config, with its keys and rules,
-in `~/.config/hypr/tide/hyprland.lua`. Without a
-`~/.config/hypr/hyprland.lua` of your own, the session runs it. To keep
-yours and still have tide's keys, load it from yours with your own
-options, such as your keyboard layout, terminal and app keys; its first
-lines list them (SPEC.md §6.8).
+in `~/.config/hypr/tide/hyprland.lua`, which the session runs. Your
+`~/.config/hypr/hyprland.lua`, if you have one, returns your options over
+tide's defaults, such as your keyboard layout, terminal and app keys; its
+first lines list them (SPEC.md §6.8). The settings pages' changes apply
+after yours.
 
 By hand, also install what the session runs: Hyprland 0.56.2 or later,
 Quickshell 0.3 (`qs`, which draws the bar; without it `tide-shell`
