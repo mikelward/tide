@@ -80,13 +80,39 @@ test("the workspaces centered, the title hidden: the workspaces on the bar's mid
     assert.equal(p.title, 0);
 });
 
-test("the workspaces and the title both centered, as one group on the middle", () => {
+test("the workspaces and the title both centered: the workspaces end at the middle, the title starts there", () => {
     const list = layoutList([{ id: "logo", zone: "left", shown: true }, { id: "workspaces", zone: "center", shown: true },
         { id: "title", zone: "center", shown: true }, { id: "icons", zone: "right", shown: true }]);
     const p = placed(list, SIZES, { width: 1920 });
-    const group = 300 + TITLE_GAP + 400;
-    assert.equal(p.x.workspaces, (1920 - group) / 2);
-    assert.equal(p.x.title, p.x.workspaces + 300 + TITLE_GAP);
+    assert.equal(p.x.workspaces + 300, 960 - TITLE_GAP / 2, "the workspaces end at the middle");
+    assert.equal(p.x.title, 960 + TITLE_GAP / 2, "the title starts there");
+});
+
+test("three centered: the middle one on the middle, the others either side", () => {
+    const list = layoutList([{ id: "logo", zone: "left", shown: true }, { id: "workspaces", zone: "center", shown: true },
+        { id: "title", zone: "center", shown: true }, { id: "icons", zone: "center", shown: true }]);
+    const p = placed(list, { logo: 20, workspaces: 300, title: 400, icons: 200 }, { width: 1920 });
+    assert.equal(p.x.title + 400 / 2, 960, "the title centered");
+    assert.equal(p.x.workspaces + 300 + TITLE_GAP, p.x.title, "the workspaces to its left");
+    assert.equal(p.x.icons, p.x.title + 400 + TITLE_GAP, "the icons to its right");
+});
+
+test("a center half too wide for its side moves the zone, and the title takes what's left", () => {
+    // Codex's case: wide workspaces, then the title, centered.
+    const list = layoutList([{ id: "logo", zone: "left", shown: true }, { id: "workspaces", zone: "center", shown: true },
+        { id: "title", zone: "center", shown: true }, { id: "icons", zone: "right", shown: true }]);
+    const p = placed(list, { logo: 20, workspaces: 700, title: 400, icons: 200 }, { width: 1280 });
+    assert.ok(p.x.title + p.title + TITLE_GAP <= p.x.icons, "the title clears the icons");
+    assert.equal(p.x.workspaces, 12 + 20 + GAP, "the workspaces moved over as far as the left lets them");
+    assert.equal(p.x.title + p.title + TITLE_GAP, p.x.icons, "and the title fills the rest");
+});
+
+test("a long title in the center's second half is cut where the right side starts", () => {
+    const list = layoutList([{ id: "logo", zone: "left", shown: true }, { id: "workspaces", zone: "center", shown: true },
+        { id: "title", zone: "center", shown: true }, { id: "icons", zone: "right", shown: true }]);
+    const p = placed(list, Object.assign({}, SIZES, { title: 5000 }), { width: 1920 });
+    assert.equal(p.x.workspaces + 300, 960 - TITLE_GAP / 2, "the workspaces still end at the middle");
+    assert.equal(p.x.title + p.title, 1920 - 6 - 500 - TITLE_GAP, "the title runs up to the icons' gap");
 });
 
 test("a long centered title is cut to stay centered between the sides", () => {

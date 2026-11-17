@@ -2827,12 +2827,17 @@ See [`bar.png`](docs/mocks/bar.png).
   - By default the bar is as described below: the logo and workspaces
     left, the title centered, the status icons right.
   - The center zone sits on the bar's true middle, whatever the sides
-    hold. It moves over only as far as it must to clear them, keeping
-    clear of the left when it can't clear both. Spacers between items
+    hold. With an odd number of items, the middle one is centered on it,
+    the others to its left and right. With an even number, the first half
+    ends at the middle and the second half starts there, the gap between
+    them split evenly: the workspaces and the title both centered meet at
+    the middle. It moves over only as far as it must to clear the sides,
+    keeping clear of the left when it can't clear both. Spacers between items
     couldn't do that: two stretching spacers center what's between them
     only when the sides are the same width.
   - The window title takes the room its zone leaves, up to its own width,
-    and keeps 32 px from what's beside it. Centered, it stays centered.
+    and keeps 32 px from what's beside it. In the center it grows only
+    until its zone reaches a side, so the zone's middle stays put.
   - The pills aren't placed. They start the right zone, or sit at the
     right edge with it empty, and show only while they have something to
     say, so a warning is never moved off or hidden. The config errors'

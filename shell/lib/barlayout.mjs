@@ -1,7 +1,8 @@
 // The bar's layout as the Bar page chooses it (SPEC.md §7.1, §16): which of
 // its items show, and where, in three zones, left, center and right, each
 // in the order you give, kept as appearance.json's barLayout. The center
-// zone sits on the bar's true middle, whatever the sides hold.
+// zone sits on the bar's true middle, whatever the sides hold: its middle
+// item centered on it, or, with an even number, its halves either side.
 //
 // The items are the bar's top-level groups. The status icons are one item,
 // the tray and the clocks among them, ordered within it as barIcons says
@@ -142,8 +143,8 @@ export const TITLE_GAP = 32;
 // the width of the pills group, 0 with none showing. `margin` is the room
 // at the bar's left and right edges. The left zone runs from the left
 // edge, the right zone ends at the right edge with the pills first, and
-// the center zone is centered on the bar, moved over only as far as it
-// must to clear the sides. The title takes the room its zone leaves, no
+// the center zone sits on the bar's middle (its pivot, below), moved over
+// only as far as it must to clear the sides. The title takes the room its zone leaves, no
 // more than it would like. Returns {x, title, pills}: each shown id's x,
 // the title's width, and the pills' x.
 export function placed(list, sizes, { width, pills = 0, margin = { left: 12, right: 6 } }) {
@@ -172,11 +173,25 @@ export function placed(list, sizes, { width, pills = 0, margin = { left: 12, rig
     // may end, clear of the sides by the gap its neighbors call for.
     const loEdge = (title) => (has(zones.left) ? leftEnd(title) + gap(last(zones.left), zones.center[0]) : margin.left);
     const hiEdge = (title) => rightBound(title) - (hasRight ? gap(last(zones.center), rightFirst) : 0);
-    // The center's x: on the bar's middle, moved only as far as it must to
-    // clear the sides; too crowded to clear both, it keeps clear of the left.
+    // The point in the center zone that sits on the bar's middle, as its
+    // distance from the zone's start: with an odd number of items, the
+    // middle one's middle, the others either side; with an even number,
+    // halfway across the gap between the two halves, so the first half
+    // ends at the middle and the second starts there.
+    const pivot = (title) => {
+        const ids = zones.center;
+        const k = Math.floor(ids.length / 2);
+        if (ids.length % 2 === 1) {
+            return span(ids.slice(0, k), title) + (k > 0 ? gap(ids[k - 1], ids[k]) : 0) + w(ids[k], title) / 2;
+        }
+        return ids.length > 0 ? span(ids.slice(0, k), title) + gap(ids[k - 1], ids[k]) / 2 : 0;
+    };
+    // The center's x: its pivot on the bar's middle, moved only as far as
+    // it must to clear the sides; too crowded to clear both, it keeps
+    // clear of the left.
     const centerX = (title) => {
         const cw = span(zones.center, title);
-        return Math.max(loEdge(title), Math.min((width - cw) / 2, hiEdge(title) - cw));
+        return Math.max(loEdge(title), Math.min(width / 2 - pivot(title), hiEdge(title) - cw));
     };
 
     // The title's width: the most its zone leaves once the others are
@@ -185,10 +200,29 @@ export function placed(list, sizes, { width, pills = 0, margin = { left: 12, rig
     const want = Math.max(0, sizes.title ?? 0);
     const zone = ZONES.find((z) => zones[z].includes("title"));
     if (zone === "center") {
-        // The zone stays centered, so the nearer side limits it on both.
-        // Its width with a title of 0 is the other items and their gaps.
-        const half = Math.min(width / 2 - loEdge(0), hiEdge(0) - width / 2);
-        title = 2 * half - span(zones.center, 0);
+        // The pivot stays on the middle, so the title may grow only until
+        // the zone reaches a side. Of each px the title grows, `a` falls
+        // before the pivot: all of it in the first half, half of it as the
+        // middle item, none in the second half.
+        const p0 = pivot(0);
+        const c0 = span(zones.center, 0);
+        const a = pivot(1) - p0;
+        const lo = loEdge(0);
+        const hi = hiEdge(0);
+        const room = [];
+        if (width / 2 - p0 < lo || width / 2 - p0 + c0 > hi) {
+            // The zone is moved over even with no title, so the pivot
+            // can't stay put: the title takes what's left between the sides.
+            room.push(hi - lo - c0);
+        } else {
+            if (a > 0) {
+                room.push((width / 2 - p0 - lo) / a);
+            }
+            if (a < 1) {
+                room.push((hi - width / 2 + p0 - c0) / (1 - a));
+            }
+        }
+        title = Math.min(...room);
     } else if (zone === "left") {
         // Up to where the center really starts, or the right side.
         const next = has(zones.center) ? zones.center[0] : rightFirst;
