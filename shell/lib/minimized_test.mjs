@@ -1,7 +1,7 @@
 // Tests for minimized.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PREFIX, minimizedWorkspace, minimizedFrom, isMinimizedFrom, isMinimizedFromWorkspace, minimizeFrom, trayWindows } from "./minimized.mjs";
+import { PREFIX, minimizedWorkspace, minimizedFrom, isMinimizedFrom, isMinimizedFromWorkspace, homeWorkspace, minimizeFrom, trayWindows } from "./minimized.mjs";
 
 test("a minimized window's workspace names the one it came from", () => {
     assert.equal(PREFIX, "special:minimized:");
@@ -71,4 +71,13 @@ test("a window minimized from a monitor's part is its workspace's on the bar, an
     ];
     assert.deepEqual(trayWindows(windows, "re@DP-2").map((w) => w.address), ["a"], "DP-2's tray");
     assert.deepEqual(trayWindows(windows, "re").map((w) => w.address), ["b"], "the main monitor's tray");
+});
+
+test("a window belongs on its workspace, or the one it was minimized from", () => {
+    assert.equal(homeWorkspace("re"), "re");
+    assert.equal(homeWorkspace("re@DP-2"), "re@DP-2", "a monitor's part");
+    assert.equal(homeWorkspace("special:minimized:re"), "re");
+    assert.equal(homeWorkspace("special:scratch"), "", "another special workspace");
+    assert.equal(homeWorkspace(""), "");
+    assert.equal(homeWorkspace(undefined), "");
 });
