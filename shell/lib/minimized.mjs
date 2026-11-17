@@ -24,6 +24,18 @@ export function minimizedFrom(workspaceName) {
     return s.startsWith(PREFIX) && s.length > PREFIX.length ? s.slice(PREFIX.length) : null;
 }
 
+// The workspace a window on workspace `workspaceName` belongs on: the one
+// it was minimized from, if it's minimized; "" for another special
+// workspace, or none.
+export function homeWorkspace(workspaceName) {
+    const s = String(workspaceName ?? "");
+    const from = minimizedFrom(s);
+    if (from !== null) {
+        return from;
+    }
+    return s.startsWith("special:") ? "" : s;
+}
+
 // Whether a window on workspace `workspaceName` was minimized from the
 // workspace named `name`. Names match ignoring case, as the bar matches a
 // standing workspace to the one made under it (workspaces.mjs's

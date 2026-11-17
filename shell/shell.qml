@@ -129,6 +129,8 @@ ShellRoot {
         PopupsData.resync();
         // Pinned windows kept open by tidewm, in its session.
         PinnedData.load();
+        // Reopened windows sent back to their workspaces.
+        ReopenedData.load();
         // tidewm's config errors, for the bar's warning, in its session.
         ConfigErrorsData.load();
     }

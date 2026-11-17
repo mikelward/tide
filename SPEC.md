@@ -2096,6 +2096,40 @@ workspace it's on stays open there.
     other window still gets them.
   - A minimized window stays kept open, as it's still on its workspace.
 
+**Reopened windows go back to their workspaces.** An app that closes all
+its windows and opens them again, as a browser does when it restarts to
+update, would otherwise open them all where you are.
+
+- Each window that closes is remembered for 10 minutes: its app, title and
+  workspace. A minimized one's is the workspace it was minimized from.
+- A window that opens while its app has no other window open starts that
+  app's reopening, for 30 seconds. Each of its windows that opens
+  meanwhile goes back, unfollowed, to the workspace of a remembered window
+  with its app and title, the one that closed first if more than one has
+  them. That workspace is made again if it went.
+- A window whose title doesn't match as it opens goes back if it comes to
+  match within 5 seconds, while it's still where it opened. Later, it
+  could be a page you opened yourself.
+- Nothing else moves: a window opened while another of its app is open
+  (a new browser window), one moved meanwhile, and one with a title no
+  closed window had.
+- Matching is by title because no app tells the compositor which window
+  is which yet. xdg-session-management, in wayland-protocols' staging
+  since 1.48, is meant for that: an app names each window and asks for it
+  back before it's shown. KWin 6.7.5 implements it and restores a
+  window's desktops; Hyprland, wlroots and tidewm don't. Chromium speaks
+  only its draft, `xx_session_manager_v1`, behind its
+  `WaylandSessionManagement` feature, off by default (checked in
+  Chromium's source, 2026-11). tidewm's and tidesway's `TODO.md` have
+  implementing it.
+- **How.** On Hyprland and tidewm the shell remembers and sends windows
+  back, from the windows Compositor.qml lists (`ReopenedData.qml`,
+  `lib/reopened.mjs`). A window is sent once it's shown, so it can flash
+  where it opened first. What's remembered is the shell's alone: a
+  restarted shell, or a new login, starts with nothing remembered. tide
+  on KDE does the same in its KWin script, with a copy of
+  `lib/reopened.mjs`.
+
 **The short name.**
 
 - `workspaces.json`'s `namePatterns` is a list of regular expressions,

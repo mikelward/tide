@@ -7,6 +7,21 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **How reopened windows find their workspaces** (2026-11-17, SPEC.md
+  §6.5), guessed where you hadn't said:
+  - Only a matching app and title send a window back. Falling back to the
+    order windows closed in would place windows whose titles changed, but
+    would also send a fresh window of a restarted app somewhere you
+    weren't.
+  - A closed window is remembered for 10 minutes, an app's reopening lasts
+    30 seconds, and a title has 5 seconds to come to match.
+  - A window opened by your own launch is matched too: one whose title is
+    a closed window's (a new tab's, say) can be sent to that window's
+    workspace.
+  - Nothing is saved: a new login, or a restarted shell, remembers no
+    windows, so a browser's restored session at login opens where you are.
+  Reversible: `shell/lib/reopened.mjs`'s constants and `windowsChanged`.
+
 - **The boot splash no longer stays up for the login screen**
   (2026-11-15, SPEC.md §5.3): you asked on 2026-11-14 for the splash to
   stay until the greeter drew, and setup did it with a drop-in making
