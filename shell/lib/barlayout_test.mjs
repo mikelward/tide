@@ -1,12 +1,12 @@
 // Tests for barlayout.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ITEMS, layoutList, stored, byZone, moved, switched, zoned, placed, GAP, PILLS_GAP, TITLE_GAP } from "./barlayout.mjs";
+import { ITEMS, INSETS, layoutList, names, stored, byZone, moved, switched, zoned, placed, GAP, PILLS_GAP, TITLE_GAP } from "./barlayout.mjs";
 
 const ids = (list) => list.map((e) => `${e.id}:${e.zone}${e.shown ? "" : ":off"}`);
 
-test("with nothing stored, the bar is today's: logo and workspaces left, the title centered, the icons right", () => {
-    assert.deepEqual(ids(layoutList(undefined)), ["logo:left", "workspaces:left", "title:center", "icons:right"]);
+test("with nothing stored, the bar is today's: logo and workspaces left, the title centered, the icons and clocks right", () => {
+    assert.deepEqual(ids(layoutList(undefined)), ["logo:left", "workspaces:left", "title:center", "icons:right", "clocks:right"]);
     assert.deepEqual(layoutList(null).map((e) => e.label), ITEMS.map((e) => e.label));
 });
 
@@ -18,7 +18,7 @@ test("a stored layout keeps its order and zones, and makes itself whole", () => 
         { id: "workspaces", zone: "right", shown: true },
         { id: "icons", zone: "middle", shown: true },
     ]);
-    assert.deepEqual(ids(list), ["logo:left", "workspaces:center", "title:center:off", "icons:right"],
+    assert.deepEqual(ids(list), ["logo:left", "workspaces:center", "title:center:off", "icons:right", "clocks:right"],
         "an unknown id and a repeat dropped, an unknown zone the default, the missing logo first");
 });
 
@@ -26,19 +26,19 @@ test("the page lists the items by zone, and the arrows move them through every p
     let list = layoutList(undefined);
     // Workspaces down: past the end of left, into center, before the title.
     list = layoutList(moved(list, 1, 1));
-    assert.deepEqual(ids(byZone(list)), ["logo:left", "workspaces:center", "title:center", "icons:right"]);
+    assert.deepEqual(ids(byZone(list)), ["logo:left", "workspaces:center", "title:center", "icons:right", "clocks:right"]);
     // Down again: after the title, still center.
     list = layoutList(moved(list, 1, 1));
-    assert.deepEqual(ids(byZone(list)), ["logo:left", "title:center", "workspaces:center", "icons:right"]);
+    assert.deepEqual(ids(byZone(list)), ["logo:left", "title:center", "workspaces:center", "icons:right", "clocks:right"]);
     // Down again: into right, before the icons.
     list = layoutList(moved(list, 2, 1));
-    assert.deepEqual(ids(byZone(list)), ["logo:left", "title:center", "workspaces:right", "icons:right"]);
+    assert.deepEqual(ids(byZone(list)), ["logo:left", "title:center", "workspaces:right", "icons:right", "clocks:right"]);
     // Up from the icons: past the workspaces.
     list = layoutList(moved(list, 3, -1));
-    assert.deepEqual(ids(byZone(list)), ["logo:left", "title:center", "icons:right", "workspaces:right"]);
+    assert.deepEqual(ids(byZone(list)), ["logo:left", "title:center", "icons:right", "workspaces:right", "clocks:right"]);
     // The logo up, and the last item down, go nowhere.
     assert.equal(moved(list, 0, -1), null);
-    assert.equal(moved(list, 3, 1), null);
+    assert.equal(moved(list, 4, 1), null);
     assert.equal(moved(list, 9, 1), null);
 });
 
@@ -46,15 +46,15 @@ test("an item moves into an empty zone", () => {
     let list = layoutList([{ id: "logo", zone: "left", shown: true }, { id: "workspaces", zone: "left", shown: true },
         { id: "title", zone: "right", shown: true }, { id: "icons", zone: "right", shown: true }]);
     list = layoutList(moved(list, 1, 1));
-    assert.deepEqual(ids(byZone(list)), ["logo:left", "workspaces:center", "title:right", "icons:right"]);
+    assert.deepEqual(ids(byZone(list)), ["logo:left", "workspaces:center", "title:right", "icons:right", "clocks:right"]);
 });
 
 test("an item goes into a zone, at its end, and shows or hides", () => {
     let list = layoutList(undefined);
     list = layoutList(zoned(list, 1, "center"));
-    assert.deepEqual(ids(byZone(list)), ["logo:left", "title:center", "workspaces:center", "icons:right"]);
+    assert.deepEqual(ids(byZone(list)), ["logo:left", "title:center", "workspaces:center", "icons:right", "clocks:right"]);
     list = layoutList(switched(list, 1, false));
-    assert.deepEqual(ids(byZone(list)), ["logo:left", "title:center:off", "workspaces:center", "icons:right"]);
+    assert.deepEqual(ids(byZone(list)), ["logo:left", "title:center:off", "workspaces:center", "icons:right", "clocks:right"]);
     assert.equal(zoned(list, 1, "top"), null);
     assert.deepEqual(stored(list)[0], { id: "logo", zone: "left", shown: true });
 });
@@ -174,7 +174,7 @@ test("a title beside a centered zone that the other side pushes over leaves the 
     const right = layoutList([{ id: "icons", zone: "left", shown: true }, { id: "workspaces", zone: "center", shown: true },
         { id: "title", zone: "right", shown: true }, { id: "logo", zone: "right", shown: true }]);
     p = placed(right, sizes, { width: 1280 });
-    assert.ok(p.x.icons + 600 + GAP <= p.x.workspaces, "the workspaces clear the icons");
+    assert.ok(p.x.icons + 600 + GAP - INSETS.icons.right <= p.x.workspaces, "the workspaces clear the icons, less the room after the last icon");
     assert.ok(p.x.workspaces + 300 + TITLE_GAP <= p.x.title, "and the title clears the workspaces");
     assert.ok(p.x.title + p.title + TITLE_GAP <= p.x.logo, "and the logo after it");
 });
@@ -188,4 +188,51 @@ test("a title squeezed to nothing leaves no gaps that push the others off the ba
     assert.equal(p.x.title, undefined, "no place, so no gaps");
     assert.ok(p.x.icons + 900 <= 1280, "the icons stay on the bar");
     assert.equal(p.x.icons, p.x.workspaces + 300 + GAP, "beside the workspaces, as with the title hidden");
+});
+
+test("the clocks go left, center or right like any item, after the icons by default", () => {
+    const list = layoutList(undefined);
+    assert.deepEqual(list[list.length - 1], { id: "clocks", label: "Clocks", zone: "right", shown: true });
+    const centered = layoutList(zoned(list, 4, "center"));
+    assert.deepEqual(ids(byZone(centered)), ["logo:left", "workspaces:left", "title:center", "clocks:center", "icons:right"]);
+});
+
+test("clocks turned off when they were a status icon stay off, until the layout says", () => {
+    const icons = [{ id: "network", shown: true }, { id: "clocks", shown: false }];
+    assert.equal(layoutList(undefined, icons).find((e) => e.id === "clocks").shown, false);
+    assert.equal(layoutList([{ id: "clocks", zone: "left", shown: true }], icons).find((e) => e.id === "clocks").shown, true,
+        "the layout's own choice wins");
+    assert.equal(layoutList(undefined, [{ id: "clocks", shown: true }]).find((e) => e.id === "clocks").shown, true);
+    assert.equal(layoutList(undefined, "junk").find((e) => e.id === "clocks").shown, true);
+});
+
+test("the clocks sit as they did among the icons: 10 px from the last icon, their text 11 px from the edge", () => {
+    const sizes = { logo: 20, workspaces: 300, title: 400, icons: 500, clocks: 120 };
+    const p = placed(layoutList(undefined), sizes, { width: 1920 });
+    // The clocks keep 5 px inside either side of their text, and the icons
+    // 5 px after the last one.
+    assert.equal(p.x.clocks + 120 - INSETS.clocks.right, 1920 - 11);
+    assert.equal((p.x.clocks + INSETS.clocks.left) - (p.x.icons + 500 - INSETS.icons.right), 10);
+    // In the center beside the title, the title's gap counts their room.
+    const mid = placed(layoutList(zoned(layoutList(undefined), 4, "center")), sizes, { width: 1920 });
+    assert.equal((mid.x.clocks + INSETS.clocks.left) - (mid.x.title + mid.title), TITLE_GAP);
+});
+
+test("the pills keep their gap from clocks that start the right zone", () => {
+    const list = layoutList([{ id: "clocks", zone: "right", shown: true }, { id: "icons", zone: "right", shown: true }]);
+    const p = placed(list, { logo: 20, workspaces: 300, title: 400, icons: 500, clocks: 120 }, { width: 1920, pills: 80 });
+    assert.equal((p.x.clocks + INSETS.clocks.left) - (p.pills + 80), PILLS_GAP);
+});
+
+test("a stored layout from before the clocks were an item doesn't name them", () => {
+    assert.equal(names(undefined, "clocks"), false);
+    assert.equal(names([{ id: "logo", zone: "left", shown: true }], "clocks"), false);
+    assert.equal(names([null, { id: "clocks", zone: "right", shown: false }], "clocks"), true);
+    assert.equal(names("junk", "clocks"), false);
+    // So its clocks still come from the old icons, until it's stored again.
+    const old = [{ id: "title", zone: "left", shown: true }];
+    const icons = [{ id: "clocks", shown: false }];
+    const kept = stored(layoutList(old, icons));
+    assert.equal(names(kept, "clocks"), true);
+    assert.equal(layoutList(kept, []).find((e) => e.id === "clocks").shown, false, "kept off once stored");
 });

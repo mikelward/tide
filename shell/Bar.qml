@@ -20,7 +20,8 @@ PanelWindow {
 
     // The Bar page's layout (SPEC.md §7.1): each item's zone, order and
     // whether it shows (appearance.json's barLayout, lib/barlayout.mjs).
-    readonly property var layout: BarLayout.layoutList(AppearanceData.settings.barLayout)
+    // barIcons keeps clocks turned off when they were a status icon.
+    readonly property var layout: BarLayout.layoutList(AppearanceData.settings.barLayout, AppearanceData.settings.barIcons)
     readonly property var shown: {
         const out = {};
         for (const e of bar.layout) {
@@ -36,7 +37,8 @@ PanelWindow {
         logo: logo.implicitWidth,
         workspaces: workspaces.implicitWidth + 7 + layoutSymbol.implicitWidth,
         title: Math.min(windowTitle.implicitWidth, windowTitle.maxWidth),
-        icons: statusIcons.implicitWidth
+        icons: statusIcons.implicitWidth,
+        clocks: clocks.implicitWidth
     }, { width: bar.width, pills: pills.implicitWidth })
 
     // How far each click target reaches past its ends: the gaps between
@@ -50,7 +52,8 @@ PanelWindow {
         { id: "presenter", item: presenter, in: pills },
         { id: "sharing", item: sharing, in: pills },
         { id: "mic", item: mic, in: pills },
-        { id: "icons", item: statusIcons }
+        { id: "icons", item: statusIcons },
+        { id: "clocks", item: clocks }
     ].map(t => ({
         id: t.id,
         left: t.item.x + (t.in ? t.in.x : 0),
@@ -183,9 +186,7 @@ PanelWindow {
         }
     }
 
-    // The tray, the status icons and the clocks, in the Bar page's order
-    // (§7.4). At the right edge, with the clocks' own 5 px, the last
-    // clock's text sits 11 px from it.
+    // The tray and the status icons, in the Bar page's order (§7.4).
     StatusIcons {
         id: statusIcons
 
@@ -196,6 +197,19 @@ PanelWindow {
         // and the bell opens the center there (HistoryData.openOn).
         monitorName: bar.screen?.name ?? ""
         anchors.verticalCenter: parent.verticalCenter
+    }
+
+    // Local's clock and the zones in the bar (§7.3), wherever the Bar
+    // page's Layout puts them: by default after the status icons. At the
+    // right edge, with the clocks' own 5 px, the last clock's text sits
+    // 11 px from it.
+    Clocks {
+        id: clocks
+
+        visible: bar.shown.clocks
+        x: bar.place.x.clocks ?? 0
+        anchors.verticalCenter: parent.verticalCenter
+        reach: bar.reaches.clocks
     }
 
     // Every bar is in the notification center's focus grab, so the bell

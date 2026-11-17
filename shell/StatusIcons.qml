@@ -20,9 +20,10 @@ import "lib/baricons.mjs" as BarIcons
 // keyboard layout, once there are two; keep awake; Bluetooth, then one for
 // each connected audio device; network; volume and its %, which scrolls by
 // 5%; battery, red at 20% and below; and the system monitor's CPU %, each
-// with its popover; the notification center's bell; the session menu; and
-// the clocks (Clocks.qml). Each one the page turns off is hidden. Each
-// icon's x is baricons.mjs's, which counts the clocks' own room.
+// with its popover; the notification center's bell; and the session menu.
+// Each one the page turns off is hidden. Each icon's x is baricons.mjs's.
+// The clocks aren't among them: they're an item of the bar's own
+// (Clocks.qml, Bar.qml).
 Item {
     id: root
 
@@ -62,8 +63,7 @@ Item {
         battery: root.size(batteryIcon),
         sysmon: root.size(sysmon),
         notifications: root.size(bell),
-        session: root.size(session),
-        clocks: root.size(clocks)
+        session: root.size(session)
     })
 
     // Each icon's x, and the group's width. It leaves out the reach past
@@ -667,15 +667,5 @@ Item {
 
             icon: session
         }
-    }
-
-    // Local's clock, and the zones in the bar (SPEC.md §7.3).
-    Clocks {
-        id: clocks
-
-        x: root.geometry.x.clocks
-        anchors.verticalCenter: parent.verticalCenter
-        visible: root.on("clocks")
-        reach: root.placed.reach.clocks
     }
 }
