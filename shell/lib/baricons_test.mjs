@@ -11,13 +11,13 @@ const SHELL = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ids = (list) => list.map((e) => e.id);
 const DEFAULT_IDS = ids(ICONS);
 
-test("with nothing stored, every icon shows, in the bar's order, the clocks last", () => {
+test("with nothing stored, every icon shows, in the bar's order, the session menu last", () => {
     for (const nothing of [undefined, null, "network", {}, []]) {
         const list = iconList(nothing);
         assert.deepEqual(ids(list), DEFAULT_IDS);
         assert.ok(list.every((e) => e.shown), JSON.stringify(nothing));
     }
-    assert.equal(DEFAULT_IDS[DEFAULT_IDS.length - 1], "clocks");
+    assert.equal(DEFAULT_IDS[DEFAULT_IDS.length - 1], "session");
     assert.equal(DEFAULT_IDS[0], "tray");
 });
 
@@ -33,9 +33,9 @@ test("each icon has a name for the page, and is named as the bar names it", () =
 });
 
 test("a stored list keeps its order and what it turned off", () => {
-    const list = iconList([{ id: "clocks", shown: true }, { id: "network", shown: false }].concat(
-        DEFAULT_IDS.filter((id) => id !== "clocks" && id !== "network").map((id) => ({ id, shown: true }))));
-    assert.deepEqual(ids(list).slice(0, 2), ["clocks", "network"]);
+    const list = iconList([{ id: "session", shown: true }, { id: "network", shown: false }].concat(
+        DEFAULT_IDS.filter((id) => id !== "session" && id !== "network").map((id) => ({ id, shown: true }))));
+    assert.deepEqual(ids(list).slice(0, 2), ["session", "network"]);
     assert.equal(list[1].shown, false);
     assert.equal(list[1].label, "Network");
     assert.equal(list.length, ICONS.length);
@@ -52,10 +52,11 @@ test("an id it doesn't know, or names twice, is dropped", () => {
 test("an icon added since goes in after the one it follows by default", () => {
     // A list from before Notifications, moved around: it lands after the
     // system monitor wherever that went, and the tray, with nothing before
-    // it, goes first.
+    // it, goes first. The clocks, an icon then, are the layout's now
+    // (barlayout.mjs), so they're dropped.
     const old = ["clocks", "sysmon", "session", "keyboard", "keepawake", "bluetooth", "headphones", "network", "volume", "battery"];
     const list = iconList(old.map((id) => ({ id, shown: true })));
-    assert.deepEqual(ids(list), ["tray", "clocks", "sysmon", "notifications", "session", "keyboard", "keepawake",
+    assert.deepEqual(ids(list), ["tray", "sysmon", "notifications", "session", "keyboard", "keepawake",
         "bluetooth", "headphones", "network", "volume", "battery"]);
 });
 
@@ -79,25 +80,19 @@ test("the switch turns one icon on or off, and the list stays whole", () => {
     assert.deepEqual(stored(list).map((e) => e.id), DEFAULT_IDS);
 });
 
-test("icons sit GAP apart, the clocks' own room counted, and hidden or empty ones take none", () => {
+test("icons sit GAP apart, and hidden or empty ones take none", () => {
     const items = {
         config: { width: 16, shown: false },
         tray: { width: 0, shown: true },
         network: { width: 16, shown: true },
         volume: { width: 40, shown: false },
         session: { width: 16, shown: true },
-        clocks: { width: 100, shown: true },
     };
-    const order = ["config", "tray", "network", "volume", "session", "clocks"];
+    const order = ["config", "tray", "network", "volume", "session"];
     const a = arranged(order, items);
     assert.equal(a.x.network, 0);
     assert.equal(a.x.session, 16 + GAP);
-    // The clocks keep 5 px inside, so their text is GAP from the session icon.
-    assert.equal(a.x.clocks, 16 + GAP + 16 + GAP - 5);
-    assert.equal(a.width, a.x.clocks + 100, "the clocks' own room ends the group");
-    const moved = arranged(["clocks", "network", "session"], items);
-    assert.equal(moved.x.network, 100 + GAP - 5);
-    assert.equal(moved.width, moved.x.session + 16 + END, "the group ends as far past the last icon");
+    assert.equal(a.width, a.x.session + 16 + END, "the group ends END past the last icon");
 });
 
 test("the tray sits 4 px further from its neighbors", () => {

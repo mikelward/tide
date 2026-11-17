@@ -2822,10 +2822,18 @@ See [`bar.png`](docs/mocks/bar.png).
   belong only to things that pop up (popovers, notifications, the launcher).
 - **The Bar page places the bar's items** (§16), in three zones: left,
   center and right. The items are the logo, the workspaces (with the
-  layout symbol after them), the window title, and the status icons as
-  one group. Each goes in any zone, in any order, or is turned off.
+  layout symbol after them), the window title, the status icons as one
+  group, and the clocks. Each goes in any zone, in any order, or is
+  turned off.
   - By default the bar is as described below: the logo and workspaces
-    left, the title centered, the status icons right.
+    left, the title centered, the status icons and then the clocks right.
+  - **The clocks are an item of their own,** not a status icon, so they
+    can sit on the left or in the middle, as the workspaces and the title
+    can. They were once one of the status icons: clocks turned off there
+    (`barIcons`) stay off until the layout says otherwise. A change to the
+    Icons list stores the layout first while it doesn't name the clocks
+    (none stored yet, or one from before), so that choice isn't lost with
+    the old list.
   - The center zone sits on the bar's true middle, whatever the sides
     hold. With an odd number of items, the middle one is centered on it,
     the others to its left and right. With an even number, the first half
@@ -2861,20 +2869,20 @@ See [`bar.png`](docs/mocks/bar.png).
   while it has any (§7.4). Then, by default, third-party tray icons and
   the built-in status icons: the keyboard layout (once there are two), keep-awake, Bluetooth
   and its audio devices, network, volume %, battery %, CPU %,
-  notifications, session. Local's clock comes last.
+  notifications, session. Then the clocks, local's last (§7.3), which
+  are their own item.
 - **The Bar page chooses which of those show, and their order** (§16).
   - It's `barIcons` in `appearance.json` (§15): a list of `{"id":
     "network", "shown": false}`, in the bar's order. The ids are `tray`,
     `keyboard`, `keepawake`, `bluetooth`, `headphones` (the audio
-    devices), `network`, `volume`, `battery`, `sysmon`, `notifications`,
-    `session` and `clocks`.
+    devices), `network`, `volume`, `battery`, `sysmon`, `notifications`
+    and `session`. A list from before that names `clocks` has it dropped:
+    the clocks are the layout's (above).
   - `shell/lib/baricons.mjs` makes a stored list whole, as tide for
     macOS's `bar.icon_list` does. An id it doesn't know or names twice is
     dropped, so a list from a newer tide still loads. An icon the list
     leaves out, one added since, goes in after the one it follows by
     default. Every icon shows unless turned off.
-  - **The clocks are in the list**, as on tide for macOS, so they move and
-    turn off as an icon does.
   - **The pills and the config errors aren't.** Each shows only while it
     has something to say: a privacy pill hidden by choice would hide that
     the screen or mic is in use, and a hidden error would leave a missing
@@ -3147,10 +3155,14 @@ component, `BarTip`, so they all look alike.
 
 **Spacing.**
 
-- The status icons sit 10 px apart, and the icon before the clocks sits
-  as far from the first clock's text. The tray sits 14 px from its
-  neighbors. Whatever the order, the last item's text or icon ends 11 px
-  from the bar's edge (`shell/lib/baricons.mjs`'s `arranged`).
+- The status icons sit 10 px apart. The tray sits 14 px from its
+  neighbors. Whatever the order, the last icon ends 11 px from the bar's
+  edge (`shell/lib/baricons.mjs`'s `arranged`).
+- The clocks keep 5 px inside either side of their text, and the status
+  icons 5 px after the last one; that room counts toward the gaps beside
+  them (`shell/lib/barlayout.mjs`'s `INSETS`). So by default the last icon
+  sits 10 px from the first clock's text, as icons do from each other,
+  and the last clock's text ends 11 px from the bar's edge.
 - The clocks sit 12 px apart: 5 px inside each, either side of its text,
   and 2 px between them.
 - The volume's % and the CPU's are held as wide as two digits, so the
@@ -6626,8 +6638,8 @@ settings NAME ARGS...`; most answer why not, or an empty string.
     `stretch`). A new wallpaper goes back to `fill`, so set its position
     after it.
 
-- **Bar** sets where the bar runs, its color, where its items go, and
-  which status icons it shows (§7.1).
+- **Bar** sets where the bar runs, its color, where its items and its
+  clocks go, and which status icons it shows (§7.1).
   A right-click on the bar opens it, off any item or on one no other page
   fits (§7.1's table).
   - **Position**, which ‹ and › step between Top and Bottom, is
@@ -6641,7 +6653,7 @@ settings NAME ARGS...`; most answer why not, or an empty string.
     changes at once.
   - **Layout** lists the bar's items by zone, Left, Center, then Right:
     the logo, the workspaces (with the layout symbol), the window title,
-    and the status icons as one group (§7.1). Each shows its zone, has ↑
+    the status icons as one group, and the clocks (§7.1). Each shows its zone, has ↑
     and ↓, which move it, past its zone's end into the next, and an On or
     Off switch. It's `barLayout` in `appearance.local.json`, and the bar
     follows at once.

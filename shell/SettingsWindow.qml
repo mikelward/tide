@@ -2725,12 +2725,27 @@ PanelWindow {
                         readonly property var icons: BarIcons.iconList(AppearanceData.settings.barIcons)
                         // The Layout list, made whole, by zone
                         // (lib/barlayout.mjs).
-                        readonly property var layout: BarLayout.layoutList(AppearanceData.settings.barLayout)
+                        readonly property var layout: BarLayout.layoutList(AppearanceData.settings.barLayout, AppearanceData.settings.barIcons)
                         readonly property var layoutRows: BarLayout.byZone(barPage.layout)
 
                         function set(key, value) {
                             refused = AppearanceData.set(key, value);
                             root.report(refused);
+                        }
+
+                        // A change to the Icons list, which no longer names
+                        // the clocks: while the stored layout doesn't name
+                        // them either (none yet, or one from before), the
+                        // layout is stored first, so clocks turned off when
+                        // they were an icon stay off (BarLayout.layoutList).
+                        function setIcons(value) {
+                            if (!BarLayout.names(AppearanceData.settings.barLayout, "clocks")) {
+                                barPage.set("barLayout", BarLayout.stored(barPage.layout));
+                                if (refused !== "") {
+                                    return;
+                                }
+                            }
+                            barPage.set("barIcons", value);
                         }
 
                         onVisibleChanged: refused = ""
@@ -2985,14 +3000,14 @@ PanelWindow {
                                         name: "go-up-symbolic"
                                         value: barIcon.index
                                         next: barIcon.index > 0 ? barIcon.index - 1 : barIcon.index
-                                        onActivated: barPage.set("barIcons", BarIcons.moved(barPage.icons, barIcon.index, -1))
+                                        onActivated: barPage.setIcons(BarIcons.moved(barPage.icons, barIcon.index, -1))
                                     }
 
                                     StepButton {
                                         name: "go-down-symbolic"
                                         value: barIcon.index
                                         next: barIcon.index < barPage.icons.length - 1 ? barIcon.index + 1 : barIcon.index
-                                        onActivated: barPage.set("barIcons", BarIcons.moved(barPage.icons, barIcon.index, 1))
+                                        onActivated: barPage.setIcons(BarIcons.moved(barPage.icons, barIcon.index, 1))
                                     }
 
                                     // On or off, in the accent color while
@@ -3014,7 +3029,7 @@ PanelWindow {
                                         }
 
                                         TapHandler {
-                                            onTapped: barPage.set("barIcons", BarIcons.switched(barPage.icons, barIcon.index, !barIcon.modelData.shown))
+                                            onTapped: barPage.setIcons(BarIcons.switched(barPage.icons, barIcon.index, !barIcon.modelData.shown))
                                         }
                                     }
                                 }

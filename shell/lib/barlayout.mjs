@@ -5,11 +5,12 @@
 // item centered on it, or, with an even number, its halves either side.
 //
 // The items are the bar's top-level groups. The status icons are one item,
-// the tray and the clocks among them, ordered within it as barIcons says
-// (baricons.mjs). The pills (presenter mode, sharing, the mic) and the
-// config errors aren't items: each shows only while it has something to
-// say, at the start of the right zone, so a warning is never hidden or
-// moved off the side.
+// the tray among them, ordered within it as barIcons says (baricons.mjs).
+// The clocks are an item of their own, so they go left, center or right as
+// the workspaces and the title do. The pills (presenter mode, sharing, the
+// mic) and the config errors aren't items: each shows only while it has
+// something to say, at the start of the right zone, so a warning is never
+// hidden or moved off the side.
 
 export const ZONES = Object.freeze(["left", "center", "right"]);
 export const ZONE_LABELS = Object.freeze({ left: "Left", center: "Center", right: "Right" });
@@ -22,6 +23,7 @@ export const ITEMS = Object.freeze([
     Object.freeze({ id: "workspaces", label: "Workspaces", zone: "left", shown: true }),
     Object.freeze({ id: "title", label: "Window title", zone: "center", shown: true }),
     Object.freeze({ id: "icons", label: "Status icons", zone: "right", shown: true }),
+    Object.freeze({ id: "clocks", label: "Clocks", zone: "right", shown: true }),
 ]);
 
 // A stored list (barLayout) as every item of ITEMS once, [{id, label, zone,
@@ -29,7 +31,11 @@ export const ITEMS = Object.freeze([
 // dropped, a zone it doesn't know is the item's default, and an item it
 // leaves out (one added since) goes in after the one it follows by
 // default, or first. Anything but a list is the default.
-export function layoutList(stored) {
+//
+// The clocks were once one of the status icons. `icons`, the stored
+// barIcons, keeps a choice made there: with no clocks in `stored`, clocks
+// turned off among the icons stay off.
+export function layoutList(stored, icons) {
     const known = new Map(ITEMS.map((e) => [e.id, e]));
     const out = [];
     for (const v of Array.isArray(stored) ? stored : []) {
@@ -56,9 +62,23 @@ export function layoutList(stored) {
                 break;
             }
         }
-        out.splice(at, 0, { id: e.id, label: e.label, zone: e.zone, shown: e.shown });
+        let shown = e.shown;
+        if (e.id === "clocks" && Array.isArray(icons)) {
+            const was = icons.find((v) => v !== null && typeof v === "object" && v.id === "clocks");
+            if (was && typeof was.shown === "boolean") {
+                shown = was.shown;
+            }
+        }
+        out.splice(at, 0, { id: e.id, label: e.label, zone: e.zone, shown });
     });
     return out;
+}
+
+// Whether a stored list (barLayout) names item `id`. One from before the
+// clocks were an item doesn't name them, so their place still comes from
+// the old barIcons (layoutList).
+export function names(stored, id) {
+    return Array.isArray(stored) && stored.some((v) => v !== null && typeof v === "object" && v.id === id);
 }
 
 // The list as barLayout stores it: [{id, zone, shown}].
@@ -136,6 +156,15 @@ export const PILLS_GAP = 10;
 // The window title keeps this far from whatever is beside it, so it never
 // reads as part of a workspace or an icon.
 export const TITLE_GAP = 32;
+// Room an item keeps inside its own edges, which counts toward the gaps
+// beside it: the clocks' 5 px either side of their text, and the status
+// icons' 5 px after the last one (baricons.mjs's END). So the last icon
+// sits 10 px from the first clock's text, as icons sit from each other,
+// and the clocks' text ends 11 px from the bar's edge, as an icon does.
+export const INSETS = Object.freeze({
+    clocks: Object.freeze({ left: 5, right: 5 }),
+    icons: Object.freeze({ left: 0, right: 5 }),
+});
 
 // Where each shown item goes on a bar `width` wide: `sizes` gives each id's
 // width (the title's is the width it would like, its text's; one of 0 has
@@ -155,11 +184,14 @@ export function placed(list, sizes, { width, pills = 0, margin = { left: 12, rig
         zones[z] = list.filter((e) => e.zone === z && e.shown && (sizes[e.id] ?? 0) > 0).map((e) => e.id);
     }
     const w = (id, title) => (id === "title" ? title : Math.max(0, sizes[id] ?? 0));
-    // The gap after `a` and before `b`: wider beside the title.
-    const gap = (a, b) => (a === "title" || b === "title" ? TITLE_GAP : GAP);
+    // The gap after `a` and before `b`: wider beside the title, less the
+    // room each keeps inside (INSETS).
+    const gap = (a, b) => Math.max(0, (a === "title" || b === "title" ? TITLE_GAP : GAP)
+        - (INSETS[a]?.right ?? 0) - (INSETS[b]?.left ?? 0));
     const span = (ids, title) => ids.reduce((sum, id, k) => sum + w(id, title) + (k > 0 ? gap(ids[k - 1], id) : 0), 0);
     // The right zone's items, then the pills before them.
-    const rightSpan = (title) => span(zones.right, title) + (pills > 0 ? pills + (zones.right.length > 0 ? PILLS_GAP : 0) : 0);
+    const rightSpan = (title) => span(zones.right, title)
+        + (pills > 0 ? pills + (zones.right.length > 0 ? Math.max(0, PILLS_GAP - (INSETS[zones.right[0]]?.left ?? 0)) : 0) : 0);
     const leftEnd = (title) => margin.left + span(zones.left, title);
     const rightStart = (title) => width - margin.right - rightSpan(title);
     const has = (ids) => ids.length > 0;

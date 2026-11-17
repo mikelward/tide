@@ -9,7 +9,9 @@ import { chainReaches } from "./barclick.mjs";
 // another: each one's id, the name the page gives it, and whether it shows
 // unless you say. The ids are barsettings.mjs's names for the same items.
 // The pills (presenter mode, sharing, the mic) and the config errors'
-// warning aren't here: each shows only while it has something to say.
+// warning aren't here: each shows only while it has something to say. Nor
+// are the clocks, an item of the bar's layout of their own (barlayout.mjs);
+// a stored list that names them, from before, has them dropped.
 export const ICONS = Object.freeze([
     Object.freeze({ id: "tray", label: "Other apps' icons", shown: true }),
     Object.freeze({ id: "keyboard", label: "Keyboard", shown: true }),
@@ -22,7 +24,6 @@ export const ICONS = Object.freeze([
     Object.freeze({ id: "sysmon", label: "System monitor", shown: true }),
     Object.freeze({ id: "notifications", label: "Notifications", shown: true }),
     Object.freeze({ id: "session", label: "Lock and power", shown: true }),
-    Object.freeze({ id: "clocks", label: "Clocks", shown: true }),
 ]);
 
 // A stored list (barIcons) as every icon of ICONS once, [{id, label,
@@ -83,10 +84,9 @@ export function switched(list, i, shown) {
 export const GAP = 10;
 // How far past the last icon the group ends, less the room it keeps inside.
 export const END = 5;
-// Room an item keeps inside its own edges, which counts toward the gap:
-// the clocks' 5 px either side of their text. The tray's is less than
-// none, so it sits 14 px from the icons beside it.
-export const INSETS = Object.freeze({ clocks: 5, tray: -4 });
+// Room an item keeps inside its own edges, which counts toward the gap.
+// The tray's is less than none, so it sits 14 px from the icons beside it.
+export const INSETS = Object.freeze({ tray: -4 });
 
 // Where each item goes, left to right, in `order` (ids): `items` gives
 // each id's {width, shown}, and `reach` how far the group's ends reach past
