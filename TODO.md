@@ -17,9 +17,6 @@ once you have agreed with it or reversed it.
   - The user name becomes `user1` unless it's shorter than three letters
     or "root", "user" or "tide", where replacing it would mangle the rest.
   - The issue's title is "tide for Linux: ", for you to finish.
-  - `Super+Shift+B` is also `conf`'s next audio profile, which loads after
-    tide and keeps the key, so with `conf` Report a bug has none until one
-    of them moves (SPEC.md §6.6). Left for you: `conf` is yours.
   - On tidewm and tidesway the shell logs what it sees take focus, but
     not why: tidewm's focus guard would log its own reasons (below).
 - **How reopened windows find their workspaces** (2026-11-17, SPEC.md
