@@ -209,13 +209,14 @@ PanelWindow {
     // Brings up a window row's window, as Enter does: on its own
     // workspace, which clears its mark, and a minimized one back on the
     // workspace it came from (§6.7).
-    function goToWindow(item) {
+    // `why`, for the journal, is what asked: the switcher, unless said.
+    function goToWindow(item, why) {
         if (root.plasma) {
             KWinData.activate(item.address);
         } else if (item.restoreTo) {
-            Compositor.moveWindowTo(item.address, item.restoreTo);
+            Compositor.moveWindowTo(item.address, item.restoreTo, why || "the switcher");
         } else {
-            Compositor.focusWindow(item.address);
+            Compositor.focusWindow(item.address, why || "the switcher");
         }
     }
 
@@ -233,7 +234,7 @@ PanelWindow {
             if (root.plasma) {
                 KWinData.goTo(row.item.desktop);
             } else {
-                Compositor.goToWorkspace(row.item.name);
+                Compositor.goToWorkspace(row.item.name, "the switcher's Workspaces tab");
             }
             return;
         }
@@ -249,9 +250,9 @@ PanelWindow {
             TabsData.activate(row.item);
             if (row.item.address) {
                 if (row.item.restoreTo) {
-                    Compositor.moveWindowTo(row.item.address, row.item.restoreTo);
+                    Compositor.moveWindowTo(row.item.address, row.item.restoreTo, "the switcher");
                 } else {
-                    Compositor.focusWindow(row.item.address);
+                    Compositor.focusWindow(row.item.address, "the switcher");
                 }
             }
             return;
@@ -492,7 +493,7 @@ PanelWindow {
                 return "no window wants attention";
             }
             root.close();
-            root.goToWindow(item);
+            root.goToWindow(item, "the next_attention key");
             return "ok";
         }
     }

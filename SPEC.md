@@ -1169,6 +1169,62 @@ flowchart TD
     file doctor can't read, or no python3, is reported, since either
     leaves directories unsearched.
 
+**Reporting a bug** (maintainer, 2026-11-18). `Super+Shift+B` (§6.6), or the
+switcher's "Report a bug" (§8.2), runs `tide report-bug`. It is for a bug
+you just saw, such as a workspace that jumped, so it covers only the 30
+seconds before it ran (maintainer, 2026-11-18), and nothing after, which
+would be its own `tide doctor`'s checks.
+- **The report** is plain text:
+  - the port, tide's version, the OS, the compositor's and Quickshell's
+    versions;
+  - `tide doctor`'s output;
+  - each workspace and focus change of those 30 seconds, with its
+    reason (below);
+  - tide's log of those 30 seconds: tide's units and the commands that log
+    under their own names (§5.3), and the compositor's unit's lines. Of
+    Hyprland's, only those that name tide or are errors, as it logs much.
+    A journal it can't read is said in both the changes and the log, so it
+    doesn't look like a quiet 30 seconds.
+- **What it does with it.** It saves it to
+  `~/.local/state/tide/reports/tide-DATE.txt`, readable by you alone,
+  copies it to the clipboard, and opens a new issue on mikelward/tide
+  with a short body: what it holds, the version, and that the report is
+  on the clipboard to paste. The body names the file but not its folder:
+  the page's address reaches GitHub before you've read anything, and
+  `$XDG_STATE_HOME` can be anywhere. A notification says so. A copy, browser or
+  notification that fails is said in the notification and the journal;
+  the saved file still has the report.
+- **Privacy.** Nothing is sent: you read the report and submit the issue.
+  Your home folder is written `~`, your hostname `host1` and your user
+  name `user1`, but a name of under three letters, or "root", "user" or
+  "tide", which would mangle the rest. App names, window titles and
+  workspace names stay. The issue's first line says so.
+- **The version** is what `make install` recorded in
+  `~/.local/share/tide/version` (`install/version`): the release tag the
+  commit would have, and the commit, or a release's tag.
+- **The reasons** are journal lines starting `tide why:`, written where
+  tide decides, so there's no state to keep:
+  - Hyprland's focus guard (`focus.lua`), for each window it focuses, moves
+    or leaves unfocused, each grant it drops and why, and each focus
+    change it didn't make, with Hyprland's reason: the pointer, a key
+    binding, a click, a workspace change or a window closing.
+  - tide's Hyprland config, for each workspace key, and for
+    `conf_workspaces.go` and `move`, which say what asked, a hyprctl call
+    otherwise. Also a monitor coming or going.
+  - The shell, for each move it asks for, naming what asked (the bar, the
+    switcher, the name prompt, the tray, a reopened window, home's apps,
+    a workspace key), and each workspace it sees come up. On tidewm and
+    tidesway it also logs each window it sees take focus; their own
+    reasons are theirs to log.
+- **On KDE** tide on KDE's key runs `tide report-bug` through its own
+  unit, and tide's launcher runs `tide report-bug --kde`. Either way,
+  under Plasma (`XDG_CURRENT_DESKTOP` names KDE) the report is tide on
+  KDE's, for mikelward/tide-kde. It has KWin's and Plasma's versions. Its
+  reasons are the KWin script's lines, which reach the user journal
+  through kwin_wayland as `js: tide-kde: workspace FROM -> TO (WHY)` and
+  `js: tide-kde: focus APP on WORKSPACE (WHY)`. Its log is every other
+  line of those 30 seconds that names tide.
+
 ### 5.5 Coexisting with KDE
 
 KDE Plasma stays installed as the fallback session.
@@ -2316,6 +2372,7 @@ is a platform's other key, with why. The notes under the table say more.
 | the app's own close and quit, kept from a pinned window | **`Ctrl+W`**, **`Ctrl+Shift+W`**, **`Ctrl+Q`**, **`Alt+F4`** | — | — | differs: `Cmd+W`, `Cmd+Shift+W`, `Cmd+Q` |
 | minimize (§6.7); `minimize` | **`Super+Z`** | `Meta+Z` | — | `Super+Z` |
 | lock; `lock` | `Super+L` | — | chromeOS's `Search+L` | `Super+L` |
+| **report a bug** (§5.4); `report_bug` | **`Super+Shift+B`** | `Meta+Shift+B` | `Search+Shift+B` | `Super+Shift+B` |
 | reload the config (below); `reload` | **`Super+Shift+R`** | — | — | `Super+Shift+R`: reloads tide |
 | quit, ending the session; `quit` | `Super+Shift+E` | — | — | `Super+Shift+E`: logs out |
 | keep awake (§10); `keep_awake` | **`Super+S`** | — | `Search+S` | `Super+S` |
@@ -2448,6 +2505,18 @@ is a platform's other key, with why. The notes under the table say more.
 - **`Super+O`**: O as in one window. It's tide for Chrome's key too.
 - **Restore** puts the window back in its tile from maximize or
   fullscreen.
+- **`Super+Shift+B`** reports a bug: it copies a report of the last 30
+  seconds and opens a new issue to paste it in (§5.4). B as in bug; the
+  maintainer's pick, on every platform (2026-11-18).
+  - `conf` binds it too, to the next audio profile (below), and loads
+    after tide, so where `conf` is, its key wins and Report a bug has
+    none. On Hyprland its `apps` option binds first, and a default key
+    goes to the first binding that wants it, without a word. On tidewm a
+    later binding of the same keys replaces an earlier one. On tidesway,
+    as in sway, the later one replaces it too, and swaynag, where it's
+    installed, shows "Overwriting binding" as the config loads
+    (`sway/commands/bind.c`'s `binding_add`). Which keeps the key
+    is the maintainer's to say (`TODO.md`).
 - **`Super+Alt+F`** opens the Floating settings (§16) with a rule filled
   in for the focused window, its class and exact title, the title
   selected to trim; Enter adds it, Esc doesn't.
@@ -3509,6 +3578,8 @@ See [`switcher.png`](docs/mocks/switcher.png).
     and flips light and dark until the schedule's next change (§15).
   - Clear clipboard history (§8.4).
   - Reload shell.
+  - Report a bug (§5.4). On Plasma it's there too, after the session's
+    actions, and reports tide on KDE's.
 
   Power actions check logind inhibitors and ask only when something is
   blocking them.
@@ -3984,8 +4055,8 @@ on the tap of `Meta`.
 - **Quick actions.** Screenshots (Spectacle, onto the clipboard), lock
   (`loginctl lock-session`), log out (`org.kde.LogoutPrompt`'s
   `promptLogout`, Plasma's own confirmation), and suspend, restart and
-  shut down (`systemctl`), in that order. The rest are tide's own, so
-  they're left out: its settings, do not disturb, dark style, keep awake,
+  shut down (`systemctl`), then Report a bug (`tide report-bug --kde`,
+  §5.4), in that order. The rest are tide's own, so they're left out: its settings, do not disturb, dark style, keep awake,
   presenter mode, clear clipboard history and reload shell.
 - **Launching.** Through KDE's `kstart`, as Kickoff does, not `tide
   launch`, which places windows on tide's workspaces: an app by its
@@ -7048,7 +7119,7 @@ light/dark switch.
 
 | Repo | Gets |
 |---|---|
-| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme, and the launcher on KDE Plasma (§8.5). The sessions: the `tide`, `tide-tidewm` and `tide-tidesway` `wayland-sessions` entries, which run `tide-session`, and the `tide-hyprland` and `tide-tidewm` wrappers (§5.3). The units in `systemd/user/`: `tide.service`, `tide-lock.service`, `tide-clipboard.service`, `tide-fcitx5.service`, `tide-lid-inhibit.service`, the fallbacks `tide-shell-fallback`, `tide-lock-fallback` and `tide-idle-fallback`, `tide-kde.service`, and drop-ins for `hypridle.service`, `hyprpolkitagent.service` and autostarted apps (`app-.service.d`). `tide-portals.conf` and `tidewm-portals.conf`, the `tide-lock` PAM file, and the fallback bar's waybar config (`tide-waybar`). The greeter: `tide-greeter`, `tide-greetd`, its Hyprland config and the greetd config template. The commands in `bin/`: `tide` (`launch`, `workspace`, `grant`, `lock`, `idle-suspend`, `reload` and the rest), `tide doctor`, `tide clipboard`, `tide fill`, `tide-lock`, `tide-shell` and `tide-shell-fallback`, `tide-share-picker` and `tide-sysmon`. The Go commands in `cmd/`: `tide-agent`, the network and Bluetooth agent (§5.6); `tide-grant`; `tide-msg`, tidewm's IPC client; `tide-pick`, the file chooser and wallpaper lister; `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3); `tide-tz`; and `tide-kwin-paste`, for the picker on Plasma. The Lua tiling layout. The default Hyprland config (§6.8), with tide's keys, rules and input scripts, and the settings pages' files it reads; tidewm's (`tidewm/tide.conf`); and hypridle's (§10). The tide connector, the browser extension in `connector/` (§8.3). `make install`. The installer, `install/tide-setup`: distro packages, dbus-broker for the buses, the pinned source builds and tidewm's and tidesway's, units, fcitx5, greetd and the greeter, and the tabs host manifest. Releases, one per push to main (`make dist`, `release.yml`). `deps.lock`, the pins of what's built from source (Quickshell, Hyprland and its libraries, and wlroots for tidewm and tidesway, whose latest `main`s are built unpinned), which the installer and CI read through `install/pins`. |
+| **tide** (this) | The spec and mocks. The Quickshell config (`shell/`): bar, switcher and launcher, the name prompt, the clipboard and characters picker with its character list, notifications, lock/greeter, OSD, share picker, settings, theme, and the launcher on KDE Plasma (§8.5). The sessions: the `tide`, `tide-tidewm` and `tide-tidesway` `wayland-sessions` entries, which run `tide-session`, and the `tide-hyprland` and `tide-tidewm` wrappers (§5.3). The units in `systemd/user/`: `tide.service`, `tide-lock.service`, `tide-clipboard.service`, `tide-fcitx5.service`, `tide-lid-inhibit.service`, the fallbacks `tide-shell-fallback`, `tide-lock-fallback` and `tide-idle-fallback`, `tide-kde.service`, and drop-ins for `hypridle.service`, `hyprpolkitagent.service` and autostarted apps (`app-.service.d`). `tide-portals.conf` and `tidewm-portals.conf`, the `tide-lock` PAM file, and the fallback bar's waybar config (`tide-waybar`). The greeter: `tide-greeter`, `tide-greetd`, its Hyprland config and the greetd config template. The commands in `bin/`: `tide` (`launch`, `workspace`, `grant`, `lock`, `idle-suspend`, `reload` and the rest), `tide doctor`, `tide report-bug`, `tide clipboard`, `tide fill`, `tide-lock`, `tide-shell` and `tide-shell-fallback`, `tide-share-picker` and `tide-sysmon`. The Go commands in `cmd/`: `tide-agent`, the network and Bluetooth agent (§5.6); `tide-grant`; `tide-msg`, tidewm's IPC client; `tide-pick`, the file chooser and wallpaper lister; `tide-tabs`, the browser tabs' native-messaging host and relay (§8.3); `tide-tz`; and `tide-kwin-paste`, for the picker on Plasma. The Lua tiling layout. The default Hyprland config (§6.8), with tide's keys, rules and input scripts, and the settings pages' files it reads; tidewm's (`tidewm/tide.conf`); and hypridle's (§10). The tide connector, the browser extension in `connector/` (§8.3). `make install`. The installer, `install/tide-setup`: distro packages, dbus-broker for the buses, the pinned source builds and tidewm's and tidesway's, units, fcitx5, greetd and the greeter, and the tabs host manifest. Releases, one per push to main (`make dist`, `release.yml`). `deps.lock`, the pins of what's built from source (Quickshell, Hyprland and its libraries, and wlroots for tidewm and tidesway, whose latest `main`s are built unpinned), which the installer and CI read through `install/pins`. |
 | **conf** | The personal config: its own Hyprland config in Lua, loading tide's with its owner's preferences (§6.8): the Dvorak layout, left-handed mice, kitty, the app keys for the launcher scripts, `runenv`; waybar, swaync and fuzzel outside tide; its tidewm config, which includes tide's and changes the same (§6.8); uwsm env; two of the shared `~/.config/tide/*.json` defaults, `input.json` and `workspaces.json` (the standing workspaces, home's apps and each workspace's own settings), with `*.local.json` left per machine (§16.1); shpool and tmux sessions named from `TIDE_WORKSPACE`; `.desktop` files for the launcher scripts. Deleting waybar, swaync, fuzzel, hyprlock, `theme-daemon.sh` and the sway config once M5 lands (§21). |
 | **tideco** | tide for Chrome: tiling on chromeOS. On Linux it can list the browser's tabs in the Windows tab, as tide's own connector does (§8.3). |
 | **scripts** | `setup`, which runs tide's installer through `setup-tide`, then its owner's extras: the launcher scripts' desktop entries, the GDM hostname banner and the retired lid drop-ins' cleanup. `screenshot` gains a Wayland path. `lock-screensaver` goes through `loginctl lock-session` on Wayland. `setup --purge-obsolete` learns about packages tide replaces. |

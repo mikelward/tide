@@ -7,6 +7,21 @@ Deferred work, with enough notes to pick it up later.
 Calls made on autopilot, each chosen for being cheap to undo. Delete an entry
 once you have agreed with it or reversed it.
 
+- **Reporting a bug** (2026-11-18, SPEC.md §5.4), guessed where you
+  hadn't said:
+  - The reasons are journal lines (`tide why:`), not a ring buffer: tide
+    decides in three processes (Hyprland's Lua, the shell, `tide`), and the
+    journal already outlasts each and orders them by time.
+  - Hyprland logs every focus change the guard didn't make, the pointer's
+    included, so a busy pointer writes a line per window it crosses.
+  - The user name becomes `user1` unless it's shorter than three letters
+    or "root", "user" or "tide", where replacing it would mangle the rest.
+  - The issue's title is "tide for Linux: ", for you to finish.
+  - `Super+Shift+B` is also `conf`'s next audio profile, which loads after
+    tide and keeps the key, so with `conf` Report a bug has none until one
+    of them moves (SPEC.md §6.6). Left for you: `conf` is yours.
+  - On tidewm and tidesway the shell logs what it sees take focus, but
+    not why: tidewm's focus guard would log its own reasons (below).
 - **How reopened windows find their workspaces** (2026-11-17, SPEC.md
   §6.5), guessed where you hadn't said:
   - Only a matching app and title send a window back. Falling back to the
@@ -1383,6 +1398,16 @@ the session's keys (SPEC.md §5.4). Left:
   fails and a nonzero exit (most do); scripts' session entry points
   (`sessionlib`); tidewm's own spawns, whose output reaches the journal
   through uwsm's unit already.
+
+## Reasons in a bug report (SPEC.md §5.4)
+
+- [ ] **tidewm's and tidesway's focus guards say why**: a `tide why:`
+  line on stderr for each window they focus or leave unfocused, and each
+  grant they drop, as Hyprland's guard does, so `tide report-bug` has
+  their reasons, not only what the shell saw.
+- [ ] **Check on a real Hyprland** that the Lua `print` lines reach the
+  journal through `debug:enable_stdout_logs`, and how many the pointer's
+  focus changes write in a busy minute.
 
 ## "No keyboard" on the maintainer's machine (SPEC.md §10)
 

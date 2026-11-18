@@ -26,7 +26,7 @@ Scope {
             if (r.error !== undefined) {
                 return r.error;
             }
-            Compositor.minimizeWindow(active.address, r.name);
+            Compositor.minimizeWindow(active.address, r.name, "the minimize key");
             return "minimized";
         }
     }

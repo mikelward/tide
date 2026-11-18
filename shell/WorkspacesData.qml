@@ -177,7 +177,7 @@ Singleton {
     // Sends the window at `address` home, without following it.
     function sendHome(address, why) {
         console.log(`tide: sending window ${address}, ${why}, to ${root.home}`);
-        Compositor.sendWindowTo(address, root.home);
+        Compositor.sendWindowTo(address, root.home, `home's apps go home: ${why}`);
     }
 
     // Hyprland took `text`, or on tidewm the shell did: if it's the rules

@@ -1,0 +1,311 @@
+#!/bin/sh
+#
+# tide report-bug: what Super+Shift+B and the switcher's "Report a bug"
+# run (SPEC.md §5.4, Reporting a bug). It gathers a report as plain text,
+# saves it, copies it to the clipboard, and opens a new GitHub issue with a
+# short body that says to paste it. Nothing is sent: you read the report
+# and submit the issue yourself.
+#
+#   tide report-bug [--kde]
+#
+# The report holds:
+#   - the port (tide for Linux, or with --kde, or under KDE Plasma, tide
+#     on KDE), tide's version as `make install` recorded it, the OS, and
+#     the compositor's and Quickshell's versions;
+#   - `tide doctor`'s output;
+#   - the workspace and focus changes of the 30 s before it ran, each with
+#     its reason: the journal's `tide why:` lines (shell/lib/why.mjs,
+#     hypr/tide/focus.lua, hypr/hyprland.lua), or on KDE, tide-kde's KWin
+#     script's, which reach the user journal through kwin_wayland as
+#     `js: tide-kde: workspace FROM -> TO (WHY)` and
+#     `js: tide-kde: focus APP on WORKSPACE (WHY)`;
+#   - tide's log from the same 30 s: tide's units and commands in the user
+#     journal, the compositor's lines that name tide or are errors, and on
+#     KDE every line of the user journal that names tide, KWin's included.
+# It replaces your home directory with ~, your hostname with host1 and
+# your user name with user1 (but a name of fewer than three letters, or
+# one of "root", "user" and "tide", which would mangle the rest), and
+# keeps app names, window titles and workspace names.
+#
+# The report goes to ~/.local/state/tide/reports/tide-DATE.txt (under
+# $XDG_STATE_HOME), readable by you alone, and the issue page opens with
+# xdg-open. A notification says the report is on the clipboard. It exits
+# 1, saying why, if the report couldn't be saved; a clipboard, browser or
+# notification that fails is said on stderr and in the notification, and
+# the saved file still has the report.
+
+prog=tide
+nl='
+'
+
+usage() {
+    echo "usage: $prog report-bug [--kde]" >&2
+    exit 2
+}
+
+kde=
+case "${XDG_CURRENT_DESKTOP:-}" in
+    *tide*) ;;
+    *KDE*) kde=yes ;;
+esac
+while test $# -gt 0; do
+    case "$1" in
+        --kde) kde=yes ;;
+        *) usage ;;
+    esac
+    shift
+done
+
+say() {
+    printf '%s report-bug: %s\n' "$prog" "$*" >&2
+}
+
+# The 30 s before the key or action: everything logged since then.
+now=$(date +%s) || now=
+case "$now" in
+    '' | *[!0-9]*)
+        say "couldn't read the time, so the log can't be limited to the last 30 seconds"
+        exit 1
+        ;;
+esac
+since=@$((now - 30))
+say "gathering a report of the 30 seconds since $(date -d "@$((now - 30))" '+%H:%M:%S' 2>/dev/null || echo "$since")"
+
+if test -n "$kde"; then
+    port="tide on KDE"
+    repo=mikelward/tide-kde
+else
+    port="tide for Linux"
+    repo=mikelward/tide
+fi
+
+# The first line of a command's output, or "unknown" with why.
+first_line() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "not installed"
+        return
+    fi
+    _out=$("$@" 2>&1) || {
+        echo "unknown (${_out:-$1 failed})" | head -n 1
+        return
+    }
+    printf '%s\n' "${_out:-unknown}" | head -n 1
+}
+
+version_file=${TIDE_VERSION_FILE:-${XDG_DATA_HOME:-$HOME/.local/share}/tide/version}
+version=unknown
+if test -r "$version_file"; then
+    IFS= read -r version <"$version_file" || :
+    version=${version:-unknown}
+fi
+
+os=unknown
+if test -r /etc/os-release; then
+    os=$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release | tr -d '"')
+fi
+os="${os:-unknown}, $(uname -sr 2>/dev/null || echo "kernel unknown")"
+
+desktop=${XDG_CURRENT_DESKTOP:-}
+if test -n "$kde"; then
+    compositor="KWin $(first_line kwin_wayland --version); Plasma $(first_line plasmashell --version)"
+else
+    case ":$desktop:" in
+        *:tidesway:*) compositor="tidesway: $(first_line tidesway -v)" ;;
+        *:tidewm:*) compositor="tidewm: $(first_line tidewm -v)" ;;
+        *) compositor="Hyprland: $(first_line Hyprland --version)" ;;
+    esac
+fi
+quickshell=$(first_line qs --version)
+
+# The journal from `since` to `now`, in time order, for journalctl's
+# ARGS: up to the moment you asked, so what gathering the report logs,
+# tide doctor's checks say, stays out. A journal it can't read is said in
+# the report, in a line the filters below keep (NOTE).
+journal() {
+    if ! command -v journalctl >/dev/null 2>&1; then
+        echo "(no journalctl, so no log)"
+        return
+    fi
+    _j=$(journalctl --no-pager -q -o short-iso-precise --since="$since" --until="@$now" "$@" 2>&1) || {
+        printf '(journalctl %s failed: %s)\n' "$*" "$_j"
+        return
+    }
+    test -z "$_j" || printf '%s\n' "$_j"
+}
+
+# Lines saying why the workspace or the focused window changed: tide's
+# `tide why:`, and tide-kde's `tide-kde: workspace` and `tide-kde: focus`,
+# which come after KWin's `js: `, so anywhere in the line.
+WHY='tide why: |tide-kde: (workspace|focus) '
+# journal()'s own lines, saying it couldn't read the journal: kept by
+# every filter, so an unreadable journal doesn't look like a quiet one.
+NOTE='^\((no )?journalctl'
+
+reasons() {
+    journal --user | grep -E "$WHY|$NOTE" || :
+}
+
+# tide's units, and the commands that log under their own names, then the
+# compositor's lines. -u and -t together would match both at once
+# (journalctl ANDs different fields), so each is asked apart and the lines
+# merged by time.
+tide_log() {
+    if test -n "$kde"; then
+        # tide-kde's units and KWin script, and tide's launcher there:
+        # what names tide, those 30 s being short.
+        journal --user | grep -E -i "tide|$NOTE" | grep -v -E "$WHY" || :
+        return
+    fi
+    {
+        journal --user -u tide.service -u tide-lock.service -u tide-lock-fallback.service \
+            -u tide-idle-fallback.service -u tide-shell-fallback.service -u tide-clipboard.service \
+            -u tide-fcitx5.service -u tide-lid-inhibit.service -u hypridle.service
+        journal --user -t tide-session -t tide-hyprland -t tide-tidewm -t tide-keys -t tide-input -t tide-splash
+        # Hyprland's own log is long; its lines that name tide or are
+        # errors are the ones a report needs. tidewm's and tidesway's say
+        # little, so all of theirs.
+        case ":$desktop:" in
+            *:tidewm:*) journal --user -u 'wayland-wm@*' ;;
+            *) journal --user -u 'wayland-wm@*' | grep -i -E "tide|\\[ERR\\]|\\[CRIT|$NOTE" || : ;;
+        esac
+    } | grep -v -E "$WHY" | sort -s -k 1,1
+}
+
+doctor() {
+    _dir=$(dirname "$0")
+    if test -f "$_dir/tide-doctor"; then
+        sh "$_dir/tide-doctor" 2>&1
+    else
+        echo "(no tide-doctor beside $0)"
+    fi
+}
+
+# Replaces each of the arguments' FROM with TO, literally and as a whole
+# word: between characters that can't be in a name.
+redact() {
+    awk -v home="$HOME" -v host="$1" -v user="$2" '
+        function word(s, from, to,    out, i, before, after) {
+            if (from == "") return s
+            out = ""
+            while ((i = index(s, from)) > 0) {
+                before = i > 1 ? substr(s, i - 1, 1) : ""
+                after = substr(s, i + length(from), 1)
+                if (before ~ /[A-Za-z0-9_-]/ || after ~ /[A-Za-z0-9_-]/) {
+                    out = out substr(s, 1, i + length(from) - 1)
+                } else {
+                    out = out substr(s, 1, i - 1) to
+                }
+                s = substr(s, i + length(from))
+            }
+            return out s
+        }
+        function literal(s, from, to,    out, i) {
+            if (from == "" || from == "/") return s
+            out = ""
+            while ((i = index(s, from)) > 0) {
+                out = out substr(s, 1, i - 1) to
+                s = substr(s, i + length(from))
+            }
+            return out s
+        }
+        {
+            line = literal($0, home, "~")
+            line = word(line, host, "host1")
+            line = word(line, user, "user1")
+            print line
+        }'
+}
+
+host=$(uname -n 2>/dev/null || :)
+user=$(id -un 2>/dev/null || echo "${USER:-}")
+case "$user" in
+    root | user | tide | ? | ??) user= ;;
+esac
+
+stamp=$(date -d "@$now" '+%Y-%m-%d %H:%M:%S %z' 2>/dev/null || echo "@$now")
+report=$({
+    echo "# $port bug report"
+    echo
+    echo "- Port: $port"
+    echo "- Version: $version"
+    echo "- OS: $os"
+    echo "- Compositor: $compositor"
+    echo "- Quickshell: $quickshell"
+    echo "- Session: ${desktop:-unknown}"
+    echo "- Made: $stamp, covering the 30 seconds before"
+    echo
+    echo "## Workspace and focus changes, with their reasons"
+    echo
+    reasons
+    echo
+    echo "## tide doctor"
+    echo
+    doctor
+    echo
+    echo "## tide's log"
+    echo
+    tide_log
+} | redact "$host" "$user")
+
+dir=${XDG_STATE_HOME:-$HOME/.local/state}/tide/reports
+file=$dir/tide-$(date -d "@$now" '+%Y%m%d-%H%M%S' 2>/dev/null || echo "$now").txt
+if ! err=$( (umask 077 && mkdir -p "$dir" && printf '%s\n' "$report" >"$file") 2>&1); then
+    say "couldn't save the report to $file: $err"
+    command -v notify-send >/dev/null 2>&1 \
+        && notify-send -a tide -u critical "No bug report" "It couldn't be saved: $err"
+    exit 1
+fi
+say "saved the report to $file"
+shown_file=$(printf '%s\n' "$file" | redact "" "")
+# The issue page's address goes to GitHub as the page opens, before you've
+# read anything, so it names the file alone: its folder can be anywhere.
+named_file="$(basename "$file") in tide's reports folder"
+
+# The issue's title and body, kept short: the report itself is pasted.
+title="$port: "
+body="This report was made on my computer and nothing was sent; it may hold app names, window titles and workspace names, but no hostname, user name or home folder.${nl}${nl}Port: $port${nl}Version: $version${nl}${nl}What happened:${nl}${nl}What I expected:${nl}${nl}The full report is on your clipboard: paste it below. It's also saved as $named_file to attach.${nl}"
+
+uri() {
+    jq -rn --arg s "$1" '$s | @uri'
+}
+
+problems=
+if command -v wl-copy >/dev/null 2>&1; then
+    # Its stderr goes to a file, not a pipe: once it owns the clipboard
+    # it forks, and the child keeps stderr open until the clipboard is
+    # replaced (as tide-clipboard's wl_copy says), so whatever ran this,
+    # waiting on a pipe, would wait until then.
+    errs=$dir/.wl-copy-errors
+    if ! wl-copy --type text/plain <"$file" >/dev/null 2>"$errs"; then
+        say "couldn't copy the report to the clipboard: $(cat "$errs" 2>/dev/null)"
+        problems="It couldn't be copied: attach $shown_file instead."
+    fi
+else
+    say "no wl-copy, so the report isn't on the clipboard"
+    problems="It couldn't be copied: attach $shown_file instead."
+fi
+
+url=
+if command -v jq >/dev/null 2>&1; then
+    url="https://github.com/$repo/issues/new?title=$(uri "$title")&body=$(uri "$body")"
+else
+    say "no jq to spell the issue's title and body, so the page opens empty"
+    url="https://github.com/$repo/issues/new"
+fi
+if command -v xdg-open >/dev/null 2>&1 && xdg-open "$url"; then
+    opened="the issue page is open"
+else
+    say "couldn't open the issue page, $url"
+    opened="open github.com/$repo/issues/new to report it"
+fi
+
+message="It's on the clipboard, and $opened: paste it there."
+if test -n "$problems"; then
+    message="$problems Then $opened."
+fi
+if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a tide "Bug report ready" "$message" || say "couldn't show the notification: $message"
+else
+    say "no notify-send: $message"
+fi
+say "done: $message"

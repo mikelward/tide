@@ -904,7 +904,7 @@ test("every key in the spec is bound", function()
         "SUPER + SHIFT + F", "SUPER + Insert", "SUPER + SHIFT + R",
         "SUPER + Tab", "SUPER + Home", "SUPER + End", "SUPER + A", "ALT + Tab",
         "SUPER + 1", "SUPER + 5", "SUPER + 9", "SUPER + SHIFT + 1", "SUPER + SHIFT + 9",
-        "SUPER + SHIFT + N", "SUPER + ALT + Space",
+        "SUPER + SHIFT + N", "SUPER + ALT + Space", "SUPER + SHIFT + B",
         "Print", "ALT + Print", "SHIFT + Print", "SUPER + Print",
         "XF86AudioMicMute", "SUPER + SHIFT + M",
         "XF86AudioRaiseVolume", "XF86AudioLowerVolume", "XF86AudioMute",
@@ -2518,6 +2518,66 @@ test("Super+Shift+R reloads with tide reload in the tide session, with hyprctl r
     load()
     eq("hyprctl reload", bind("SUPER + SHIFT + R").target.args)
     eq(nil, S.binds["|SUPER + CTRL + R"], "its old key is free")
+end)
+
+test("Super+Shift+B reports a bug with tide report-bug", function()
+    load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" }, opts = {} })
+    eq("tide report-bug", unlogged(bind("SUPER + SHIFT + B").target.args))
+    eq("Report a bug", bind("SUPER + SHIFT + B").opts.description)
+end)
+
+test("an apps option's binding of Super+Shift+B keeps it, as conf's next audio profile does", function()
+    -- The apps option binds before tide's later keys, and a default key
+    -- goes to the first binding that wants it (apply_keys), so report_bug
+    -- is left with none, which the Keyboard shortcuts page can change.
+    load({ env = { XDG_CURRENT_DESKTOP = "tide:Hyprland" } })
+    eq("~/scripts/runenv pulseprofile.py", unlogged(bind("SUPER + SHIFT + B").target.args))
+end)
+
+-- The lines the workspace keys and conf_workspaces write, saying why the
+-- workspace changed (SPEC.md §5.4, Reporting a bug), while `fn` runs.
+local function why_lines(fn)
+    local lines = {}
+    local real = print
+    print = function(...)
+        local line = table.concat({ ... }, " ")
+        if line:find("^tide why: ") then
+            table.insert(lines, line)
+        end
+    end
+    local ok, err = pcall(fn)
+    print = real
+    if not ok then
+        error(err, 0)
+    end
+    return table.concat(lines, "\n")
+end
+
+test("each workspace key says in the log which key changed the workspace", function()
+    load({ workspaces = STANDING })
+    S.workspace_list = named("in", "re", "docs")
+    S.active_workspace = { id = -1338, name = "in" }
+    eq("tide why: go to workspace re: the Super+2 key", why_lines(function() run("SUPER + 2") end))
+    eq("tide why: move the focused window to workspace oc: the Super+Shift+3 key",
+        why_lines(function() run("SUPER + SHIFT + 3") end))
+    S.active_workspace = { id = -1340, name = "re" }
+    eq("tide why: go to workspace in: the home key", why_lines(function() run("SUPER + Home") end))
+    eq("tide why: go to workspace in: the home_or_back key, away from home", why_lines(function() run("SUPER + Tab") end))
+    eq("tide why: move the focused window to workspace oc, following it: the move_to_next_workspace key",
+        why_lines(function() run("SUPER + SHIFT + Page_Down") end))
+end)
+
+test("conf_workspaces says what asked it, over hyprctl unless told", function()
+    load({ workspaces = STANDING, span = FAKE_SPAN })
+    two_monitors()
+    eq("tide why: go to workspace docs: asked over hyprctl, by the shell or a script",
+        why_lines(function() conf_workspaces.go("docs") end))
+    eq("tide why: go to workspace docs: the bar", why_lines(function() conf_workspaces.go("docs", "the bar") end))
+    S.windows_by_address = { ["0xabc"] = { address = "0xabc", monitor = { name = "DP-2" } } }
+    eq("tide why: move 0xabc to workspace docs, following it: the name prompt",
+        why_lines(function() conf_workspaces.move("0xabc", "docs", true, "the name prompt") end))
+    eq("", why_lines(function() conf_workspaces.move("0xabc", "docs", true, false) end),
+        "nothing more from a caller that said why already")
 end)
 
 test("the tide session's autostart is the splash and uwsm finalize alone", function()

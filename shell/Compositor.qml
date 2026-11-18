@@ -8,6 +8,7 @@ import Quickshell.Io
 import "lib/compositor.mjs" as Comp
 import "lib/dispatch.mjs" as Dispatch
 import "lib/tidewm.mjs" as Tw
+import "lib/why.mjs" as Why
 import "lib/workspaces.mjs" as Ws
 
 // What the shell asks of the compositor the session runs (SPEC.md §5.3):
@@ -100,8 +101,16 @@ Singleton {
     // is FocusData's, which knows Hyprland's quirks.
     readonly property var tidewmActive: root.tidewm ? Tw.activeWindow(root.windows, root.tidewmCurrentName) : null
 
+    // Says in the journal why the shell asked for a move (SPEC.md §5.4,
+    // Reporting a bug): `why` names what asked, "the bar" or "the
+    // switcher", for `tide report-bug`.
+    function said(what, why) {
+        console.log(Why.line(what, why || "the shell"));
+    }
+
     // Focuses the window at `address`, showing its workspace.
-    function focusWindow(address) {
+    function focusWindow(address, why) {
+        root.said(`focus ${address}`, why);
         if (!root.tidewm) {
             Hyprland.dispatch(Dispatch.focusWindow(address, Hyprland.usingLua));
             return;
@@ -111,7 +120,8 @@ Singleton {
 
     // Moves the window at `address` to the workspace named `name`, and
     // focuses it there, as a minimized one is brought back (§6.7).
-    function moveWindowTo(address, name) {
+    function moveWindowTo(address, name, why) {
+        root.said(`move ${address} to workspace ${name}, following it`, why);
         if (!root.tidewm) {
             Hyprland.dispatch(Dispatch.moveWindowToWorkspace(address, name, Hyprland.usingLua));
             return;
@@ -121,7 +131,8 @@ Singleton {
 
     // Moves the window at `address` to the workspace named `name` without
     // following it: a home app's window sent home, and Super+Shift+1…9.
-    function sendWindowTo(address, name) {
+    function sendWindowTo(address, name, why) {
+        root.said(`move ${address} to workspace ${name}`, why);
         if (!root.tidewm) {
             Hyprland.dispatch(Dispatch.sendWindowTo(address, name, Hyprland.usingLua));
             return;
@@ -135,12 +146,13 @@ Singleton {
     // the workspace's part on the window's own monitor
     // (Dispatch.moveWindowToNamed); a tidewm workspace spans every monitor
     // already, so it's moveWindowTo's.
-    function moveWindowToNamed(address, name) {
+    function moveWindowToNamed(address, name, why) {
         if (!root.tidewm) {
+            root.said(`move ${address} to workspace ${name}, following it`, why);
             Hyprland.dispatch(Dispatch.moveWindowToNamed(address, name, Hyprland.usingLua));
             return;
         }
-        root.moveWindowTo(address, name);
+        root.moveWindowTo(address, name, why);
     }
 
     // Asks the window at `address` to close, as Super+Backspace does.
@@ -157,7 +169,8 @@ Singleton {
     // (Dispatch.minimizeWindow); on tidewm, by its own minimize, which
     // keeps the window on its workspace, hidden. Either way moveWindowTo
     // back to `name` restores it.
-    function minimizeWindow(address, name) {
+    function minimizeWindow(address, name, why) {
+        root.said(`minimize ${address} from workspace ${name}`, why);
         if (!root.tidewm) {
             Hyprland.dispatch(Dispatch.minimizeWindow(address, name, Hyprland.usingLua));
             return;
@@ -201,7 +214,8 @@ Singleton {
 
     // Goes to the workspace named `name`, which the compositor makes if
     // it's new: on Hyprland as Dispatch.focusWorkspaceName says.
-    function goToWorkspace(name) {
+    function goToWorkspace(name, why) {
+        root.said(`go to workspace ${name}`, why);
         if (!root.tidewm) {
             Hyprland.dispatch(Dispatch.focusWorkspaceName(name, Hyprland.usingLua));
             return;

@@ -338,14 +338,14 @@ test("moving the selection stops at the ends", () => {
     assert.equal(moved(0, 1, 0), -1);
 });
 
-test("the quick actions are the screenshots, the session, settings, the toggles, clearing the clipboard and reload", () => {
+test("the quick actions are the screenshots, the session, settings, the toggles, clearing the clipboard, reload and reporting a bug", () => {
     assert.deepEqual(quickActions({ notifications: true }).map(q => q.id), [
         "screenshot-window", "screenshot-screen", "screenshot-region",
         "lock", "logout", "suspend", "reboot", "poweroff",
         "settings",
         ...PAGES.map(p => `settings-${p.id}`),
         ...SECTIONS.map(s => `settings-${s.id}`),
-        "dnd", "dark-style", "keep-awake", "presenter", "clear-clipboard", "reload",
+        "dnd", "dark-style", "keep-awake", "presenter", "clear-clipboard", "reload", "report-bug",
     ]);
     // Every one has something to run.
     for (const q of quickActions({ notifications: true })) {
@@ -358,6 +358,14 @@ test("Clear clipboard history wipes cliphist's history, notifying a failure", ()
     assert.deepEqual(quickCommand("clear-clipboard"), { run: ["tide", "clipboard", "wipe", "--notify"], afterClose: false });
     assert.equal(search(quickActions(), "clear clip")[0].item.id, "clear-clipboard");
     assert.equal(search(quickActions(), "cliphist")[0].item.id, "clear-clipboard");
+});
+
+test("Report a bug runs tide report-bug, which bug finds, on its key", () => {
+    assert.deepEqual(quickCommand("report-bug"), { run: ["tide", "report-bug"], afterClose: false });
+    assert.equal(byId(quickActions(), "hint")["report-bug"], "Super+Shift+B");
+    for (const query of ["bug", "report", "issue"]) {
+        assert.equal(search(quickActions({ notifications: true }), query)[0].item.id, "report-bug", query);
+    }
 });
 
 test("keep awake is the cup, as on the bar and the OSD, and coffee finds it", () => {
@@ -802,9 +810,9 @@ test("on Plasma, kstart runs an app by its desktop ID and an action by its comma
 
 test("on Plasma, the actions are the screenshots and the session's, without tide's keys", () => {
     const actions = quickActions({ plasma: true });
-    assert.deepEqual(actions.map(a => a.id), ["screenshot-window", "screenshot-screen", "screenshot-region", "lock", "logout", "suspend", "reboot", "poweroff"]);
+    assert.deepEqual(actions.map(a => a.id), ["screenshot-window", "screenshot-screen", "screenshot-region", "lock", "logout", "suspend", "reboot", "poweroff", "report-bug"]);
     assert.equal(actions.every(a => a.hint === ""), true);
-    assert.deepEqual(actions.map(a => a.rank), [0, 1, 2, 3, 4, 5, 6, 7]);
+    assert.deepEqual(actions.map(a => a.rank), [0, 1, 2, 3, 4, 5, 6, 7, 8]);
     // The same words find them as under tide.
     assert.deepEqual(actions.find(a => a.id === "logout").keywords, quickActions().find(a => a.id === "logout").keywords);
 });
@@ -816,6 +824,8 @@ test("on Plasma, Spectacle takes the screenshots, logind locks, and Plasma asks 
     assert.deepEqual(quickCommand("screenshot-region", plasma), { run: ["spectacle", "--background", "--copy-image", "--region"], afterClose: true });
     assert.deepEqual(quickCommand("lock", plasma), { run: ["loginctl", "lock-session"], afterClose: false, power: false });
     assert.deepEqual(quickCommand("logout", plasma).run, ["busctl", "--user", "call", "org.kde.LogoutPrompt", "/LogoutPrompt", "org.kde.LogoutPrompt", "promptLogout"]);
+    // tide on KDE's report, for its own repository.
+    assert.deepEqual(quickCommand("report-bug", plasma), { run: ["tide", "report-bug", "--kde"], afterClose: false });
     // Power checks logind's inhibitors as under tide.
     assert.deepEqual(quickCommand("reboot", plasma), quickCommand("reboot"));
 });

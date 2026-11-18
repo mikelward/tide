@@ -34,7 +34,7 @@ Singleton {
         root.state = r.state;
         for (const m of r.moves) {
             console.log(`tide: sending window ${m.address} (${m.app}), reopened, back to ${m.workspace}`);
-            Compositor.sendWindowTo(m.address, m.workspace);
+            Compositor.sendWindowTo(m.address, m.workspace, `${m.app} reopened it, so it goes back where it was`);
         }
     }
 

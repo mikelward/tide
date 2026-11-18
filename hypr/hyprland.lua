@@ -1400,6 +1400,9 @@ bind("lock", key("L"), exec(lock), does("Lock"))
 -- `tide reload` also starts tide's shell if it isn't running, never
 -- restarting one that is, and says what failed.
 bind("reload", key("SHIFT + R"), exec(tide_session and "tide reload" or "hyprctl reload"), does("Reload the config"))
+-- Super+Shift+B: report a bug (tide SPEC.md §5.4): `tide report-bug` copies a
+-- report of the last 30 seconds and opens a new issue to paste it in.
+bind("report_bug", key("SHIFT + B"), exec("tide report-bug"), does("Report a bug"))
 -- Super+S: keep awake, Super+P: presenter mode, Do not disturb and keep
 -- awake together (tide SPEC.md §10). tide's shell holds both and shows
 -- the OSD; without it nothing could, so a notification says why.
@@ -1645,9 +1648,21 @@ local function active_name()
     return plain(name)
 end
 
+-- Why tide changed workspace or moved a window to one (tide SPEC.md §5.4,
+-- Reporting a bug): one line each in Hyprland's log, which is the
+-- journal's, starting `tide why:`, for `tide report-bug`. The focus guard
+-- writes its own (focus.lua).
+local function why(what, cause)
+    print("tide why: " .. what .. ": " .. cause)
+end
+
 -- Goes to workspace `name`: on every monitor at once when it spans more
--- than one, the focused monitor's part last so focus stays on it.
-local function go(name)
+-- than one, the focused monitor's part last so focus stays on it. `cause`
+-- says why, in the log; nil for a step of a move that said so already.
+local function go(name, cause)
+    if cause then
+        why("go to workspace " .. name, cause)
+    end
     local s = spanning(name)
     if not s then
         hl.dispatch(hl.dsp.focus({ workspace = "name:" .. name }))
@@ -1662,7 +1677,10 @@ end
 -- part on the window's own monitor; with follow, goes there too, on every
 -- monitor, and focuses the window. Without span.lua or with one monitor,
 -- it's Hyprland's own move.
-local function move_window(address, name, follow)
+local function move_window(address, name, follow, cause)
+    if cause then
+        why("move " .. address .. " to workspace " .. name .. (follow and ", following it" or ""), cause)
+    end
     local selector = "address:" .. address
     local s = spanning(name)
     if not s then
@@ -1680,7 +1698,8 @@ end
 
 -- Moves the focused window to workspace `name`, as move_window does; with
 -- one monitor, Hyprland's own move of the focused window.
-local function send(name, follow)
+local function send(name, follow, cause)
+    why("move the focused window to workspace " .. name .. (follow and ", following it" or ""), cause)
     if not spanning(name) then
         hl.dispatch(hl.dsp.window.move({ workspace = "name:" .. name, follow = follow }))
         return
@@ -1820,6 +1839,7 @@ local function handoff(gone)
             if name then
                 spanning(name) -- binds the part to its monitor before it's made
             end
+            why("move " .. m.address .. " to workspace " .. (m.workspace:gsub("^name:", "")), "a monitor went or came back")
             hl.dispatch(hl.dsp.window.move({ workspace = m.workspace, follow = false, window = "address:" .. m.address }))
         end
     end)
@@ -1847,7 +1867,8 @@ end
 -- has a window, wrapping from the last to home and back, so an empty one is
 -- never a stop; with none, it stays. With move_window (Super+Shift), the
 -- focused window moves to the very next, empty or not, and focus follows.
-local function step_workspace(delta, move_window)
+local function step_workspace(delta, move_window, binding)
+    local cause = "the " .. binding .. " key"
     return function()
         local name = active_name()
         if not name then
@@ -1876,16 +1897,16 @@ local function step_workspace(delta, move_window)
             return
         end
         if move_window then
-            send(target, true)
+            send(target, true, cause)
         else
-            go(target)
+            go(target, cause)
         end
     end
 end
-bind("previous_workspace", key("Page_Up"), step_workspace(-1, false), does("Previous workspace"))
-bind("next_workspace", key("Page_Down"), step_workspace(1, false), does("Next workspace"))
-bind("move_to_previous_workspace", key("SHIFT + Page_Up"), step_workspace(-1, true), does("Move the window to the previous workspace"))
-bind("move_to_next_workspace", key("SHIFT + Page_Down"), step_workspace(1, true), does("Move the window to the next workspace"))
+bind("previous_workspace", key("Page_Up"), step_workspace(-1, false, "previous_workspace"), does("Previous workspace"))
+bind("next_workspace", key("Page_Down"), step_workspace(1, false, "next_workspace"), does("Next workspace"))
+bind("move_to_previous_workspace", key("SHIFT + Page_Up"), step_workspace(-1, true, "move_to_previous_workspace"), does("Move the window to the previous workspace"))
+bind("move_to_next_workspace", key("SHIFT + Page_Down"), step_workspace(1, true, "move_to_next_workspace"), does("Move the window to the next workspace"))
 -- The arrows are windows, across monitors, as in tide for macOS (above).
 bind("focus_left", key("Left"), side.focus_left, does("Focus the window to the left"))
 bind("focus_right", key("Right"), side.focus_right, does("Focus the window to the right"))
@@ -1901,6 +1922,7 @@ bind("move_below", key("SHIFT + Down"), side.move_below, does("Move the window d
 -- as KDE does. Past the last workspace, nothing. Super+0 (n = 0) is the
 -- last workspace on the bar, and Super+Shift+0 sends the window there.
 local function nth_workspace(n, send_window)
+    local cause = "the Super+" .. (send_window and "Shift+" or "") .. n .. " key"
     return function()
         local order = bar_order()
         local target = order[n == 0 and #order or n]
@@ -1908,9 +1930,9 @@ local function nth_workspace(n, send_window)
             return
         end
         if send_window then
-            send(target, false)
+            send(target, false, cause)
         else
-            go(target)
+            go(target, cause)
         end
     end
 end
@@ -1959,16 +1981,16 @@ end
 bind("home_or_back", key("Tab"), function()
     local here, home_name = active_name(), conf_workspaces.home()
     if here ~= home_name then
-        go(home_name)
+        go(home_name, "the home_or_back key, away from home")
         return
     end
     local back = last_used(nil)
     if back then
-        go(back)
+        go(back, "the home_or_back key, from home to the last workspace used")
     end
 end, does("Home, or back to the last workspace"))
 bind("home", key("Home"), function()
-    go(conf_workspaces.home())
+    go(conf_workspaces.home(), "the home key")
 end, does("Home workspace"))
 -- Super+End: the last workspace other than home and this one; from home,
 -- where Super+Tab goes. So presses toggle between two, never home.
@@ -1976,7 +1998,7 @@ bind("last_other_workspace", key("End"), function()
     local here = active_name()
     local back = last_used(here)
     if back then
-        go(back)
+        go(back, "the last_other_workspace key")
     end
 end, does("The last workspace other than home"))
 
@@ -3109,9 +3131,23 @@ hl.on("monitor.added", function(m)
     tide_workspaces.rule = hl.workspace_rule({
         workspace = "name:" .. tide_workspaces.home, persistent = true, default = true, monitor = m.name,
     })
+    why("go to workspace " .. tide_workspaces.home, "the first monitor connected")
     hl.dispatch(hl.dsp.focus({ workspace = "name:" .. tide_workspaces.home }))
 end)
 apply_tide_workspaces()
+
+-- What asked conf_workspaces to move, for the log: the caller's words, or
+-- a hyprctl call's, which is how the shell and scripts reach it; nil, so
+-- nothing more is said, when the caller (the focus guard) said already.
+local function hyprctl_cause(cause)
+    if cause == false then
+        return nil
+    end
+    if type(cause) == "string" and cause ~= "" then
+        return cause
+    end
+    return "asked over hyprctl, by the shell or a script"
+end
 _G.conf_workspaces = {
     reload = apply_tide_workspaces,
     -- The home workspace's name, and the standing workspaces' in order,
@@ -3127,24 +3163,26 @@ _G.conf_workspaces = {
         return tide_workspaces.monitor
     end,
     -- Goes to the workspace named, on every monitor when it spans them, as
-    -- the workspace keys do: how tide's bar and switcher switch.
-    go = function(name)
+    -- the workspace keys do: how tide's bar and switcher switch. `cause`,
+    -- for the log, says what asked; false when the caller said already.
+    go = function(name, cause)
         if type(name) ~= "string" or name == "" then
             error("conf_workspaces.go takes a workspace's name, got " .. tostring(name), 2)
         end
-        go(name)
+        go(name, hyprctl_cause(cause))
     end,
     -- Moves the window at `address` to the workspace named, into its part
     -- on the window's own monitor, and with `follow` goes there: how tide's
-    -- name prompt and launches on a named workspace move a window.
-    move = function(address, name, follow)
+    -- name prompt and launches on a named workspace move a window. `cause`
+    -- as go's.
+    move = function(address, name, follow, cause)
         if type(address) ~= "string" or not address:match("^0x%x+$") then
             error("conf_workspaces.move takes a window's address, 0x and hex, got " .. tostring(address), 2)
         end
         if type(name) ~= "string" or name == "" then
             error("conf_workspaces.move takes a workspace's name, got " .. tostring(name), 2)
         end
-        move_window(address, name, follow == true)
+        move_window(address, name, follow == true, hyprctl_cause(cause))
     end,
 }
 
@@ -3177,7 +3215,7 @@ local function show_parts()
         end
     end
     if stray and shown and shown ~= "" and not shown:find("^special:") then
-        go(shown)
+        go(shown, "a monitor came on showing another workspace")
     end
 end
 hl.on("monitor.added", show_parts)
