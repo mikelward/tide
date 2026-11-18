@@ -94,3 +94,15 @@ export function hitRect({ width, height, barHeight, left, right }) {
         height: barHeight,
     };
 }
+
+// Where a target's hover rect goes, in its click target's coordinates
+// (hitRect's): the span itself and at most PAD past each end, never the
+// rest of its reach. A target at the end of a group, whose reach runs to
+// the bar's edge or across the bar's middle, still lights up only its own
+// cell.
+export function hoverRect({ width, left, right }) {
+    const l = Math.min(left, PAD);
+    const r = Math.min(right, PAD);
+    return { x: left - l, width: width + l + r };
+}
+

@@ -1,7 +1,7 @@
 // Tests for barclick.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PAD, toggled, shownState, closesOnPress, chainReaches, groupReach, hitRect } from "./barclick.mjs";
+import { PAD, toggled, shownState, closesOnPress, chainReaches, groupReach, hitRect, hoverRect } from "./barclick.mjs";
 
 const a = { name: "a" };
 const b = { name: "b" };
@@ -115,4 +115,16 @@ test("adjacent targets in a group tile with no gap and no overlap", () => {
     for (let i = 1; i < rects.length; i++) {
         assert.equal(rects[i - 1].to, rects[i].from);
     }
+});
+
+test("hovered, a target lights only its own cell, not the rest of its reach", () => {
+    // The first workspace of a centered group: its reach runs 300 px back
+    // to the left side, but the hover stops PAD short of the chip.
+    const reach = { left: 300, right: 2 };
+    const hit = hitRect({ width: 40, height: 26, barHeight: 36, ...reach });
+    const hover = hoverRect({ width: 40, ...reach });
+    assert.deepEqual(hover, { x: 300 - PAD, width: 40 + PAD + 2 });
+    assert.ok(hover.x >= 0 && hover.x + hover.width <= hit.width, "inside the click target");
+    // A small reach is lit whole, as before.
+    assert.deepEqual(hoverRect({ width: 40, left: 2, right: 2 }), { x: 0, width: 44 });
 });
