@@ -2950,10 +2950,14 @@ See [`bar.png`](docs/mocks/bar.png).
   - The config errors' list has none either, since no page fixes a config,
     and nor does the notification center (§9).
   - The session menu hides its row while it asks about a blocked action.
-- **Hovered, a target shows its whole span** as a rounded rect, the text
-  color at 8% over whatever fill it has, and 15% while pressed
-  (`Theme.hover`, `Theme.pressed`). So it reads on both palettes, on the
-  bar and over a pill or workspace.
+- **Hovered, a target shows its own cell** as a rounded rect: its span
+  and at most 4 px past each end, never the rest of its reach. So the
+  first or last workspace, whose reach can run to the bar's edge or
+  across its middle, lights up alone (`hoverRect` in
+  `shell/lib/barclick.mjs`). The rect is the text color at 8% over
+  whatever fill it has, and 15% while pressed (`Theme.hover`,
+  `Theme.pressed`), so it reads on both palettes, on the bar and over a
+  pill or workspace.
 - **One popover at a time.** Opening one closes any other, and a press off
   it closes it.
 - **Each popover sets PopupWindow's `grabFocus`.** Without it, Quickshell

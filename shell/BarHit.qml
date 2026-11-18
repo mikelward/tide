@@ -6,8 +6,8 @@ import "lib/settings.mjs" as Settings
 
 // A bar item's click target (SPEC.md §7.1): its whole span, the bar's full
 // height, and `reach` past its ends, {left, right}, which splits the gap
-// with its neighbors so none of it is dead. Hovered, it shows as a rounded
-// rect, a touch darker while pressed. Its handlers go in it. It takes no
+// with its neighbors so none of it is dead. Hovered, its own cell (not the
+// rest of its reach) shows as a rounded rect, a touch darker while pressed. Its handlers go in it. It takes no
 // room of its own, so it never changes the visual spacing.
 //
 // Never make it a Row's own child: a positioner culls a child with no
@@ -61,9 +61,19 @@ Item {
         width: rect.width
         height: rect.height
 
+        // Only the item's own cell, not the rest of its reach
+        // (Click.hoverRect): the first workspace of a centered group lights
+        // up alone, not the bar back to the left side.
         Rectangle {
+            readonly property var cell: Click.hoverRect({
+                width: root.span?.width ?? 0,
+                left: root.reach.left,
+                right: root.reach.right
+            })
+
             anchors.verticalCenter: parent.verticalCenter
-            width: parent.width
+            x: cell.x
+            width: cell.width
             height: Math.min(Theme.chipHeight, parent.height)
             radius: Theme.chipRadius
             color: root.pressed ? Theme.pressed : Theme.hover
