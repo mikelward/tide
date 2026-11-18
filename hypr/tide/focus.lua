@@ -80,6 +80,18 @@ M.defaults = {
 -- (eFocusReason in desktop/state/FocusState.hpp: a plain enum, not flags).
 local REASON_NEW_WINDOW = 16
 
+-- The same reasons in words, for the lines below that say why focus moved.
+local REASON_NAMES = {
+    [1] = "the pointer",
+    [2] = "a key binding",
+    [3] = "a dispatch",
+    [5] = "a click",
+    [11] = "a workspace change",
+    [13] = "a window closing",
+    [14] = "a window closing",
+    [16] = "a new window",
+}
+
 local state = {
     opts = nil,
     -- { app = normalized id, at = seconds, pid = requester or nil, live },
@@ -145,6 +157,20 @@ end
 
 local function active_record(w)
     return { address = field(w, "address"), pid = field(w, "pid"), app = app_of(w) }
+end
+
+-- Why focus moved, or didn't (SPEC.md §5.4, Reporting a bug): one line
+-- each in Hyprland's log, which is the journal's, starting `tide why:`,
+-- for `tide report-bug`. A field so the tests can read it.
+M.log = print
+
+local function why(what, cause)
+    M.log("tide why: " .. what .. ": " .. cause)
+end
+
+-- A window as those lines name it: its app and its address.
+local function named(w)
+    return (app_of(w) or "a window") .. " (" .. tostring(field(w, "address") or "?") .. ")"
 end
 
 local function expire()
@@ -242,12 +268,19 @@ local function take_grant_by_ancestry(w)
 end
 
 -- Anything you do after launching cancels every grant: a slow app mustn't
--- take focus from whatever you moved on to.
-local function cancel_grants()
+-- take focus from whatever you moved on to. `cause` says what that was.
+local function cancel_grants(cause)
+    local apps = {}
     for _, g in ipairs(state.grants) do
+        if g.live then
+            table.insert(apps, (g.apps and #g.apps > 0) and table.concat(g.apps, " ") or g.app or ("pid " .. tostring(g.pid)))
+        end
         g.live = false
     end
     state.grants = {}
+    if #apps > 0 then
+        why("drop the launch grant for " .. table.concat(apps, ", "), cause)
+    end
 end
 
 local function same_app_as_active(w)
@@ -309,15 +342,17 @@ end
 -- in that workspace's part on its own monitor and switches every monitor
 -- there, focusing it (SPEC.md §6.5, Monitors). Without it, Hyprland's own
 -- `name:` move.
-local function focus_on_named(w, name)
+local function focus_on_named(w, name, cause)
     local conf = rawget(_G, "conf_workspaces")
     local address = field(w, "address")
+    why("focus " .. named(w) .. ", moving it to workspace " .. name, cause)
     if not (address and type(conf) == "table" and type(conf.move) == "function") then
         focus_on_workspace(w, "name:" .. name)
         return
     end
     focusing = true
-    local ok, err = pcall(conf.move, address, name, true)
+    -- The guard said why just now, so conf's move doesn't again.
+    local ok, err = pcall(conf.move, address, name, true, false)
     focusing = false
     if not ok then
         error(err, 0)
@@ -342,16 +377,18 @@ end
 -- it is would show the minimize workspace and leave it minimized. So a
 -- notification's click, its grant running out, and an app's activation
 -- with a grant all bring it back.
-local function focus(w)
+local function focus(w, cause)
     local address = field(w, "address")
     if not address then
         return -- a window that is going away has no address, and needs no focus
     end
     local from = minimized_from(w)
     if from then
+        why("focus " .. named(w) .. ", restoring it to workspace " .. from, cause)
         focus_on_workspace(w, "name:" .. from)
         return
     end
+    why("focus " .. named(w), cause)
     focus_address(address)
 end
 
@@ -462,16 +499,21 @@ function M.on_open(w)
     -- you are in (a second terminal from a terminal, or a script's window).
     local g = take_grant(w) or take_grant_by_ancestry(w)
     if g and g.workspace then
-        focus_on_named(w, g.workspace)
+        focus_on_named(w, g.workspace, "its launch asked for that workspace")
     elseif g then
-        focus(w)
+        focus(w, g.pid and not names(g, app_of(w)) and "a command you ran just now opened it"
+            or "you launched its app just now")
     elseif same_app_as_active(w) or portal_dialog_for_active(w) or prompt_you_asked_for(w) then
+        local cause = same_app_as_active(w) and "a new window of the app you're in"
+            or portal_dialog_for_active(w) and "a file dialog of the app you're in"
+            or "a password prompt just after a key press"
         -- Focus moving to a window no grant asked for is moving on, even
         -- though the guard dispatches it: a dialog that follows a click
         -- Lua can't see is the click's only trace.
-        cancel_grants()
-        focus(w)
+        cancel_grants(cause .. " took focus")
+        focus(w, cause)
     else
+        why("leave " .. named(w) .. " unfocused, marked for attention", "nothing asked for it")
         announce(w)
     end
 end
@@ -498,9 +540,10 @@ function M.on_urgent(w)
     -- A grant asked for on a new workspace focuses an existing window where
     -- it is: moving a window you already had would be a surprise.
     if take_grant(w) then
-        focus(w)
+        focus(w, "it asked for focus while its launch grant held")
         return
     end
+    why("leave " .. named(w) .. " unfocused, marked for attention", "it asked for focus with no launch grant")
     -- Announced like a window the guard kept, without the notification, so
     -- the bar keeps its mark after Hyprland's own urgent flag goes.
     local address = wait(w)
@@ -569,15 +612,17 @@ function M.next_attention()
         return false
     end
     local address = list[1]
-    cancel_grants() -- you chose another window
+    local cause = "the next window wanting attention"
+    cancel_grants("you went to " .. cause) -- you chose another window
     forget(address)
     unlist(address)
     local w = window_at(address)
     if w then
-        focus(w)
+        focus(w, cause)
     else
         -- Gone since it was marked, or Hyprland can't say: the focus
         -- dispatch finds it if it's there, and does nothing if not.
+        why("focus " .. address, cause)
         focus_address(address)
     end
     return true
@@ -673,6 +718,7 @@ function M.minimize(address, name)
         error("tide_focus.minimize: expected a workspace name, got " .. tostring(name), 2)
     end
     address = "0x" .. key(address)
+    why("minimize " .. address .. " from workspace " .. name, "the minimize key or the shell asked")
     local active = hl.get_active_window()
     local was_active = active ~= nil and key(field(active, "address") or "") == key(address)
     local monitor = was_active and field(field(active, "monitor"), "id") or nil
@@ -715,8 +761,11 @@ function M.minimize(address, name)
             cursor = nil
         end
     end
-    local target = under_pointer(address, windows, type(cursor) == "table" and cursor or nil, monitor) or before
+    local under = under_pointer(address, windows, type(cursor) == "table" and cursor or nil, monitor)
+    local target = under or before
     if target then
+        why("focus " .. target, under and "it's under the pointer, after a minimize"
+            or "it had focus before the window minimized")
         focus_address(target)
     end
 end
@@ -787,14 +836,17 @@ function M.on_active(w, reason)
     if focusing or returned or reason == REASON_NEW_WINDOW then
         return
     end
-    cancel_grants()
+    -- Not the guard's doing, so Hyprland's reason is the one there is.
+    local cause = REASON_NAMES[reason] or ("Hyprland's focus reason " .. tostring(reason))
+    why((w and named(w) or "no window") .. " has focus on workspace " .. tostring(state.workspace), cause)
+    cancel_grants("focus moved, by " .. cause)
 end
 
 function M.on_key(_, _, key_state)
     -- 1 is a press; releases (including the one after the launch key) don't
     -- count as moving on.
     if key_state == 1 then
-        cancel_grants()
+        cancel_grants("a key press")
         state.last_key = M.clock()
     end
 end
@@ -976,7 +1028,7 @@ local function lapse(g)
     end
     local w = most_recent(g.apps)
     if w then
-        focus(w)
+        focus(w, "a clicked notification's app opened no window, so its last one comes up")
     end
 end
 
@@ -1007,8 +1059,8 @@ function M.focus_recent(app)
     local ids = app_ids(app, "focus_recent")
     local w = most_recent(ids)
     if w then
-        cancel_grants() -- you chose this window
-        focus(w)
+        cancel_grants("you clicked a notification") -- you chose this window
+        focus(w, "a click on its notification")
     else
         print("tide focus: no window of " .. table.concat(ids, ", ") .. " to bring up")
     end

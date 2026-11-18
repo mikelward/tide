@@ -49,6 +49,10 @@ ShellRoot {
     // Super+1…9, Super+Home, Super+Tab and Super+End's IPC, for tidewm.
     WorkspaceKeys {}
 
+    // The workspaces and focus it sees change, in the journal, for a bug
+    // report (§5.4).
+    WhyLog {}
+
     // One launcher, which moves to the focused monitor as it opens.
     LauncherWindow {}
 

@@ -296,6 +296,14 @@
 #
 #     Checks the running session and prints one line per problem, with
 #     its fix (SPEC.md §5.4); see tide-doctor.
+#
+#   tide report-bug [--kde]
+#
+#     Gathers a bug report from the 30 seconds before it ran (the
+#     workspace and focus changes with their reasons, and tide's log),
+#     with the versions and `tide doctor`'s output, copies it to the
+#     clipboard and opens a new GitHub issue to paste it in (SPEC.md §5.4);
+#     see tide-report-bug.
 
 prog=${0##*/}
 # The subcommand, for the lookups' messages.
@@ -330,6 +338,7 @@ usage() {
     echo "       $prog clipboard store | list | copy ID | put TEXT | delete ID | wipe" >&2
     echo "       $prog fill list | type snippet NAME | type login ID FIELD | unlock" >&2
     echo "       $prog doctor" >&2
+    echo "       $prog report-bug [--kde]" >&2
     exit 2
 }
 
@@ -1839,5 +1848,6 @@ case "${1:-}" in
     doctor) shift; exec sh "$(dirname "$0")/tide-doctor" "$@" ;;
     clipboard) shift; exec sh "$(dirname "$0")/tide-clipboard" "$@" ;;
     fill) shift; exec sh "$(dirname "$0")/tide-fill" "$@" ;;
+    report-bug) shift; exec sh "$(dirname "$0")/tide-report-bug" "$@" ;;
     *) usage ;;
 esac

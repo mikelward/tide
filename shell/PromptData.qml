@@ -119,9 +119,9 @@ Singleton {
         } else if (a.launch !== undefined) {
             root.launch(a.name, a.launch, a.cwd);
         } else if (a.go !== undefined) {
-            Compositor.goToWorkspace(a.go);
+            Compositor.goToWorkspace(a.go, "the name prompt");
         } else {
-            Compositor.moveWindowToNamed(a.move, a.name);
+            Compositor.moveWindowToNamed(a.move, a.name, "the name prompt");
         }
     }
 

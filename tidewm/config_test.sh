@@ -118,6 +118,11 @@ check "Super+Shift+R reloads with tide reload" \
 check "and no other binding has Super+Shift+R or Super+Ctrl+R" \
     test "$(grep -c -i -E '\$mod\+(Shift|Ctrl)\+r ' "$tmp/named")" -eq 1
 
+# Super+Shift+B reports a bug with `tide report-bug`, as on Hyprland.
+# shellcheck disable=SC2016 # $mod is the config's, not the shell's
+check "Super+Shift+B reports a bug with tide report-bug" \
+    test "$(sed -n 's/^bindsym --name=report_bug \$mod+Shift+b exec //p' "$tmp/named")" = "tide report-bug"
+
 # Every name hyprland.lua binds, so keys.json serves both sessions, but the
 # floating rules' key and the layout used last, which have no tidewm
 # command yet.

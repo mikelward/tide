@@ -75,6 +75,8 @@ WAYBAR_DIR ?= $(or $(XDG_CONFIG_HOME),$(HOME)/.config)/waybar
 SYSTEMD_USER_DIR ?= $(HOME)/.config/systemd/user
 PORTAL_DIR ?= $(HOME)/.config/xdg-desktop-portal
 SHELL_DIR ?= $(HOME)/.config/quickshell/tide
+# Where `make install` records tide's version, for `tide report-bug`.
+VERSION_DIR ?= $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/tide
 PREFIX ?= /usr/local
 # The per-agent drop-ins earlier versions installed, which the allowlist
 # replaces, are found by how their first line starts, so ones installed
@@ -163,6 +165,7 @@ test-fast: test-lua
 	sh bin/tide_test.sh
 	sh bin/tide-clipboard_test.sh
 	sh bin/tide-fill_test.sh
+	sh bin/tide-report-bug_test.sh
 	sh bin/tide-lock_test.sh
 	sh bin/tide-waybar_test.sh
 	sh bin/tide-shell_test.sh
@@ -175,13 +178,14 @@ test-fast: test-lua
 	sh .github/workflows/ci_test.sh
 	sh .github/workflows/release_test.sh
 	sh install/pins_test.sh
+	sh install/version_test.sh
 	sh plymouth/theme_test.sh
 	$(MAKE) test-accents
 	@test -n "$(QMLLINT)" || { echo "make test: no qmllint; install qt6-declarative-dev-tools" >&2; exit 1; }
 	$(QMLLINT) $(filter-out %_test.mjs,$(wildcard shell/lib/*.mjs))
 	@test -n "$(QMLCACHEGEN)" || { echo "make test: no qmlcachegen; install qt6-declarative-dev-tools" >&2; exit 1; }
 	sh shell/compile_test.sh "$(QMLCACHEGEN)"
-	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/span_test.mjs shell/lib/minimized_test.mjs shell/lib/reopened_test.mjs shell/lib/mute_test.mjs shell/lib/workspacenames_test.mjs shell/lib/switcher_test.mjs shell/lib/tabs_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/settings_test.mjs shell/lib/settingssearch_test.mjs shell/lib/steps_test.mjs shell/lib/idle_test.mjs shell/lib/writes_test.mjs shell/lib/input_test.mjs shell/lib/keys_test.mjs shell/lib/keymaps_test.mjs shell/lib/outputs_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/sysmon_test.mjs shell/lib/keepawake_test.mjs shell/lib/wallclock_test.mjs shell/lib/presenter_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs shell/lib/vpn_test.mjs shell/lib/mic_test.mjs shell/lib/fuzzy_test.mjs shell/lib/frecency_test.mjs shell/lib/launcher_test.mjs shell/lib/lock_test.mjs shell/lib/greeter_test.mjs shell/lib/splash_test.mjs shell/lib/greetd_test.mjs shell/lib/unplug_test.mjs shell/lib/polkit_test.mjs shell/lib/agent_test.mjs shell/lib/sharepicker_test.mjs shell/lib/picker_test.mjs shell/lib/startup_test.mjs shell/lib/barclick_test.mjs shell/lib/barhit_test.mjs shell/lib/barsettings_test.mjs shell/lib/baricons_test.mjs shell/lib/barlayout_test.mjs shell/lib/barside_test.mjs shell/lib/dnd_test.mjs shell/lib/clipboard_test.mjs shell/lib/power_test.mjs shell/lib/workspacepage_test.mjs shell/lib/floating_test.mjs shell/lib/unicode_test.mjs shell/lib/popups_test.mjs shell/lib/persist_test.mjs shell/lib/compositor_test.mjs shell/lib/tidewm_test.mjs shell/lib/configerrors_test.mjs shell/lib/kwin_test.mjs shell/lib/kdeborders_test.mjs shell/lib/workspacekeys_test.mjs shell/lib/overview_test.mjs shell/lib/cities_test.mjs
+	$(NODE) --import ./shell/lib/qtjs_env_test.mjs --test shell/lib/clocks_test.mjs shell/lib/workspaces_test.mjs shell/lib/span_test.mjs shell/lib/minimized_test.mjs shell/lib/reopened_test.mjs shell/lib/mute_test.mjs shell/lib/workspacenames_test.mjs shell/lib/switcher_test.mjs shell/lib/tabs_test.mjs shell/lib/tzdata_test.mjs shell/lib/layouts_test.mjs shell/lib/appearance_test.mjs shell/lib/status_test.mjs shell/lib/dst_test.mjs shell/lib/popover_test.mjs shell/lib/session_test.mjs shell/lib/audio_test.mjs shell/lib/bluetooth_test.mjs shell/lib/launch_test.mjs shell/lib/dispatch_test.mjs shell/lib/osd_test.mjs shell/lib/network_test.mjs shell/lib/notifications_test.mjs shell/lib/tray_test.mjs shell/lib/settings_test.mjs shell/lib/settingssearch_test.mjs shell/lib/steps_test.mjs shell/lib/idle_test.mjs shell/lib/writes_test.mjs shell/lib/input_test.mjs shell/lib/keys_test.mjs shell/lib/keymaps_test.mjs shell/lib/outputs_test.mjs shell/lib/title_test.mjs shell/lib/history_test.mjs shell/lib/share_test.mjs shell/lib/sysmon_test.mjs shell/lib/keepawake_test.mjs shell/lib/wallclock_test.mjs shell/lib/presenter_test.mjs shell/lib/icons_test.mjs shell/lib/report_test.mjs shell/lib/vpn_test.mjs shell/lib/mic_test.mjs shell/lib/fuzzy_test.mjs shell/lib/frecency_test.mjs shell/lib/launcher_test.mjs shell/lib/lock_test.mjs shell/lib/greeter_test.mjs shell/lib/splash_test.mjs shell/lib/greetd_test.mjs shell/lib/unplug_test.mjs shell/lib/polkit_test.mjs shell/lib/agent_test.mjs shell/lib/sharepicker_test.mjs shell/lib/picker_test.mjs shell/lib/startup_test.mjs shell/lib/barclick_test.mjs shell/lib/barhit_test.mjs shell/lib/barsettings_test.mjs shell/lib/baricons_test.mjs shell/lib/barlayout_test.mjs shell/lib/barside_test.mjs shell/lib/dnd_test.mjs shell/lib/clipboard_test.mjs shell/lib/power_test.mjs shell/lib/workspacepage_test.mjs shell/lib/floating_test.mjs shell/lib/unicode_test.mjs shell/lib/popups_test.mjs shell/lib/persist_test.mjs shell/lib/compositor_test.mjs shell/lib/tidewm_test.mjs shell/lib/configerrors_test.mjs shell/lib/kwin_test.mjs shell/lib/kdeborders_test.mjs shell/lib/workspacekeys_test.mjs shell/lib/overview_test.mjs shell/lib/cities_test.mjs shell/lib/why_test.mjs
 # theme/ is build-time Node, not loaded by the shell, so runs unguarded.
 	$(NODE) --test theme/palette_test.mjs
 	$(NODE) --test connector/bridge_test.js
@@ -262,6 +266,11 @@ build/tide-kwin-paste: go.mod $(wildcard cmd/tide-kwin-paste/*.go)
 # Copies only. Enabling tide.service, which hangs it off the tide
 # session's target, is the installer's job (install/tide-setup).
 install: build install-shell
+	@# The version `tide report-bug` names (SPEC.md §5.4): the release tag
+	@# this commit would have, and the commit, from a git checkout; the tag
+	@# in a release's directory name (tide-v0.0.N); or else unknown.
+	install -d "$(VERSION_DIR)"
+	sh install/version "$(RELEASE_MINOR)" >"$(VERSION_DIR)/version"
 	install -d "$(HYPR_DIR)"
 	install -m 644 hypr/tide/geometry.lua hypr/tide/direction.lua hypr/tide/span.lua hypr/tide/layout.lua hypr/tide/focus.lua hypr/tide/pinned.lua hypr/hyprland.lua hypr/session.lua hypr/hyprland.local.lua.template "$(HYPR_DIR)/"
 	@# tide's hypridle config, for a hypridle with none of yours, beside
@@ -331,7 +340,7 @@ install-session:
 		test -x build/$$cmd || { echo "make install-session: no build/$$cmd; run make build first, as yourself" >&2; exit 1; }; \
 	done
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/wayland-sessions"
-	install -m 755 bin/tide bin/tide-session bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-greeter bin/tide-hyprland bin/tide-tidewm bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-shell-fallback bin/tide-waybar bin/tide-sysmon build/tide-grant build/tide-msg build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
+	install -m 755 bin/tide bin/tide-session bin/tide-clipboard bin/tide-fill bin/tide-doctor bin/tide-report-bug bin/tide-greeter bin/tide-hyprland bin/tide-tidewm bin/tide-lock bin/tide-share-picker bin/tide-shell bin/tide-shell-fallback bin/tide-waybar bin/tide-sysmon build/tide-grant build/tide-msg build/tide-tz build/tide-greetd build/tide-agent build/tide-tabs build/tide-pick build/tide-kwin-paste "$(DESTDIR)$(PREFIX)/bin/"
 	$(if $(strip $(SESSIONS)),install -m 644 $(SESSIONS:%=session/%.desktop) "$(DESTDIR)$(PREFIX)/share/wayland-sessions/")
 	@# KWin lets a program use its fake-input (KDE's Win+V paste) only if
 	@# a desktop entry whose Exec is that program's path lists it in

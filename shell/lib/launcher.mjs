@@ -238,7 +238,8 @@ const SESSION_KEYWORDS = Object.freeze({
 // shortcuts"). The settings rows (`settings`) are listed among the apps,
 // not the actions; the pages' are found by a query only (`queryOnly`), so
 // the empty query doesn't list a dozen of them. On Plasma (`state.plasma`,
-// SPEC.md §8.5) there are just the screenshots and the session's actions,
+// SPEC.md §8.5) there are just the screenshots, the session's actions and
+// reporting a bug,
 // without tide's keys: the rest are tide's own.
 export function quickActions(state = {}) {
     const quick = (id, name, sub, icon, keywords, hint = "") => ({
@@ -252,6 +253,9 @@ export function quickActions(state = {}) {
         hint,
     });
     const onOff = on => (on ? "On" : "Off");
+    // SPEC.md §5.4: a report of the last 30 seconds, for a new issue.
+    const reportBug = hint => quick("report-bug", "Report a bug", "Copies a report and opens a new issue", "dialog-warning-symbolic",
+        ["bug", "issue", "problem", "github", "feedback", "crash"], hint);
     const session = {};
     for (const a of SESSION) {
         session[a.id] = a;
@@ -262,6 +266,7 @@ export function quickActions(state = {}) {
             quick("screenshot-screen", "Screenshot screen", "The monitor you were on", "camera-photo-symbolic", ["capture", "print"]),
             quick("screenshot-region", "Screenshot region", "Drag to select", "camera-photo-symbolic", ["capture", "print", "area"]),
             ...SESSION.map(a => quick(a.id, a.label, "Session", a.icon, SESSION_KEYWORDS[a.id])),
+            reportBug(""),
         ].map((q, rank) => Object.assign({}, q, { rank }));
     }
     // Listed in this order, which also breaks ties between them: window
@@ -281,6 +286,7 @@ export function quickActions(state = {}) {
         quick("presenter", "Presenter mode", onOff(state.presenting), "x-office-presentation-symbolic", ["presentation", "slides", "projector", "meeting"], "Super+P"),
         quick("clear-clipboard", "Clear clipboard history", "Forget everything Super+V lists", "edit-clear-all-symbolic", ["clipboard", "wipe", "history", "cliphist", "forget"]),
         quick("reload", "Reload shell", "tide", "view-refresh-symbolic", ["restart", "quickshell"]),
+        reportBug("Super+Shift+B"),
     ].filter(q => q).map((q, rank) => Object.assign({}, q, { rank }));
 }
 
@@ -346,6 +352,8 @@ const PLASMA_COMMANDS = Object.freeze({
         afterClose: false,
         power: false,
     }),
+    // tide on KDE's report, of its KWin script's lines, for its own issues.
+    "report-bug": Object.freeze({ run: ["tide", "report-bug", "--kde"], afterClose: false }),
 });
 
 // What running a quick action takes: a command to run (`run`), with a
@@ -388,6 +396,9 @@ export function quickCommand(id, context = {}) {
     case "clear-clipboard":
         // Says why in a notification if it fails (SPEC.md §8.4).
         return { run: ["tide", "clipboard", "wipe", "--notify"], afterClose: false };
+    case "report-bug":
+        // Says what it did, or what failed, in a notification (SPEC.md §5.4).
+        return { run: ["tide", "report-bug"], afterClose: false };
     case "dnd":
     case "dark-style":
     case "keep-awake":

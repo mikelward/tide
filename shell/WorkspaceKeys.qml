@@ -46,11 +46,13 @@ Scope {
         };
     }
 
-    function goTo(name, why) {
+    // Goes to `name`, saying in the journal that `key` asked; with none,
+    // answers `why`.
+    function goTo(name, why, key) {
         if (name === null) {
             return why;
         }
-        Compositor.goToWorkspace(name);
+        Compositor.goToWorkspace(name, `the ${key} key`);
         return `went to ${name}`;
     }
 
@@ -67,7 +69,7 @@ Scope {
 
         // Super+N: the Nth workspace on the bar, the last for 0.
         function go(n: int): string {
-            return root.goTo(Keys.nth(root.order(), n), `no workspace ${n} on the bar`);
+            return root.goTo(Keys.nth(root.order(), n), `no workspace ${n} on the bar`, `Super+${n}`);
         }
         // Super+Shift+N: sends the focused window there, staying here.
         function send(n: int): string {
@@ -79,20 +81,20 @@ Scope {
             if (address === null) {
                 return "no window focused";
             }
-            Compositor.sendWindowTo(address, name);
+            Compositor.sendWindowTo(address, name, `the Super+Shift+${n} key`);
             return `sent ${address} to ${name}`;
         }
         // Super+Home.
         function home(): string {
-            return root.goTo(WorkspacesData.home, "");
+            return root.goTo(WorkspacesData.home, "", "home");
         }
         // Super+Tab: home, or from home back to the last other one.
         function homeOrBack(): string {
-            return root.goTo(Keys.homeOrBack(root.here(), root.history, root.place()), "no other workspace used");
+            return root.goTo(Keys.homeOrBack(root.here(), root.history, root.place()), "no other workspace used", "home_or_back");
         }
         // Super+End: the last workspace other than home and this one.
         function lastOther(): string {
-            return root.goTo(Keys.lastOther(root.here(), root.history, root.place()), "no other workspace used");
+            return root.goTo(Keys.lastOther(root.here(), root.history, root.place()), "no other workspace used", "last_other_workspace");
         }
     }
 }

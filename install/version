@@ -1,0 +1,30 @@
+#!/bin/sh
+#
+# Prints the version of the tide checkout it's run in, for `make install`
+# to record for `tide report-bug` (SPEC.md §5.4):
+#
+#   install/version MINOR
+#
+# From a git checkout, the release tag this commit would have
+# (v0.MINOR.<commits>, as `make release-tag` makes it) and the commit,
+# noting changes not committed and a shallow clone, whose count is short.
+# From a release's source (`make dist`'s tide-v0.MINOR.N directory), the
+# tag in the directory's name. Otherwise "unknown".
+
+minor=${1:?usage: install/version MINOR}
+if commit=$(git rev-parse --short=12 HEAD 2>/dev/null); then
+    notes=
+    if ! git diff --quiet HEAD 2>/dev/null; then
+        notes="$notes, with changes"
+    fi
+    if test "$(git rev-parse --is-shallow-repository 2>/dev/null)" != false; then
+        notes="$notes, a shallow clone"
+    fi
+    echo "v0.$minor.$(git rev-list --count HEAD) ($commit$notes)"
+    exit 0
+fi
+dir=${PWD##*/}
+case "$dir" in
+    tide-v*) echo "${dir#tide-}" ;;
+    *) echo unknown ;;
+esac

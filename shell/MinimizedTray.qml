@@ -79,7 +79,7 @@ PanelWindow {
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton
-                        onClicked: Compositor.moveWindowTo(slot.modelData.address, root.shown)
+                        onClicked: Compositor.moveWindowTo(slot.modelData.address, root.shown, "a click in the minimized windows' tray")
                     }
 
                     // The title, above the icon while it's hovered.

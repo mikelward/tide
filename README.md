@@ -214,6 +214,16 @@ secret-tool or openssl missing, the keyring locked, or
 `tide-clipboard.service` stopped. It exits 1
 if it found a problem.
 
+To report a bug, press `Super+Shift+B` right after it happens, or tap
+`Super`, type "bug" and press Enter. `tide report-bug` copies a report to
+the clipboard and opens a new issue here, to paste it in. The report has
+tide's version, `tide doctor`'s output, and the 30 seconds before: each
+workspace and focus change with its reason, and tide's log. Your home
+folder shows as `~`, your hostname as `host1` and your user name as
+`user1`; app names, window titles and workspace names stay, so read it
+before you submit. Nothing is sent until you do. A copy is kept in
+`~/.local/state/tide/reports/`.
+
 XDG autostart is an allowlist in tide. `make install` adds one systemd
 drop-in, `app-.service.d/tide-autostart.conf`, that reaches every
 autostart unit; in the tide session it skips each entry that

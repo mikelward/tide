@@ -31,7 +31,7 @@ local S -- what the stub recorded
 local now
 
 local function load(opts)
-    S = { rules = {}, handlers = {}, dispatched = {}, notified = {}, active = nil, timers = {}, windows = {}, workspace = 1 }
+    S = { rules = {}, handlers = {}, dispatched = {}, notified = {}, active = nil, timers = {}, windows = {}, workspace = 1, logged = {} }
     now = 1000
     _G.tide_focus = nil
     _G.hl = {
@@ -56,6 +56,7 @@ local function load(opts)
     }
     local m = dofile(dir .. "focus.lua")
     m.clock = function() return now end
+    m.log = function(line) table.insert(S.logged, line) end
     m.setup(opts)
     return m
 end
@@ -673,6 +674,7 @@ test("with conf's move, a named workspace's window goes to its part on its own m
     eq(moved[1][1], firefox.address, "that window")
     eq(moved[1][2], "docs", "to the workspace named")
     eq(moved[1][3], true, "and follows it")
+    eq(moved[1][4], false, "saying nothing more of why, which the guard said")
     eq(#m.grants(), 0, "the grant is used up")
 end)
 
@@ -822,6 +824,7 @@ test("the window focused at load counts as the app you're in", function()
     S.active = kitty
     local m = dofile(dir .. "focus.lua")
     m.clock = function() return now end
+    m.log = function(line) table.insert(S.logged, line) end
     m.setup({})
     local dialog = window("kitty", 70)
     eq(is_focus(fire("window.open", dialog)[1], dialog), true, "focused")
@@ -1433,6 +1436,108 @@ test("minimize rejects a bad address or workspace name", function()
     eq(pcall(m.minimize, "x) os.exit(", "1"), false, "address")
     eq(pcall(m.minimize, "0x1", ""), false, "empty name")
     eq(pcall(m.minimize, "0x1", 5), false, "not a name")
+end)
+
+-- Why focus moved (SPEC.md §5.4, Reporting a bug): a `tide why:` line
+-- for each of the guard's choices, and for each focus change it didn't
+-- make, with Hyprland's reason.
+local function logged(text)
+    for _, line in ipairs(S.logged) do
+        if line == text then
+            return true
+        end
+    end
+    return false
+end
+
+test("a launched app's window says it took focus because you launched it", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("firefox")
+    local firefox = window("firefox")
+    fire("window.open", firefox)
+    eq(logged("tide why: focus firefox (" .. firefox.address .. "): you launched its app just now"), true, "logged")
+end)
+
+test("a launch on a named workspace says it moved the window there, and why", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("firefox", nil, nil, { workspace = "docs" })
+    local firefox = window("firefox")
+    fire("window.open", firefox)
+    eq(logged("tide why: focus firefox (" .. firefox.address .. "), moving it to workspace docs: its launch asked for that workspace"), true, "logged")
+end)
+
+test("a window nothing asked for says it was left unfocused, and why", function()
+    load()
+    focused(window("kitty"), FFM)
+    local popup = window("updater")
+    fire("window.open", popup)
+    eq(logged("tide why: leave updater (" .. popup.address .. ") unfocused, marked for attention: nothing asked for it"), true, "logged")
+end)
+
+test("an activation without a grant says it was kept from focus", function()
+    load()
+    focused(window("kitty"), FFM)
+    local mail = window("mail")
+    fire("window.urgent", mail)
+    eq(logged("tide why: leave mail (" .. mail.address .. ") unfocused, marked for attention: it asked for focus with no launch grant"), true, "logged")
+end)
+
+test("a new window of the app you're in says so", function()
+    load()
+    focused(window("kitty", 50), FFM)
+    local second = window("kitty", 50)
+    fire("window.open", second)
+    eq(logged("tide why: focus kitty (" .. second.address .. "): a new window of the app you're in"), true, "logged")
+end)
+
+test("focus the guard didn't move is logged with Hyprland's reason", function()
+    load()
+    local kitty = window("kitty")
+    focused(kitty, FFM)
+    eq(logged("tide why: kitty (" .. kitty.address .. ") has focus on workspace 1: the pointer"), true, "the pointer")
+    local mail = window("mail")
+    S.workspace = 2
+    focused(mail, WORKSPACE)
+    eq(logged("tide why: mail (" .. mail.address .. ") has focus on workspace 2: a workspace change"), true, "a workspace change")
+    focused(nil, KEYBIND)
+    eq(logged("tide why: no window has focus on workspace 2: a key binding"), true, "nothing focused")
+    focused(window("x"), 42)
+    eq(S.logged[#S.logged]:match(": Hyprland's focus reason 42$") ~= nil, true, "an unknown reason by number")
+end)
+
+test("the guard's own focusing isn't logged twice", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("firefox")
+    local firefox = window("firefox")
+    -- Hyprland moves focus within the dispatch, so window.active comes
+    -- while the guard is still focusing.
+    local dispatch = hl.dispatch
+    hl.dispatch = function(d)
+        dispatch(d)
+        if is_focus(d, firefox) then
+            S.handlers["window.active"](firefox, DISPATCH)
+        end
+    end
+    local before = #S.logged
+    fire("window.open", firefox)
+    eq(#S.logged, before + 1, "one line, the guard's, for the focus it made")
+end)
+
+test("a dropped grant says what dropped it", function()
+    local m = load()
+    focused(window("kitty"), FFM)
+    m.grant("firefox")
+    fire("input.keyboard.key", nil, nil, 1)
+    eq(logged("tide why: drop the launch grant for firefox: a key press"), true, "a key press")
+    m.grant("mail")
+    focused(window("files"), CLICK)
+    eq(logged("tide why: drop the launch grant for mail: focus moved, by a click"), true, "a click")
+    local count = #S.logged
+    fire("input.keyboard.key", nil, nil, 1)
+    eq(#S.logged, count, "no line when there was no grant to drop")
 end)
 
 io.write(string.format("focus_test.lua: %d passed, %d failed\n", passed, failures))

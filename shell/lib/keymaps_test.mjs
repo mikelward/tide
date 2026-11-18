@@ -16,7 +16,7 @@ const NAMES = new Set([
     "previous_workspace", "next_workspace", "move_to_previous_workspace", "move_to_next_workspace",
     "focus_left", "focus_right", "move_left", "move_right", "focus_above", "focus_below", "move_above", "move_below", "home_or_back", "home", "last_other_workspace", "last_layout",
     "go_to_workspace", "move_to_workspace", "attention", "next_attention", "screenshot", "screenshot_window", "screenshot_region",
-    "mute_microphone", "reload",
+    "mute_microphone", "reload", "report_bug",
 ]);
 
 test("every preset is listed once, tide's first", () => {

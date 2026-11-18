@@ -102,15 +102,15 @@ PanelWindow {
         const c = Ov.choice(card);
         root.close();
         if (c.restore !== undefined) {
-            Compositor.moveWindowTo(c.restore, c.to);
+            Compositor.moveWindowTo(c.restore, c.to, "the overview");
         } else {
-            Compositor.focusWindow(c.focus);
+            Compositor.focusWindow(c.focus, "the overview");
         }
     }
 
     function goTo(name) {
         root.close();
-        Compositor.goToWorkspace(name);
+        Compositor.goToWorkspace(name, "the overview");
     }
 
     // The selected card, kept in view once the positioners have placed it,

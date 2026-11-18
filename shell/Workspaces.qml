@@ -76,7 +76,7 @@ Row {
                 MouseArea {
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
-                    onClicked: Compositor.goToWorkspace(chip.modelData.name)
+                    onClicked: Compositor.goToWorkspace(chip.modelData.name, "a click on the bar")
                 }
             }
 
@@ -134,8 +134,8 @@ Row {
                                 anchors.fill: parent
                                 acceptedButtons: Qt.LeftButton
                                 onClicked: icon.modelData.restoreTo !== null
-                                    ? Compositor.moveWindowTo(icon.modelData.address, icon.modelData.restoreTo)
-                                    : Compositor.focusWindow(icon.modelData.address)
+                                    ? Compositor.moveWindowTo(icon.modelData.address, icon.modelData.restoreTo, "a click on the bar")
+                                    : Compositor.focusWindow(icon.modelData.address, "a click on the bar")
                             }
                         }
                     }
@@ -192,7 +192,7 @@ Row {
             root.wheel -= notches * 120;
             const target = Ws.scrollTarget(root.list, root.current, notches);
             if (target !== null) {
-                Compositor.goToWorkspace(target);
+                Compositor.goToWorkspace(target, "scrolling on the bar");
             }
         }
     }
