@@ -2508,15 +2508,6 @@ is a platform's other key, with why. The notes under the table say more.
 - **`Super+Shift+B`** reports a bug: it copies a report of the last 30
   seconds and opens a new issue to paste it in (§5.4). B as in bug; the
   maintainer's pick, on every platform (2026-11-18).
-  - `conf` binds it too, to the next audio profile (below), and loads
-    after tide, so where `conf` is, its key wins and Report a bug has
-    none. On Hyprland its `apps` option binds first, and a default key
-    goes to the first binding that wants it, without a word. On tidewm a
-    later binding of the same keys replaces an earlier one. On tidesway,
-    as in sway, the later one replaces it too, and swaynag, where it's
-    installed, shows "Overwriting binding" as the config loads
-    (`sway/commands/bind.c`'s `binding_add`). Which keeps the key
-    is the maintainer's to say (`TODO.md`).
 - **`Super+Alt+F`** opens the Floating settings (§16) with a rule filled
   in for the focused window, its class and exact title, the title
   selected to trim; Enter adds it, Esc doesn't.
@@ -2538,12 +2529,12 @@ launchers through `runenv`. They're `conf`'s, not tide's:
 | `Super+Y` | YouTube Music |
 | `Super+H` | the home folder |
 | `Super+N` | a notepad |
-| `Super+B`, `Super+Shift+B` | connect the headphones, and switch to the next audio profile |
+| `Super+B` | connect the headphones |
 
 `conf`'s Terminal on the VM, which had `Super+V`, has no key now; the
 launcher finds it.
 
-tide for macOS binds the same app keys but `Super+B` and `Super+Shift+B`.
+tide for macOS binds the same app keys but `Super+B`.
 tide for Chrome binds `Search+G` for the browser and four web apps of
 its own (tide for Chrome §9).
 

@@ -2526,7 +2526,7 @@ test("Super+Shift+B reports a bug with tide report-bug", function()
     eq("Report a bug", bind("SUPER + SHIFT + B").opts.description)
 end)
 
-test("an apps option's binding of Super+Shift+B keeps it, as conf's next audio profile does", function()
+test("an apps option's binding of Super+Shift+B keeps it from Report a bug", function()
     -- The apps option binds before tide's later keys, and a default key
     -- goes to the first binding that wants it (apply_keys), so report_bug
     -- is left with none, which the Keyboard shortcuts page can change.
