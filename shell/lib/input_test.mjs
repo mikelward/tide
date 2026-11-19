@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    ACCEL_STEP, LADDERS, SECTIONS, accelCurve, accelPoints, connectedDevices, connectedTidewmDevices, deviceKind, deviceSection, listedDevices, listedTidewmDevices, deviceSettingError, deviceShown, formatValue, hasOwn, inputConf, inputLua, isText, loadInput,
+    ACCEL_ON, ACCEL_STEP, LADDERS, SECTIONS, SLIDERS, isSlider, nudged, sliderFraction, sliderValue, toggledAccel, accelCurve, accelPoints, connectedDevices, connectedTidewmDevices, deviceKind, deviceSection, listedDevices, listedTidewmDevices, deviceSettingError, deviceShown, formatValue, hasOwn, inputConf, inputLua, isText, loadInput,
     pairError, parseInput, parseValue, settingError, shown, stepped, targetLabel, targets, withDeviceSetting, withSetting, withoutDevice,
 } from "./input.mjs";
 
@@ -562,4 +562,43 @@ test("tidewm's devices are listed by the names Hyprland would give them", () => 
     assert.match(listedTidewmDevices(false, "{").error, /^tide-msg --type get_inputs: /);
     assert.match(listedTidewmDevices(false, "{}").error, /expected a list of devices/);
     assert.match(listedTidewmDevices(false, '[{"type": "keyboard"}]').error, /too old to name it/);
+});
+
+test("the pointer's speed and acceleration are sliders in steps of 0.05, without float noise", () => {
+    assert.equal(isSlider("speed"), true);
+    assert.equal(isSlider("accel"), true);
+    assert.equal(isSlider("scroll"), false);
+    assert.equal(sliderValue("speed", 0), -1);
+    assert.equal(sliderValue("speed", 1), 1);
+    assert.equal(sliderValue("speed", 0.5), 0);
+    assert.equal(sliderValue("speed", 0.5375), 0.05, "to the nearest step");
+    assert.equal(sliderValue("accel", 0), SLIDERS.accel.min, "the slider never reaches Off");
+    assert.equal(sliderValue("accel", 1), 4);
+    assert.equal(sliderValue("accel", sliderFraction("accel", 1.35)), 1.35);
+    assert.equal(sliderValue("speed", -0.5), -1, "a fraction out of range stays at an end");
+    assert.equal(sliderFraction("speed", 0), 0.5);
+    assert.equal(sliderFraction("accel", 0), 0, "Off sits at the slider's start");
+});
+
+test("an arrow key moves a slider one step, staying within its ends", () => {
+    assert.equal(nudged("speed", 0.1, 1), 0.15);
+    assert.equal(nudged("speed", 1, 1), 1);
+    assert.equal(nudged("accel", 0.05, -1), 0.05);
+    assert.equal(nudged("accel", 1, -1), 0.95);
+});
+
+test("the Acceleration switch turns libinput's adaptive curve on, and its flat profile on for off", () => {
+    assert.equal(toggledAccel(0), ACCEL_ON);
+    assert.equal(ACCEL_ON, 1);
+    assert.equal(toggledAccel(1.35), 0);
+    assert.equal(formatValue("accel", 0), "Off");
+    assert.equal(formatValue("accel", 1.35), "1.35×");
+    assert.equal(formatValue("speed", 0.05), "+0.05");
+});
+
+test("a kind with no slider, as a hidden slider on another row has, gives no slider value and doesn't throw", () => {
+    assert.equal(sliderFraction("toggle", true), 0);
+    assert.equal(sliderFraction("", undefined), 0);
+    assert.equal(nudged("toggle", 1, 1), 1);
+    assert.ok(Number.isNaN(sliderValue("toggle", 0.5)));
 });
