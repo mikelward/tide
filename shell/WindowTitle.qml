@@ -3,6 +3,7 @@ import Quickshell
 import "lib/title.mjs" as Title
 import "lib/barsettings.mjs" as BarSettings
 import "lib/barclick.mjs" as Click
+import "lib/tipsize.mjs" as TipSize
 
 // The window title in the middle of this monitor's bar (SPEC.md §7.1):
 // the focused window's when it's on this monitor, else nothing, from
@@ -68,6 +69,11 @@ Text {
     }
 
     readonly property string hoverText: Title.hoverTitle(root.window, hover.hovered)
+    // The hover text the popup's size is worked out for: it shows only
+    // then (TipSize.tipShown), as Quickshell keeps the size a popup showed
+    // at.
+    property string tipSizedFor: ""
+    onHoverTextChanged: Qt.callLater(() => { root.tipSizedFor = root.hoverText; })
 
     TextMetrics {
         id: fullWidth
@@ -77,7 +83,7 @@ Text {
     }
 
     PopupWindow {
-        visible: root.hoverText !== ""
+        visible: TipSize.tipShown(root.hoverText, root.tipSizedFor)
         anchor.item: root
         anchor.edges: Theme.hangEdge
         anchor.gravity: Theme.hangEdge
