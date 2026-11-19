@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import "lib/tipsize.mjs" as TipSize
 
 // A bar item's hover text (SPEC.md §7.4): one line under `item`, or over
 // it on a bottom bar (Theme.hangEdge), while `shown`, which is its
@@ -15,7 +16,13 @@ PopupWindow {
     property string text: ""
     property bool shown: false
 
-    visible: shown && text !== "" && PopoverData.open === null && HistoryData.openOn === ""
+    // The text its size is worked out for: it shows only then
+    // (TipSize.tipShown), as Quickshell keeps the size a popup showed at.
+    property string sizedFor: ""
+
+    onTextChanged: Qt.callLater(() => { root.sizedFor = root.text; })
+    Component.onCompleted: root.sizedFor = root.text
+    visible: shown && TipSize.tipShown(text, sizedFor) && PopoverData.open === null && HistoryData.openOn === ""
     anchor.item: item
     anchor.edges: Theme.hangEdge
     anchor.gravity: Theme.hangEdge
