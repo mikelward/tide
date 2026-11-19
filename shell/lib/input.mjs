@@ -788,6 +788,60 @@ function settingsText(settings) {
     return JSON.stringify(next, null, 2) + "\n";
 }
 
+// The pointer's sliders: a speed from -1 to 1, and an acceleration's amount
+// while it's on, from 0.05 to 4, each in steps of 0.05. Off, 0, is the
+// Acceleration switch's, not the slider's.
+export const SLIDERS = Object.freeze({
+    speed: Object.freeze({ min: -1, max: 1, step: 0.05 }),
+    accel: Object.freeze({ min: 0.05, max: 4, step: 0.05 }),
+});
+
+// Whether `kind` is set with a slider.
+export function isSlider(kind) {
+    return Object.prototype.hasOwnProperty.call(SLIDERS, kind);
+}
+
+// The value at `fraction` (0 to 1) along `kind`'s slider: to its step,
+// within its ends, without the float's noise (0.15, not 0.15000000000000002).
+// NaN for a kind with no slider. The page draws a hidden slider on every
+// row, so these three take any kind.
+export function sliderValue(kind, fraction) {
+    const r = SLIDERS[kind];
+    if (!r) {
+        return NaN;
+    }
+    const f = Math.min(1, Math.max(0, fraction));
+    const v = r.min + Math.round(f * (r.max - r.min) / r.step) * r.step;
+    return Math.round(Math.min(r.max, Math.max(r.min, v)) * 100) / 100;
+}
+
+// Where `value` sits along `kind`'s slider, 0 to 1; 0 for a kind with no
+// slider.
+export function sliderFraction(kind, value) {
+    const r = SLIDERS[kind];
+    if (!r || typeof value !== "number") {
+        return 0;
+    }
+    return Math.min(1, Math.max(0, (value - r.min) / (r.max - r.min)));
+}
+
+// `value` moved `steps` of its slider's step, as an arrow key does; as it
+// was for a kind with no slider.
+export function nudged(kind, value, steps) {
+    const r = SLIDERS[kind];
+    if (!r) {
+        return value;
+    }
+    return sliderValue(kind, sliderFraction(kind, value + steps * r.step));
+}
+
+// The Acceleration switch: on is libinput's adaptive curve, 1, as conf's
+// config has it; off is 0, its flat profile.
+export const ACCEL_ON = 1;
+export function toggledAccel(value) {
+    return value > 0 ? 0 : ACCEL_ON;
+}
+
 // The next value along `kind`'s ladder from `value`, up (`step` 1) or down
 // (-1), staying put at either end; a value between rungs moves to the
 // nearest rung that way.

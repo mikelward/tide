@@ -6059,11 +6059,19 @@ settings NAME ARGS...`; most answer why not, or an empty string.
   - Only what's set reaches Hyprland. The rest stays as the Hyprland
     config has it, yours or tide's (§6.8), and the pages show those values
     until they're changed.
-  - A mouse's **acceleration** is an amount from 0 to 4, stepped 0, ¼, ½,
-    ¾, 1, 1½, 2, 2½, 3, 4. 1 is libinput's adaptive curve, which tide's
-    config sets; 0, Off, is libinput's `flat` profile, the same gain at every
-    speed, with the speed as sensitivity; 2 doubles how fast a fast move speeds up, and how
-    far.
+  - The pointer's **speed** is a slider from −1 to 1, a mouse's and a
+    touchpad's alike. A mouse's **acceleration** is an On and Off switch,
+    and while it's on, an **Amount** slider below it, from 0.05 to 4. Each
+    slider moves in steps of 0.05, as tide for macOS's do (its §15), and
+    is set when it's let go, or a step at a time with the arrow keys, so
+    the files aren't written at every step of a drag. Other settings keep
+    − and +.
+  - A mouse's **acceleration** is stored as that amount, 0 for Off. 1 is
+    libinput's adaptive curve, which tide's config sets and which On
+    turns back on; 0, Off, is libinput's `flat` profile, the same gain at
+    every speed, with the speed as sensitivity; 2 doubles how fast a fast
+    move speeds up, and how far. Off and back On gives 1, not the amount
+    before.
     - Hyprland takes it as a curve, `accel_profile = "custom <step>
       <points>"` (Hyprland's `CInputManager::setPointerConfigs`): the
       speed out at each step of speed in, which libinput joins with

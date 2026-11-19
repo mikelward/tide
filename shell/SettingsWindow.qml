@@ -512,6 +512,84 @@ PanelWindow {
         }
     }
 
+    // A pointer setting's slider (input.mjs's SLIDERS), and its value: a
+    // drag shows the value as it goes, and only letting go, or an arrow
+    // key, asks to set it, so the files aren't written at every step.
+    component SettingSlider: Row {
+        id: slider
+
+        property string kind
+        property real value
+        property string label
+        // Where a drag is, while one is under way.
+        property real dragged: NaN
+        readonly property real shown: isNaN(dragged) ? value : dragged
+
+        signal committed(real value)
+        // Escape, which gives the keyboard back to the search field, as
+        // the page's other fields do; that's the page's to do.
+        signal escaped
+
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 10
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Slider
+        Accessible.name: label
+        Keys.onLeftPressed: slider.committed(Input.nudged(kind, value, -1))
+        Keys.onRightPressed: slider.committed(Input.nudged(kind, value, 1))
+        Keys.onEscapePressed: slider.escaped()
+
+        Rectangle {
+            id: track
+
+            anchors.verticalCenter: parent.verticalCenter
+            width: 180
+            height: 6
+            radius: 3
+            color: Theme.surface2
+            border.width: slider.activeFocus ? 1 : 0
+            border.color: Theme.accent
+
+            Rectangle {
+                width: track.width * Input.sliderFraction(slider.kind, slider.shown)
+                height: parent.height
+                radius: 3
+                color: Theme.accent
+            }
+
+            // Taller than the track, so it's easy to grab.
+            MouseArea {
+                anchors.fill: parent
+                anchors.topMargin: -8
+                anchors.bottomMargin: -8
+
+                function at(x) {
+                    return Input.sliderValue(slider.kind, x / track.width);
+                }
+
+                onPressed: mouse => slider.dragged = at(mouse.x)
+                onPositionChanged: mouse => slider.dragged = at(mouse.x)
+                onReleased: mouse => {
+                    const v = at(mouse.x);
+                    slider.dragged = NaN;
+                    slider.committed(v);
+                }
+                onCanceled: slider.dragged = NaN
+            }
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            width: 56
+            horizontalAlignment: Text.AlignRight
+            text: Input.formatValue(slider.kind, slider.shown)
+            color: Theme.fg
+            font.family: Theme.font
+            font.pixelSize: 13
+            font.features: ({ "tnum": 1 })
+        }
+    }
+
     // The wallpaper grid's listing (galleryCommand), tracked as every
     // command the shell runs is, waiting for its stdout too.
     Component {
@@ -988,10 +1066,11 @@ PanelWindow {
                     }
 
                     // Mouse, Touchpad and Keyboard: each setting for that
-                    // kind of device, which − and + step along input.mjs's
-                    // ladders, a click turns on or off, or is typed and set
-                    // with Enter. Until it's set, it shows what conf's
-                    // config has.
+                    // kind of device, which a slider sets (the pointer's
+                    // speed, and its acceleration's amount, under an On and
+                    // Off switch), − and + step along input.mjs's ladders, a
+                    // click turns on or off, or is typed and set with Enter.
+                    // Until it's set, it shows what conf's config has.
                     Column {
                         id: device
 
@@ -1118,14 +1197,83 @@ PanelWindow {
                                 readonly property var value: device.shown(modelData.key)
                                 readonly property bool toggle: modelData.kind === "toggle"
                                 readonly property bool typed: Input.isText(modelData.kind)
+                                readonly property bool accel: modelData.kind === "accel"
+                                readonly property bool slid: modelData.kind === "speed"
+                                // Acceleration's amount, on a second line
+                                // while it's on.
+                                readonly property bool amount: accel && value > 0
 
                                 width: device.width
-                                implicitHeight: 32
+                                implicitHeight: amount ? 66 : 32
+
+                                SettingSlider {
+                                    visible: option.slid
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    kind: option.modelData.kind
+                                    value: option.slid ? option.value : 0
+                                    label: option.modelData.label
+                                    onCommitted: v => device.set(option.modelData.key, v)
+                                    onEscaped: keys.forceActiveFocus()
+                                }
+
+                                // On or off: off is libinput's flat profile.
+                                Rectangle {
+                                    visible: option.accel
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    y: 3
+                                    width: 56
+                                    height: 26
+                                    radius: 13
+                                    color: option.amount ? Theme.accentBg : Theme.surface2
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: Input.formatValue("toggle", option.amount)
+                                        color: option.amount ? Theme.accentFg : Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 12
+                                        font.weight: Font.DemiBold
+                                    }
+
+                                    TapHandler {
+                                        enabled: option.accel
+                                        onTapped: device.set(option.modelData.key, Input.toggledAccel(option.value))
+                                    }
+                                }
+
+                                Item {
+                                    visible: option.amount
+                                    y: 34
+                                    width: parent.width
+                                    height: 32
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 10
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Amount"
+                                        color: Theme.fg
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                    }
+
+                                    SettingSlider {
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 6
+                                        kind: "accel"
+                                        value: option.amount ? option.value : 0
+                                        label: "Acceleration amount"
+                                        onCommitted: v => device.set(option.modelData.key, v)
+                                        onEscaped: keys.forceActiveFocus()
+                                    }
+                                }
 
                                 Text {
                                     anchors.left: parent.left
                                     anchors.leftMargin: 10
-                                    anchors.verticalCenter: parent.verticalCenter
+                                    y: (32 - height) / 2
                                     text: option.modelData.label
                                     color: Theme.fg
                                     font.family: Theme.font
@@ -1133,7 +1281,7 @@ PanelWindow {
                                 }
 
                                 Row {
-                                    visible: !option.toggle && !option.typed
+                                    visible: !option.toggle && !option.typed && !option.accel && !option.slid
                                     anchors.right: parent.right
                                     anchors.rightMargin: 6
                                     anchors.verticalCenter: parent.verticalCenter
