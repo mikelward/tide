@@ -188,7 +188,7 @@ test("a rule covers a window by its class, ignoring case, and its title anywhere
     assert.deepEqual(coveringRule([], "kitty", "Save As…"), { builtIn: true, index: -1 });
 });
 
-test("Floating now lists floating windows no rule covers, one per class, leaving out tiled and classless ones", () => {
+test("Floating now lists every floating window no rule covers, leaving out tiled and classless ones", () => {
     const windows = [
         { address: "0x1", class: "kitty", title: "htop", floating: true },
         { address: "0x2", class: "Kitty", title: "vim", floating: true },
@@ -197,7 +197,10 @@ test("Floating now lists floating windows no rule covers, one per class, leaving
         { address: "0x5", class: "pavucontrol", title: "Volume Control", floating: true },
         { address: "0x6", class: "", title: "", floating: true },
     ];
-    assert.deepEqual(floatingNow(windows, [calc]), [{ class: "kitty", title: "htop", address: "0x1", details: [] }]);
+    assert.deepEqual(floatingNow(windows, [calc]), [
+        { class: "kitty", title: "htop", address: "0x1", details: [] },
+        { class: "Kitty", title: "vim", address: "0x2", details: [] },
+    ], "each window, a second of the same class too");
 });
 
 test("Also floating lists every floating window a rule covers, dialogs among them, saying whose rule", () => {

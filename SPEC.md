@@ -6455,8 +6455,8 @@ settings NAME ARGS...`; most answer why not, or an empty string.
   - The page shows the rules, with arrows that move one and a bin that
     takes it out. A class and a title typed at the foot are added with
     Enter. A change names a rule by its place, class and title (§16.1).
-  - *Floating now* lists the floating windows no rule covers, one per
-    class: `floating` and `class` from Hyprland's client list, the title
+  - *Floating now* lists every floating window no rule covers, one each:
+    `floating` and `class` from Hyprland's client list, the title
     from Quickshell's toplevel, which follows `windowtitlev2` as the
     client list Quickshell keeps doesn't. Applying a rule and Super+Alt+F
     read a window the same way.
