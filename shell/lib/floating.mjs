@@ -650,8 +650,8 @@ export function coveringRule(rules, cls, title) {
     return index < 0 ? null : { builtIn: false, index };
 }
 
-// The windows the page lists under Floating now: those floating that no
-// rule covers, one per class, in the order given, each {class, title,
+// The windows the page lists under Floating now: every one floating that
+// no rule covers, one each, in the order given, each {class, title,
 // address}. `windows` are {address, class, title, floating}. A window
 // with no class can't be named by a rule, so it isn't listed.
 export function floatingNow(windows, rules) {
@@ -659,9 +659,6 @@ export function floatingNow(windows, rules) {
     for (const w of windows) {
         const cls = String(w.class ?? "");
         if (!w.floating || cls === "" || coveringRule(rules, cls, w.title ?? "") !== null) {
-            continue;
-        }
-        if (out.some(o => o.class.toLowerCase() === cls.toLowerCase())) {
             continue;
         }
         out.push({ class: cls, title: String(w.title ?? ""), address: w.address, details: w.details ?? [] });
