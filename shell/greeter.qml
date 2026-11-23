@@ -451,7 +451,7 @@ ShellRoot {
                 wallpaper: root.shown?.path ?? ""
                 wallpaperColor: root.shown?.color ?? ""
                 wallpaperPosition: root.shown?.position ?? "fill"
-                status: Greeter.statusText(root.face, root.chosen?.name ?? "", Lock.statusLine(root.face).text)
+                status: Greeter.statusText(root.face, root.chosen?.name ?? "", Lock.statusLine(root.face, keyboards.present).text)
                 powerMessage: powerActions.message
                 powerBusy: powerActions.busy
                 layout: keymap.layoutName

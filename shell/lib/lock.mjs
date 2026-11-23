@@ -209,14 +209,17 @@ export function fieldText(state) {
     return "";
 }
 
-// What the layout's place under the field says while there's no keyboard
-// to type with (SPEC.md §10), as when a KVM has switched it away.
+// What the line under the layout says while there's no keyboard to type
+// with (SPEC.md §10), as when a KVM has switched it away.
 export const NO_KEYBOARD = "No keyboard";
 
 // The line under the layout, and whether it's a failure's, drawn in red:
-// "Checking" while PAM checks, else PAM's message or the failure.
-export function statusLine(state) {
+// "Checking" while PAM checks, else "No keyboard" while there's none
+// (hasKeyboard), as a failure can't be answered without one, else PAM's
+// message or the failure.
+export function statusLine(state, keyboard = true) {
     if (state.checking) return { text: "Checking", error: false };
+    if (!keyboard) return { text: NO_KEYBOARD, error: false };
     return { text: state.message, error: state.error };
 }
 
@@ -224,14 +227,14 @@ export function statusLine(state) {
 export const CAPS_LOCK_ON = "Caps Lock is on";
 
 // The row under the password field, as the boot splash has it (SPEC.md
-// §10): the layout's name, then, beside it, "No keyboard" while there's
-// none (hasKeyboard), else "Caps Lock is on" while it's on. With no
-// keyboard Hyprland names no layout, so `last`, the last one named, stands
-// in. Returns {layout, flag, kind}: kind "keyboard", "caps" or "" for none.
+// §10): the layout's name, then, beside it, "Caps Lock is on" while it's
+// on and there's a keyboard (hasKeyboard). With no keyboard Hyprland names
+// no layout, so `last`, the last one named, stands in, and "No keyboard"
+// goes on the line below (statusLine). Returns {layout, flag, kind}: kind
+// "caps" or "" for none.
 export function layoutRow({ layout, last, keyboard, capsLock }) {
     const name = layout || (keyboard ? "" : last || "");
-    if (!keyboard) return { layout: name, flag: NO_KEYBOARD, kind: "keyboard" };
-    if (capsLock === true) return { layout: name, flag: CAPS_LOCK_ON, kind: "caps" };
+    if (keyboard && capsLock === true) return { layout: name, flag: CAPS_LOCK_ON, kind: "caps" };
     return { layout: name, flag: "", kind: "" };
 }
 

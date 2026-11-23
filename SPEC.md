@@ -4738,11 +4738,11 @@ talk, a demo, or a meeting room's screen.
   monitor's, or one with no keyboard to type with, as when a monitor's
   KVM has switched its USB keyboard to another machine. A failed attempt's
   red border wins over both.
-  - With no keyboard, "No keyboard" sits beside the layout under the
-    field, on every face, where "Caps Lock is on" goes (maintainer,
-    2026-11-13). The compositor names no layout with no keyboard, so the
-    last one named stays. The line under the row keeps PAM's message or the
-    failure.
+  - With no keyboard, "No keyboard" is on the line under the layout, on
+    every face, where PAM's message or a failure goes (maintainer,
+    2026-11-23). It wins over them, as a failure can't be answered
+    without a keyboard, but not over "Checking". The compositor names no
+    layout with no keyboard, so the last one named stays.
   - A keyboard is an input device udev tags `ID_INPUT_KEYBOARD`: one with
     every key from Esc to D. A power button isn't one. Nor is any that
     can't be typed on while the keyboard is away (maintainer, 2026-11-15):
@@ -4814,7 +4814,7 @@ talk, a demo, or a meeting room's screen.
   the keyboards' Caps Lock lights, which Hyprland and tidewm both set. The
   lock and the greeter run it at start, when a keyboard comes or goes, and
   each time Caps Lock is released. A keyboard with no light can't say, so
-  nothing shows for it. "No keyboard" wins over it.
+  nothing shows for it, nor with no keyboard.
 - **Either mouse button clicks** on the lock and the greeter, so a
   left-handed mouse needs no setting there.
 - **Power from the lock:** Suspend at the bottom left, Restart and Shut down

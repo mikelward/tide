@@ -671,7 +671,7 @@ test("the journal says when a key stands in for the count, and when that ends", 
     assert.equal(keyboardsKeyLog(one, keyboardsNext(one, { type: "key" }).state), null);
 });
 
-test("the row under the field names the layout, and No keyboard or Caps Lock beside it", () => {
+test("the row under the field names the layout, and Caps Lock beside it", () => {
     assert.deepEqual(layoutRow({ layout: "Dvorak", last: "Dvorak", keyboard: true, capsLock: false }),
         { layout: "Dvorak", flag: "", kind: "" });
     assert.deepEqual(layoutRow({ layout: "Dvorak", last: "Dvorak", keyboard: true, capsLock: true }),
@@ -679,16 +679,30 @@ test("the row under the field names the layout, and No keyboard or Caps Lock bes
     // Unknown is shown as off.
     assert.deepEqual(layoutRow({ layout: "Dvorak", last: "", keyboard: true, capsLock: null }),
         { layout: "Dvorak", flag: "", kind: "" });
-    // The KVM switches away: Hyprland names no layout, so the last one stays.
+    // The KVM switches away: Hyprland names no layout, so the last one
+    // stays, alone: No keyboard is on the line below.
     assert.deepEqual(layoutRow({ layout: "", last: "Dvorak", keyboard: false, capsLock: true }),
-        { layout: "Dvorak", flag: NO_KEYBOARD, kind: "keyboard" });
+        { layout: "Dvorak", flag: "", kind: "" });
     assert.deepEqual(layoutRow({ layout: "", last: "", keyboard: false, capsLock: null }),
-        { layout: "", flag: "No keyboard", kind: "keyboard" });
+        { layout: "", flag: "", kind: "" });
     // With a keyboard, a layout that can't be read isn't guessed.
     assert.deepEqual(layoutRow({ layout: "", last: "Dvorak", keyboard: true, capsLock: false }),
         { layout: "", flag: "", kind: "" });
     const failed = run(INITIAL, ...type("pw"), { type: "submit" }, prompt, { type: "done", result: "failed" }).state;
     assert.deepEqual(statusLine(failed), { text: WRONG, error: true });
+});
+
+test("No keyboard is on the line under the layout, where a failure goes", () => {
+    assert.deepEqual(statusLine(INITIAL, false), { text: NO_KEYBOARD, error: false });
+    assert.equal(statusLine(INITIAL, true).text, "");
+    // A failure can't be answered without a keyboard, so No keyboard wins,
+    // and the failure is back once there's one.
+    const failed = run(INITIAL, ...type("pw"), { type: "submit" }, prompt, { type: "done", result: "failed" }).state;
+    assert.deepEqual(statusLine(failed, false), { text: NO_KEYBOARD, error: false });
+    assert.deepEqual(statusLine(failed, true), { text: WRONG, error: true });
+    // A check already under way still says so.
+    const checking = run(INITIAL, ...type("pw"), { type: "submit" }).state;
+    assert.equal(statusLine(checking, false).text, "Checking");
 });
 
 test("Caps Lock is read one at a time, and an answer it can't read hides it", () => {
