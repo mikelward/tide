@@ -207,6 +207,19 @@ function barLayoutValid(v) {
 
 const NEEDS_PLACE = 'mode "sun" needs latitude and longitude';
 
+// How long sunrise and sunset with no location set wait for the time
+// zone's city before that's an error: past tide-tz's retry, a minute after
+// a run that fails, so a slow login doesn't report a location missing that
+// the time zone gives moments later.
+export const PLACE_WAIT_MS = 2 * 60 * 1000;
+
+// Whether sunrise and sunset with no location set still wait for the time
+// zone's city: until tide-tz has answered (`answered`, its table loaded,
+// with a city or none), or PLACE_WAIT_MS have passed (`waitedMs`).
+export function placeAwaited(answered, waitedMs) {
+    return !answered && waitedMs < PLACE_WAIT_MS;
+}
+
 // The settings with the time zone's place (tide-tz's {latitude, longitude,
 // city}, or null) standing in for a latitude or longitude that isn't set,
 // so sunrise and sunset work before a location is typed (SPEC.md §15).

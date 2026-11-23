@@ -15,8 +15,7 @@ import {
     POSITIONS, POSITION_CHOICES, BAR_POSITIONS, BAR_CHOICES, barAtBottom, wallpaperPosition, wallpaperPlacement, positionAt, steppedPositionAt, appearanceConf, tideswayConf, joinedConfs, splitConfs, confBorder, newBorder, ROUNDING,
     BORDER_WIDTH, BORDER_WIDTH_MAX, borderWidth, steppedBorder, SHADOW_SIZE, SHADOW_SIZE_MAX, shadowSize, steppedShadow, formatPixels, borderColor,
     SHADOWS, SHADOWS_DEFAULT, shadows, SHADOW_CHOICES, shadowsAt, steppedShadowsAt,
-    LOOK_ROOT, lookDir, lookCommand, lookWriteCommand, lookCopied, lookJson, parseLook, lookAt
-} from "./appearance.mjs";
+    LOOK_ROOT, lookDir, lookCommand, lookWriteCommand, lookCopied, lookJson, parseLook, lookAt, PLACE_WAIT_MS, placeAwaited } from "./appearance.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, statSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1761,4 +1760,13 @@ test("the Bar page's choices start with Default, the palette's own, which takes 
         assert.deepEqual(first, { label: "Default", color: dark ? "#16161a" : "#fafafb", value: null });
         assert.deepEqual(rest.map(c => c.value), barColors(dark).map(c => c.color));
     }
+});
+
+test("sunrise and sunset wait for the time zone's city past tide-tz's retry", () => {
+    // A login where tide-tz is slow, or fails and is tried a minute later
+    assert.equal(placeAwaited(false, 5 * 1000), true);
+    assert.equal(placeAwaited(false, 61 * 1000), true);
+    assert.equal(placeAwaited(false, PLACE_WAIT_MS), false);
+    // tide-tz answered, with a city or without one: no more waiting
+    assert.equal(placeAwaited(true, 0), false);
 });
