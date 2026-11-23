@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { workspaceOrder } from "./workspaces.mjs";
-import { NO_HISTORY, HISTORY_SIZE, used, lastUsed, nth, homeOrBack, lastOther } from "./workspacekeys.mjs";
+import { NO_HISTORY, HISTORY_SIZE, used, lastUsed, nth, homeOrBack, lastOther, step } from "./workspacekeys.mjs";
 
 const standing = ["in", "re"];
 // Visits each in turn from an empty history.
@@ -93,4 +93,36 @@ test("Super+End from home goes where Super+Tab does, never home", () => {
 
 test("lastUsed with nothing used is null", () => {
     assert.equal(lastUsed(NO_HISTORY, place(["in", "x"])), null);
+});
+
+// The bar's order: in, re, two empty, then ti, made before re
+const BAR = ["in", "re", "ab", "cd", "ti"].map(name => ({ name }));
+
+test("Super+PgDn goes to the next workspace on the bar with a window, not the next made", () => {
+    assert.equal(step(BAR, "in", 1, { withWindows: ["in", "re", "ti"] }), "re");
+    assert.equal(step(BAR, "re", 1, { withWindows: ["in", "re", "ti"] }), "ti", "past the empty ones");
+});
+
+test("Super+PgDn goes round from the last to the first, and PgUp back", () => {
+    assert.equal(step(BAR, "ti", 1, { withWindows: ["in", "re", "ti"] }), "in");
+    assert.equal(step(BAR, "in", -1, { withWindows: ["in", "re", "ti"] }), "ti");
+    assert.equal(step(BAR, "re", -1, { withWindows: ["in", "re", "ti"] }), "in");
+});
+
+test("from an empty workspace, Super+PgDn goes to the next with a window", () => {
+    assert.equal(step(BAR, "ab", 1, { withWindows: ["in", "ti"] }), "ti");
+});
+
+test("with no other workspace with a window, Super+PgDn stays", () => {
+    assert.equal(step(BAR, "in", 1, { withWindows: ["in"] }), null);
+    assert.equal(step(BAR, "in", 1), null);
+});
+
+test("Super+Shift+PgDn's workspace is the very next, empty or not", () => {
+    assert.equal(step(BAR, "re", 1, { any: true }), "ab");
+    assert.equal(step(BAR, "in", -1, { any: true }), "ti");
+});
+
+test("a workspace not on the bar steps nowhere", () => {
+    assert.equal(step(BAR, "special:x", 1, { any: true }), null);
 });

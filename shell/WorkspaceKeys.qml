@@ -9,8 +9,9 @@ import "lib/workspaces.mjs" as Ws
 // The workspace keys of SPEC.md §6.6 that need the bar's order or the
 // workspaces you used, which tidewm doesn't know: conf's tidewm config
 // runs `qs -c tide ipc call workspaces …` for Super+1…9 and Super+0
-// (`go N`, `send N`), Super+Home (`home`), Super+Tab (`homeOrBack`) and
-// Super+End (`lastOther`). conf's hyprland.lua does them itself, but the
+// (`go N`, `send N`), Super+Home (`home`), Super+Tab (`homeOrBack`),
+// Super+End (`lastOther`), Super+PgDn and PgUp (`next`, `prev`), and
+// with Shift (`moveNext`, `movePrev`). conf's hyprland.lua does them itself, but the
 // calls work there too. Each answers what it did, or why it didn't.
 Scope {
     id: root
@@ -44,6 +45,30 @@ Scope {
             standing: WorkspacesData.standing,
             names: Compositor.workspaces.map(w => Span.workspaceOf(w.name))
         };
+    }
+
+    // The workspaces with a window not minimized, by plain name.
+    function withWindows() {
+        return Compositor.windows.filter(w => w.workspace !== null && w.workspace !== undefined)
+            .map(w => Span.workspaceOf(w.workspaceName));
+    }
+
+    function step(delta, key) {
+        return root.goTo(Keys.step(root.order(), root.here(), delta, { withWindows: root.withWindows() }),
+            "no other workspace with a window", key);
+    }
+
+    function moveStep(delta, key) {
+        const name = Keys.step(root.order(), root.here(), delta, { any: true });
+        if (name === null) {
+            return "no other workspace on the bar";
+        }
+        const address = root.focused();
+        if (address === null) {
+            return "no window focused";
+        }
+        Compositor.moveWindowTo(address, name, `the ${key} key`);
+        return `moved ${address} to ${name}`;
     }
 
     // Goes to `name`, saying in the journal that `key` asked; with none,
@@ -83,6 +108,22 @@ Scope {
             }
             Compositor.sendWindowTo(address, name, `the Super+Shift+${n} key`);
             return `sent ${address} to ${name}`;
+        }
+        // Super+PgDn and Super+PgUp: the next or previous workspace on
+        // the bar with a window, round from the end.
+        function next(): string {
+            return root.step(1, "next_workspace");
+        }
+        function prev(): string {
+            return root.step(-1, "previous_workspace");
+        }
+        // Super+Shift+PgDn and PgUp: the focused window to the very next
+        // or previous workspace on the bar, empty or not, following it.
+        function moveNext(): string {
+            return root.moveStep(1, "move_to_next_workspace");
+        }
+        function movePrev(): string {
+            return root.moveStep(-1, "move_to_previous_workspace");
         }
         // Super+Home.
         function home(): string {
