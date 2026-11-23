@@ -2714,8 +2714,11 @@ floating window.
     swap alone. Hyprland binds `Escape` and `Alt+Shift+Tab` only while
     you're choosing, so they reach apps otherwise.
   - KDE and tide for Chrome can't hear `Alt` come up, so a half-second
-    pause after the last `Tab` makes the choice instead (not built yet).
-    macOS hears it (not built yet).
+    pause after the last `Tab` makes the choice instead; a focus change or
+    a workspace switch meanwhile cancels it, and neither has `Escape` or a
+    way back. tide for Chrome's key is `Search+Shift+M`. macOS hears Alt
+    come up through its event tap, but Karabiner leaves `Alt+Shift+Tab`
+    as the app's own key, so there's no way back there either.
   - Hyprland takes a bound key from every app, so `Alt+Tab` no longer
     reaches one, such as a remote desktop or a VM viewer.
 - **`Super+Return`** used to move the focused window. It goes to a
