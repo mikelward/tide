@@ -30,8 +30,10 @@ once you have agreed with it or reversed it.
   - A window opened by your own launch is matched too: one whose title is
     a closed window's (a new tab's, say) can be sent to that window's
     workspace.
-  - Nothing is saved: a new login, or a restarted shell, remembers no
-    windows, so a browser's restored session at login opens where you are.
+  - Saved across a logout since 2026-11-23, when you asked for Chrome's
+    restored windows to go back: the windows open and those remembered
+    are saved, and count as closed at the next login. A window you open
+    at login whose title matches a saved one's goes to its workspace too.
   Reversible: `shell/lib/reopened.mjs`'s constants and `windowsChanged`.
 
 - **The boot splash no longer stays up for the login screen**

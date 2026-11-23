@@ -1,7 +1,7 @@
 // Tests for reopened.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { NOTHING, KEEP_MS, REOPEN_MS, TITLE_MS, MAX_CLOSED, windowsChanged } from "./reopened.mjs";
+import { NOTHING, KEEP_MS, REOPEN_MS, TITLE_MS, MAX_CLOSED, SAVED_MS, windowsChanged, snapshot, restored } from "./reopened.mjs";
 
 const brave = (address, title, workspace) => ({ address, app: "brave-browser", title, workspace });
 const term = (address, workspace) => ({ address, app: "kitty", title: "~", workspace });
@@ -201,4 +201,73 @@ test("only the latest closed windows are remembered", () => {
     const { state } = run([[many, 0], [[], 100]]);
     assert.equal(state.closed.length, MAX_CLOSED);
     assert.equal(state.closed.some(c => c.title === "Page 0 - Brave"), false, "the oldest went");
+});
+
+// Across a logout: the snapshot saved before it, restored at the next login.
+function afterLogin(before, at, steps) {
+    let state = restored(JSON.parse(JSON.stringify(snapshot(run(before).state, 0))), at);
+    const moves = [];
+    for (const [windows, when] of steps) {
+        const r = windowsChanged(state, windows, when);
+        state = r.state;
+        for (const m of r.moves) {
+            moves.push([m.address, m.workspace]);
+        }
+    }
+    return moves;
+}
+
+test("a browser's restored session at the next login goes back to its workspaces", () => {
+    const login = 8 * 60 * 60 * 1000;
+    const moves = afterLogin([[open, 0]], login, [
+        [[], login],
+        [[brave("c", "Mail - Brave", "in")], login + 5000],
+        [[brave("c", "Mail - Brave", "in"), brave("d", "Docs - Brave", "in")], login + 5500],
+    ]);
+    assert.deepEqual(moves, [["d", "re"]]);
+});
+
+test("windows already open when the shell starts go back too", () => {
+    const moves = afterLogin([[open, 0]], 1000, [
+        [[brave("c", "Docs - Brave", "in"), brave("d", "Mail - Brave", "in")], 1000],
+    ]);
+    assert.deepEqual(moves, [["c", "re"]]);
+});
+
+test("windows with one title stay on their own workspaces", () => {
+    // A shell restarted with two terminals open, both titled ~
+    const moves = afterLogin([[[term("t", "in"), term("u", "re")], 0]], 1000, [
+        [[term("u", "re"), term("t", "in")], 1000],
+    ]);
+    assert.deepEqual(moves, []);
+});
+
+test("a window closed before the logout is remembered across it", () => {
+    const moves = afterLogin([[open, 0], [[term("t", "re")], 100]], 60000, [
+        [[], 60000],
+        [[brave("c", "Docs - Brave", "in")], 61000],
+    ]);
+    assert.deepEqual(moves, [["c", "re"]]);
+});
+
+test("a snapshot too old, malformed or missing restores nothing", () => {
+    const old = snapshot(run([[open, 0]]).state, 0);
+    assert.equal(restored(old, SAVED_MS), NOTHING);
+    assert.equal(restored(old, -1), NOTHING);
+    assert.equal(restored(null, 0), NOTHING);
+    assert.equal(restored({ at: 0, windows: "x" }, 0), NOTHING);
+    assert.equal(restored({ at: 0, windows: [{ app: "", title: "x", workspace: "in" }] }, 0), NOTHING);
+});
+
+test("a snapshot leaves out windows with no workspace to go back to", () => {
+    const s = snapshot(run([[[brave("a", "Mail - Brave", ""), term("t", "re")], 0]]).state, 5);
+    assert.deepEqual(s, { at: 5, windows: [{ app: "kitty", title: "~", workspace: "re" }] });
+});
+
+test("a window on its own workspace's match isn't moved for another's sake", () => {
+    // Saved kitty ~ on in and re; restored on other and in, in that order
+    const moves = afterLogin([[[term("t", "in"), term("u", "re")], 0]], 1000, [
+        [[term("v", "other"), term("w", "in")], 1000],
+    ]);
+    assert.deepEqual(moves, [["v", "re"]]);
 });
