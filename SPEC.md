@@ -2181,10 +2181,23 @@ update, would otherwise open them all where you are.
 - **How.** On Hyprland and tidewm the shell remembers and sends windows
   back, from the windows Compositor.qml lists (`ReopenedData.qml`,
   `lib/reopened.mjs`). A window is sent once it's shown, so it can flash
-  where it opened first. What's remembered is the shell's alone: a
-  restarted shell, or a new login, starts with nothing remembered. tide
-  on KDE does the same in its KWin script, with a copy of
-  `lib/reopened.mjs`.
+  where it opened first. tide on KDE does the same in its KWin script,
+  with a copy of `lib/reopened.mjs`.
+- **Across a logout.** The shell saves the windows open, and those it
+  remembers, to `$XDG_STATE_HOME/tide/windows.json` as they change, at
+  most every 2 seconds: each one's app, title and workspace, and nothing
+  else. At the next login, or when the shell restarts, those count as
+  closed just then, and every window open counts as opened. So a browser
+  that restores its session puts each window back where it was, by the
+  same rules, and so does any app whose windows come back with the same
+  titles. A snapshot more than 7 days old is left unused.
+  - Of windows with one title, two terminals say, each stays on its own
+    workspace if a saved one with that title was there, so a restarted
+    shell doesn't swap them.
+  - tide on KDE saves the same list through plasmashell's scripting, to
+    `~/.local/state/tide/kde-windows`, as a KWin script can't write a file
+    itself (tide-kde's SPEC.md); with Plasma's widgets locked, plasmashell
+    refuses scripts, so nothing is saved there.
 
 **The short name.**
 

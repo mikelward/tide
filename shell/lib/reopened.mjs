@@ -25,6 +25,12 @@
 // is taken once.
 // Nothing else moves: a window opened while another of its app is open,
 // one moved meanwhile, and one with a title no closed window had.
+//
+// Across a logout: snapshot() is what to save, the windows open and those
+// remembered, and restored() a state from it at the next login, in which
+// they all count as closed then and nothing is open yet. So the first
+// list's windows each count as opened, and an app that restores its
+// windows, as a browser does its session, has them sent back too.
 
 // How long a closed window is remembered, in milliseconds: long enough for
 // an update to install before the app opens again.
@@ -36,6 +42,8 @@ export const REOPEN_MS = 30 * 1000;
 export const TITLE_MS = 5 * 1000;
 // The most closed windows remembered; the oldest go first.
 export const MAX_CLOSED = 200;
+// How old a saved snapshot may be at login and still be used.
+export const SAVED_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Before the first list: nothing seen, nothing remembered.
 export const NOTHING = Object.freeze({ seen: null, closed: [], reopening: [], waiting: [] });
@@ -68,13 +76,16 @@ function reopeningUntil(reopening, app, now) {
     return null;
 }
 
-// The index in `closed` of the window `w` reopens, or -1.
-function match(closed, w) {
+// The index in `closed` of the window `w` reopens, or -1; with `own`, only
+// one on w's own workspace. Windows are matched to their own workspace's
+// first, all of them, so windows with one title, two terminals say, aren't
+// swapped between workspaces.
+function match(closed, w, own) {
     if (w.title === "") {
         return -1;
     }
     for (let i = 0; i < closed.length; i++) {
-        if (closed[i].app === w.app && closed[i].title === w.title) {
+        if (closed[i].app === w.app && closed[i].title === w.title && (!own || closed[i].workspace === w.workspace)) {
             return i;
         }
     }
@@ -118,30 +129,75 @@ export function windowsChanged(state, windows, now) {
         }
     };
     // Those waiting for their title, while still where they opened and
-    // their app's reopening lasts.
-    const waiting = [];
+    // their app's reopening lasts, then those opened in its reopening.
+    const candidates = [];
     for (const wait of state.waiting) {
         const w = find(current, wait.address);
-        if (w === null || w.place !== wait.place || now >= wait.until) {
-            continue;
-        }
-        const i = match(closed, w);
-        if (i >= 0) {
-            take(w, i);
-        } else {
-            waiting.push(wait);
+        if (w !== null && w.place === wait.place && now < wait.until) {
+            candidates.push({ w: w, wait: wait });
         }
     }
     for (const w of opened) {
-        if (reopeningUntil(reopening, w.app, now) === null) {
-            continue;
+        if (reopeningUntil(reopening, w.app, now) !== null) {
+            candidates.push({ w: w, wait: { address: w.address, place: w.place, until: now + TITLE_MS } });
         }
-        const i = match(closed, w);
+    }
+    // Each to a closed window on its own workspace first, then the rest to
+    // any; one with none waits for its title.
+    const waiting = [];
+    const left = [];
+    for (const c of candidates) {
+        const i = match(closed, c.w, true);
         if (i >= 0) {
-            take(w, i);
+            take(c.w, i);
         } else {
-            waiting.push({ address: w.address, place: w.place, until: now + TITLE_MS });
+            left.push(c);
+        }
+    }
+    for (const c of left) {
+        const i = match(closed, c.w, false);
+        if (i >= 0) {
+            take(c.w, i);
+        } else {
+            waiting.push(c.wait);
         }
     }
     return { state: { seen: current, closed: closed, reopening: reopening, waiting: waiting }, moves: moves };
+}
+
+// What to save at `now`, so the next login can send windows back: each
+// open window with a workspace, then those remembered, at most MAX_CLOSED,
+// as {at, windows: [{app, title, workspace}]}.
+export function snapshot(state, now) {
+    const windows = [];
+    for (const w of (state && state.seen) || []) {
+        if (w.workspace !== "") {
+            windows.push({ app: w.app, title: w.title, workspace: w.workspace });
+        }
+    }
+    for (const c of (state && state.closed) || []) {
+        windows.push({ app: c.app, title: c.title, workspace: c.workspace });
+    }
+    return { at: now, windows: windows.slice(0, MAX_CLOSED) };
+}
+
+// The state to start from at `now` given a saved snapshot, or NOTHING for
+// none, a malformed one, or one older than SAVED_MS: every saved window
+// counts as closed at `now`, and none as open.
+export function restored(saved, now) {
+    if (!saved || typeof saved !== "object" || !Number.isFinite(saved.at) || !Array.isArray(saved.windows)
+            || now - saved.at < 0 || now - saved.at >= SAVED_MS) {
+        return NOTHING;
+    }
+    const closed = [];
+    for (const w of saved.windows) {
+        if (w && typeof w.app === "string" && w.app !== "" && typeof w.title === "string"
+                && typeof w.workspace === "string" && w.workspace !== "") {
+            closed.push({ app: w.app, title: w.title, workspace: w.workspace, at: now });
+        }
+    }
+    if (closed.length === 0) {
+        return NOTHING;
+    }
+    return { seen: [], closed: closed.slice(0, MAX_CLOSED), reopening: [], waiting: [] };
 }
