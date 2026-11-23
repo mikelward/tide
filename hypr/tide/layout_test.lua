@@ -1043,6 +1043,99 @@ test("swap_with_master on the master goes back to the master before it", functio
     eq(hl.dispatched[#hl.dispatched].arg, "address:0x103", "and again: presses go back and forth")
 end)
 
+-- Alt+Tab held: the order is 0x101 0x102 0x103, the master first, and
+-- focus is on the last.
+local function cycling()
+    local qs, layout = fresh()
+    lay(layout, HD, 1, { 1, 2, 3 })
+    hl.active_window = "0x103"
+    return qs
+end
+
+-- A press of Alt+Tab, held, as Hyprland makes it: focus moves at once.
+local function press(qs, dir)
+    local n = #hl.dispatched
+    local began = qs.cycle(dir)
+    local d = hl.dispatched[n + 1]
+    if d and d.kind == "focus" then
+        hl.active_window = d.arg:match("^address:(.*)$")
+    end
+    return began
+end
+
+test("an Alt+Tab tap is swap_with_master as Alt comes up", function()
+    local qs = cycling()
+    eq(press(qs, 1), true, "the press begins it")
+    eq(#hl.dispatched, 0, "and moves nothing")
+    qs.cycle_end()
+    eq(hl.dispatched[1].kind, "swap")
+    eq(hl.dispatched[1].arg, "address:0x101", "the last window swaps with the master")
+    eq(qs.cycling(), false)
+end)
+
+test("Alt held, each Tab moves focus on round the order, and letting go makes it the master", function()
+    local qs = cycling()
+    press(qs, 1)
+    press(qs, 1)
+    eq(hl.active_window, "0x101", "from the last, round to the master")
+    press(qs, 1)
+    eq(hl.active_window, "0x102", "then on")
+    qs.cycle_end()
+    eq(hl.dispatched[#hl.dispatched].kind, "swap")
+    eq(hl.dispatched[#hl.dispatched].arg, "address:0x101", "the second swaps with the master")
+end)
+
+test("Alt+Shift+Tab goes back", function()
+    local qs = cycling()
+    press(qs, 1)
+    press(qs, -1)
+    eq(hl.active_window, "0x102")
+end)
+
+test("letting go of Alt on the master leaves it", function()
+    local qs = cycling()
+    press(qs, 1)
+    press(qs, 1)
+    local n = #hl.dispatched
+    qs.cycle_end()
+    eq(#hl.dispatched, n, "no swap")
+end)
+
+test("Escape puts focus back where it began and makes no master", function()
+    local qs = cycling()
+    press(qs, 1)
+    press(qs, 1)
+    press(qs, 1)
+    qs.cycle_cancel()
+    local d = hl.dispatched[#hl.dispatched]
+    eq(d.kind, "focus")
+    eq(d.arg, "address:0x103", "back to where it began")
+    eq(qs.cycling(), false)
+    local n = #hl.dispatched
+    qs.cycle_end()
+    eq(#hl.dispatched, n, "Alt coming up after does nothing")
+end)
+
+test("Escape leaves focus be when the window it began in has gone", function()
+    local qs = cycling()
+    press(qs, 1)
+    press(qs, 1)
+    lay(hl.registered.tide, HD, 1, { 1, 2 })
+    local n = #hl.dispatched
+    qs.cycle_cancel()
+    eq(#hl.dispatched, n, "no focus to a gone window")
+end)
+
+test("Escape leaves focus be once you've gone to another workspace", function()
+    local qs = cycling()
+    press(qs, 1)
+    press(qs, 1)
+    hl.active_ws = 2
+    local n = #hl.dispatched
+    qs.cycle_cancel()
+    eq(#hl.dispatched, n, "no focus to a hidden window")
+end)
+
 test("a master that changed another way is the one Alt+Tab goes back to", function()
     local qs, layout = fresh({ new_window = "master" })
     lay(layout, HD, 1, { 1 })

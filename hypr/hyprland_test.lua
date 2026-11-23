@@ -253,6 +253,9 @@ local function new_hl()
         monitor_that_way = nil,
         monitor_list = {},
         workspace_list = {},
+        -- Key codes held, for hl.is_key_down, and the hl.timer calls due.
+        keys_down = {},
+        timers = {},
     }
     local submap = ""
     local function record(fn, a)
@@ -354,6 +357,13 @@ local function new_hl()
             submap = prev
         end,
         exec_cmd = function(cmd) table.insert(S.execs, cmd) end,
+        -- As Hyprland 0.56 has them: whether a key code is down, and a
+        -- timer, which runs when the test says (timers()).
+        is_key_down = function(code) return S.keys_down[code] == true end,
+        timer = function(fn, o)
+            assert(type(fn) == "function" and type(o) == "table" and o.timeout > 0, "hl.timer(fn, { timeout, type })")
+            table.insert(S.timers, fn)
+        end,
         dispatch = function(d) table.insert(S.dispatched, d) end,
         dsp = dsp_namespace(nil),
         -- The running Hyprland's version, as hl.version() gives it.
@@ -525,6 +535,9 @@ local function load(setup)
     end
     _G.fake_layout = nil
     _G.hl = new_hl()
+    if setup and setup.no_key_down then
+        _G.hl.is_key_down = nil -- before Hyprland 0.56
+    end
     S.version = (setup and setup.version) or "0.57.1"
     -- Monitors already connected as the config loads, as on a reload.
     if setup and setup.monitors then
@@ -1608,6 +1621,93 @@ test("Alt+Tab swaps with the master, and Super+Return no longer does", function(
     eq(_G.fake_layout.swap_with_master, bind("ALT + Tab").target)
     load()
     eq("swapwithmaster master", bind("ALT + Tab").target.args)
+end)
+
+-- FAKE_LAYOUT, with Alt+Tab held's calls, which it records
+local CYCLE_LAYOUT = FAKE_LAYOUT:gsub("return M\n$", [[
+local on = false
+function M.cycle(dir) table.insert(M.calls, { "cycle", dir }); local began = not on; on = true; return began end
+function M.cycling() return on end
+function M.cycle_end() table.insert(M.calls, { "cycle_end" }); on = false end
+function M.cycle_cancel() table.insert(M.calls, { "cycle_cancel" }); on = false end
+return M
+]])
+
+local function timers()
+    local due = S.timers
+    S.timers = {}
+    for _, fn in ipairs(due) do
+        fn()
+    end
+end
+
+local function key_event(code, state)
+    for _, fn in ipairs(S.handlers["input.keyboard.key"] or {}) do
+        fn(code, 0, state)
+    end
+end
+
+local function layout_calls()
+    local out = {}
+    for _, c in ipairs(_G.fake_layout.calls) do
+        table.insert(out, c[1] .. (c[2] and " " .. tostring(c[2]) or ""))
+    end
+    return table.concat(out, ", ")
+end
+
+test("Alt+Tab with Alt held chooses the window, and Alt coming up ends it", function()
+    load({ layout = CYCLE_LAYOUT })
+    S.keys_down[64] = true -- Alt_L
+    run("ALT + Tab")
+    eq(nil, S.binds["|ALT + escape"], "Escape is bound only by the timer")
+    timers()
+    truthy(S.binds["|ALT + SHIFT + Tab"], "Alt+Shift+Tab goes back while it's under way")
+    truthy(S.binds["|ALT + escape"], "Escape stops it while it's under way")
+    run("ALT + Tab")
+    run("ALT + SHIFT + Tab")
+    key_event(23, 0) -- Tab coming up ends nothing
+    S.keys_down[64] = nil
+    key_event(64, 0)
+    eq("cycle 1, cycle 1, cycle -1, cycle_end", layout_calls())
+    timers()
+    eq(nil, S.binds["|ALT + SHIFT + Tab"], "Alt+Shift+Tab reaches apps again")
+    eq(nil, S.binds["|ALT + escape"], "and Escape")
+end)
+
+test("Escape while Alt is held stops Alt+Tab choosing", function()
+    load({ layout = CYCLE_LAYOUT })
+    S.keys_down[108] = true -- Alt_R
+    run("ALT + Tab")
+    timers()
+    run("ALT + escape")
+    eq("cycle 1, cycle_cancel", layout_calls())
+    timers()
+    eq(nil, S.binds["|ALT + escape"])
+    S.keys_down[108] = nil
+    key_event(108, 0)
+    eq("cycle 1, cycle_cancel", layout_calls(), "Alt coming up after does nothing")
+end)
+
+test("Alt coming up before the timer leaves Escape unbound", function()
+    load({ layout = CYCLE_LAYOUT })
+    S.keys_down[64] = true
+    run("ALT + Tab")
+    S.keys_down[64] = nil
+    key_event(64, 0)
+    timers()
+    eq(nil, S.binds["|ALT + escape"])
+    eq(nil, S.binds["|ALT + SHIFT + Tab"])
+end)
+
+test("Alt+Tab with no modifier held swaps at once", function()
+    load({ layout = CYCLE_LAYOUT })
+    run("ALT + Tab")
+    eq("swap_with_master", layout_calls())
+end)
+
+test("before Hyprland 0.56, Alt+Tab is the swap", function()
+    load({ layout = CYCLE_LAYOUT, no_key_down = true })
+    eq(_G.fake_layout.swap_with_master, bind("ALT + Tab").target)
 end)
 
 test("a broken standing list is reported", function()

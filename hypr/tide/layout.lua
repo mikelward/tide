@@ -520,6 +520,73 @@ function M.swap_with_master()
     hl.dispatch(hl.dsp.window.swap({ target = selector(other) }))
 end
 
+-- Alt+Tab held (SPEC.md §6.6). The press that begins it notes where focus
+-- is and moves nothing, so a tap is swap_with_master as Alt comes up. Each
+-- further press while Alt is held moves focus to the next window in layout
+-- order (dir 1) or the one before (-1), round from the end; from a floating
+-- window, or none, to the master. cycle_end, as Alt comes up, makes the
+-- focused window the master, unless focus moved and it's the master
+-- already. cycle_cancel, on Escape, puts focus back and makes no master.
+-- hyprland.lua hears Alt come up and binds Escape while it's under way.
+local cycle
+
+-- Returns true when this press began it
+function M.cycle(dir)
+    local me = active_address()
+    if not cycle then
+        cycle = { start = me, stepped = false }
+        return true
+    end
+    local order = M.order()
+    local i = me and index_of(order, me)
+    local target
+    if i then
+        target = order[((i - 1 + dir) % #order) + 1]
+    else
+        target = order[1]
+    end
+    if target and target ~= me then
+        hl.dispatch(hl.dsp.focus({ window = selector(target) }))
+        cycle.stepped = true
+    end
+    return false
+end
+
+function M.cycling()
+    return cycle ~= nil
+end
+
+function M.cycle_end()
+    local c = cycle
+    cycle = nil
+    if not c then
+        return
+    end
+    local me = active_address()
+    if c.stepped and me and M.order()[1] == me then
+        return
+    end
+    M.swap_with_master()
+end
+
+function M.cycle_cancel()
+    local c = cycle
+    cycle = nil
+    if not (c and c.start) or c.start == active_address() then
+        return
+    end
+    -- Only a window still here, on the workspace shown: one gone since, or
+    -- on a workspace left since, leaves focus where it is.
+    local ok, wins = pcall(hl.get_windows)
+    local shown = active_workspace_id()
+    for _, w in ipairs(ok and wins or {}) do
+        if field(w, "address") == c.start and workspace_key(field(w, "workspace")) == shown then
+            hl.dispatch(hl.dsp.focus({ window = selector(c.start) }))
+            return
+        end
+    end
+end
+
 -- Super+J / Super+K: focus the next / previous window in layout order.
 function M.focus(delta)
     local order, me = M.order(), active_address()

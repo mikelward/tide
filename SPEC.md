@@ -2390,7 +2390,7 @@ is a platform's other key, with why. The notes under the table say more.
 | move the window down, up the stack; `move_down`, `move_up` | `Super+Shift+J`, `Super+Shift+K` | `Meta+Shift+J`, `Meta+Shift+K` | `Search+Shift+J`, `Search+Shift+K` | `Super+Shift+J`, `Super+Shift+K` |
 | go to a workspace, by name (§6.5); `go_to_workspace` | `Super+Return` | `Meta+Return` | differs: `Search+W`, as Chrome can't bind Return | `Super+Return` |
 | move the window to a workspace, by name; `move_to_workspace` | **`Super+Shift+Return`** | `Meta+Shift+Return` | differs: `Search+Shift+W` | `Super+Shift+Return` |
-| make the window the master; `swap_master` | **`Alt+Tab`** | `Alt+Tab` | differs: `Search+Shift+M`, as chromeOS keeps `Alt+Tab` | `Alt+Tab`, with Karabiner |
+| make the window the master, or held, choose it first (below); `swap_master` | **`Alt+Tab`** | `Alt+Tab` | differs: `Search+Shift+M`, as chromeOS keeps `Alt+Tab` | `Alt+Tab`, with Karabiner |
 | grow, shrink the master (`mfact`, by §6.1's step); `grow_master`, `shrink_master` | `Super+\`, `Super+/` | `Meta+\`, `Meta+/` | differs: `Search+N`, `Search+H` | `Super+\`, `Super+/` |
 | add, remove a master; `add_master`, `remove_master` | `Super+=`, `Super+-` | `Meta+=`, `Meta+-` | differs: `Search+I`, `Search+D` | `Super+=`, `Super+-` |
 | next, previous layout in the cycle (§6.1); `next_layout`, `previous_layout` | `Super+.`, `Super+,` | `Meta+.`, `Meta+,` | `Search+.`, `Search+,` | `Super+.`, `Super+,` |
@@ -2702,6 +2702,20 @@ floating window.
   swaps it with the window that was master before. The layout remembers
   that window per part, and takes the top of the stack once it's
   gone.
+  - Held, it chooses the window first. Each further `Tab` while `Alt` is
+    down moves focus to the next window on the workspace, in layout order,
+    round from the end; `Alt+Shift+Tab` goes back. Letting go of `Alt` makes
+    the focused window the master, or leaves it if it's the master already.
+    `Escape` while `Alt` is down puts focus back and makes no master. Focus
+    moving is the only cue: there's no switcher to draw. A tap is the swap
+    above, made as `Alt` comes up.
+  - tidewm and tidesway: `zoom next` and `zoom prev`. Hyprland: from 0.56,
+    which reports a key coming up to the config; before it, `Alt+Tab` is the
+    swap alone. Hyprland binds `Escape` and `Alt+Shift+Tab` only while
+    you're choosing, so they reach apps otherwise.
+  - KDE and tide for Chrome can't hear `Alt` come up, so a half-second
+    pause after the last `Tab` makes the choice instead (not built yet).
+    macOS hears it (not built yet).
   - Hyprland takes a bound key from every app, so `Alt+Tab` no longer
     reaches one, such as a remote desktop or a VM viewer.
 - **`Super+Return`** used to move the focused window. It goes to a
