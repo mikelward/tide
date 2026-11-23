@@ -2684,9 +2684,14 @@ floating window.
   `Super+Alt+F`, `Super+Return` and `Super+Shift+Return`.
   - On tidewm, which knows neither the bar's order nor home, so do
     `Super+1…9`, `Super+0`, their `Shift` forms, `Super+Home`,
-    `Super+Tab` and `Super+End`: tide's tidewm config runs `workspaces go
-    N`, `workspaces send N`, `workspaces home`, `workspaces homeOrBack`
-    and `workspaces lastOther`.
+    `Super+Tab`, `Super+End`, and `Super+PgUp` and `Super+PgDn` with
+    their `Shift` forms: tide's tidewm config runs `workspaces go N`,
+    `workspaces send N`, `workspaces home`, `workspaces homeOrBack`,
+    `workspaces lastOther`, `workspaces next`, `workspaces prev`,
+    `workspaces moveNext` and `workspaces movePrev`. Without the shell,
+    `Super+PgUp` and `Super+PgDn` fall back to tidewm's own `workspace
+    next` and `prev`, which go in the order the workspaces were made and
+    stop at empty ones.
   - Without the shell, a notification says the key needs it, on Hyprland
     and for tidewm's workspace keys; tidewm's others do nothing. On
     Hyprland, `Super+Space` runs the `launcher` option instead where one

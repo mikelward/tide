@@ -46,6 +46,28 @@ export function nth(order, n) {
     return order[n === 0 ? order.length - 1 : n - 1]?.name ?? null;
 }
 
+// Super+PgDn's workspace (delta 1), or Super+PgUp's (-1): the next or the
+// previous in the bar's order (`order`, as nth's) from `here` that has a
+// window, round from the end to the start, so an empty one is never a stop;
+// `withWindows` names those that have one (plain names). With `any`, for
+// Super+Shift, the very next, empty or not. null means stay: here isn't on
+// the bar, or no other qualifies. As conf's hyprland.lua's step_workspace.
+export function step(order, here, delta, { withWindows = [], any = false } = {}) {
+    const names = order.map(w => w.name);
+    const at = names.indexOf(here);
+    if (at < 0 || (delta !== 1 && delta !== -1)) {
+        return null;
+    }
+    const has = new Set(withWindows);
+    for (let k = 1; k < names.length; k++) {
+        const n = names[((at + delta * k) % names.length + names.length) % names.length];
+        if (any || has.has(n)) {
+            return n;
+        }
+    }
+    return null;
+}
+
 // Super+Tab's workspace: home from any other, and from home the last other
 // one used (lastUsed), so presses toggle. null means stay.
 export function homeOrBack(here, history, place) {
