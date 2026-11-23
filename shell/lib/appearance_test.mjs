@@ -760,6 +760,7 @@ test("tidewm's file has what's set of the border's width, which windows cast a s
     assert.match(conf, /^default_border none$/m);
     assert.match(conf, /^shadows active$/m);
     assert.match(conf, new RegExp(`^shadow_blur_radius ${SHADOW_SIZE}$`, "m"), "the page's default, as on Hyprland");
+    assert.match(conf, new RegExp(`^dim_inactive ${DIM_STRENGTH}$`, "m"), "the page's default, as on Hyprland");
 });
 
 test("tidewm's file has a border's color, light or dark, while there's a border", () => {
