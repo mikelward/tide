@@ -5740,7 +5740,11 @@ to be focused.
   a bad value, or `sun` with no location and no time zone city is an error
   at load (§16.1). The shell waits for `tide-tz`'s first answer, up to
   2 minutes, before calling it one: a login can be slow, and a failed
-  run is tried again a minute later. Both times are wall
+  run is tried again a minute later. Such an error, or `light` and
+  `dark` the same time, puts back only light or dark, the last good or
+  the default schedule: the bar's layout and position, the wallpapers
+  and the borders still hold, and apply while the shell waits. Both
+  times are wall
   clock times, so a daylight saving change doesn't move them. Where the sun
   doesn't rise or set that day, `sun` stays dark or light all day.
 
