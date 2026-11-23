@@ -411,6 +411,26 @@ test("sunrise and sunset from a time zone that loses its city fall back to the d
     assert.deepEqual(loadAppearance("{", null, typed, null).settings, typed, "a location typed still works");
 });
 
+test("sunrise and sunset with no location yet keep the bar and the rest", () => {
+    // A login before tide-tz answers: only light or dark falls back, so
+    // the bar stays where it was put, and the wallpapers and borders too.
+    const local = JSON.stringify({
+        mode: "sun", barPosition: "bottom", borderWidth: 2,
+        barLayout: [{ id: "workspaces", zone: "center", shown: true }],
+    });
+    const r = loadAppearance(null, local);
+    assert.equal(r.needsPlace, true);
+    assert.equal(r.settings.mode, DEFAULTS.mode, "light or dark falls back");
+    assert.equal(r.settings.barPosition, "bottom");
+    assert.equal(r.settings.borderWidth, 2);
+    assert.deepEqual(r.settings.barLayout, [{ id: "workspaces", zone: "center", shown: true }]);
+    // As with light and dark the same time.
+    const same = loadAppearance(JSON.stringify({ light: "08:00", dark: "08:00", barPosition: "bottom" }), null);
+    assert.equal(same.errors.length, 1);
+    assert.equal(same.settings.light, DEFAULTS.light);
+    assert.equal(same.settings.barPosition, "bottom");
+});
+
 test("the Location row names the city chosen, or the time zone's", () => {
     assert.deepEqual(locationRow({ mode: "sun" }, LA), { shown: true, label: "Location", value: "Los Angeles, from your time zone" });
     assert.equal(locationRow({ mode: "schedule" }, LA).shown, false, "only under sunrise and sunset");

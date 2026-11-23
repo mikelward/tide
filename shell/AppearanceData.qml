@@ -198,7 +198,13 @@ Singleton {
         const broken = [shared.broken, local.broken].filter(b => b !== "");
         const result = Appearance.loadAppearance(shared.broken ? null : textOf(shared), local.broken ? null : textOf(local), root.settings, root.place);
         if (result.needsPlace && root.place === null && root.placeAwaited) {
-            return; // onPlaceChanged, or placeWait, loads again
+            // The rest of the settings, the bar's among them, apply now;
+            // only light or dark waits. onPlaceChanged, or placeWait,
+            // loads again.
+            if (broken.length === 0) {
+                root.settings = result.settings;
+            }
+            return;
         }
         const errors = broken.concat(result.errors);
         for (const error of errors) {

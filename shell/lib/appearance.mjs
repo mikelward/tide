@@ -243,6 +243,20 @@ export function checkSettings(s, place = null) {
     return null;
 }
 
+// `settings` with light or dark decided as `theme` decides it: its
+// THEME_KEYS and city in place of the settings' own.
+function withTheme(settings, theme) {
+    const out = Object.assign({}, settings);
+    for (const k of THEME_KEYS.concat(["city"])) {
+        if (theme[k] === undefined) {
+            delete out[k];
+        } else {
+            out[k] = theme[k];
+        }
+    }
+    return out;
+}
+
 function keptSettings(lastGood, place) {
     return checkSettings(lastGood, place) ? DEFAULTS : lastGood;
 }
@@ -289,7 +303,11 @@ export function loadAppearance(sharedText, localText, lastGood = DEFAULTS, place
         const wrong = checkSettings(settings, place);
         if (wrong) {
             errors.push(`${localText !== null && localText !== undefined ? "appearance.local.json" : "appearance.json"}: ${wrong}`);
-            const kept = keptSettings(lastGood, place);
+            // Only light or dark falls back: the files' other settings, the
+            // bar's layout and position, the wallpapers and the borders,
+            // still hold, so a login before the time zone's city is known
+            // doesn't put them back to the defaults.
+            const kept = withTheme(settings, keptSettings(lastGood, place));
             return wrong === NEEDS_PLACE ? { settings: kept, errors, needsPlace: true } : { settings: kept, errors };
         }
     }
