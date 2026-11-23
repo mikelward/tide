@@ -583,6 +583,8 @@ Singleton {
 
         onJumped: console.log(`tide: the clock caught up; it is ${root.dark ? "dark" : "light"}`)
 
-        readonly property real minute: date.getTime()
+        // Now until SystemClock's first tick, which a reload can read
+        // before: undefined would warn, and 0 would theme for 1970
+        readonly property real minute: date ? date.getTime() : Date.now()
     }
 }
