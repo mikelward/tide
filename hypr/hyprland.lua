@@ -1278,6 +1278,7 @@ end
 local named_binds = {}
 local named_by = {}
 local fixed_keys = {}
+local local_keys
 
 -- A binding's keys as one string to compare, its modifiers in a set order
 -- and its key in lower case, so "SHIFT + SUPER + g" is "SUPER + SHIFT + G".
@@ -1430,7 +1431,154 @@ bind("remove_master", key("minus"), act.remove_master, does("Remove a master"))
 -- dwm's zoom on Alt+Tab (tide SPEC.md §6.6); on the master, the tide
 -- layout swaps back with the master before it. Hyprland takes a bound key
 -- from every app, so Alt+Tab no longer reaches one.
-bind("swap_master", "ALT + Tab", act.swap_master, does("Swap with the master"))
+--
+-- Held, it chooses the window first: with the tide layout, from Hyprland
+-- 0.56 (hl.is_key_down and the input.keyboard.key event), each further
+-- press while the key's modifiers are held moves focus round the layout's
+-- order (qs.cycle), Shift going back, and a modifier coming up makes the
+-- focused window the master (qs.cycle_end); Escape puts focus back
+-- (qs.cycle_cancel). Escape and the Shift keys are bound only while it's
+-- under way, so they reach apps otherwise, and a timer binds and unbinds
+-- them, as a binding's own call can't change the bindings being matched.
+-- Elsewhere, and pressed with no modifier held, it's the swap alone.
+local MOD_KEYCODES = { ALT = { 64, 108 }, SUPER = { 133, 134 }, CTRL = { 37, 105 } }
+local swap_master = act.swap_master
+if qs and type(qs.cycle) == "function" and type(hl.is_key_down) == "function"
+        and type(hl.timer) == "function" then
+    -- From its keys, as bound: up, the key codes of their modifiers but
+    -- Shift, whose coming up ends it; back, each with Shift; escape, each
+    -- one's modifiers with Escape.
+    local function cycle_keys_now()
+        local up, back, escape = {}, {}, {}
+        local b = named_by.swap_master
+        for _, k in ipairs(b and b.bound or {}) do
+            local parts = {}
+            for raw in tostring(k):gmatch("[^+]+") do
+                local part = raw:match("^%s*(.-)%s*$")
+                if part ~= "" then
+                    table.insert(parts, part)
+                end
+            end
+            local last = table.remove(parts)
+            local shift, held = false, false
+            for _, m in ipairs(parts) do
+                local name = MOD_ALIAS[m:upper()] or m:upper()
+                if name == "SHIFT" then
+                    shift = true
+                elseif MOD_KEYCODES[name] then
+                    held = true
+                    for _, code in ipairs(MOD_KEYCODES[name]) do
+                        up[code] = true
+                    end
+                end
+            end
+            if held and last then
+                local mods = table.concat(parts, " + ")
+                if not shift then
+                    table.insert(back, mods .. " + SHIFT + " .. last)
+                end
+                table.insert(escape, mods .. " + escape")
+            end
+        end
+        return { up = up, back = back, escape = escape }
+    end
+    -- Whether another binding has k, which it then leaves be
+    local function taken(k)
+        local id = key_id(k)
+        if fixed_keys[id] or (local_keys and local_keys[id]) then
+            return true
+        end
+        for _, nb in ipairs(named_binds) do
+            for _, bk in ipairs(nb.bound) do
+                if key_id(bk) == id then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+    local keys -- cycle_keys_now() as it began
+    local extra = {} -- the keys bound while it's under way
+    local gen = 0 -- which one it is, so a late timer binds nothing
+    local function later(fn)
+        hl.timer(fn, { timeout = 1, type = "oneshot" })
+    end
+    local function unbind_extra()
+        gen = gen + 1
+        local list = extra
+        extra = {}
+        if #list > 0 then
+            later(function()
+                for _, k in ipairs(list) do
+                    hl.unbind(k)
+                end
+            end)
+        end
+    end
+    local function held()
+        for code in pairs(keys and keys.up or {}) do
+            local ok, down = pcall(hl.is_key_down, code)
+            if ok and down then
+                return true
+            end
+        end
+        return false
+    end
+    local press
+    press = function(dir)
+        if qs.cycling() and not held() then
+            -- Its modifiers came up unheard: that ends it first.
+            qs.cycle_end()
+            unbind_extra()
+        end
+        if qs.cycling() then
+            qs.cycle(dir)
+            return
+        end
+        keys = cycle_keys_now()
+        if not held() then
+            qs.swap_with_master()
+            return
+        end
+        qs.cycle(dir)
+        local mine = gen
+        later(function()
+            if mine ~= gen or not qs.cycling() then
+                return
+            end
+            for _, k in ipairs(keys.back) do
+                if not taken(k) then
+                    hl.bind(k, function() press(-1) end, does("Back a window, choosing the master"))
+                    table.insert(extra, k)
+                end
+            end
+            for _, k in ipairs(keys.escape) do
+                if not taken(k) then
+                    hl.bind(k, function()
+                        qs.cycle_cancel()
+                        unbind_extra()
+                    end, does("Stop choosing the master"))
+                    table.insert(extra, k)
+                end
+            end
+        end)
+    end
+    -- From 0.56 with hl.is_key_down; a failure leaves the swap alone.
+    local heard, err = pcall(hl.on, "input.keyboard.key", function(code, _, state)
+        if state == 0 and qs.cycling() and keys and keys.up[code] then
+            qs.cycle_end()
+            unbind_extra()
+        end
+    end)
+    if heard then
+        swap_master = function()
+            press(1)
+        end
+    else
+        notify_error("Alt+Tab can't wait for Alt to come up, so it swaps at once: " .. tostring(err))
+    end
+end
+bind("swap_master", "ALT + Tab", swap_master, does("Swap with the master"))
 bind("focus_down", key("J"), act.focus_next, does("Focus down the stack"))
 bind("focus_up", key("K"), act.focus_prev, does("Focus up the stack"))
 bind("move_down", key("SHIFT + J"), act.move_next, does("Move down the stack"))
@@ -2177,8 +2325,9 @@ end
 
 -- The keys hyprland.local.lua binds or unbinds, which the named bindings
 -- leave to it: a reload of tide's keys never takes them back. "unbound" if
--- it unbound them first, as README.md says to, else "bound".
-local local_keys = {}
+-- it unbound them first, as README.md says to, else "bound". Declared
+-- with fixed_keys, for Alt+Tab's keys.
+local_keys = {}
 
 -- What tide's Keyboard shortcuts list, beside `hyprctl binds -j`: each named
 -- binding's name, what it does, its defaults and its keys now, in this
