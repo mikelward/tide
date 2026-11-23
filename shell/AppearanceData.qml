@@ -54,7 +54,9 @@ Singleton {
     // The settings with the place filled in, which decide light or dark.
     readonly property var located: Appearance.placed(root.settings, root.place)
     // Whether a load that needs the place still waits for tide-tz, rather
-    // than calling sunrise and sunset with no location an error.
+    // than calling sunrise and sunset with no location an error: until
+    // tide-tz first answers, or Appearance.PLACE_WAIT_MS without an
+    // answer (Appearance.placeAwaited).
     property bool placeAwaited: true
     readonly property var now: Appearance.themeAt(root.located, clock.minute, root.flipOverride)
     readonly property bool dark: root.now.dark
@@ -540,12 +542,26 @@ Singleton {
         root.load();
     }
 
-    // tide-tz answers in moments; one that never does (not installed, say)
-    // leaves sunrise and sunset needing a location typed.
+    // tide-tz's first answer ends the wait, with the place or without one.
+    Connections {
+        target: ClockData
+
+        function onTableChanged() {
+            if (root.placeAwaited && !Appearance.placeAwaited(ClockData.table !== null, 0)) {
+                root.placeAwaited = false;
+                root.load();
+            }
+        }
+    }
+
+    // tide-tz answers in moments, but at a login it can take longer, and a
+    // run that fails is tried again a minute later (ClockData.retry). One
+    // that never answers (not installed, say) leaves sunrise and sunset
+    // needing a location typed.
     Timer {
         id: placeWait
 
-        interval: 5 * 1000
+        interval: Appearance.PLACE_WAIT_MS
         running: true
         onTriggered: {
             if (root.placeAwaited) {

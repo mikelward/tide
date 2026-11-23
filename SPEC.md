@@ -5738,8 +5738,9 @@ to be focused.
   coordinates set with it. A file that sets a `latitude` or `longitude`
   and no `city` drops the shared file's. An unknown setting,
   a bad value, or `sun` with no location and no time zone city is an error
-  at load (§16.1). The shell waits up to 5 s for `tide-tz` before
-  calling it one. Both times are wall
+  at load (§16.1). The shell waits for `tide-tz`'s first answer, up to
+  2 minutes, before calling it one: a login can be slow, and a failed
+  run is tried again a minute later. Both times are wall
   clock times, so a daylight saving change doesn't move them. Where the sun
   doesn't rise or set that day, `sun` stays dark or light all day.
 
