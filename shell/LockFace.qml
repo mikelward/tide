@@ -49,9 +49,9 @@ Item {
     property string wallpaperColor: ""
     // How the picture is placed, as the shell places it (Appearance.POSITIONS).
     property string wallpaperPosition: "fill"
-    // The line under the field (Lock.statusLine); the greeter says which
-    // session is starting.
-    readonly property var line: Lock.statusLine(lockState)
+    // The line under the field (Lock.statusLine), "No keyboard" among its
+    // messages; the greeter says which session is starting.
+    readonly property var line: Lock.statusLine(lockState, keyboard)
     property string status: line.text
     // The last power action's trouble, if any (Lock.powerMessage).
     property string powerMessage: ""
@@ -64,8 +64,8 @@ Item {
     property bool keyboard: true
     // Whether Caps Lock is on (LockCapsLock.on).
     property bool capsLock: false
-    // The last layout named, which stays beside "No keyboard" while there's
-    // none, since then Hyprland names none (Lock.layoutRow).
+    // The last layout named, which stays while there's no keyboard, since
+    // then Hyprland names none (Lock.layoutRow).
     property string lastLayout: ""
     onLayoutChanged: {
         if (layout !== "") {
@@ -500,8 +500,8 @@ Item {
                 }
 
                 // The keyboard layout, so a failed password isn't a layout
-                // mystery, and beside it "No keyboard" while there's none
-                // or "Caps Lock is on" (Lock.layoutRow): where the boot
+                // mystery, and beside it "Caps Lock is on" (Lock.layoutRow):
+                // where the boot
                 // splash has them, under the field, the layout in dim
                 // text. It keeps its height when empty, so nothing moves
                 // as they come and go.
@@ -543,7 +543,7 @@ Item {
 
                         SymbolicIcon {
                             anchors.verticalCenter: parent.verticalCenter
-                            name: face.layoutRow.kind === "caps" ? "caps-lock-symbolic.svg" : "input-keyboard-symbolic"
+                            name: "caps-lock-symbolic.svg"
                             color: flagText.color
                         }
 
@@ -552,7 +552,7 @@ Item {
 
                             anchors.verticalCenter: parent.verticalCenter
                             text: face.layoutRow.flag
-                            color: face.layoutRow.kind === "caps" ? face.palette.caps : face.ink(0.8)
+                            color: face.palette.caps
                             font.family: "Inter"
                             font.pixelSize: 12
                             font.weight: Font.DemiBold
@@ -560,8 +560,8 @@ Item {
                     }
                 }
 
-                // "Checking", PAM's message, or the failure, under the
-                // layout.
+                // "Checking", "No keyboard", PAM's message, or the failure,
+                // under the layout.
                 // It keeps a line's room when empty, so one appearing moves
                 // nothing.
                 Text {

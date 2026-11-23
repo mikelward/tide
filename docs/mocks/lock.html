@@ -45,6 +45,7 @@
   .pw .caret.after { margin-left: -6px; }
   .pw .caret.before { margin-right: -5px; }
   .errmsg { margin-top: 8px; font-size: 12px; color: #ff9e8a; font-weight: 600; }
+  .stmsg { margin-top: 8px; font-size: 12px; color: rgba(255,255,255,.7); font-weight: 600; }
   .sess { position: absolute; left: 16px; bottom: 14px; display: flex; gap: 8px; }
   .chipx { height: 28px; border-radius: 14px; background: rgba(255,255,255,.1); display: flex; align-items: center; gap: 6px; padding: 0 12px 0 10px; font-size: 12px; font-weight: 600; }
   .chipx .ms { font-size: 16px; }
@@ -121,10 +122,11 @@
       <div class="fclocks"><span>Mon Sep 28 <b>19:47</b></span></div>
       <div class="who"><span class="av">U</span><div><div class="n">user</div></div></div>
       <div class="pw"><i class="ms">lock</i><span style="letter-spacing:0;font-size:13px;color:rgba(255,255,255,.45)">Password</span></div>
-      <div class="kbrow"><i class="ms">keyboard</i>Dvorak<span class="flag"><i class="ms">keyboard</i>No keyboard</span></div>
+      <div class="kbrow"><i class="ms">keyboard</i>Dvorak</div>
+      <div class="stmsg">No keyboard</div>
       <div class="pwr"><span><i class="ms">restart_alt</i></span><span><i class="ms">power_settings_new</i></span></div>
     </div>
-    <div class="cap"><b>No keyboard</b>: while there’s none to type with, as when a KVM has switched it away, “No keyboard” sits beside the layout, where “Caps Lock is on” goes, and the field has a quiet border and no caret. The last layout named stays.</div>
+    <div class="cap"><b>No keyboard</b>: while there’s none to type with, as when a KVM has switched it away, “No keyboard” is on the line under the layout, where a failed password’s message goes, and the field has a quiet border and no caret. The last layout named stays.</div>
   </div>
   <div>
     <div class="face ambient">
