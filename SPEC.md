@@ -1626,8 +1626,9 @@ aspect of about 2.45, so it's an ultrawide, and a 16:9 one's about 1.84.
   dimming looks stronger than KDE's Dim Inactive effect at the same
   number: 0.15, the KDE setup's strength, looked too heavy in the first
   real session, and 0.07 too faint to tell which window had the focus.
-  - tidewm's `tide.conf` has `dim_inactive 0.07`. Whether its black layer
-    needs a lower number than Hyprland's dimming hasn't been tested.
+  - tidewm's `tide.conf` has `dim_inactive 0.12` too: both lay black over
+    the window at that opacity. Its first number, 0.07, was too faint to
+    tell which window had the focus at night (maintainer, 2026-11-23).
 - A monitor showing one window never dims it. With nothing to tell
   apart, a dimmed lone window just looks wrong.
 - Video, picture-in-picture and screen-share preview windows get a `nodim`
