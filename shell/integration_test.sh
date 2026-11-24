@@ -1325,8 +1325,11 @@ written_settings() {
         sleep 0.1
         i=$((i + 1))
     done
-    if ! grep -qxF 'return {' "$appearance_conf" 2>/dev/null || grep -q '=' "$appearance_conf"; then
-        echo "FAIL: the shell should write no dim strength to $appearance_conf; it has: $(cat "$appearance_conf" 2>&1)" >&2
+    # Nothing set, so only the shadow's color for the theme in effect.
+    if ! grep -qxF 'return {' "$appearance_conf" 2>/dev/null ||
+        test "$(grep -c '=' "$appearance_conf")" -ne 1 ||
+        ! grep -qE '^    shadow_color = "rgba\((00000044|ededf155)\)",$' "$appearance_conf"; then
+        echo "FAIL: the shell should write only the shadow's color to $appearance_conf; it has: $(cat "$appearance_conf" 2>&1)" >&2
         exit 1
     fi
     _dims=$(grep -c '^hyprctl eval conf_appearance.reload()$' "$tmp/helpers.log")

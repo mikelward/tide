@@ -8,7 +8,7 @@ import {
     DEFAULTS, LOCAL, parseTime, parseAppearance, loadAppearance, sunDown,
     scheduled, themeAt, flip, settingsKey, clockTime, schemeCommands, schemeIsDark,
     hookCommand, TELL_IDLE, tellNext, MODE_CHOICES, steppedModeAt, placed, locationRow, resetLocation, withLocation, steppedTime, steppedTimePast, parseCoordinate, withSetting,
-    DIM_STRENGTH, dimStrength, steppedDim, formatDim, appearanceLua, roundedCorners,
+    DIM_STRENGTH, SHADOW_COLORS, shadowColor, dimStrength, steppedDim, formatDim, appearanceLua, roundedCorners,
     expandHome, pickCommand, galleryFolders, galleryCommand, galleryThumbnailCommand, galleryThumbnail, gallerySource, newLines, galleryImages, fitsScreens, galleryRows, galleryCollection, galleryCollections, distroName, galleryModeFor, galleryFiltered, GALLERY_MODES, UNSPLASH, moreWallpapers, openCommand, pickedWallpaper, wallpaperCandidates, fileUrl, findCommand, drawableCandidates, wallpaperRecord, recordedWallpaper,
     wallpaperColor, lockColor, WALLPAPER_COLORS, barColor, barColors, barColorReads, barColorChoices, contrast, BAR_CONTRAST,
     wallpaperFrame, framingCaption, previewScreens, previewLayout, previewCandidates,
@@ -620,6 +620,11 @@ test("− and + step the dim a point at a time, from none to half", () => {
     assert.equal(formatDim(0.125), "13%");
 });
 
+// A generated file's lines, less its comments.
+const confLines = text => text.split("\n").filter(line => line !== "" && !line.startsWith("#"));
+// The same, less the shadow's color, which is there whatever's set.
+const settingLines = text => confLines(text).filter(line => !line.startsWith("shadow_color "));
+
 test("rounded corners are on until a setting turns them off, and only one that's set reaches Hyprland", () => {
     assert.equal(roundedCorners(DEFAULTS), true);
     assert.equal(roundedCorners(loadAppearance(null, '{"roundedCorners": false}').settings), false);
@@ -634,18 +639,15 @@ test("rounded corners are on until a setting turns them off, and only one that's
     assert.equal(body(appearanceLua({ dimStrength: 0.1, roundedCorners: true })),
         "return {\n    dim_strength = 0.1,\n    rounded_corners = true,\n}\n");
     // tidewm's windows are square: its file has no line for it
-    assert.ok(appearanceConf({ roundedCorners: false }).split("\n").every(line => line === "" || line.startsWith("#")));
+    assert.deepEqual(settingLines(appearanceConf({ roundedCorners: false })), []);
 });
-
-// A generated file's lines, less its comments.
-const confLines = text => text.split("\n").filter(line => line !== "" && !line.startsWith("#"));
 
 test("tidesway's file rounds the corners as Hyprland does, or squares them", () => {
     assert.deepEqual(confLines(tideswayConf({})), [`corner_radius ${ROUNDING}`], "rounded unless turned off");
     assert.deepEqual(confLines(tideswayConf({ roundedCorners: true })), [`corner_radius ${ROUNDING}`]);
     assert.deepEqual(confLines(tideswayConf({ roundedCorners: false })), ["corner_radius 0"]);
     // tidewm fails on a line it doesn't know, so its own file never has it
-    assert.deepEqual(confLines(appearanceConf({ roundedCorners: true })), []);
+    assert.deepEqual(settingLines(appearanceConf({ roundedCorners: true })), []);
     // The radius is Hyprland's
     const lua = readFileSync(new URL("../../hypr/hyprland.lua", import.meta.url), "utf8");
     assert.match(lua, new RegExp(`^local ROUNDING = ${ROUNDING}$`, "m"));
@@ -726,17 +728,20 @@ test("a border is the palette's surface-3, light or dark", () => {
 
 test("only a border or shadow setting that's set reaches Hyprland, and a border's color for the theme", () => {
     const body = lua => lua.split("\n").slice(3).join("\n");
-    assert.equal(body(appearanceLua({ borderWidth: 0 }, true)), "return {\n    border_width = 0,\n}\n", "no border, no color");
+    const glow = `    shadow_color = "rgba(${shadowColor(true)})",\n`;
+    const shade = `    shadow_color = "rgba(${shadowColor(false)})",\n`;
+    assert.equal(body(appearanceLua({ borderWidth: 0 }, true)), `return {\n    border_width = 0,\n${glow}}\n`, "no border, no border color");
     assert.equal(body(appearanceLua({ shadowSize: 12, shadows: "all", roundedCorners: true })),
         'return {\n    rounded_corners = true,\n    shadows = "all",\n    shadow_size = 12,\n}\n');
     for (const which of SHADOWS) {
         assert.equal(body(appearanceLua({ shadows: which })), `return {\n    shadows = "${which}",\n}\n`);
     }
-    assert.equal(body(appearanceLua({}, true)), "return {\n}\n", "nothing set: light or dark, the same file");
+    assert.equal(body(appearanceLua({})), "return {\n}\n", "nothing set and no theme yet: nothing");
+    assert.equal(body(appearanceLua({}, true)), `return {\n${glow}}\n`, "the shadow's color, whatever's set");
     assert.equal(body(appearanceLua({ borderWidth: 1 }, false)),
-        `return {\n    border_width = 1,\n    border_color = "rgba(${borderColor(false)})",\n}\n`);
+        `return {\n    border_width = 1,\n    border_color = "rgba(${borderColor(false)})",\n${shade}}\n`);
     assert.equal(body(appearanceLua({ borderWidth: 1 }, true)),
-        `return {\n    border_width = 1,\n    border_color = "rgba(${borderColor(true)})",\n}\n`);
+        `return {\n    border_width = 1,\n    border_color = "rgba(${borderColor(true)})",\n${glow}}\n`);
     // The defaults are Hyprland's own config's
     const lua = readFileSync(new URL("../../hypr/hyprland.lua", import.meta.url), "utf8");
     assert.match(lua, new RegExp(`^local BORDER_SIZE = ${BORDER_WIDTH}$`, "m"));
@@ -746,14 +751,14 @@ test("only a border or shadow setting that's set reaches Hyprland, and a border'
 });
 
 test("tidewm's file has what's set of the border's width, which windows cast a shadow and how far", () => {
-    assert.deepEqual(confLines(appearanceConf({ borderWidth: 6 })).slice(0, 1), ["default_border pixel 6"]);
-    assert.deepEqual(confLines(appearanceConf({ borderWidth: 0 })), ["default_border pixel 0"]);
-    assert.deepEqual(confLines(appearanceConf({ shadows: "none" })), ["shadows disable"]);
-    assert.deepEqual(confLines(appearanceConf({ shadows: "floating" })), ["shadows floating"]);
-    assert.deepEqual(confLines(appearanceConf({ shadows: "focused" })), ["shadows active"]);
-    assert.deepEqual(confLines(appearanceConf({ shadows: "all" })), ["shadows all"]);
-    assert.deepEqual(confLines(appearanceConf({ shadowSize: 20 })), ["shadow_blur_radius 20"]);
-    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, borderWidth: 0, shadows: "all", shadowSize: 0 }, false)),
+    assert.deepEqual(settingLines(appearanceConf({ borderWidth: 6 })).slice(0, 1), ["default_border pixel 6"]);
+    assert.deepEqual(settingLines(appearanceConf({ borderWidth: 0 })), ["default_border pixel 0"]);
+    assert.deepEqual(settingLines(appearanceConf({ shadows: "none" })), ["shadows disable"]);
+    assert.deepEqual(settingLines(appearanceConf({ shadows: "floating" })), ["shadows floating"]);
+    assert.deepEqual(settingLines(appearanceConf({ shadows: "focused" })), ["shadows active"]);
+    assert.deepEqual(settingLines(appearanceConf({ shadows: "all" })), ["shadows all"]);
+    assert.deepEqual(settingLines(appearanceConf({ shadowSize: 20 })), ["shadow_blur_radius 20"]);
+    assert.deepEqual(settingLines(appearanceConf({ dimStrength: 0.1, borderWidth: 0, shadows: "all", shadowSize: 0 }, false)),
         ["dim_inactive 0.1", "default_border pixel 0", "shadows all", "shadow_blur_radius 0"]);
     // The defaults are tide.conf's
     const conf = readFileSync(new URL("../../tidewm/tide.conf", import.meta.url), "utf8");
@@ -766,7 +771,7 @@ test("tidewm's file has what's set of the border's width, which windows cast a s
 test("tidewm's file has a border's color, light or dark, while there's a border", () => {
     const dark = `#${borderColor(true)}`;
     const light = `#${borderColor(false)}`;
-    assert.deepEqual(confLines(appearanceConf({ dimStrength: 0.1, borderWidth: 2, shadows: "all" }, true)), [
+    assert.deepEqual(settingLines(appearanceConf({ dimStrength: 0.1, borderWidth: 2, shadows: "all" }, true)), [
         "dim_inactive 0.1",
         "default_border pixel 2",
         `client.focused ${dark} ${dark} #ededf1 ${dark} ${dark}`,
@@ -774,23 +779,40 @@ test("tidewm's file has a border's color, light or dark, while there's a border"
         `client.unfocused ${dark} ${dark} #ededf1 ${dark} ${dark}`,
         "shadows all",
     ]);
-    assert.deepEqual(confLines(appearanceConf({ borderWidth: 6 }, false)), [
+    assert.deepEqual(settingLines(appearanceConf({ borderWidth: 6 }, false)), [
         "default_border pixel 6",
         `client.focused ${light} ${light} #1f1f24 ${light} ${light}`,
         `client.focused_inactive ${light} ${light} #1f1f24 ${light} ${light}`,
         `client.unfocused ${light} ${light} #1f1f24 ${light} ${light}`,
     ]);
     // Each is a line tidewm takes: three to five colors, #RRGGBB or #RRGGBBAA
-    for (const line of confLines(appearanceConf({ borderWidth: 6 }, true)).slice(1)) {
+    for (const line of settingLines(appearanceConf({ borderWidth: 6 }, true)).slice(1)) {
         assert.match(line, /^client\.(focused|focused_inactive|unfocused)( #[0-9a-f]{6}([0-9a-f]{2})?){5}$/);
     }
-    // No border, no color, so light and dark are the same file
+    // No border, no color
     for (const settings of [{}, { borderWidth: 0 }, { shadows: "focused", dimStrength: 0.2 }]) {
         assert.doesNotMatch(appearanceConf(settings, true), /client\./);
-        assert.equal(appearanceConf(settings, true), appearanceConf(settings, false));
     }
     assert.notEqual(appearanceConf({ borderWidth: 1 }, true), appearanceConf({ borderWidth: 1 }, false),
         "with a border, the theme changes the file, so a flip writes it again");
+});
+
+test("the shadow is black by day and a light glow by night, on every compositor", () => {
+    assert.deepEqual(SHADOW_COLORS, { light: "00000044", dark: "ededf155" });
+    assert.equal(shadowColor(false), "00000044", "black, as before");
+    assert.equal(shadowColor(true), "ededf155", "the dark palette's text color, a glow");
+    assert.equal(`#${shadowColor(true).slice(0, 6)}`, "#ededf1");
+    // tidewm and tidesway: a line each takes, whatever else is set
+    for (const settings of [{}, { shadows: "none" }, { borderWidth: 2, dimStrength: 0.1 }]) {
+        assert.deepEqual(confLines(appearanceConf(settings, true)).filter(l => l.startsWith("shadow_color")), ["shadow_color #ededf155"]);
+        assert.deepEqual(confLines(appearanceConf(settings, false)).filter(l => l.startsWith("shadow_color")), ["shadow_color #00000044"]);
+    }
+    // So a flip writes the file again, and the compositor takes it
+    assert.notEqual(appearanceConf({}, true), appearanceConf({}, false));
+    assert.notEqual(appearanceLua({}, true), appearanceLua({}, false));
+    // Hyprland's own default is light's, as it's always been
+    const lua = readFileSync(new URL("../../hypr/hyprland.lua", import.meta.url), "utf8");
+    assert.match(lua, new RegExp(`^local SHADOW_COLOR = "rgba\\(${shadowColor(false)}\\)"$`, "m"));
 });
 
 test("tidesway's own file has only what tidewm lacks: a floating window's border and the corners", () => {
@@ -813,7 +835,7 @@ test("on tidesway both files are one, so a setting unset there leaves no line of
     const [tidewmUnset, own] = splitConfs(unset);
     assert.match(tidewmSet, /^dim_inactive 0\.2$/m);
     assert.match(tidewmSet, /^default_border pixel 3$/m);
-    assert.deepEqual(confLines(tidewmUnset), [], "tidewm's file says nothing, so the config's own stands");
+    assert.deepEqual(settingLines(tidewmUnset), [], "tidewm's file says nothing, so the config's own stands");
     assert.deepEqual(confLines(own), [`corner_radius ${ROUNDING}`]);
     assert.notEqual(set, unset, "so unsetting writes and reloads");
     // Exactly what a tidewm session writes, so the two never fight over it
@@ -1531,8 +1553,8 @@ test("the page's ‹ and › step through each mode's positions, stopping at eit
 test("tidewm's file has the dim strength as its dim_inactive, and only what's set", () => {
     const text = appearanceConf({ dimStrength: 0.12, mode: "dark" });
     assert.ok(text.startsWith("# Written by tide from appearance.json"), text);
-    assert.ok(text.endsWith("\ndim_inactive 0.12\n"), text);
-    assert.ok(appearanceConf({ mode: "dark" }).split("\n").every(line => line === "" || line.startsWith("#")));
+    assert.match(text, /\ndim_inactive 0\.12\n/);
+    assert.deepEqual(settingLines(appearanceConf({ mode: "dark" })), []);
     assert.ok(appearanceConf({ dimStrength: 0 }).includes("\ndim_inactive 0\n"), "none at all");
 });
 
