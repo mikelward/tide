@@ -1,7 +1,7 @@
 ---
 trigger: always_on
 alwaysApply: true
-last_modified: 2026-11-15
+last_modified: 2026-11-24
 ---
 
 # tide
@@ -92,6 +92,8 @@ Shared by every mikelward repo and the user-level agent config; canonical in mik
 - **Autopilot**. Drive without asking, logging guesses in `TODO.md` under *Decisions
   needing review*. Still ask before anything irreversible, outside this repo, or private.
 - **Red baseline**. Fix existing failures first, in their own commit.
+- **Fix fully**. Fix a reported problem's cause, everywhere it occurs (every platform,
+  consumer and copy), not only the case reported.
 - **Lasting fixes**. Fix the cause in a repo. Don't propose a step that lasts only this
   session (stopping a service, a setting in this container) or a hand edit to a dotfile:
   neither persists.
@@ -119,9 +121,11 @@ Shared by every mikelward repo and the user-level agent config; canonical in mik
 
 ## Project
 
-- **Compositors**. Hyprland, tidewm, tidesway and KDE Plasma behave the same. Make a
-  change on all of them unasked, without asking whether to; check what the others do
-  before saying it's done. Only the user allows a difference, and `SPEC.md` records it.
+- **Platforms**. Hyprland, tidewm, tidesway, KDE Plasma (tide-kde), macOS (tidemo) and
+  Chrome (tideco) behave the same. Make a change on all of them unasked, without asking
+  whether to, copies included (tidemo's `make sync`, tide-kde's checks); check what the
+  others do before saying it's done. Only the user allows a difference, and `SPEC.md`
+  records it.
 - **Lua**. It must run on both 5.4 and 5.5; keep geometry free of Hyprland's API, and
   never dispatch from a layout callback.
 - **Go**. `gofmt`, building with the oldest Go the distros ship.
