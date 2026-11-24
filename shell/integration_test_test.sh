@@ -471,7 +471,7 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
             *" dim "*)
                 {
                     mkdir -p "\$HOME/.config/hypr" &&
-                        printf '%s\n' 'return {' '}' >"\$HOME/.config/hypr/tide-appearance.lua" &&
+                        printf '%s\n' 'return {' '    shadow_color = "rgba(00000044)",' '}' >"\$HOME/.config/hypr/tide-appearance.lua" &&
                         hyprctl eval 'conf_appearance.reload()' >/dev/null 2>&1
                     # The dim set over IPC, as the Appearance page sets it;
                     # gone with qs, as the idle one is.
@@ -480,7 +480,7 @@ if test -n "\$HYPRLAND_INSTANCE_SIGNATURE"; then
                         sleep 0.1
                     done
                     rm "\$XDG_RUNTIME_DIR/dim-set"
-                    printf '%s\n' 'return {' '    dim_strength = 0.12,' '}' >"\$HOME/.config/hypr/tide-appearance.lua"
+                    printf '%s\n' 'return {' '    dim_strength = 0.12,' '    shadow_color = "rgba(00000044)",' '}' >"\$HOME/.config/hypr/tide-appearance.lua"
                     hyprctl eval 'conf_appearance.reload()' >/dev/null 2>&1
                 } &
                 ;;

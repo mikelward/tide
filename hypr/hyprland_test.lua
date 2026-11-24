@@ -3598,6 +3598,22 @@ test("tide-appearance.lua sets the shadow's size, and turns it off at 0", functi
     eq(true, S.config.decoration.shadow.enabled)
 end)
 
+test("tide-appearance.lua sets the shadow's color, black by day and a glow by night", function()
+    load()
+    eq("rgba(00000044)", S.config.decoration.shadow.color, "black with nothing set")
+    load({ appearance = 'return { shadow_color = "rgba(ededf155)" }' })
+    eq("rgba(ededf155)", S.config.decoration.shadow.color)
+    eq(0, #S.notifications)
+    write(TIDE_APPEARANCE, "return {}")
+    conf_appearance.reload()
+    eq("rgba(00000044)", S.config.decoration.shadow.color, "a setting tide stops making")
+    load({
+        appearance = 'return { shadow_color = "rgba(ededf155)" }',
+        ["local"] = 'hl.config({ decoration = { shadow = { color = "rgba(ff000088)" } } })',
+    })
+    eq("rgba(ff000088)", S.config.decoration.shadow.color, "hyprland.local.lua's own wins")
+end)
+
 test("hyprland.local.lua's own border and shadow win over tide's", function()
     load({
         appearance = 'return { border_width = 2, shadow_size = 20, border_color = "rgba(dcdce2ff)" }',
@@ -3625,6 +3641,7 @@ test("a border or shadow tide-appearance.lua gets wrong is reported, naming it, 
         { "return { shadow_size = 0 / 0 }", "shadow_size should be a whole number from 0 to 32" },
         { 'return { border_color = "red" }', "border_color should be a color like rgba(46464dff)" },
         { "return { border_color = 5 }", "border_color should be a color like rgba(46464dff)" },
+        { 'return { shadow_color = "white" }', "shadow_color should be a color like rgba(00000044)" },
     }
     for _, case in ipairs(cases) do
         load({ appearance = case[1] })

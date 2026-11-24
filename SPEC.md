@@ -1651,7 +1651,16 @@ aspect of about 2.45, so it's an ultrawide, and a 16:9 one's about 1.84.
 - Dimming fades as focus moves, over 300 ms, as a new window fades in. On
   tidewm, these are `fade_duration 300`.
 - **Shadows.** The focused window casts a soft shadow, tiled or floating:
-  black at 27% by its edge, gone 16 px out. The Borders page's **Shadows**
+  black at 27% by its edge, gone 16 px out. In dark mode it's a light
+  glow instead, the dark palette's text color `#ededf1` at 33%, as black
+  hardly shows on a dark desktop, at night most of all (maintainer,
+  2026-11-24). The shell writes the color with the theme, and again as it
+  changes: `shadow_color` in Hyprland's `tide-appearance.lua`
+  (`decoration:shadow:color`), and a `shadow_color` line, tidesway's
+  syntax, in tidewm's `tide-appearance.conf`, which tidesway reads too.
+  tide-kde's decoration and tidemo draw the same two colors, which they
+  check against `appearance.mjs`'s `SHADOW_COLORS`. tide for Chrome
+  draws no shadows: Chrome gives an extension no way to. The Borders page's **Shadows**
   says which windows cast one: None, Floating windows, Focused window or
   All windows (maintainer, 2026-11-14; Focused window as the default is a
   guess, in `TODO.md`). **Shadow size** is how far it reaches, 0 to 32 px.
@@ -1704,7 +1713,8 @@ aspect of about 2.45, so it's an ultrawide, and a 16:9 one's about 1.84.
     windows already open, with `[con_id=N] border pixel W`. A floating
     window that draws its own decorations keeps them, as a new one does.
 - `hyprland.local.lua`'s own `dim_strength`, `rounding`, `border_size`,
-  border colors and shadow `range` and `enabled` win over the pages'.
+  border colors and shadow `range`, `enabled` and `color` win over the
+  pages'.
 
 ### 6.3 One window big: monocle, maximize, fullscreen
 

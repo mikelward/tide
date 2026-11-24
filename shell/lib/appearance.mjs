@@ -838,6 +838,16 @@ export function borderColor(dark) {
     return c.length === 9 ? c.slice(3) + c.slice(1, 3) : c.slice(1) + "ff";
 }
 
+// The shadow's color at its darkest, light or dark (SPEC.md §6.2), as
+// "rrggbbaa": black by day, and by night a soft glow of the dark palette's
+// text color, as a black shadow hardly shows on a dark desktop. tide-kde
+// and tidemo restate these, and check them against this.
+export const SHADOW_COLORS = Object.freeze({ light: "00000044", dark: "ededf155" });
+
+export function shadowColor(dark) {
+    return dark ? SHADOW_COLORS.dark : SHADOW_COLORS.light;
+}
+
 // What reaches Hyprland, as the Lua table conf's hyprland.lua reads from
 // ~/.config/hypr/tide-appearance.lua: only what's set, so the config's own
 // stands for the rest, and, while there's a border, its color for the
@@ -869,6 +879,9 @@ export function appearanceLua(settings, dark = undefined) {
     if (dark !== undefined && borderWidth(settings) > 0) {
         lines.push(`    border_color = "rgba(${borderColor(dark)})",`);
     }
+    if (dark !== undefined) {
+        lines.push(`    shadow_color = "rgba(${shadowColor(dark)})",`);
+    }
     lines.push("}");
     return lines.join("\n") + "\n";
 }
@@ -878,7 +891,8 @@ export function appearanceLua(settings, dark = undefined) {
 // the config's own stands for the rest. tidewm's dim_inactive takes the
 // strength as Hyprland's dim_strength does, from 0 to 1, its
 // default_border the width, its shadows which windows cast one, and its
-// shadow_blur_radius how far. While there's a border, sway's client.CLASS
+// shadow_blur_radius how far, and its shadow_color the shadow's color for
+// the theme in effect (shadowColor). While there's a border, sway's client.CLASS
 // lines give it its color for the theme in effect (`dark`), on the
 // focused window and the rest: tidewm colors a border by the last of the
 // five, sway's child_border. tidewm's windows are square, so
@@ -912,6 +926,7 @@ export function appearanceConf(settings, dark = true) {
     if (settings.shadowSize !== undefined) {
         lines.push(`shadow_blur_radius ${settings.shadowSize}`);
     }
+    lines.push(`shadow_color #${shadowColor(dark)}`);
     return lines.join("\n") + "\n";
 }
 

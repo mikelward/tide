@@ -778,6 +778,10 @@ local DIM_STRENGTH = 0.12
 local ROUNDING = 6
 -- How far a shadow reaches, unless the Borders page sets a size.
 local SHADOW_RANGE = 16
+-- Its color at its darkest, until tide says: light's, black. By night tide
+-- makes it a soft light glow, as black hardly shows on a dark desktop
+-- (shell/lib/appearance.mjs's SHADOW_COLORS).
+local SHADOW_COLOR = "rgba(00000044)"
 -- Which windows cast one, unless the Borders page says: none, floating
 -- ones, the focused one, tiled or floating, or all of them.
 local SHADOWS = "focused"
@@ -798,7 +802,7 @@ hl.config({
             enabled = true,
             range = SHADOW_RANGE,
             render_power = 2,
-            color = "rgba(00000044)",
+            color = SHADOW_COLOR,
         },
         active_opacity = 1.0,
         inactive_opacity = 1.0,
@@ -1081,6 +1085,7 @@ local local_border = nil
 local local_border_active = nil
 local local_border_inactive = nil
 local local_shadow_range = nil
+local local_shadow_color = nil
 local local_shadow_enabled = nil
 local local_grab_area = nil
 
@@ -1163,6 +1168,12 @@ local function read_tide_appearance()
             else
                 out.shadows = v
             end
+        elseif k == "shadow_color" then
+            if type(v) ~= "string" or not v:match("^rgba%(%x%x%x%x%x%x%x%x%)$") then
+                notify_error("tide-appearance.lua: shadow_color should be a color like rgba(00000044), not " .. tostring(v))
+            else
+                out.shadow_color = v
+            end
         elseif k == "border_color" then
             if type(v) ~= "string" or not v:match("^rgba%(%x%x%x%x%x%x%x%x%)$") then
                 notify_error("tide-appearance.lua: border_color should be a color like rgba(46464dff), not " .. tostring(v))
@@ -1182,7 +1193,7 @@ end
 
 -- Each is applied each time, tide's or the default, so a setting tide
 -- stops making goes back to DIM_STRENGTH, ROUNDING, BORDER_SIZE,
--- BORDER_COLOR, SHADOWS or SHADOW_RANGE rather than staying put.
+-- BORDER_COLOR, SHADOWS, SHADOW_RANGE or SHADOW_COLOR rather than staying put.
 --
 -- Which windows cast a shadow is two window rules, each on in one mode:
 -- no-shadow-tiled takes it off tiled windows, for floating ones only, and
@@ -1218,6 +1229,9 @@ local function apply_tide_appearance()
     local range = tide.shadow_size or SHADOW_RANGE
     if local_shadow_range == nil then
         hl.config({ decoration = { shadow = { range = range } } })
+    end
+    if local_shadow_color == nil then
+        hl.config({ decoration = { shadow = { color = tide.shadow_color or SHADOW_COLOR } } })
     end
     if local_shadow_enabled == nil then
         hl.config({ decoration = { shadow = { enabled = mode ~= "none" and range > 0 } } })
@@ -3447,6 +3461,9 @@ do
                 end
                 if type(shadow) == "table" and shadow.enabled ~= nil then
                     local_shadow_enabled = shadow.enabled
+                end
+                if type(shadow) == "table" and shadow.color ~= nil then
+                    local_shadow_color = shadow.color
                 end
                 local general = type(t) == "table" and t.general
                 if type(general) == "table" and general.border_size ~= nil then
